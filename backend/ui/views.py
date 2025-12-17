@@ -515,6 +515,8 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     activity = ActivityEvent.objects.filter(company_id=company.id).select_related("actor")[:50]
     quick_form = CompanyQuickEditForm(instance=company)
 
+    transfer_targets = User.objects.filter(is_active=True, role=User.Role.MANAGER).order_by("last_name", "first_name")
+
     return render(
         request,
         "ui/company_detail.html",
@@ -527,6 +529,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "tasks": tasks,
             "activity": activity,
             "quick_form": quick_form,
+            "transfer_targets": transfer_targets,
         },
     )
 
@@ -557,6 +560,54 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
         form = CompanyEditForm(instance=company)
 
     return render(request, "ui/company_edit.html", {"company": company, "form": form})
+
+
+@login_required
+def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_edit_company(user, company):
+        messages.error(request, "Нет прав на передачу компании.")
+        return redirect("company_detail", company_id=company.id)
+
+    new_resp_id = (request.POST.get("responsible_id") or "").strip()
+    if not new_resp_id:
+        messages.error(request, "Выберите менеджера.")
+        return redirect("company_detail", company_id=company.id)
+
+    new_resp = get_object_or_404(User, id=new_resp_id, is_active=True)
+    if new_resp.role != User.Role.MANAGER:
+        messages.error(request, "Передавать можно только менеджеру.")
+        return redirect("company_detail", company_id=company.id)
+
+    old_resp = company.responsible
+    company.responsible = new_resp
+    # При передаче обновляем филиал компании под филиал нового ответственного (может быть другой регион).
+    company.branch = new_resp.branch
+    company.save()
+
+    messages.success(request, f"Компания передана: {new_resp}.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="company",
+        entity_id=company.id,
+        company_id=company.id,
+        message="Передана компания другому менеджеру",
+        meta={"from": str(old_resp) if old_resp else "", "to": str(new_resp)},
+    )
+    if new_resp.id != user.id:
+        notify(
+            user=new_resp,
+            kind=Notification.Kind.COMPANY,
+            title="Вам передали компанию",
+            body=f"{company.name}",
+            url=f"/companies/{company.id}/",
+        )
+    return redirect("company_detail", company_id=company.id)
 
 
 @login_required

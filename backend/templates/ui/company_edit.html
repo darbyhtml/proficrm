@@ -55,8 +55,23 @@
 
       <div>
         <label class="block text-sm text-brand-dark/80 mb-1">Сферы (можно несколько)</label>
-        {{ form.spheres }}
-        <div class="text-xs text-brand-dark/60 mt-1">Можно выбрать несколько (Ctrl/Shift), либо используйте быстрый мультиселект в карточке.</div>
+        <div class="ms" data-ms="1" data-placeholder="Выберите сферы">
+          <button type="button" class="ms-btn">
+            <span class="ms-value"></span>
+            <span class="ms-muted">▼</span>
+          </button>
+          <div class="ms-panel hidden">
+            <div class="ms-top">
+              <input class="input ms-search" placeholder="Поиск" />
+              <a href="#" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" data-ms-clear>Снять</a>
+            </div>
+            <div class="ms-list"></div>
+          </div>
+          <div class="hidden">
+            {{ form.spheres }}
+          </div>
+        </div>
+        <div class="text-xs text-brand-dark/60 mt-1">Можно выбрать несколько чекбоксами.</div>
       </div>
 
       {% if form.errors %}

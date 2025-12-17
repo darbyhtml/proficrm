@@ -46,6 +46,20 @@
         <div class="font-medium mb-3">Быстро</div>
         {% if can_edit_company %}
           <a class="btn btn-primary w-full" href="/tasks/new/?company={{ company.id }}">+ Поставить задачу</a>
+          <div class="mt-3">
+            <div class="text-xs text-brand-dark/70 mb-1">Передать другому менеджеру</div>
+            <form method="post" action="/companies/{{ company.id }}/transfer/" class="flex gap-2">
+              {% csrf_token %}
+              <select name="responsible_id" class="select">
+                <option value="">Выберите менеджера…</option>
+                {% for u in transfer_targets %}
+                  <option value="{{ u.id }}">{{ u }}</option>
+                {% endfor %}
+              </select>
+              <button class="btn btn-outline" type="submit">Передать</button>
+            </form>
+            <div class="text-xs muted-2 mt-1">При передаче филиал компании обновится под филиал нового ответственного.</div>
+          </div>
         {% else %}
           <div class="rounded-xl border border-brand-orange/60 bg-brand-orange/20 px-4 py-3 text-sm text-brand-dark">
             У вас доступ <b>только на просмотр</b>. Редактировать может создатель/ответственный/директор филиала/управляющий.
@@ -82,7 +96,22 @@
               <button class="btn btn-outline w-full" type="submit">Сохранить</button>
             </form>
           {% else %}
-            <div class="text-sm text-brand-dark/70">Только просмотр.</div>
+            <div class="text-sm text-brand-dark/70 space-y-2">
+              <div>
+                <div class="text-xs text-brand-dark/50 mb-1">Статус</div>
+                <div>{{ company.status|default:"—" }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-brand-dark/50 mb-1">Сферы</div>
+                <div class="flex flex-wrap gap-1">
+                  {% for s in company.spheres.all %}
+                    <span class="badge">{{ s.name }}</span>
+                  {% empty %}
+                    <span class="text-brand-dark/70">—</span>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
           {% endif %}
         </div>
       </section>
