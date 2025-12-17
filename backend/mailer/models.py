@@ -116,6 +116,7 @@ class Campaign(models.Model):
     subject = models.CharField("Тема письма", max_length=200)
     body_text = models.TextField("Текст письма (plain)", blank=True, default="")
     body_html = models.TextField("Текст письма (HTML)", blank=True, default="")
+    sender_name = models.CharField("Имя отправителя", max_length=120, blank=True, default="")
 
     # Снэпшот фильтра (пока просто сохраняем параметры)
     filter_meta = models.JSONField("Фильтр", default=dict, blank=True)

@@ -94,10 +94,11 @@ class GlobalMailAccountForm(forms.ModelForm):
 class CampaignForm(forms.ModelForm):
     class Meta:
         model = Campaign
-        fields = ["name", "subject", "body_html"]
+        fields = ["name", "subject", "sender_name", "body_html"]
         widgets = {
             "name": forms.TextInput(attrs={"class": "input"}),
             "subject": forms.TextInput(attrs={"class": "input"}),
+            "sender_name": forms.TextInput(attrs={"class": "input", "placeholder": "Например: CRM ПРОФИ / Отдел продаж"}),
             "body_html": forms.Textarea(attrs={"class": "textarea", "rows": 10, "placeholder": "<p>...</p>", "id": "id_body_html"}),
         }
 

@@ -176,6 +176,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "counts": counts,
             "recent": recent,
             "smtp_from_email": (smtp_cfg.from_email or smtp_cfg.smtp_username or "").strip(),
+            "smtp_from_name_default": (smtp_cfg.from_name or "CRM ПРОФИ").strip(),
             "recipient_add_form": CampaignRecipientAddForm(),
             "branches": Branch.objects.order_by("name"),
             "responsibles": User.objects.order_by("last_name", "first_name"),
@@ -395,7 +396,7 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
             body_html=(camp.body_html or "") + f'<hr><p style="font-size:12px;color:#666">Отписаться: <a href="{unsubscribe_url}">{unsubscribe_url}</a></p>',
             unsubscribe_url=unsubscribe_url,
             from_email=((smtp_cfg.from_email or "").strip() or (smtp_cfg.smtp_username or "").strip()),
-            from_name=(user.get_full_name() or smtp_cfg.from_name or "CRM ПРОФИ").strip(),
+            from_name=((camp.sender_name or "").strip() or (smtp_cfg.from_name or "CRM ПРОФИ").strip()),
             reply_to=(user.email or "").strip(),
         )
 
@@ -452,7 +453,7 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
         body_html=(camp.body_html or "") + f'<hr><p style="font-size:12px;color:#666">(Тест) Кампания: <a href="{link}">{link}</a></p>',
         unsubscribe_url=link,
         from_email=((smtp_cfg.from_email or "").strip() or (smtp_cfg.smtp_username or "").strip()),
-        from_name=(user.get_full_name() or smtp_cfg.from_name or "CRM ПРОФИ").strip(),
+        from_name=((camp.sender_name or "").strip() or (smtp_cfg.from_name or "CRM ПРОФИ").strip()),
         reply_to=(user.email or "").strip(),
     )
     try:

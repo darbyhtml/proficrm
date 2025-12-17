@@ -11,6 +11,7 @@
           <span>Тема: <b>{{ campaign.subject }}</b></span>
           <span class="badge">Статус: <b class="ml-1">{{ campaign.get_status_display }}</b></span>
           <span class="badge">From: <b class="ml-1">{{ smtp_from_email|default:"—" }}</b></span>
+          <span class="badge">Имя: <b class="ml-1">{{ campaign.sender_name|default:smtp_from_name_default }}</b></span>
           <span class="badge">Reply‑To: <b class="ml-1">{{ request.user.email|default:"—" }}</b></span>
         </div>
       </div>
