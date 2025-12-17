@@ -42,3 +42,6 @@ debug_types*.py
 inspect_*.py
 scan_rows.py
 
+# Local temporary scripts (repo-internal)
+backend/_compile_templates.py
+
