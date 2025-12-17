@@ -1172,7 +1172,7 @@ def settings_security(request: HttpRequest) -> HttpResponse:
     # Статистика по пользователям: кто чаще всего пытался/делал экспорт
     export_stats = (
         ActivityEvent.objects.filter(entity_type="export")
-        .values("actor_id", "actor__username", "actor__first_name", "actor__last_name")
+        .values("actor_id", "actor__first_name", "actor__last_name")
         .annotate(
             total=Count("id"),
             denied=Count("id", filter=Q(meta__allowed=False)),

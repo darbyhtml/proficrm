@@ -26,7 +26,6 @@
                 <tr>
                   <td class="text-sm">
                     {{ r.actor__last_name }} {{ r.actor__first_name }}
-                    <div class="text-xs muted">{{ r.actor__username }}</div>
                   </td>
                   <td class="text-sm">{{ r.total }}</td>
                   <td class="text-sm">{% if r.denied %}<span class="badge badge-warn">{{ r.denied }}</span>{% else %}0{% endif %}</td>
