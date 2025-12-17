@@ -21,6 +21,15 @@ class CompanySphere(models.Model):
 class Company(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Создатель",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="created_companies",
+    )
+
     name = models.CharField("Название", max_length=255, db_index=True)
     legal_name = models.CharField("Юр. название", max_length=255, blank=True, default="")
     inn = models.CharField("ИНН", max_length=20, blank=True, default="", db_index=True)

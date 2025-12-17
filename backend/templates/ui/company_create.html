@@ -18,7 +18,7 @@
           <div class="font-medium mb-1">Найдены возможные дубли{% if duplicate_reasons %} ({{ duplicate_reasons|join:", " }}){% endif %}</div>
           <div class="text-sm">Открой существующую карточку или нажми “Создать всё равно”.</div>
           {% if duplicates_hidden_count %}
-            <div class="text-xs muted mt-1">Есть совпадения вне вашего доступа: {{ duplicates_hidden_count }}.</div>
+            <div class="text-xs muted mt-1">И ещё совпадений: {{ duplicates_hidden_count }}.</div>
           {% endif %}
           {% if possible_duplicates %}
             <div class="mt-2 space-y-2">

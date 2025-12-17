@@ -72,6 +72,24 @@
           <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %} />
           Только с просрочками
         </label>
+        <div>
+          <label class="block text-xs text-brand-dark/70 mb-1">Сортировка</label>
+          <select name="sort" class="select" style="min-width:170px">
+            <option value="updated_at" {% if sort == 'updated_at' %}selected{% endif %}>По обновлению</option>
+            <option value="name" {% if sort == 'name' %}selected{% endif %}>По названию</option>
+            <option value="inn" {% if sort == 'inn' %}selected{% endif %}>По ИНН</option>
+            <option value="status" {% if sort == 'status' %}selected{% endif %}>По статусу</option>
+            <option value="responsible" {% if sort == 'responsible' %}selected{% endif %}>По ответственному</option>
+            <option value="branch" {% if sort == 'branch' %}selected{% endif %}>По филиалу</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-brand-dark/70 mb-1">Направление</label>
+          <select name="dir" class="select" style="min-width:120px">
+            <option value="asc" {% if dir == 'asc' %}selected{% endif %}>А → Я</option>
+            <option value="desc" {% if dir == 'desc' %}selected{% endif %}>Я → А</option>
+          </select>
+        </div>
         <button class="btn btn-primary" type="submit">Фильтр</button>
         <a class="btn btn-outline" href="/companies/">Сброс</a>
       </div>
@@ -138,10 +156,10 @@
         <div class="text-brand-dark/70">Стр. {{ page.number }} / {{ page.paginator.num_pages }}</div>
         <div class="flex gap-2">
           {% if page.has_previous %}
-            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&overdue={{ overdue }}&page={{ page.previous_page_number }}">Назад</a>
+            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}&page={{ page.previous_page_number }}">Назад</a>
           {% endif %}
           {% if page.has_next %}
-            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&overdue={{ overdue }}&page={{ page.next_page_number }}">Вперёд</a>
+            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}&page={{ page.next_page_number }}">Вперёд</a>
           {% endif %}
         </div>
       </div>

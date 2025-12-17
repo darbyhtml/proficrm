@@ -60,6 +60,44 @@ def _dup_reasons(*, c: Company, inn: str, kpp: str, name: str, address: str) -> 
     return reasons
 
 
+def _can_edit_company(user: User, company: Company) -> bool:
+    """
+    Правило редактирования компании:
+    - Админ/суперпользователь/управляющий группой компаний: всегда
+    - Создатель или ответственный: да
+    - Директор филиала: да, если компания в его филиале (branch) или у ответственного тот же филиал
+    Просмотр компании разрешён всем.
+    """
+    if not user or not user.is_authenticated or not user.is_active:
+        return False
+    if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+        return True
+    if company.responsible_id and company.responsible_id == user.id:
+        return True
+    if getattr(company, "created_by_id", None) and company.created_by_id == user.id:
+        return True
+    if user.role == User.Role.BRANCH_DIRECTOR and user.branch_id:
+        if company.branch_id == user.branch_id:
+            return True
+        resp = getattr(company, "responsible", None)
+        if resp and getattr(resp, "branch_id", None) == user.branch_id:
+            return True
+    return False
+
+
+def _editable_company_qs(user: User):
+    """
+    QuerySet компаний, которые пользователь может РЕДАКТИРОВАТЬ.
+    """
+    qs = Company.objects.all().select_related("responsible", "branch")
+    if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+        return qs
+    q = Q(responsible_id=user.id) | Q(created_by_id=user.id)
+    if user.role == User.Role.BRANCH_DIRECTOR and user.branch_id:
+        q = q | Q(branch_id=user.branch_id) | Q(responsible__branch_id=user.branch_id)
+    return qs.filter(q).distinct()
+
+
 @login_required
 def dashboard(request: HttpRequest) -> HttpResponse:
     user: User = request.user
@@ -120,7 +158,8 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 def company_list(request: HttpRequest) -> HttpResponse:
     user: User = request.user
     now = timezone.now()
-    base_qs = apply_company_scope(Company.objects.all(), user)
+    # Просмотр компаний: всем доступна вся база (без ограничения по филиалу/scope).
+    base_qs = Company.objects.all()
     companies_total = base_qs.order_by().count()
     overdue_tasks = (
         Task.objects.filter(company_id=OuterRef("pk"), due_at__lt=now)
@@ -133,7 +172,6 @@ def company_list(request: HttpRequest) -> HttpResponse:
         .select_related("responsible", "branch", "status")
         .prefetch_related("spheres")
         .annotate(has_overdue=Exists(overdue_tasks))
-        .order_by("-updated_at")
     )
 
     q = (request.GET.get("q") or "").strip()
@@ -160,6 +198,27 @@ def company_list(request: HttpRequest) -> HttpResponse:
     if only_overdue == "1":
         qs = qs.filter(has_overdue=True)
 
+    # Sorting (asc/desc)
+    sort = (request.GET.get("sort") or "").strip() or "updated_at"
+    direction = (request.GET.get("dir") or "").strip().lower() or "desc"
+    direction = "asc" if direction == "asc" else "desc"
+    sort_map = {
+        "updated_at": "updated_at",
+        "name": "name",
+        "inn": "inn",
+        "status": "status__name",
+        "responsible": "responsible__last_name",
+        "branch": "branch__name",
+    }
+    sort_field = sort_map.get(sort, "updated_at")
+    if sort == "responsible":
+        order = [sort_field, "responsible__first_name", "name"]
+    else:
+        order = [sort_field, "name"]
+    if direction == "desc":
+        order = [f"-{f}" for f in order]
+    qs = qs.order_by(*order)
+
     filter_active = any([q, responsible, status, branch, sphere, only_overdue == "1"])
     companies_filtered = qs.order_by().count()
 
@@ -182,6 +241,8 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "companies_total": companies_total,
             "companies_filtered": companies_filtered,
             "filter_active": filter_active,
+            "sort": sort,
+            "dir": direction,
             "responsibles": User.objects.order_by("last_name", "first_name"),
             "statuses": CompanyStatus.objects.order_by("name"),
             "spheres": CompanySphere.objects.order_by("name"),
@@ -385,12 +446,10 @@ def company_create(request: HttpRequest) -> HttpResponse:
                     reasons.append("Адрес")
                 if not q:
                     return [], 0, []
-                # видимые пользователю
-                qs_visible = apply_company_scope(qs_all, user).filter(q).select_related("responsible", "branch", "status").order_by("-updated_at")
-                visible = list(qs_visible[:8])
-                # скрытые (существуют, но вне scope)
-                hidden_count = qs_all.filter(q).exclude(id__in=[c.id for c in visible]).count()
-                return visible, hidden_count, reasons
+                qs_match = qs_all.filter(q).select_related("responsible", "branch", "status").order_by("-updated_at")
+                visible = list(qs_match[:8])
+                more_count = max(0, qs_match.count() - len(visible))
+                return visible, more_count, reasons
 
             dups, hidden_count, reasons = _find_dups()
             if (dups or hidden_count) and not confirm:
@@ -403,6 +462,7 @@ def company_create(request: HttpRequest) -> HttpResponse:
                 )
 
             # Менеджер создаёт компанию только на себя; филиал подтягиваем от пользователя.
+            company.created_by = user
             company.responsible = user
             company.branch = user.branch
             company.save()
@@ -454,9 +514,9 @@ def company_duplicates(request: HttpRequest) -> HttpResponse:
         return JsonResponse({"items": [], "hidden_count": 0, "reasons": []})
 
     qs_all = Company.objects.all()
-    qs_visible = apply_company_scope(qs_all, user).filter(q).select_related("responsible", "branch").order_by("-updated_at")
-    visible = list(qs_visible[:10])
-    hidden_count = qs_all.filter(q).exclude(id__in=[c.id for c in visible]).count()
+    qs_match = qs_all.filter(q).select_related("responsible", "branch").order_by("-updated_at")
+    visible = list(qs_match[:10])
+    hidden_count = max(0, qs_match.count() - len(visible))
 
     items = []
     for c in visible:
@@ -480,8 +540,8 @@ def company_duplicates(request: HttpRequest) -> HttpResponse:
 @login_required
 def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     user: User = request.user
-    company_qs = apply_company_scope(Company.objects.all(), user)
-    company = get_object_or_404(company_qs, id=company_id)
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch", "status"), id=company_id)
+    can_edit_company = _can_edit_company(user, company)
 
     contacts = Contact.objects.filter(company=company).prefetch_related("emails", "phones").order_by("last_name", "first_name")[:200]
     notes = CompanyNote.objects.filter(company=company).select_related("author").order_by("-created_at")[:50]
@@ -500,6 +560,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         "ui/company_detail.html",
         {
             "company": company,
+            "can_edit_company": can_edit_company,
             "contacts": contacts,
             "notes": notes,
             "note_form": note_form,
@@ -516,8 +577,10 @@ def company_update(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
-    company_qs = apply_company_scope(Company.objects.all(), user)
-    company = get_object_or_404(company_qs, id=company_id)
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_edit_company(user, company):
+        messages.error(request, "Редактирование доступно только создателю/ответственному/директору филиала/управляющему.")
+        return redirect("company_detail", company_id=company.id)
 
     form = CompanyQuickEditForm(request.POST, instance=company)
     if form.is_valid():
@@ -539,8 +602,10 @@ def company_update(request: HttpRequest, company_id) -> HttpResponse:
 @login_required
 def contact_create(request: HttpRequest, company_id) -> HttpResponse:
     user: User = request.user
-    company_qs = apply_company_scope(Company.objects.all(), user)
-    company = get_object_or_404(company_qs, id=company_id)
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_edit_company(user, company):
+        messages.error(request, "Нет прав на добавление контактов в эту компанию.")
+        return redirect("company_detail", company_id=company.id)
 
     contact = Contact(company=company)
 
@@ -579,10 +644,14 @@ def contact_create(request: HttpRequest, company_id) -> HttpResponse:
 @login_required
 def contact_edit(request: HttpRequest, contact_id) -> HttpResponse:
     user: User = request.user
-    # Контакт должен принадлежать компании в scope пользователя
-    company_qs = apply_company_scope(Company.objects.all(), user)
-    contact = get_object_or_404(Contact.objects.select_related("company"), id=contact_id, company__in=company_qs)
+    contact = get_object_or_404(Contact.objects.select_related("company", "company__responsible", "company__branch"), id=contact_id)
     company = contact.company
+    if not company:
+        messages.error(request, "Контакт не привязан к компании.")
+        return redirect("company_list")
+    if not _can_edit_company(user, company):
+        messages.error(request, "Нет прав на редактирование контактов этой компании.")
+        return redirect("company_detail", company_id=company.id)
 
     if request.method == "POST":
         form = ContactForm(request.POST, instance=contact)
@@ -620,8 +689,10 @@ def company_note_add(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
-    company_qs = apply_company_scope(Company.objects.all(), user)
-    company = get_object_or_404(company_qs, id=company_id)
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_edit_company(user, company):
+        messages.error(request, "Нет прав на добавление заметок по этой компании.")
+        return redirect("company_detail", company_id=company.id)
 
     form = CompanyNoteForm(request.POST)
     if form.is_valid():
@@ -656,8 +727,7 @@ def company_note_delete(request: HttpRequest, company_id, note_id: int) -> HttpR
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
-    company_qs = apply_company_scope(Company.objects.all(), user)
-    company = get_object_or_404(company_qs, id=company_id)
+    company = get_object_or_404(Company.objects.all(), id=company_id)
 
     # Удалять можно только свою заметку
     note = get_object_or_404(CompanyNote.objects.select_related("author"), id=note_id, company_id=company.id, author_id=user.id)
@@ -685,9 +755,8 @@ def task_list(request: HttpRequest) -> HttpResponse:
 
     qs = Task.objects.select_related("company", "assigned_to", "created_by", "type").order_by("-created_at")
 
-    # Те же принципы, что и в API: доступ через компании + мои назначенные задачи
-    company_qs = apply_company_scope(Company.objects.all(), user)
-    qs = (qs.filter(company__in=company_qs) | qs.filter(assigned_to=user)).distinct()
+    # Просмотр задач: всем доступны все задачи (без ограничения по компаниям/филиалам).
+    qs = qs.distinct()
 
     status = (request.GET.get("status") or "").strip()
     if status:
@@ -720,6 +789,11 @@ def task_create(request: HttpRequest) -> HttpResponse:
         if form.is_valid():
             task: Task = form.save(commit=False)
             task.created_by = user
+            if task.company_id:
+                comp = Company.objects.select_related("responsible", "branch").filter(id=task.company_id).first()
+                if comp and not _can_edit_company(user, comp):
+                    messages.error(request, "Нет прав на постановку задач по этой компании.")
+                    return redirect("company_detail", company_id=comp.id)
 
             # RBAC как в API:
             if user.role == User.Role.MANAGER:
@@ -755,11 +829,15 @@ def task_create(request: HttpRequest) -> HttpResponse:
         initial = {"assigned_to": user}
         company_id = (request.GET.get("company") or "").strip()
         if company_id:
-            initial["company"] = company_id
+            comp = Company.objects.select_related("responsible", "branch").filter(id=company_id).first()
+            if comp and _can_edit_company(user, comp):
+                initial["company"] = company_id
+            else:
+                messages.warning(request, "Нет прав на постановку задач по этой компании.")
         form = TaskForm(initial=initial)
 
-    # Ограничить список компаний по scope
-    form.fields["company"].queryset = apply_company_scope(Company.objects.all(), user).order_by("name")
+    # Выбор компании: только те, которые пользователь может редактировать
+    form.fields["company"].queryset = _editable_company_qs(user).order_by("name")
 
     # Ограничить назначаемых
     if user.role == User.Role.MANAGER:
@@ -778,15 +856,15 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
         return redirect("task_list")
 
     user: User = request.user
-    company_qs = apply_company_scope(Company.objects.all(), user)
+    task = get_object_or_404(Task.objects.select_related("company", "company__responsible", "company__branch", "assigned_to"), id=task_id)
 
-    task = get_object_or_404(
-        Task.objects.select_related("company", "assigned_to"),
-        id=task_id,
-    )
-
-    # Доступ: как в списке задач — через scope компании или если задача назначена пользователю
-    if not ((task.company_id and company_qs.filter(id=task.company_id).exists()) or task.assigned_to_id == user.id):
+    # Доступ: либо задача назначена пользователю, либо он может редактировать компанию задачи
+    can_edit = False
+    if task.assigned_to_id == user.id:
+        can_edit = True
+    elif task.company_id and task.company and _can_edit_company(user, task.company):
+        can_edit = True
+    if not can_edit:
         messages.error(request, "Нет доступа к этой задаче.")
         return redirect("task_list")
 
