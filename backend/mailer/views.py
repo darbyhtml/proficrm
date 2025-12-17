@@ -15,7 +15,7 @@ from audit.service import log_event
 from companies.models import Company
 from accounts.models import Branch
 from companies.models import CompanySphere, CompanyStatus, ContactEmail, Contact
-from mailer.forms import CampaignForm, CampaignGenerateRecipientsForm, MailAccountForm, GlobalMailAccountForm
+from mailer.forms import CampaignForm, CampaignGenerateRecipientsForm, CampaignRecipientAddForm, MailAccountForm, GlobalMailAccountForm
 from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, UnsubscribeToken
 from mailer.smtp_sender import build_message, send_via_smtp
 from mailer.utils import html_to_text
@@ -158,6 +158,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
         messages.error(request, "Доступ запрещён.")
         return redirect("campaigns")
 
+    smtp_cfg = GlobalMailAccount.load()
     counts = {
         "pending": camp.recipients.filter(status=CampaignRecipient.Status.PENDING).count(),
         "sent": camp.recipients.filter(status=CampaignRecipient.Status.SENT).count(),
@@ -174,12 +175,68 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "campaign": camp,
             "counts": counts,
             "recent": recent,
+            "smtp_from_email": (smtp_cfg.from_email or smtp_cfg.smtp_username or "").strip(),
+            "recipient_add_form": CampaignRecipientAddForm(),
             "branches": Branch.objects.order_by("name"),
             "responsibles": User.objects.order_by("last_name", "first_name"),
             "statuses": CompanyStatus.objects.order_by("name"),
             "spheres": CompanySphere.objects.order_by("name"),
         },
     )
+
+
+@login_required
+def campaign_recipient_add(request: HttpRequest, campaign_id) -> HttpResponse:
+    user: User = request.user
+    camp = get_object_or_404(Campaign, id=campaign_id)
+    if user.role == User.Role.MANAGER and camp.created_by_id != user.id:
+        messages.error(request, "Доступ запрещён.")
+        return redirect("campaigns")
+    if request.method != "POST":
+        return redirect("campaign_detail", campaign_id=camp.id)
+
+    form = CampaignRecipientAddForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, "Некорректный email.")
+        return redirect("campaign_detail", campaign_id=camp.id)
+
+    email = (form.cleaned_data["email"] or "").strip().lower()
+    if not email:
+        messages.error(request, "Введите email.")
+        return redirect("campaign_detail", campaign_id=camp.id)
+
+    if Unsubscribe.objects.filter(email__iexact=email).exists():
+        CampaignRecipient.objects.get_or_create(
+            campaign=camp,
+            email=email,
+            defaults={"status": CampaignRecipient.Status.UNSUBSCRIBED},
+        )
+        messages.warning(request, f"{email} в списке отписавшихся — добавлен как 'Отписался'.")
+        return redirect("campaign_detail", campaign_id=camp.id)
+
+    _, created = CampaignRecipient.objects.get_or_create(campaign=camp, email=email)
+    if created:
+        messages.success(request, f"Добавлен получатель: {email}")
+    else:
+        messages.info(request, f"Получатель уже есть: {email}")
+    return redirect("campaign_detail", campaign_id=camp.id)
+
+
+@login_required
+def campaign_recipient_delete(request: HttpRequest, campaign_id, recipient_id) -> HttpResponse:
+    user: User = request.user
+    camp = get_object_or_404(Campaign, id=campaign_id)
+    if user.role == User.Role.MANAGER and camp.created_by_id != user.id:
+        messages.error(request, "Доступ запрещён.")
+        return redirect("campaigns")
+    if request.method != "POST":
+        return redirect("campaign_detail", campaign_id=camp.id)
+
+    r = get_object_or_404(CampaignRecipient, id=recipient_id, campaign=camp)
+    email = r.email
+    r.delete()
+    messages.success(request, f"Удалён получатель: {email}")
+    return redirect("campaign_detail", campaign_id=camp.id)
 
 
 @login_required

@@ -105,3 +105,10 @@ class CampaignForm(forms.ModelForm):
 class CampaignGenerateRecipientsForm(forms.Form):
     limit = forms.IntegerField(label="Лимит получателей", min_value=1, max_value=5000, initial=200)
 
+
+class CampaignRecipientAddForm(forms.Form):
+    email = forms.EmailField(
+        label="Email",
+        widget=forms.EmailInput(attrs={"class": "input", "placeholder": "email@example.com"}),
+    )
+

@@ -3,114 +3,161 @@
 
 {% block content %}
   <div class="space-y-4">
-    <div class="flex items-end justify-between gap-3">
+    <div class="flex flex-col md:flex-row md:items-end justify-between gap-3">
       <div>
         <div class="text-sm muted"><a class="link" href="/mail/campaigns/">Почта</a> /</div>
         <h1 class="text-2xl font-semibold">{{ campaign.name }}</h1>
-        <div class="muted text-sm">Тема: <b>{{ campaign.subject }}</b> · Статус: <span class="badge">{{ campaign.get_status_display }}</span></div>
+        <div class="text-sm text-brand-dark/70 flex flex-wrap items-center gap-2">
+          <span>Тема: <b>{{ campaign.subject }}</b></span>
+          <span class="badge">Статус: <b class="ml-1">{{ campaign.get_status_display }}</b></span>
+          <span class="badge">From: <b class="ml-1">{{ smtp_from_email|default:"—" }}</b></span>
+          <span class="badge">Reply‑To: <b class="ml-1">{{ request.user.email|default:"—" }}</b></span>
+        </div>
       </div>
-      <div class="flex gap-2">
-        <a class="btn btn-outline" href="/mail/campaigns/{{ campaign.id }}/edit/">Редактировать</a>
-        <form method="post" action="/mail/campaigns/{{ campaign.id }}/test-send/">
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      <div class="lg:col-span-8 space-y-4">
+        <details class="card card-pad" open>
+          <summary class="cursor-pointer font-medium">Предпросмотр письма</summary>
+          <div class="mt-3">
+            <div class="text-sm muted mb-2">Тема: <b>{{ campaign.subject }}</b></div>
+            {% if campaign.body_html %}
+              <iframe class="w-full" style="height:280px;border:1px solid rgba(194,226,222,.95);border-radius:12px;background:#fff" srcdoc='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial; padding:14px; color:#003D38} a{color:#01948E}</style></head><body>{{ campaign.body_html|escape }}</body></html>'></iframe>
+            {% else %}
+              <div class="text-sm" style="white-space:pre-wrap">{{ campaign.body_text }}</div>
+            {% endif %}
+          </div>
+        </details>
+
+        <div class="card card-pad">
+          <div class="flex flex-col md:flex-row md:items-end justify-between gap-3">
+            <div>
+              <div class="font-medium">Получатели</div>
+              <div class="text-sm muted">Можно сгенерировать по фильтрам или добавить вручную.</div>
+            </div>
+            <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/add/" class="flex gap-2 items-end">
+              {% csrf_token %}
+              <div style="min-width:260px">
+                <label class="block text-xs muted mb-1">Добавить email вручную</label>
+                {{ recipient_add_form.email }}
+              </div>
+              <button class="btn btn-primary" type="submit">Добавить</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="card overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="table">
+              <thead>
+                <tr>
+                  <th>Email</th>
+                  <th>Статус</th>
+                  <th>Ошибка</th>
+                  <th>Обновлено</th>
+                  <th style="width:120px">Действия</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in recent %}
+                  <tr>
+                    <td class="font-mono text-xs">{{ r.email }}</td>
+                    <td>
+                      <span class="badge {% if r.status == 'failed' %}badge-warn{% endif %}">{{ r.get_status_display }}</span>
+                    </td>
+                    <td class="muted text-xs">{{ r.last_error }}</td>
+                    <td class="muted text-xs">{{ r.updated_at }}</td>
+                    <td>
+                      <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/{{ r.id }}/delete/" onsubmit="return confirm('Удалить получателя {{ r.email }}?');">
+                        {% csrf_token %}
+                        <button class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" type="submit">Удалить</button>
+                      </form>
+                    </td>
+                  </tr>
+                {% empty %}
+                  <tr><td class="muted" colspan="5" style="padding:1.25rem 1rem">Получателей пока нет.</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="lg:col-span-4 space-y-4">
+        <div class="card card-pad">
+          <div class="font-medium mb-2">Действия</div>
+          <div class="flex flex-wrap gap-2">
+            <a class="btn btn-outline" href="/mail/campaigns/{{ campaign.id }}/edit/">Редактировать</a>
+            <form method="post" action="/mail/campaigns/{{ campaign.id }}/test-send/">
+              {% csrf_token %}
+              <button class="btn btn-outline" type="submit">Тест себе</button>
+            </form>
+            <form method="post" action="/mail/campaigns/{{ campaign.id }}/send-step/">
+              {% csrf_token %}
+              <button class="btn btn-primary" type="submit">Отправить (до 50)</button>
+            </form>
+          </div>
+          <div class="text-xs muted-2 mt-2">Отправка идёт батчами и учитывает лимиты SMTP.</div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="card card-pad"><div class="muted text-sm">Всего</div><div class="text-2xl font-semibold">{{ counts.total }}</div></div>
+          <div class="card card-pad"><div class="muted text-sm">В очереди</div><div class="text-2xl font-semibold">{{ counts.pending }}</div></div>
+          <div class="card card-pad"><div class="muted text-sm">Отправлено</div><div class="text-2xl font-semibold">{{ counts.sent }}</div></div>
+          <div class="card card-pad"><div class="muted text-sm">Ошибки</div><div class="text-2xl font-semibold">{{ counts.failed }}</div></div>
+        </div>
+
+        <form method="post" action="/mail/campaigns/{{ campaign.id }}/generate/" class="card card-pad space-y-3">
           {% csrf_token %}
-          <button class="btn btn-outline" type="submit">Тест себе</button>
-        </form>
-        <form method="post" action="/mail/campaigns/{{ campaign.id }}/generate/" class="flex gap-2 items-end flex-wrap">
-          {% csrf_token %}
-          <div>
-            <label class="block text-xs muted mb-1">Лимит</label>
-            <input class="input" style="max-width:140px" type="number" name="limit" value="200" min="1" max="5000" />
-          </div>
-          <div>
-            <label class="block text-xs muted mb-1">Филиал</label>
-            <select class="select" style="max-width:200px" name="branch">
-              <option value="">Любой</option>
-              {% for b in branches %}
-                <option value="{{ b.id }}">{{ b.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs muted mb-1">Ответственный</label>
-            <select class="select" style="max-width:240px" name="responsible">
-              <option value="">Любой</option>
-              {% for u in responsibles %}
-                <option value="{{ u.id }}">{{ u.get_full_name|default:u.username }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs muted mb-1">Статус</label>
-            <select class="select" style="max-width:220px" name="status">
-              <option value="">Любой</option>
-              {% for s in statuses %}
-                <option value="{{ s.id }}">{{ s.name }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div>
-            <label class="block text-xs muted mb-1">Сфера</label>
-            <select class="select" style="max-width:220px" name="sphere">
-              <option value="">Любая</option>
-              {% for s in spheres %}
-                <option value="{{ s.id }}">{{ s.name }}</option>
-              {% endfor %}
-            </select>
+          <div class="font-medium">Сгенерировать получателей</div>
+          <div class="grid grid-cols-1 gap-2">
+            <div>
+              <label class="block text-xs muted mb-1">Лимит</label>
+              <input class="input" type="number" name="limit" value="200" min="1" max="5000" />
+            </div>
+            <div>
+              <label class="block text-xs muted mb-1">Филиал</label>
+              <select class="select" name="branch">
+                <option value="">Любой</option>
+                {% for b in branches %}
+                  <option value="{{ b.id }}">{{ b.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs muted mb-1">Ответственный</label>
+              <select class="select" name="responsible">
+                <option value="">Любой</option>
+                {% for u in responsibles %}
+                  <option value="{{ u.id }}">{{ u.get_full_name|default:u.username }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs muted mb-1">Статус</label>
+              <select class="select" name="status">
+                <option value="">Любой</option>
+                {% for s in statuses %}
+                  <option value="{{ s.id }}">{{ s.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs muted mb-1">Сфера</label>
+              <select class="select" name="sphere">
+                <option value="">Любая</option>
+                {% for s in spheres %}
+                  <option value="{{ s.id }}">{{ s.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
           </div>
           <button class="btn btn-outline" type="submit">Сгенерировать</button>
         </form>
-        <form method="post" action="/mail/campaigns/{{ campaign.id }}/send-step/">
-          {% csrf_token %}
-          <button class="btn btn-primary" type="submit">Отправить 50</button>
-        </form>
       </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4">
-      <div class="card card-pad"><div class="muted text-sm">Всего</div><div class="text-2xl font-semibold">{{ counts.total }}</div></div>
-      <div class="card card-pad"><div class="muted text-sm">В очереди</div><div class="text-2xl font-semibold">{{ counts.pending }}</div></div>
-      <div class="card card-pad"><div class="muted text-sm">Отправлено</div><div class="text-2xl font-semibold">{{ counts.sent }}</div></div>
-      <div class="card card-pad"><div class="muted text-sm">Ошибки</div><div class="text-2xl font-semibold">{{ counts.failed }}</div></div>
-    </div>
-
-    <details class="card card-pad">
-      <summary class="cursor-pointer font-medium">Предпросмотр письма</summary>
-      <div class="mt-3">
-        <div class="text-sm muted mb-2">Тема: <b>{{ campaign.subject }}</b></div>
-        {% if campaign.body_html %}
-          <iframe class="w-full" style="height:280px;border:1px solid rgba(194,226,222,.95);border-radius:12px;background:#fff" srcdoc='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial; padding:14px; color:#003D38} a{color:#01948E}</style></head><body>{{ campaign.body_html|escape }}</body></html>'></iframe>
-        {% else %}
-          <div class="text-sm" style="white-space:pre-wrap">{{ campaign.body_text }}</div>
-        {% endif %}
-      </div>
-    </details>
-
-    <div class="card overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="table">
-          <thead>
-            <tr>
-              <th>Email</th>
-              <th>Статус</th>
-              <th>Ошибка</th>
-              <th>Обновлено</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for r in recent %}
-              <tr>
-                <td class="font-mono text-xs">{{ r.email }}</td>
-                <td><span class="badge {% if r.status == 'failed' %}badge-warn{% endif %}">{{ r.get_status_display }}</span></td>
-                <td class="muted text-xs">{{ r.last_error }}</td>
-                <td class="muted text-xs">{{ r.updated_at }}</td>
-              </tr>
-            {% empty %}
-              <tr><td class="muted" colspan="4" style="padding:1.25rem 1rem">Получателей пока нет.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
   </div>
 {% endblock %}
 
