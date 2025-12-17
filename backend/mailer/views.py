@@ -65,7 +65,7 @@ def mail_settings(request: HttpRequest) -> HttpResponse:
                     body_text=f"Тестовое письмо из CRM ПРОФИ.\n\nЕсли вы это читаете — SMTP настроен.\n\n{test_url}",
                     body_html=f"<p>Тестовое письмо из CRM ПРОФИ.</p><p>Если вы это читаете — SMTP настроен.</p><p><a href='{test_url}'>{test_url}</a></p>",
                     unsubscribe_url=test_url,
-                    from_email=(cfg.smtp_username or "").strip(),
+                    from_email=((cfg.from_email or "").strip() or (cfg.smtp_username or "").strip()),
                     from_name=(cfg.from_name or "CRM ПРОФИ").strip(),
                     reply_to=to_email,
                 )
@@ -107,6 +107,7 @@ def campaigns(request: HttpRequest) -> HttpResponse:
 @login_required
 def campaign_create(request: HttpRequest) -> HttpResponse:
     user: User = request.user
+    smtp_cfg = GlobalMailAccount.load()
     if request.method == "POST":
         form = CampaignForm(request.POST)
         if form.is_valid():
@@ -118,7 +119,11 @@ def campaign_create(request: HttpRequest) -> HttpResponse:
             return redirect("campaign_detail", campaign_id=camp.id)
     else:
         form = CampaignForm()
-    return render(request, "ui/mail/campaign_form.html", {"form": form, "mode": "create"})
+    return render(
+        request,
+        "ui/mail/campaign_form.html",
+        {"form": form, "mode": "create", "smtp_from_email": (smtp_cfg.from_email or smtp_cfg.smtp_username or "").strip()},
+    )
 
 
 @login_required
@@ -128,6 +133,7 @@ def campaign_edit(request: HttpRequest, campaign_id) -> HttpResponse:
     if user.role == User.Role.MANAGER and camp.created_by_id != user.id:
         messages.error(request, "Доступ запрещён.")
         return redirect("campaigns")
+    smtp_cfg = GlobalMailAccount.load()
 
     if request.method == "POST":
         form = CampaignForm(request.POST, instance=camp)
@@ -137,7 +143,11 @@ def campaign_edit(request: HttpRequest, campaign_id) -> HttpResponse:
             return redirect("campaign_detail", campaign_id=camp.id)
     else:
         form = CampaignForm(instance=camp)
-    return render(request, "ui/mail/campaign_form.html", {"form": form, "mode": "edit", "campaign": camp})
+    return render(
+        request,
+        "ui/mail/campaign_form.html",
+        {"form": form, "mode": "edit", "campaign": camp, "smtp_from_email": (smtp_cfg.from_email or smtp_cfg.smtp_username or "").strip()},
+    )
 
 
 @login_required
@@ -327,7 +337,7 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
             body_text=(auto_plain or camp.body_text or "") + footer,
             body_html=(camp.body_html or "") + f'<hr><p style="font-size:12px;color:#666">Отписаться: <a href="{unsubscribe_url}">{unsubscribe_url}</a></p>',
             unsubscribe_url=unsubscribe_url,
-            from_email=(user.email or smtp_cfg.smtp_username).strip(),
+            from_email=((smtp_cfg.from_email or "").strip() or (smtp_cfg.smtp_username or "").strip()),
             from_name=(user.get_full_name() or smtp_cfg.from_name or "CRM ПРОФИ").strip(),
             reply_to=(user.email or "").strip(),
         )
@@ -384,7 +394,7 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
         body_text=(html_to_text(camp.body_html or "") or camp.body_text or "") + f"\n\n(Тест) Кампания: {link}\n",
         body_html=(camp.body_html or "") + f'<hr><p style="font-size:12px;color:#666">(Тест) Кампания: <a href="{link}">{link}</a></p>',
         unsubscribe_url=link,
-        from_email=(user.email or smtp_cfg.smtp_username).strip(),
+        from_email=((smtp_cfg.from_email or "").strip() or (smtp_cfg.smtp_username or "").strip()),
         from_name=(user.get_full_name() or smtp_cfg.from_name or "CRM ПРОФИ").strip(),
         reply_to=(user.email or "").strip(),
     )

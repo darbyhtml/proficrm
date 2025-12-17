@@ -74,7 +74,7 @@ class Command(BaseCommand):
                         body_text=(auto_plain or camp.body_text or "") + footer,
                         body_html=(camp.body_html or "") + f'<hr><p style="font-size:12px;color:#666">Отписаться: <a href="{unsubscribe_url}">{unsubscribe_url}</a></p>',
                         unsubscribe_url=unsubscribe_url,
-                        from_email=(user.email or smtp_cfg.smtp_username).strip(),
+                        from_email=((smtp_cfg.from_email or "").strip() or (smtp_cfg.smtp_username or "").strip()),
                         from_name=(user.get_full_name() or smtp_cfg.from_name or "CRM ПРОФИ").strip(),
                         reply_to=(user.email or "").strip(),
                     )

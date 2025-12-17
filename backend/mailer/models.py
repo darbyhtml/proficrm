@@ -51,6 +51,8 @@ class GlobalMailAccount(models.Model):
     smtp_username = models.CharField("Логин SMTP", max_length=255, default="")
     smtp_password_enc = models.TextField("Пароль (зашифрован)", blank=True, default="")
 
+    # Единый адрес отправителя (From) для всей CRM
+    from_email = models.EmailField("Email отправителя (From)", blank=True, default="no-reply@groupprofi.ru")
     # Опционально: дефолтное имя отправителя (если у пользователя не задано ФИО)
     from_name = models.CharField("Имя отправителя (по умолчанию)", max_length=120, blank=True, default="CRM ПРОФИ")
     is_enabled = models.BooleanField("Включено", default=False)

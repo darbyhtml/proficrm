@@ -60,6 +60,19 @@
           </div>
         </div>
 
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm muted mb-1">Email отправителя (From)</label>
+            {{ form.from_email }}
+            <div class="text-xs muted-2 mt-1">Все рассылки будут уходить с этого адреса (например: <span class="font-mono">no-reply@groupprofi.ru</span>).</div>
+          </div>
+          <div>
+            <label class="block text-sm muted mb-1">Reply-To (автоматически)</label>
+            <div class="input bg-brand-soft/20" style="display:flex;align-items:center">email менеджера из профиля</div>
+            <div class="text-xs muted-2 mt-1">Чтобы получатели отвечали конкретному менеджеру.</div>
+          </div>
+        </div>
+
         <div>
           <label class="block text-sm muted mb-1">Имя отправителя (по умолчанию)</label>
           {{ form.from_name }}

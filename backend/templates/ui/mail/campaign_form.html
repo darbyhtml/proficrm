@@ -7,7 +7,8 @@
       <div class="text-sm muted"><a class="link" href="/mail/campaigns/">Почта</a> /</div>
       <h1 class="text-2xl font-semibold">{% if mode == 'edit' %}Редактировать кампанию{% else %}Новая кампания{% endif %}</h1>
       <div class="text-sm text-brand-dark/70 mt-1">
-        Отправитель: <b>{{ request.user.email|default:"(email не задан в профиле)" }}</b>
+        Отправитель: <b>{{ smtp_from_email|default:"(не задан в настройках SMTP)" }}</b>
+        <span class="muted-2">· Reply‑To: {{ request.user.email|default:"(email менеджера не задан)" }}</span>
       </div>
     </div>
 
