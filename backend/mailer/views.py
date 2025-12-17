@@ -243,7 +243,7 @@ def campaign_recipient_delete(request: HttpRequest, campaign_id, recipient_id) -
 @login_required
 def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpResponse:
     """
-    MVP: генерируем получателей из email контактов по доступным компаниям (scope пользователя).
+    MVP: генерируем получателей из email контактов по компаниям (вся база видна всем пользователям).
     """
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)

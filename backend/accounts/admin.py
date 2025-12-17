@@ -12,10 +12,10 @@ class BranchAdmin(admin.ModelAdmin):
 
 @admin.register(User)
 class UserAdmin(DjangoUserAdmin):
-    list_display = ("username", "email", "role", "data_scope", "branch", "is_active", "is_staff")
-    list_filter = ("role", "data_scope", "branch", "is_active", "is_staff")
+    list_display = ("username", "email", "role", "branch", "is_active", "is_staff")
+    list_filter = ("role", "branch", "is_active", "is_staff")
     fieldsets = DjangoUserAdmin.fieldsets + (
-        ("CRM", {"fields": ("role", "data_scope", "branch")}),
+        ("CRM", {"fields": ("role", "branch")}),
     )
 
 # Register your models here.

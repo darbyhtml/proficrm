@@ -3,8 +3,8 @@ from rest_framework.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 
 from accounts.models import User
-from accounts.scope import apply_company_scope
 from companies.models import Company
+from companies.permissions import can_edit_company
 from .models import Task, TaskType
 
 
@@ -48,18 +48,18 @@ class TaskViewSet(viewsets.ModelViewSet):
     ordering_fields = ("created_at", "due_at")
 
     def get_queryset(self):
-        user: User = self.request.user
         qs = Task.objects.select_related("company", "assigned_to", "created_by").order_by("-created_at")
-
-        # Ограничиваем задачи через scope компаний + всегда показываем задачи, назначенные пользователю.
-        company_qs = apply_company_scope(Company.objects.all(), user)
-        qs = qs.filter(company__in=company_qs) | qs.filter(assigned_to=user)
+        # В UI сейчас задачи видны всем (фильтр "мои" — опционально). Держим тот же принцип и в API.
         return qs.distinct()
 
     def perform_create(self, serializer):
         user: User = self.request.user
         data = dict(serializer.validated_data)
         assigned_to = data.get("assigned_to") or user
+        company: Company | None = data.get("company")
+
+        if company is not None and not can_edit_company(user, company):
+            raise PermissionDenied("Нет прав на постановку задач по этой компании.")
 
         if user.role == User.Role.MANAGER and assigned_to.id != user.id:
             raise PermissionDenied("Менеджер может назначать задачи только себе.")
@@ -74,6 +74,16 @@ class TaskViewSet(viewsets.ModelViewSet):
         user: User = self.request.user
         obj: Task = self.get_object()
         data = dict(serializer.validated_data)
+
+        # Доступ: либо задача назначена пользователю, либо он может редактировать компанию задачи,
+        # либо он админ/суперпользователь/управляющий.
+        if not (
+            obj.assigned_to_id == user.id
+            or (obj.company_id and obj.company and can_edit_company(user, obj.company))
+            or user.is_superuser
+            or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER)
+        ):
+            raise PermissionDenied("Нет доступа к этой задаче.")
 
         if "assigned_to" in data:
             assigned_to = data["assigned_to"]

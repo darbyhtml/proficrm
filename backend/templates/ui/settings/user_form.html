@@ -1,5 +1,5 @@
 {% extends "ui/base.html" %}
-{% block title %}{% if mode == 'edit' %}Редактировать пользователя{% else %}Новый пользователь{% endif %} — Настройки{% endblock %}
+{% block title %}{% if mode == 'edit' %}Редактировать пользователя{% else %}Новый пользователь{% endif %} — CRM ПРОФИ{% endblock %}
 
 {% block content %}
   <div class="space-y-4">
@@ -33,14 +33,10 @@
         </div>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label class="block text-sm text-brand-dark/80 mb-1">Роль</label>
           {{ form.role }}
-        </div>
-        <div>
-          <label class="block text-sm text-brand-dark/80 mb-1">Доступ к базе</label>
-          {{ form.data_scope }}
         </div>
         <div>
           <label class="block text-sm text-brand-dark/80 mb-1">Филиал</label>

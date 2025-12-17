@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from django.utils import timezone
 
-from accounts.scope import apply_company_scope
-from companies.models import Company
 from notifications.models import Notification
 from tasksapp.models import Task
 
@@ -22,7 +20,7 @@ def notifications_panel(request):
     notif_items = Notification.objects.filter(user=user).order_by("-created_at")[:10]
 
     now = timezone.now()
-    # напоминания: мои задачи (или задачи по доступным компаниям, если назначено на меня)
+    # напоминания: мои задачи (назначенные пользователю)
     reminders = (
         Task.objects.filter(assigned_to=user)
         .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])

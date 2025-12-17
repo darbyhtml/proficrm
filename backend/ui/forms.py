@@ -119,14 +119,14 @@ class UserCreateForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ["username", "first_name", "last_name", "email", "role", "data_scope", "branch", "is_active"]
+        # data_scope больше не используем: вся база компаний видна всем пользователям.
+        fields = ["username", "first_name", "last_name", "email", "role", "branch", "is_active"]
         widgets = {
             "username": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "first_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "last_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "email": forms.EmailInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "role": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "data_scope": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "branch": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
 
@@ -158,14 +158,14 @@ class UserEditForm(forms.ModelForm):
 
     class Meta:
         model = User
-        fields = ["username", "first_name", "last_name", "email", "role", "data_scope", "branch", "is_active"]
+        # data_scope больше не используем: вся база компаний видна всем пользователям.
+        fields = ["username", "first_name", "last_name", "email", "role", "branch", "is_active"]
         widgets = {
             "username": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "first_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "last_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "email": forms.EmailInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "role": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "data_scope": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "branch": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
 

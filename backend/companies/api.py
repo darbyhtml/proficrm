@@ -2,8 +2,8 @@ from rest_framework import serializers, viewsets
 from rest_framework.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 
-from accounts.scope import apply_company_scope
 from accounts.models import User
+from .permissions import can_edit_company
 from .models import Company, Contact, CompanyNote
 
 
@@ -35,8 +35,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
     ordering_fields = ("updated_at", "created_at", "name")
 
     def get_queryset(self):
-        qs = Company.objects.all().order_by("-updated_at")
-        return apply_company_scope(qs, self.request.user)
+        return Company.objects.all().order_by("-updated_at")
 
     def perform_create(self, serializer):
         user: User = self.request.user
@@ -67,12 +66,15 @@ class CompanyViewSet(viewsets.ModelViewSet):
         if branch is None:
             branch = responsible.branch
 
-        serializer.save(responsible=responsible, branch=branch)
+        serializer.save(responsible=responsible, branch=branch, created_by=user)
 
     def perform_update(self, serializer):
         user: User = self.request.user
         obj: Company = self.get_object()
         data = dict(serializer.validated_data)
+
+        if not can_edit_company(user, obj):
+            raise PermissionDenied("Нет прав на редактирование компании.")
 
         new_responsible = data.get("responsible", obj.responsible)
         new_branch = data.get("branch", obj.branch)
@@ -118,9 +120,27 @@ class ContactViewSet(viewsets.ModelViewSet):
     ordering_fields = ("updated_at", "created_at", "last_name")
 
     def get_queryset(self):
-        # Ограничиваем контакты через доступные компании.
-        company_qs = apply_company_scope(Company.objects.all(), self.request.user)
-        return Contact.objects.filter(company__in=company_qs).order_by("-updated_at")
+        return Contact.objects.all().order_by("-updated_at")
+
+    def perform_create(self, serializer):
+        user: User = self.request.user
+        company: Company = serializer.validated_data["company"]
+        if not can_edit_company(user, company):
+            raise PermissionDenied("Нет прав на добавление контактов для этой компании.")
+        serializer.save()
+
+    def perform_update(self, serializer):
+        user: User = self.request.user
+        obj: Contact = self.get_object()
+        if not can_edit_company(user, obj.company):
+            raise PermissionDenied("Нет прав на редактирование контактов этой компании.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        user: User = self.request.user
+        if not can_edit_company(user, instance.company):
+            raise PermissionDenied("Нет прав на удаление контактов этой компании.")
+        instance.delete()
 
 
 class CompanyNoteSerializer(serializers.ModelSerializer):
@@ -137,10 +157,31 @@ class CompanyNoteViewSet(viewsets.ModelViewSet):
     ordering_fields = ("created_at",)
 
     def get_queryset(self):
-        company_qs = apply_company_scope(Company.objects.all(), self.request.user)
-        return CompanyNote.objects.filter(company__in=company_qs).order_by("-created_at")
+        return CompanyNote.objects.all().order_by("-created_at")
 
     def perform_create(self, serializer):
-        serializer.save(author=self.request.user)
+        user: User = self.request.user
+        company: Company = serializer.validated_data["company"]
+        if not can_edit_company(user, company):
+            raise PermissionDenied("Нет прав на добавление заметок для этой компании.")
+        serializer.save(author=user)
+
+    def perform_update(self, serializer):
+        user: User = self.request.user
+        obj: CompanyNote = self.get_object()
+        if not can_edit_company(user, obj.company):
+            raise PermissionDenied("Нет прав на редактирование заметок этой компании.")
+        # правило: обычный пользователь может править только свои заметки
+        if not (user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER)) and obj.author_id != user.id:
+            raise PermissionDenied("Можно редактировать только свои заметки.")
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        user: User = self.request.user
+        if not can_edit_company(user, instance.company):
+            raise PermissionDenied("Нет прав на удаление заметок этой компании.")
+        if not (user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER)) and instance.author_id != user.id:
+            raise PermissionDenied("Можно удалять только свои заметки.")
+        instance.delete()
 
 
