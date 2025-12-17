@@ -17,6 +17,8 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import include, path
 from django.contrib.auth import views as auth_views
+from django.views.generic import RedirectView
+from django.templatetags.static import static
 
 from rest_framework import routers
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
@@ -49,6 +51,7 @@ router.register(r"task-types", TaskTypeViewSet, basename="task-type")
 router.register(r"tasks", TaskViewSet, basename="task")
 
 urlpatterns = [
+    path("favicon.ico", RedirectView.as_view(url=static("ui/favicon.svg"), permanent=True)),
     path('admin/', admin.site.urls),
     path("", include("ui.urls")),
     path("", include("mailer.urls")),
