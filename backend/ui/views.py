@@ -873,14 +873,10 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
     user: User = request.user
     task = get_object_or_404(Task.objects.select_related("company", "company__responsible", "company__branch", "assigned_to"), id=task_id)
 
-    # Доступ: либо задача назначена пользователю, либо он может редактировать компанию задачи
-    can_edit = False
-    if task.assigned_to_id == user.id:
-        can_edit = True
-    elif task.company_id and task.company and _can_edit_company(user, task.company):
-        can_edit = True
-    if not can_edit:
-        messages.error(request, "Нет доступа к этой задаче.")
+    # Доступ: менять статус может только исполнитель задачи (assigned_to).
+    # Исключение: админ/суперпользователь.
+    if not (task.assigned_to_id == user.id or user.is_superuser or user.role == User.Role.ADMIN):
+        messages.error(request, "Менять статус может только исполнитель задачи.")
         return redirect("task_list")
 
     new_status = (request.POST.get("status") or "").strip()

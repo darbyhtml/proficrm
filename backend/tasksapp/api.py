@@ -75,15 +75,10 @@ class TaskViewSet(viewsets.ModelViewSet):
         obj: Task = self.get_object()
         data = dict(serializer.validated_data)
 
-        # Доступ: либо задача назначена пользователю, либо он может редактировать компанию задачи,
-        # либо он админ/суперпользователь/управляющий.
-        if not (
-            obj.assigned_to_id == user.id
-            or (obj.company_id and obj.company and can_edit_company(user, obj.company))
-            or user.is_superuser
-            or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER)
-        ):
-            raise PermissionDenied("Нет доступа к этой задаче.")
+        # Доступ: обновлять/менять статус может только исполнитель (assigned_to).
+        # Исключение: админ/суперпользователь (админ всегда имеет полный доступ).
+        if not (obj.assigned_to_id == user.id or user.is_superuser or user.role == User.Role.ADMIN):
+            raise PermissionDenied("Менять задачу может только исполнитель.")
 
         if "assigned_to" in data:
             assigned_to = data["assigned_to"]
