@@ -43,7 +43,8 @@ class GlobalMailAccount(models.Model):
     Глобальные SMTP-настройки (одни на всю CRM). Редактируются администратором.
     Пароль хранится шифрованным (Fernet), как и в MailAccount.
     """
-    smtp_host = models.CharField("SMTP host", max_length=255, default="smtp.yandex.ru")
+    # smtp.bz defaults (recommended: 587 STARTTLS; alt: 2525)
+    smtp_host = models.CharField("SMTP host", max_length=255, default="connect.smtp.bz")
     smtp_port = models.PositiveIntegerField("SMTP port", default=587)
     use_starttls = models.BooleanField("STARTTLS", default=True)
 
@@ -55,8 +56,10 @@ class GlobalMailAccount(models.Model):
     is_enabled = models.BooleanField("Включено", default=False)
 
     # Глобальные лимиты (если нужно быстро ограничить отправку всей системой)
-    rate_per_minute = models.PositiveIntegerField("Лимит писем в минуту", default=20)
-    rate_per_day = models.PositiveIntegerField("Лимит писем в день", default=500)
+    # Для FREE smtp.bz: 100/час → 1/мин (плюс небольшой запас на retry)
+    rate_per_minute = models.PositiveIntegerField("Лимит писем в минуту", default=1)
+    # В тарифе указан общий лимит писем (обычно месячный). Оставляем большим, но можно снизить.
+    rate_per_day = models.PositiveIntegerField("Лимит писем в день", default=15000)
     updated_at = models.DateTimeField("Обновлено", auto_now=True)
 
     @classmethod

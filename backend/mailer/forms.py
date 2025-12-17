@@ -7,10 +7,10 @@ from mailer.models import Campaign, MailAccount, GlobalMailAccount
 
 class MailAccountForm(forms.ModelForm):
     smtp_password = forms.CharField(
-        label="Пароль приложения (Яндекс)",
+        label="Пароль SMTP",
         required=False,
         widget=forms.PasswordInput(attrs={"class": "input"}),
-        help_text="Рекомендуется использовать пароль приложения Яндекса, а не основной пароль.",
+        help_text="Для smtp.bz создайте логин/пароль в личном кабинете. Для Яндекса используйте пароль приложения.",
     )
 
     class Meta:
@@ -51,10 +51,10 @@ class MailAccountForm(forms.ModelForm):
 
 class GlobalMailAccountForm(forms.ModelForm):
     smtp_password = forms.CharField(
-        label="Пароль приложения (Яндекс)",
+        label="Пароль SMTP",
         required=False,
         widget=forms.PasswordInput(attrs={"class": "input"}),
-        help_text="Рекомендуется использовать пароль приложения Яндекса, а не основной пароль.",
+        help_text="smtp.bz: логин/пароль берутся из кабинета smtp.bz. Яндекс: пароль приложения.",
     )
 
     class Meta:
