@@ -5,8 +5,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-crm}
       POSTGRES_USER: ${POSTGRES_USER:-crm}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crm}
-    ports:
-      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
@@ -27,11 +25,10 @@ services:
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
     depends_on:
       - db
-    ports:
-      - "8000:8000"
     command: >
       sh -c "pip install -q -r /app/backend/requirements.txt &&
              python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
              python manage.py runserver 0.0.0.0:8000"
 
 volumes:

@@ -78,10 +78,12 @@ python manage.py import_amo --csv ..\\amocrm_export_contacts_and_companies_2025-
 - Если у компании есть **ИНН**, он главный ключ дедупликации.
 
 ### Деплой на VDS (через Docker)
-В корне есть `docker-compose.yml` (Postgres + web). Для старта:
+В корне есть `docker-compose.yml` (Postgres + web) + оверрайды для окружений:
+- `docker-compose.dev.yml` — локальная разработка (публикует порты наружу)
+- `docker-compose.vds.yml` — VDS (публикует только на localhost для прокси через Nginx)
 
 ```bash
-docker compose up -d --build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 ```
 
 Дальше: зайти в контейнер и создать суперпользователя, либо добавить отдельный one-shot сервис (сделаем на следующем шаге).
