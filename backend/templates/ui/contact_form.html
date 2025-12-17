@@ -110,10 +110,10 @@
       {% endif %}
 
       <div class="flex gap-2">
-        <button class="rounded-lg bg-brand-teal text-white px-4 py-2 hover:bg-brand-dark">
+        <button class="btn btn-primary" type="submit">
           {% if mode == 'edit' %}Сохранить{% else %}Создать{% endif %}
         </button>
-        <a class="rounded-lg border border-brand-soft px-4 py-2 hover:bg-brand-soft/40" href="/companies/{{ company.id }}/">Отмена</a>
+        <a class="btn btn-outline" href="/companies/{{ company.id }}/">Отмена</a>
       </div>
     </form>
   </div>

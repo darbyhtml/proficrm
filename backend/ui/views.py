@@ -265,7 +265,7 @@ def company_export(request: HttpRequest) -> HttpResponse:
     )
 
     qs = (
-        apply_company_scope(Company.objects.all(), user)
+        Company.objects.all()
         .select_related("responsible", "branch", "status")
         .prefetch_related("spheres")
         .annotate(has_overdue=Exists(overdue_tasks))

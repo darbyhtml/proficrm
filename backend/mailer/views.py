@@ -9,7 +9,6 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 
 from accounts.models import User
-from accounts.scope import apply_company_scope
 from audit.models import ActivityEvent
 from audit.service import log_event
 from companies.models import Company
@@ -261,8 +260,8 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
 
     limit = int(form.cleaned_data["limit"])
 
-    # Компании, видимые пользователю + простая сегментация (MVP)
-    company_qs = apply_company_scope(Company.objects.all(), user)
+    # Компании (вся база видна всем пользователям) + простая сегментация (MVP)
+    company_qs = Company.objects.all()
     branch = (request.POST.get("branch") or "").strip()
     responsible = (request.POST.get("responsible") or "").strip()
     status = (request.POST.get("status") or "").strip()
