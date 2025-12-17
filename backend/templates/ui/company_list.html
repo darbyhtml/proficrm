@@ -7,7 +7,13 @@
       <div class="flex items-end justify-between gap-3">
         <div>
           <h1 class="text-2xl font-semibold">Компании</h1>
-          <div class="text-sm text-brand-dark/70">Поиск по названию, ИНН, адресу</div>
+            <div class="text-sm text-brand-dark/70 flex flex-wrap items-center gap-2">
+              <span>Поиск по названию, ИНН, адресу</span>
+              <span class="badge">Всего: <b class="ml-1">{{ companies_total }}</b></span>
+              {% if filter_active and companies_filtered != companies_total %}
+                <span class="badge badge-warn">По фильтру: <b class="ml-1">{{ companies_filtered }}</b></span>
+              {% endif %}
+            </div>
         </div>
         <div class="flex gap-2">
           <a href="/companies/new/" class="btn btn-primary">+ Добавить компанию</a>

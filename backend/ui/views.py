@@ -120,6 +120,8 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 def company_list(request: HttpRequest) -> HttpResponse:
     user: User = request.user
     now = timezone.now()
+    base_qs = apply_company_scope(Company.objects.all(), user)
+    companies_total = base_qs.order_by().count()
     overdue_tasks = (
         Task.objects.filter(company_id=OuterRef("pk"), due_at__lt=now)
         .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
@@ -127,7 +129,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
     )
 
     qs = (
-        apply_company_scope(Company.objects.all(), user)
+        base_qs
         .select_related("responsible", "branch", "status")
         .prefetch_related("spheres")
         .annotate(has_overdue=Exists(overdue_tasks))
@@ -158,6 +160,9 @@ def company_list(request: HttpRequest) -> HttpResponse:
     if only_overdue == "1":
         qs = qs.filter(has_overdue=True)
 
+    filter_active = any([q, responsible, status, branch, sphere, only_overdue == "1"])
+    companies_filtered = qs.order_by().count()
+
     paginator = Paginator(qs, 25)
     page = paginator.get_page(request.GET.get("page"))
     ui_cfg = UiGlobalConfig.load()
@@ -174,6 +179,9 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "branch": branch,
             "sphere": sphere,
             "overdue": only_overdue,
+            "companies_total": companies_total,
+            "companies_filtered": companies_filtered,
+            "filter_active": filter_active,
             "responsibles": User.objects.order_by("last_name", "first_name"),
             "statuses": CompanyStatus.objects.order_by("name"),
             "spheres": CompanySphere.objects.order_by("name"),
