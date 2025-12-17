@@ -38,6 +38,44 @@ class MailAccount(models.Model):
         return f"{self.user} ({self.from_email or self.smtp_username})"
 
 
+class GlobalMailAccount(models.Model):
+    """
+    Глобальные SMTP-настройки (одни на всю CRM). Редактируются администратором.
+    Пароль хранится шифрованным (Fernet), как и в MailAccount.
+    """
+    smtp_host = models.CharField("SMTP host", max_length=255, default="smtp.yandex.ru")
+    smtp_port = models.PositiveIntegerField("SMTP port", default=587)
+    use_starttls = models.BooleanField("STARTTLS", default=True)
+
+    smtp_username = models.CharField("Логин SMTP", max_length=255, default="")
+    smtp_password_enc = models.TextField("Пароль (зашифрован)", blank=True, default="")
+
+    # Опционально: дефолтное имя отправителя (если у пользователя не задано ФИО)
+    from_name = models.CharField("Имя отправителя (по умолчанию)", max_length=120, blank=True, default="CRM ПРОФИ")
+    is_enabled = models.BooleanField("Включено", default=False)
+
+    # Глобальные лимиты (если нужно быстро ограничить отправку всей системой)
+    rate_per_minute = models.PositiveIntegerField("Лимит писем в минуту", default=20)
+    rate_per_day = models.PositiveIntegerField("Лимит писем в день", default=500)
+    updated_at = models.DateTimeField("Обновлено", auto_now=True)
+
+    @classmethod
+    def load(cls) -> "GlobalMailAccount":
+        obj, _ = cls.objects.get_or_create(id=1)
+        return obj
+
+    def set_password(self, password: str):
+        from mailer.crypto import encrypt_str
+        self.smtp_password_enc = encrypt_str(password or "")
+
+    def get_password(self) -> str:
+        from mailer.crypto import decrypt_str
+        return decrypt_str(self.smtp_password_enc or "")
+
+    def __str__(self) -> str:
+        return f"Global SMTP ({self.smtp_username or self.smtp_host})"
+
+
 class Unsubscribe(models.Model):
     email = models.EmailField("Email", unique=True)
     created_at = models.DateTimeField("Когда", auto_now_add=True)

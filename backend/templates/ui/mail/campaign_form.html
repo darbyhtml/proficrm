@@ -6,6 +6,9 @@
     <div>
       <div class="text-sm muted"><a class="link" href="/mail/campaigns/">Почта</a> /</div>
       <h1 class="text-2xl font-semibold">{% if mode == 'edit' %}Редактировать кампанию{% else %}Новая кампания{% endif %}</h1>
+      <div class="text-sm text-brand-dark/70 mt-1">
+        Отправитель: <b>{{ request.user.email|default:"(email не задан в профиле)" }}</b>
+      </div>
     </div>
 
     <form method="post" class="card card-pad space-y-3">

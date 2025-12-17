@@ -15,8 +15,8 @@ from audit.service import log_event
 from companies.models import Company
 from accounts.models import Branch
 from companies.models import CompanySphere, CompanyStatus, ContactEmail, Contact
-from mailer.forms import CampaignForm, CampaignGenerateRecipientsForm, MailAccountForm
-from mailer.models import Campaign, CampaignRecipient, MailAccount, SendLog, Unsubscribe, UnsubscribeToken
+from mailer.forms import CampaignForm, CampaignGenerateRecipientsForm, MailAccountForm, GlobalMailAccountForm
+from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, UnsubscribeToken
 from mailer.smtp_sender import build_message, send_via_smtp
 from mailer.utils import html_to_text
 
@@ -28,13 +28,17 @@ def _require_admin(user: User) -> bool:
 @login_required
 def mail_settings(request: HttpRequest) -> HttpResponse:
     """
-    Настройки SMTP для текущего пользователя.
+    Настройки SMTP. Редактирует только администратор (глобально для всей CRM).
     """
     user: User = request.user
-    account, _ = MailAccount.objects.get_or_create(user=user)
+    is_admin = _require_admin(user)
+    cfg = GlobalMailAccount.load()
 
     if request.method == "POST":
-        form = MailAccountForm(request.POST, instance=account)
+        if not is_admin:
+            messages.error(request, "Доступ запрещён.")
+            return redirect("mail_settings")
+        form = GlobalMailAccountForm(request.POST, instance=cfg)
         if form.is_valid():
             # Проверка на наличие ключа шифрования, если вводят пароль
             if (form.cleaned_data.get("smtp_password") or "").strip():
@@ -44,37 +48,51 @@ def mail_settings(request: HttpRequest) -> HttpResponse:
                     return redirect("mail_settings")
             form.save()
             if "test_send" in request.POST:
-                # тестовое письмо на себя
-                to_email = account.from_email or account.smtp_username or user.email
+                # тестовое письмо администратору (на email профиля)
+                to_email = (user.email or "").strip()
                 if not to_email:
-                    messages.error(request, "Не указан email отправителя для теста.")
+                    messages.error(request, "В вашем профиле не задан email — некуда отправить тест.")
                     return redirect("mail_settings")
                 from django.conf import settings
                 rel = reverse("mail_settings")
                 base = (getattr(settings, "PUBLIC_BASE_URL", "") or "").strip().rstrip("/")
                 test_url = (base + rel) if base else request.build_absolute_uri(rel)
+                # From: по умолчанию используем SMTP логин (самый совместимый вариант), Reply-To = email админа
                 msg = build_message(
-                    account=account,
+                    account=cfg,  # type: ignore[arg-type]
                     to_email=to_email,
-                    subject="CRM: тест отправки",
-                    body_text=f"Тестовое письмо из CRM.\n\nЕсли вы это читаете — SMTP настроен.\n\n{test_url}",
-                    body_html=f"<p>Тестовое письмо из CRM.</p><p>Если вы это читаете — SMTP настроен.</p><p><a href='{test_url}'>{test_url}</a></p>",
+                    subject="CRM ПРОФИ: тест отправки",
+                    body_text=f"Тестовое письмо из CRM ПРОФИ.\n\nЕсли вы это читаете — SMTP настроен.\n\n{test_url}",
+                    body_html=f"<p>Тестовое письмо из CRM ПРОФИ.</p><p>Если вы это читаете — SMTP настроен.</p><p><a href='{test_url}'>{test_url}</a></p>",
                     unsubscribe_url=test_url,
+                    from_email=(cfg.smtp_username or "").strip(),
+                    from_name=(cfg.from_name or "CRM ПРОФИ").strip(),
+                    reply_to=to_email,
                 )
                 try:
-                    send_via_smtp(account, msg)
+                    send_via_smtp(cfg, msg)
                     messages.success(request, f"Тестовое письмо отправлено на {to_email}.")
                 except Exception as ex:
                     messages.error(request, f"Ошибка отправки: {ex}")
                 return redirect("mail_settings")
-            messages.success(request, "Настройки почты сохранены.")
+            messages.success(request, "Настройки SMTP сохранены.")
             return redirect("mail_settings")
     else:
-        form = MailAccountForm(instance=account)
+        form = GlobalMailAccountForm(instance=cfg) if is_admin else None
 
     from django.conf import settings
     key_missing = not bool(getattr(settings, "MAILER_FERNET_KEY", "") or "")
-    return render(request, "ui/mail/settings.html", {"form": form, "account": account, "key_missing": key_missing})
+    return render(
+        request,
+        "ui/mail/settings.html",
+        {
+            "form": form,
+            "account": cfg,
+            "key_missing": key_missing,
+            "is_admin": is_admin,
+            "user_sender_email": (user.email or "").strip(),
+        },
+    )
 
 
 @login_required
@@ -259,25 +277,25 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
         messages.error(request, "Доступ запрещён.")
         return redirect("campaigns")
 
-    account = getattr(user, "mail_account", None)
-    if not account or not account.is_enabled:
-        messages.error(request, "Настройте почту в разделе Почта → Настройки.")
+    smtp_cfg = GlobalMailAccount.load()
+    if not smtp_cfg.is_enabled:
+        messages.error(request, "SMTP не настроен администратором (Почта → Настройки).")
         return redirect("campaign_detail", campaign_id=camp.id)
 
-    # Rate limit (MVP): дневной/минутный по аккаунту
+    # Rate limit (MVP): глобальные лимиты
     from django.utils import timezone as _tz
     now = _tz.now()
-    sent_last_min = SendLog.objects.filter(account=account, status="sent", created_at__gte=now - _tz.timedelta(minutes=1)).count()
-    sent_today = SendLog.objects.filter(account=account, status="sent", created_at__date=now.date()).count()
-    if sent_today >= account.rate_per_day:
+    sent_last_min = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__gte=now - _tz.timedelta(minutes=1)).count()
+    sent_today = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__date=now.date()).count()
+    if sent_today >= smtp_cfg.rate_per_day:
         messages.error(request, "Достигнут дневной лимит отправки.")
         return redirect("campaign_detail", campaign_id=camp.id)
-    if sent_last_min >= account.rate_per_minute:
+    if sent_last_min >= smtp_cfg.rate_per_minute:
         messages.error(request, "Слишком часто. Подожди минуту (лимит в минуту).")
         return redirect("campaign_detail", campaign_id=camp.id)
 
     # 50 писем за шаг — безопасный MVP, но с учетом лимитов
-    allowed = max(1, min(50, account.rate_per_minute - sent_last_min, account.rate_per_day - sent_today))
+    allowed = max(1, min(50, smtp_cfg.rate_per_minute - sent_last_min, smtp_cfg.rate_per_day - sent_today))
     batch = list(camp.recipients.filter(status=CampaignRecipient.Status.PENDING)[:allowed])
     if not batch:
         messages.info(request, "Очередь пуста.")
@@ -303,26 +321,29 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
         footer = f"\n\nОтписаться: {unsubscribe_url}\n"
         auto_plain = html_to_text(camp.body_html or "")
         msg = build_message(
-            account=account,
+            account=MailAccount.objects.get_or_create(user=user)[0],  # fallback fields for build_message
             to_email=r.email,
             subject=camp.subject,
             body_text=(auto_plain or camp.body_text or "") + footer,
             body_html=(camp.body_html or "") + f'<hr><p style="font-size:12px;color:#666">Отписаться: <a href="{unsubscribe_url}">{unsubscribe_url}</a></p>',
             unsubscribe_url=unsubscribe_url,
+            from_email=(user.email or smtp_cfg.smtp_username).strip(),
+            from_name=(user.get_full_name() or smtp_cfg.from_name or "CRM ПРОФИ").strip(),
+            reply_to=(user.email or "").strip(),
         )
 
         try:
-            send_via_smtp(account, msg)
+            send_via_smtp(smtp_cfg, msg)
             r.status = CampaignRecipient.Status.SENT
             r.last_error = ""
             r.save(update_fields=["status", "last_error", "updated_at"])
-            SendLog.objects.create(campaign=camp, recipient=r, account=account, status="sent", message_id=str(msg["Message-ID"]))
+            SendLog.objects.create(campaign=camp, recipient=r, account=None, provider="smtp_global", status="sent", message_id=str(msg["Message-ID"]))
             sent += 1
         except Exception as ex:
             r.status = CampaignRecipient.Status.FAILED
             r.last_error = str(ex)[:255]
             r.save(update_fields=["status", "last_error", "updated_at"])
-            SendLog.objects.create(campaign=camp, recipient=r, account=account, status="failed", error=str(ex))
+            SendLog.objects.create(campaign=camp, recipient=r, account=None, provider="smtp_global", status="failed", error=str(ex))
             failed += 1
 
     messages.success(request, f"Отправлено: {sent}, ошибок: {failed}.")
@@ -341,12 +362,12 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
         messages.error(request, "Доступ запрещён.")
         return redirect("campaigns")
 
-    account = getattr(user, "mail_account", None)
-    if not account or not account.is_enabled:
-        messages.error(request, "Настройте почту в разделе Почта → Настройки.")
+    smtp_cfg = GlobalMailAccount.load()
+    if not smtp_cfg.is_enabled:
+        messages.error(request, "SMTP не настроен администратором (Почта → Настройки).")
         return redirect("campaign_detail", campaign_id=camp.id)
 
-    to_email = account.from_email or account.smtp_username or user.email
+    to_email = (user.email or "").strip()
     if not to_email:
         messages.error(request, "Некуда отправить тест (не задан email).")
         return redirect("campaign_detail", campaign_id=camp.id)
@@ -357,19 +378,22 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
     link = (base + rel) if base else request.build_absolute_uri(rel)
 
     msg = build_message(
-        account=account,
+        account=MailAccount.objects.get_or_create(user=user)[0],
         to_email=to_email,
         subject=f"[ТЕСТ] {camp.subject}",
         body_text=(html_to_text(camp.body_html or "") or camp.body_text or "") + f"\n\n(Тест) Кампания: {link}\n",
         body_html=(camp.body_html or "") + f'<hr><p style="font-size:12px;color:#666">(Тест) Кампания: <a href="{link}">{link}</a></p>',
         unsubscribe_url=link,
+        from_email=(user.email or smtp_cfg.smtp_username).strip(),
+        from_name=(user.get_full_name() or smtp_cfg.from_name or "CRM ПРОФИ").strip(),
+        reply_to=(user.email or "").strip(),
     )
     try:
-        send_via_smtp(account, msg)
-        SendLog.objects.create(campaign=camp, recipient=None, account=account, status="sent", message_id=str(msg["Message-ID"]))
+        send_via_smtp(smtp_cfg, msg)
+        SendLog.objects.create(campaign=camp, recipient=None, account=None, provider="smtp_global", status="sent", message_id=str(msg["Message-ID"]))
         messages.success(request, f"Тестовое письмо отправлено на {to_email}.")
     except Exception as ex:
-        SendLog.objects.create(campaign=camp, recipient=None, account=account, status="failed", error=str(ex))
+        SendLog.objects.create(campaign=camp, recipient=None, account=None, provider="smtp_global", status="failed", error=str(ex))
         messages.error(request, f"Ошибка тестовой отправки: {ex}")
     return redirect("campaign_detail", campaign_id=camp.id)
 

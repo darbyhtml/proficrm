@@ -5,7 +5,13 @@
   <div class="space-y-4">
     <div>
       <h1 class="text-2xl font-semibold">Почта: настройки SMTP</h1>
-      <div class="muted text-sm">Для Яндекса обычно: smtp.yandex.ru:587 + STARTTLS + пароль приложения.</div>
+      <div class="muted text-sm">
+        {% if is_admin %}
+          Администратор настраивает SMTP один раз — менеджерам ничего вводить не нужно.
+        {% else %}
+          SMTP настраивается администратором. Ваш адрес отправителя будет: <b>{{ user_sender_email|default:"(не задан в профиле)" }}</b>
+        {% endif %}
+      </div>
     </div>
 
     {% if key_missing %}
@@ -24,74 +30,79 @@
       </div>
     </details>
 
-    <form method="post" class="card card-pad space-y-3">
-      {% csrf_token %}
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label class="block text-sm muted mb-1">SMTP host</label>
-          {{ form.smtp_host }}
+    {% if is_admin %}
+      <form method="post" class="card card-pad space-y-3">
+        {% csrf_token %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm muted mb-1">SMTP host</label>
+            {{ form.smtp_host }}
+          </div>
+          <div>
+            <label class="block text-sm muted mb-1">SMTP port</label>
+            {{ form.smtp_port }}
+          </div>
         </div>
-        <div>
-          <label class="block text-sm muted mb-1">SMTP port</label>
-          {{ form.smtp_port }}
-        </div>
-      </div>
 
-      <div class="flex items-center gap-2 text-sm">
-        {{ form.use_starttls }} <span class="muted">STARTTLS</span>
-      </div>
+        <div class="flex items-center gap-2 text-sm">
+          {{ form.use_starttls }} <span class="muted">STARTTLS</span>
+        </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label class="block text-sm muted mb-1">Логин SMTP</label>
-          {{ form.smtp_username }}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm muted mb-1">Логин SMTP</label>
+            {{ form.smtp_username }}
+          </div>
+          <div>
+            <label class="block text-sm muted mb-1">Пароль приложения (Яндекс)</label>
+            {{ form.smtp_password }}
+            <div class="text-xs muted-2 mt-1">{{ form.smtp_password.help_text }}</div>
+          </div>
         </div>
-        <div>
-          <label class="block text-sm muted mb-1">Пароль приложения (Яндекс)</label>
-          {{ form.smtp_password }}
-          <div class="text-xs muted-2 mt-1">{{ form.smtp_password.help_text }}</div>
-        </div>
-      </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
-          <label class="block text-sm muted mb-1">Email отправителя</label>
-          {{ form.from_email }}
-        </div>
-        <div>
-          <label class="block text-sm muted mb-1">Имя отправителя</label>
+          <label class="block text-sm muted mb-1">Имя отправителя (по умолчанию)</label>
           {{ form.from_name }}
+          <div class="text-xs muted-2 mt-1">Если у пользователя задано ФИО — оно будет использоваться, иначе это значение.</div>
         </div>
-        <div>
-          <label class="block text-sm muted mb-1">Reply-To</label>
-          {{ form.reply_to }}
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm muted mb-1">Лимит в минуту</label>
+            {{ form.rate_per_minute }}
+          </div>
+          <div>
+            <label class="block text-sm muted mb-1">Лимит в день</label>
+            {{ form.rate_per_day }}
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 text-sm">
+          {{ form.is_enabled }} <span class="muted">Включить отправку</span>
+        </div>
+
+        {% if form.errors %}
+          <div class="rounded-xl border border-brand-orange/60 bg-brand-orange/20 px-4 py-3 text-sm text-brand-dark">Проверь поля формы.</div>
+        {% endif %}
+
+        <div class="flex gap-2">
+          <button class="btn btn-primary" type="submit">Сохранить</button>
+          <button class="btn btn-outline" type="submit" name="test_send" value="1">Проверить отправку</button>
+        </div>
+      </form>
+    {% else %}
+      <div class="card card-pad">
+        <div class="text-sm">
+          <div class="font-medium mb-1">Отправка настроена администратором</div>
+          <div class="muted">При отправке кампаний будет использоваться ваш email как <b>From</b> и <b>Reply-To</b>.</div>
+          {% if not user_sender_email %}
+            <div class="mt-2 rounded-xl border border-brand-orange/60 bg-brand-orange/20 px-4 py-3 text-sm text-brand-dark">
+              В вашем профиле не задан email. Адрес отправителя подставить нельзя — попросите администратора заполнить email в карточке пользователя.
+            </div>
+          {% endif %}
         </div>
       </div>
-
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
-          <label class="block text-sm muted mb-1">Лимит в минуту</label>
-          {{ form.rate_per_minute }}
-        </div>
-        <div>
-          <label class="block text-sm muted mb-1">Лимит в день</label>
-          {{ form.rate_per_day }}
-        </div>
-      </div>
-
-      <div class="flex items-center gap-2 text-sm">
-        {{ form.is_enabled }} <span class="muted">Включить отправку</span>
-      </div>
-
-      {% if form.errors %}
-        <div class="rounded-xl border border-brand-orange/60 bg-brand-orange/20 px-4 py-3 text-sm text-brand-dark">Проверь поля формы.</div>
-      {% endif %}
-
-      <div class="flex gap-2">
-        <button class="btn btn-primary" type="submit">Сохранить</button>
-        <button class="btn btn-outline" type="submit" name="test_send" value="1">Проверить отправку</button>
-      </div>
-    </form>
+    {% endif %}
   </div>
 {% endblock %}
 

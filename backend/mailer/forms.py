@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from django import forms
 
-from mailer.models import Campaign, MailAccount
+from mailer.models import Campaign, MailAccount, GlobalMailAccount
 
 
 class MailAccountForm(forms.ModelForm):
@@ -41,6 +41,46 @@ class MailAccountForm(forms.ModelForm):
 
     def save(self, commit=True):
         obj: MailAccount = super().save(commit=False)
+        p = (self.cleaned_data.get("smtp_password") or "").strip()
+        if p:
+            obj.set_password(p)
+        if commit:
+            obj.save()
+        return obj
+
+
+class GlobalMailAccountForm(forms.ModelForm):
+    smtp_password = forms.CharField(
+        label="Пароль приложения (Яндекс)",
+        required=False,
+        widget=forms.PasswordInput(attrs={"class": "input"}),
+        help_text="Рекомендуется использовать пароль приложения Яндекса, а не основной пароль.",
+    )
+
+    class Meta:
+        model = GlobalMailAccount
+        fields = [
+            "smtp_host",
+            "smtp_port",
+            "use_starttls",
+            "smtp_username",
+            "from_name",
+            "rate_per_minute",
+            "rate_per_day",
+            "is_enabled",
+        ]
+        widgets = {
+            "smtp_host": forms.TextInput(attrs={"class": "input"}),
+            "smtp_port": forms.NumberInput(attrs={"class": "input"}),
+            "use_starttls": forms.CheckboxInput(),
+            "smtp_username": forms.TextInput(attrs={"class": "input"}),
+            "from_name": forms.TextInput(attrs={"class": "input"}),
+            "rate_per_minute": forms.NumberInput(attrs={"class": "input"}),
+            "rate_per_day": forms.NumberInput(attrs={"class": "input"}),
+        }
+
+    def save(self, commit=True):
+        obj: GlobalMailAccount = super().save(commit=False)
         p = (self.cleaned_data.get("smtp_password") or "").strip()
         if p:
             obj.set_password(p)

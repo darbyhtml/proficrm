@@ -7,7 +7,19 @@ from email.utils import formataddr, make_msgid
 
 from django.conf import settings
 
+from typing import Optional, Protocol
+
 from mailer.models import MailAccount
+
+
+class _SmtpAccountLike(Protocol):
+    smtp_host: str
+    smtp_port: int
+    use_starttls: bool
+    smtp_username: str
+    is_enabled: bool
+
+    def get_password(self) -> str: ...
 
 
 def build_message(
@@ -18,15 +30,19 @@ def build_message(
     body_text: str,
     body_html: str,
     unsubscribe_url: str,
+    from_email: Optional[str] = None,
+    from_name: Optional[str] = None,
+    reply_to: Optional[str] = None,
 ) -> EmailMessage:
     msg = EmailMessage()
     msg["Subject"] = subject
-    from_email = account.from_email or account.smtp_username
-    from_name = account.from_name or ""
-    msg["From"] = formataddr((from_name, from_email)) if from_name else from_email
+    _from_email = (from_email or account.from_email or account.smtp_username or "").strip()
+    _from_name = (from_name or account.from_name or "").strip()
+    msg["From"] = formataddr((_from_name, _from_email)) if _from_name else _from_email
     msg["To"] = to_email
-    if account.reply_to:
-        msg["Reply-To"] = account.reply_to
+    _reply_to = (reply_to or account.reply_to or "").strip()
+    if _reply_to:
+        msg["Reply-To"] = _reply_to
 
     # Помогает с доставляемостью/спамом: стандартный заголовок отписки
     msg["List-Unsubscribe"] = f"<{unsubscribe_url}>"
@@ -44,7 +60,7 @@ def build_message(
     return msg
 
 
-def send_via_smtp(account: MailAccount, msg: EmailMessage) -> None:
+def send_via_smtp(account: _SmtpAccountLike, msg: EmailMessage) -> None:
     password = account.get_password()
     if not account.is_enabled:
         raise RuntimeError("Почтовый аккаунт отключён.")

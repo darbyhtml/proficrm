@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Campaign, CampaignRecipient, MailAccount, SendLog, Unsubscribe, UnsubscribeToken
+from .models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, UnsubscribeToken
 
 
 @admin.register(MailAccount)
@@ -8,6 +8,12 @@ class MailAccountAdmin(admin.ModelAdmin):
     list_display = ("user", "from_email", "smtp_host", "smtp_port", "is_enabled", "updated_at")
     search_fields = ("user__username", "from_email", "smtp_username")
     list_filter = ("is_enabled",)
+
+
+@admin.register(GlobalMailAccount)
+class GlobalMailAccountAdmin(admin.ModelAdmin):
+    list_display = ("smtp_host", "smtp_port", "smtp_username", "is_enabled", "updated_at")
+    list_filter = ("is_enabled", "use_starttls")
 
 
 @admin.register(Unsubscribe)

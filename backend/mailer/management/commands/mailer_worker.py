@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Q
 from django.utils import timezone
 
-from mailer.models import Campaign, CampaignRecipient, MailAccount, SendLog, Unsubscribe, UnsubscribeToken
+from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, UnsubscribeToken
 from mailer.smtp_sender import build_message, send_via_smtp
 from mailer.utils import html_to_text
 
@@ -33,17 +33,17 @@ class Command(BaseCommand):
                 user = camp.created_by
                 if not user:
                     continue
-                account = getattr(user, "mail_account", None)
-                if not account or not account.is_enabled:
+                smtp_cfg = GlobalMailAccount.load()
+                if not smtp_cfg.is_enabled:
                     continue
 
                 now = timezone.now()
-                sent_last_min = SendLog.objects.filter(account=account, status="sent", created_at__gte=now - timezone.timedelta(minutes=1)).count()
-                sent_today = SendLog.objects.filter(account=account, status="sent", created_at__date=now.date()).count()
-                if sent_today >= account.rate_per_day or sent_last_min >= account.rate_per_minute:
+                sent_last_min = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__gte=now - timezone.timedelta(minutes=1)).count()
+                sent_today = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__date=now.date()).count()
+                if sent_today >= smtp_cfg.rate_per_day or sent_last_min >= smtp_cfg.rate_per_minute:
                     continue
 
-                allowed = max(1, min(batch_size, account.rate_per_minute - sent_last_min, account.rate_per_day - sent_today))
+                allowed = max(1, min(batch_size, smtp_cfg.rate_per_minute - sent_last_min, smtp_cfg.rate_per_day - sent_today))
                 batch = list(camp.recipients.filter(status=CampaignRecipient.Status.PENDING)[:allowed])
                 if not batch:
                     continue
@@ -65,25 +65,30 @@ class Command(BaseCommand):
                     footer = f"\n\nОтписаться: {unsubscribe_url}\n"
                     auto_plain = html_to_text(camp.body_html or "")
 
+                    # Нужен объект MailAccount только как "контейнер" полей для build_message; заголовки задаём явно.
+                    identity, _ = MailAccount.objects.get_or_create(user=user)
                     msg = build_message(
-                        account=account,
+                        account=identity,
                         to_email=r.email,
                         subject=camp.subject,
                         body_text=(auto_plain or camp.body_text or "") + footer,
                         body_html=(camp.body_html or "") + f'<hr><p style="font-size:12px;color:#666">Отписаться: <a href="{unsubscribe_url}">{unsubscribe_url}</a></p>',
                         unsubscribe_url=unsubscribe_url,
+                        from_email=(user.email or smtp_cfg.smtp_username).strip(),
+                        from_name=(user.get_full_name() or smtp_cfg.from_name or "CRM ПРОФИ").strip(),
+                        reply_to=(user.email or "").strip(),
                     )
                     try:
-                        send_via_smtp(account, msg)
+                        send_via_smtp(smtp_cfg, msg)
                         r.status = CampaignRecipient.Status.SENT
                         r.last_error = ""
                         r.save(update_fields=["status", "last_error", "updated_at"])
-                        SendLog.objects.create(campaign=camp, recipient=r, account=account, status="sent", message_id=str(msg["Message-ID"]))
+                        SendLog.objects.create(campaign=camp, recipient=r, account=None, provider="smtp_global", status="sent", message_id=str(msg["Message-ID"]))
                     except Exception as ex:
                         r.status = CampaignRecipient.Status.FAILED
                         r.last_error = str(ex)[:255]
                         r.save(update_fields=["status", "last_error", "updated_at"])
-                        SendLog.objects.create(campaign=camp, recipient=r, account=account, status="failed", error=str(ex))
+                        SendLog.objects.create(campaign=camp, recipient=r, account=None, provider="smtp_global", status="failed", error=str(ex))
 
             if once:
                 break
