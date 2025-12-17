@@ -51,7 +51,7 @@ router.register(r"task-types", TaskTypeViewSet, basename="task-type")
 router.register(r"tasks", TaskViewSet, basename="task")
 
 urlpatterns = [
-    path("favicon.ico", RedirectView.as_view(url=static("ui/favicon.svg"), permanent=True)),
+    path("favicon.ico", RedirectView.as_view(url=static("ui/favicon-v2.svg"), permanent=True)),
     path('admin/', admin.site.urls),
     path("", include("ui.urls")),
     path("", include("mailer.urls")),
