@@ -23,6 +23,9 @@ services:
       DJANGO_DEBUG: "0"
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-me}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      MAILER_FERNET_KEY: ${MAILER_FERNET_KEY:-}
     depends_on:
       - db
     command: >
