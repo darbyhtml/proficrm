@@ -729,8 +729,13 @@ def company_note_delete(request: HttpRequest, company_id, note_id: int) -> HttpR
     user: User = request.user
     company = get_object_or_404(Company.objects.all(), id=company_id)
 
-    # Удалять можно только свою заметку
-    note = get_object_or_404(CompanyNote.objects.select_related("author"), id=note_id, company_id=company.id, author_id=user.id)
+    # Удалять заметки:
+    # - админ/суперпользователь/управляющий: любые
+    # - остальные: только свои
+    if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+        note = get_object_or_404(CompanyNote.objects.select_related("author"), id=note_id, company_id=company.id)
+    else:
+        note = get_object_or_404(CompanyNote.objects.select_related("author"), id=note_id, company_id=company.id, author_id=user.id)
     note.delete()
 
     messages.success(request, "Заметка удалена.")
