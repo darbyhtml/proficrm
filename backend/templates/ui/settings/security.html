@@ -1,0 +1,122 @@
+{% extends "ui/base.html" %}
+{% block title %}Безопасность — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div>
+      <div class="text-sm muted"><a class="link" href="/settings/">Настройки</a> /</div>
+      <h1 class="text-2xl font-semibold">Безопасность</h1>
+      <div class="muted text-sm">Фокус: экспорты и попытки выгрузки базы.</div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <section class="card card-pad lg:col-span-1">
+        <div class="font-medium mb-3">Топ по экспортам</div>
+        <div class="overflow-x-auto">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Пользователь</th>
+                <th>Всего</th>
+                <th>Запрещено</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in export_stats %}
+                <tr>
+                  <td class="text-sm">
+                    {{ r.actor__last_name }} {{ r.actor__first_name }}
+                    <div class="text-xs muted">{{ r.actor__username }}</div>
+                  </td>
+                  <td class="text-sm">{{ r.total }}</td>
+                  <td class="text-sm">{% if r.denied %}<span class="badge badge-warn">{{ r.denied }}</span>{% else %}0{% endif %}</td>
+                </tr>
+              {% empty %}
+                <tr><td class="muted" colspan="3" style="padding:1.25rem 1rem">Пока данных нет.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card card-pad lg:col-span-2">
+        <div class="font-medium mb-3">Подозрительные события (попытки экспорта)</div>
+        <div class="overflow-x-auto">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Когда</th>
+                <th>Кто</th>
+                <th>IP</th>
+                <th>UA</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for e in suspicious %}
+                <tr>
+                  <td class="muted text-xs">{{ e.created_at }}</td>
+                  <td class="text-sm">{{ e.actor|default:"—" }}</td>
+                  <td class="text-xs font-mono">{{ e.meta.ip|default:"—" }}</td>
+                  <td class="text-xs muted">{{ e.meta.user_agent|default:"—" }}</td>
+                </tr>
+              {% empty %}
+                <tr><td class="muted" colspan="4" style="padding:1.25rem 1rem">Подозрительных попыток нет.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <section class="card card-pad">
+      <div class="font-medium mb-3">Последние экспорты</div>
+      <div class="overflow-x-auto">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Когда</th>
+              <th>Кто</th>
+              <th>Разрешено</th>
+              <th>Строк</th>
+              <th>IP</th>
+              <th>Фильтры</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for e in exports %}
+              <tr>
+                <td class="muted text-xs">{{ e.created_at }}</td>
+                <td class="text-sm">{{ e.actor|default:"—" }}</td>
+                <td class="text-sm">
+                  {% if e.meta.allowed %}
+                    <span class="badge">Да</span>
+                  {% else %}
+                    <span class="badge badge-warn">Нет</span>
+                  {% endif %}
+                </td>
+                <td class="text-sm">{{ e.meta.row_count|default:"—" }}</td>
+                <td class="text-xs font-mono">{{ e.meta.ip|default:"—" }}</td>
+                <td class="text-xs muted">
+                  {% if e.meta.filters %}
+                    q={{ e.meta.filters.q|default:"" }}
+                    resp={{ e.meta.filters.responsible|default:"" }}
+                    status={{ e.meta.filters.status|default:"" }}
+                    branch={{ e.meta.filters.branch|default:"" }}
+                    sphere={{ e.meta.filters.sphere|default:"" }}
+                    overdue={{ e.meta.filters.overdue|default:"" }}
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td class="muted" colspan="6" style="padding:1.25rem 1rem">Экспортов ещё не было.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+{% endblock %}
+
+

@@ -1,0 +1,199 @@
+{% extends "ui/base.html" %}
+{% block title %}{{ company.name }} — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <div class="space-y-6">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <div class="text-sm text-brand-dark/70"><a class="underline" href="/companies/">Компании</a> /</div>
+        <h1 class="text-2xl font-semibold">{{ company.name }}</h1>
+        <div class="text-sm text-brand-dark/80">
+          {% if company.inn %}ИНН: <span class="font-mono">{{ company.inn }}</span>{% endif %}
+          {% if company.kpp %} · КПП: <span class="font-mono">{{ company.kpp }}</span>{% endif %}
+        </div>
+      </div>
+      <div class="text-sm text-brand-dark/80">
+        <div><span class="text-brand-dark/50">Ответственный:</span> {{ company.responsible }}</div>
+        <div><span class="text-brand-dark/50">Филиал:</span> {{ company.branch }}</div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <section class="card card-pad lg:col-span-2">
+        <div class="font-medium mb-3">Данные</div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+          <div>
+            <div class="text-brand-dark/50">Юр. название</div>
+            <div>{{ company.legal_name|default:"—" }}</div>
+          </div>
+          <div>
+            <div class="text-brand-dark/50">Сайт</div>
+            <div>{% if company.website %}<a class="link" href="{{ company.website }}" target="_blank">{{ company.website }}</a>{% else %}—{% endif %}</div>
+          </div>
+          <div class="md:col-span-2">
+            <div class="text-brand-dark/50">Адрес</div>
+            <div class="whitespace-pre-line">{{ company.address|default:"—" }}</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card card-pad">
+        <div class="font-medium mb-3">Быстро</div>
+        <a class="btn btn-primary w-full" href="/tasks/new/?company={{ company.id }}">+ Поставить задачу</a>
+        <div class="mt-4 border-t pt-4">
+          <div class="font-medium mb-2">Статус и сферы</div>
+          <form method="post" action="/companies/{{ company.id }}/update/" class="space-y-2">
+            {% csrf_token %}
+            <div>
+              <label class="block text-xs text-brand-dark/70 mb-1">Статус</label>
+              {{ quick_form.status|safe }}
+            </div>
+            <div>
+              <label class="block text-xs text-brand-dark/70 mb-1">Сферы</label>
+              <div class="ms" data-ms="1" data-placeholder="Выберите сферы">
+                <button type="button" class="ms-btn">
+                  <span class="ms-value"></span>
+                  <span class="ms-muted">▼</span>
+                </button>
+                <div class="ms-panel hidden">
+                  <div class="ms-top">
+                    <input class="input ms-search" placeholder="Поиск" />
+                    <a href="#" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" data-ms-clear>Снять</a>
+                  </div>
+                  <div class="ms-list"></div>
+                </div>
+                <div class="hidden">
+                  {{ quick_form.spheres }}
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-outline w-full" type="submit">Сохранить</button>
+          </form>
+        </div>
+      </section>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <section class="card card-pad">
+        <div class="flex items-end justify-between gap-3 mb-3">
+          <div class="font-medium">Контакты</div>
+          <a class="btn btn-outline" href="/companies/{{ company.id }}/contacts/new/">+ Добавить контакт</a>
+        </div>
+        {% if contacts %}
+          <div class="space-y-3">
+            {% for c in contacts %}
+              <div class="rounded-lg border p-3">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <div class="text-sm font-medium">{{ c.last_name }} {{ c.first_name }}</div>
+                    <div class="text-xs text-brand-dark/70">{{ c.position }}</div>
+                  </div>
+                  <a class="text-sm link" href="/contacts/{{ c.id }}/edit/">Редактировать</a>
+                </div>
+                <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <div class="text-brand-dark/50 text-xs">Email</div>
+                    {% for e in c.emails.all %}
+                      <div>{{ e.value }}</div>
+                    {% empty %}
+                      <div class="text-brand-dark/70">—</div>
+                    {% endfor %}
+                  </div>
+                  <div>
+                    <div class="text-brand-dark/50 text-xs">Телефон</div>
+                    {% for p in c.phones.all %}
+                      <div>{{ p.value }}</div>
+                    {% empty %}
+                      <div class="text-brand-dark/70">—</div>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-sm text-brand-dark/70">Контактов нет.</div>
+        {% endif %}
+      </section>
+
+      <section class="card card-pad">
+        <div class="font-medium mb-3">Последние задачи</div>
+        {% if tasks %}
+          <div class="space-y-2">
+            {% for t in tasks %}
+              <div class="rounded-lg border p-3">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <div class="text-sm font-medium">{{ t.title }}</div>
+                    <div class="text-xs text-brand-dark/70">
+                      {{ t.get_status_display }}
+                      {% if t.type %} · {{ t.type.name }}{% endif %}
+                      {% if t.assigned_to %} · {{ t.assigned_to }}{% endif %}
+                    </div>
+                  </div>
+                  <div class="text-xs text-brand-dark/70">
+                    {% if t.due_at %}дедлайн: {{ t.due_at }}{% else %}—{% endif %}
+                  </div>
+                </div>
+                {% if t.description %}
+                  <div class="mt-2 text-sm text-brand-dark/80">{{ t.description|truncatechars:160 }}</div>
+                {% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-sm text-brand-dark/70">Задач по компании пока нет.</div>
+        {% endif %}
+        <div class="mt-3">
+          <a class="btn btn-outline" href="/tasks/new/?company={{ company.id }}">+ Добавить задачу</a>
+        </div>
+      </section>
+
+      <section class="card card-pad">
+        <div class="font-medium mb-3">Заметки</div>
+        <form class="space-y-2" method="post" action="/companies/{{ company.id }}/notes/add/">
+          {% csrf_token %}
+          {{ note_form.text }}
+          <button class="btn btn-primary" type="submit">Добавить</button>
+        </form>
+
+        <div class="mt-4 space-y-3">
+          {% for n in notes %}
+            <div class="rounded-lg border p-3">
+              <div class="flex items-start justify-between gap-3">
+                <div class="text-xs text-brand-dark/70 mb-1">{{ n.created_at }} · {{ n.author }}</div>
+                {% if n.author_id == request.user.id %}
+                  <form method="post" action="/companies/{{ company.id }}/notes/{{ n.id }}/delete/" onsubmit="return confirm('Удалить заметку?');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem">Удалить</button>
+                  </form>
+                {% endif %}
+              </div>
+              <div class="text-sm whitespace-pre-line">{{ n.text }}</div>
+            </div>
+          {% empty %}
+            <div class="text-sm text-brand-dark/70">Пока нет заметок.</div>
+          {% endfor %}
+        </div>
+      </section>
+    </div>
+
+    <section class="card card-pad">
+      <div class="font-medium mb-3">История действий</div>
+      {% if activity %}
+        <div class="space-y-2">
+          {% for ev in activity %}
+            <div class="rounded-lg border p-3 text-sm">
+              <div class="text-xs text-brand-dark/70 mb-1">{{ ev.created_at }} · {{ ev.actor|default:"—" }}</div>
+              <div>{{ ev.message|default:ev.get_verb_display }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="text-sm text-brand-dark/70">Пока пусто.</div>
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}
+
+

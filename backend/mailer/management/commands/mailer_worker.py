@@ -1,0 +1,95 @@
+from __future__ import annotations
+
+import time
+
+from django.core.management.base import BaseCommand
+from django.db.models import Q
+from django.utils import timezone
+
+from mailer.models import Campaign, CampaignRecipient, MailAccount, SendLog, Unsubscribe, UnsubscribeToken
+from mailer.smtp_sender import build_message, send_via_smtp
+from mailer.utils import html_to_text
+
+
+class Command(BaseCommand):
+    help = "Фоновый воркер для отправки рассылок (обрабатывает pending получателей)."
+
+    def add_arguments(self, parser):
+        parser.add_argument("--sleep", type=float, default=1.0, help="Пауза между итерациями (сек).")
+        parser.add_argument("--batch", type=int, default=50, help="Максимум писем за итерацию на кампанию.")
+        parser.add_argument("--once", action="store_true", help="Сделать один проход и выйти.")
+
+    def handle(self, *args, **opts):
+        sleep_s = float(opts["sleep"])
+        batch_size = int(opts["batch"])
+        once = bool(opts["once"])
+
+        self.stdout.write(self.style.SUCCESS("mailer_worker started"))
+        while True:
+            did_work = False
+            # берём кампании с pending
+            camps = Campaign.objects.filter(recipients__status=CampaignRecipient.Status.PENDING).distinct().order_by("created_at")[:20]
+            for camp in camps:
+                user = camp.created_by
+                if not user:
+                    continue
+                account = getattr(user, "mail_account", None)
+                if not account or not account.is_enabled:
+                    continue
+
+                now = timezone.now()
+                sent_last_min = SendLog.objects.filter(account=account, status="sent", created_at__gte=now - timezone.timedelta(minutes=1)).count()
+                sent_today = SendLog.objects.filter(account=account, status="sent", created_at__date=now.date()).count()
+                if sent_today >= account.rate_per_day or sent_last_min >= account.rate_per_minute:
+                    continue
+
+                allowed = max(1, min(batch_size, account.rate_per_minute - sent_last_min, account.rate_per_day - sent_today))
+                batch = list(camp.recipients.filter(status=CampaignRecipient.Status.PENDING)[:allowed])
+                if not batch:
+                    continue
+
+                did_work = True
+                for r in batch:
+                    if Unsubscribe.objects.filter(email__iexact=r.email).exists():
+                        r.status = CampaignRecipient.Status.UNSUBSCRIBED
+                        r.save(update_fields=["status", "updated_at"])
+                        continue
+
+                    tok_obj = UnsubscribeToken.objects.filter(email__iexact=r.email).first()
+                    if not tok_obj:
+                        import secrets
+                        tok_obj = UnsubscribeToken.objects.create(email=r.email, token=secrets.token_urlsafe(32)[:64])
+
+                    # В воркере мы не знаем домен; footer без absolute URL (для VDS лучше задать PUBLIC_BASE_URL в settings)
+                    unsubscribe_url = f"/unsubscribe/{tok_obj.token}/"
+                    footer = f"\n\nОтписаться: {unsubscribe_url}\n"
+                    auto_plain = html_to_text(camp.body_html or "")
+
+                    msg = build_message(
+                        account=account,
+                        to_email=r.email,
+                        subject=camp.subject,
+                        body_text=(auto_plain or camp.body_text or "") + footer,
+                        body_html=(camp.body_html or "") + f'<hr><p style="font-size:12px;color:#666">Отписаться: <a href="{unsubscribe_url}">{unsubscribe_url}</a></p>',
+                        unsubscribe_url=unsubscribe_url,
+                    )
+                    try:
+                        send_via_smtp(account, msg)
+                        r.status = CampaignRecipient.Status.SENT
+                        r.last_error = ""
+                        r.save(update_fields=["status", "last_error", "updated_at"])
+                        SendLog.objects.create(campaign=camp, recipient=r, account=account, status="sent", message_id=str(msg["Message-ID"]))
+                    except Exception as ex:
+                        r.status = CampaignRecipient.Status.FAILED
+                        r.last_error = str(ex)[:255]
+                        r.save(update_fields=["status", "last_error", "updated_at"])
+                        SendLog.objects.create(campaign=camp, recipient=r, account=account, status="failed", error=str(ex))
+
+            if once:
+                break
+            if not did_work:
+                time.sleep(sleep_s)
+
+        self.stdout.write(self.style.SUCCESS("mailer_worker stopped"))
+
+

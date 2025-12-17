@@ -1,0 +1,57 @@
+{% extends "ui/base.html" %}
+{% block title %}Справочники — Настройки{% endblock %}
+
+{% block content %}
+  <div class="space-y-6">
+    <div>
+      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> /</div>
+      <h1 class="text-2xl font-semibold">Справочники</h1>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <section class="bg-white border rounded-2xl p-4">
+        <div class="flex items-end justify-between gap-3 mb-3">
+          <div class="font-medium">Статусы компаний</div>
+          <a class="text-sm underline" href="/settings/dicts/company-status/new/">+ Добавить</a>
+        </div>
+        <ul class="space-y-2 text-sm">
+          {% for s in company_statuses %}
+            <li class="rounded-lg border px-3 py-2">{{ s.name }}</li>
+          {% empty %}
+            <li class="text-brand-dark/70">Пусто</li>
+          {% endfor %}
+        </ul>
+      </section>
+
+      <section class="bg-white border rounded-2xl p-4">
+        <div class="flex items-end justify-between gap-3 mb-3">
+          <div class="font-medium">Сферы компаний</div>
+          <a class="text-sm underline" href="/settings/dicts/company-sphere/new/">+ Добавить</a>
+        </div>
+        <ul class="space-y-2 text-sm">
+          {% for s in company_spheres %}
+            <li class="rounded-lg border px-3 py-2">{{ s.name }}</li>
+          {% empty %}
+            <li class="text-brand-dark/70">Пусто</li>
+          {% endfor %}
+        </ul>
+      </section>
+
+      <section class="bg-white border rounded-2xl p-4">
+        <div class="flex items-end justify-between gap-3 mb-3">
+          <div class="font-medium">Типы задач</div>
+          <a class="text-sm underline" href="/settings/dicts/task-type/new/">+ Добавить</a>
+        </div>
+        <ul class="space-y-2 text-sm">
+          {% for t in task_types %}
+            <li class="rounded-lg border px-3 py-2">{{ t.name }}</li>
+          {% empty %}
+            <li class="text-brand-dark/70">Пусто</li>
+          {% endfor %}
+        </ul>
+      </section>
+    </div>
+  </div>
+{% endblock %}
+
+

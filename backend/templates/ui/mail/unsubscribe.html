@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Отписка</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: { teal: "#01948E", orange: "#FDAD3A", dark: "#003D38", soft: "#C2E2DE" },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="bg-brand-soft/40 text-brand-dark min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-lg bg-white border border-brand-soft rounded-2xl p-6">
+      <div class="text-xl font-semibold mb-2">Вы отписаны</div>
+      <div class="text-sm text-brand-dark/80">
+        {% if email %}Email: <span class="font-mono">{{ email }}</span>{% endif %}
+      </div>
+      <div class="text-sm text-brand-dark/70 mt-3">
+        Вы больше не будете получать рассылки на этот адрес.
+      </div>
+    </div>
+  </body>
+</html>
+
+

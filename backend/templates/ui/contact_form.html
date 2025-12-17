@@ -1,0 +1,122 @@
+{% extends "ui/base.html" %}
+{% block title %}{% if mode == 'edit' %}Редактировать контакт{% else %}Новый контакт{% endif %} — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div>
+        <div class="text-sm text-brand-dark/70">
+        <a class="underline" href="/companies/">Компании</a> /
+        <a class="underline" href="/companies/{{ company.id }}/">{{ company.name }}</a> /
+      </div>
+      <h1 class="text-2xl font-semibold">
+        {% if mode == 'edit' %}Редактировать контакт{% else %}Новый контакт{% endif %}
+      </h1>
+    </div>
+
+    <form method="post" class="bg-white border rounded-2xl p-4 space-y-4">
+      {% csrf_token %}
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Фамилия</label>
+          {{ form.last_name }}
+        </div>
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Имя</label>
+          {{ form.first_name }}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Должность</label>
+          {{ form.position }}
+        </div>
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Статус</label>
+          {{ form.status }}
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Примечание</label>
+        {{ form.note }}
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <section>
+          <div class="font-medium mb-2">Email</div>
+          {{ email_fs.management_form }}
+          {% if email_fs.non_form_errors %}
+            <div class="rounded-lg border border-brand-orange/60 bg-brand-orange/20 p-3 text-sm text-brand-dark mb-2">
+              {{ email_fs.non_form_errors }}
+            </div>
+          {% endif %}
+          <div class="space-y-2">
+            {% for f in email_fs %}
+              <div class="grid grid-cols-12 gap-2 items-end">
+                <div class="col-span-4">
+                  <label class="block text-xs text-brand-dark/70 mb-1">Тип</label>
+                  {{ f.type }}
+                </div>
+                <div class="col-span-7">
+                  <label class="block text-xs text-brand-dark/70 mb-1">Email</label>
+                  {{ f.value }}
+                  {% if f.errors %}<div class="text-xs text-brand-orange">{{ f.errors }}</div>{% endif %}
+                </div>
+                <div class="col-span-1">
+                  <label class="block text-xs text-brand-dark/70 mb-1">Удал.</label>
+                  {{ f.DELETE }}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </section>
+
+        <section>
+          <div class="font-medium mb-2">Телефоны</div>
+          {{ phone_fs.management_form }}
+          {% if phone_fs.non_form_errors %}
+            <div class="rounded-lg border border-brand-orange/60 bg-brand-orange/20 p-3 text-sm text-brand-dark mb-2">
+              {{ phone_fs.non_form_errors }}
+            </div>
+          {% endif %}
+          <div class="space-y-2">
+            {% for f in phone_fs %}
+              <div class="grid grid-cols-12 gap-2 items-end">
+                <div class="col-span-4">
+                  <label class="block text-xs text-brand-dark/70 mb-1">Тип</label>
+                  {{ f.type }}
+                </div>
+                <div class="col-span-7">
+                  <label class="block text-xs text-brand-dark/70 mb-1">Телефон</label>
+                  {{ f.value }}
+                  {% if f.errors %}<div class="text-xs text-brand-orange">{{ f.errors }}</div>{% endif %}
+                </div>
+                <div class="col-span-1">
+                  <label class="block text-xs text-brand-dark/70 mb-1">Удал.</label>
+                  {{ f.DELETE }}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        </section>
+      </div>
+
+      {% if form.errors %}
+        <div class="rounded-lg border border-brand-orange/60 bg-brand-orange/20 p-3 text-sm text-brand-dark">
+          Проверь поля контакта.
+        </div>
+      {% endif %}
+
+      <div class="flex gap-2">
+        <button class="rounded-lg bg-brand-teal text-white px-4 py-2 hover:bg-brand-dark">
+          {% if mode == 'edit' %}Сохранить{% else %}Создать{% endif %}
+        </button>
+        <a class="rounded-lg border border-brand-soft px-4 py-2 hover:bg-brand-soft/40" href="/companies/{{ company.id }}/">Отмена</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}
+
+

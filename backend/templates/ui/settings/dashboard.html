@@ -1,0 +1,44 @@
+{% extends "ui/base.html" %}
+{% block title %}Настройки — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div>
+      <h1 class="text-2xl font-semibold">Настройки</h1>
+      <div class="text-sm text-brand-dark/70">Доступно только администратору</div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <a href="/settings/users/" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
+        <div class="font-medium">Пользователи</div>
+        <div class="text-sm text-brand-dark/70">учётки, роли, доступ к базе</div>
+      </a>
+      <a href="/settings/branches/" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
+        <div class="font-medium">Филиалы</div>
+        <div class="text-sm text-brand-dark/70">ЕКБ / КРД / ТМН и т.д.</div>
+      </a>
+      <a href="/settings/dicts/" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
+        <div class="font-medium">Справочники</div>
+        <div class="text-sm text-brand-dark/70">статусы, сферы, типы задач</div>
+      </a>
+      <a href="/settings/activity/" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
+        <div class="font-medium">Журнал действий</div>
+        <div class="text-sm text-brand-dark/70">кто что сделал и когда</div>
+      </a>
+      <a href="/settings/import/" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
+        <div class="font-medium">Импорт</div>
+        <div class="text-sm text-brand-dark/70">загрузка CSV (админ)</div>
+      </a>
+      <a href="/settings/company-columns/" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
+        <div class="font-medium">Колонки компаний</div>
+        <div class="text-sm text-brand-dark/70">что показывать в таблице</div>
+      </a>
+      <a href="/settings/security/" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
+        <div class="font-medium">Безопасность</div>
+        <div class="text-sm text-brand-dark/70">экспорты, попытки, подозрительные действия</div>
+      </a>
+    </div>
+  </div>
+{% endblock %}
+
+

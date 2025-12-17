@@ -1,0 +1,40 @@
+{% extends "ui/base.html" %}
+{% block title %}Колонки компаний — Настройки{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div>
+      <div class="text-sm muted"><a class="link" href="/settings/">Настройки</a> /</div>
+      <h1 class="text-2xl font-semibold">Колонки списка компаний</h1>
+      <div class="muted text-sm">Эта настройка глобальная: влияет на всех пользователей.</div>
+    </div>
+
+    <form method="post" class="card card-pad space-y-3">
+      {% csrf_token %}
+
+      <div class="text-sm">
+        <div class="font-medium mb-2">Показывать в таблице:</div>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {% for checkbox in form.columns %}
+            <label class="flex items-center gap-2 rounded-xl border border-brand-soft px-3 py-2 hover:bg-brand-soft/25">
+              {{ checkbox.tag }}
+              <span>{{ checkbox.choice_label }}</span>
+            </label>
+          {% endfor %}
+        </div>
+        <div class="text-xs muted-2 mt-2">Колонка “Компания” обязательная — если снять, мы включим её автоматически.</div>
+      </div>
+
+      {% if form.errors %}
+        <div class="rounded-xl border border-brand-orange/60 bg-brand-orange/20 px-4 py-3 text-sm text-brand-dark">Проверь форму.</div>
+      {% endif %}
+
+      <div class="flex gap-2">
+        <button class="btn btn-primary" type="submit">Сохранить</button>
+        <a class="btn btn-outline" href="/settings/">Назад</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}
+
+

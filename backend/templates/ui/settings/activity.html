@@ -1,0 +1,39 @@
+{% extends "ui/base.html" %}
+{% block title %}Журнал действий — Настройки{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div>
+      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> /</div>
+      <h1 class="text-2xl font-semibold">Журнал действий</h1>
+      <div class="text-sm text-brand-dark/70">Последние 500 событий</div>
+    </div>
+
+    <div class="bg-white border rounded-2xl overflow-hidden">
+      <table class="min-w-full text-sm">
+        <thead class="bg-brand-soft/40 text-brand-dark/80">
+          <tr>
+            <th class="text-left px-4 py-3">Когда</th>
+            <th class="text-left px-4 py-3">Кто</th>
+            <th class="text-left px-4 py-3">Сущность</th>
+            <th class="text-left px-4 py-3">Описание</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in events %}
+            <tr class="border-t align-top">
+              <td class="px-4 py-3 text-brand-dark/70 whitespace-nowrap">{{ e.created_at }}</td>
+              <td class="px-4 py-3">{{ e.actor|default:"—" }}</td>
+              <td class="px-4 py-3 font-mono text-xs">{{ e.entity_type }}:{{ e.entity_id }}</td>
+              <td class="px-4 py-3">{{ e.message|default:e.get_verb_display }}</td>
+            </tr>
+          {% empty %}
+            <tr><td class="px-4 py-6 text-brand-dark/70" colspan="4">Пока событий нет.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}
+
+

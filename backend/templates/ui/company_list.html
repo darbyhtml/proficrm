@@ -1,0 +1,146 @@
+{% extends "ui/base.html" %}
+{% block title %}Компании — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div>
+      <div class="flex items-end justify-between gap-3">
+        <div>
+          <h1 class="text-2xl font-semibold">Компании</h1>
+          <div class="text-sm text-brand-dark/70">Поиск по названию, ИНН, адресу</div>
+        </div>
+        <div class="flex gap-2">
+          <a href="/companies/new/" class="btn btn-primary">+ Добавить компанию</a>
+          {% if request.user.is_superuser or request.user.role == 'admin' %}
+            <a href="/companies/export/?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&overdue={{ overdue }}" class="btn btn-outline">Экспорт CSV</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <form class="card card-pad grid grid-cols-1 md:grid-cols-6 gap-3" method="get">
+      <div class="md:col-span-2">
+        <label class="block text-sm text-brand-dark/80 mb-1">Поиск</label>
+        <input name="q" value="{{ q }}" class="input" placeholder="ИНН / название / адрес" />
+      </div>
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Ответственный</label>
+        <select name="responsible" class="select">
+          <option value="">Любой</option>
+          {% for u in responsibles %}
+            <option value="{{ u.id }}" {% if responsible == u.id|stringformat:"s" %}selected{% endif %}>
+              {{ u.get_full_name|default:u.username }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Статус</label>
+        <select name="status" class="select">
+          <option value="">Любой</option>
+          {% for s in statuses %}
+            <option value="{{ s.id }}" {% if status == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Филиал</label>
+        <select name="branch" class="select">
+          <option value="">Любой</option>
+          {% for b in branches %}
+            <option value="{{ b.id }}" {% if branch == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Сфера</label>
+        <select name="sphere" class="select">
+          <option value="">Любая</option>
+          {% for s in spheres %}
+            <option value="{{ s.id }}" {% if sphere == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="flex items-end gap-2">
+        <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 mr-2">
+          <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %} />
+          Только с просрочками
+        </label>
+        <button class="btn btn-primary" type="submit">Фильтр</button>
+        <a class="btn btn-outline" href="/companies/">Сброс</a>
+      </div>
+    </form>
+
+    <div class="card overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="table">
+          <thead>
+            <tr>
+              {% if "name" in company_list_columns %}<th class="text-left px-4 py-3">Компания</th>{% endif %}
+              {% if "overdue" in company_list_columns %}<th class="text-left px-4 py-3">Просрочки</th>{% endif %}
+              {% if "inn" in company_list_columns %}<th class="text-left px-4 py-3">ИНН</th>{% endif %}
+              {% if "status" in company_list_columns %}<th class="text-left px-4 py-3">Статус</th>{% endif %}
+              {% if "spheres" in company_list_columns %}<th class="text-left px-4 py-3">Сферы</th>{% endif %}
+              {% if "responsible" in company_list_columns %}<th class="text-left px-4 py-3">Ответственный</th>{% endif %}
+              {% if "branch" in company_list_columns %}<th class="text-left px-4 py-3">Филиал</th>{% endif %}
+              {% if "updated_at" in company_list_columns %}<th class="text-left px-4 py-3">Обновлено</th>{% endif %}
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in page.object_list %}
+              <tr onclick="window.location='/companies/{{ c.id }}/'" style="cursor:pointer">
+                {% if "name" in company_list_columns %}
+                  <td>
+                    <a class="link" href="/companies/{{ c.id }}/" onclick="event.stopPropagation()">{{ c.name }}</a>
+                    {% if "address" in company_list_columns %}
+                      <div class="text-xs text-brand-dark/70">{{ c.address }}</div>
+                    {% endif %}
+                  </td>
+                {% endif %}
+                {% if "overdue" in company_list_columns %}
+                  <td>
+                    {% if c.has_overdue %}
+                      <span class="badge badge-warn">Да</span>
+                    {% else %}
+                      <span class="muted-2">—</span>
+                    {% endif %}
+                  </td>
+                {% endif %}
+                {% if "inn" in company_list_columns %}<td>{{ c.inn }}</td>{% endif %}
+                {% if "status" in company_list_columns %}<td>{{ c.status|default:"—" }}</td>{% endif %}
+                {% if "spheres" in company_list_columns %}
+                  <td>
+                    {% for s in c.spheres.all %}
+                      <span class="badge mr-1 mb-1">{{ s.name }}</span>
+                    {% empty %}
+                      <span class="text-brand-dark/70">—</span>
+                    {% endfor %}
+                  </td>
+                {% endif %}
+                {% if "responsible" in company_list_columns %}<td>{{ c.responsible }}</td>{% endif %}
+                {% if "branch" in company_list_columns %}<td>{{ c.branch }}</td>{% endif %}
+                {% if "updated_at" in company_list_columns %}<td class="muted">{{ c.updated_at }}</td>{% endif %}
+              </tr>
+            {% empty %}
+              <tr><td class="muted" colspan="20" style="padding:1.25rem 1rem">Ничего не найдено.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex items-center justify-between px-4 py-3 border-t text-sm">
+        <div class="text-brand-dark/70">Стр. {{ page.number }} / {{ page.paginator.num_pages }}</div>
+        <div class="flex gap-2">
+          {% if page.has_previous %}
+            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&overdue={{ overdue }}&page={{ page.previous_page_number }}">Назад</a>
+          {% endif %}
+          {% if page.has_next %}
+            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&overdue={{ overdue }}&page={{ page.next_page_number }}">Вперёд</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+

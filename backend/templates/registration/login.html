@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Вход — CRM ПРОФИ</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                teal: "#01948E",
+                orange: "#FDAD3A",
+                dark: "#003D38",
+                soft: "#C2E2DE",
+              },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="bg-brand-soft/40 text-brand-dark min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-white border border-brand-soft rounded-2xl p-6 shadow-sm">
+      <div class="mb-4">
+        <div class="text-xl font-semibold">Вход</div>
+        <div class="text-sm text-brand-dark/70">Используй логин/пароль сотрудника</div>
+      </div>
+
+      {% if form.errors %}
+        <div class="mb-4 rounded-lg border border-brand-orange/60 bg-brand-orange/20 p-3 text-sm text-brand-dark">
+          Проверь логин/пароль.
+        </div>
+      {% endif %}
+
+      <form method="post" class="space-y-3">
+        {% csrf_token %}
+        {% if next %}<input type="hidden" name="next" value="{{ next }}" />{% endif %}
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Логин</label>
+          <input name="username" autofocus required class="w-full rounded-lg border border-brand-soft px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-teal/30" />
+        </div>
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Пароль</label>
+          <input name="password" type="password" required class="w-full rounded-lg border border-brand-soft px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-teal/30" />
+        </div>
+        <button class="w-full rounded-lg bg-brand-teal text-white py-2 hover:bg-brand-dark active:scale-[0.99]">
+          Войти
+        </button>
+      </form>
+    </div>
+  </body>
+</html>
+
+

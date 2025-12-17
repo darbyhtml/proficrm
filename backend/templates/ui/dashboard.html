@@ -1,0 +1,123 @@
+{% extends "ui/base.html" %}
+{% block title %}Рабочий стол — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <div class="space-y-6">
+    <div class="flex items-end justify-between">
+      <div>
+        <h1 class="text-2xl font-semibold">Рабочий стол</h1>
+        <div class="text-sm text-brand-dark/70">Сегодняшние задачи и последние изменения</div>
+      </div>
+      <a href="/tasks/new/" class="btn btn-primary">+ Новая задача</a>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <section class="card card-pad">
+        <div class="font-medium mb-3">Просрочено</div>
+        {% if overdue %}
+          <ul class="space-y-2">
+            {% for t in overdue %}
+              <li class="rounded-lg border p-3 task-overdue">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="text-sm font-medium">{{ t.title }}</div>
+                  <div class="flex items-center gap-2 flex-shrink-0">
+                    <span class="badge badge-danger">Просрочено</span>
+                    <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
+                  </div>
+                </div>
+                <div class="text-xs text-brand-dark/70">
+                  {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>{% endif %}
+                  {% if t.due_at %} · <span class="text-red-700">дедлайн: {{ t.due_at }}</span>{% endif %}
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="text-sm text-brand-dark/70">Нет просроченных задач.</div>
+        {% endif %}
+      </section>
+
+      <section class="card card-pad">
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-medium">Новые назначения</div>
+          <a class="text-sm link" href="/tasks/?mine=1&status=new">Все новые</a>
+        </div>
+        {% if tasks_new %}
+          <ul class="space-y-2">
+            {% for t in tasks_new %}
+              <li class="rounded-lg border p-3">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="text-sm font-medium">{{ t.title }}</div>
+                  <span class="badge badge-new">Новая</span>
+                </div>
+                <div class="text-xs text-brand-dark/70">
+                  {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>{% endif %}
+                  {% if t.created_by %} · назначил: {{ t.created_by }}{% endif %}
+                  · {{ t.created_at }}
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="text-sm text-brand-dark/70">Новых задач нет.</div>
+        {% endif %}
+      </section>
+
+      <section class="card card-pad">
+        <div class="font-medium mb-3">На сегодня</div>
+        {% if tasks_today %}
+          <ul class="space-y-2">
+            {% for t in tasks_today %}
+              <li class="rounded-lg border p-3 {% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %}">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="text-sm font-medium">{{ t.title }}</div>
+                  <div class="flex items-center gap-2 flex-shrink-0">
+                    {% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}
+                      <span class="badge badge-danger">Срочно</span>
+                    {% endif %}
+                    <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
+                  </div>
+                </div>
+                <div class="text-xs text-brand-dark/70">
+                  {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>{% endif %}
+                  {% if t.due_at %} · <span class="{% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}">{{ t.due_at }}</span>{% endif %}
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="text-sm text-brand-dark/70">На сегодня задач нет.</div>
+        {% endif %}
+      </section>
+    </div>
+
+    <section class="card card-pad">
+      <div class="font-medium mb-3">Задачи на неделю</div>
+      {% if tasks_week %}
+        <ul class="space-y-2">
+          {% for t in tasks_week %}
+            <li class="rounded-lg border p-3 {% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %}">
+              <div class="flex items-start justify-between gap-3">
+                <div class="text-sm font-medium">{{ t.title }}</div>
+                <div class="flex items-center gap-2 flex-shrink-0">
+                  {% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}
+                    <span class="badge badge-danger">Просрочено</span>
+                  {% endif %}
+                  <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
+                </div>
+              </div>
+              <div class="text-xs text-brand-dark/70">
+                {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>{% endif %}
+                {% if t.due_at %} · <span class="{% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}">{{ t.due_at }}</span>{% endif %}
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <div class="text-sm text-brand-dark/70">На ближайшую неделю задач нет.</div>
+      {% endif %}
+    </section>
+  </div>
+{% endblock %}
+
+

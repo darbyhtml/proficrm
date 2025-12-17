@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{% block title %}CRM ПРОФИ{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                teal: "#01948E",
+                orange: "#FDAD3A",
+                dark: "#003D38",
+                soft: "#C2E2DE",
+              },
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      :root{
+        --brand-teal:#01948E;
+        --brand-orange:#FDAD3A;
+        --brand-dark:#003D38;
+        --brand-soft:#C2E2DE;
+      }
+      .card{border:1px solid rgba(194,226,222,.9); border-radius:16px; background:#fff; box-shadow:0 1px 0 rgba(0,61,56,.04)}
+      .card-pad{padding:16px}
+      .btn{display:inline-flex; align-items:center; justify-content:center; gap:.5rem; border-radius:12px; padding:.55rem .9rem; font-size:.875rem; line-height:1.1; transition:background-color .15s ease, border-color .15s ease, transform .05s ease}
+      .btn:active{transform:scale(.99)}
+      .btn-primary{background:var(--brand-teal); color:#fff}
+      .btn-primary:hover{background:var(--brand-dark)}
+      .btn-secondary{background:rgba(194,226,222,.35); border:1px solid rgba(194,226,222,.9); color:var(--brand-dark)}
+      .btn-secondary:hover{background:rgba(194,226,222,.55)}
+      .btn-outline{background:#fff; border:1px solid rgba(194,226,222,.9); color:var(--brand-dark)}
+      .btn-outline:hover{background:rgba(194,226,222,.35)}
+      .input,.select,.textarea{width:100%; border-radius:12px; border:1px solid rgba(194,226,222,.95); padding:.55rem .75rem; background:#fff; color:var(--brand-dark)}
+      .textarea{min-height:96px}
+      .input:focus,.select:focus,.textarea:focus{outline:none; box-shadow:0 0 0 4px rgba(1,148,142,.14); border-color:rgba(1,148,142,.65)}
+      .muted{color:rgba(0,61,56,.72)}
+      .muted-2{color:rgba(0,61,56,.55)}
+      .badge{display:inline-flex; align-items:center; border-radius:999px; padding:.15rem .55rem; font-size:.75rem; border:1px solid rgba(194,226,222,.95); background:rgba(194,226,222,.35); color:var(--brand-dark); white-space:nowrap}
+      .badge-warn{background:rgba(253,173,58,.22); border-color:rgba(253,173,58,.45)}
+      .badge-new{background:rgba(1,148,142,.12); border-color:rgba(1,148,142,.35)}
+      .badge-progress{background:rgba(253,173,58,.22); border-color:rgba(253,173,58,.45)}
+      .badge-done{background:rgba(34,197,94,.15); border-color:rgba(34,197,94,.35)}
+      .badge-cancel{background:rgba(148,163,184,.18); border-color:rgba(148,163,184,.35); color:rgba(0,61,56,.75)}
+      .badge-danger{background:rgba(239,68,68,.14); border-color:rgba(239,68,68,.30)}
+      .task-overdue{border-color:rgba(239,68,68,.45)!important; background:rgba(239,68,68,.06)}
+      .table{width:100%; font-size:.875rem}
+      .table th{background:rgba(194,226,222,.35); color:rgba(0,61,56,.82); text-align:left; padding:.85rem 1rem}
+      .table td{padding:.85rem 1rem; border-top:1px solid rgba(194,226,222,.7); vertical-align:top}
+      .table tr:hover td{background:rgba(194,226,222,.20)}
+      a.link{ text-decoration:underline; text-underline-offset:2px }
+      /* Icon alignment */
+      .nav-ico-wrap{width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;flex:none}
+      .nav-ico-wrap svg{display:block}
+      /* Multiselect (checkbox dropdown) */
+      .ms{position:relative}
+      .ms-btn{width:100%; display:flex; align-items:center; justify-content:space-between; gap:.5rem; border-radius:12px; border:1px solid rgba(194,226,222,.95); padding:.55rem .75rem; background:#fff; color:var(--brand-dark)}
+      .ms-btn:hover{background:rgba(194,226,222,.20)}
+      .ms-value{font-size:.875rem}
+      .ms-panel{position:absolute; left:0; right:0; top:calc(100% + 8px); z-index:60; border-radius:16px; border:1px solid rgba(194,226,222,.95); background:#fff; box-shadow:0 12px 30px rgba(0,61,56,.10); overflow:hidden}
+      .ms-panel .ms-top{padding:10px 12px; border-bottom:1px solid rgba(194,226,222,.7); display:flex; gap:8px; align-items:center}
+      .ms-panel .ms-search{flex:1}
+      .ms-panel .ms-list{max-height:260px; overflow:auto; padding:8px}
+      .ms-item{display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:12px}
+      .ms-item:hover{background:rgba(194,226,222,.25)}
+      .ms-muted{color:rgba(0,61,56,.65); font-size:.75rem}
+    </style>
+  </head>
+  <body class="bg-brand-soft/40 text-brand-dark">
+    <div class="min-h-screen">
+      <header class="border-b border-brand-soft bg-white/80 backdrop-blur">
+        <div class="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <button id="menuBtn" type="button" class="md:hidden rounded-xl border border-brand-soft bg-white px-2.5 py-2 hover:bg-brand-soft/40 active:scale-[0.99]" aria-label="Меню">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M4 6h16M4 12h16M4 18h16"/>
+              </svg>
+            </button>
+            <a href="/" class="font-semibold tracking-tight text-brand-dark">CRM ПРОФИ</a>
+            <span class="text-xs text-brand-dark/70">простая, как amo, но без лишнего</span>
+          </div>
+          <div class="flex items-center gap-3 text-sm">
+            <div class="relative">
+              <button id="notifBtn" type="button" class="relative rounded-xl border border-brand-soft bg-white px-2.5 py-2 hover:bg-brand-soft/40 active:scale-[0.99]" aria-label="Уведомления">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 8a6 6 0 10-12 0c0 7-3 7-3 7h18s-3 0-3-7"/>
+                  <path d="M13.73 21a2 2 0 01-3.46 0"/>
+                </svg>
+                {% if bell_count and bell_count > 0 %}
+                  <span class="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-brand-orange text-brand-dark text-[11px] font-semibold border border-white">
+                    {{ bell_count }}
+                  </span>
+                {% endif %}
+              </button>
+
+              <div id="notifPanel" class="hidden absolute right-0 mt-2 w-[360px] max-w-[90vw] card overflow-hidden z-50">
+                <div class="px-4 py-3 border-b border-brand-soft bg-white">
+                  <div class="flex items-center justify-between">
+                    <div class="font-medium">Уведомления</div>
+                    <form method="post" action="/notifications/mark-all-read/">
+                      {% csrf_token %}
+                      <button class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" type="submit">Прочитано</button>
+                    </form>
+                  </div>
+                  <div class="text-xs muted mt-1">
+                    Новые: <b>{{ notif_unread_count|default:0 }}</b> · Напоминания: <b>{{ reminder_count|default:0 }}</b>
+                  </div>
+                </div>
+
+                <div class="max-h-[420px] overflow-auto bg-white">
+                  {% if reminder_items %}
+                    <div class="px-4 pt-3 pb-2 text-xs muted">Напоминания</div>
+                    <div class="px-2 pb-2">
+                      {% for r in reminder_items %}
+                        <a class="block rounded-xl border border-brand-soft px-3 py-2 mb-2 hover:bg-brand-soft/25" href="{{ r.url }}">
+                          <div class="text-sm font-medium">{{ r.title }}</div>
+                          {% if r.subtitle %}<div class="text-xs muted mt-0.5">{{ r.subtitle }}</div>{% endif %}
+                        </a>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+
+                  <div class="px-4 pt-3 pb-2 text-xs muted">Новые/последние</div>
+                  <div class="px-2 pb-3">
+                    {% for n in notif_items %}
+                      <div class="rounded-xl border border-brand-soft px-3 py-2 mb-2 {% if not n.is_read %}bg-brand-soft/20{% else %}bg-white{% endif %}">
+                        <div class="flex items-start justify-between gap-2">
+                          <div>
+                            <div class="text-sm font-medium">{{ n.title }}</div>
+                            {% if n.body %}<div class="text-xs muted mt-0.5">{{ n.body|truncatechars:140 }}</div>{% endif %}
+                            <div class="text-[11px] muted-2 mt-1">{{ n.created_at }}</div>
+                          </div>
+                          {% if not n.is_read %}
+                            <form method="post" action="/notifications/{{ n.id }}/read/">
+                              {% csrf_token %}
+                              <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" type="submit">✓</button>
+                            </form>
+                          {% endif %}
+                        </div>
+                        {% if n.url %}
+                          <a class="link text-sm mt-2 inline-block" href="{{ n.url }}">Открыть</a>
+                        {% endif %}
+                      </div>
+                    {% empty %}
+                      <div class="px-2 pb-3 muted text-sm">Уведомлений пока нет.</div>
+                    {% endfor %}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <span class="text-brand-dark/80">
+              {% if request.user.first_name or request.user.last_name %}
+                {{ request.user.last_name }} {{ request.user.first_name }}
+              {% else %}
+                {{ request.user.get_username }}
+              {% endif %}
+            </span>
+            <form method="post" action="/logout/">
+              {% csrf_token %}
+              <button class="rounded-lg border border-brand-soft bg-white px-3 py-1.5 hover:bg-brand-soft/40 active:scale-[0.99]">Выйти</button>
+            </form>
+          </div>
+        </div>
+      </header>
+
+      <div class="mx-auto max-w-7xl px-4 py-6 flex flex-col md:flex-row gap-6">
+        <div id="sidebarOverlay" class="hidden md:hidden fixed inset-0 bg-black/30 z-40"></div>
+        <aside class="md:w-[220px] md:flex-shrink-0">
+          <div id="sidebarDrawer" class="bg-white border border-brand-soft rounded-xl p-2 md:sticky md:top-4
+               md:block fixed z-50 inset-y-0 left-0 w-[280px] max-w-[85vw] md:w-auto
+               transform -translate-x-full md:translate-x-0 transition-transform duration-150 ease-out
+               overflow-y-auto">
+
+            <div class="md:hidden flex items-center justify-between px-2 py-2 border-b border-brand-soft mb-2">
+              <div class="font-semibold">Меню</div>
+              <button id="menuCloseBtn" type="button" class="rounded-xl border border-brand-soft bg-white px-2.5 py-2 hover:bg-brand-soft/40 active:scale-[0.99]" aria-label="Закрыть">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+
+            <nav class="space-y-1">
+              <a class="flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-brand-soft/40 text-sm {% if request.resolver_match.url_name == 'dashboard' %}bg-brand-soft/50 font-medium{% endif %}" href="/">
+                <span class="nav-ico-wrap">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5L12 3l9 7.5V21a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></svg>
+                </span>
+                <span>Рабочий стол</span>
+              </a>
+              <a class="flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-brand-soft/40 text-sm {% if request.resolver_match.url_name in 'task_list task_create' %}bg-brand-soft/50 font-medium{% endif %}" href="/tasks/">
+                <span class="nav-ico-wrap">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+                </span>
+                <span>Задачи</span>
+              </a>
+              <a class="flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-brand-soft/40 text-sm {% if request.resolver_match.url_name in 'company_list company_detail' %}bg-brand-soft/50 font-medium{% endif %}" href="/companies/">
+                <span class="nav-ico-wrap">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v14"/><path d="M9 21V9h6v12"/><path d="M9 13h6"/></svg>
+                </span>
+                <span>Списки (компании)</span>
+              </a>
+              <a class="flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-brand-soft/40 text-sm {% if request.path|slice:':6' == '/mail/' %}bg-brand-soft/50 font-medium{% endif %}" href="/mail/campaigns/">
+                <span class="nav-ico-wrap">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 6h16a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"/>
+                    <path d="m22 8-10 6L2 8"/>
+                  </svg>
+                </span>
+                <span>Почта</span>
+              </a>
+              <div class="flex items-center gap-2 px-2.5 py-2 rounded-lg text-sm text-brand-dark/50">
+                <span class="nav-ico-wrap">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 3 5-7"/></svg>
+                </span>
+                <span>Аналитика (скоро)</span>
+              </div>
+              {% if request.user.is_superuser or request.user.role == 'admin' %}
+                <a class="flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-brand-soft/40 text-sm {% if request.resolver_match.url_name|slice:':9' == 'settings_' %}bg-brand-soft/50 font-medium{% endif %}" href="/settings/">
+                  <span class="nav-ico-wrap">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 21v-7"/>
+                      <path d="M4 10V3"/>
+                      <path d="M12 21v-9"/>
+                      <path d="M12 8V3"/>
+                      <path d="M20 21v-5"/>
+                      <path d="M20 12V3"/>
+                      <path d="M2 14h4"/>
+                      <path d="M10 12h4"/>
+                      <path d="M18 16h4"/>
+                    </svg>
+                  </span>
+                  <span>Настройки</span>
+                </a>
+              {% endif %}
+              {% if request.user.is_superuser or request.user.role == 'admin' %}
+                <a class="flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-brand-soft/40 text-sm" href="/admin/">
+                  <span class="nav-ico-wrap">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  </span>
+                  <span>Админка</span>
+                </a>
+              {% endif %}
+            </nav>
+          </div>
+        </aside>
+
+        <main class="flex-1 min-w-0">
+          {% if messages %}
+            <div class="space-y-2 mb-4">
+              {% for message in messages %}
+                {% if 'error' in message.tags %}
+                  <div class="rounded-xl border border-brand-orange/40 bg-brand-orange/15 px-4 py-3 text-sm text-brand-dark">
+                    {{ message }}
+                  </div>
+                {% elif 'warning' in message.tags %}
+                  <div class="rounded-xl border border-brand-orange/60 bg-brand-orange/20 px-4 py-3 text-sm text-brand-dark">
+                    {{ message }}
+                  </div>
+                {% elif 'success' in message.tags %}
+                  <div class="rounded-xl border border-brand-teal/40 bg-brand-teal/10 px-4 py-3 text-sm text-brand-dark">
+                    {{ message }}
+                  </div>
+                {% else %}
+                  <div class="rounded-xl border border-brand-soft bg-white px-4 py-3 text-sm text-brand-dark">
+                    {{ message }}
+                  </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          {% endif %}
+          {% block content %}{% endblock %}
+        </main>
+      </div>
+    </div>
+
+    <script>
+      (function(){
+        const btn = document.getElementById('notifBtn');
+        const panel = document.getElementById('notifPanel');
+        if(!btn || !panel) return;
+        function close(){ panel.classList.add('hidden'); }
+        function toggle(){ panel.classList.toggle('hidden'); }
+        btn.addEventListener('click', function(e){ e.stopPropagation(); toggle(); });
+        panel.addEventListener('click', function(e){ e.stopPropagation(); });
+        document.addEventListener('click', close);
+        document.addEventListener('keydown', function(e){ if(e.key === 'Escape') close(); });
+      })();
+    </script>
+    <script>
+      (function(){
+        const openBtn = document.getElementById('menuBtn');
+        const closeBtn = document.getElementById('menuCloseBtn');
+        const drawer = document.getElementById('sidebarDrawer');
+        const overlay = document.getElementById('sidebarOverlay');
+        if(!drawer) return;
+        function open(){
+          drawer.classList.remove('-translate-x-full');
+          if(overlay){ overlay.classList.remove('hidden'); }
+        }
+        function close(){
+          drawer.classList.add('-translate-x-full');
+          if(overlay){ overlay.classList.add('hidden'); }
+        }
+        if(openBtn) openBtn.addEventListener('click', function(e){ e.stopPropagation(); open(); });
+        if(closeBtn) closeBtn.addEventListener('click', function(e){ e.stopPropagation(); close(); });
+        if(overlay) overlay.addEventListener('click', close);
+        document.addEventListener('keydown', function(e){ if(e.key === 'Escape') close(); });
+      })();
+    </script>
+    <script>
+      // Checkbox multiselect over <select multiple>
+      (function(){
+        function initOne(root){
+          const select = root.querySelector('select[multiple]');
+          if(!select) return;
+          // hide original select but keep in DOM for submit
+          select.classList.add('hidden');
+
+          const btn = root.querySelector('.ms-btn');
+          const valueEl = root.querySelector('.ms-value');
+          const panel = root.querySelector('.ms-panel');
+          const search = root.querySelector('.ms-search');
+          const list = root.querySelector('.ms-list');
+          const clearBtn = root.querySelector('[data-ms-clear]');
+
+          function selectedTexts(){
+            const selected = Array.from(select.options).filter(o => o.selected).map(o => o.text.trim()).filter(Boolean);
+            return selected;
+          }
+          function renderValue(){
+            const sel = selectedTexts();
+            valueEl.textContent = sel.length ? sel.join(', ') : (root.getAttribute('data-placeholder') || 'Выберите…');
+          }
+          function renderList(filter){
+            const f = (filter || '').toLowerCase().trim();
+            list.innerHTML = '';
+            const opts = Array.from(select.options);
+            for(const o of opts){
+              const label = (o.text || '').trim();
+              if(!label) continue;
+              if(f && !label.toLowerCase().includes(f)) continue;
+              const row = document.createElement('label');
+              row.className = 'ms-item';
+              const cb = document.createElement('input');
+              cb.type = 'checkbox';
+              cb.checked = !!o.selected;
+              cb.addEventListener('change', () => {
+                o.selected = cb.checked;
+                renderValue();
+              });
+              const span = document.createElement('span');
+              span.textContent = label;
+              row.appendChild(cb);
+              row.appendChild(span);
+              list.appendChild(row);
+            }
+            if(!list.children.length){
+              const empty = document.createElement('div');
+              empty.className = 'ms-muted px-1 py-2';
+              empty.textContent = 'Ничего не найдено';
+              list.appendChild(empty);
+            }
+          }
+
+          function open(){
+            panel.classList.remove('hidden');
+            renderList(search.value);
+            search.focus();
+          }
+          function close(){
+            panel.classList.add('hidden');
+            search.value = '';
+          }
+
+          btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if(panel.classList.contains('hidden')) open(); else close();
+          });
+          panel.addEventListener('click', (e) => e.stopPropagation());
+          document.addEventListener('click', close);
+          document.addEventListener('keydown', (e) => { if(e.key === 'Escape') close(); });
+
+          search.addEventListener('input', () => renderList(search.value));
+          if(clearBtn){
+            clearBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              for(const o of Array.from(select.options)) o.selected = false;
+              renderValue();
+              renderList(search.value);
+            });
+          }
+
+          // initial
+          renderValue();
+        }
+
+        function initAll(){
+          document.querySelectorAll('[data-ms="1"]').forEach(initOne);
+        }
+        document.addEventListener('DOMContentLoaded', initAll);
+      })();
+    </script>
+  </body>
+</html>
+
+

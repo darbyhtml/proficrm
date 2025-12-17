@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+.Python
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+
+# Django / local runtime
+backend/.env
+.env
+*.env
+*.log
+backend/db.sqlite3
+db.sqlite3
+media/
+staticfiles/
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+
+# Data exports / large files (keep out of git)
+*.csv
+*.xlsx
+*.xls
+
+# Local helper binaries
+cloudflared.exe
+
+# Local one-off/debug scripts (project root)
+count_types.py
+debug_types*.py
+inspect_*.py
+scan_rows.py
+

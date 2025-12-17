@@ -1,0 +1,48 @@
+{% extends "ui/base.html" %}
+{% block title %}Почта — Кампании{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div class="flex items-end justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-semibold">Кампании рассылок</h1>
+        <div class="muted text-sm">Создай кампанию → сгенерируй получателей → отправляй батчами.</div>
+      </div>
+      <div class="flex gap-2">
+        <a class="btn btn-outline" href="/mail/settings/">Настройки SMTP</a>
+        <a class="btn btn-primary" href="/mail/campaigns/new/">+ Новая кампания</a>
+      </div>
+    </div>
+
+    <div class="card overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Название</th>
+              <th>Тема</th>
+              <th>Статус</th>
+              <th>Создатель</th>
+              <th>Создано</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in campaigns %}
+              <tr onclick="window.location='/mail/campaigns/{{ c.id }}/'" style="cursor:pointer">
+                <td><a class="link" href="/mail/campaigns/{{ c.id }}/" onclick="event.stopPropagation()">{{ c.name }}</a></td>
+                <td class="muted">{{ c.subject }}</td>
+                <td><span class="badge">{{ c.get_status_display }}</span></td>
+                <td class="muted">{{ c.created_by|default:"—" }}</td>
+                <td class="muted">{{ c.created_at }}</td>
+              </tr>
+            {% empty %}
+              <tr><td class="muted" colspan="5" style="padding:1.25rem 1rem">Кампаний нет.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+
