@@ -131,7 +131,7 @@
               <select class="select" name="responsible">
                 <option value="">Любой</option>
                 {% for u in responsibles %}
-                  <option value="{{ u.id }}">{{ u.get_full_name|default:u.username }}</option>
+                  <option value="{{ u.id }}">{{ u }}</option>
                 {% endfor %}
               </select>
             </div>

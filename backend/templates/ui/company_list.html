@@ -35,7 +35,7 @@
           <option value="">Любой</option>
           {% for u in responsibles %}
             <option value="{{ u.id }}" {% if responsible == u.id|stringformat:"s" %}selected{% endif %}>
-              {{ u.get_full_name|default:u.username }}
+              {{ u }}
             </option>
           {% endfor %}
         </select>
