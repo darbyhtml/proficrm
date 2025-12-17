@@ -26,6 +26,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from accounts.models import User
 from companies.api import CompanyNoteViewSet, CompanyViewSet, ContactViewSet
 from tasksapp.api import TaskTypeViewSet, TaskViewSet
+from phonebridge.api import PullCallView, RegisterDeviceView
 
 
 admin.site.site_header = "CRM — Админка"
@@ -61,5 +62,7 @@ urlpatterns = [
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("api/phone/devices/register/", RegisterDeviceView.as_view(), name="phone_register_device"),
+    path("api/phone/calls/pull/", PullCallView.as_view(), name="phone_pull_call"),
     path("api/", include(router.urls)),
 ]

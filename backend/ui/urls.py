@@ -16,6 +16,7 @@ urlpatterns = [
     path("contacts/<uuid:contact_id>/edit/", views.contact_edit, name="contact_edit"),
     path("companies/<uuid:company_id>/notes/add/", views.company_note_add, name="company_note_add"),
     path("companies/<uuid:company_id>/notes/<int:note_id>/delete/", views.company_note_delete, name="company_note_delete"),
+    path("phone/call/", views.phone_call_create, name="phone_call_create"),
     path("tasks/", views.task_list, name="task_list"),
     path("tasks/new/", views.task_create, name="task_create"),
     path("tasks/<uuid:task_id>/status/", views.task_set_status, name="task_set_status"),

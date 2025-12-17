@@ -76,6 +76,7 @@ INSTALLED_APPS = [
     'audit',
     'mailer',
     'notifications',
+    'phonebridge',
 ]
 
 MIDDLEWARE = [

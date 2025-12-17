@@ -150,7 +150,19 @@
                   <div>
                     <div class="text-brand-dark/50 text-xs">Телефон</div>
                     {% for p in c.phones.all %}
-                      <div>{{ p.value }}</div>
+                      <div class="flex items-center justify-between gap-2">
+                        <div class="font-mono text-xs">{{ p.value }}</div>
+                        <button
+                          type="button"
+                          class="btn btn-outline js-call-phone"
+                          style="padding:.25rem .5rem;font-size:.75rem"
+                          data-phone="{{ p.value }}"
+                          data-company="{{ company.id }}"
+                          data-contact="{{ c.id }}"
+                        >
+                          Позвонить с телефона
+                        </button>
+                      </div>
                     {% empty %}
                       <div class="text-brand-dark/70">—</div>
                     {% endfor %}
@@ -231,6 +243,44 @@
         </div>
       </section>
     </div>
+
+    <script>
+      (function(){
+        function getCookie(name) {
+          const value = `; ${document.cookie}`;
+          const parts = value.split(`; ${name}=`);
+          if (parts.length === 2) return parts.pop().split(';').shift();
+          return '';
+        }
+        const csrftoken = getCookie('csrftoken');
+        document.querySelectorAll('.js-call-phone').forEach(btn => {
+          btn.addEventListener('click', async () => {
+            const phone = btn.dataset.phone || '';
+            const companyId = btn.dataset.company || '';
+            const contactId = btn.dataset.contact || '';
+            btn.disabled = true;
+            const old = btn.textContent;
+            btn.textContent = 'Отправляю...';
+            try {
+              const body = new URLSearchParams({phone, company_id: companyId, contact_id: contactId});
+              const res = await fetch('/phone/call/', {
+                method: 'POST',
+                headers: {'X-CSRFToken': csrftoken, 'Content-Type': 'application/x-www-form-urlencoded'},
+                body: body.toString()
+              });
+              const data = await res.json().catch(() => ({}));
+              if (!res.ok || !data.ok) throw new Error(data.detail || 'Ошибка');
+              btn.textContent = 'Отправлено ✓';
+              setTimeout(() => { btn.textContent = old; btn.disabled = false; }, 1200);
+            } catch (e) {
+              btn.textContent = old;
+              btn.disabled = false;
+              alert('Не удалось отправить команду на телефон: ' + (e && e.message ? e.message : e));
+            }
+          });
+        });
+      })();
+    </script>
 
     <section class="card card-pad">
       <div class="font-medium mb-3">История действий</div>

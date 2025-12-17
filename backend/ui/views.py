@@ -23,6 +23,7 @@ from companies.permissions import can_edit_company as can_edit_company_perm, edi
 from tasksapp.models import Task, TaskType
 from notifications.models import Notification
 from notifications.service import notify
+from phonebridge.models import CallRequest
 
 from .forms import (
     CompanyCreateForm,
@@ -758,6 +759,46 @@ def company_note_delete(request: HttpRequest, company_id, note_id: int) -> HttpR
         message="Удалена заметка",
     )
     return redirect("company_detail", company_id=company.id)
+
+
+@login_required
+def phone_call_create(request: HttpRequest) -> HttpResponse:
+    """
+    UI endpoint: создать "команду на звонок" для телефона текущего пользователя.
+    Android-приложение (APK) забирает команду через polling /api/phone/calls/pull/.
+    """
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "detail": "method not allowed"}, status=405)
+
+    user: User = request.user
+    phone = (request.POST.get("phone") or "").strip()
+    company_id = (request.POST.get("company_id") or "").strip()
+    contact_id = (request.POST.get("contact_id") or "").strip()
+
+    if not phone:
+        return JsonResponse({"ok": False, "detail": "phone is required"}, status=400)
+
+    # минимальная нормализация для tel: (Android ACTION_DIAL)
+    normalized = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+
+    call = CallRequest.objects.create(
+        user=user,
+        created_by=user,
+        company_id=company_id or None,
+        contact_id=contact_id or None,
+        phone_raw=normalized,
+        note="UI click",
+    )
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.CREATE,
+        entity_type="call_request",
+        entity_id=str(call.id),
+        company_id=company_id or None,
+        message="Запрос на звонок с телефона",
+        meta={"phone": normalized, "contact_id": contact_id or None},
+    )
+    return JsonResponse({"ok": True, "id": str(call.id), "phone": normalized})
 
 
 @login_required
