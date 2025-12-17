@@ -9,6 +9,7 @@ urlpatterns = [
     path("companies/export/", views.company_export, name="company_export"),
     path("companies/new/", views.company_create, name="company_create"),
     path("companies/<uuid:company_id>/", views.company_detail, name="company_detail"),
+    path("companies/<uuid:company_id>/edit/", views.company_edit, name="company_edit"),
     path("companies/<uuid:company_id>/update/", views.company_update, name="company_update"),
     path("companies/<uuid:company_id>/contacts/new/", views.contact_create, name="contact_create"),
     path("contacts/<uuid:contact_id>/edit/", views.contact_edit, name="contact_edit"),

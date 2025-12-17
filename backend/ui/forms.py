@@ -33,6 +33,26 @@ class CompanyQuickEditForm(forms.ModelForm):
         }
 
 
+class CompanyEditForm(forms.ModelForm):
+    """
+    Полное редактирование данных компании (без смены ответственного/филиала).
+    Статус/сферы здесь тоже доступны, чтобы редактирование было "в одном месте".
+    """
+    class Meta:
+        model = Company
+        fields = ["name", "legal_name", "inn", "kpp", "address", "website", "status", "spheres"]
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "legal_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "inn": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "kpp": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "address": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2"}),
+            "website": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "status": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "spheres": forms.SelectMultiple(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+        }
+
+
 class CompanyNoteForm(forms.ModelForm):
     class Meta:
         model = CompanyNote

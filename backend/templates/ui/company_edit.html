@@ -1,0 +1,76 @@
+{% extends "ui/base.html" %}
+{% block title %}Редактировать — {{ company.name }}{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div>
+      <div class="text-sm text-brand-dark/70">
+        <a class="underline" href="/companies/">Компании</a> /
+        <a class="underline" href="/companies/{{ company.id }}/">{{ company.name }}</a> /
+      </div>
+      <h1 class="text-2xl font-semibold">Редактировать данные</h1>
+      <div class="text-sm text-brand-dark/70">Доступно: создателю, ответственному, директору филиала, управляющему, администратору.</div>
+    </div>
+
+    <form method="post" class="bg-white border rounded-2xl p-4 space-y-3">
+      {% csrf_token %}
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Название</label>
+          {{ form.name }}
+        </div>
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Юр. название</label>
+          {{ form.legal_name }}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">ИНН</label>
+          {{ form.inn }}
+        </div>
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">КПП</label>
+          {{ form.kpp }}
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Адрес</label>
+        {{ form.address }}
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Сайт</label>
+          {{ form.website }}
+        </div>
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Статус</label>
+          {{ form.status }}
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Сферы (можно несколько)</label>
+        {{ form.spheres }}
+        <div class="text-xs text-brand-dark/60 mt-1">Можно выбрать несколько (Ctrl/Shift), либо используйте быстрый мультиселект в карточке.</div>
+      </div>
+
+      {% if form.errors %}
+        <div class="rounded-lg border border-brand-orange/60 bg-brand-orange/20 p-3 text-sm text-brand-dark">
+          Проверь поля формы.
+        </div>
+      {% endif %}
+
+      <div class="flex gap-2">
+        <button class="btn btn-primary" type="submit">Сохранить</button>
+        <a class="btn btn-outline" href="/companies/{{ company.id }}/">Отмена</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}
+
+

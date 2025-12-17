@@ -11,6 +11,11 @@
           {% if company.inn %}ИНН: <span class="font-mono">{{ company.inn }}</span>{% endif %}
           {% if company.kpp %} · КПП: <span class="font-mono">{{ company.kpp }}</span>{% endif %}
         </div>
+        {% if can_edit_company %}
+          <div class="mt-2">
+            <a class="btn btn-outline" href="/companies/{{ company.id }}/edit/">Редактировать данные</a>
+          </div>
+        {% endif %}
       </div>
       <div class="text-sm text-brand-dark/80">
         <div><span class="text-brand-dark/50">Ответственный:</span> {{ company.responsible }}</div>

@@ -26,6 +26,7 @@ from notifications.service import notify
 from .forms import (
     CompanyCreateForm,
     CompanyQuickEditForm,
+    CompanyEditForm,
     CompanyNoteForm,
     ContactEmailFormSet,
     ContactForm,
@@ -420,47 +421,6 @@ def company_create(request: HttpRequest) -> HttpResponse:
         if form.is_valid():
             company: Company = form.save(commit=False)
 
-            # Проверка дублей: ИНН/КПП/название/адрес.
-            inn = (company.inn or "").strip()
-            kpp = (company.kpp or "").strip()
-            name = (company.name or "").strip()
-            address = (company.address or "").strip()
-
-            confirm = (request.POST.get("confirm_create") or "").strip() == "1"
-
-            def _find_dups():
-                qs_all = Company.objects.all()
-                q = Q()
-                reasons = []
-                if inn:
-                    q |= Q(inn=inn)
-                    reasons.append("ИНН")
-                if kpp:
-                    q |= Q(kpp=kpp)
-                    reasons.append("КПП")
-                if name:
-                    q |= Q(name__iexact=name) | Q(legal_name__iexact=name)
-                    reasons.append("Название")
-                if address:
-                    q |= Q(address__iexact=address)
-                    reasons.append("Адрес")
-                if not q:
-                    return [], 0, []
-                qs_match = qs_all.filter(q).select_related("responsible", "branch", "status").order_by("-updated_at")
-                visible = list(qs_match[:8])
-                more_count = max(0, qs_match.count() - len(visible))
-                return visible, more_count, reasons
-
-            dups, hidden_count, reasons = _find_dups()
-            if (dups or hidden_count) and not confirm:
-                messages.warning(request, "Похоже, компания уже есть в базе. Проверь совпадения и открой существующую карточку.")
-                dups_view = [{"obj": c, "reasons": _dup_reasons(c=c, inn=inn, kpp=kpp, name=name, address=address)} for c in dups]
-                return render(
-                    request,
-                    "ui/company_create.html",
-                    {"form": form, "possible_duplicates": dups_view, "duplicates_hidden_count": hidden_count, "duplicate_reasons": reasons},
-                )
-
             # Менеджер создаёт компанию только на себя; филиал подтягиваем от пользователя.
             company.created_by = user
             company.responsible = user
@@ -569,6 +529,34 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "quick_form": quick_form,
         },
     )
+
+
+@login_required
+def company_edit(request: HttpRequest, company_id) -> HttpResponse:
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch", "status"), id=company_id)
+    if not _can_edit_company(user, company):
+        messages.error(request, "Нет прав на редактирование данных компании.")
+        return redirect("company_detail", company_id=company.id)
+
+    if request.method == "POST":
+        form = CompanyEditForm(request.POST, instance=company)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Данные компании обновлены.")
+            log_event(
+                actor=user,
+                verb=ActivityEvent.Verb.UPDATE,
+                entity_type="company",
+                entity_id=company.id,
+                company_id=company.id,
+                message="Обновлены данные компании",
+            )
+            return redirect("company_detail", company_id=company.id)
+    else:
+        form = CompanyEditForm(instance=company)
+
+    return render(request, "ui/company_edit.html", {"company": company, "form": form})
 
 
 @login_required
