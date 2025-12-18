@@ -8,7 +8,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
@@ -86,9 +88,20 @@ class CallListenerService : Service() {
                             }
                             // 2) Если приложение на экране — открываем звонилку сразу.
                             if (AppState.isForeground) {
-                                val uri = Uri.parse("tel:$phone")
-                                val dial = Intent(Intent.ACTION_DIAL, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                startActivity(dial)
+                                try {
+                                    val uri = Uri.parse("tel:$phone")
+                                    val dial = Intent(Intent.ACTION_DIAL, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    // запуск activity делаем на main thread, чтобы не словить странные краши на прошивках
+                                    Handler(Looper.getMainLooper()).post {
+                                        try {
+                                            startActivity(dial)
+                                        } catch (_: Throwable) {
+                                            // ignore — уведомление уже показали
+                                        }
+                                    }
+                                } catch (_: Throwable) {
+                                    // ignore — уведомление уже показали
+                                }
                             }
                         }
                     } catch (_: Exception) {
