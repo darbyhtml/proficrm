@@ -45,3 +45,7 @@ scan_rows.py
 # Local temporary scripts (repo-internal)
 backend/_compile_templates.py
 
+# Android (local)
+**/.gradle/
+**/local.properties
+
