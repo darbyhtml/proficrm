@@ -55,8 +55,12 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences(CrmProfiApp.PREFS, Context.MODE_PRIVATE)
         val lastCrash = prefs.getString(CrmProfiApp.KEY_LAST_CRASH, null)
         if (!lastCrash.isNullOrBlank()) {
-            prefs.edit().remove(CrmProfiApp.KEY_LAST_CRASH).apply()
             statusEl.text = "Последний вылет:\n$lastCrash"
+            statusEl.setOnLongClickListener {
+                prefs.edit().remove(CrmProfiApp.KEY_LAST_CRASH).apply()
+                statusEl.text = "Статус: не подключено"
+                true
+            }
         }
 
         listenSwitch.isEnabled = false
