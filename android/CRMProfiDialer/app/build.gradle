@@ -4,15 +4,15 @@ plugins {
 }
 
 android {
-    namespace "ru.groupprofi.crmprofi.dialer"
-    compileSdk 34
+    namespace = "ru.groupprofi.crmprofi.dialer"
+    compileSdk = 34
 
     defaultConfig {
-        applicationId "ru.groupprofi.crmprofi.dialer"
-        minSdk 24
-        targetSdk 34
-        versionCode 1
-        versionName "0.1"
+        applicationId = "ru.groupprofi.crmprofi.dialer"
+        minSdk = 24
+        targetSdk = 34
+        versionCode = 1
+        versionName = "0.1"
     }
 
     buildTypes {

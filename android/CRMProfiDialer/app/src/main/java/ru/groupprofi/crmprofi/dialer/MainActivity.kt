@@ -181,7 +181,9 @@ class MainActivity : AppCompatActivity() {
             val raw = res.body?.string() ?: ""
             if (!res.isSuccessful) throw RuntimeException("Pull call failed: HTTP ${res.code} $raw")
             val obj = JSONObject(raw)
-            return obj.optString("phone", null)
+            // org.json optString требует defaultValue:String. Возвращаем null, если поля нет/пусто.
+            val phone = obj.optString("phone", "")
+            return phone.ifBlank { null }
         }
     }
 }
