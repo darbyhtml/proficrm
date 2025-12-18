@@ -108,6 +108,9 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="10dp"
                     android:text="Слушать команды (работает в фоне)"
+                    android:textOn="Вкл"
+                    android:textOff="Выкл"
+                    app:showText="false"
                     android:textColor="@color/brand_dark" />
 
                 <TextView
