@@ -68,14 +68,14 @@ class MainActivity : AppCompatActivity() {
                     accessToken = token
                     apiRegisterDevice(baseUrl, token, deviceId, android.os.Build.MODEL ?: "Android")
 
-                    withContext(Dispatchers.Main) {
+                    runOnUiThread {
                         listenSwitch.isEnabled = true
                         listenSwitch.isChecked = false
                     }
                     setStatus("Статус: подключено. device_id=$deviceId")
                 } catch (e: Exception) {
                     accessToken = null
-                    withContext(Dispatchers.Main) {
+                    runOnUiThread {
                         listenSwitch.isEnabled = false
                         listenSwitch.isChecked = false
                     }
