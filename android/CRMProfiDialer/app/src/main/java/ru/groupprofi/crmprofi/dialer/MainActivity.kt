@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.content.Context
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
@@ -49,6 +50,14 @@ class MainActivity : AppCompatActivity() {
         loginBtn = findViewById(R.id.loginBtn)
         listenSwitch = findViewById(R.id.listenSwitch)
         statusEl = findViewById(R.id.status)
+
+        // If we crashed previously, show the stack trace in status to debug without Logcat.
+        val prefs = getSharedPreferences(CrmProfiApp.PREFS, Context.MODE_PRIVATE)
+        val lastCrash = prefs.getString(CrmProfiApp.KEY_LAST_CRASH, null)
+        if (!lastCrash.isNullOrBlank()) {
+            prefs.edit().remove(CrmProfiApp.KEY_LAST_CRASH).apply()
+            statusEl.text = "Последний вылет:\n$lastCrash"
+        }
 
         listenSwitch.isEnabled = false
 
