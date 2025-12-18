@@ -5,12 +5,12 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.content.Context
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.google.android.material.materialswitch.MaterialSwitch
 import kotlinx.coroutines.CoroutineScope
@@ -26,14 +26,16 @@ class MainActivity : AppCompatActivity() {
     private val http = OkHttpClient()
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
 
-    private lateinit var baseUrlEl: EditText
+    private lateinit var accountStatusEl: TextView
     private lateinit var usernameEl: EditText
     private lateinit var passwordEl: EditText
     private lateinit var loginBtn: Button
+    private lateinit var notifBtn: Button
     private lateinit var listenSwitch: MaterialSwitch
     private lateinit var statusEl: TextView
 
     private var accessToken: String? = null
+    private var refreshToken: String? = null
     private var pendingStartListening: Boolean = false
 
     private val deviceId: String by lazy {
@@ -45,29 +47,24 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        baseUrlEl = findViewById(R.id.baseUrl)
+        accountStatusEl = findViewById(R.id.accountStatus)
         usernameEl = findViewById(R.id.username)
         passwordEl = findViewById(R.id.password)
         loginBtn = findViewById(R.id.loginBtn)
+        notifBtn = findViewById(R.id.notifBtn)
         listenSwitch = findViewById(R.id.listenSwitch)
         statusEl = findViewById(R.id.status)
 
-        // If we crashed previously, show the stack trace in status to debug without Logcat.
-        val prefs = getSharedPreferences(CrmProfiApp.PREFS, Context.MODE_PRIVATE)
-        val lastCrash = prefs.getString(CrmProfiApp.KEY_LAST_CRASH, null)
-        if (!lastCrash.isNullOrBlank()) {
-            statusEl.text = "Последний вылет:\n$lastCrash"
-            statusEl.setOnLongClickListener {
-                prefs.edit().remove(CrmProfiApp.KEY_LAST_CRASH).apply()
-                statusEl.text = "Статус: не подключено"
-                true
-            }
-        }
-
-        // Show last background-service status (helps debug when app crashes later).
-        val lastStatus = prefs.getString(CallListenerService.KEY_LAST_STATUS, null)
-        if (!lastStatus.isNullOrBlank() && lastCrash.isNullOrBlank()) {
-            statusEl.text = "Статус: $lastStatus"
+        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        accessToken = prefs.getString(KEY_ACCESS, null)
+        refreshToken = prefs.getString(KEY_REFRESH, null)
+        val savedUsername = prefs.getString(KEY_USERNAME, null)
+        if (!savedUsername.isNullOrBlank() && !refreshToken.isNullOrBlank()) {
+            accountStatusEl.text = "Аккаунт: $savedUsername (вход выполнен)"
+            statusEl.text = "Статус: готово. device_id=$deviceId"
+        } else {
+            accountStatusEl.text = "Аккаунт: не выполнен вход"
+            statusEl.text = "Статус: не подключено"
         }
 
         listenSwitch.isEnabled = false
@@ -76,32 +73,46 @@ class MainActivity : AppCompatActivity() {
         listenSwitch.setOnCheckedChangeListener(null)
         listenSwitch.isChecked = false
 
+        notifBtn.setOnClickListener { openNotificationSettings() }
+
         loginBtn.setOnClickListener {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    val baseUrl = baseUrlEl.text.toString().trim().trimEnd('/')
                     val username = usernameEl.text.toString().trim()
                     val password = passwordEl.text.toString()
-                    if (baseUrl.isEmpty() || username.isEmpty() || password.isEmpty()) {
-                        setStatus("Статус: заполните baseUrl/логин/пароль")
+                    if (username.isEmpty() || password.isEmpty()) {
+                        setStatus("Статус: заполните логин/пароль")
                         return@launch
                     }
 
                     setStatus("Статус: логинюсь…")
-                    val token = apiLogin(baseUrl, username, password)
-                    accessToken = token
-                    apiRegisterDevice(baseUrl, token, deviceId, android.os.Build.MODEL ?: "Android")
+                    val tokens = apiLogin(BASE_URL, username, password)
+                    accessToken = tokens.first
+                    refreshToken = tokens.second
+
+                    prefs.edit()
+                        .putString(KEY_USERNAME, username)
+                        .putString(KEY_ACCESS, accessToken)
+                        .putString(KEY_REFRESH, refreshToken)
+                        .putString(KEY_DEVICE_ID, deviceId)
+                        .apply()
+
+                    apiRegisterDevice(BASE_URL, accessToken!!, deviceId, android.os.Build.MODEL ?: "Android")
 
                     runOnUiThread {
                         listenSwitch.isEnabled = true
                         listenSwitch.isChecked = false
+                        accountStatusEl.text = "Аккаунт: $username (вход выполнен)"
                     }
                     setStatus("Статус: подключено. device_id=$deviceId")
                 } catch (e: Exception) {
                     accessToken = null
+                    refreshToken = null
+                    prefs.edit().remove(KEY_ACCESS).remove(KEY_REFRESH).apply()
                     runOnUiThread {
                         listenSwitch.isEnabled = false
                         listenSwitch.isChecked = false
+                        accountStatusEl.text = "Аккаунт: не выполнен вход"
                     }
                     setStatus("Ошибка: ${e.message}")
                 }
@@ -124,11 +135,21 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startListeningService() {
-        val baseUrl = baseUrlEl.text.toString().trim().trimEnd('/')
-        val token = accessToken
-        if (token.isNullOrBlank() || baseUrl.isEmpty()) {
+        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        val token = accessToken ?: prefs.getString(KEY_ACCESS, null)
+        val refresh = refreshToken ?: prefs.getString(KEY_REFRESH, null)
+        if (token.isNullOrBlank() || refresh.isNullOrBlank()) {
             listenSwitch.isChecked = false
             setStatus("Статус: сначала войдите")
+            return
+        }
+
+        // На Android 8+ foreground-service обязан показывать уведомление.
+        // Если уведомления для приложения отключены, фон «не виден» и может работать нестабильно.
+        if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) {
+            listenSwitch.isChecked = false
+            setStatus("Статус: включите уведомления для приложения (иначе фон не работает)")
+            openNotificationSettings()
             return
         }
 
@@ -144,8 +165,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         val i = Intent(this, CallListenerService::class.java)
-            .putExtra(CallListenerService.EXTRA_BASE_URL, baseUrl)
             .putExtra(CallListenerService.EXTRA_TOKEN, token)
+            .putExtra(CallListenerService.EXTRA_REFRESH, refresh)
             .putExtra(CallListenerService.EXTRA_DEVICE_ID, deviceId)
 
         if (Build.VERSION.SDK_INT >= 26) {
@@ -186,7 +207,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun apiLogin(baseUrl: String, username: String, password: String): String {
+    private fun apiLogin(baseUrl: String, username: String, password: String): Pair<String, String> {
         val url = "$baseUrl/api/token/"
         val bodyJson = JSONObject()
             .put("username", username)
@@ -200,7 +221,7 @@ class MainActivity : AppCompatActivity() {
             val raw = res.body?.string() ?: ""
             if (!res.isSuccessful) throw RuntimeException("Login failed: HTTP ${res.code} $raw")
             val obj = JSONObject(raw)
-            return obj.getString("access")
+            return Pair(obj.getString("access"), obj.getString("refresh"))
         }
     }
 
@@ -221,7 +242,29 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun openNotificationSettings() {
+        try {
+            val i = Intent().apply {
+                action = Settings.ACTION_APP_NOTIFICATION_SETTINGS
+                putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(i)
+        } catch (_: Exception) {
+            // ignore
+        }
+    }
+
     // Polling реализован в ForegroundService (CallListenerService).
+
+    companion object {
+        private const val BASE_URL = "https://crm.groupprofi.ru"
+        private const val PREFS = "crmprofi_dialer"
+        private const val KEY_USERNAME = "username"
+        private const val KEY_ACCESS = "access"
+        private const val KEY_REFRESH = "refresh"
+        private const val KEY_DEVICE_ID = "device_id"
+    }
 }
 
 

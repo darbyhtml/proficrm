@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,12 +20,15 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 
 class CallListenerService : Service() {
     private val http = OkHttpClient()
+    private val jsonMedia = "application/json; charset=utf-8".toMediaType()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var loopJob: Job? = null
 
@@ -39,11 +43,18 @@ class CallListenerService : Service() {
         }
 
         val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
-        val baseUrl = (intent?.getStringExtra(EXTRA_BASE_URL) ?: prefs.getString(KEY_BASE_URL, "") ?: "").trim().trimEnd('/')
+        val baseUrl = BASE_URL
         val token = intent?.getStringExtra(EXTRA_TOKEN) ?: prefs.getString(KEY_TOKEN, null)
+        val refresh = intent?.getStringExtra(EXTRA_REFRESH) ?: prefs.getString(KEY_REFRESH, null)
         val deviceId = (intent?.getStringExtra(EXTRA_DEVICE_ID) ?: prefs.getString(KEY_DEVICE_ID, "") ?: "").trim()
 
-        if (baseUrl.isBlank() || token.isNullOrBlank() || deviceId.isBlank()) {
+        if (token.isNullOrBlank() || refresh.isNullOrBlank() || deviceId.isBlank()) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        // If notifications are disabled, foreground-service becomes pointless (user won't see anything).
+        if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) {
             stopSelf()
             return START_NOT_STICKY
         }
@@ -53,17 +64,15 @@ class CallListenerService : Service() {
             val perm = android.Manifest.permission.POST_NOTIFICATIONS
             val granted = ContextCompat.checkSelfPermission(this, perm) == android.content.pm.PackageManager.PERMISSION_GRANTED
             if (!granted) {
-                prefs.edit().putString(KEY_LAST_STATUS, "Разрешите уведомления для CRM ПРОФИ (иначе фон не работает).").apply()
                 stopSelf()
                 return START_NOT_STICKY
             }
         }
 
         prefs.edit()
-            .putString(KEY_BASE_URL, baseUrl)
             .putString(KEY_TOKEN, token)
+            .putString(KEY_REFRESH, refresh)
             .putString(KEY_DEVICE_ID, deviceId)
-            .putString(KEY_LAST_STATUS, "Слушаю команды (в фоне)…")
             .apply()
 
         ensureChannel()
@@ -78,7 +87,9 @@ class CallListenerService : Service() {
             loopJob = scope.launch {
                 while (true) {
                     try {
-                        val phone = pullCall(baseUrl, token, deviceId)
+                        val latestToken = prefs.getString(KEY_TOKEN, null) ?: token
+                        val latestRefresh = prefs.getString(KEY_REFRESH, null) ?: refresh
+                        val phone = pullCallWithRefresh(baseUrl, latestToken, latestRefresh, deviceId)
                         if (!phone.isNullOrBlank()) {
                             // 1) Всегда показываем уведомление с действием (работает и в фоне).
                             try {
@@ -121,20 +132,50 @@ class CallListenerService : Service() {
         super.onDestroy()
     }
 
-    private fun pullCall(baseUrl: String, token: String, deviceId: String): String? {
+    private fun pullCallWithRefresh(baseUrl: String, token: String, refresh: String, deviceId: String): String? {
         val url = "$baseUrl/api/phone/calls/pull/?device_id=$deviceId"
+        fun doPull(access: String): Pair<Int, String> {
+            val req = Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("Authorization", "Bearer $access")
+                .build()
+            http.newCall(req).execute().use { res ->
+                return Pair(res.code, res.body?.string() ?: "")
+            }
+        }
+
+        // 1) try with current access
+        val (code1, body1) = doPull(token)
+        if (code1 == 204) return null
+        if (code1 == 401) {
+            // 2) refresh + retry once
+            val newAccess = refreshAccess(baseUrl, refresh) ?: return null
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_TOKEN, newAccess).apply()
+            val (code2, body2) = doPull(newAccess)
+            if (code2 == 204) return null
+            if (code2 != 200) return null
+            val obj2 = JSONObject(body2)
+            val phone2 = obj2.optString("phone", "")
+            return phone2.ifBlank { null }
+        }
+        if (code1 != 200) return null
+        val obj = JSONObject(body1)
+        val phone = obj.optString("phone", "")
+        return phone.ifBlank { null }
+    }
+
+    private fun refreshAccess(baseUrl: String, refresh: String): String? {
+        val url = "$baseUrl/api/token/refresh/"
+        val bodyJson = JSONObject().put("refresh", refresh).toString()
         val req = Request.Builder()
             .url(url)
-            .get()
-            .addHeader("Authorization", "Bearer $token")
+            .post(bodyJson.toRequestBody(jsonMedia))
             .build()
         http.newCall(req).execute().use { res ->
-            if (res.code == 204) return null
             val raw = res.body?.string() ?: ""
             if (!res.isSuccessful) return null
-            val obj = JSONObject(raw)
-            val phone = obj.optString("phone", "")
-            return phone.ifBlank { null }
+            return JSONObject(raw).optString("access", "").ifBlank { null }
         }
     }
 
@@ -196,16 +237,17 @@ class CallListenerService : Service() {
         private const val NOTIF_CALL_ID = 1002
 
         private const val PREFS = "crmprofi_dialer"
-        private const val KEY_BASE_URL = "base_url"
         private const val KEY_TOKEN = "token"
+        private const val KEY_REFRESH = "refresh"
         private const val KEY_DEVICE_ID = "device_id"
-        const val KEY_LAST_STATUS = "last_status"
 
-        const val EXTRA_BASE_URL = "base_url"
         const val EXTRA_TOKEN = "token"
+        const val EXTRA_REFRESH = "refresh"
         const val EXTRA_DEVICE_ID = "device_id"
 
         const val ACTION_STOP = "ru.groupprofi.crmprofi.dialer.STOP"
+
+        private const val BASE_URL = "https://crm.groupprofi.ru"
     }
 }
 
