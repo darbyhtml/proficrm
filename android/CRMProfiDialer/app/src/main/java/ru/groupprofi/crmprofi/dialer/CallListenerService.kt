@@ -10,6 +10,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -45,14 +46,31 @@ class CallListenerService : Service() {
             return START_NOT_STICKY
         }
 
+        // Android 13+ (targetSdk 33+) may crash/startForeground fail if notifications are not allowed.
+        if (Build.VERSION.SDK_INT >= 33) {
+            val perm = android.Manifest.permission.POST_NOTIFICATIONS
+            val granted = ContextCompat.checkSelfPermission(this, perm) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!granted) {
+                prefs.edit().putString(KEY_LAST_STATUS, "Разрешите уведомления для CRM ПРОФИ (иначе фон не работает).").apply()
+                stopSelf()
+                return START_NOT_STICKY
+            }
+        }
+
         prefs.edit()
             .putString(KEY_BASE_URL, baseUrl)
             .putString(KEY_TOKEN, token)
             .putString(KEY_DEVICE_ID, deviceId)
+            .putString(KEY_LAST_STATUS, "Слушаю команды (в фоне)…")
             .apply()
 
         ensureChannel()
-        startForeground(NOTIF_ID, buildListeningNotification())
+        try {
+            startForeground(NOTIF_ID, buildListeningNotification())
+        } catch (_: Throwable) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
         if (loopJob == null) {
             loopJob = scope.launch {
@@ -61,7 +79,11 @@ class CallListenerService : Service() {
                         val phone = pullCall(baseUrl, token, deviceId)
                         if (!phone.isNullOrBlank()) {
                             // 1) Всегда показываем уведомление с действием (работает и в фоне).
-                            showCallNotification(phone)
+                            try {
+                                showCallNotification(phone)
+                            } catch (_: Throwable) {
+                                // ignore
+                            }
                             // 2) Если приложение на экране — открываем звонилку сразу.
                             if (AppState.isForeground) {
                                 val uri = Uri.parse("tel:$phone")
@@ -164,6 +186,7 @@ class CallListenerService : Service() {
         private const val KEY_BASE_URL = "base_url"
         private const val KEY_TOKEN = "token"
         private const val KEY_DEVICE_ID = "device_id"
+        const val KEY_LAST_STATUS = "last_status"
 
         const val EXTRA_BASE_URL = "base_url"
         const val EXTRA_TOKEN = "token"

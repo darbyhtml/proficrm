@@ -34,6 +34,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusEl: TextView
 
     private var accessToken: String? = null
+    private var pendingStartListening: Boolean = false
 
     private val deviceId: String by lazy {
         // стабильный id устройства для привязки (используем ANDROID_ID как простой MVP)
@@ -63,7 +64,17 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // Show last background-service status (helps debug when app crashes later).
+        val lastStatus = prefs.getString(CallListenerService.KEY_LAST_STATUS, null)
+        if (!lastStatus.isNullOrBlank() && lastCrash.isNullOrBlank()) {
+            statusEl.text = "Статус: $lastStatus"
+        }
+
         listenSwitch.isEnabled = false
+        // Prevent state-restore crash loops: we don't auto-start listening on launch.
+        listenSwitch.isSaveEnabled = false
+        listenSwitch.setOnCheckedChangeListener(null)
+        listenSwitch.isChecked = false
 
         loginBtn.setOnClickListener {
             CoroutineScope(Dispatchers.IO).launch {
@@ -121,11 +132,14 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        // Android 13+ требует разрешение на уведомления, иначе фоновые уведомления могут не отображаться.
+        // Android 13+ требует разрешение на уведомления. Запускаем сервис ТОЛЬКО после выдачи.
         if (Build.VERSION.SDK_INT >= 33) {
             val perm = android.Manifest.permission.POST_NOTIFICATIONS
             if (ContextCompat.checkSelfPermission(this, perm) != PackageManager.PERMISSION_GRANTED) {
+                pendingStartListening = true
                 ActivityCompat.requestPermissions(this, arrayOf(perm), 100)
+                setStatus("Статус: нужно разрешение на уведомления (Android 13+)")
+                return
             }
         }
 
@@ -145,6 +159,25 @@ class MainActivity : AppCompatActivity() {
     private fun stopListeningService() {
         stopService(Intent(this, CallListenerService::class.java))
         setStatus("Статус: подключено (слушание выключено)")
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 100) {
+            val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+            if (granted && pendingStartListening) {
+                pendingStartListening = false
+                startListeningService()
+                return
+            }
+            pendingStartListening = false
+            listenSwitch.setOnCheckedChangeListener(null)
+            listenSwitch.isChecked = false
+            listenSwitch.setOnCheckedChangeListener { _, isChecked ->
+                if (isChecked) startListeningService() else stopListeningService()
+            }
+            setStatus("Статус: без уведомлений фон не работает (разрешение отклонено)")
+        }
     }
 
     private fun setStatus(text: String) {
