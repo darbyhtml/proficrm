@@ -14,7 +14,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -105,7 +104,7 @@ class MainActivity : AppCompatActivity() {
                 try {
                     val phone = apiPullCall(baseUrl, token, deviceId)
                     if (!phone.isNullOrBlank()) {
-                        withContext(Dispatchers.Main) {
+                        runOnUiThread {
                             val uri = Uri.parse("tel:$phone")
                             startActivity(Intent(Intent.ACTION_DIAL, uri))
                         }
@@ -129,8 +128,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private suspend fun setStatus(text: String) {
-        withContext(Dispatchers.Main) {
+    private fun setStatus(text: String) {
+        runOnUiThread {
             statusEl.text = text
         }
     }
