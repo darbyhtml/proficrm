@@ -7,11 +7,11 @@ import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
 import android.widget.EditText
-import android.widget.Switch
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.google.android.material.materialswitch.MaterialSwitch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -29,7 +29,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var usernameEl: EditText
     private lateinit var passwordEl: EditText
     private lateinit var loginBtn: Button
-    private lateinit var listenSwitch: Switch
+    private lateinit var listenSwitch: MaterialSwitch
     private lateinit var statusEl: TextView
 
     private var accessToken: String? = null
