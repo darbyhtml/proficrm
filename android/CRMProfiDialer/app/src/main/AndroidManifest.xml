@@ -6,6 +6,7 @@
     <application
         android:allowBackup="true"
         android:label="CRM ПРОФИ"
+        android:theme="@style/Theme.CRMProfiDialer"
         android:supportsRtl="true">
 
         <activity

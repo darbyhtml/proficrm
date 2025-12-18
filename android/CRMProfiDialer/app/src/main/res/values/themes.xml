@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Minimal theme required for AppCompatActivity -->
+    <style name="Theme.CRMProfiDialer" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="colorPrimary">#01948E</item>
+        <item name="colorPrimaryVariant">#003D38</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">#FDAD3A</item>
+        <item name="colorSecondaryVariant">#FDAD3A</item>
+        <item name="colorOnSecondary">#003D38</item>
+    </style>
+</resources>
+
+
