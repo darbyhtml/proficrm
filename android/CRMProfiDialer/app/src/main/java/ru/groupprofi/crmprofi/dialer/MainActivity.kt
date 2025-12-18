@@ -127,6 +127,14 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         AppState.isForeground = true
+
+        // Лаконичный индикатор "доходит ли телефон до сервера"
+        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        val at = prefs.getString(CallListenerService.KEY_LAST_POLL_AT, null)
+        val code = prefs.getInt(CallListenerService.KEY_LAST_POLL_CODE, -1)
+        if (!at.isNullOrBlank() && code != -1) {
+            statusEl.text = "Статус: опрос $code · $at"
+        }
     }
 
     override fun onPause() {

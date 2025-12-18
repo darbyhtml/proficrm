@@ -11,6 +11,9 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -31,6 +34,7 @@ class CallListenerService : Service() {
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var loopJob: Job? = null
+    private val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -89,7 +93,13 @@ class CallListenerService : Service() {
                     try {
                         val latestToken = prefs.getString(KEY_TOKEN, null) ?: token
                         val latestRefresh = prefs.getString(KEY_REFRESH, null) ?: refresh
-                        val phone = pullCallWithRefresh(baseUrl, latestToken, latestRefresh, deviceId)
+                        val (code, phone) = pullCallWithRefresh(baseUrl, latestToken, latestRefresh, deviceId)
+                        val nowStr = timeFmt.format(Date())
+                        prefs.edit()
+                            .putString(KEY_LAST_POLL_AT, nowStr)
+                            .putInt(KEY_LAST_POLL_CODE, code)
+                            .apply()
+                        updateListeningNotification("Опрос: $code · $nowStr")
                         if (!phone.isNullOrBlank()) {
                             // 1) Всегда показываем уведомление с действием (работает и в фоне).
                             try {
@@ -132,7 +142,7 @@ class CallListenerService : Service() {
         super.onDestroy()
     }
 
-    private fun pullCallWithRefresh(baseUrl: String, token: String, refresh: String, deviceId: String): String? {
+    private fun pullCallWithRefresh(baseUrl: String, token: String, refresh: String, deviceId: String): Pair<Int, String?> {
         val url = "$baseUrl/api/phone/calls/pull/?device_id=$deviceId"
         fun doPull(access: String): Pair<Int, String> {
             val req = Request.Builder()
@@ -147,22 +157,22 @@ class CallListenerService : Service() {
 
         // 1) try with current access
         val (code1, body1) = doPull(token)
-        if (code1 == 204) return null
+        if (code1 == 204) return Pair(204, null)
         if (code1 == 401) {
             // 2) refresh + retry once
-            val newAccess = refreshAccess(baseUrl, refresh) ?: return null
+            val newAccess = refreshAccess(baseUrl, refresh) ?: return Pair(401, null)
             getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_TOKEN, newAccess).apply()
             val (code2, body2) = doPull(newAccess)
-            if (code2 == 204) return null
-            if (code2 != 200) return null
+            if (code2 == 204) return Pair(204, null)
+            if (code2 != 200) return Pair(code2, null)
             val obj2 = JSONObject(body2)
             val phone2 = obj2.optString("phone", "")
-            return phone2.ifBlank { null }
+            return Pair(200, phone2.ifBlank { null })
         }
-        if (code1 != 200) return null
+        if (code1 != 200) return Pair(code1, null)
         val obj = JSONObject(body1)
         val phone = obj.optString("phone", "")
-        return phone.ifBlank { null }
+        return Pair(200, phone.ifBlank { null })
     }
 
     private fun refreshAccess(baseUrl: String, refresh: String): String? {
@@ -209,6 +219,34 @@ class CallListenerService : Service() {
         )
         .build()
 
+    private fun updateListeningNotification(text: String) {
+        try {
+            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.notify(
+                NOTIF_ID,
+                NotificationCompat.Builder(this, CHANNEL_ID)
+                    .setSmallIcon(android.R.drawable.sym_action_call)
+                    .setContentTitle("CRM ПРОФИ")
+                    .setContentText(text)
+                    .setOngoing(true)
+                    .setOnlyAlertOnce(true)
+                    .addAction(
+                        android.R.drawable.ic_menu_close_clear_cancel,
+                        "Остановить",
+                        PendingIntent.getService(
+                            this,
+                            1,
+                            Intent(this, CallListenerService::class.java).setAction(ACTION_STOP),
+                            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
+                        )
+                    )
+                    .build()
+            )
+        } catch (_: Throwable) {
+            // ignore
+        }
+    }
+
     private fun showCallNotification(phone: String) {
         val uri = Uri.parse("tel:$phone")
         val dialIntent = Intent(Intent.ACTION_DIAL, uri)
@@ -240,6 +278,8 @@ class CallListenerService : Service() {
         private const val KEY_TOKEN = "token"
         private const val KEY_REFRESH = "refresh"
         private const val KEY_DEVICE_ID = "device_id"
+        const val KEY_LAST_POLL_AT = "last_poll_at"
+        const val KEY_LAST_POLL_CODE = "last_poll_code"
 
         const val EXTRA_TOKEN = "token"
         const val EXTRA_REFRESH = "refresh"
