@@ -1,7 +1,8 @@
 package ru.groupprofi.crmprofi.dialer
 
 import android.content.Intent
-import android.net.Uri
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
@@ -9,10 +10,10 @@ import android.widget.EditText
 import android.widget.Switch
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -32,7 +33,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var statusEl: TextView
 
     private var accessToken: String? = null
-    private var pollJob: Job? = null
 
     private val deviceId: String by lazy {
         // стабильный id устройства для привязки (используем ANDROID_ID как простой MVP)
@@ -85,11 +85,21 @@ class MainActivity : AppCompatActivity() {
         }
 
         listenSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) startPolling() else stopPolling()
+            if (isChecked) startListeningService() else stopListeningService()
         }
     }
 
-    private fun startPolling() {
+    override fun onResume() {
+        super.onResume()
+        AppState.isForeground = true
+    }
+
+    override fun onPause() {
+        AppState.isForeground = false
+        super.onPause()
+    }
+
+    private fun startListeningService() {
         val baseUrl = baseUrlEl.text.toString().trim().trimEnd('/')
         val token = accessToken
         if (token.isNullOrBlank() || baseUrl.isEmpty()) {
@@ -97,35 +107,31 @@ class MainActivity : AppCompatActivity() {
             setStatus("Статус: сначала войдите")
             return
         }
-        stopPolling()
-        pollJob = CoroutineScope(Dispatchers.IO).launch {
-            setStatus("Статус: слушаю команды…")
-            while (true) {
-                try {
-                    val phone = apiPullCall(baseUrl, token, deviceId)
-                    if (!phone.isNullOrBlank()) {
-                        runOnUiThread {
-                            val uri = Uri.parse("tel:$phone")
-                            startActivity(Intent(Intent.ACTION_DIAL, uri))
-                        }
-                    }
-                } catch (e: Exception) {
-                    // не падаем, просто показываем статус и продолжаем
-                    setStatus("Ошибка polling: ${e.message}")
-                }
-                delay(1500)
+
+        // Android 13+ требует разрешение на уведомления, иначе фоновые уведомления могут не отображаться.
+        if (Build.VERSION.SDK_INT >= 33) {
+            val perm = android.Manifest.permission.POST_NOTIFICATIONS
+            if (ContextCompat.checkSelfPermission(this, perm) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, arrayOf(perm), 100)
             }
         }
+
+        val i = Intent(this, CallListenerService::class.java)
+            .putExtra(CallListenerService.EXTRA_BASE_URL, baseUrl)
+            .putExtra(CallListenerService.EXTRA_TOKEN, token)
+            .putExtra(CallListenerService.EXTRA_DEVICE_ID, deviceId)
+
+        if (Build.VERSION.SDK_INT >= 26) {
+            startForegroundService(i)
+        } else {
+            startService(i)
+        }
+        setStatus("Статус: слушаю команды (в фоне тоже)…")
     }
 
-    private fun stopPolling() {
-        pollJob?.cancel()
-        pollJob = null
-        if (accessToken.isNullOrBlank()) {
-            setStatus("Статус: не подключено")
-        } else {
-            setStatus("Статус: подключено (polling выключен)")
-        }
+    private fun stopListeningService() {
+        stopService(Intent(this, CallListenerService::class.java))
+        setStatus("Статус: подключено (слушание выключено)")
     }
 
     private fun setStatus(text: String) {
@@ -169,23 +175,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun apiPullCall(baseUrl: String, token: String, deviceId: String): String? {
-        val url = "$baseUrl/api/phone/calls/pull/?device_id=$deviceId"
-        val req = Request.Builder()
-            .url(url)
-            .get()
-            .addHeader("Authorization", "Bearer $token")
-            .build()
-        http.newCall(req).execute().use { res ->
-            if (res.code == 204) return null
-            val raw = res.body?.string() ?: ""
-            if (!res.isSuccessful) throw RuntimeException("Pull call failed: HTTP ${res.code} $raw")
-            val obj = JSONObject(raw)
-            // org.json optString требует defaultValue:String. Возвращаем null, если поля нет/пусто.
-            val phone = obj.optString("phone", "")
-            return phone.ifBlank { null }
-        }
-    }
+    // Polling реализован в ForegroundService (CallListenerService).
 }
 
 

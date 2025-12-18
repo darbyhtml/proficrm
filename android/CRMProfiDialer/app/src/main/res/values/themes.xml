@@ -2,12 +2,12 @@
 <resources>
     <!-- Minimal theme required for AppCompatActivity -->
     <style name="Theme.CRMProfiDialer" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">#01948E</item>
-        <item name="colorPrimaryVariant">#003D38</item>
+        <item name="colorPrimary">@color/brand_teal</item>
+        <item name="colorPrimaryVariant">@color/brand_dark</item>
         <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorSecondary">#FDAD3A</item>
-        <item name="colorSecondaryVariant">#FDAD3A</item>
-        <item name="colorOnSecondary">#003D38</item>
+        <item name="colorSecondary">@color/brand_orange</item>
+        <item name="colorSecondaryVariant">@color/brand_orange</item>
+        <item name="colorOnSecondary">@color/brand_dark</item>
     </style>
 </resources>
 

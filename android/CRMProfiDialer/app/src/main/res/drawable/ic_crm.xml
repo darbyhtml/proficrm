@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- simple "briefcase" icon -->
+    <path
+        android:fillColor="#01948E"
+        android:pathData="M10,2h4a2,2 0,0 1,2 2v2h4a2,2 0,0 1,2 2v3H0V8a2,2 0,0 1,2 -2h4V4a2,2 0,0 1,2 -2z"/>
+    <path
+        android:fillColor="#003D38"
+        android:pathData="M8,6V4a2,2 0,0 1,2 -2h4a2,2 0,0 1,2 2v2h-2V4H10v2H8z"/>
+    <path
+        android:fillColor="#FDAD3A"
+        android:pathData="M0,11h24v9a2,2 0,0 1,-2 2H2a2,2 0,0 1,-2 -2v-9z"/>
+</vector>
+
+
