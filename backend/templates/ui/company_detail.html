@@ -446,7 +446,7 @@
                     </form>
                   {% endif %}
 
-                  {% if n.author_id == request.user.id or request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'group_manager' %}
+                  {% if n.author_id == request.user.id or is_admin or is_group_manager %}
                     <form method="post" action="/companies/{{ company.id }}/notes/{{ n.id }}/delete/" onsubmit="return confirm('Удалить заметку?');" style="display:inline">
                       {% csrf_token %}
                       <button type="submit" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem;border-color:rgba(239,68,68,.35);color:#b91c1c;background:rgba(239,68,68,.06)" title="Удалить" aria-label="Удалить">

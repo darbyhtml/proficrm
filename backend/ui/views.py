@@ -74,6 +74,85 @@ def _editable_company_qs(user: User):
     return editable_company_qs_perm(user)
 
 
+def _companies_with_overdue_flag(*, now):
+    """
+    Базовый QS компаний с вычисляемым флагом просроченных задач `has_overdue`.
+    Используется в списке/экспорте/массовых операциях, чтобы фильтры работали одинаково.
+    """
+    overdue_tasks = (
+        Task.objects.filter(company_id=OuterRef("pk"), due_at__lt=now)
+        .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+        .values("id")
+    )
+    return Company.objects.all().annotate(has_overdue=Exists(overdue_tasks))
+
+
+def _apply_company_filters(*, qs, params: dict):
+    """
+    Единые фильтры компаний для:
+    - списка компаний
+    - экспорта
+    - массового переназначения (apply_mode=filtered)
+    """
+    q = (params.get("q") or "").strip()
+    if q:
+        qs = qs.filter(
+            Q(name__icontains=q)
+            | Q(inn__icontains=q)
+            | Q(legal_name__icontains=q)
+            | Q(address__icontains=q)
+            | Q(phone__icontains=q)
+            | Q(email__icontains=q)
+            | Q(contact_name__icontains=q)
+            | Q(contact_position__icontains=q)
+            | Q(branch__name__icontains=q)
+        )
+
+    responsible = (params.get("responsible") or "").strip()
+    if responsible:
+        qs = qs.filter(responsible_id=responsible)
+
+    status = (params.get("status") or "").strip()
+    if status:
+        qs = qs.filter(status_id=status)
+
+    branch = (params.get("branch") or "").strip()
+    if branch:
+        qs = qs.filter(branch_id=branch)
+
+    sphere = (params.get("sphere") or "").strip()
+    if sphere:
+        qs = qs.filter(spheres__id=sphere)
+
+    contract_type = (params.get("contract_type") or "").strip()
+    if contract_type:
+        qs = qs.filter(contract_type=contract_type)
+
+    cold_call = (params.get("cold_call") or "").strip()
+    if cold_call == "1":
+        qs = qs.filter(is_cold_call=True)
+    elif cold_call == "0":
+        qs = qs.filter(is_cold_call=False)
+
+    overdue = (params.get("overdue") or "").strip()
+    if overdue == "1":
+        qs = qs.filter(has_overdue=True)
+
+    filter_active = any([q, responsible, status, branch, sphere, contract_type, cold_call, overdue == "1"])
+    return {
+        "qs": qs.distinct(),
+        "q": q,
+        "responsible": responsible,
+        "status": status,
+        "branch": branch,
+        "sphere": sphere,
+        "contract_type": contract_type,
+        "cold_call": cold_call,
+        "overdue": overdue,
+        "filter_active": filter_active,
+    }
+
+
 @login_required
 def dashboard(request: HttpRequest) -> HttpResponse:
     user: User = request.user
@@ -137,62 +216,13 @@ def company_list(request: HttpRequest) -> HttpResponse:
     # Просмотр компаний: всем доступна вся база (без ограничения по филиалу/scope).
     base_qs = Company.objects.all()
     companies_total = base_qs.order_by().count()
-    overdue_tasks = (
-        Task.objects.filter(company_id=OuterRef("pk"), due_at__lt=now)
-        .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
-        .values("id")
-    )
-
     qs = (
-        base_qs
+        _companies_with_overdue_flag(now=now)
         .select_related("responsible", "branch", "status")
         .prefetch_related("spheres")
-        .annotate(has_overdue=Exists(overdue_tasks))
     )
-
-    q = (request.GET.get("q") or "").strip()
-    if q:
-        qs = qs.filter(
-            Q(name__icontains=q)
-            | Q(inn__icontains=q)
-            | Q(legal_name__icontains=q)
-            | Q(address__icontains=q)
-            | Q(phone__icontains=q)
-            | Q(email__icontains=q)
-            | Q(contact_name__icontains=q)
-            | Q(contact_position__icontains=q)
-            | Q(branch__name__icontains=q)
-        )
-
-    responsible = (request.GET.get("responsible") or "").strip()
-    if responsible:
-        qs = qs.filter(responsible_id=responsible)
-
-    status = (request.GET.get("status") or "").strip()
-    if status:
-        qs = qs.filter(status_id=status)
-
-    branch = (request.GET.get("branch") or "").strip()
-    if branch:
-        qs = qs.filter(branch_id=branch)
-
-    sphere = (request.GET.get("sphere") or "").strip()
-    if sphere:
-        qs = qs.filter(spheres__id=sphere)
-
-    contract_type = (request.GET.get("contract_type") or "").strip()
-    if contract_type:
-        qs = qs.filter(contract_type=contract_type)
-
-    cold_call = (request.GET.get("cold_call") or "").strip()
-    if cold_call == "1":
-        qs = qs.filter(is_cold_call=True)
-    elif cold_call == "0":
-        qs = qs.filter(is_cold_call=False)
-
-    only_overdue = (request.GET.get("overdue") or "").strip()
-    if only_overdue == "1":
-        qs = qs.filter(has_overdue=True)
+    f = _apply_company_filters(qs=qs, params=request.GET)
+    qs = f["qs"]
 
     # Sorting (asc/desc)
     sort = (request.GET.get("sort") or "").strip() or "updated_at"
@@ -215,8 +245,8 @@ def company_list(request: HttpRequest) -> HttpResponse:
         order = [f"-{f}" for f in order]
     qs = qs.order_by(*order)
 
-    filter_active = any([q, responsible, status, branch, sphere, contract_type, cold_call, only_overdue == "1"])
     companies_filtered = qs.order_by().count()
+    filter_active = f["filter_active"]
 
     paginator = Paginator(qs, 25)
     page = paginator.get_page(request.GET.get("page"))
@@ -228,14 +258,14 @@ def company_list(request: HttpRequest) -> HttpResponse:
         "ui/company_list.html",
         {
             "page": page,
-            "q": q,
-            "responsible": responsible,
-            "status": status,
-            "branch": branch,
-            "sphere": sphere,
-            "contract_type": contract_type,
-            "cold_call": cold_call,
-            "overdue": only_overdue,
+            "q": f["q"],
+            "responsible": f["responsible"],
+            "status": f["status"],
+            "branch": f["branch"],
+            "sphere": f["sphere"],
+            "contract_type": f["contract_type"],
+            "cold_call": f["cold_call"],
+            "overdue": f["overdue"],
             "companies_total": companies_total,
             "companies_filtered": companies_filtered,
             "filter_active": filter_active,
@@ -280,47 +310,9 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
     # режим "по фильтру" — переносим фильтры из скрытых полей формы
     if apply_mode == "filtered":
         now = timezone.now()
-        overdue_tasks = (
-            Task.objects.filter(company_id=OuterRef("pk"), due_at__lt=now)
-            .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
-            .values("id")
-        )
-        qs = Company.objects.all().annotate(has_overdue=Exists(overdue_tasks))
-        q = (request.POST.get("q") or "").strip()
-        if q:
-            qs = qs.filter(
-                Q(name__icontains=q)
-                | Q(inn__icontains=q)
-                | Q(legal_name__icontains=q)
-                | Q(address__icontains=q)
-                | Q(phone__icontains=q)
-                | Q(email__icontains=q)
-                | Q(contact_name__icontains=q)
-                | Q(contact_position__icontains=q)
-            )
-        responsible = (request.POST.get("responsible") or "").strip()
-        if responsible:
-            qs = qs.filter(responsible_id=responsible)
-        status = (request.POST.get("status") or "").strip()
-        if status:
-            qs = qs.filter(status_id=status)
-        branch = (request.POST.get("branch") or "").strip()
-        if branch:
-            qs = qs.filter(branch_id=branch)
-        sphere = (request.POST.get("sphere") or "").strip()
-        if sphere:
-            qs = qs.filter(spheres__id=sphere)
-        contract_type = (request.POST.get("contract_type") or "").strip()
-        if contract_type:
-            qs = qs.filter(contract_type=contract_type)
-        cold_call = (request.POST.get("cold_call") or "").strip()
-        if cold_call == "1":
-            qs = qs.filter(is_cold_call=True)
-        elif cold_call == "0":
-            qs = qs.filter(is_cold_call=False)
-        overdue = (request.POST.get("overdue") or "").strip()
-        if overdue == "1":
-            qs = qs.filter(has_overdue=True)
+        qs = _companies_with_overdue_flag(now=now)
+        f = _apply_company_filters(qs=qs, params=request.POST)
+        qs = f["qs"]
 
         # ограничиваем до редактируемых пользователем
         qs = qs.filter(id__in=editable_qs.values_list("id", flat=True)).distinct()
@@ -413,53 +405,13 @@ def company_export(request: HttpRequest) -> HttpResponse:
         return redirect("company_list")
 
     now = timezone.now()
-    overdue_tasks = (
-        Task.objects.filter(company_id=OuterRef("pk"), due_at__lt=now)
-        .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
-        .values("id")
-    )
-
     qs = (
-        Company.objects.all()
+        _companies_with_overdue_flag(now=now)
         .select_related("responsible", "branch", "status")
         .prefetch_related("spheres")
-        .annotate(has_overdue=Exists(overdue_tasks))
         .order_by("-updated_at")
     )
-
-    q = (request.GET.get("q") or "").strip()
-    if q:
-        qs = qs.filter(Q(name__icontains=q) | Q(inn__icontains=q) | Q(legal_name__icontains=q) | Q(address__icontains=q))
-
-    responsible = (request.GET.get("responsible") or "").strip()
-    if responsible:
-        qs = qs.filter(responsible_id=responsible)
-
-    status = (request.GET.get("status") or "").strip()
-    if status:
-        qs = qs.filter(status_id=status)
-
-    branch = (request.GET.get("branch") or "").strip()
-    if branch:
-        qs = qs.filter(branch_id=branch)
-
-    sphere = (request.GET.get("sphere") or "").strip()
-    if sphere:
-        qs = qs.filter(spheres__id=sphere)
-
-    contract_type = (request.GET.get("contract_type") or "").strip()
-    if contract_type:
-        qs = qs.filter(contract_type=contract_type)
-
-    cold_call = (request.GET.get("cold_call") or "").strip()
-    if cold_call == "1":
-        qs = qs.filter(is_cold_call=True)
-    elif cold_call == "0":
-        qs = qs.filter(is_cold_call=False)
-
-    only_overdue = (request.GET.get("overdue") or "").strip()
-    if only_overdue == "1":
-        qs = qs.filter(has_overdue=True)
+    qs = _apply_company_filters(qs=qs, params=request.GET)["qs"]
 
     cfg = UiGlobalConfig.load()
     cols = cfg.company_list_columns or ["name"]

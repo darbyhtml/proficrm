@@ -1,3 +1,3 @@
-from django.shortcuts import render
-
-# Create your views here.
+"""
+UI задач реализован в `ui.views`. Приложение `tasksapp` — модели/админка/API.
+"""

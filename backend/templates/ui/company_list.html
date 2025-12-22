@@ -17,7 +17,7 @@
         </div>
         <div class="flex gap-2">
           <a href="/companies/new/" class="btn btn-primary">+ Добавить компанию</a>
-          {% if request.user.is_superuser or request.user.role == 'admin' %}
+          {% if is_admin %}
             <a href="/companies/export/?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}&cold_call={{ cold_call }}&overdue={{ overdue }}" class="btn btn-outline">Экспорт CSV</a>
           {% endif %}
         </div>

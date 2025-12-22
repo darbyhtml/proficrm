@@ -274,7 +274,8 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
         company_qs = company_qs.filter(status_id=status)
     if sphere:
         company_qs = company_qs.filter(spheres__id=sphere)
-    company_ids = company_qs.values_list("id", flat=True)
+    # Важно: при фильтрации по m2m (spheres) будут дубли без distinct()
+    company_ids = company_qs.order_by().values_list("id", flat=True).distinct()
 
     # 1) Берём email контактов, связанных с компаниями
     emails_qs = (
@@ -486,7 +487,3 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
         SendLog.objects.create(campaign=camp, recipient=None, account=None, provider="smtp_global", status="failed", error=str(ex))
         messages.error(request, f"Ошибка тестовой отправки: {ex}")
     return redirect("campaign_detail", campaign_id=camp.id)
-
-from django.shortcuts import render
-
-# Create your views here.

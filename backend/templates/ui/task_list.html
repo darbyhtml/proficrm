@@ -82,7 +82,7 @@
                   <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
                 </td>
                 <td>
-                  {% if request.user.is_superuser or request.user.role == 'admin' or t.assigned_to_id == request.user.id %}
+                  {% if is_admin or t.assigned_to_id == request.user.id %}
                     <form method="post" action="/tasks/{{ t.id }}/status/" class="flex flex-wrap gap-2">
                       {% csrf_token %}
                       <button name="status" value="in_progress" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem">В работу</button>

@@ -1,3 +1,4 @@
-from django.shortcuts import render
-
-# Create your views here.
+"""
+Веб-страницы компаний реализованы в `ui.views`.
+`companies` содержит модели/админку/DRF API/права — HTTP views не используются.
+"""

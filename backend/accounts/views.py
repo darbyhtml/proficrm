@@ -1,3 +1,4 @@
-from django.shortcuts import render
-
-# Create your views here.
+"""
+Модуль views для accounts сейчас не используется (UI вынесен в приложение `ui`).
+Оставлен пустым осознанно.
+"""

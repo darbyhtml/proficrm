@@ -25,7 +25,3 @@ def mark_read(request: HttpRequest, notification_id: int) -> HttpResponse:
     n.is_read = True
     n.save(update_fields=["is_read"])
     return redirect(n.url or (request.META.get("HTTP_REFERER") or "/"))
-
-from django.shortcuts import render
-
-# Create your views here.

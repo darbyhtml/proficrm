@@ -1,3 +1,4 @@
-from django.shortcuts import render
-
-# Create your views here.
+"""
+В этом проекте аудит используется как сервис/модели (`audit.service`, `audit.models`).
+HTTP views не используются — модуль оставлен пустым осознанно.
+"""
