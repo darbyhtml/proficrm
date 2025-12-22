@@ -398,6 +398,11 @@ def company_export(request: HttpRequest) -> HttpResponse:
 def company_create(request: HttpRequest) -> HttpResponse:
     user: User = request.user
 
+    # РОП: только просмотр компаний + заметки
+    if user.role == User.Role.SALES_HEAD:
+        messages.error(request, "Руководитель отдела продаж не может создавать компании (только просмотр и заметки).")
+        return redirect("company_list")
+
     if request.method == "POST":
         form = CompanyCreateForm(request.POST)
         if form.is_valid():
@@ -507,7 +512,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     activity = ActivityEvent.objects.filter(company_id=company.id).select_related("actor")[:50]
     quick_form = CompanyQuickEditForm(instance=company)
 
-    transfer_targets = User.objects.filter(is_active=True, role__in=[User.Role.MANAGER, User.Role.SALES_HEAD]).order_by("last_name", "first_name")
+    transfer_targets = User.objects.filter(is_active=True, role__in=[User.Role.MANAGER, User.Role.BRANCH_DIRECTOR]).order_by("last_name", "first_name")
 
     return render(
         request,
@@ -662,8 +667,8 @@ def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company.id)
 
     new_resp = get_object_or_404(User, id=new_resp_id, is_active=True)
-    if new_resp.role not in (User.Role.MANAGER, User.Role.SALES_HEAD):
-        messages.error(request, "Назначить ответственным можно только менеджера или руководителя отдела продаж.")
+    if new_resp.role not in (User.Role.MANAGER, User.Role.BRANCH_DIRECTOR):
+        messages.error(request, "Назначить ответственным можно только менеджера или директора филиала.")
         return redirect("company_detail", company_id=company.id)
 
     old_resp = company.responsible
@@ -980,7 +985,7 @@ def task_create(request: HttpRequest) -> HttpResponse:
             else:
                 if not task.assigned_to:
                     task.assigned_to = user
-                if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id and task.assigned_to.branch_id != user.branch_id:
+                if user.role == User.Role.BRANCH_DIRECTOR and user.branch_id and task.assigned_to.branch_id != user.branch_id:
                     task.assigned_to = user
 
             task.save()
@@ -1021,7 +1026,7 @@ def task_create(request: HttpRequest) -> HttpResponse:
     # Ограничить назначаемых
     if user.role == User.Role.MANAGER:
         form.fields["assigned_to"].queryset = User.objects.filter(id=user.id)
-    elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+    elif user.role == User.Role.BRANCH_DIRECTOR and user.branch_id:
         form.fields["assigned_to"].queryset = User.objects.filter(branch_id=user.branch_id).order_by("last_name", "first_name")
     else:
         form.fields["assigned_to"].queryset = User.objects.order_by("last_name", "first_name")
