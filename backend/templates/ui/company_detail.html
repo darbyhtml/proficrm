@@ -59,8 +59,8 @@
                   {% csrf_token %}
                   <button type="submit" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" title="Открепить" aria-label="Открепить">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M14 4l6 6-3 3v5H7v-5L4 10l6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                      <path d="M12 22v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                      <path d="M9 3h6l1 7 2 2v2H6v-2l2-2 1-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      <path d="M12 17v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                     </svg>
                   </button>
                 </form>
@@ -335,26 +335,35 @@
                   {{ n.created_at }} · {{ n.author }}
                   {% if n.is_pinned %}· <span class="badge badge-warn" style="padding:.1rem .35rem;font-size:.65rem">Закреплено</span>{% endif %}
                 </div>
-                {% if n.author_id == request.user.id or request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'group_manager' %}
-                  <form method="post" action="/companies/{{ company.id }}/notes/{{ n.id }}/delete/" onsubmit="return confirm('Удалить заметку?');">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem">Удалить</button>
-                  </form>
-                {% endif %}
-              </div>
-              {% if can_edit_company %}
-                <div class="mt-1">
-                  <form method="post" action="/companies/{{ company.id }}/notes/{{ n.id }}/pin/" style="display:inline">
-                    {% csrf_token %}
-                    <button type="submit" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" title="{% if n.is_pinned %}Открепить{% else %}Закрепить{% endif %}" aria-label="{% if n.is_pinned %}Открепить{% else %}Закрепить{% endif %}">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M14 4l6 6-3 3v5H7v-5L4 10l6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M12 22v-4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                      </svg>
-                    </button>
-                  </form>
+                <div class="flex items-center gap-2 shrink-0">
+                  {% if can_edit_company %}
+                    <form method="post" action="/companies/{{ company.id }}/notes/{{ n.id }}/pin/" style="display:inline">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" title="{% if n.is_pinned %}Открепить{% else %}Закрепить{% endif %}" aria-label="{% if n.is_pinned %}Открепить{% else %}Закрепить{% endif %}">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path d="M9 3h6l1 7 2 2v2H6v-2l2-2 1-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          <path d="M12 17v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                      </button>
+                    </form>
+                  {% endif %}
+
+                  {% if n.author_id == request.user.id or request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'group_manager' %}
+                    <form method="post" action="/companies/{{ company.id }}/notes/{{ n.id }}/delete/" onsubmit="return confirm('Удалить заметку?');" style="display:inline">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem;border-color:rgba(239,68,68,.35);color:#b91c1c;background:rgba(239,68,68,.06)" title="Удалить" aria-label="Удалить">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path d="M3 6h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                          <path d="M8 6V4h8v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          <path d="M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          <path d="M10 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                          <path d="M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                      </button>
+                    </form>
+                  {% endif %}
                 </div>
-              {% endif %}
+              </div>
               <div class="text-sm whitespace-pre-line">{{ n.text }}</div>
               {% if n.attachment %}
                 <div class="mt-2 rounded-lg border border-brand-soft bg-brand-soft/15 px-3 py-2">
