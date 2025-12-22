@@ -12,6 +12,7 @@ from django.http import HttpRequest, HttpResponse
 from django.http import StreamingHttpResponse
 from django.http import JsonResponse
 from django.http import FileResponse, Http404
+from django.db import transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
@@ -231,8 +232,128 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "spheres": CompanySphere.objects.order_by("name"),
             "branches": Branch.objects.order_by("name"),
             "company_list_columns": columns,
+            "transfer_targets": User.objects.filter(is_active=True, role__in=[User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD]).order_by("last_name", "first_name"),
         },
     )
+
+
+@login_required
+def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
+    """
+    Массовое переназначение ответственного:
+    - либо по выбранным company_ids[]
+    - либо по текущему фильтру (apply_mode=filtered), чтобы быстро переназначить, например, все компании уволенного сотрудника.
+    """
+    if request.method != "POST":
+        return redirect("company_list")
+
+    user: User = request.user
+    new_resp_id = (request.POST.get("responsible_id") or "").strip()
+    apply_mode = (request.POST.get("apply_mode") or "selected").strip().lower()
+    if not new_resp_id:
+        messages.error(request, "Выберите нового ответственного.")
+        return redirect("company_list")
+
+    new_resp = get_object_or_404(User, id=new_resp_id, is_active=True)
+    if new_resp.role not in (User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD):
+        messages.error(request, "Нового ответственного можно выбрать только из: менеджер / директор филиала / РОП.")
+        return redirect("company_list")
+
+    # Базовый QS: все компании (просмотр всем) → сужаем до редактируемых пользователем
+    editable_qs = _editable_company_qs(user)
+
+    # режим "по фильтру" — переносим фильтры из скрытых полей формы
+    if apply_mode == "filtered":
+        now = timezone.now()
+        overdue_tasks = (
+            Task.objects.filter(company_id=OuterRef("pk"), due_at__lt=now)
+            .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+            .values("id")
+        )
+        qs = Company.objects.all().annotate(has_overdue=Exists(overdue_tasks))
+        q = (request.POST.get("q") or "").strip()
+        if q:
+            qs = qs.filter(
+                Q(name__icontains=q)
+                | Q(inn__icontains=q)
+                | Q(legal_name__icontains=q)
+                | Q(address__icontains=q)
+                | Q(phone__icontains=q)
+                | Q(email__icontains=q)
+                | Q(contact_name__icontains=q)
+                | Q(contact_position__icontains=q)
+            )
+        responsible = (request.POST.get("responsible") or "").strip()
+        if responsible:
+            qs = qs.filter(responsible_id=responsible)
+        status = (request.POST.get("status") or "").strip()
+        if status:
+            qs = qs.filter(status_id=status)
+        branch = (request.POST.get("branch") or "").strip()
+        if branch:
+            qs = qs.filter(branch_id=branch)
+        sphere = (request.POST.get("sphere") or "").strip()
+        if sphere:
+            qs = qs.filter(spheres__id=sphere)
+        overdue = (request.POST.get("overdue") or "").strip()
+        if overdue == "1":
+            qs = qs.filter(has_overdue=True)
+
+        # ограничиваем до редактируемых пользователем
+        qs = qs.filter(id__in=editable_qs.values_list("id", flat=True)).distinct()
+        # safety cap
+        cap = 5000
+        ids = list(qs.values_list("id", flat=True)[:cap])
+        if not ids:
+            messages.error(request, "Нет компаний для переназначения (или нет прав).")
+            return redirect("company_list")
+        if len(ids) >= cap:
+            messages.warning(request, f"Выбрано слишком много компаний (>{cap}). Сузьте фильтр и повторите.")
+            return redirect("company_list")
+    else:
+        ids = request.POST.getlist("company_ids") or []
+        ids = [i for i in ids if i]
+        if not ids:
+            messages.error(request, "Выберите хотя бы одну компанию (чекбоксы слева).")
+            return redirect("company_list")
+
+        # ограничиваем до редактируемых
+        ids = list(editable_qs.filter(id__in=ids).values_list("id", flat=True))
+        if not ids:
+            messages.error(request, "Нет выбранных компаний, доступных для переназначения.")
+            return redirect("company_list")
+
+    # Ограничения директора филиала: переназначать можно только внутри филиала
+    if user.role == User.Role.BRANCH_DIRECTOR and user.branch_id:
+        if new_resp.branch_id != user.branch_id:
+            messages.error(request, "Директор филиала может переназначать компании только внутри своего филиала.")
+            return redirect("company_list")
+
+    now_ts = timezone.now()
+    with transaction.atomic():
+        qs_to_update = Company.objects.filter(id__in=ids).select_related("responsible")
+        # фиксируем "старых" ответственных для лога (первых 20)
+        old_resps = list(qs_to_update.values_list("responsible_id", flat=True).distinct()[:20])
+        updated = qs_to_update.update(responsible=new_resp, branch=new_resp.branch, updated_at=now_ts)
+
+    messages.success(request, f"Переназначено компаний: {updated}. Новый ответственный: {new_resp}.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="company_bulk_transfer",
+        entity_id=str(new_resp.id),
+        message="Массовое переназначение компаний",
+        meta={"count": updated, "to": str(new_resp), "old_responsible_ids_sample": old_resps, "mode": apply_mode},
+    )
+    if new_resp.id != user.id:
+        notify(
+            user=new_resp,
+            kind=Notification.Kind.COMPANY,
+            title="Вам передали компании",
+            body=f"Количество: {updated}",
+            url=f"/companies/?responsible={new_resp.id}",
+        )
+    return redirect("company_list")
 
 
 @login_required

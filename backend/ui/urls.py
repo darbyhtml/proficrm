@@ -7,6 +7,7 @@ urlpatterns = [
     path("companies/", views.company_list, name="company_list"),
     path("companies/duplicates/", views.company_duplicates, name="company_duplicates"),
     path("companies/export/", views.company_export, name="company_export"),
+    path("companies/bulk-transfer/", views.company_bulk_transfer, name="company_bulk_transfer"),
     path("companies/new/", views.company_create, name="company_create"),
     path("companies/<uuid:company_id>/", views.company_detail, name="company_detail"),
     path("companies/<uuid:company_id>/edit/", views.company_edit, name="company_edit"),

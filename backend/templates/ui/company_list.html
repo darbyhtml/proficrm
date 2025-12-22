@@ -95,11 +95,46 @@
       </div>
     </form>
 
+    <form method="post" action="/companies/bulk-transfer/" class="card card-pad" id="bulkTransferForm" style="display:none">
+      {% csrf_token %}
+      <input type="hidden" name="apply_mode" id="bulkApplyMode" value="selected" />
+      <input type="hidden" name="q" value="{{ q }}" />
+      <input type="hidden" name="responsible" value="{{ responsible }}" />
+      <input type="hidden" name="status" value="{{ status }}" />
+      <input type="hidden" name="branch" value="{{ branch }}" />
+      <input type="hidden" name="sphere" value="{{ sphere }}" />
+      <input type="hidden" name="overdue" value="{{ overdue }}" />
+
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div class="text-sm text-brand-dark/80">
+          Выбрано: <b id="bulkSelectedCount">0</b>
+          <span class="muted-2 ml-2" id="bulkModeHint"></span>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <select name="responsible_id" class="select" style="min-width:260px">
+            <option value="">Новый ответственный…</option>
+            {% for u in transfer_targets %}
+              <option value="{{ u.id }}">{{ u }} ({{ u.get_role_display }})</option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-primary" type="submit" onclick="return confirm('Переназначить выбранные компании?');">Переназначить</button>
+          <button class="btn btn-outline" type="button" id="bulkSelectFiltered">Выбрать все по фильтру</button>
+          <button class="btn btn-outline" type="button" id="bulkClear">Снять выделение</button>
+        </div>
+      </div>
+      <div class="text-xs muted-2 mt-2">
+        Совет: чтобы переназначить “все компании сотрудника”, отфильтруйте по ответственному → нажмите <b>Выбрать все по фильтру</b> → выберите нового ответственного → Переназначить.
+      </div>
+    </form>
+
     <div class="card overflow-hidden">
       <div class="overflow-x-auto">
         <table class="table">
           <thead>
             <tr>
+              <th class="text-left px-4 py-3" style="width:44px">
+                <input type="checkbox" id="bulkSelectAll" />
+              </th>
               {% if "name" in company_list_columns %}<th class="text-left px-4 py-3">Компания</th>{% endif %}
               {% if "overdue" in company_list_columns %}<th class="text-left px-4 py-3">Просрочки</th>{% endif %}
               {% if "inn" in company_list_columns %}<th class="text-left px-4 py-3">ИНН</th>{% endif %}
@@ -113,6 +148,9 @@
           <tbody>
             {% for c in page.object_list %}
               <tr onclick="window.location='/companies/{{ c.id }}/'" style="cursor:pointer">
+                <td onclick="event.stopPropagation()">
+                  <input class="bulk-company" type="checkbox" name="company_ids" value="{{ c.id }}" form="bulkTransferForm" />
+                </td>
                 {% if "name" in company_list_columns %}
                   <td>
                     <a class="link" href="/companies/{{ c.id }}/" onclick="event.stopPropagation()">{{ c.name }}</a>
@@ -165,6 +203,62 @@
       </div>
     </div>
   </div>
+
+  <script>
+    (function(){
+      const form = document.getElementById('bulkTransferForm');
+      const selectAll = document.getElementById('bulkSelectAll');
+      const items = Array.from(document.querySelectorAll('.bulk-company'));
+      const countEl = document.getElementById('bulkSelectedCount');
+      const clearBtn = document.getElementById('bulkClear');
+      const selectFilteredBtn = document.getElementById('bulkSelectFiltered');
+      const modeEl = document.getElementById('bulkApplyMode');
+      const hintEl = document.getElementById('bulkModeHint');
+
+      function selectedCount() {
+        return items.filter(i => i.checked).length;
+      }
+
+      function update() {
+        const cnt = selectedCount();
+        if (countEl) countEl.textContent = String(cnt);
+        if (form) form.style.display = (cnt > 0) ? 'block' : 'none';
+        if (selectAll) selectAll.checked = (cnt > 0 && cnt === items.length);
+        if (modeEl) modeEl.value = 'selected';
+        if (hintEl) hintEl.textContent = cnt ? ' (выбранные на странице)' : '';
+      }
+
+      if (selectAll) {
+        selectAll.addEventListener('change', () => {
+          const v = !!selectAll.checked;
+          items.forEach(i => { i.checked = v; });
+          update();
+        });
+      }
+
+      items.forEach(i => i.addEventListener('change', update));
+
+      if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+          items.forEach(i => { i.checked = false; });
+          update();
+        });
+      }
+
+      if (selectFilteredBtn) {
+        selectFilteredBtn.addEventListener('click', () => {
+          // включает режим "по фильтру", но всё равно требует подтверждения на submit
+          if (!confirm('Переназначить ВСЕ компании по текущему фильтру?')) return;
+          if (modeEl) modeEl.value = 'filtered';
+          if (hintEl) hintEl.textContent = ' (все по фильтру)';
+          if (form) form.style.display = 'block';
+          if (countEl) countEl.textContent = '{{ companies_filtered }}';
+        });
+      }
+
+      update();
+    })();
+  </script>
 {% endblock %}
 
 
