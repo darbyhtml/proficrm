@@ -371,21 +371,23 @@
       })();
     </script>
 
-    <section class="card card-pad">
-      <div class="font-medium mb-3">История действий</div>
-      {% if activity %}
-        <div class="space-y-2">
-          {% for ev in activity %}
-            <div class="rounded-lg border p-3 text-sm">
-              <div class="text-xs text-brand-dark/70 mb-1">{{ ev.created_at }} · {{ ev.actor|default:"—" }}</div>
-              <div>{{ ev.message|default:ev.get_verb_display }}</div>
-            </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="text-sm text-brand-dark/70">Пока пусто.</div>
-      {% endif %}
-    </section>
+    <details class="card card-pad">
+      <summary class="cursor-pointer font-medium">История действий</summary>
+      <div class="mt-3">
+        {% if activity %}
+          <div class="space-y-2">
+            {% for ev in activity %}
+              <div class="rounded-lg border p-3 text-sm">
+                <div class="text-xs text-brand-dark/70 mb-1">{{ ev.created_at }} · {{ ev.actor|default:"—" }}</div>
+                <div>{{ ev.message|default:ev.get_verb_display }}</div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="text-sm text-brand-dark/70">Пока пусто.</div>
+        {% endif %}
+      </div>
+    </details>
   </div>
 {% endblock %}
 
