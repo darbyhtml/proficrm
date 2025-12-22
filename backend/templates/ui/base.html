@@ -412,6 +412,149 @@
         document.addEventListener('DOMContentLoaded', initAll);
       })();
     </script>
+    <script>
+      // Searchable single select over <select> (not multiple)
+      (function(){
+        const MAX_RENDER = 200;
+
+        function initOne(root){
+          const select = root.querySelector('select:not([multiple])');
+          if(!select) return;
+          // hide original select but keep in DOM for submit
+          select.classList.add('hidden');
+
+          const btn = root.querySelector('.ms-btn');
+          const valueEl = root.querySelector('.ms-value');
+          const panel = root.querySelector('.ms-panel');
+          const search = root.querySelector('.ms-search');
+          const list = root.querySelector('.ms-list');
+          const clearBtn = root.querySelector('[data-ms-clear]');
+
+          function selectedText(){
+            const o = select.options[select.selectedIndex];
+            const txt = (o && (o.text || '').trim()) || '';
+            const val = (o && (o.value || '').trim()) || '';
+            if(!val) return '';
+            return txt;
+          }
+          function renderValue(){
+            const txt = selectedText();
+            valueEl.textContent = txt || (root.getAttribute('data-placeholder') || 'Выберите…');
+          }
+          function renderList(filter){
+            const f = (filter || '').toLowerCase().trim();
+            list.innerHTML = '';
+            const opts = Array.from(select.options);
+
+            // special "empty" option (value == "")
+            const emptyOpt = opts.find(o => !((o.value || '').trim()));
+            const emptyLabel = (emptyOpt && (emptyOpt.text || '').trim()) || '— Не выбрано —';
+            const emptyRow = document.createElement('label');
+            emptyRow.className = 'ms-item';
+            const emptyRb = document.createElement('input');
+            emptyRb.type = 'radio';
+            emptyRb.name = '__ms_single_' + (select.name || 'x');
+            emptyRb.checked = !((select.value || '').trim());
+            emptyRb.addEventListener('change', () => {
+              select.value = '';
+              renderValue();
+            });
+            const emptySpan = document.createElement('span');
+            emptySpan.textContent = emptyLabel;
+            emptyRow.appendChild(emptyRb);
+            emptyRow.appendChild(emptySpan);
+            if(!f || emptyLabel.toLowerCase().includes(f)) {
+              list.appendChild(emptyRow);
+            }
+
+            let rendered = 0;
+            let matched = 0;
+            for(const o of opts){
+              const val = (o.value || '').trim();
+              const label = (o.text || '').trim();
+              if(!val) continue; // skip empty option (rendered above)
+              if(!label) continue;
+              if(f && !label.toLowerCase().includes(f)) continue;
+              matched += 1;
+              if(rendered >= MAX_RENDER) continue;
+
+              const row = document.createElement('label');
+              row.className = 'ms-item';
+              const rb = document.createElement('input');
+              rb.type = 'radio';
+              rb.name = '__ms_single_' + (select.name || 'x');
+              rb.checked = (select.value || '') === o.value;
+              rb.addEventListener('change', () => {
+                select.value = o.value;
+                renderValue();
+              });
+              const span = document.createElement('span');
+              span.textContent = label;
+              row.appendChild(rb);
+              row.appendChild(span);
+              list.appendChild(row);
+              rendered += 1;
+            }
+
+            if(!list.children.length){
+              const empty = document.createElement('div');
+              empty.className = 'ms-muted px-1 py-2';
+              empty.textContent = 'Ничего не найдено';
+              list.appendChild(empty);
+              return;
+            }
+
+            if(matched > MAX_RENDER){
+              const more = document.createElement('div');
+              more.className = 'ms-muted px-1 py-2';
+              more.textContent = 'Показаны первые ' + MAX_RENDER + '. Уточните запрос, чтобы найти нужное.';
+              list.appendChild(more);
+            }
+          }
+
+          function open(){
+            panel.classList.remove('hidden');
+            renderList(search.value);
+            search.focus();
+          }
+          function close(){
+            panel.classList.add('hidden');
+            search.value = '';
+          }
+
+          if(btn){
+            btn.addEventListener('click', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              if(panel.classList.contains('hidden')) open(); else close();
+            });
+          }
+          panel.addEventListener('click', (e) => e.stopPropagation());
+          document.addEventListener('click', close);
+          document.addEventListener('keydown', (e) => { if(e.key === 'Escape') close(); });
+
+          if(search){
+            search.addEventListener('input', () => renderList(search.value));
+          }
+          if(clearBtn){
+            clearBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              select.value = '';
+              renderValue();
+              renderList(search.value);
+            });
+          }
+
+          // initial
+          renderValue();
+        }
+
+        function initAll(){
+          document.querySelectorAll('[data-ms-single="1"]').forEach(initOne);
+        }
+        document.addEventListener('DOMContentLoaded', initAll);
+      })();
+    </script>
   </body>
 </html>
 

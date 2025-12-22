@@ -62,7 +62,22 @@
 
       <div>
         <label class="block text-sm text-brand-dark/80 mb-1">Головная организация (если это филиал клиента)</label>
-        {{ form.head_company }}
+        <div class="ms" data-ms-single="1" data-placeholder="— Не выбрано —">
+          <button type="button" class="ms-btn">
+            <span class="ms-value"></span>
+            <span class="ms-muted">▼</span>
+          </button>
+          <div class="ms-panel hidden">
+            <div class="ms-top">
+              <input class="input ms-search" placeholder="Поиск по названию" />
+              <a href="#" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" data-ms-clear>Сброс</a>
+            </div>
+            <div class="ms-list"></div>
+          </div>
+          <div class="hidden">
+            {{ form.head_company }}
+          </div>
+        </div>
         <div class="text-xs muted-2 mt-1">Если не выбрать — эта карточка будет считаться “головной”.</div>
       </div>
 
