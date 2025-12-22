@@ -4,6 +4,15 @@ from django.conf import settings
 from django.db import models
 
 
+def _safe_ext(name: str) -> str:
+    n = (name or "").strip().lower()
+    if "." not in n:
+        return ""
+    ext = n.rsplit(".", 1)[-1]
+    # sanity: keep only short extensions
+    return ext[:16]
+
+
 class CompanyStatus(models.Model):
     name = models.CharField("Название", max_length=120, unique=True)
 
@@ -79,6 +88,59 @@ class CompanyNote(models.Model):
 
     def __str__(self) -> str:
         return f"Note({self.company_id})"
+
+
+class CompanyDocument(models.Model):
+    """
+    Документы компании (файлы: pdf/doc/xls/изображения и т.п.).
+    Храним в MEDIA_ROOT, показываем в карточке компании.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    company = models.ForeignKey(Company, verbose_name="Компания", on_delete=models.CASCADE, related_name="documents")
+
+    title = models.CharField("Название", max_length=255, blank=True, default="")
+    file = models.FileField("Файл", upload_to="company_docs/%Y/%m/%d/")
+
+    original_name = models.CharField("Оригинальное имя файла", max_length=255, blank=True, default="")
+    ext = models.CharField("Расширение", max_length=16, blank=True, default="", db_index=True)
+    size = models.BigIntegerField("Размер (байт)", default=0)
+    content_type = models.CharField("MIME тип", max_length=120, blank=True, default="")
+
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Кто загрузил",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="uploaded_company_documents",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["company", "created_at"], name="companydoc_company_created_idx"),
+        ]
+        ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        # Снэпшоты метаданных файла (если не заданы)
+        try:
+            if self.file and not self.original_name:
+                self.original_name = (getattr(self.file, "name", "") or "").split("/")[-1].split("\\")[-1]
+            if self.file and not self.ext:
+                self.ext = _safe_ext(self.original_name or getattr(self.file, "name", ""))
+            if self.file and not self.size:
+                self.size = int(getattr(self.file, "size", 0) or 0)
+        except Exception:
+            # не ломаем сохранение из-за метаданных
+            pass
+        super().save(*args, **kwargs)
+
+    def __str__(self) -> str:
+        label = self.title or self.original_name or str(self.id)
+        return f"{label} ({self.company_id})"
 
 
 class Contact(models.Model):

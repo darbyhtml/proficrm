@@ -70,6 +70,40 @@ class CompanyNoteForm(forms.ModelForm):
         }
 
 
+class CompanyDocumentUploadForm(forms.Form):
+    title = forms.CharField(
+        label="Название (опционально)",
+        required=False,
+        widget=forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "Например: Договор / КП / Счёт"}),
+    )
+    file = forms.FileField(label="Файл")
+
+    MAX_SIZE = 15 * 1024 * 1024  # 15 MB
+    ALLOWED_EXT = {
+        "pdf",
+        "doc", "docx",
+        "xls", "xlsx",
+        "ppt", "pptx",
+        "png", "jpg", "jpeg", "gif", "webp",
+        "txt", "csv",
+    }
+
+    def clean_file(self):
+        f = self.cleaned_data.get("file")
+        if not f:
+            raise ValidationError("Выберите файл.")
+        size = int(getattr(f, "size", 0) or 0)
+        if size <= 0:
+            raise ValidationError("Пустой файл.")
+        if size > self.MAX_SIZE:
+            raise ValidationError("Слишком большой файл. Максимум 15 МБ.")
+        name = (getattr(f, "name", "") or "").strip().lower()
+        ext = name.rsplit(".", 1)[-1] if "." in name else ""
+        if ext and ext not in self.ALLOWED_EXT:
+            raise ValidationError("Формат файла не поддерживается. Разрешены: PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX, изображения, TXT/CSV.")
+        return f
+
+
 class TaskForm(forms.ModelForm):
     due_at = forms.DateTimeField(
         required=False,

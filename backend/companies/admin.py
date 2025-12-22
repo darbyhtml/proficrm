@@ -4,6 +4,7 @@ from accounts.models import User
 from accounts.scope import apply_company_scope
 from .models import (
     Company,
+    CompanyDocument,
     CompanyNote,
     CompanySphere,
     CompanyStatus,
@@ -44,6 +45,13 @@ class ContactAdmin(admin.ModelAdmin):
 class CompanyNoteAdmin(admin.ModelAdmin):
     list_display = ("company", "author", "created_at")
     search_fields = ("company__name", "author__username", "text")
+
+
+@admin.register(CompanyDocument)
+class CompanyDocumentAdmin(admin.ModelAdmin):
+    list_display = ("company", "title", "original_name", "ext", "size", "uploaded_by", "created_at")
+    search_fields = ("company__name", "title", "original_name", "ext")
+    list_filter = ("ext",)
 
 
 @admin.register(Company)

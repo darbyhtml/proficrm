@@ -11,24 +11,27 @@ from django.db.models import Count, Max
 from django.http import HttpRequest, HttpResponse
 from django.http import StreamingHttpResponse
 from django.http import JsonResponse
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from accounts.models import Branch, User
 from audit.models import ActivityEvent
 from audit.service import log_event
-from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact
+from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, CompanyDocument
 from companies.permissions import can_edit_company as can_edit_company_perm, editable_company_qs as editable_company_qs_perm
 from tasksapp.models import Task, TaskType
 from notifications.models import Notification
 from notifications.service import notify
 from phonebridge.models import CallRequest
+import mimetypes
 
 from .forms import (
     CompanyCreateForm,
     CompanyQuickEditForm,
     CompanyEditForm,
     CompanyNoteForm,
+    CompanyDocumentUploadForm,
     ContactEmailFormSet,
     ContactForm,
     ContactPhoneFormSet,
@@ -485,6 +488,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
 
     contacts = Contact.objects.filter(company=company).prefetch_related("emails", "phones").order_by("last_name", "first_name")[:200]
     notes = CompanyNote.objects.filter(company=company).select_related("author").order_by("-created_at")[:50]
+    documents = CompanyDocument.objects.filter(company=company).select_related("uploaded_by").order_by("-created_at")[:200]
     tasks = (
         Task.objects.filter(company=company)
         .select_related("assigned_to", "type")
@@ -492,6 +496,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     )
 
     note_form = CompanyNoteForm()
+    doc_form = CompanyDocumentUploadForm()
     activity = ActivityEvent.objects.filter(company_id=company.id).select_related("actor")[:50]
     quick_form = CompanyQuickEditForm(instance=company)
 
@@ -506,12 +511,136 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "contacts": contacts,
             "notes": notes,
             "note_form": note_form,
+            "documents": documents,
+            "doc_form": doc_form,
             "tasks": tasks,
             "activity": activity,
             "quick_form": quick_form,
             "transfer_targets": transfer_targets,
         },
     )
+
+
+@login_required
+def company_document_upload(request: HttpRequest, company_id) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_edit_company(user, company):
+        messages.error(request, "Нет прав на загрузку документов по этой компании.")
+        return redirect("company_detail", company_id=company.id)
+
+    form = CompanyDocumentUploadForm(request.POST, request.FILES)
+    if not form.is_valid():
+        messages.error(request, "Не удалось загрузить файл. Проверьте размер/формат.")
+        return redirect("company_detail", company_id=company.id)
+
+    f = form.cleaned_data["file"]
+    title = (form.cleaned_data.get("title") or "").strip()
+    original_name = (getattr(f, "name", "") or "").split("/")[-1].split("\\")[-1]
+    ext = (original_name.rsplit(".", 1)[-1].lower() if "." in original_name else "")[:16]
+    size = int(getattr(f, "size", 0) or 0)
+    ctype = (getattr(f, "content_type", "") or "").strip()[:120]
+
+    doc = CompanyDocument.objects.create(
+        company=company,
+        title=title,
+        file=f,
+        original_name=original_name,
+        ext=ext,
+        size=size,
+        content_type=ctype,
+        uploaded_by=user,
+    )
+    messages.success(request, "Документ загружен.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.CREATE,
+        entity_type="company_document",
+        entity_id=str(doc.id),
+        company_id=company.id,
+        message="Загружен документ компании",
+        meta={"name": doc.original_name, "ext": doc.ext, "size": doc.size},
+    )
+    return redirect("company_detail", company_id=company.id)
+
+
+@login_required
+def company_document_delete(request: HttpRequest, company_id, doc_id) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_edit_company(user, company):
+        messages.error(request, "Нет прав на удаление документов по этой компании.")
+        return redirect("company_detail", company_id=company.id)
+
+    doc = get_object_or_404(CompanyDocument.objects.select_related("company"), id=doc_id, company_id=company.id)
+    name = doc.original_name or str(doc.id)
+    # Удаляем файл из storage, затем запись
+    try:
+        if doc.file:
+            doc.file.delete(save=False)
+    except Exception:
+        pass
+    doc.delete()
+
+    messages.success(request, "Документ удалён.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.DELETE,
+        entity_type="company_document",
+        entity_id=str(doc_id),
+        company_id=company.id,
+        message="Удалён документ компании",
+        meta={"name": name},
+    )
+    return redirect("company_detail", company_id=company.id)
+
+
+@login_required
+def company_document_open(request: HttpRequest, company_id, doc_id) -> HttpResponse:
+    """
+    Открыть файл в новом окне (inline). Доступ: всем пользователям (как просмотр компании).
+    """
+    company = get_object_or_404(Company.objects.all(), id=company_id)
+    doc = get_object_or_404(CompanyDocument.objects.select_related("company"), id=doc_id, company_id=company.id)
+    if not doc.file:
+        raise Http404("Файл не найден")
+    path = getattr(doc.file, "path", None)
+    if not path:
+        raise Http404("Файл недоступен")
+    ctype = (doc.content_type or "").strip()
+    if not ctype:
+        ctype = mimetypes.guess_type(doc.original_name or doc.file.name)[0] or "application/octet-stream"
+    try:
+        return FileResponse(open(path, "rb"), as_attachment=False, filename=(doc.original_name or "file"), content_type=ctype)
+    except FileNotFoundError:
+        raise Http404("Файл не найден")
+
+
+@login_required
+def company_document_download(request: HttpRequest, company_id, doc_id) -> HttpResponse:
+    """
+    Скачать файл (attachment). Доступ: всем пользователям (как просмотр компании).
+    """
+    company = get_object_or_404(Company.objects.all(), id=company_id)
+    doc = get_object_or_404(CompanyDocument.objects.select_related("company"), id=doc_id, company_id=company.id)
+    if not doc.file:
+        raise Http404("Файл не найден")
+    path = getattr(doc.file, "path", None)
+    if not path:
+        raise Http404("Файл недоступен")
+    ctype = (doc.content_type or "").strip()
+    if not ctype:
+        ctype = mimetypes.guess_type(doc.original_name or doc.file.name)[0] or "application/octet-stream"
+    try:
+        return FileResponse(open(path, "rb"), as_attachment=True, filename=(doc.original_name or "file"), content_type=ctype)
+    except FileNotFoundError:
+        raise Http404("Файл не найден")
 
 
 @login_required

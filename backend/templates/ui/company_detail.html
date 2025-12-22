@@ -213,6 +213,85 @@
       </section>
 
       <section class="card card-pad">
+        <div class="flex items-end justify-between gap-3 mb-3">
+          <div>
+            <div class="font-medium">Документы</div>
+            <div class="text-xs muted-2">PDF/DOC/XLS/картинки и др. · до 15 МБ за файл</div>
+          </div>
+        </div>
+
+        {% if can_edit_company %}
+          <form method="post" action="/companies/{{ company.id }}/docs/upload/" enctype="multipart/form-data" class="space-y-2">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <div>
+                <label class="block text-xs muted mb-1">Название (опционально)</label>
+                {{ doc_form.title }}
+              </div>
+              <div>
+                <label class="block text-xs muted mb-1">Файл</label>
+                <input type="file" name="file" class="w-full rounded-lg border px-3 py-2 bg-white" />
+              </div>
+            </div>
+            <button class="btn btn-outline" type="submit">Загрузить</button>
+          </form>
+        {% else %}
+          <div class="text-sm text-brand-dark/70">Загрузка документов недоступна (только просмотр).</div>
+        {% endif %}
+
+        <div class="mt-4 space-y-2">
+          {% for d in documents %}
+            <div class="rounded-lg border p-3">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2">
+                    {% with ext=d.ext|upper %}
+                      {% if ext == "PDF" %}
+                        <span class="badge badge-warn">PDF</span>
+                      {% elif ext == "DOC" or ext == "DOCX" %}
+                        <span class="badge">DOC</span>
+                      {% elif ext == "XLS" or ext == "XLSX" %}
+                        <span class="badge">XLS</span>
+                      {% elif ext == "PPT" or ext == "PPTX" %}
+                        <span class="badge">PPT</span>
+                      {% elif ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
+                        <span class="badge">IMG</span>
+                      {% elif ext %}
+                        <span class="badge">{{ ext }}</span>
+                      {% else %}
+                        <span class="badge">FILE</span>
+                      {% endif %}
+                    {% endwith %}
+                    <div class="font-medium truncate">
+                      {{ d.title|default:d.original_name|default:"Документ" }}
+                    </div>
+                  </div>
+                  <div class="text-xs muted-2 mt-1">
+                    {{ d.original_name|default:"" }}
+                    {% if d.size %} · {{ d.size|filesizeformat }}{% endif %}
+                    {% if d.uploaded_by %} · загрузил: {{ d.uploaded_by }}{% endif %}
+                    · {{ d.created_at }}
+                  </div>
+                </div>
+                <div class="flex flex-wrap gap-2 shrink-0">
+                  <a class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" target="_blank" rel="noopener" href="/companies/{{ company.id }}/docs/{{ d.id }}/open/">Открыть</a>
+                  <a class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" target="_blank" rel="noopener" href="/companies/{{ company.id }}/docs/{{ d.id }}/download/">Скачать</a>
+                  {% if can_edit_company %}
+                    <form method="post" action="/companies/{{ company.id }}/docs/{{ d.id }}/delete/" onsubmit="return confirm('Удалить документ?');">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem">Удалить</button>
+                    </form>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          {% empty %}
+            <div class="text-sm text-brand-dark/70">Документов пока нет.</div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="card card-pad">
         <div class="font-medium mb-3">Последние задачи</div>
         {% if tasks %}
           <div class="space-y-2">
