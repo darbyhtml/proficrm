@@ -24,14 +24,14 @@
       </div>
     </div>
 
-    <form class="card card-pad grid grid-cols-1 md:grid-cols-10 gap-3" method="get">
-      <div class="md:col-span-2">
+    <form class="card card-pad grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 w-full" method="get">
+      <div class="md:col-span-1">
         <label class="block text-sm text-brand-dark/80 mb-1">Поиск</label>
         <input name="q" value="{{ q }}" class="input" placeholder="ИНН / название / адрес" />
       </div>
       <div>
         <label class="block text-sm text-brand-dark/80 mb-1">Ответственный</label>
-        <select name="responsible" class="select">
+        <select name="responsible" class="select w-full">
           <option value="">Любой</option>
           {% for u in responsibles %}
             <option value="{{ u.id }}" {% if responsible == u.id|stringformat:"s" %}selected{% endif %}>
@@ -42,7 +42,7 @@
       </div>
       <div>
         <label class="block text-sm text-brand-dark/80 mb-1">Статус</label>
-        <select name="status" class="select">
+        <select name="status" class="select w-full">
           <option value="">Любой</option>
           {% for s in statuses %}
             <option value="{{ s.id }}" {% if status == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
@@ -51,7 +51,7 @@
       </div>
       <div>
         <label class="block text-sm text-brand-dark/80 mb-1">Филиал</label>
-        <select name="branch" class="select">
+        <select name="branch" class="select w-full">
           <option value="">Любой</option>
           {% for b in branches %}
             <option value="{{ b.id }}" {% if branch == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
@@ -60,7 +60,7 @@
       </div>
       <div>
         <label class="block text-sm text-brand-dark/80 mb-1">Сфера</label>
-        <select name="sphere" class="select">
+        <select name="sphere" class="select w-full">
           <option value="">Любая</option>
           {% for s in spheres %}
             <option value="{{ s.id }}" {% if sphere == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
@@ -69,7 +69,7 @@
       </div>
       <div>
         <label class="block text-sm text-brand-dark/80 mb-1">Вид договора</label>
-        <select name="contract_type" class="select">
+        <select name="contract_type" class="select w-full">
           <option value="">Любой</option>
           {% for val, label in contract_types %}
             <option value="{{ val }}" {% if contract_type == val %}selected{% endif %}>{{ label }}</option>
@@ -78,13 +78,13 @@
       </div>
       <div>
         <label class="block text-sm text-brand-dark/80 mb-1">Холодный звонок</label>
-        <select name="cold_call" class="select">
+        <select name="cold_call" class="select w-full">
           <option value="">Любой</option>
           <option value="1" {% if cold_call == "1" %}selected{% endif %}>Да</option>
           <option value="0" {% if cold_call == "0" %}selected{% endif %}>Нет</option>
         </select>
       </div>
-      <div class="md:col-span-10 flex flex-col md:flex-row md:items-end md:flex-wrap gap-2">
+      <div class="col-span-full flex flex-col md:flex-row md:items-end md:flex-wrap gap-2">
         <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 md:mr-2">
           <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %} />
           Только с просрочками
