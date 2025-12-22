@@ -89,6 +89,16 @@ class CompanyNote(models.Model):
     attachment_ext = models.CharField("Расширение", max_length=16, blank=True, default="", db_index=True)
     attachment_size = models.BigIntegerField("Размер (байт)", default=0)
     attachment_content_type = models.CharField("MIME тип", max_length=120, blank=True, default="")
+    is_pinned = models.BooleanField("Закреплено", default=False, db_index=True)
+    pinned_at = models.DateTimeField("Когда закрепили", null=True, blank=True)
+    pinned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Кто закрепил",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="pinned_company_notes",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:

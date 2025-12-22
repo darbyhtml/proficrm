@@ -249,6 +249,64 @@
 
       <section class="card card-pad">
         <div class="font-medium mb-3">Заметки</div>
+        {% if pinned_note %}
+          <div class="mb-3 rounded-xl border border-brand-soft bg-brand-soft/20 p-3">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="badge badge-warn">Закреплено</span>
+                  <div class="text-xs text-brand-dark/70">
+                    {{ pinned_note.created_at }} · {{ pinned_note.author }}
+                    {% if pinned_note.pinned_by %} · закрепил: {{ pinned_note.pinned_by }}{% endif %}
+                  </div>
+                </div>
+                {% if pinned_note.text %}
+                  <div class="mt-2 text-sm whitespace-pre-line">{{ pinned_note.text }}</div>
+                {% endif %}
+                {% if pinned_note.attachment %}
+                  <div class="mt-2 rounded-lg border border-brand-soft bg-brand-soft/15 px-3 py-2">
+                    <div class="flex items-center justify-between gap-2">
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          {% with ext=pinned_note.attachment_ext|upper %}
+                            {% if ext == "PDF" %}
+                              <span class="badge badge-warn">PDF</span>
+                            {% elif ext == "DOC" or ext == "DOCX" %}
+                              <span class="badge">DOC</span>
+                            {% elif ext == "XLS" or ext == "XLSX" %}
+                              <span class="badge">XLS</span>
+                            {% elif ext == "PPT" or ext == "PPTX" %}
+                              <span class="badge">PPT</span>
+                            {% elif ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
+                              <span class="badge">IMG</span>
+                            {% elif ext %}
+                              <span class="badge">{{ ext }}</span>
+                            {% else %}
+                              <span class="badge">FILE</span>
+                            {% endif %}
+                          {% endwith %}
+                          <div class="text-sm font-medium truncate">{{ pinned_note.attachment_name|default:"Файл" }}</div>
+                          {% if pinned_note.attachment_size %}<div class="text-xs muted-2">{{ pinned_note.attachment_size|filesizeformat }}</div>{% endif %}
+                        </div>
+                      </div>
+                      <div class="flex flex-wrap gap-2 shrink-0">
+                        <a class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/open/">Открыть</a>
+                        <a class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/download/">Скачать</a>
+                      </div>
+                    </div>
+                  </div>
+                {% endif %}
+              </div>
+              {% if can_edit_company %}
+                <form method="post" action="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/pin/">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem">Открепить</button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
+
         <form class="space-y-2" method="post" action="/companies/{{ company.id }}/notes/add/" enctype="multipart/form-data" id="noteForm">
           {% csrf_token %}
           <div class="space-y-2">
@@ -256,7 +314,12 @@
             <div class="flex items-center justify-between gap-2">
               <input id="noteFile" type="file" name="attachment" class="hidden" />
               <button type="button" class="btn btn-outline" id="noteAttachBtn" title="Прикрепить файл" style="padding:.35rem .6rem;font-size:.75rem">
-                📎 Файл
+                <span class="inline-flex items-center gap-1">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M8 12.5l7.1-7.1a3 3 0 014.2 4.2l-8.5 8.5a5 5 0 01-7.1-7.1l8.2-8.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                  <span>Файл</span>
+                </span>
               </button>
               <div class="text-xs muted-2 truncate" id="noteFileName"></div>
               <button class="btn btn-primary" type="submit">Добавить</button>
@@ -269,7 +332,10 @@
           {% for n in notes %}
             <div class="rounded-lg border p-3">
               <div class="flex items-start justify-between gap-3">
-                <div class="text-xs text-brand-dark/70 mb-1">{{ n.created_at }} · {{ n.author }}</div>
+                <div class="text-xs text-brand-dark/70 mb-1">
+                  {{ n.created_at }} · {{ n.author }}
+                  {% if n.is_pinned %}· <span class="badge badge-warn" style="padding:.1rem .35rem;font-size:.65rem">Закреплено</span>{% endif %}
+                </div>
                 {% if n.author_id == request.user.id or request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'group_manager' %}
                   <form method="post" action="/companies/{{ company.id }}/notes/{{ n.id }}/delete/" onsubmit="return confirm('Удалить заметку?');">
                     {% csrf_token %}
@@ -277,6 +343,16 @@
                   </form>
                 {% endif %}
               </div>
+              {% if can_edit_company %}
+                <div class="mt-1">
+                  <form method="post" action="/companies/{{ company.id }}/notes/{{ n.id }}/pin/" style="display:inline">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem">
+                      {% if n.is_pinned %}Открепить{% else %}Закрепить{% endif %}
+                    </button>
+                  </form>
+                </div>
+              {% endif %}
               <div class="text-sm whitespace-pre-line">{{ n.text }}</div>
               {% if n.attachment %}
                 <div class="mt-2 rounded-lg border border-brand-soft bg-brand-soft/15 px-3 py-2">

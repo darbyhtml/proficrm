@@ -486,7 +486,17 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     can_edit_company = _can_edit_company(user, company)
 
     contacts = Contact.objects.filter(company=company).prefetch_related("emails", "phones").order_by("last_name", "first_name")[:200]
-    notes = CompanyNote.objects.filter(company=company).select_related("author").order_by("-created_at")[:50]
+    pinned_note = (
+        CompanyNote.objects.filter(company=company, is_pinned=True)
+        .select_related("author", "pinned_by")
+        .order_by("-pinned_at", "-created_at")
+        .first()
+    )
+    notes = (
+        CompanyNote.objects.filter(company=company)
+        .select_related("author", "pinned_by")
+        .order_by("-is_pinned", "-pinned_at", "-created_at")[:60]
+    )
     tasks = (
         Task.objects.filter(company=company)
         .select_related("assigned_to", "type")
@@ -507,6 +517,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "can_edit_company": can_edit_company,
             "contacts": contacts,
             "notes": notes,
+            "pinned_note": pinned_note,
             "note_form": note_form,
             "tasks": tasks,
             "activity": activity,
@@ -514,6 +525,55 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "transfer_targets": transfer_targets,
         },
     )
+
+
+@login_required
+def company_note_pin_toggle(request: HttpRequest, company_id, note_id: int) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_edit_company(user, company):
+        messages.error(request, "Нет прав на закрепление заметок по этой компании.")
+        return redirect("company_detail", company_id=company.id)
+
+    note = get_object_or_404(CompanyNote.objects.select_related("company"), id=note_id, company_id=company.id)
+    now = timezone.now()
+
+    if note.is_pinned:
+        note.is_pinned = False
+        note.pinned_at = None
+        note.pinned_by = None
+        note.save(update_fields=["is_pinned", "pinned_at", "pinned_by"])
+        messages.success(request, "Заметка откреплена.")
+        log_event(
+            actor=user,
+            verb=ActivityEvent.Verb.UPDATE,
+            entity_type="note",
+            entity_id=str(note.id),
+            company_id=company.id,
+            message="Откреплена заметка",
+        )
+        return redirect("company_detail", company_id=company.id)
+
+    # Закрепляем: снимаем закрепление с других заметок (одна закреплённая на компанию)
+    CompanyNote.objects.filter(company=company, is_pinned=True).exclude(id=note.id).update(is_pinned=False, pinned_at=None, pinned_by=None)
+    note.is_pinned = True
+    note.pinned_at = now
+    note.pinned_by = user
+    note.save(update_fields=["is_pinned", "pinned_at", "pinned_by"])
+
+    messages.success(request, "Заметка закреплена.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="note",
+        entity_id=str(note.id),
+        company_id=company.id,
+        message="Закреплена заметка",
+    )
+    return redirect("company_detail", company_id=company.id)
 
 @login_required
 def company_note_attachment_open(request: HttpRequest, company_id, note_id: int) -> HttpResponse:
