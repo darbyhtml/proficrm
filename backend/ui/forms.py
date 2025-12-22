@@ -11,7 +11,7 @@ from ui.models import UiGlobalConfig
 class CompanyCreateForm(forms.ModelForm):
     class Meta:
         model = Company
-        fields = ["name", "legal_name", "inn", "kpp", "address", "website", "phone", "email", "contact_name", "contact_position", "status", "spheres"]
+        fields = ["name", "legal_name", "inn", "kpp", "address", "website", "head_company", "phone", "email", "contact_name", "contact_position", "status", "spheres"]
         widgets = {
             "name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "legal_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
@@ -19,6 +19,7 @@ class CompanyCreateForm(forms.ModelForm):
             "kpp": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "address": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2"}),
             "website": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "head_company": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "phone": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "+7 ..."}),
             "email": forms.EmailInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "email@example.com"}),
             "contact_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "ФИО"}),
@@ -44,7 +45,7 @@ class CompanyEditForm(forms.ModelForm):
     """
     class Meta:
         model = Company
-        fields = ["name", "legal_name", "inn", "kpp", "address", "website", "phone", "email", "contact_name", "contact_position", "status", "spheres"]
+        fields = ["name", "legal_name", "inn", "kpp", "address", "website", "head_company", "phone", "email", "contact_name", "contact_position", "status", "spheres"]
         widgets = {
             "name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "legal_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
@@ -52,6 +53,7 @@ class CompanyEditForm(forms.ModelForm):
             "kpp": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "address": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2"}),
             "website": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "head_company": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "phone": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "+7 ..."}),
             "email": forms.EmailInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "email@example.com"}),
             "contact_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "ФИО"}),
@@ -107,6 +109,12 @@ class TaskForm(forms.ModelForm):
         input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"],
         widget=forms.DateTimeInput(attrs={"type": "datetime-local", "class": "w-full rounded-lg border px-3 py-2"}),
         label="Дедлайн",
+    )
+    apply_to_org_branches = forms.BooleanField(
+        required=False,
+        initial=False,
+        label="Применить ко всем филиалам организации",
+        help_text="Если у компании есть филиалы клиента (или она сама филиал) — задача будет создана на все карточки этой организации.",
     )
 
     class Meta:

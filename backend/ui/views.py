@@ -160,6 +160,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
             | Q(email__icontains=q)
             | Q(contact_name__icontains=q)
             | Q(contact_position__icontains=q)
+            | Q(branch__name__icontains=q)
         )
 
     responsible = (request.GET.get("responsible") or "").strip()
@@ -603,8 +604,17 @@ def company_duplicates(request: HttpRequest) -> HttpResponse:
 @login_required
 def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch", "status"), id=company_id)
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch", "status", "head_company"), id=company_id)
     can_edit_company = _can_edit_company(user, company)
+
+    # "Организация" (головная карточка) и "филиалы" (дочерние карточки клиента)
+    head = company.head_company or company
+    org_head = Company.objects.select_related("responsible", "branch").filter(id=head.id).first()
+    org_branches = (
+        Company.objects.select_related("responsible", "branch")
+        .filter(head_company_id=head.id)
+        .order_by("name")[:200]
+    )
 
     contacts = Contact.objects.filter(company=company).prefetch_related("emails", "phones").order_by("last_name", "first_name")[:200]
     pinned_note = (
@@ -635,6 +645,8 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         "ui/company_detail.html",
         {
             "company": company,
+            "org_head": org_head,
+            "org_branches": org_branches,
             "can_edit_company": can_edit_company,
             "contacts": contacts,
             "notes": notes,
@@ -1089,8 +1101,10 @@ def task_create(request: HttpRequest) -> HttpResponse:
         if form.is_valid():
             task: Task = form.save(commit=False)
             task.created_by = user
+            apply_to_org = bool(form.cleaned_data.get("apply_to_org_branches"))
+            comp = None
             if task.company_id:
-                comp = Company.objects.select_related("responsible", "branch").filter(id=task.company_id).first()
+                comp = Company.objects.select_related("responsible", "branch", "head_company").filter(id=task.company_id).first()
                 if comp and not _can_edit_company(user, comp):
                     messages.error(request, "Нет прав на постановку задач по этой компании.")
                     return redirect("company_detail", company_id=comp.id)
@@ -1104,6 +1118,57 @@ def task_create(request: HttpRequest) -> HttpResponse:
                 if user.role == User.Role.BRANCH_DIRECTOR and user.branch_id and task.assigned_to.branch_id != user.branch_id:
                     task.assigned_to = user
 
+            # Если включено "на все филиалы организации" — создаём копии по всем карточкам организации
+            if apply_to_org and comp:
+                head = comp.head_company or comp
+                org_companies = list(
+                    Company.objects.select_related("responsible", "branch", "head_company")
+                    .filter(Q(id=head.id) | Q(head_company_id=head.id))
+                    .distinct()
+                )
+                created = 0
+                skipped = 0
+                for c in org_companies:
+                    if not _can_edit_company(user, c):
+                        skipped += 1
+                        continue
+                    t = Task(
+                        created_by=user,
+                        assigned_to=task.assigned_to,
+                        company=c,
+                        type=task.type,
+                        title=task.title,
+                        description=task.description,
+                        due_at=task.due_at,
+                        recurrence_rrule=task.recurrence_rrule,
+                        status=Task.Status.NEW,
+                    )
+                    t.save()
+                    created += 1
+                    log_event(
+                        actor=user,
+                        verb=ActivityEvent.Verb.CREATE,
+                        entity_type="task",
+                        entity_id=t.id,
+                        company_id=c.id,
+                        message=f"Создана задача (по организации): {t.title}",
+                    )
+                if created:
+                    messages.success(request, f"Задача создана по организации: {created} карточек. Пропущено (нет прав): {skipped}.")
+                else:
+                    messages.error(request, "Не удалось создать задачу по организации (нет прав).")
+                # уведомление назначенному (если это не создатель)
+                if task.assigned_to_id and task.assigned_to_id != user.id and created:
+                    notify(
+                        user=task.assigned_to,
+                        kind=Notification.Kind.TASK,
+                        title="Вам назначили задачи",
+                        body=f"{task.title} (по организации) · {created} компаний",
+                        url="/tasks/?mine=1",
+                    )
+                return redirect("task_list")
+
+            # обычное создание
             task.save()
             form.save_m2m()
             # уведомление назначенному (если это не создатель)
@@ -1129,9 +1194,14 @@ def task_create(request: HttpRequest) -> HttpResponse:
         initial = {"assigned_to": user}
         company_id = (request.GET.get("company") or "").strip()
         if company_id:
-            comp = Company.objects.select_related("responsible", "branch").filter(id=company_id).first()
+            comp = Company.objects.select_related("responsible", "branch", "head_company").filter(id=company_id).first()
             if comp and _can_edit_company(user, comp):
                 initial["company"] = company_id
+                # если есть организация (головная или филиалы), включим флажок по умолчанию
+                head = (comp.head_company or comp)
+                has_org = Company.objects.filter(Q(id=head.id) | Q(head_company_id=head.id)).exclude(id=comp.id).exists()
+                if has_org:
+                    initial["apply_to_org_branches"] = True
             else:
                 messages.warning(request, "Нет прав на постановку задач по этой компании.")
         form = TaskForm(initial=initial)

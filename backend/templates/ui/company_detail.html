@@ -84,6 +84,25 @@
       <section class="card card-pad lg:col-span-2">
         <div class="font-medium mb-3">Данные</div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+          <div class="md:col-span-2">
+            <div class="text-brand-dark/50">Организация</div>
+            <div class="flex flex-wrap items-center gap-2">
+              {% if org_head %}
+                {% if org_head.id == company.id %}
+                  <span class="badge">Головная</span>
+                  <div class="font-medium">{{ org_head.name }}</div>
+                {% else %}
+                  <span class="badge">Филиал</span>
+                  <a class="link font-medium" href="/companies/{{ org_head.id }}/">{{ org_head.name }}</a>
+                {% endif %}
+              {% else %}
+                <span class="text-brand-dark/70">—</span>
+              {% endif %}
+              {% if org_branches %}
+                <span class="muted-2 text-xs">· филиалов: {{ org_branches|length }}</span>
+              {% endif %}
+            </div>
+          </div>
           <div>
             <div class="text-brand-dark/50">Юр. название</div>
             <div>{{ company.legal_name|default:"—" }}</div>
@@ -211,6 +230,24 @@
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {% if org_head and org_head.id == company.id and org_branches %}
+        <section class="card card-pad">
+          <div class="font-medium mb-3">Филиалы организации</div>
+          <div class="space-y-2">
+            {% for b in org_branches %}
+              <a class="block rounded-lg border p-3 hover:bg-brand-soft/20" href="/companies/{{ b.id }}/">
+                <div class="flex items-start justify-between gap-3">
+                  <div>
+                    <div class="text-sm font-medium">{{ b.name }}</div>
+                    <div class="text-xs muted-2">ИНН: {{ b.inn|default:"—" }} · Ответственный: {{ b.responsible|default:"—" }} · Филиал: {{ b.branch|default:"—" }}</div>
+                  </div>
+                </div>
+              </a>
+            {% endfor %}
+          </div>
+        </section>
+      {% endif %}
+
       <section class="card card-pad">
         <div class="flex items-end justify-between gap-3 mb-3">
           <div class="font-medium">Контакты</div>

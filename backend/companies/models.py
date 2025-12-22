@@ -46,6 +46,16 @@ class Company(models.Model):
     address = models.CharField("Адрес", max_length=500, blank=True, default="")
     website = models.CharField("Сайт", max_length=255, blank=True, default="")
 
+    head_company = models.ForeignKey(
+        "self",
+        verbose_name="Головная организация",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="client_branches",
+        help_text="Если эта карточка — филиал/подразделение клиента, выберите головную организацию.",
+    )
+
     phone = models.CharField("Телефон (основной)", max_length=50, blank=True, default="", db_index=True)
     email = models.EmailField("Email (основной)", max_length=254, blank=True, default="", db_index=True)
     contact_name = models.CharField("Контакт (ФИО)", max_length=255, blank=True, default="")
