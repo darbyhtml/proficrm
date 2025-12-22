@@ -15,7 +15,6 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from accounts.models import Branch, User
-from accounts.scope import apply_company_scope
 from audit.models import ActivityEvent
 from audit.service import log_event
 from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact
@@ -149,7 +148,16 @@ def company_list(request: HttpRequest) -> HttpResponse:
 
     q = (request.GET.get("q") or "").strip()
     if q:
-        qs = qs.filter(Q(name__icontains=q) | Q(inn__icontains=q) | Q(legal_name__icontains=q) | Q(address__icontains=q))
+        qs = qs.filter(
+            Q(name__icontains=q)
+            | Q(inn__icontains=q)
+            | Q(legal_name__icontains=q)
+            | Q(address__icontains=q)
+            | Q(phone__icontains=q)
+            | Q(email__icontains=q)
+            | Q(contact_name__icontains=q)
+            | Q(contact_position__icontains=q)
+        )
 
     responsible = (request.GET.get("responsible") or "").strip()
     if responsible:

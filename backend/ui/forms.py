@@ -11,7 +11,7 @@ from ui.models import UiGlobalConfig
 class CompanyCreateForm(forms.ModelForm):
     class Meta:
         model = Company
-        fields = ["name", "legal_name", "inn", "kpp", "address", "website", "status", "spheres"]
+        fields = ["name", "legal_name", "inn", "kpp", "address", "website", "phone", "email", "contact_name", "contact_position", "status", "spheres"]
         widgets = {
             "name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "legal_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
@@ -19,6 +19,10 @@ class CompanyCreateForm(forms.ModelForm):
             "kpp": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "address": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2"}),
             "website": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "phone": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "+7 ..."}),
+            "email": forms.EmailInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "email@example.com"}),
+            "contact_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "ФИО"}),
+            "contact_position": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "Должность"}),
             "status": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "spheres": forms.SelectMultiple(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
@@ -40,7 +44,7 @@ class CompanyEditForm(forms.ModelForm):
     """
     class Meta:
         model = Company
-        fields = ["name", "legal_name", "inn", "kpp", "address", "website", "status", "spheres"]
+        fields = ["name", "legal_name", "inn", "kpp", "address", "website", "phone", "email", "contact_name", "contact_position", "status", "spheres"]
         widgets = {
             "name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "legal_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
@@ -48,6 +52,10 @@ class CompanyEditForm(forms.ModelForm):
             "kpp": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "address": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2"}),
             "website": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "phone": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "+7 ..."}),
+            "email": forms.EmailInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "email@example.com"}),
+            "contact_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "ФИО"}),
+            "contact_position": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "Должность"}),
             "status": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "spheres": forms.SelectMultiple(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }

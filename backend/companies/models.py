@@ -37,6 +37,11 @@ class Company(models.Model):
     address = models.CharField("Адрес", max_length=500, blank=True, default="")
     website = models.CharField("Сайт", max_length=255, blank=True, default="")
 
+    phone = models.CharField("Телефон (основной)", max_length=50, blank=True, default="", db_index=True)
+    email = models.EmailField("Email (основной)", max_length=254, blank=True, default="", db_index=True)
+    contact_name = models.CharField("Контакт (ФИО)", max_length=255, blank=True, default="")
+    contact_position = models.CharField("Контакт (должность)", max_length=255, blank=True, default="")
+
     status = models.ForeignKey(CompanyStatus, verbose_name="Статус", null=True, blank=True, on_delete=models.SET_NULL, related_name="companies")
     spheres = models.ManyToManyField(CompanySphere, verbose_name="Сферы", blank=True, related_name="companies")
 

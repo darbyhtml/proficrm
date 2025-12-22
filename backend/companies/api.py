@@ -18,6 +18,10 @@ class CompanySerializer(serializers.ModelSerializer):
             "kpp",
             "address",
             "website",
+            "phone",
+            "email",
+            "contact_name",
+            "contact_position",
             "status",
             "spheres",
             "responsible",
@@ -31,7 +35,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
     serializer_class = CompanySerializer
     filter_backends = (DjangoFilterBackend,)
     filterset_fields = ("branch", "responsible", "status")
-    search_fields = ("name", "inn", "legal_name", "address")
+    search_fields = ("name", "inn", "legal_name", "address", "phone", "email", "contact_name", "contact_position")
     ordering_fields = ("updated_at", "created_at", "name")
 
     def get_queryset(self):

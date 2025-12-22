@@ -35,6 +35,42 @@
             <div class="text-brand-dark/50">Сайт</div>
             <div>{% if company.website %}<a class="link" href="{{ company.website }}" target="_blank">{{ company.website }}</a>{% else %}—{% endif %}</div>
           </div>
+          <div>
+            <div class="text-brand-dark/50">Телефон (основной)</div>
+            <div class="flex items-center justify-between gap-2">
+              <div class="font-mono text-xs">{{ company.phone|default:"—" }}</div>
+              {% if company.phone %}
+                <button
+                  type="button"
+                  class="btn btn-outline js-call-phone"
+                  style="padding:.25rem .5rem;font-size:.75rem"
+                  data-phone="{{ company.phone }}"
+                  data-company="{{ company.id }}"
+                  data-contact=""
+                >
+                  Позвонить с телефона
+                </button>
+              {% endif %}
+            </div>
+          </div>
+          <div>
+            <div class="text-brand-dark/50">Email (основной)</div>
+            <div>
+              {% if company.email %}
+                <a class="link font-mono text-xs" href="mailto:{{ company.email }}">{{ company.email }}</a>
+              {% else %}
+                —
+              {% endif %}
+            </div>
+          </div>
+          <div>
+            <div class="text-brand-dark/50">Контакт (ФИО)</div>
+            <div>{{ company.contact_name|default:"—" }}</div>
+          </div>
+          <div>
+            <div class="text-brand-dark/50">Контакт (должность)</div>
+            <div>{{ company.contact_position|default:"—" }}</div>
+          </div>
           <div class="md:col-span-2">
             <div class="text-brand-dark/50">Адрес</div>
             <div class="whitespace-pre-line">{{ company.address|default:"—" }}</div>
@@ -228,7 +264,7 @@
             <div class="rounded-lg border p-3">
               <div class="flex items-start justify-between gap-3">
                 <div class="text-xs text-brand-dark/70 mb-1">{{ n.created_at }} · {{ n.author }}</div>
-                {% if n.author_id == request.user.id %}
+                {% if n.author_id == request.user.id or request.user.is_superuser or request.user.role == 'admin' or request.user.role == 'group_manager' %}
                   <form method="post" action="/companies/{{ company.id }}/notes/{{ n.id }}/delete/" onsubmit="return confirm('Удалить заметку?');">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem">Удалить</button>

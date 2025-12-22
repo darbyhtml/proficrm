@@ -242,7 +242,7 @@ def campaign_recipient_delete(request: HttpRequest, campaign_id, recipient_id) -
 @login_required
 def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpResponse:
     """
-    MVP: генерируем получателей из email контактов по компаниям (вся база видна всем пользователям).
+    MVP: генерируем получателей из email контактов + основного email компании (вся база видна всем пользователям).
     """
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
@@ -276,7 +276,7 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
         company_qs = company_qs.filter(spheres__id=sphere)
     company_ids = company_qs.values_list("id", flat=True)
 
-    # Берём email контактов, связанных с компаниями
+    # 1) Берём email контактов, связанных с компаниями
     emails_qs = (
         ContactEmail.objects.filter(contact__company_id__in=company_ids)
         .select_related("contact", "contact__company")
@@ -304,6 +304,29 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
             created += 1
         if created >= limit:
             break
+
+    # 2) Добавляем основной email компании (если он заполнен)
+    if created < limit:
+        for c in Company.objects.filter(id__in=company_ids).only("id", "email").iterator():
+            email = (getattr(c, "email", "") or "").strip().lower()
+            if not email:
+                continue
+            if Unsubscribe.objects.filter(email__iexact=email).exists():
+                CampaignRecipient.objects.get_or_create(
+                    campaign=camp,
+                    email=email,
+                    defaults={"status": CampaignRecipient.Status.UNSUBSCRIBED, "contact_id": None, "company_id": c.id},
+                )
+                continue
+            _, was_created = CampaignRecipient.objects.get_or_create(
+                campaign=camp,
+                email=email,
+                defaults={"contact_id": None, "company_id": c.id},
+            )
+            if was_created:
+                created += 1
+            if created >= limit:
+                break
 
     camp.status = Campaign.Status.READY
     camp.filter_meta = {
