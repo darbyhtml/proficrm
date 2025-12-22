@@ -1,4 +1,5 @@
 {% extends "ui/base.html" %}
+{% load ui_extras %}
 {% block title %}{{ company.name }} — CRM ПРОФИ{% endblock %}
 
 {% block content %}
@@ -109,7 +110,13 @@
           </div>
           <div>
             <div class="text-brand-dark/50">Сайт</div>
-            <div>{% if company.website %}<a class="link" href="{{ company.website }}" target="_blank">{{ company.website }}</a>{% else %}—{% endif %}</div>
+            <div>
+              {% if company.website %}
+                <a class="link" href="{{ company.website|external_url }}" target="_blank" rel="noopener">{{ company.website }}</a>
+              {% else %}
+                —
+              {% endif %}
+            </div>
           </div>
           <div>
             <div class="text-brand-dark/50">Телефон (основной)</div>
