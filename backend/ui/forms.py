@@ -64,19 +64,10 @@ class CompanyEditForm(forms.ModelForm):
 class CompanyNoteForm(forms.ModelForm):
     class Meta:
         model = CompanyNote
-        fields = ["text"]
+        fields = ["text", "attachment"]
         widgets = {
             "text": forms.Textarea(attrs={"rows": 4, "placeholder": "Заметка/комментарий...", "class": "w-full rounded-lg border px-3 py-2"}),
         }
-
-
-class CompanyDocumentUploadForm(forms.Form):
-    title = forms.CharField(
-        label="Название (опционально)",
-        required=False,
-        widget=forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "Например: Договор / КП / Счёт"}),
-    )
-    file = forms.FileField(label="Файл")
 
     MAX_SIZE = 15 * 1024 * 1024  # 15 MB
     ALLOWED_EXT = {
@@ -88,20 +79,26 @@ class CompanyDocumentUploadForm(forms.Form):
         "txt", "csv",
     }
 
-    def clean_file(self):
-        f = self.cleaned_data.get("file")
-        if not f:
-            raise ValidationError("Выберите файл.")
-        size = int(getattr(f, "size", 0) or 0)
-        if size <= 0:
-            raise ValidationError("Пустой файл.")
-        if size > self.MAX_SIZE:
-            raise ValidationError("Слишком большой файл. Максимум 15 МБ.")
-        name = (getattr(f, "name", "") or "").strip().lower()
-        ext = name.rsplit(".", 1)[-1] if "." in name else ""
-        if ext and ext not in self.ALLOWED_EXT:
-            raise ValidationError("Формат файла не поддерживается. Разрешены: PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX, изображения, TXT/CSV.")
-        return f
+    def clean(self):
+        cleaned = super().clean()
+        text = (cleaned.get("text") or "").strip()
+        f = cleaned.get("attachment")
+
+        if not text and not f:
+            raise ValidationError("Нужно написать заметку или прикрепить файл.")
+
+        if f:
+            size = int(getattr(f, "size", 0) or 0)
+            if size <= 0:
+                raise ValidationError("Пустой файл.")
+            if size > self.MAX_SIZE:
+                raise ValidationError("Слишком большой файл. Максимум 15 МБ.")
+            name = (getattr(f, "name", "") or "").strip().lower()
+            ext = name.rsplit(".", 1)[-1] if "." in name else ""
+            if ext and ext not in self.ALLOWED_EXT:
+                raise ValidationError("Формат файла не поддерживается. Разрешены: PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX, изображения, TXT/CSV.")
+
+        return cleaned
 
 
 class TaskForm(forms.ModelForm):
