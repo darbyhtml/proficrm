@@ -31,4 +31,31 @@ class Notification(models.Model):
     def __str__(self) -> str:
         return f"{self.user}: {self.title}"
 
+
+class CompanyContractReminder(models.Model):
+    """
+    Дедупликация напоминаний по окончанию договора:
+    чтобы не слать одно и то же уведомление каждый запрос/день.
+    """
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="contract_reminders", verbose_name="Пользователь")
+    company = models.ForeignKey("companies.Company", on_delete=models.CASCADE, related_name="contract_reminders", verbose_name="Компания")
+    contract_until = models.DateField("Действует до")
+    days_before = models.PositiveSmallIntegerField("За сколько дней")
+    created_at = models.DateTimeField("Создано", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Напоминание по договору"
+        verbose_name_plural = "Напоминания по договорам"
+        constraints = [
+            models.UniqueConstraint(fields=["user", "company", "contract_until", "days_before"], name="uniq_contract_reminder"),
+        ]
+        indexes = [
+            models.Index(fields=["user", "created_at"], name="contractrem_u_created_idx"),
+            models.Index(fields=["user", "company", "contract_until"], name="contractrem_u_c_until_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user} {self.company_id} {self.contract_until} -{self.days_before}d"
+
 # Create your models here.

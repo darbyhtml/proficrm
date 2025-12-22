@@ -18,13 +18,13 @@
         <div class="flex gap-2">
           <a href="/companies/new/" class="btn btn-primary">+ Добавить компанию</a>
           {% if request.user.is_superuser or request.user.role == 'admin' %}
-            <a href="/companies/export/?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&overdue={{ overdue }}" class="btn btn-outline">Экспорт CSV</a>
+            <a href="/companies/export/?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}&overdue={{ overdue }}" class="btn btn-outline">Экспорт CSV</a>
           {% endif %}
         </div>
       </div>
     </div>
 
-    <form class="card card-pad grid grid-cols-1 md:grid-cols-6 gap-3" method="get">
+    <form class="card card-pad grid grid-cols-1 md:grid-cols-8 gap-3" method="get">
       <div class="md:col-span-2">
         <label class="block text-sm text-brand-dark/80 mb-1">Поиск</label>
         <input name="q" value="{{ q }}" class="input" placeholder="ИНН / название / адрес" />
@@ -67,6 +67,15 @@
           {% endfor %}
         </select>
       </div>
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Вид договора</label>
+        <select name="contract_type" class="select">
+          <option value="">Любой</option>
+          {% for val, label in contract_types %}
+            <option value="{{ val }}" {% if contract_type == val %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
       <div class="flex items-end gap-2">
         <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 mr-2">
           <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %} />
@@ -103,6 +112,7 @@
       <input type="hidden" name="status" value="{{ status }}" />
       <input type="hidden" name="branch" value="{{ branch }}" />
       <input type="hidden" name="sphere" value="{{ sphere }}" />
+      <input type="hidden" name="contract_type" value="{{ contract_type }}" />
       <input type="hidden" name="overdue" value="{{ overdue }}" />
 
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -194,10 +204,10 @@
         <div class="text-brand-dark/70">Стр. {{ page.number }} / {{ page.paginator.num_pages }}</div>
         <div class="flex gap-2">
           {% if page.has_previous %}
-            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}&page={{ page.previous_page_number }}">Назад</a>
+            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}&page={{ page.previous_page_number }}">Назад</a>
           {% endif %}
           {% if page.has_next %}
-            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}&page={{ page.next_page_number }}">Вперёд</a>
+            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}&page={{ page.next_page_number }}">Вперёд</a>
           {% endif %}
         </div>
       </div>

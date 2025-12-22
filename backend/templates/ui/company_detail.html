@@ -124,6 +124,34 @@
             </div>
           </div>
           <div>
+            <div class="text-brand-dark/50">Договор</div>
+            <div class="text-sm">
+              {% if company.contract_type %}{{ company.get_contract_type_display }}{% else %}—{% endif %}
+              {% if company.contract_until %}
+                <span class="muted-2">· до {{ company.contract_until|date:"d.m.Y" }}</span>
+              {% endif %}
+            </div>
+            {% if can_edit_company %}
+              <details class="mt-2">
+                <summary class="cursor-pointer text-xs link">Изменить договор</summary>
+                <form method="post" action="/companies/{{ company.id }}/contract/update/" class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {% csrf_token %}
+                  <div>
+                    <label class="block text-xs text-brand-dark/70 mb-1">Вид</label>
+                    {{ contract_form.contract_type }}
+                  </div>
+                  <div>
+                    <label class="block text-xs text-brand-dark/70 mb-1">Действует до (не обязательно)</label>
+                    {{ contract_form.contract_until }}
+                  </div>
+                  <div class="md:col-span-2 flex gap-2">
+                    <button class="btn btn-outline" type="submit">Сохранить</button>
+                  </div>
+                </form>
+              </details>
+            {% endif %}
+          </div>
+          <div>
             <div class="text-brand-dark/50">Телефон (основной)</div>
             <div class="flex items-center justify-between gap-2">
               <div class="font-mono text-xs">{{ company.phone|default:"—" }}</div>

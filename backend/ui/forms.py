@@ -11,7 +11,23 @@ from ui.models import UiGlobalConfig
 class CompanyCreateForm(forms.ModelForm):
     class Meta:
         model = Company
-        fields = ["name", "legal_name", "inn", "kpp", "address", "website", "head_company", "phone", "email", "contact_name", "contact_position", "status", "spheres"]
+        fields = [
+            "name",
+            "legal_name",
+            "inn",
+            "kpp",
+            "address",
+            "website",
+            "contract_type",
+            "contract_until",
+            "head_company",
+            "phone",
+            "email",
+            "contact_name",
+            "contact_position",
+            "status",
+            "spheres",
+        ]
         widgets = {
             "name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "legal_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
@@ -19,6 +35,8 @@ class CompanyCreateForm(forms.ModelForm):
             "kpp": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "address": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2"}),
             "website": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "contract_type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "contract_until": forms.DateInput(attrs={"type": "date", "class": "w-full rounded-lg border px-3 py-2"}),
             "head_company": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "phone": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "+7 ..."}),
             "email": forms.EmailInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "email@example.com"}),
@@ -45,7 +63,23 @@ class CompanyEditForm(forms.ModelForm):
     """
     class Meta:
         model = Company
-        fields = ["name", "legal_name", "inn", "kpp", "address", "website", "head_company", "phone", "email", "contact_name", "contact_position", "status", "spheres"]
+        fields = [
+            "name",
+            "legal_name",
+            "inn",
+            "kpp",
+            "address",
+            "website",
+            "contract_type",
+            "contract_until",
+            "head_company",
+            "phone",
+            "email",
+            "contact_name",
+            "contact_position",
+            "status",
+            "spheres",
+        ]
         widgets = {
             "name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "legal_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
@@ -53,6 +87,8 @@ class CompanyEditForm(forms.ModelForm):
             "kpp": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "address": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2"}),
             "website": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "contract_type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "contract_until": forms.DateInput(attrs={"type": "date", "class": "w-full rounded-lg border px-3 py-2"}),
             "head_company": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "phone": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "+7 ..."}),
             "email": forms.EmailInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "email@example.com"}),
@@ -60,6 +96,20 @@ class CompanyEditForm(forms.ModelForm):
             "contact_position": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "Должность"}),
             "status": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "spheres": forms.SelectMultiple(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+        }
+
+
+class CompanyContractForm(forms.ModelForm):
+    """
+    Мини-форма для редактирования договора прямо из карточки компании.
+    """
+
+    class Meta:
+        model = Company
+        fields = ["contract_type", "contract_until"]
+        widgets = {
+            "contract_type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "contract_until": forms.DateInput(attrs={"type": "date", "class": "w-full rounded-lg border px-3 py-2"}),
         }
 
 

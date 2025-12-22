@@ -30,6 +30,12 @@ class CompanySphere(models.Model):
 class Company(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
+    class ContractType(models.TextChoices):
+        FRAME = "frame", "Рамочный"
+        TENDER = "tender", "Тендер"
+        LEGAL = "legal", "Юр. лицо"
+        INDIVIDUAL = "individual", "Физ. лицо"
+
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         verbose_name="Создатель",
@@ -45,6 +51,16 @@ class Company(models.Model):
     kpp = models.CharField("КПП", max_length=20, blank=True, default="")
     address = models.CharField("Адрес", max_length=500, blank=True, default="")
     website = models.CharField("Сайт", max_length=255, blank=True, default="")
+
+    contract_type = models.CharField(
+        "Вид договора",
+        max_length=16,
+        choices=ContractType.choices,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+    contract_until = models.DateField("Действует до", null=True, blank=True, db_index=True)
 
     head_company = models.ForeignKey(
         "self",

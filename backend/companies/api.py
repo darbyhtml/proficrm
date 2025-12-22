@@ -18,6 +18,8 @@ class CompanySerializer(serializers.ModelSerializer):
             "kpp",
             "address",
             "website",
+            "contract_type",
+            "contract_until",
             "phone",
             "email",
             "contact_name",
@@ -26,6 +28,7 @@ class CompanySerializer(serializers.ModelSerializer):
             "spheres",
             "responsible",
             "branch",
+            "head_company",
             "created_at",
             "updated_at",
         ]
@@ -34,7 +37,7 @@ class CompanySerializer(serializers.ModelSerializer):
 class CompanyViewSet(viewsets.ModelViewSet):
     serializer_class = CompanySerializer
     filter_backends = (DjangoFilterBackend,)
-    filterset_fields = ("branch", "responsible", "status")
+    filterset_fields = ("branch", "responsible", "status", "contract_type")
     search_fields = ("name", "inn", "legal_name", "address", "phone", "email", "contact_name", "contact_position")
     ordering_fields = ("updated_at", "created_at", "name")
 

@@ -30,6 +30,7 @@ import mimetypes
 from .forms import (
     CompanyCreateForm,
     CompanyQuickEditForm,
+    CompanyContractForm,
     CompanyEditForm,
     CompanyNoteForm,
     ContactEmailFormSet,
@@ -179,6 +180,10 @@ def company_list(request: HttpRequest) -> HttpResponse:
     if sphere:
         qs = qs.filter(spheres__id=sphere)
 
+    contract_type = (request.GET.get("contract_type") or "").strip()
+    if contract_type:
+        qs = qs.filter(contract_type=contract_type)
+
     only_overdue = (request.GET.get("overdue") or "").strip()
     if only_overdue == "1":
         qs = qs.filter(has_overdue=True)
@@ -204,7 +209,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
         order = [f"-{f}" for f in order]
     qs = qs.order_by(*order)
 
-    filter_active = any([q, responsible, status, branch, sphere, only_overdue == "1"])
+    filter_active = any([q, responsible, status, branch, sphere, contract_type, only_overdue == "1"])
     companies_filtered = qs.order_by().count()
 
     paginator = Paginator(qs, 25)
@@ -222,6 +227,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "status": status,
             "branch": branch,
             "sphere": sphere,
+            "contract_type": contract_type,
             "overdue": only_overdue,
             "companies_total": companies_total,
             "companies_filtered": companies_filtered,
@@ -232,6 +238,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "statuses": CompanyStatus.objects.order_by("name"),
             "spheres": CompanySphere.objects.order_by("name"),
             "branches": Branch.objects.order_by("name"),
+            "contract_types": Company.ContractType.choices,
             "company_list_columns": columns,
             "transfer_targets": User.objects.filter(is_active=True, role__in=[User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD]).order_by("last_name", "first_name"),
         },
@@ -296,6 +303,9 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
         sphere = (request.POST.get("sphere") or "").strip()
         if sphere:
             qs = qs.filter(spheres__id=sphere)
+        contract_type = (request.POST.get("contract_type") or "").strip()
+        if contract_type:
+            qs = qs.filter(contract_type=contract_type)
         overdue = (request.POST.get("overdue") or "").strip()
         if overdue == "1":
             qs = qs.filter(has_overdue=True)
@@ -424,6 +434,10 @@ def company_export(request: HttpRequest) -> HttpResponse:
     sphere = (request.GET.get("sphere") or "").strip()
     if sphere:
         qs = qs.filter(spheres__id=sphere)
+
+    contract_type = (request.GET.get("contract_type") or "").strip()
+    if contract_type:
+        qs = qs.filter(contract_type=contract_type)
 
     only_overdue = (request.GET.get("overdue") or "").strip()
     if only_overdue == "1":
@@ -637,6 +651,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     note_form = CompanyNoteForm()
     activity = ActivityEvent.objects.filter(company_id=company.id).select_related("actor")[:50]
     quick_form = CompanyQuickEditForm(instance=company)
+    contract_form = CompanyContractForm(instance=company)
 
     transfer_targets = User.objects.filter(is_active=True, role__in=[User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD]).order_by("last_name", "first_name")
 
@@ -655,9 +670,39 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "tasks": tasks,
             "activity": activity,
             "quick_form": quick_form,
+            "contract_form": contract_form,
             "transfer_targets": transfer_targets,
         },
     )
+
+
+@login_required
+def company_contract_update(request: HttpRequest, company_id) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_edit_company(user, company):
+        messages.error(request, "Нет прав на изменение договора по этой компании.")
+        return redirect("company_detail", company_id=company.id)
+
+    form = CompanyContractForm(request.POST, instance=company)
+    if not form.is_valid():
+        messages.error(request, "Проверьте поля договора.")
+        return redirect("company_detail", company_id=company.id)
+
+    form.save()
+    messages.success(request, "Данные договора обновлены.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="company",
+        entity_id=company.id,
+        company_id=company.id,
+        message="Обновлены данные договора",
+    )
+    return redirect("company_detail", company_id=company.id)
 
 
 @login_required
