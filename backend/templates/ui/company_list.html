@@ -18,13 +18,13 @@
         <div class="flex gap-2">
           <a href="/companies/new/" class="btn btn-primary">+ Добавить компанию</a>
           {% if request.user.is_superuser or request.user.role == 'admin' %}
-            <a href="/companies/export/?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}&overdue={{ overdue }}" class="btn btn-outline">Экспорт CSV</a>
+            <a href="/companies/export/?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}&cold_call={{ cold_call }}&overdue={{ overdue }}" class="btn btn-outline">Экспорт CSV</a>
           {% endif %}
         </div>
       </div>
     </div>
 
-    <form class="card card-pad grid grid-cols-1 md:grid-cols-8 gap-3" method="get">
+    <form class="card card-pad grid grid-cols-1 md:grid-cols-10 gap-3" method="get">
       <div class="md:col-span-2">
         <label class="block text-sm text-brand-dark/80 mb-1">Поиск</label>
         <input name="q" value="{{ q }}" class="input" placeholder="ИНН / название / адрес" />
@@ -76,7 +76,15 @@
           {% endfor %}
         </select>
       </div>
-      <div class="md:col-span-8 flex flex-col md:flex-row md:items-end md:flex-wrap gap-2">
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Холодный звонок</label>
+        <select name="cold_call" class="select">
+          <option value="">Любой</option>
+          <option value="1" {% if cold_call == "1" %}selected{% endif %}>Да</option>
+          <option value="0" {% if cold_call == "0" %}selected{% endif %}>Нет</option>
+        </select>
+      </div>
+      <div class="md:col-span-10 flex flex-col md:flex-row md:items-end md:flex-wrap gap-2">
         <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 md:mr-2">
           <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %} />
           Только с просрочками
@@ -115,6 +123,7 @@
       <input type="hidden" name="branch" value="{{ branch }}" />
       <input type="hidden" name="sphere" value="{{ sphere }}" />
       <input type="hidden" name="contract_type" value="{{ contract_type }}" />
+      <input type="hidden" name="cold_call" value="{{ cold_call }}" />
       <input type="hidden" name="overdue" value="{{ overdue }}" />
 
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
@@ -166,6 +175,9 @@
                 {% if "name" in company_list_columns %}
                   <td>
                     <a class="link" href="/companies/{{ c.id }}/" onclick="event.stopPropagation()">{{ c.name }}</a>
+                    {% if c.is_cold_call %}
+                      <span class="badge badge-warn ml-2" style="padding:.1rem .35rem;font-size:.65rem">Холодный</span>
+                    {% endif %}
                     {% if "address" in company_list_columns %}
                       <div class="text-xs text-brand-dark/70">{{ c.address }}</div>
                     {% endif %}
@@ -206,10 +218,10 @@
         <div class="text-brand-dark/70">Стр. {{ page.number }} / {{ page.paginator.num_pages }}</div>
         <div class="flex gap-2">
           {% if page.has_previous %}
-            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}&page={{ page.previous_page_number }}">Назад</a>
+            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}&cold_call={{ cold_call }}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}&page={{ page.previous_page_number }}">Назад</a>
           {% endif %}
           {% if page.has_next %}
-            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}&page={{ page.next_page_number }}">Вперёд</a>
+            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}&cold_call={{ cold_call }}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}&page={{ page.next_page_number }}">Вперёд</a>
           {% endif %}
         </div>
       </div>

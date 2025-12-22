@@ -184,6 +184,12 @@ def company_list(request: HttpRequest) -> HttpResponse:
     if contract_type:
         qs = qs.filter(contract_type=contract_type)
 
+    cold_call = (request.GET.get("cold_call") or "").strip()
+    if cold_call == "1":
+        qs = qs.filter(is_cold_call=True)
+    elif cold_call == "0":
+        qs = qs.filter(is_cold_call=False)
+
     only_overdue = (request.GET.get("overdue") or "").strip()
     if only_overdue == "1":
         qs = qs.filter(has_overdue=True)
@@ -209,7 +215,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
         order = [f"-{f}" for f in order]
     qs = qs.order_by(*order)
 
-    filter_active = any([q, responsible, status, branch, sphere, contract_type, only_overdue == "1"])
+    filter_active = any([q, responsible, status, branch, sphere, contract_type, cold_call, only_overdue == "1"])
     companies_filtered = qs.order_by().count()
 
     paginator = Paginator(qs, 25)
@@ -228,6 +234,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "branch": branch,
             "sphere": sphere,
             "contract_type": contract_type,
+            "cold_call": cold_call,
             "overdue": only_overdue,
             "companies_total": companies_total,
             "companies_filtered": companies_filtered,
@@ -306,6 +313,11 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
         contract_type = (request.POST.get("contract_type") or "").strip()
         if contract_type:
             qs = qs.filter(contract_type=contract_type)
+        cold_call = (request.POST.get("cold_call") or "").strip()
+        if cold_call == "1":
+            qs = qs.filter(is_cold_call=True)
+        elif cold_call == "0":
+            qs = qs.filter(is_cold_call=False)
         overdue = (request.POST.get("overdue") or "").strip()
         if overdue == "1":
             qs = qs.filter(has_overdue=True)
@@ -438,6 +450,12 @@ def company_export(request: HttpRequest) -> HttpResponse:
     contract_type = (request.GET.get("contract_type") or "").strip()
     if contract_type:
         qs = qs.filter(contract_type=contract_type)
+
+    cold_call = (request.GET.get("cold_call") or "").strip()
+    if cold_call == "1":
+        qs = qs.filter(is_cold_call=True)
+    elif cold_call == "0":
+        qs = qs.filter(is_cold_call=False)
 
     only_overdue = (request.GET.get("overdue") or "").strip()
     if only_overdue == "1":
@@ -704,6 +722,31 @@ def company_contract_update(request: HttpRequest, company_id) -> HttpResponse:
     )
     return redirect("company_detail", company_id=company.id)
 
+
+@login_required
+def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_edit_company(user, company):
+        messages.error(request, "Нет прав на изменение признака 'Холодный звонок'.")
+        return redirect("company_detail", company_id=company.id)
+
+    company.is_cold_call = not bool(company.is_cold_call)
+    company.save(update_fields=["is_cold_call", "updated_at"])
+
+    messages.success(request, "Отметка 'Холодный звонок' обновлена.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="company",
+        entity_id=company.id,
+        company_id=company.id,
+        message=("Отмечено: холодный звонок" if company.is_cold_call else "Снято: холодный звонок"),
+    )
+    return redirect("company_detail", company_id=company.id)
 
 @login_required
 def company_note_pin_toggle(request: HttpRequest, company_id, note_id: int) -> HttpResponse:

@@ -19,6 +19,7 @@ class CompanySerializer(serializers.ModelSerializer):
             "address",
             "website",
             "activity_kind",
+            "is_cold_call",
             "contract_type",
             "contract_until",
             "phone",
@@ -38,7 +39,7 @@ class CompanySerializer(serializers.ModelSerializer):
 class CompanyViewSet(viewsets.ModelViewSet):
     serializer_class = CompanySerializer
     filter_backends = (DjangoFilterBackend,)
-    filterset_fields = ("branch", "responsible", "status", "contract_type")
+    filterset_fields = ("branch", "responsible", "status", "contract_type", "is_cold_call")
     search_fields = ("name", "inn", "legal_name", "address", "phone", "email", "contact_name", "contact_position")
     ordering_fields = ("updated_at", "created_at", "name")
 

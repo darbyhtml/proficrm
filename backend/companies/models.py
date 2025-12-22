@@ -52,6 +52,7 @@ class Company(models.Model):
     address = models.CharField("Адрес", max_length=500, blank=True, default="")
     website = models.CharField("Сайт", max_length=255, blank=True, default="")
     activity_kind = models.CharField("Вид деятельности", max_length=255, blank=True, default="", db_index=True)
+    is_cold_call = models.BooleanField("Холодный звонок", default=False, db_index=True)
 
     contract_type = models.CharField(
         "Вид договора",

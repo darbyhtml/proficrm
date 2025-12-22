@@ -6,7 +6,12 @@
     <div class="flex items-start justify-between gap-4">
       <div>
         <div class="text-sm text-brand-dark/70"><a class="underline" href="/companies/">Компании</a> /</div>
-        <h1 class="text-2xl font-semibold">{{ company.name }}</h1>
+        <h1 class="text-2xl font-semibold">
+          {{ company.name }}
+          {% if company.is_cold_call %}
+            <span class="badge badge-warn ml-2" style="padding:.15rem .45rem;font-size:.7rem">Холодный звонок</span>
+          {% endif %}
+        </h1>
         <div class="text-sm text-brand-dark/80">
           {% if company.inn %}ИНН: <span class="font-mono">{{ company.inn }}</span>{% endif %}
           {% if company.kpp %} · КПП: <span class="font-mono">{{ company.kpp }}</span>{% endif %}
@@ -205,6 +210,15 @@
         <div class="font-medium mb-3">Быстро</div>
         {% if can_edit_company %}
           <a class="btn btn-primary w-full" href="/tasks/new/?company={{ company.id }}">+ Поставить задачу</a>
+          <div class="mt-3">
+            <div class="text-xs text-brand-dark/70 mb-1">Холодный звонок</div>
+            <form method="post" action="/companies/{{ company.id }}/cold-call/toggle/">
+              {% csrf_token %}
+              <button class="btn {% if company.is_cold_call %}btn-primary{% else %}btn-outline{% endif %} w-full" type="submit">
+                {% if company.is_cold_call %}Снять отметку{% else %}Поставить отметку{% endif %}
+              </button>
+            </form>
+          </div>
           <div class="mt-3">
             <div class="text-xs text-brand-dark/70 mb-1">Передать другому менеджеру</div>
             <form method="post" action="/companies/{{ company.id }}/transfer/" class="flex gap-2">
