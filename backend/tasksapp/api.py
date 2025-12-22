@@ -64,9 +64,9 @@ class TaskViewSet(viewsets.ModelViewSet):
         if user.role == User.Role.MANAGER and assigned_to.id != user.id:
             raise PermissionDenied("Менеджер может назначать задачи только себе.")
 
-        if user.role == User.Role.BRANCH_DIRECTOR and user.branch_id:
+        if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
             if assigned_to.branch_id and assigned_to.branch_id != user.branch_id:
-                raise PermissionDenied("Директор филиала может назначать задачи только сотрудникам своего филиала.")
+                raise PermissionDenied("Можно назначать задачи только сотрудникам своего филиала.")
 
         serializer.save(created_by=user, assigned_to=assigned_to)
 
@@ -86,9 +86,9 @@ class TaskViewSet(viewsets.ModelViewSet):
             if user.role == User.Role.MANAGER and assigned_to.id != user.id:
                 raise PermissionDenied("Менеджер не может переназначать задачи другим.")
 
-            if user.role == User.Role.BRANCH_DIRECTOR and user.branch_id:
+            if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
                 if assigned_to.branch_id and assigned_to.branch_id != user.branch_id:
-                    raise PermissionDenied("Директор филиала может переназначать задачи только внутри филиала.")
+                    raise PermissionDenied("Можно переназначать задачи только внутри филиала.")
 
         serializer.save()
 

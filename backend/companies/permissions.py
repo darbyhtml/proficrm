@@ -26,7 +26,7 @@ def can_edit_company(user: User, company: Company) -> bool:
     if getattr(company, "created_by_id", None) and company.created_by_id == user.id:
         return True
 
-    if user.role == User.Role.BRANCH_DIRECTOR and user.branch_id:
+    if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
         if company.branch_id == user.branch_id:
             return True
         resp = getattr(company, "responsible", None)
@@ -47,7 +47,7 @@ def editable_company_qs(user: User) -> QuerySet[Company]:
         return qs
 
     q = Q(responsible_id=user.id) | Q(created_by_id=user.id)
-    if user.role == User.Role.BRANCH_DIRECTOR and user.branch_id:
+    if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
         q = q | Q(branch_id=user.branch_id) | Q(responsible__branch_id=user.branch_id)
 
     return qs.filter(q).distinct()

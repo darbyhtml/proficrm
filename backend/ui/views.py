@@ -980,7 +980,7 @@ def task_create(request: HttpRequest) -> HttpResponse:
             else:
                 if not task.assigned_to:
                     task.assigned_to = user
-                if user.role == User.Role.BRANCH_DIRECTOR and user.branch_id and task.assigned_to.branch_id != user.branch_id:
+                if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id and task.assigned_to.branch_id != user.branch_id:
                     task.assigned_to = user
 
             task.save()
@@ -1021,7 +1021,7 @@ def task_create(request: HttpRequest) -> HttpResponse:
     # Ограничить назначаемых
     if user.role == User.Role.MANAGER:
         form.fields["assigned_to"].queryset = User.objects.filter(id=user.id)
-    elif user.role == User.Role.BRANCH_DIRECTOR and user.branch_id:
+    elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
         form.fields["assigned_to"].queryset = User.objects.filter(branch_id=user.branch_id).order_by("last_name", "first_name")
     else:
         form.fields["assigned_to"].queryset = User.objects.order_by("last_name", "first_name")

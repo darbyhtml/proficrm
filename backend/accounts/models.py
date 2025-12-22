@@ -14,6 +14,7 @@ class User(AbstractUser):
     class Role(models.TextChoices):
         MANAGER = "manager", "Менеджер"
         BRANCH_DIRECTOR = "branch_director", "Директор филиала"
+        SALES_HEAD = "sales_head", "Руководитель отдела продаж"
         GROUP_MANAGER = "group_manager", "Управляющий группой компаний"
         ADMIN = "admin", "Администратор"
 

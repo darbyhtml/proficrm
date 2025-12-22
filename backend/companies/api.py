@@ -61,10 +61,10 @@ class CompanyViewSet(viewsets.ModelViewSet):
             if branch is not None and user.branch_id and branch.id != user.branch_id:
                 raise PermissionDenied("Менеджер не может назначать другой филиал.")
 
-        if user.role == User.Role.BRANCH_DIRECTOR:
-            # директор филиала назначает только внутри своего филиала
+        if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD):
+            # директор филиала / руководитель отдела продаж назначает только внутри своего филиала
             if user.branch_id and responsible.branch_id and responsible.branch_id != user.branch_id:
-                raise PermissionDenied("Директор филиала может назначать ответственного только в своём филиале.")
+                raise PermissionDenied("Можно назначать ответственного только в своём филиале.")
 
         # Автовывод филиала, если не задан
         if branch is None:
@@ -90,12 +90,12 @@ class CompanyViewSet(viewsets.ModelViewSet):
             if "branch" in data and (obj.branch_id != (new_branch.id if new_branch else None)):
                 raise PermissionDenied("Менеджер не может менять филиал у существующей компании.")
 
-        if user.role == User.Role.BRANCH_DIRECTOR and user.branch_id:
-            # директор филиала может переназначать только внутри филиала
+        if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+            # директор филиала / руководитель отдела продаж может переназначать только внутри филиала
             if new_responsible and new_responsible.branch_id and new_responsible.branch_id != user.branch_id:
-                raise PermissionDenied("Директор филиала может назначать ответственного только в своём филиале.")
+                raise PermissionDenied("Можно назначать ответственного только в своём филиале.")
             if new_branch and new_branch.id != user.branch_id:
-                raise PermissionDenied("Директор филиала может назначать компании другой филиал.")
+                raise PermissionDenied("Нельзя назначать компании другой филиал.")
 
         serializer.save()
 
