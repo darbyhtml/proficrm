@@ -144,7 +144,7 @@
             <form method="post" action="/companies/{{ company.id }}/transfer/" class="flex gap-2">
               {% csrf_token %}
               <select name="responsible_id" class="select">
-                <option value="">Выберите менеджера…</option>
+                <option value="">Выберите ответственного…</option>
                 {% for u in transfer_targets %}
                   <option value="{{ u.id }}">{{ u }}</option>
                 {% endfor %}

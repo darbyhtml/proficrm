@@ -507,7 +507,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     activity = ActivityEvent.objects.filter(company_id=company.id).select_related("actor")[:50]
     quick_form = CompanyQuickEditForm(instance=company)
 
-    transfer_targets = User.objects.filter(is_active=True, role=User.Role.MANAGER).order_by("last_name", "first_name")
+    transfer_targets = User.objects.filter(is_active=True, role__in=[User.Role.MANAGER, User.Role.SALES_HEAD]).order_by("last_name", "first_name")
 
     return render(
         request,
@@ -658,12 +658,12 @@ def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
 
     new_resp_id = (request.POST.get("responsible_id") or "").strip()
     if not new_resp_id:
-        messages.error(request, "Выберите менеджера.")
+        messages.error(request, "Выберите ответственного.")
         return redirect("company_detail", company_id=company.id)
 
     new_resp = get_object_or_404(User, id=new_resp_id, is_active=True)
-    if new_resp.role != User.Role.MANAGER:
-        messages.error(request, "Передавать можно только менеджеру.")
+    if new_resp.role not in (User.Role.MANAGER, User.Role.SALES_HEAD):
+        messages.error(request, "Назначить ответственным можно только менеджера или руководителя отдела продаж.")
         return redirect("company_detail", company_id=company.id)
 
     old_resp = company.responsible
@@ -672,14 +672,14 @@ def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
     company.branch = new_resp.branch
     company.save()
 
-    messages.success(request, f"Компания передана: {new_resp}.")
+    messages.success(request, f"Ответственный обновлён: {new_resp}.")
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.UPDATE,
         entity_type="company",
         entity_id=company.id,
         company_id=company.id,
-        message="Передана компания другому менеджеру",
+        message="Изменён ответственный компании",
         meta={"from": str(old_resp) if old_resp else "", "to": str(new_resp)},
     )
     if new_resp.id != user.id:
