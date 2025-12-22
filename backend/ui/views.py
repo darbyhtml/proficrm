@@ -398,11 +398,6 @@ def company_export(request: HttpRequest) -> HttpResponse:
 def company_create(request: HttpRequest) -> HttpResponse:
     user: User = request.user
 
-    # РОП: только просмотр компаний + заметки
-    if user.role == User.Role.SALES_HEAD:
-        messages.error(request, "Руководитель отдела продаж не может создавать компании (только просмотр и заметки).")
-        return redirect("company_list")
-
     if request.method == "POST":
         form = CompanyCreateForm(request.POST)
         if form.is_valid():
@@ -512,7 +507,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     activity = ActivityEvent.objects.filter(company_id=company.id).select_related("actor")[:50]
     quick_form = CompanyQuickEditForm(instance=company)
 
-    transfer_targets = User.objects.filter(is_active=True, role__in=[User.Role.MANAGER, User.Role.BRANCH_DIRECTOR]).order_by("last_name", "first_name")
+    transfer_targets = User.objects.filter(is_active=True, role__in=[User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD]).order_by("last_name", "first_name")
 
     return render(
         request,
@@ -667,8 +662,8 @@ def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company.id)
 
     new_resp = get_object_or_404(User, id=new_resp_id, is_active=True)
-    if new_resp.role not in (User.Role.MANAGER, User.Role.BRANCH_DIRECTOR):
-        messages.error(request, "Назначить ответственным можно только менеджера или директора филиала.")
+    if new_resp.role not in (User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD):
+        messages.error(request, "Назначить ответственным можно только менеджера, директора филиала или РОП.")
         return redirect("company_detail", company_id=company.id)
 
     old_resp = company.responsible

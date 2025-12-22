@@ -45,10 +45,6 @@ class CompanyViewSet(viewsets.ModelViewSet):
         user: User = self.request.user
         data = dict(serializer.validated_data)
 
-        # РОП: только просмотр компаний + заметки (без создания/редактирования компаний)
-        if user.role == User.Role.SALES_HEAD:
-            raise PermissionDenied("Руководитель отдела продаж не может создавать компании.")
-
         responsible = data.get("responsible")
         branch = data.get("branch")
 
