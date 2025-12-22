@@ -18,6 +18,7 @@ class CompanySerializer(serializers.ModelSerializer):
             "kpp",
             "address",
             "website",
+            "activity_kind",
             "contract_type",
             "contract_until",
             "phone",

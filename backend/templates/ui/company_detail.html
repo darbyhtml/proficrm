@@ -124,6 +124,10 @@
             </div>
           </div>
           <div>
+            <div class="text-brand-dark/50">Вид деятельности</div>
+            <div>{{ company.activity_kind|default:"—" }}</div>
+          </div>
+          <div>
             <div class="text-brand-dark/50">Договор</div>
             <div class="text-sm">
               {% if company.contract_type %}{{ company.get_contract_type_display }}{% else %}—{% endif %}

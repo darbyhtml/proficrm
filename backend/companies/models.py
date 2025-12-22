@@ -51,6 +51,7 @@ class Company(models.Model):
     kpp = models.CharField("КПП", max_length=20, blank=True, default="")
     address = models.CharField("Адрес", max_length=500, blank=True, default="")
     website = models.CharField("Сайт", max_length=255, blank=True, default="")
+    activity_kind = models.CharField("Вид деятельности", max_length=255, blank=True, default="", db_index=True)
 
     contract_type = models.CharField(
         "Вид договора",
