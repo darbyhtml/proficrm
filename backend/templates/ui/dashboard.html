@@ -11,7 +11,62 @@
       <a href="/tasks/new/" class="btn btn-primary">+ Новая задача</a>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {# 1 строка: На сегодня + Новые задачи #}
+      <section class="card card-pad">
+        <div class="font-medium mb-3">На сегодня</div>
+        {% if tasks_today %}
+          <ul class="space-y-2">
+            {% for t in tasks_today %}
+              <li class="rounded-lg border p-3 {% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %}">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="text-sm font-medium">{{ t.title }}</div>
+                  <div class="flex items-center gap-2 flex-shrink-0">
+                    {% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}
+                      <span class="badge badge-danger">Срочно</span>
+                    {% endif %}
+                    <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
+                  </div>
+                </div>
+                <div class="text-xs text-brand-dark/70">
+                  {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>{% endif %}
+                  {% if t.due_at %} · <span class="{% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}">{{ t.due_at }}</span>{% endif %}
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="text-sm text-brand-dark/70">На сегодня задач нет.</div>
+        {% endif %}
+      </section>
+
+      <section class="card card-pad">
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-medium">Новые задачи</div>
+          <a class="text-sm link" href="/tasks/?mine=1&status=new">Все новые</a>
+        </div>
+        {% if tasks_new %}
+          <ul class="space-y-2">
+            {% for t in tasks_new %}
+              <li class="rounded-lg border p-3">
+                <div class="flex items-start justify-between gap-3">
+                  <div class="text-sm font-medium">{{ t.title }}</div>
+                  <span class="badge badge-new">Новая</span>
+                </div>
+                <div class="text-xs text-brand-dark/70">
+                  {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>{% endif %}
+                  {% if t.created_by %} · назначил: {{ t.created_by }}{% endif %}
+                  · {{ t.created_at }}
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <div class="text-sm text-brand-dark/70">Новых задач нет.</div>
+        {% endif %}
+      </section>
+
+      {# 2 строка: Просрочено + Договоры #}
       <section class="card card-pad">
         <div class="font-medium mb-3">Просрочено</div>
         {% if overdue %}
@@ -39,41 +94,49 @@
 
       <section class="card card-pad">
         <div class="flex items-center justify-between mb-3">
-          <div class="font-medium">Новые назначения</div>
-          <a class="text-sm link" href="/tasks/?mine=1&status=new">Все новые</a>
+          <div class="font-medium">Договоры</div>
+          <a class="text-sm link" href="/companies/?contract_type=&q=">Список компаний</a>
         </div>
-        {% if tasks_new %}
+        {% if contracts_soon %}
           <ul class="space-y-2">
-            {% for t in tasks_new %}
-              <li class="rounded-lg border p-3">
+            {% for item in contracts_soon %}
+              <li class="rounded-lg border p-3 {% if item.level == 'danger' %}task-overdue{% else %}bg-brand-orange/10 border-brand-orange/40{% endif %}">
                 <div class="flex items-start justify-between gap-3">
-                  <div class="text-sm font-medium">{{ t.title }}</div>
-                  <span class="badge badge-new">Новая</span>
+                  <div class="text-sm font-medium">
+                    <a class="link" href="/companies/{{ item.company.id }}/">{{ item.company.name }}</a>
+                  </div>
+                  <span class="badge {% if item.level == 'danger' %}badge-danger{% else %}badge-warn{% endif %}">
+                    {% if item.days_left is not None %}
+                      {{ item.days_left }} дн.
+                    {% else %}
+                      —
+                    {% endif %}
+                  </span>
                 </div>
-                <div class="text-xs text-brand-dark/70">
-                  {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>{% endif %}
-                  {% if t.created_by %} · назначил: {{ t.created_by }}{% endif %}
-                  · {{ t.created_at }}
+                <div class="text-xs text-brand-dark/70 mt-1">
+                  {% if item.company.contract_type %}{{ item.company.get_contract_type_display }}{% else %}—{% endif %}
+                  {% if item.company.contract_until %} · до <span class="{% if item.level == 'danger' %}text-red-700{% endif %}">{{ item.company.contract_until|date:"d.m.Y" }}</span>{% endif %}
                 </div>
               </li>
             {% endfor %}
           </ul>
         {% else %}
-          <div class="text-sm text-brand-dark/70">Новых задач нет.</div>
+          <div class="text-sm text-brand-dark/70">Ближайших окончаний договоров нет.</div>
         {% endif %}
       </section>
 
-      <section class="card card-pad">
-        <div class="font-medium mb-3">На сегодня</div>
-        {% if tasks_today %}
+      {# 3 строка: Задачи на неделю — на всю ширину #}
+      <section class="card card-pad lg:col-span-2">
+        <div class="font-medium mb-3">Задачи на неделю</div>
+        {% if tasks_week %}
           <ul class="space-y-2">
-            {% for t in tasks_today %}
+            {% for t in tasks_week %}
               <li class="rounded-lg border p-3 {% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %}">
                 <div class="flex items-start justify-between gap-3">
                   <div class="text-sm font-medium">{{ t.title }}</div>
                   <div class="flex items-center gap-2 flex-shrink-0">
                     {% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}
-                      <span class="badge badge-danger">Срочно</span>
+                      <span class="badge badge-danger">Просрочено</span>
                     {% endif %}
                     <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
                   </div>
@@ -86,70 +149,10 @@
             {% endfor %}
           </ul>
         {% else %}
-          <div class="text-sm text-brand-dark/70">На сегодня задач нет.</div>
+          <div class="text-sm text-brand-dark/70">На ближайшую неделю задач нет.</div>
         {% endif %}
       </section>
     </div>
-
-    <section class="card card-pad">
-      <div class="font-medium mb-3">Задачи на неделю</div>
-      {% if tasks_week %}
-        <ul class="space-y-2">
-          {% for t in tasks_week %}
-            <li class="rounded-lg border p-3 {% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %}">
-              <div class="flex items-start justify-between gap-3">
-                <div class="text-sm font-medium">{{ t.title }}</div>
-                <div class="flex items-center gap-2 flex-shrink-0">
-                  {% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}
-                    <span class="badge badge-danger">Просрочено</span>
-                  {% endif %}
-                  <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
-                </div>
-              </div>
-              <div class="text-xs text-brand-dark/70">
-                {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>{% endif %}
-                {% if t.due_at %} · <span class="{% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}">{{ t.due_at }}</span>{% endif %}
-              </div>
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <div class="text-sm text-brand-dark/70">На ближайшую неделю задач нет.</div>
-      {% endif %}
-    </section>
-
-    <section class="card card-pad">
-      <div class="flex items-center justify-between mb-3">
-        <div class="font-medium">Договоры (остался месяц)</div>
-        <a class="text-sm link" href="/companies/?contract_type=&q=">Список компаний</a>
-      </div>
-      {% if contracts_soon %}
-        <ul class="space-y-2">
-          {% for item in contracts_soon %}
-            <li class="rounded-lg border p-3 {% if item.level == 'danger' %}task-overdue{% else %}bg-brand-orange/10 border-brand-orange/40{% endif %}">
-              <div class="flex items-start justify-between gap-3">
-                <div class="text-sm font-medium">
-                  <a class="link" href="/companies/{{ item.company.id }}/">{{ item.company.name }}</a>
-                </div>
-                <span class="badge {% if item.level == 'danger' %}badge-danger{% else %}badge-warn{% endif %}">
-                  {% if item.days_left is not None %}
-                    {{ item.days_left }} дн.
-                  {% else %}
-                    —
-                  {% endif %}
-                </span>
-              </div>
-              <div class="text-xs text-brand-dark/70 mt-1">
-                {% if item.company.contract_type %}{{ item.company.get_contract_type_display }}{% else %}—{% endif %}
-                {% if item.company.contract_until %} · до <span class="{% if item.level == 'danger' %}text-red-700{% endif %}">{{ item.company.contract_until|date:"d.m.Y" }}</span>{% endif %}
-              </div>
-            </li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <div class="text-sm text-brand-dark/70">Ближайших окончаний договоров нет.</div>
-      {% endif %}
-    </section>
   </div>
 {% endblock %}
 
