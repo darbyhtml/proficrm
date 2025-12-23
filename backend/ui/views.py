@@ -342,8 +342,12 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
     day_end = day_start + timedelta(days=1)
     day_label = timezone.localdate(now).strftime("%d.%m.%Y")
 
+    # Считаем "холодными" звонки:
+    # - помеченные в момент клика (call.is_cold_call)
+    # - или если контакт/основной контакт компании отмечены как холодные сейчас
     qs = (
-        CallRequest.objects.filter(created_by=user, is_cold_call=True, created_at__gte=day_start, created_at__lt=day_end)
+        CallRequest.objects.filter(created_by=user, created_at__gte=day_start, created_at__lt=day_end)
+        .filter(Q(is_cold_call=True) | Q(contact__is_cold_call=True) | Q(company__primary_contact_is_cold_call=True))
         .select_related("company", "contact")
         .order_by("created_at")
     )
@@ -380,7 +384,11 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
     available = []
     for ms in candidates:
         me = _add_months(ms, 1)
-        exists = CallRequest.objects.filter(created_by=user, is_cold_call=True, created_at__date__gte=ms, created_at__date__lt=me).exists()
+        exists = (
+            CallRequest.objects.filter(created_by=user, created_at__date__gte=ms, created_at__date__lt=me)
+            .filter(Q(is_cold_call=True) | Q(contact__is_cold_call=True) | Q(company__primary_contact_is_cold_call=True))
+            .exists()
+        )
         if exists:
             available.append(ms)
 
@@ -397,7 +405,8 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
 
     month_end = _add_months(selected, 1)
     qs = (
-        CallRequest.objects.filter(created_by=user, is_cold_call=True, created_at__date__gte=selected, created_at__date__lt=month_end)
+        CallRequest.objects.filter(created_by=user, created_at__date__gte=selected, created_at__date__lt=month_end)
+        .filter(Q(is_cold_call=True) | Q(contact__is_cold_call=True) | Q(company__primary_contact_is_cold_call=True))
         .select_related("company", "contact")
         .order_by("created_at")
     )
