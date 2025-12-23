@@ -107,7 +107,6 @@
                   <div class="flex items-center justify-between">
                     <div class="font-medium">Уведомления</div>
                     <div class="flex items-center gap-2">
-                      <button id="notifEnableSound" type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" title="Включить/выключить звук">Звук</button>
                       <button id="notifEnableBrowser" type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" title="Разрешить уведомления браузера">Браузер</button>
                       <form method="post" action="/notifications/mark-all-read/" id="notifMarkAllForm">
                         {% csrf_token %}
@@ -286,10 +285,6 @@
       </div>
     </div>
 
-    <audio id="notifSound" preload="auto">
-      <source src="{% static 'ui/sounds/notify.ogg' %}" type="audio/ogg" />
-    </audio>
-
     <script>
       (function(){
         const btn = document.getElementById('notifBtn');
@@ -329,11 +324,8 @@
         const notifList = document.getElementById('notifList');
         const reminderList = document.getElementById('reminderList');
         const markAllForm = document.getElementById('notifMarkAllForm');
-        const enableSoundBtn = document.getElementById('notifEnableSound');
         const enableBrowserBtn = document.getElementById('notifEnableBrowser');
 
-        const soundEl = document.getElementById('notifSound');
-        const SOUND_KEY = 'crm_notif_sound_enabled';
         const BROWSER_KEY = 'crm_notif_browser_enabled';
 
         function getBool(key, defVal){
@@ -348,50 +340,13 @@
         function setBool(key, val){
           try{ localStorage.setItem(key, val ? '1' : '0'); }catch(_e){}
         }
-        let soundEnabled = getBool(SOUND_KEY, false);
         let browserEnabled = getBool(BROWSER_KEY, false);
 
         function updateTogglesUI(){
-          if(enableSoundBtn){
-            enableSoundBtn.classList.toggle('btn-primary', !!soundEnabled);
-            enableSoundBtn.classList.toggle('btn-outline', !soundEnabled);
-          }
           if(enableBrowserBtn){
             enableBrowserBtn.classList.toggle('btn-primary', !!browserEnabled);
             enableBrowserBtn.classList.toggle('btn-outline', !browserEnabled);
           }
-        }
-
-        // WebAudio fallback (наиболее совместимый способ сделать звук во всех браузерах).
-        let audioCtx = null;
-        async function ensureAudioCtx(){
-          const AudioCtx = window.AudioContext || window.webkitAudioContext;
-          if(!AudioCtx) return null;
-          if(!audioCtx) audioCtx = new AudioCtx();
-          try{
-            if(audioCtx.state === 'suspended') await audioCtx.resume();
-          }catch(_e){}
-          return audioCtx;
-        }
-        async function webAudioBeep(){
-          try{
-            const ctx = await ensureAudioCtx();
-            if(!ctx) return;
-            const o = ctx.createOscillator();
-            const g = ctx.createGain();
-            const now = ctx.currentTime;
-            // единый короткий звук, чуть заметнее, но без “пугающей” громкости
-            g.gain.setValueAtTime(0.0001, now);
-            g.gain.exponentialRampToValueAtTime(0.10, now + 0.01);
-            g.gain.exponentialRampToValueAtTime(0.0001, now + 0.26);
-            o.type = 'sine';
-            o.frequency.setValueAtTime(880, now);
-            o.frequency.exponentialRampToValueAtTime(660, now + 0.26);
-            o.connect(g);
-            g.connect(ctx.destination);
-            o.start(now);
-            o.stop(now + 0.28);
-          }catch(_e){}
         }
 
         function showToast(text){
@@ -418,27 +373,6 @@
           }catch(_e){}
         }
 
-        function playSound(){
-          if(!soundEnabled) return;
-          // Важно: не используем await в user-gesture цепочке — некоторые браузеры “теряют” активацию.
-          // Кастомный звук оставляем как запасной вариант (если системный звук уведомлений в браузере не работает).
-          try{
-            if(soundEl && soundEl.play){
-              const canOgg = soundEl.canPlayType && soundEl.canPlayType('audio/ogg; codecs="vorbis"');
-              if(!canOgg) throw new Error('no ogg support');
-              soundEl.currentTime = 0;
-              soundEl.volume = 0.35;
-              soundEl.muted = false;
-              const p = soundEl.play();
-              if(p && p.catch){
-                p.catch(() => webAudioBeep());
-              }
-              return;
-            }
-          }catch(_e){}
-          webAudioBeep(); // fallback
-        }
-
         function showBrowserNotification(n){
           if(!browserEnabled) return;
           if(!('Notification' in window)) return;
@@ -451,10 +385,8 @@
             const notif = new Notification(title, {
               body,
               tag: 'crm_' + (n.id || ''),
-              // Если включён "Звук" в CRM — играем единый кастомный звук сами,
-              // а браузерные уведомления делаем беззвучными, чтобы в Chrome не было двойного звука.
-              // Если "Звук" выключен — пытаемся использовать системный/браузерный звук уведомлений.
-              silent: !!soundEnabled,
+              // Используем системный/браузерный звук уведомлений (если браузер/ОС его позволяют).
+              silent: false,
               icon: '/static/ui/favicon-v2.svg',
             });
             notif.onclick = () => {
@@ -585,11 +517,8 @@
                 btn.classList.add('ring-4','ring-brand-teal/15');
                 setTimeout(() => btn.classList.remove('ring-4','ring-brand-teal/15'), 1200);
               }
-              // Браузерное уведомление + звук:
-              // - если "Звук" в CRM выключен -> надеемся на системный звук уведомлений (если браузер/ОС его дают)
-              // - если "Звук" включен -> уведомление беззвучное, и играем наш звук
+              // Браузерное уведомление + системный/браузерный звук (если браузер/ОС его позволяют)
               if(newest) showBrowserNotification(newest);
-              if(soundEnabled) playSound();
             }
           }catch(_e){
           }finally{
@@ -600,23 +529,6 @@
         bindNotifActions();
         updateTogglesUI();
 
-        if(enableSoundBtn && !enableSoundBtn.__bound){
-          enableSoundBtn.__bound = true;
-          enableSoundBtn.addEventListener('click', () => {
-            soundEnabled = !soundEnabled;
-            setBool(SOUND_KEY, soundEnabled);
-            updateTogglesUI();
-            // попытка "разблокировать" звук user-gesture'ом
-            if(soundEnabled){
-              ensureAudioCtx().then(() => {
-                playSound();
-                showToast('Звук включён');
-              });
-            } else {
-              showToast('Звук выключен');
-            }
-          });
-        }
         if(enableBrowserBtn && !enableBrowserBtn.__bound){
           enableBrowserBtn.__bound = true;
           enableBrowserBtn.addEventListener('click', async () => {
