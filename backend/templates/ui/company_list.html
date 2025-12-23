@@ -175,7 +175,7 @@
                 {% if "name" in company_list_columns %}
                   <td>
                     <a class="link" href="/companies/{{ c.id }}/" onclick="event.stopPropagation()">{{ c.name }}</a>
-                    {% if c.is_cold_call %}
+                    {% if c.primary_contact_is_cold_call or c.has_cold_call_contact %}
                       <span class="badge badge-warn ml-2" style="padding:.1rem .35rem;font-size:.65rem">Холодный</span>
                     {% endif %}
                     {% if "address" in company_list_columns %}

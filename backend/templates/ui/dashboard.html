@@ -8,7 +8,30 @@
         <h1 class="text-2xl font-semibold">Рабочий стол</h1>
         <div class="text-sm text-brand-dark/70">Сегодняшние задачи и последние изменения</div>
       </div>
-      <a href="/tasks/new/" class="btn btn-primary">+ Новая задача</a>
+      <div class="flex items-center gap-2">
+        {% if request.user.role == 'manager' or request.user.role == 'sales_head' or request.user.role == 'branch_director' or request.user.role == 'group_manager' or is_admin %}
+          <button type="button" class="btn btn-outline" id="openColdDay" title="Отчёт по холодным звонкам за день" aria-label="Отчёт по холодным звонкам за день">
+            <span class="inline-flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>ХЗ день</span>
+            </span>
+          </button>
+          <button type="button" class="btn btn-outline" id="openColdMonth" title="Отчёт по холодным звонкам за месяц" aria-label="Отчёт по холодным звонкам за месяц">
+            <span class="inline-flex items-center gap-2">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M8 2v3M16 2v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M3 6h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M7 10h10M7 14h10M7 18h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+              <span>ХЗ месяц</span>
+            </span>
+          </button>
+        {% endif %}
+        <a href="/tasks/new/" class="btn btn-primary">+ Новая задача</a>
+      </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -153,7 +176,128 @@
         {% endif %}
       </section>
     </div>
+
+    <div id="coldCallsModal" class="fixed inset-0 z-[70] hidden">
+      <div class="absolute inset-0 bg-black/35" data-close-coldcalls></div>
+      <div class="absolute inset-x-4 top-24 mx-auto max-w-2xl">
+        <div class="card card-pad">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="font-medium" id="coldCallsTitle">Отчёт</div>
+              <div class="text-xs muted-2 mt-1" id="coldCallsSub">—</div>
+            </div>
+            <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" data-close-coldcalls aria-label="Закрыть" title="Закрыть">✕</button>
+          </div>
+          <div class="mt-3 flex flex-wrap items-center gap-2">
+            <select id="coldCallsMonthSelect" class="w-full md:w-auto rounded-lg border px-3 py-2 text-sm hidden"></select>
+            <button type="button" class="btn btn-outline" id="coldCallsRefresh">Обновить</button>
+            <button type="button" class="btn btn-primary" id="coldCallsCopy">Скопировать отчёт</button>
+          </div>
+          <div class="mt-3">
+            <textarea id="coldCallsText" class="textarea" rows="12" readonly></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
+
+  <script>
+    (function(){
+      const modal = document.getElementById('coldCallsModal');
+      const titleEl = document.getElementById('coldCallsTitle');
+      const subEl = document.getElementById('coldCallsSub');
+      const txtEl = document.getElementById('coldCallsText');
+      const monthSel = document.getElementById('coldCallsMonthSelect');
+      const btnDay = document.getElementById('openColdDay');
+      const btnMonth = document.getElementById('openColdMonth');
+      const btnCopy = document.getElementById('coldCallsCopy');
+      const btnRefresh = document.getElementById('coldCallsRefresh');
+      if(!modal || !titleEl || !subEl || !txtEl || !btnCopy) return;
+
+      let mode = 'day'; // day|month
+      let monthKey = '';
+
+      function open(){ modal.classList.remove('hidden'); }
+      function close(){ modal.classList.add('hidden'); }
+      modal.querySelectorAll('[data-close-coldcalls]').forEach(b => b.addEventListener('click', close));
+      document.addEventListener('keydown', (e) => { if(e.key === 'Escape') close(); });
+
+      async function loadDay(){
+        mode = 'day';
+        if(monthSel) monthSel.classList.add('hidden');
+        titleEl.textContent = 'Отчёт по холодным звонкам (день)';
+        subEl.textContent = 'Загружаю…';
+        txtEl.value = '';
+        const res = await fetch('/reports/cold-calls/day/', {credentials:'same-origin'});
+        const data = await res.json().catch(() => null);
+        if(!data || !data.ok) { subEl.textContent = 'Не удалось загрузить отчёт.'; return; }
+        subEl.textContent = `Дата: ${data.date} · Всего: ${data.count}`;
+        txtEl.value = data.text || '';
+      }
+
+      function fillMonthOptions(opts){
+        if(!monthSel) return;
+        monthSel.innerHTML = '';
+        (opts || []).forEach(o => {
+          const opt = document.createElement('option');
+          opt.value = o.key;
+          opt.textContent = o.label;
+          monthSel.appendChild(opt);
+        });
+        monthSel.classList.remove('hidden');
+      }
+
+      async function loadMonth(){
+        mode = 'month';
+        titleEl.textContent = 'Отчёт по холодным звонкам (месяц)';
+        subEl.textContent = 'Загружаю…';
+        txtEl.value = '';
+        const q = monthKey ? `?month=${encodeURIComponent(monthKey)}` : '';
+        const res = await fetch('/reports/cold-calls/month/' + q, {credentials:'same-origin'});
+        const data = await res.json().catch(() => null);
+        if(!data || !data.ok) { subEl.textContent = 'Не удалось загрузить отчёт.'; return; }
+        fillMonthOptions(data.available_months || []);
+        if(monthSel && data.month) {
+          monthSel.value = data.month;
+          monthKey = data.month;
+        }
+        subEl.textContent = `${data.month_label} · Всего: ${data.count}`;
+        txtEl.value = data.text || '';
+      }
+
+      if(monthSel){
+        monthSel.addEventListener('change', () => {
+          monthKey = monthSel.value || '';
+          loadMonth();
+        });
+      }
+      if(btnRefresh){
+        btnRefresh.addEventListener('click', () => {
+          if(mode === 'month') loadMonth();
+          else loadDay();
+        });
+      }
+      if(btnDay){
+        btnDay.addEventListener('click', () => { open(); loadDay(); });
+      }
+      if(btnMonth){
+        btnMonth.addEventListener('click', () => { open(); loadMonth(); });
+      }
+      btnCopy.addEventListener('click', async () => {
+        const text = txtEl.value || '';
+        try{
+          await navigator.clipboard.writeText(text);
+          btnCopy.textContent = 'Скопировано';
+          setTimeout(() => btnCopy.textContent = 'Скопировать отчёт', 1200);
+        }catch(_e){
+          // fallback
+          txtEl.focus();
+          txtEl.select();
+          document.execCommand('copy');
+        }
+      });
+    })();
+  </script>
 {% endblock %}
 
 

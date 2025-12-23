@@ -52,7 +52,10 @@ class Company(models.Model):
     address = models.CharField("Адрес", max_length=500, blank=True, default="")
     website = models.CharField("Сайт", max_length=255, blank=True, default="")
     activity_kind = models.CharField("Вид деятельности", max_length=255, blank=True, default="", db_index=True)
-    is_cold_call = models.BooleanField("Холодный звонок", default=False, db_index=True)
+    # Устаревшее: раньше отметка была на всю компанию. Оставляем поле для обратной совместимости/данных,
+    # но в UI/логике используем отметки на контактах.
+    is_cold_call = models.BooleanField("Холодный звонок (устар.)", default=False, db_index=True)
+    primary_contact_is_cold_call = models.BooleanField("Холодный звонок (основной контакт)", default=False, db_index=True)
 
     contract_type = models.CharField(
         "Вид договора",
@@ -157,6 +160,7 @@ class Contact(models.Model):
 
     status = models.CharField("Статус", max_length=120, blank=True, default="")
     note = models.TextField("Примечание", blank=True, default="")
+    is_cold_call = models.BooleanField("Холодный звонок", default=False, db_index=True)
 
     amocrm_contact_id = models.BigIntegerField("ID контакта (amo)", null=True, blank=True, db_index=True)
 

@@ -4,6 +4,8 @@ from . import views
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
+    path("reports/cold-calls/day/", views.cold_calls_report_day, name="cold_calls_report_day"),
+    path("reports/cold-calls/month/", views.cold_calls_report_month, name="cold_calls_report_month"),
     path("companies/", views.company_list, name="company_list"),
     path("companies/duplicates/", views.company_duplicates, name="company_duplicates"),
     path("companies/export/", views.company_export, name="company_export"),
@@ -21,6 +23,7 @@ urlpatterns = [
     path("companies/<uuid:company_id>/delete/", views.company_delete_direct, name="company_delete_direct"),
     path("companies/<uuid:company_id>/contacts/new/", views.contact_create, name="contact_create"),
     path("contacts/<uuid:contact_id>/edit/", views.contact_edit, name="contact_edit"),
+    path("contacts/<uuid:contact_id>/cold-call/toggle/", views.contact_cold_call_toggle, name="contact_cold_call_toggle"),
     path("companies/<uuid:company_id>/notes/add/", views.company_note_add, name="company_note_add"),
     path("companies/<uuid:company_id>/notes/<int:note_id>/edit/", views.company_note_edit, name="company_note_edit"),
     path("companies/<uuid:company_id>/notes/<int:note_id>/delete/", views.company_note_delete, name="company_note_delete"),

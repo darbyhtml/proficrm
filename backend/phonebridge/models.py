@@ -64,6 +64,7 @@ class CallRequest(models.Model):
 
     phone_raw = models.CharField(max_length=64)
     note = models.CharField(max_length=255, blank=True, default="")
+    is_cold_call = models.BooleanField(default=False, db_index=True)
 
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True)
 

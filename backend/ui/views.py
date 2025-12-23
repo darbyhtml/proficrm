@@ -26,6 +26,7 @@ from notifications.models import Notification
 from notifications.service import notify
 from phonebridge.models import CallRequest
 import mimetypes
+from datetime import date as _date
 
 from .forms import (
     CompanyCreateForm,
@@ -150,7 +151,14 @@ def _companies_with_overdue_flag(*, now):
         .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
         .values("id")
     )
-    return Company.objects.all().annotate(has_overdue=Exists(overdue_tasks))
+    cold_contacts = (
+        Contact.objects.filter(company_id=OuterRef("pk"), is_cold_call=True)
+        .values("id")
+    )
+    return Company.objects.all().annotate(
+        has_overdue=Exists(overdue_tasks),
+        has_cold_call_contact=Exists(cold_contacts),
+    )
 
 
 def _apply_company_filters(*, qs, params: dict):
@@ -196,9 +204,9 @@ def _apply_company_filters(*, qs, params: dict):
 
     cold_call = (params.get("cold_call") or "").strip()
     if cold_call == "1":
-        qs = qs.filter(is_cold_call=True)
+        qs = qs.filter(Q(primary_contact_is_cold_call=True) | Q(has_cold_call_contact=True))
     elif cold_call == "0":
-        qs = qs.filter(is_cold_call=False)
+        qs = qs.filter(primary_contact_is_cold_call=False, has_cold_call_contact=False)
 
     overdue = (params.get("overdue") or "").strip()
     if overdue == "1":
@@ -288,6 +296,142 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             "tasks_week": tasks_week,
             "contracts_soon": contracts_soon,
         },
+    )
+
+
+def _can_view_cold_call_reports(user: User) -> bool:
+    if not user or not user.is_authenticated or not user.is_active:
+        return False
+    return bool(user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD, User.Role.MANAGER))
+
+
+def _month_start(d: _date) -> _date:
+    return d.replace(day=1)
+
+
+def _add_months(d: _date, delta_months: int) -> _date:
+    # Возвращает первое число месяца, сдвинутого на delta_months.
+    y = d.year
+    m = d.month + int(delta_months)
+    while m <= 0:
+        y -= 1
+        m += 12
+    while m > 12:
+        y += 1
+        m -= 12
+    return _date(y, m, 1)
+
+
+def _month_label(d: _date) -> str:
+    months = {
+        1: "Январь", 2: "Февраль", 3: "Март", 4: "Апрель", 5: "Май", 6: "Июнь",
+        7: "Июль", 8: "Август", 9: "Сентябрь", 10: "Октябрь", 11: "Ноябрь", 12: "Декабрь",
+    }
+    return f"{months.get(d.month, str(d.month))} {d.year}"
+
+
+@login_required
+def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
+    user: User = request.user
+    if not _can_view_cold_call_reports(user):
+        return JsonResponse({"ok": False, "detail": "forbidden"}, status=403)
+
+    now = timezone.now()
+    local_now = timezone.localtime(now)
+    day_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    day_end = day_start + timedelta(days=1)
+    day_label = timezone.localdate(now).strftime("%d.%m.%Y")
+
+    qs = (
+        CallRequest.objects.filter(created_by=user, is_cold_call=True, created_at__gte=day_start, created_at__lt=day_end)
+        .select_related("company", "contact")
+        .order_by("created_at")
+    )
+    items = []
+    lines = [f"Отчёт: холодные звонки за {day_label}", f"Всего: {qs.count()}", ""]
+    i = 0
+    for call in qs:
+        i += 1
+        t = timezone.localtime(call.created_at).strftime("%H:%M")
+        company_name = getattr(call.company, "name", "") if call.company_id else ""
+        if call.contact_id and call.contact:
+            contact_name = str(call.contact) or ""
+        else:
+            contact_name = (getattr(call.company, "contact_name", "") or "").strip() if call.company_id else ""
+        who = contact_name or "Контакт не указан"
+        who2 = f"{who} ({company_name})" if company_name else who
+        phone = call.phone_raw or ""
+        items.append({"time": t, "phone": phone, "contact": who, "company": company_name})
+        lines.append(f"{i}) {t} — {who2} — {phone}")
+
+    return JsonResponse({"ok": True, "range": "day", "date": day_label, "count": len(items), "items": items, "text": "\n".join(lines)})
+
+
+@login_required
+def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
+    user: User = request.user
+    if not _can_view_cold_call_reports(user):
+        return JsonResponse({"ok": False, "detail": "forbidden"}, status=403)
+
+    today = timezone.localdate(timezone.now())
+    base = _month_start(today)
+    candidates = [_month_start(_add_months(base, -2)), _month_start(_add_months(base, -1)), base]
+
+    available = []
+    for ms in candidates:
+        me = _add_months(ms, 1)
+        exists = CallRequest.objects.filter(created_by=user, is_cold_call=True, created_at__date__gte=ms, created_at__date__lt=me).exists()
+        if exists:
+            available.append(ms)
+
+    # Если вообще нет данных — показываем текущий месяц (пустой отчёт), чтобы кнопка не была "мертвой"
+    if not available:
+        available = [base]
+
+    req_key = (request.GET.get("month") or "").strip()
+    selected = available[-1]
+    for ms in available:
+        if req_key and req_key == ms.strftime("%Y-%m"):
+            selected = ms
+            break
+
+    month_end = _add_months(selected, 1)
+    qs = (
+        CallRequest.objects.filter(created_by=user, is_cold_call=True, created_at__date__gte=selected, created_at__date__lt=month_end)
+        .select_related("company", "contact")
+        .order_by("created_at")
+    )
+
+    items = []
+    lines = [f"Отчёт: холодные звонки за {_month_label(selected)}", f"Всего: {qs.count()}", ""]
+    i = 0
+    for call in qs:
+        i += 1
+        dt = timezone.localtime(call.created_at)
+        t = dt.strftime("%d.%m %H:%M")
+        company_name = getattr(call.company, "name", "") if call.company_id else ""
+        if call.contact_id and call.contact:
+            contact_name = str(call.contact) or ""
+        else:
+            contact_name = (getattr(call.company, "contact_name", "") or "").strip() if call.company_id else ""
+        who = contact_name or "Контакт не указан"
+        who2 = f"{who} ({company_name})" if company_name else who
+        phone = call.phone_raw or ""
+        items.append({"time": t, "phone": phone, "contact": who, "company": company_name})
+        lines.append(f"{i}) {t} — {who2} — {phone}")
+
+    month_options = [{"key": ms.strftime("%Y-%m"), "label": _month_label(ms)} for ms in available]
+    return JsonResponse(
+        {
+            "ok": True,
+            "range": "month",
+            "month": selected.strftime("%Y-%m"),
+            "month_label": _month_label(selected),
+            "available_months": month_options,
+            "count": len(items),
+            "items": items,
+            "text": "\n".join(lines),
+        }
     )
 
 
@@ -621,7 +765,7 @@ def company_export(request: HttpRequest) -> HttpResponse:
             (company.address or "").replace("\n", " ").strip(),
             company.website or "",
             company.activity_kind or "",
-            "Да" if company.is_cold_call else "Нет",
+            "Да" if (company.primary_contact_is_cold_call or bool(getattr(company, "has_cold_call_contact", False))) else "Нет",
             _contract_type_display(company),
             _fmt_date(company.contract_until),
             company.status.name if company.status else "",
@@ -813,6 +957,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     )
 
     contacts = Contact.objects.filter(company=company).prefetch_related("emails", "phones").order_by("last_name", "first_name")[:200]
+    has_cold_call = bool(company.primary_contact_is_cold_call or Contact.objects.filter(company=company, is_cold_call=True).exists())
     pinned_note = (
         CompanyNote.objects.filter(company=company, is_pinned=True)
         .select_related("author", "pinned_by")
@@ -859,6 +1004,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "org_branches": org_branches,
             "can_edit_company": can_edit_company,
             "contacts": contacts,
+            "has_cold_call": has_cold_call,
             "notes": notes,
             "pinned_note": pinned_note,
             "note_form": note_form,
@@ -1084,17 +1230,46 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
         messages.error(request, "Нет прав на изменение признака 'Холодный звонок'.")
         return redirect("company_detail", company_id=company.id)
 
-    company.is_cold_call = not bool(company.is_cold_call)
-    company.save(update_fields=["is_cold_call", "updated_at"])
+    company.primary_contact_is_cold_call = not bool(company.primary_contact_is_cold_call)
+    company.save(update_fields=["primary_contact_is_cold_call", "updated_at"])
 
-    messages.success(request, "Отметка 'Холодный звонок' обновлена.")
+    messages.success(request, "Отметка 'Холодный звонок' (основной контакт) обновлена.")
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.UPDATE,
         entity_type="company",
         entity_id=company.id,
         company_id=company.id,
-        message=("Отмечено: холодный звонок" if company.is_cold_call else "Снято: холодный звонок"),
+        message=("Отмечено: холодный звонок (осн. контакт)" if company.primary_contact_is_cold_call else "Снято: холодный звонок (осн. контакт)"),
+    )
+    return redirect("company_detail", company_id=company.id)
+
+
+@login_required
+def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("dashboard")
+    user: User = request.user
+    contact = get_object_or_404(Contact.objects.select_related("company"), id=contact_id)
+    company = contact.company
+    if not company:
+        messages.error(request, "Контакт не привязан к компании.")
+        return redirect("dashboard")
+    if not _can_edit_company(user, company):
+        messages.error(request, "Нет прав на изменение контактов этой компании.")
+        return redirect("company_detail", company_id=company.id)
+
+    contact.is_cold_call = not bool(contact.is_cold_call)
+    contact.save(update_fields=["is_cold_call", "updated_at"])
+    messages.success(request, "Отметка 'Холодный звонок' по контакту обновлена.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="contact",
+        entity_id=str(contact.id),
+        company_id=company.id,
+        message=("Отмечено: холодный звонок (контакт)" if contact.is_cold_call else "Снято: холодный звонок (контакт)"),
+        meta={"contact_id": str(contact.id)},
     )
     return redirect("company_detail", company_id=company.id)
 
@@ -1521,6 +1696,20 @@ def phone_call_create(request: HttpRequest) -> HttpResponse:
         phone_raw=normalized,
         note="UI click",
     )
+    # Пометка "холодный звонок" на уровне контакта (или основного контакта компании)
+    try:
+        is_cold = False
+        if contact_id:
+            c = Contact.objects.filter(id=contact_id).only("id", "is_cold_call").first()
+            is_cold = bool(getattr(c, "is_cold_call", False))
+        elif company_id:
+            c0 = Company.objects.filter(id=company_id).only("id", "primary_contact_is_cold_call").first()
+            is_cold = bool(getattr(c0, "primary_contact_is_cold_call", False))
+        if is_cold:
+            call.is_cold_call = True
+            call.save(update_fields=["is_cold_call"])
+    except Exception:
+        pass
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.CREATE,
