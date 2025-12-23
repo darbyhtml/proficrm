@@ -15,13 +15,17 @@ from companies.models import Company
 from accounts.models import Branch
 from companies.models import CompanySphere, CompanyStatus, ContactEmail, Contact
 from mailer.forms import CampaignForm, CampaignGenerateRecipientsForm, CampaignRecipientAddForm, MailAccountForm, GlobalMailAccountForm, EmailSignatureForm
-from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, UnsubscribeToken
+from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe
 from mailer.smtp_sender import build_message, send_via_smtp
 from mailer.utils import html_to_text
 
 
 def _require_admin(user: User) -> bool:
     return bool(user.is_authenticated and user.is_active and (user.is_superuser or user.role == User.Role.ADMIN))
+
+def _contains_links(value: str) -> bool:
+    v = (value or "").lower()
+    return any(x in v for x in ("<a ", "href=", "http://", "https://", "www."))
 
 
 def _apply_signature(*, user: User, body_html: str, body_text: str) -> tuple[str, str]:
@@ -54,6 +58,12 @@ def mail_signature(request: HttpRequest) -> HttpResponse:
             user.email_signature_html = html
             user.save(update_fields=["email_signature_html"])
             messages.success(request, "Подпись сохранена.")
+            if _contains_links(html):
+                messages.warning(
+                    request,
+                    "В подписи есть ссылки. Такие письма иногда попадают в спам или блокируются почтовиками. "
+                    "Это не запрещено, просто предупреждение.",
+                )
             return redirect("mail_signature")
     else:
         form = EmailSignatureForm(initial={"signature_html": (getattr(user, "email_signature_html", "") or "")})
@@ -97,9 +107,8 @@ def mail_settings(request: HttpRequest) -> HttpResponse:
                     account=cfg,  # type: ignore[arg-type]
                     to_email=to_email,
                     subject="CRM ПРОФИ: тест отправки",
-                    body_text=f"Тестовое письмо из CRM ПРОФИ.\n\nЕсли вы это читаете — SMTP настроен.\n\n{test_url}",
-                    body_html=f"<p>Тестовое письмо из CRM ПРОФИ.</p><p>Если вы это читаете — SMTP настроен.</p><p><a href='{test_url}'>{test_url}</a></p>",
-                    unsubscribe_url=test_url,
+                    body_text="Тестовое письмо из CRM ПРОФИ.\n\nЕсли вы это читаете — SMTP настроен.\n",
+                    body_html="<p>Тестовое письмо из CRM ПРОФИ.</p><p>Если вы это читаете — SMTP настроен.</p>",
                     from_email=((cfg.from_email or "").strip() or (cfg.smtp_username or "").strip()),
                     from_name=(cfg.from_name or "CRM ПРОФИ").strip(),
                     reply_to=to_email,
@@ -151,6 +160,12 @@ def campaign_create(request: HttpRequest) -> HttpResponse:
             camp.status = Campaign.Status.DRAFT
             camp.save()
             messages.success(request, "Кампания создана.")
+            if _contains_links(camp.body_html or ""):
+                messages.warning(
+                    request,
+                    "В письме есть ссылки. Такие письма иногда попадают в спам или блокируются почтовиками. "
+                    "Это не запрещено, просто предупреждение.",
+                )
             return redirect("campaign_detail", campaign_id=camp.id)
     else:
         form = CampaignForm()
@@ -175,6 +190,12 @@ def campaign_edit(request: HttpRequest, campaign_id) -> HttpResponse:
         if form.is_valid():
             form.save()
             messages.success(request, "Кампания сохранена.")
+            if _contains_links(camp.body_html or ""):
+                messages.warning(
+                    request,
+                    "В письме есть ссылки. Такие письма иногда попадают в спам или блокируются почтовиками. "
+                    "Это не запрещено, просто предупреждение.",
+                )
             return redirect("campaign_detail", campaign_id=camp.id)
     else:
         form = CampaignForm(instance=camp)
@@ -436,25 +457,14 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
             r.save(update_fields=["status", "updated_at"])
             continue
 
-        # token for unsubscribe
-        import secrets
-        tok_obj = UnsubscribeToken.objects.filter(email__iexact=r.email).first()
-        if not tok_obj:
-            tok_obj = UnsubscribeToken.objects.create(email=r.email, token=secrets.token_urlsafe(32)[:64])
-        from django.conf import settings
-        rel = reverse("unsubscribe", kwargs={"token": tok_obj.token})
-        base = (getattr(settings, "PUBLIC_BASE_URL", "") or "").strip().rstrip("/")
-        unsubscribe_url = (base + rel) if base else request.build_absolute_uri(rel)
-        footer = f"\n\nОтписаться: {unsubscribe_url}\n"
         auto_plain = html_to_text(camp.body_html or "")
         base_html, base_text = _apply_signature(user=user, body_html=(camp.body_html or ""), body_text=(auto_plain or camp.body_text or ""))
         msg = build_message(
             account=MailAccount.objects.get_or_create(user=user)[0],  # fallback fields for build_message
             to_email=r.email,
             subject=camp.subject,
-            body_text=(base_text or "") + footer,
-            body_html=(base_html or "") + f'<hr><p style="font-size:12px;color:#666">Отписаться: <a href="{unsubscribe_url}">{unsubscribe_url}</a></p>',
-            unsubscribe_url=unsubscribe_url,
+            body_text=(base_text or ""),
+            body_html=(base_html or ""),
             from_email=((smtp_cfg.from_email or "").strip() or (smtp_cfg.smtp_username or "").strip()),
             from_name=((camp.sender_name or "").strip() or (smtp_cfg.from_name or "CRM ПРОФИ").strip()),
             reply_to=(user.email or "").strip(),
@@ -500,19 +510,14 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
         messages.error(request, "Некуда отправить тест (не задан email).")
         return redirect("campaign_detail", campaign_id=camp.id)
 
-    from django.conf import settings
-    rel = reverse("campaign_detail", kwargs={"campaign_id": camp.id})
-    base = (getattr(settings, "PUBLIC_BASE_URL", "") or "").strip().rstrip("/")
-    link = (base + rel) if base else request.build_absolute_uri(rel)
     base_html, base_text = _apply_signature(user=user, body_html=(camp.body_html or ""), body_text=(html_to_text(camp.body_html or "") or camp.body_text or ""))
 
     msg = build_message(
         account=MailAccount.objects.get_or_create(user=user)[0],
         to_email=to_email,
         subject=f"[ТЕСТ] {camp.subject}",
-        body_text=(base_text or "") + f"\n\n(Тест) Кампания: {link}\n",
-        body_html=(base_html or "") + f'<hr><p style="font-size:12px;color:#666">(Тест) Кампания: <a href="{link}">{link}</a></p>',
-        unsubscribe_url=link,
+        body_text=(base_text or ""),
+        body_html=(base_html or ""),
         from_email=((smtp_cfg.from_email or "").strip() or (smtp_cfg.smtp_username or "").strip()),
         from_name=((camp.sender_name or "").strip() or (smtp_cfg.from_name or "CRM ПРОФИ").strip()),
         reply_to=(user.email or "").strip(),

@@ -170,13 +170,23 @@
             <div class="text-brand-dark/50">Вид деятельности</div>
             <div>{{ company.activity_kind|default:"—" }}</div>
           </div>
-          <div>
-            <div class="text-brand-dark/50">Договор</div>
+          <div class="{% if contract_alert == 'danger' %}rounded-xl border border-red-400/40 bg-red-500/5 p-2 -m-2{% elif contract_alert == 'warn' %}rounded-xl border border-brand-orange/50 bg-brand-orange/10 p-2 -m-2{% endif %}">
+            <div class="text-brand-dark/50 flex items-center gap-2">
+              <span>Договор</span>
+              {% if contract_alert == 'danger' %}
+                <span class="badge badge-danger" style="padding:.1rem .35rem;font-size:.65rem">Срочно</span>
+              {% elif contract_alert == 'warn' %}
+                <span class="badge badge-warn" style="padding:.1rem .35rem;font-size:.65rem">Остался месяц</span>
+              {% endif %}
+            </div>
             <div class="flex items-start justify-between gap-2">
               <div class="text-sm">
                 {% if company.contract_type %}{{ company.get_contract_type_display }}{% else %}—{% endif %}
                 {% if company.contract_until %}
                   <span class="muted-2">· до {{ company.contract_until|date:"d.m.Y" }}</span>
+                  {% if contract_days_left is not None %}
+                    <span class="muted-2">· осталось {{ contract_days_left }} дн.</span>
+                  {% endif %}
                 {% endif %}
               </div>
               {% if can_edit_company %}

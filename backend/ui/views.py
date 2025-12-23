@@ -225,6 +225,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     now = timezone.now()
     # Важно: при USE_TZ=True timezone.now() в UTC. Для фильтров "сегодня/неделя" считаем границы по локальной TZ.
     local_now = timezone.localtime(now)
+    today_date = timezone.localdate(now)
     today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow_start = today_start + timedelta(days=1)
 
@@ -262,6 +263,20 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         .order_by("-created_at")[:20]
     )
 
+    # Договоры, которые подходят по сроку (<= 30 дней) — только для ответственного
+    contract_until_30 = today_date + timedelta(days=30)
+    contracts_soon_qs = (
+        Company.objects.filter(responsible=user, contract_until__isnull=False)
+        .filter(contract_until__gte=today_date, contract_until__lte=contract_until_30)
+        .only("id", "name", "contract_type", "contract_until")
+        .order_by("contract_until", "name")[:50]
+    )
+    contracts_soon = []
+    for c in contracts_soon_qs:
+        days_left = (c.contract_until - today_date).days if c.contract_until else None
+        level = "danger" if (days_left is not None and days_left < 14) else "warn"
+        contracts_soon.append({"company": c, "days_left": days_left, "level": level})
+
     return render(
         request,
         "ui/dashboard.html",
@@ -271,6 +286,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             "tasks_today": tasks_today,
             "overdue": overdue,
             "tasks_week": tasks_week,
+            "contracts_soon": contracts_soon,
         },
     )
 
@@ -823,6 +839,17 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
 
     transfer_targets = User.objects.filter(is_active=True, role__in=[User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD]).order_by("last_name", "first_name")
 
+    # Подсветка договора: оранжевый <= 30 дней, красный < 14 дней (ежедневно)
+    contract_alert = ""
+    contract_days_left = None
+    if company.contract_until:
+        today_date = timezone.localdate(timezone.now())
+        contract_days_left = (company.contract_until - today_date).days
+        if contract_days_left < 14:
+            contract_alert = "danger"
+        elif contract_days_left <= 30:
+            contract_alert = "warn"
+
     return render(
         request,
         "ui/company_detail.html",
@@ -844,6 +871,8 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "quick_form": quick_form,
             "contract_form": contract_form,
             "transfer_targets": transfer_targets,
+            "contract_alert": contract_alert,
+            "contract_days_left": contract_days_left,
         },
     )
 

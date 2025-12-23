@@ -10,7 +10,7 @@ class EmailSignatureForm(forms.Form):
         label="Подпись (HTML)",
         required=False,
         widget=forms.Textarea(attrs={"class": "textarea", "rows": 10, "id": "id_signature_html"}),
-        help_text="HTML-подпись, которая будет добавляться в конце письма перед блоком отписки.",
+        help_text="HTML-подпись, которая будет добавляться в конец письма.",
     )
 
 

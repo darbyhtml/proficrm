@@ -29,7 +29,6 @@ def build_message(
     subject: str,
     body_text: str,
     body_html: str,
-    unsubscribe_url: str,
     from_email: Optional[str] = None,
     from_name: Optional[str] = None,
     reply_to: Optional[str] = None,
@@ -43,10 +42,6 @@ def build_message(
     _reply_to = (reply_to or account.reply_to or "").strip()
     if _reply_to:
         msg["Reply-To"] = _reply_to
-
-    # Помогает с доставляемостью/спамом: стандартный заголовок отписки
-    msg["List-Unsubscribe"] = f"<{unsubscribe_url}>"
-    msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
 
     msg_id = make_msgid(domain=None)
     msg["Message-ID"] = msg_id

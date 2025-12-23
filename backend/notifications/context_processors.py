@@ -56,7 +56,7 @@ def notifications_panel(request):
     reminder_count = len(overdue) + len(today)
 
     # Напоминания по договорам (для ответственного): показываем в "Напоминаниях"
-    # + создаём реальное уведомление на порогах (7/1/0 дней) с дедупликацией.
+    # + создаём реальное уведомление на порогах (30/14 дней) с дедупликацией.
     try:
         now = timezone.now()
         today_date = timezone.localdate(now)
@@ -72,13 +72,15 @@ def notifications_panel(request):
             .only("id", "name", "contract_until")
         )
 
-        # 1) UI-напоминания: ближайшие 10 в пределах 7 дней
-        soon_until = today_date + timedelta(days=7)
+        # 1) UI-напоминания: ближайшие 10 в пределах 30 дней
+        soon_until = today_date + timedelta(days=30)
         soon = contract_qs.filter(contract_until__lte=soon_until).order_by("contract_until")[:10]
         for c in list(soon):
+            days_left = (c.contract_until - today_date).days if c.contract_until else None
+            prefix = "Срочно: " if (days_left is not None and days_left < 14) else ""
             reminder_items.append(
                 {
-                    "title": f"Договор заканчивается: {c.contract_until.strftime('%d.%m.%Y')}",
+                    "title": f"{prefix}Договор до {c.contract_until.strftime('%d.%m.%Y')}",
                     "subtitle": c.name,
                     "url": f"/companies/{c.id}/",
                     "kind": "contract",
@@ -88,7 +90,7 @@ def notifications_panel(request):
 
         # 2) Реальные уведомления (с дедупликацией)
         if should_check:
-            thresholds = [7, 1, 0]
+            thresholds = [30, 14]
             for days_before in thresholds:
                 target = today_date + timedelta(days=days_before)
                 qs_hit = contract_qs.filter(contract_until=target)
@@ -101,11 +103,11 @@ def notifications_panel(request):
                     CompanyContractReminder.objects.create(
                         user=user, company_id=c.id, contract_until=target, days_before=days_before
                     )
-                    if days_before == 0:
-                        title = "Сегодня заканчивается договор"
+                    if days_before == 30:
+                        title = "До окончания договора остался месяц"
                         body = f"{c.name} · до {target.strftime('%d.%m.%Y')}"
                     else:
-                        title = f"Скоро заканчивается договор (через {days_before} дн.)"
+                        title = "До окончания договора осталось 2 недели"
                         body = f"{c.name} · до {target.strftime('%d.%m.%Y')}"
                     notify(
                         user=user,

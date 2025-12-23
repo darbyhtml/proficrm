@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Q
 from django.utils import timezone
 
-from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, UnsubscribeToken
+from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe
 from mailer.smtp_sender import build_message, send_via_smtp
 from mailer.utils import html_to_text
 
@@ -54,15 +54,6 @@ class Command(BaseCommand):
                         r.status = CampaignRecipient.Status.UNSUBSCRIBED
                         r.save(update_fields=["status", "updated_at"])
                         continue
-
-                    tok_obj = UnsubscribeToken.objects.filter(email__iexact=r.email).first()
-                    if not tok_obj:
-                        import secrets
-                        tok_obj = UnsubscribeToken.objects.create(email=r.email, token=secrets.token_urlsafe(32)[:64])
-
-                    # В воркере мы не знаем домен; footer без absolute URL (для VDS лучше задать PUBLIC_BASE_URL в settings)
-                    unsubscribe_url = f"/unsubscribe/{tok_obj.token}/"
-                    footer = f"\n\nОтписаться: {unsubscribe_url}\n"
                     auto_plain = html_to_text(camp.body_html or "")
 
                     # Нужен объект MailAccount только как "контейнер" полей для build_message; заголовки задаём явно.
@@ -71,9 +62,8 @@ class Command(BaseCommand):
                         account=identity,
                         to_email=r.email,
                         subject=camp.subject,
-                        body_text=(auto_plain or camp.body_text or "") + footer,
-                        body_html=(camp.body_html or "") + f'<hr><p style="font-size:12px;color:#666">Отписаться: <a href="{unsubscribe_url}">{unsubscribe_url}</a></p>',
-                        unsubscribe_url=unsubscribe_url,
+                        body_text=(auto_plain or camp.body_text or ""),
+                        body_html=(camp.body_html or ""),
                         from_email=((smtp_cfg.from_email or "").strip() or (smtp_cfg.smtp_username or "").strip()),
                         from_name=((camp.sender_name or "").strip() or (smtp_cfg.from_name or "CRM ПРОФИ").strip()),
                         reply_to=(user.email or "").strip(),
