@@ -388,26 +388,6 @@ def analytics(request: HttpRequest) -> HttpResponse:
             stats[uid]["cold_calls"] += 1
         calls_by_user.setdefault(uid, []).append(call)
 
-    # Отметки "холодный" (контакты + основной контакт компании)
-    contact_marks = (
-        Contact.objects.filter(cold_marked_by_id__in=user_ids, cold_marked_at__isnull=False, cold_marked_at__gte=start, cold_marked_at__lt=end)
-        .values("cold_marked_by_id")
-        .annotate(cnt=Count("id"))
-    )
-    primary_marks = (
-        Company.objects.filter(primary_cold_marked_by_id__in=user_ids, primary_cold_marked_at__isnull=False, primary_cold_marked_at__gte=start, primary_cold_marked_at__lt=end)
-        .values("primary_cold_marked_by_id")
-        .annotate(cnt=Count("id"))
-    )
-    for row in contact_marks:
-        uid = row["cold_marked_by_id"]
-        stats.setdefault(uid, {"calls_total": 0, "cold_calls": 0})
-        stats[uid]["cold_marks"] = stats[uid].get("cold_marks", 0) + int(row["cnt"] or 0)
-    for row in primary_marks:
-        uid = row["primary_cold_marked_by_id"]
-        stats.setdefault(uid, {"calls_total": 0, "cold_calls": 0})
-        stats[uid]["cold_marks"] = stats[uid].get("cold_marks", 0) + int(row["cnt"] or 0)
-
     # Группировка по филиалу (для управляющего) + карточки для шаблона
     groups_map = {}
     for u in users_list:
@@ -419,7 +399,6 @@ def analytics(request: HttpRequest) -> HttpResponse:
                 "user": u,
                 "calls_total": int(s.get("calls_total", 0) or 0),
                 "cold_calls": int(s.get("cold_calls", 0) or 0),
-                "cold_marks": int(s.get("cold_marks", 0) or 0),
                 "url": f"/analytics/users/{u.id}/?period={period}",
             }
         )
