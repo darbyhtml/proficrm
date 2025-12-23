@@ -35,7 +35,7 @@
                 {% if lead_state_req %}
                   Запрос состояния
                 {% else %}
-                  {% if is_cold_company %}Сделать тёплой{% else %}Сделать холодной{% endif %}
+                  Сделать теплым
                 {% endif %}
               </button>
             {% endif %}
@@ -242,12 +242,20 @@
                 <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" id="openLeadStateReqModal2" {% if lead_state_req %}disabled{% endif %}>
                   Запросить смену
                 </button>
-              {% elif can_decide_lead_state and not lead_state_req %}
+              {% elif can_decide_lead_state and not lead_state_req and is_cold_company %}
                 <form method="post" action="/companies/{{ company.id }}/lead-state/set/">
                   {% csrf_token %}
-                  <input type="hidden" name="lead_state" value="{% if is_cold_company %}warm{% else %}cold{% endif %}" />
+                  <input type="hidden" name="lead_state" value="warm" />
                   <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" type="submit">
-                    {% if is_cold_company %}Сделать теплым{% else %}Сделать холодным{% endif %}
+                    Сделать теплым
+                  </button>
+                </form>
+              {% elif can_revert_lead_state %}
+                <form method="post" action="/companies/{{ company.id }}/lead-state/set/">
+                  {% csrf_token %}
+                  <input type="hidden" name="lead_state" value="cold" />
+                  <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem;border-color:rgba(239,68,68,.35);color:#b91c1c;background:rgba(239,68,68,.06)" type="submit" onclick="return confirm('Вернуть в «Холодный контакт»?');">
+                    Вернуть в холодный (админ)
                   </button>
                 </form>
               {% endif %}
@@ -383,12 +391,20 @@
                   <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" id="openLeadStateReqModalQuick" {% if lead_state_req %}disabled{% endif %}>
                     Запросить смену
                   </button>
-                {% elif can_decide_lead_state and not lead_state_req %}
+                {% elif can_decide_lead_state and not lead_state_req and is_cold_company %}
                   <form method="post" action="/companies/{{ company.id }}/lead-state/set/">
                     {% csrf_token %}
-                    <input type="hidden" name="lead_state" value="{% if is_cold_company %}warm{% else %}cold{% endif %}" />
+                    <input type="hidden" name="lead_state" value="warm" />
                     <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" type="submit">
-                      {% if is_cold_company %}Сделать теплым{% else %}Сделать холодным{% endif %}
+                      Сделать теплым
+                    </button>
+                  </form>
+                {% elif can_revert_lead_state %}
+                  <form method="post" action="/companies/{{ company.id }}/lead-state/set/">
+                    {% csrf_token %}
+                    <input type="hidden" name="lead_state" value="cold" />
+                    <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem;border-color:rgba(239,68,68,.35);color:#b91c1c;background:rgba(239,68,68,.06)" type="submit" onclick="return confirm('Вернуть в «Холодный контакт»?');">
+                      Вернуть в холодный (админ)
                     </button>
                   </form>
                 {% else %}
@@ -850,9 +866,9 @@
             </div>
             <form method="post" action="/companies/{{ company.id }}/lead-state/request/" class="mt-3 space-y-2">
               {% csrf_token %}
-              <input type="hidden" name="requested_state" value="{% if is_cold_company %}warm{% else %}cold{% endif %}" />
+              <input type="hidden" name="requested_state" value="warm" />
               <div class="text-sm">
-                Запрос: <b>{% if is_cold_company %}сделать тёплой{% else %}сделать холодной{% endif %}</b>
+                Запрос: <b>сделать теплым</b>
               </div>
               <div>
                 <label class="block text-xs text-brand-dark/70 mb-1">Примечание (почему меняем)</label>
