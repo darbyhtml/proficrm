@@ -5,6 +5,15 @@ from django import forms
 from mailer.models import Campaign, MailAccount, GlobalMailAccount
 
 
+class EmailSignatureForm(forms.Form):
+    signature_html = forms.CharField(
+        label="Подпись (HTML)",
+        required=False,
+        widget=forms.Textarea(attrs={"class": "textarea", "rows": 10, "id": "id_signature_html"}),
+        help_text="HTML-подпись, которая будет добавляться в конце письма перед блоком отписки.",
+    )
+
+
 class MailAccountForm(forms.ModelForm):
     smtp_password = forms.CharField(
         label="Пароль SMTP",

@@ -1,0 +1,146 @@
+{% extends "ui/base.html" %}
+{% block title %}Почта — подпись{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div class="flex items-end justify-between gap-3">
+      <div>
+        <div class="text-sm muted"><a class="link" href="/mail/campaigns/">Почта</a> /</div>
+        <h1 class="text-2xl font-semibold">Настройка подписи</h1>
+        <div class="muted text-sm">Подпись автоматически добавится в конец письма перед блоком «Отписаться».</div>
+      </div>
+      <a class="btn btn-outline" href="/mail/campaigns/">Назад</a>
+    </div>
+
+    <form method="post" class="card card-pad space-y-3" id="sigForm">
+      {% csrf_token %}
+
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div>
+          <div class="font-medium mb-2">Редактор</div>
+          <div class="flex flex-wrap gap-2 mb-2">
+            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" data-cmd="bold"><b>B</b></button>
+            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" data-cmd="italic"><i>I</i></button>
+            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" data-cmd="underline"><u>U</u></button>
+            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" data-cmd="insertUnorderedList">• Список</button>
+            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="sigLinkBtn">Ссылка</button>
+            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="sigImgBtn">Картинка</button>
+            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="sigClearBtn">Очистить</button>
+          </div>
+
+          <div class="rounded-xl border border-brand-soft bg-white p-3">
+            <div id="sigEditor" contenteditable="true" class="min-h-[180px] outline-none text-sm"></div>
+          </div>
+          <div class="text-xs muted-2 mt-2">
+            - **Картинки**: можно вставить через кнопку «Картинка» (файл будет встроен в подпись).<br>
+            - Также можно вставлять текст/картинки из буфера (если браузер поддерживает).<br>
+            - Если подпись пустая — ничего не добавляется.
+          </div>
+
+          <div class="hidden">
+            {{ form.signature_html }}
+          </div>
+          <input id="sigImgInput" type="file" accept="image/*" class="hidden" />
+        </div>
+
+        <div>
+          <div class="font-medium mb-2">Предпросмотр</div>
+          <div class="rounded-xl border border-brand-soft bg-white p-3">
+            <div class="text-xs muted-2 mb-2">Так подпись будет выглядеть в письме:</div>
+            <div id="sigPreview" class="text-sm"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex gap-2">
+        <button class="btn btn-primary" type="submit">Сохранить</button>
+        <a class="btn btn-outline" href="/mail/campaigns/">Отмена</a>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    (function(){
+      const textarea = document.getElementById('id_signature_html');
+      const editor = document.getElementById('sigEditor');
+      const preview = document.getElementById('sigPreview');
+      const form = document.getElementById('sigForm');
+      const imgInput = document.getElementById('sigImgInput');
+      const imgBtn = document.getElementById('sigImgBtn');
+      const linkBtn = document.getElementById('sigLinkBtn');
+      const clearBtn = document.getElementById('sigClearBtn');
+
+      if (!textarea || !editor || !preview || !form) return;
+
+      // init
+      editor.innerHTML = textarea.value || '';
+      preview.innerHTML = editor.innerHTML || '<span class="muted-2">—</span>';
+
+      function updatePreview() {
+        preview.innerHTML = editor.innerHTML || '<span class="muted-2">—</span>';
+      }
+
+      // toolbar commands
+      document.querySelectorAll('[data-cmd]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const cmd = btn.getAttribute('data-cmd');
+          if (!cmd) return;
+          document.execCommand(cmd, false);
+          editor.focus();
+          updatePreview();
+        });
+      });
+
+      if (linkBtn) {
+        linkBtn.addEventListener('click', () => {
+          const url = prompt('Ссылка (https://...)');
+          if (!url) return;
+          document.execCommand('createLink', false, url);
+          editor.focus();
+          updatePreview();
+        });
+      }
+
+      if (clearBtn) {
+        clearBtn.addEventListener('click', () => {
+          if (!confirm('Очистить подпись?')) return;
+          editor.innerHTML = '';
+          updatePreview();
+        });
+      }
+
+      // image insert (embed as data URL)
+      function insertHtml(html) {
+        editor.focus();
+        document.execCommand('insertHTML', false, html);
+        updatePreview();
+      }
+
+      if (imgBtn && imgInput) {
+        imgBtn.addEventListener('click', () => imgInput.click());
+        imgInput.addEventListener('change', () => {
+          const f = imgInput.files && imgInput.files.length ? imgInput.files[0] : null;
+          if (!f) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            const src = String(reader.result || '');
+            if (!src) return;
+            insertHtml(`<img src="${src}" alt="img" style="max-width:220px;height:auto;display:block;margin:6px 0;" />`);
+            imgInput.value = '';
+          };
+          reader.readAsDataURL(f);
+        });
+      }
+
+      editor.addEventListener('input', updatePreview);
+      editor.addEventListener('blur', updatePreview);
+      editor.addEventListener('paste', () => setTimeout(updatePreview, 0));
+
+      form.addEventListener('submit', () => {
+        textarea.value = editor.innerHTML || '';
+      });
+    })();
+  </script>
+{% endblock %}
+
+

@@ -9,7 +9,10 @@
         <div class="muted text-sm">Создай кампанию → сгенерируй получателей → отправляй батчами.</div>
       </div>
       <div class="flex gap-2">
-        <a class="btn btn-outline" href="/mail/settings/">Настройки SMTP</a>
+        {% if is_admin %}
+          <a class="btn btn-outline" href="/mail/settings/">Настройки SMTP</a>
+        {% endif %}
+        <a class="btn btn-outline" href="/mail/signature/">Настройка подписи</a>
         <a class="btn btn-primary" href="/mail/campaigns/new/">+ Новая кампания</a>
       </div>
     </div>

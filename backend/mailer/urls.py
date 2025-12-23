@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     path("mail/settings/", views.mail_settings, name="mail_settings"),
+    path("mail/signature/", views.mail_signature, name="mail_signature"),
     path("mail/campaigns/", views.campaigns, name="campaigns"),
     path("mail/campaigns/new/", views.campaign_create, name="campaign_create"),
     path("mail/campaigns/<uuid:campaign_id>/", views.campaign_detail, name="campaign_detail"),

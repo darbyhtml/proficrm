@@ -29,6 +29,8 @@ class User(AbstractUser):
     # По умолчанию доступ "вся база", но админ может ограничить.
     data_scope = models.CharField("Доступ к базе", max_length=16, choices=DataScope.choices, default=DataScope.GLOBAL)
 
+    email_signature_html = models.TextField("Подпись в письме (HTML)", blank=True, default="")
+
     def __str__(self) -> str:
         full = f"{self.last_name} {self.first_name}".strip()
         return full or self.get_username()
