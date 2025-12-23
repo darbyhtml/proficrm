@@ -9,7 +9,7 @@
         <div class="text-sm text-brand-dark/70">Сегодняшние задачи и последние изменения</div>
       </div>
       <div class="flex items-center gap-2">
-        {% if request.user.role == 'manager' or request.user.role == 'sales_head' or request.user.role == 'branch_director' or request.user.role == 'group_manager' or is_admin %}
+        {% if can_view_cold_call_reports %}
           <button type="button" class="btn btn-outline" id="openColdDay" title="Отчёт по холодным звонкам за день" aria-label="Отчёт по холодным звонкам за день">
             <span class="inline-flex items-center gap-2">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">

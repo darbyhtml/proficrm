@@ -15,12 +15,16 @@ def ui_globals(request):
     is_group_manager = bool(is_auth and (getattr(user, "is_superuser", False) or role in (User.Role.ADMIN, User.Role.GROUP_MANAGER)))
     is_branch_lead = bool(is_auth and role in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR))
     can_view_activity = bool(is_auth and (is_admin or is_group_manager or is_branch_lead))
+    can_view_cold_call_reports = bool(
+        is_auth and (is_admin or is_group_manager or is_branch_lead or role == User.Role.MANAGER)
+    )
 
     return {
         "is_admin": is_admin,
         "is_group_manager": is_group_manager,
         "is_branch_lead": is_branch_lead,
         "can_view_activity": can_view_activity,
+        "can_view_cold_call_reports": can_view_cold_call_reports,
     }
 
 
