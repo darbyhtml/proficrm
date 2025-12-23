@@ -219,7 +219,7 @@
                 <span>Почта</span>
               </a>
               {% if is_admin or is_group_manager or is_branch_lead %}
-                <a class="flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-brand-soft/40 text-sm {% if request.resolver_match.url_name == 'analytics' %}bg-brand-soft/50 font-medium{% endif %}" href="/analytics/">
+                <a class="flex items-center gap-2 px-2.5 py-2 rounded-lg hover:bg-brand-soft/40 text-sm {% if request.resolver_match.url_name == 'analytics' or request.resolver_match.url_name == 'analytics_user' %}bg-brand-soft/50 font-medium{% endif %}" href="/analytics/">
                   <span class="nav-ico-wrap">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 4 3 5-7"/></svg>
                   </span>
@@ -349,7 +349,7 @@
           }
         }
 
-        function showToast(text){
+        function showToast(text, kind){
           try{
             const id = 'notifToast';
             let el = document.getElementById(id);
@@ -366,12 +366,28 @@
               document.body.appendChild(el);
             }
             const box = el.firstElementChild;
-            if(box) box.textContent = text || '';
+            if(box){
+              box.textContent = text || '';
+              const k = String(kind || '');
+              if(k === 'error'){
+                box.style.borderColor = 'rgba(239,68,68,.30)';
+                box.style.background = 'rgba(239,68,68,.08)';
+              }else if(k === 'success'){
+                box.style.borderColor = 'rgba(16,185,129,.30)';
+                box.style.background = 'rgba(16,185,129,.06)';
+              }else{
+                box.style.borderColor = 'rgba(194,226,222,.95)';
+                box.style.background = '#fff';
+              }
+            }
             el.style.display = 'block';
             clearTimeout(el.__t);
             el.__t = setTimeout(() => { el.style.display = 'none'; }, 2400);
           }catch(_e){}
         }
+
+        // Глобальный toast для остальных страниц (company_detail и т.п.)
+        window.uiToast = showToast;
 
         function showBrowserNotification(n){
           if(!browserEnabled) return;
@@ -533,11 +549,11 @@
           enableBrowserBtn.__bound = true;
           enableBrowserBtn.addEventListener('click', async () => {
             if(!('Notification' in window)){
-              alert('Браузерные уведомления не поддерживаются.');
+              showToast('Браузерные уведомления не поддерживаются.', 'error');
               return;
             }
             if(!window.isSecureContext){
-              alert('Браузерные уведомления работают только по HTTPS.');
+              showToast('Браузерные уведомления работают только по HTTPS.', 'error');
               return;
             }
             try{
@@ -546,8 +562,9 @@
               setBool(BROWSER_KEY, browserEnabled);
               updateTogglesUI();
               if(!browserEnabled) {
-                alert('Разрешение не выдано. Уведомления браузера отключены.');
+                showToast('Разрешение не выдано. Уведомления браузера отключены.', 'error');
               } else {
+                showToast('Браузерные уведомления включены.', 'success');
                 // тестовое уведомление, чтобы было понятно что всё включилось
                 showBrowserNotification({id:'test', title:'CRM ПРОФИ', body:'Браузерные уведомления включены', url:''});
               }

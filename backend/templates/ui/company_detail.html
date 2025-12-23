@@ -820,10 +820,6 @@
       </div>
     </div>
 
-    <div id="toast" class="fixed bottom-4 right-4 z-[80] hidden max-w-[92vw]">
-      <div id="toastInner" class="rounded-xl border border-brand-soft bg-white px-4 py-3 shadow-lg text-sm text-brand-dark"></div>
-    </div>
-
     {% if can_request_delete %}
       <div id="deleteRequestModal" class="fixed inset-0 z-[200] hidden">
         <div class="fixed inset-0 bg-black/35" data-close-delreq></div>
@@ -1015,18 +1011,7 @@
           if (parts.length === 2) return parts.pop().split(';').shift();
           return '';
         }
-        const toast = document.getElementById('toast');
-        const toastInner = document.getElementById('toastInner');
-        let toastTimer = null;
-        function showToast(text, kind) {
-          if (!toast || !toastInner) return;
-          if (toastTimer) clearTimeout(toastTimer);
-          toastInner.textContent = text || '';
-          toastInner.style.borderColor = kind === 'error' ? 'rgba(239,68,68,.30)' : 'rgba(194,226,222,.95)';
-          toastInner.style.background = kind === 'error' ? 'rgba(239,68,68,.08)' : '#fff';
-          toast.classList.remove('hidden');
-          toastTimer = setTimeout(() => toast.classList.add('hidden'), kind === 'error' ? 4200 : 2400);
-        }
+        const uiToast = (window.uiToast || function(text){ try{ console.log('[toast]', text); }catch(_e){} });
 
         const contractModal = document.getElementById('contractModal');
         const openContract = document.getElementById('openContractModal');
@@ -1113,7 +1098,7 @@
           btn.addEventListener('click', (e) => {
             if (btn.getAttribute('data-disabled') === '1') {
               e.preventDefault();
-              showToast(btn.title || 'Недоступно', 'info');
+              uiToast(btn.title || 'Недоступно', 'info');
               return false;
             }
           });
@@ -1129,7 +1114,7 @@
             if (btn.dataset.busy === '1') return;
             btn.dataset.busy = '1';
             btn.classList.add('opacity-60');
-            showToast('Отправляю команду на телефон…', 'info');
+            uiToast('Отправляю команду на телефон…', 'info');
             try {
               const body = new URLSearchParams({phone, company_id: companyId, contact_id: contactId});
               const res = await fetch('/phone/call/', {
@@ -1139,12 +1124,12 @@
               });
               const data = await res.json().catch(() => ({}));
               if (!res.ok || !data.ok) throw new Error(data.detail || 'Ошибка');
-              showToast('Отправлено на телефон ✓', 'success');
+              uiToast('Отправлено на телефон ✓', 'success');
               // Через 10 секунд делаем активной кнопку "отметить холодный" рядом с тем номером/контактом, по которому звонили.
               const key = contactId ? (`contact-${contactId}`) : 'primary';
               const coldBtn = document.querySelector(`[data-cold-btn="${key}"]`);
               if (coldBtn && coldBtn.getAttribute('data-cold-marked') !== '1') {
-                showToast('Можно отметить «холодный» через 10 секунд…', 'info');
+                uiToast('Можно отметить «холодный» через 10 секунд…', 'info');
                 setTimeout(() => {
                   try {
                     const b = document.querySelector(`[data-cold-btn="${key}"]`);
@@ -1164,7 +1149,7 @@
             } catch (e) {
               btn.dataset.busy = '0';
               btn.classList.remove('opacity-60');
-              showToast('Не удалось отправить на телефон: ' + (e && e.message ? e.message : e), 'error');
+              uiToast('Не удалось отправить на телефон: ' + (e && e.message ? e.message : e), 'error');
             }
           });
         });
