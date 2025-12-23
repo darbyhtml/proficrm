@@ -60,7 +60,7 @@ class Company(models.Model):
         "Состояние карточки",
         max_length=8,
         choices=LeadState.choices,
-        default=LeadState.COLD,
+        default=LeadState.WARM,
         db_index=True,
         help_text="Холодная/тёплая карточка (влияет на доступность отметок «холодный звонок»).",
     )

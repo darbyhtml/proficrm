@@ -216,6 +216,29 @@
             <div class="text-brand-dark/50">Вид деятельности</div>
             <div>{{ company.activity_kind|default:"—" }}</div>
           </div>
+          <div>
+            <div class="text-brand-dark/50">Состояние</div>
+            <div class="flex flex-wrap items-center gap-2">
+              {% if is_cold_company %}
+                <span class="badge badge-warn" style="padding:.1rem .35rem;font-size:.65rem">Холодная</span>
+              {% else %}
+                <span class="badge" style="padding:.1rem .35rem;font-size:.65rem">Тёплая</span>
+              {% endif %}
+              {% if can_request_lead_state %}
+                <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" id="openLeadStateReqModal2" {% if lead_state_req %}disabled{% endif %}>
+                  Запросить смену
+                </button>
+              {% elif can_decide_lead_state and not lead_state_req %}
+                <form method="post" action="/companies/{{ company.id }}/lead-state/set/">
+                  {% csrf_token %}
+                  <input type="hidden" name="lead_state" value="{% if is_cold_company %}warm{% else %}cold{% endif %}" />
+                  <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" type="submit">
+                    {% if is_cold_company %}Сделать тёплой{% else %}Сделать холодной{% endif %}
+                  </button>
+                </form>
+              {% endif %}
+            </div>
+          </div>
           <div class="{% if contract_alert == 'danger' %}rounded-xl border border-red-400/40 bg-red-500/5 p-2 -m-2{% elif contract_alert == 'warn' %}rounded-xl border border-brand-orange/50 bg-brand-orange/10 p-2 -m-2{% endif %}">
             <div class="text-brand-dark/50 flex items-center gap-2">
               <span>Договор</span>
@@ -998,6 +1021,11 @@
           openLeadStateReq.addEventListener('click', openM);
           closeBtns.forEach(b => b.addEventListener('click', closeM));
           document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeM(); });
+        }
+        const openLeadStateReq2 = document.getElementById('openLeadStateReqModal2');
+        if (leadStateReqModal && openLeadStateReq2 && !openLeadStateReq2.disabled) {
+          function openM() { leadStateReqModal.classList.remove('hidden'); }
+          openLeadStateReq2.addEventListener('click', openM);
         }
 
         const cancelLeadStateReqModal = document.getElementById('cancelLeadStateReqModal');

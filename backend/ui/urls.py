@@ -28,6 +28,7 @@ urlpatterns = [
         views.company_lead_state_request_cancel,
         name="company_lead_state_request_cancel",
     ),
+    path("companies/<uuid:company_id>/lead-state/set/", views.company_lead_state_set, name="company_lead_state_set"),
     path("companies/<uuid:company_id>/transfer/", views.company_transfer, name="company_transfer"),
     path("companies/<uuid:company_id>/delete-request/", views.company_delete_request_create, name="company_delete_request_create"),
     path("companies/<uuid:company_id>/delete-request/<int:req_id>/cancel/", views.company_delete_request_cancel, name="company_delete_request_cancel"),

@@ -1537,6 +1537,49 @@ def company_lead_state_request_approve(request: HttpRequest, company_id, req_id)
 
 
 @login_required
+def company_lead_state_set(request: HttpRequest, company_id) -> HttpResponse:
+    """
+    Прямое изменение состояния карточки руководителем (без запроса).
+    Используем для РОП/директора/управляющего/админа.
+    """
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_decide_company_lead_state(user, company):
+        messages.error(request, "Нет прав на изменение состояния по этой компании.")
+        return redirect("company_detail", company_id=company.id)
+
+    # Если есть активный запрос — сначала его обработайте, чтобы не было рассинхрона.
+    pending = CompanyLeadStateRequest.objects.filter(company=company, status=CompanyLeadStateRequest.Status.PENDING).first()
+    if pending:
+        messages.info(request, "По компании уже есть запрос смены состояния — сначала обработайте его.")
+        return redirect("company_detail", company_id=company.id)
+
+    requested_state = (request.POST.get("lead_state") or "").strip()
+    if requested_state not in (Company.LeadState.COLD, Company.LeadState.WARM):
+        messages.error(request, "Некорректное состояние.")
+        return redirect("company_detail", company_id=company.id)
+    if requested_state == company.lead_state:
+        messages.info(request, "Состояние уже установлено.")
+        return redirect("company_detail", company_id=company.id)
+
+    company.lead_state = requested_state
+    company.save(update_fields=["lead_state", "updated_at"])
+    messages.success(request, "Состояние карточки обновлено.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="company",
+        entity_id=str(company.id),
+        company_id=company.id,
+        message="Изменено состояние карточки (напрямую)",
+        meta={"lead_state": requested_state},
+    )
+    return redirect("company_detail", company_id=company.id)
+
+
+@login_required
 def company_contract_update(request: HttpRequest, company_id) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
