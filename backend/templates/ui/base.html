@@ -380,17 +380,17 @@
             const o = ctx.createOscillator();
             const g = ctx.createGain();
             const now = ctx.currentTime;
-            // чуть громче, но всё ещё аккуратно
+            // единый короткий звук, чуть заметнее, но без “пугающей” громкости
             g.gain.setValueAtTime(0.0001, now);
-            g.gain.exponentialRampToValueAtTime(0.06, now + 0.01);
-            g.gain.exponentialRampToValueAtTime(0.0001, now + 0.20);
+            g.gain.exponentialRampToValueAtTime(0.10, now + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.0001, now + 0.26);
             o.type = 'sine';
             o.frequency.setValueAtTime(880, now);
-            o.frequency.exponentialRampToValueAtTime(660, now + 0.20);
+            o.frequency.exponentialRampToValueAtTime(660, now + 0.26);
             o.connect(g);
             g.connect(ctx.destination);
             o.start(now);
-            o.stop(now + 0.22);
+            o.stop(now + 0.28);
           }catch(_e){}
         }
 
@@ -421,6 +421,8 @@
         function playSound(){
           if(!soundEnabled) return;
           // Важно: не используем await в user-gesture цепочке — некоторые браузеры “теряют” активацию.
+          // Всегда играем WebAudio — это наиболее предсказуемо и одинаково во всех браузерах.
+          webAudioBeep();
           try{
             if(soundEl && soundEl.play){
               const canOgg = soundEl.canPlayType && soundEl.canPlayType('audio/ogg; codecs="vorbis"');
@@ -435,7 +437,6 @@
               return;
             }
           }catch(_e){}
-          webAudioBeep(); // fallback
         }
 
         function showBrowserNotification(n){
@@ -450,8 +451,9 @@
             const notif = new Notification(title, {
               body,
               tag: 'crm_' + (n.id || ''),
-              // Даем ОС/браузеру возможность проиграть стандартный звук уведомления
-              silent: false,
+              // Системный звук отличается по браузерам/ОС (и может быть выключен).
+              // Держим уведомления беззвучными и играем единый звук сами.
+              silent: true,
               icon: '/static/ui/favicon-v2.svg',
             });
             notif.onclick = () => {
