@@ -87,8 +87,10 @@ class ImportTasksResult:
     total_events: int = 0
     created_tasks: int = 0
     skipped_existing: int = 0
+    skipped_unmatched: int = 0
     linked_to_company: int = 0
     without_company: int = 0
+    created_companies: int = 0
     preview: list[dict] | None = None
 
 
@@ -99,6 +101,7 @@ def import_amocrm_ics(
     dry_run: bool = False,
     limit_events: int = 200,
     actor: User | None = None,
+    unmatched_mode: str = "keep",  # keep|skip|create_company
 ) -> ImportTasksResult:
     """
     Импорт задач из amoCRM iCal (.ics) в Task.
@@ -175,7 +178,36 @@ def import_amocrm_ics(
             if company:
                 res.linked_to_company += 1
             else:
-                res.without_company += 1
+                mode = (unmatched_mode or "keep").strip().lower()
+                if mode == "skip":
+                    res.skipped_unmatched += 1
+                    continue
+                if mode == "create_company":
+                    # создаём компанию-заглушку, чтобы не потерять задачу (best-effort)
+                    guess = company_name or ""
+                    if not guess:
+                        res.skipped_unmatched += 1
+                        continue
+                    # защитим от дублей: сначала ещё раз попробуем найти (на случай гонок)
+                    company = find_company(guess)
+                    if company is None:
+                        company = Company(
+                            name=guess[:255],
+                            created_by=actor,
+                            responsible=actor,
+                            raw_fields={"source": "amo_ics_stub"},
+                        )
+                        if not dry_run:
+                            company.save()
+                        res.created_companies += 1
+                        # добавим в кеш для последующих задач
+                        key = _norm_company_name(company.name)
+                        if key and key not in by_norm:
+                            by_norm[key] = company
+                    res.linked_to_company += 1
+                else:
+                    # keep: импортируем без компании
+                    res.without_company += 1
 
             assigned_to = None
             if company and getattr(company, "responsible_id", None):
@@ -184,7 +216,9 @@ def import_amocrm_ics(
 
             task = Task(
                 title=(summary[:255] if summary else "Задача (amo)"),
-                description=(desc or "") + (f"\n\n[Amo UID: {uid}]" if uid else ""),
+                description=(desc or "")
+                + (f"\n\n[Amo UID: {uid}]" if uid else "")
+                + (f"\n[Amo Company: {company_name}]" if company_name and not company else ""),
                 due_at=dt_start,
                 company=company,
                 created_by=actor,

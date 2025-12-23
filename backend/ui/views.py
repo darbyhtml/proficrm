@@ -2857,6 +2857,7 @@ def settings_import_tasks(request: HttpRequest) -> HttpResponse:
             f = form.cleaned_data["ics_file"]
             limit_events = int(form.cleaned_data["limit_events"])
             dry_run = bool(form.cleaned_data.get("dry_run"))
+            unmatched_mode = (form.cleaned_data.get("unmatched_mode") or "keep").strip().lower()
 
             fd, tmp_path = tempfile.mkstemp(suffix=".ics")
             Path(tmp_path).write_bytes(f.read())
@@ -2869,13 +2870,14 @@ def settings_import_tasks(request: HttpRequest) -> HttpResponse:
                     dry_run=dry_run,
                     limit_events=limit_events,
                     actor=request.user,
+                    unmatched_mode=unmatched_mode,
                 )
                 if dry_run:
                     messages.success(request, "Проверка (dry-run) выполнена.")
                 else:
                     messages.success(
                         request,
-                        f"Импорт выполнен: добавлено задач {result.created_tasks}, пропущено (уже было) {result.skipped_existing}.",
+                        f"Импорт выполнен: добавлено задач {result.created_tasks}, пропущено (уже было) {result.skipped_existing}, пропущено (нет компании) {getattr(result,'skipped_unmatched',0)}.",
                     )
             finally:
                 try:
