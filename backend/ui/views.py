@@ -2857,7 +2857,10 @@ def settings_import_tasks(request: HttpRequest) -> HttpResponse:
             f = form.cleaned_data["ics_file"]
             limit_events = int(form.cleaned_data["limit_events"])
             dry_run = bool(form.cleaned_data.get("dry_run"))
+            only_linked = bool(form.cleaned_data.get("only_linked"))
             unmatched_mode = (form.cleaned_data.get("unmatched_mode") or "keep").strip().lower()
+            if only_linked:
+                unmatched_mode = "skip"
 
             fd, tmp_path = tempfile.mkstemp(suffix=".ics")
             Path(tmp_path).write_bytes(f.read())

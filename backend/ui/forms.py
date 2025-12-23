@@ -300,6 +300,11 @@ class ImportTasksIcsForm(forms.Form):
     ics_file = forms.FileField(label="ICS файл (.ics)")
     limit_events = forms.IntegerField(label="Сколько задач импортировать", min_value=1, max_value=20000, initial=500)
     dry_run = forms.BooleanField(label="Только проверить (dry-run)", required=False, initial=True)
+    only_linked = forms.BooleanField(
+        label="Импортировать только задачи, привязанные к существующей компании",
+        required=False,
+        initial=True,
+    )
     unmatched_mode = forms.ChoiceField(
         label="Если компания не найдена",
         choices=[
