@@ -3,6 +3,19 @@
 
 {% block content %}
   <div class="space-y-4">
+    <style>
+      /* Чтобы подпись в UI выглядела как в письме: без растягивания картинок */
+      #sigEditor img, #sigPreview img{
+        max-width: 100% !important;
+        height: auto !important;
+        width: auto;
+        object-fit: contain;
+      }
+      /* Ограничим слишком большие фото, чтобы не раздувало экран */
+      #sigEditor img, #sigPreview img{
+        max-height: 420px;
+      }
+    </style>
     <div class="flex items-end justify-between gap-3">
       <div>
         <div class="text-sm muted"><a class="link" href="/mail/campaigns/">Почта</a> /</div>
@@ -80,6 +93,26 @@
         preview.innerHTML = editor.innerHTML || '<span class="muted-2">—</span>';
       }
 
+      function normalizeImages(root) {
+        if (!root) return;
+        root.querySelectorAll('img').forEach(img => {
+          try {
+            // Убираем “ломающие” размеры, чтобы не растягивало
+            if (img.style) {
+              if (img.style.width && String(img.style.width).includes('%')) {
+                img.style.width = 'auto';
+              }
+              img.style.height = 'auto';
+              img.style.maxWidth = '100%';
+              img.style.objectFit = 'contain';
+            }
+          } catch (e) {}
+        });
+      }
+
+      normalizeImages(editor);
+      normalizeImages(preview);
+
       // toolbar commands
       document.querySelectorAll('[data-cmd]').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -133,10 +166,11 @@
       }
 
       editor.addEventListener('input', updatePreview);
-      editor.addEventListener('blur', updatePreview);
-      editor.addEventListener('paste', () => setTimeout(updatePreview, 0));
+      editor.addEventListener('blur', () => { normalizeImages(editor); updatePreview(); normalizeImages(preview); });
+      editor.addEventListener('paste', () => setTimeout(() => { normalizeImages(editor); updatePreview(); normalizeImages(preview); }, 0));
 
       form.addEventListener('submit', () => {
+        normalizeImages(editor);
         textarea.value = editor.innerHTML || '';
       });
     })();
