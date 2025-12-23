@@ -522,7 +522,7 @@
                     <div class="text-sm font-medium">{{ c.last_name }} {{ c.first_name }}</div>
                     <div class="text-xs text-brand-dark/70">
                       {{ c.position }}
-                      {% if c.is_cold_call %}
+                      {% if is_cold_company and c.is_cold_call %}
                         <span class="badge badge-warn ml-2" style="padding:.1rem .35rem;font-size:.65rem">Холодный</span>
                       {% endif %}
                     </div>
