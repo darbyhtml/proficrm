@@ -19,7 +19,7 @@ from django.utils import timezone
 from accounts.models import Branch, User
 from audit.models import ActivityEvent
 from audit.service import log_event
-from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact
+from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, CompanyDeletionRequest
 from companies.permissions import can_edit_company as can_edit_company_perm, editable_company_qs as editable_company_qs_perm
 from tasksapp.models import Task, TaskType
 from notifications.models import Notification
@@ -72,6 +72,36 @@ def _can_edit_company(user: User, company: Company) -> bool:
 
 def _editable_company_qs(user: User):
     return editable_company_qs_perm(user)
+
+
+def _company_branch_id(company: Company):
+    if getattr(company, "branch_id", None):
+        return company.branch_id
+    resp = getattr(company, "responsible", None)
+    return getattr(resp, "branch_id", None)
+
+
+def _can_delete_company(user: User, company: Company) -> bool:
+    if not user or not user.is_authenticated or not user.is_active:
+        return False
+    if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+        return True
+    if user.role in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR) and user.branch_id:
+        return bool(_company_branch_id(company) == user.branch_id)
+    return False
+
+
+def _notify_branch_leads(*, branch_id, title: str, body: str, url: str, exclude_user_id=None):
+    if not branch_id:
+        return 0
+    qs = User.objects.filter(is_active=True, branch_id=branch_id, role__in=[User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR])
+    if exclude_user_id:
+        qs = qs.exclude(id=exclude_user_id)
+    sent = 0
+    for u in qs.iterator():
+        notify(user=u, kind=Notification.Kind.COMPANY, title=title, body=body, url=url)
+        sent += 1
+    return sent
 
 
 def _companies_with_overdue_flag(*, now):
@@ -712,6 +742,14 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     company = get_object_or_404(Company.objects.select_related("responsible", "branch", "status", "head_company"), id=company_id)
     can_edit_company = _can_edit_company(user, company)
     can_view_activity = bool(user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD))
+    can_delete_company = _can_delete_company(user, company)
+    can_request_delete = bool(user.role == User.Role.MANAGER and company.responsible_id == user.id)
+    delete_req = (
+        CompanyDeletionRequest.objects.filter(company=company, status=CompanyDeletionRequest.Status.PENDING)
+        .select_related("requested_by", "decided_by")
+        .order_by("-created_at")
+        .first()
+    )
 
     # "Организация" (головная карточка) и "филиалы" (дочерние карточки клиента)
     head = company.head_company or company
@@ -764,11 +802,164 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "tasks": tasks,
             "activity": activity,
             "can_view_activity": can_view_activity,
+            "can_delete_company": can_delete_company,
+            "can_request_delete": can_request_delete,
+            "delete_req": delete_req,
             "quick_form": quick_form,
             "contract_form": contract_form,
             "transfer_targets": transfer_targets,
         },
     )
+
+
+@login_required
+def company_delete_request_create(request: HttpRequest, company_id) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not (user.role == User.Role.MANAGER and company.responsible_id == user.id):
+        messages.error(request, "Запрос на удаление может отправить только ответственный менеджер.")
+        return redirect("company_detail", company_id=company.id)
+    existing = CompanyDeletionRequest.objects.filter(company=company, status=CompanyDeletionRequest.Status.PENDING).first()
+    if existing:
+        messages.info(request, "Запрос на удаление уже отправлен и ожидает решения.")
+        return redirect("company_detail", company_id=company.id)
+    note = (request.POST.get("note") or "").strip()
+    req = CompanyDeletionRequest.objects.create(
+        company=company,
+        company_id_snapshot=company.id,
+        company_name_snapshot=company.name or "",
+        requested_by=user,
+        requested_by_branch=user.branch,
+        note=note,
+        status=CompanyDeletionRequest.Status.PENDING,
+    )
+    branch_id = _company_branch_id(company)
+    sent = _notify_branch_leads(
+        branch_id=branch_id,
+        title="Запрос на удаление компании",
+        body=f"{company.name}: {(note[:180] + '…') if len(note) > 180 else note or 'без комментария'}",
+        url=f"/companies/{company.id}/",
+        exclude_user_id=user.id,
+    )
+    messages.success(request, f"Запрос отправлен на рассмотрение. Уведомлено руководителей: {sent}.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.CREATE,
+        entity_type="company_delete_request",
+        entity_id=str(req.id),
+        company_id=company.id,
+        message="Запрос на удаление компании",
+        meta={"note": note[:500], "notified": sent},
+    )
+    return redirect("company_detail", company_id=company.id)
+
+
+@login_required
+def company_delete_request_cancel(request: HttpRequest, company_id, req_id: int) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_delete_company(user, company):
+        messages.error(request, "Нет прав на обработку запросов удаления по этой компании.")
+        return redirect("company_detail", company_id=company.id)
+    req = get_object_or_404(CompanyDeletionRequest.objects.select_related("requested_by"), id=req_id, company_id_snapshot=company.id)
+    if req.status != CompanyDeletionRequest.Status.PENDING:
+        messages.info(request, "Запрос уже обработан.")
+        return redirect("company_detail", company_id=company.id)
+    decision_note = (request.POST.get("decision_note") or "").strip()
+    if not decision_note:
+        messages.error(request, "Укажите причину отмены запроса.")
+        return redirect("company_detail", company_id=company.id)
+    req.status = CompanyDeletionRequest.Status.CANCELLED
+    req.decided_by = user
+    req.decision_note = decision_note
+    req.decided_at = timezone.now()
+    req.save(update_fields=["status", "decided_by", "decision_note", "decided_at"])
+    if req.requested_by_id:
+        notify(
+            user=req.requested_by,
+            kind=Notification.Kind.COMPANY,
+            title="Запрос на удаление отклонён",
+            body=f"{company.name}: {decision_note}",
+            url=f"/companies/{company.id}/",
+        )
+    messages.success(request, "Запрос отклонён. Менеджер уведомлён.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="company_delete_request",
+        entity_id=str(req.id),
+        company_id=company.id,
+        message="Отклонён запрос на удаление компании",
+        meta={"decision_note": decision_note[:500]},
+    )
+    return redirect("company_detail", company_id=company.id)
+
+
+@login_required
+def company_delete_request_approve(request: HttpRequest, company_id, req_id: int) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_delete_company(user, company):
+        messages.error(request, "Нет прав на удаление этой компании.")
+        return redirect("company_detail", company_id=company.id)
+    req = get_object_or_404(CompanyDeletionRequest.objects.select_related("requested_by"), id=req_id, company_id_snapshot=company.id)
+    if req.status != CompanyDeletionRequest.Status.PENDING:
+        messages.info(request, "Запрос уже обработан.")
+        return redirect("company_detail", company_id=company.id)
+    req.status = CompanyDeletionRequest.Status.APPROVED
+    req.decided_by = user
+    req.decided_at = timezone.now()
+    req.save(update_fields=["status", "decided_by", "decided_at"])
+    if req.requested_by_id:
+        notify(
+            user=req.requested_by,
+            kind=Notification.Kind.COMPANY,
+            title="Запрос на удаление подтверждён",
+            body=f"{company.name}: компания удалена",
+            url="/companies/",
+        )
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.DELETE,
+        entity_type="company",
+        entity_id=str(company.id),
+        company_id=company.id,
+        message="Компания удалена (по запросу)",
+        meta={"request_id": req.id},
+    )
+    company.delete()
+    messages.success(request, "Компания удалена.")
+    return redirect("company_list")
+
+
+@login_required
+def company_delete_direct(request: HttpRequest, company_id) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_delete_company(user, company):
+        messages.error(request, "Нет прав на удаление этой компании.")
+        return redirect("company_detail", company_id=company.id)
+    reason = (request.POST.get("reason") or "").strip()
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.DELETE,
+        entity_type="company",
+        entity_id=str(company.id),
+        company_id=company.id,
+        message="Компания удалена",
+        meta={"reason": reason[:500]},
+    )
+    company.delete()
+    messages.success(request, "Компания удалена.")
+    return redirect("company_list")
 
 
 @login_required

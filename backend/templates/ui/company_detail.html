@@ -6,16 +6,54 @@
     <div class="flex items-start justify-between gap-4">
       <div>
         <div class="text-sm text-brand-dark/70"><a class="underline" href="/companies/">Компании</a> /</div>
-        <h1 class="text-2xl font-semibold">
-          {{ company.name }}
-          {% if company.is_cold_call %}
-            <span class="badge badge-warn ml-2" style="padding:.15rem .45rem;font-size:.7rem">Холодный звонок</span>
-          {% endif %}
-        </h1>
+        <div class="flex items-start justify-between gap-3">
+          <h1 class="text-2xl font-semibold">
+            {{ company.name }}
+            {% if company.is_cold_call %}
+              <span class="badge badge-warn ml-2" style="padding:.15rem .45rem;font-size:.7rem">Холодный звонок</span>
+            {% endif %}
+          </h1>
+          <div class="flex items-center gap-2 shrink-0">
+            {% if can_delete_company %}
+              <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem;border-color:rgba(239,68,68,.35);color:#b91c1c;background:rgba(239,68,68,.06)" id="openDeleteCompanyModal">Удалить</button>
+            {% elif can_request_delete %}
+              <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem;border-color:rgba(239,68,68,.35);color:#b91c1c;background:rgba(239,68,68,.06)" id="openDeleteRequestModal">
+                {% if delete_req %}Запрос отправлен{% else %}Запросить удаление{% endif %}
+              </button>
+            {% endif %}
+          </div>
+        </div>
         <div class="text-sm text-brand-dark/80">
           {% if company.inn %}ИНН: <span class="font-mono">{{ company.inn }}</span>{% endif %}
           {% if company.kpp %} · КПП: <span class="font-mono">{{ company.kpp }}</span>{% endif %}
         </div>
+
+        {% if delete_req %}
+          {% if can_delete_company or can_request_delete %}
+          <div class="mt-3 rounded-xl border border-brand-orange/60 bg-brand-orange/15 px-4 py-3 text-sm text-brand-dark">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <div class="font-medium">Запрос на удаление</div>
+                <div class="text-xs muted-2 mt-1">
+                  От: <b>{{ delete_req.requested_by|default:"—" }}</b> · {{ delete_req.created_at }}
+                </div>
+                {% if delete_req.note %}
+                  <div class="mt-2 whitespace-pre-line">{{ delete_req.note }}</div>
+                {% endif %}
+              </div>
+              {% if can_delete_company %}
+                <div class="flex flex-col gap-2 shrink-0">
+                  <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="openCancelDeleteReqModal">Отменить запрос</button>
+                  <form method="post" action="/companies/{{ company.id }}/delete-request/{{ delete_req.id }}/approve/" onsubmit="return confirm('Подтвердить удаление компании?');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-primary" style="padding:.35rem .6rem;font-size:.75rem;background:#b91c1c">Подтвердить удаление</button>
+                  </form>
+                </div>
+              {% endif %}
+            </div>
+          </div>
+          {% endif %}
+        {% endif %}
         {% if pinned_note %}
           <div class="mt-3 rounded-xl border border-brand-soft bg-brand-soft/15 px-3 py-2">
             <div class="flex items-start justify-between gap-3">
@@ -504,6 +542,90 @@
       <div id="toastInner" class="rounded-xl border border-brand-soft bg-white px-4 py-3 shadow-lg text-sm text-brand-dark"></div>
     </div>
 
+    {% if can_request_delete %}
+      <div id="deleteRequestModal" class="fixed inset-0 z-[70] hidden">
+        <div class="absolute inset-0 bg-black/35" data-close-delreq></div>
+        <div class="absolute inset-x-4 top-24 mx-auto max-w-lg">
+          <div class="card card-pad">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="font-medium">Запросить удаление компании</div>
+                <div class="text-xs muted-2 mt-1">Опишите причину — запрос уйдёт РОП и директору филиала.</div>
+              </div>
+              <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" data-close-delreq aria-label="Закрыть" title="Закрыть">✕</button>
+            </div>
+            <form method="post" action="/companies/{{ company.id }}/delete-request/" class="mt-3 space-y-2">
+              {% csrf_token %}
+              <div>
+                <label class="block text-xs text-brand-dark/70 mb-1">Примечание</label>
+                <textarea name="note" class="textarea" rows="5" placeholder="Почему нужно удалить карточку?">{{ delete_req.note|default:"" }}</textarea>
+              </div>
+              <div class="flex gap-2">
+                <button class="btn btn-primary" type="submit">Отправить запрос</button>
+                <button class="btn btn-outline" type="button" data-close-delreq>Отмена</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if can_delete_company %}
+      <div id="deleteCompanyModal" class="fixed inset-0 z-[70] hidden">
+        <div class="absolute inset-0 bg-black/35" data-close-delcompany></div>
+        <div class="absolute inset-x-4 top-24 mx-auto max-w-lg">
+          <div class="card card-pad">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="font-medium" style="color:#b91c1c">Удалить компанию</div>
+                <div class="text-xs muted-2 mt-1">Удаление необратимо. Заметки будут удалены, задачи/контакты отвяжутся от компании.</div>
+              </div>
+              <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" data-close-delcompany aria-label="Закрыть" title="Закрыть">✕</button>
+            </div>
+            <form method="post" action="/companies/{{ company.id }}/delete/" class="mt-3 space-y-2" onsubmit="return confirm('Точно удалить компанию?');">
+              {% csrf_token %}
+              <div>
+                <label class="block text-xs text-brand-dark/70 mb-1">Комментарий (не обязательно)</label>
+                <textarea name="reason" class="textarea" rows="3" placeholder="Причина удаления"></textarea>
+              </div>
+              <div class="flex gap-2">
+                <button class="btn btn-primary" type="submit" style="background:#b91c1c">Удалить</button>
+                <button class="btn btn-outline" type="button" data-close-delcompany>Отмена</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if can_delete_company and delete_req %}
+      <div id="cancelDeleteReqModal" class="fixed inset-0 z-[70] hidden">
+        <div class="absolute inset-0 bg-black/35" data-close-cancelreq></div>
+        <div class="absolute inset-x-4 top-24 mx-auto max-w-lg">
+          <div class="card card-pad">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="font-medium">Отменить запрос на удаление</div>
+                <div class="text-xs muted-2 mt-1">Менеджеру уйдёт уведомление с причиной.</div>
+              </div>
+              <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" data-close-cancelreq aria-label="Закрыть" title="Закрыть">✕</button>
+            </div>
+            <form method="post" action="/companies/{{ company.id }}/delete-request/{{ delete_req.id }}/cancel/" class="mt-3 space-y-2">
+              {% csrf_token %}
+              <div>
+                <label class="block text-xs text-brand-dark/70 mb-1">Почему отменили?</label>
+                <textarea name="decision_note" class="textarea" rows="4" placeholder="Причина отмены" required></textarea>
+              </div>
+              <div class="flex gap-2">
+                <button class="btn btn-outline" type="submit">Отменить запрос</button>
+                <button class="btn btn-outline" type="button" data-close-cancelreq>Отмена</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
     {% if can_edit_company %}
       <div id="contractModal" class="fixed inset-0 z-[70] hidden">
         <div class="absolute inset-0 bg-black/35" data-close-contract></div>
@@ -572,6 +694,39 @@
           document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeM();
           });
+        }
+
+        const delReqModal = document.getElementById('deleteRequestModal');
+        const openDelReq = document.getElementById('openDeleteRequestModal');
+        if (delReqModal && openDelReq) {
+          const closeBtns = delReqModal.querySelectorAll('[data-close-delreq]');
+          function openM() { delReqModal.classList.remove('hidden'); }
+          function closeM() { delReqModal.classList.add('hidden'); }
+          openDelReq.addEventListener('click', openM);
+          closeBtns.forEach(b => b.addEventListener('click', closeM));
+          document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeM(); });
+        }
+
+        const delCompanyModal = document.getElementById('deleteCompanyModal');
+        const openDelCompany = document.getElementById('openDeleteCompanyModal');
+        if (delCompanyModal && openDelCompany) {
+          const closeBtns = delCompanyModal.querySelectorAll('[data-close-delcompany]');
+          function openM() { delCompanyModal.classList.remove('hidden'); }
+          function closeM() { delCompanyModal.classList.add('hidden'); }
+          openDelCompany.addEventListener('click', openM);
+          closeBtns.forEach(b => b.addEventListener('click', closeM));
+          document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeM(); });
+        }
+
+        const cancelReqModal = document.getElementById('cancelDeleteReqModal');
+        const openCancelReq = document.getElementById('openCancelDeleteReqModal');
+        if (cancelReqModal && openCancelReq) {
+          const closeBtns = cancelReqModal.querySelectorAll('[data-close-cancelreq]');
+          function openM() { cancelReqModal.classList.remove('hidden'); }
+          function closeM() { cancelReqModal.classList.add('hidden'); }
+          openCancelReq.addEventListener('click', openM);
+          closeBtns.forEach(b => b.addEventListener('click', closeM));
+          document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeM(); });
         }
 
         const csrftoken = getCookie('csrftoken');

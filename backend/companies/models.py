@@ -204,4 +204,61 @@ class ContactPhone(models.Model):
     def __str__(self) -> str:
         return self.value
 
-# Create your models here.
+class CompanyDeletionRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Ожидает решения"
+        CANCELLED = "cancelled", "Отклонено"
+        APPROVED = "approved", "Подтверждено"
+
+    company = models.ForeignKey(
+        Company,
+        verbose_name="Компания",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="deletion_requests",
+    )
+    company_id_snapshot = models.UUIDField("ID компании (снимок)", db_index=True)
+    company_name_snapshot = models.CharField("Название компании (снимок)", max_length=255, blank=True, default="")
+
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Кто запросил",
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="company_delete_requests",
+    )
+    requested_by_branch = models.ForeignKey(
+        "accounts.Branch",
+        verbose_name="Филиал автора (снимок)",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+
+    note = models.TextField("Примечание (почему удалить)", blank=True, default="")
+    status = models.CharField("Статус", max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True)
+
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Кто решил",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="company_delete_decisions",
+    )
+    decision_note = models.TextField("Комментарий решения", blank=True, default="")
+    decided_at = models.DateTimeField("Когда решили", null=True, blank=True)
+
+    created_at = models.DateTimeField("Создано", auto_now_add=True, db_index=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["company_id_snapshot", "status"]),
+            models.Index(fields=["status", "created_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"DeleteRequest({self.company_id_snapshot}) {self.status}"
+
