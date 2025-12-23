@@ -9,8 +9,10 @@
         <div class="flex items-start justify-between gap-3">
           <h1 class="text-2xl font-semibold">
             {{ company.name }}
-            {% if has_cold_call %}
-              <span class="badge badge-warn ml-2" style="padding:.15rem .45rem;font-size:.7rem">Холодный звонок</span>
+            {% if is_cold_company %}
+              <span class="badge badge-warn ml-2" style="padding:.15rem .45rem;font-size:.7rem">Холодная</span>
+            {% else %}
+              <span class="badge ml-2" style="padding:.15rem .45rem;font-size:.7rem">Тёплая</span>
             {% endif %}
           </h1>
           <div class="flex items-center gap-2 shrink-0">
@@ -19,6 +21,22 @@
             {% elif can_request_delete %}
               <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem;border-color:rgba(239,68,68,.35);color:#b91c1c;background:rgba(239,68,68,.06)" id="openDeleteRequestModal">
                 {% if delete_req %}Запрос отправлен{% else %}Запросить удаление{% endif %}
+              </button>
+            {% endif %}
+            {% if can_request_lead_state %}
+              <button
+                type="button"
+                class="btn btn-outline"
+                style="padding:.35rem .6rem;font-size:.75rem"
+                id="openLeadStateReqModal"
+                {% if lead_state_req %}disabled{% endif %}
+                title="{% if lead_state_req %}Запрос уже отправлен{% else %}Запросить смену состояния{% endif %}"
+              >
+                {% if lead_state_req %}
+                  Запрос состояния
+                {% else %}
+                  {% if is_cold_company %}Сделать тёплой{% else %}Сделать холодной{% endif %}
+                {% endif %}
               </button>
             {% endif %}
           </div>
@@ -52,6 +70,34 @@
               {% endif %}
             </div>
           </div>
+          {% endif %}
+        {% endif %}
+        {% if lead_state_req %}
+          {% if can_decide_lead_state or can_request_lead_state %}
+            <div class="mt-3 rounded-xl border border-brand-soft bg-brand-soft/15 px-4 py-3 text-sm text-brand-dark">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="font-medium">Запрос смены состояния</div>
+                  <div class="text-xs muted-2 mt-1">
+                    От: <b>{{ lead_state_req.requested_by|default:"—" }}</b> · {{ lead_state_req.created_at }}
+                    · Запрошено:
+                    <b>{% if lead_state_req.requested_state == "warm" %}Тёплая{% else %}Холодная{% endif %}</b>
+                  </div>
+                  {% if lead_state_req.note %}
+                    <div class="mt-2 whitespace-pre-line">{{ lead_state_req.note }}</div>
+                  {% endif %}
+                </div>
+                {% if can_decide_lead_state %}
+                  <div class="flex flex-col gap-2 shrink-0">
+                    <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="openCancelLeadStateReqModal">Отклонить</button>
+                    <form method="post" action="/companies/{{ company.id }}/lead-state/request/{{ lead_state_req.id }}/approve/" onsubmit="return confirm('Подтвердить смену состояния карточки?');">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-primary" style="padding:.35rem .6rem;font-size:.75rem">Подтвердить</button>
+                    </form>
+                  </div>
+                {% endif %}
+              </div>
+            </div>
           {% endif %}
         {% endif %}
         {% if pinned_note %}
@@ -200,24 +246,27 @@
               <div class="font-mono text-xs">{{ company.phone|default:"—" }}</div>
               {% if company.phone %}
                 <div class="flex items-center gap-2 shrink-0">
-                  {% if can_edit_company %}
+                  {% if can_edit_company and is_cold_company %}
                     <form method="post" action="/companies/{{ company.id }}/cold-call/toggle/" style="display:inline">
                       {% csrf_token %}
                       <button
                         type="submit"
-                        class="btn btn-outline"
+                        class="btn btn-outline js-cold-mark transition-opacity duration-300 {% if not primary_cold_available and not company.primary_contact_is_cold_call %}opacity-50 cursor-not-allowed{% endif %}"
+                        data-cold-btn="primary"
+                        data-cold-marked="{% if company.primary_contact_is_cold_call %}1{% else %}0{% endif %}"
                         style="padding:.25rem .5rem;font-size:.75rem;{% if company.primary_contact_is_cold_call %}background:#003D38;color:#fff;border-color:rgba(0,61,56,.35){% endif %}"
                         {% if company.primary_contact_is_cold_call %}
                           disabled
                           title="Холодный уже отмечен (один раз)"
                           aria-label="Холодный уже отмечен (один раз)"
                         {% elif not primary_cold_available %}
-                          disabled
-                          title="{% if primary_cold_deadline %}Можно отметить до {{ primary_cold_deadline|date:'d.m.Y H:i' }}{% else %}Можно отметить только в течение 8 часов после звонка{% endif %}"
-                          aria-label="Можно отметить только в течение 8 часов после звонка"
+                          data-disabled="1"
+                          title="{% if primary_cold_unlocks_at %}Станет доступно {{ primary_cold_unlocks_at|date:'d.m.Y H:i:s' }}{% elif primary_cold_deadline %}Можно отметить до {{ primary_cold_deadline|date:'d.m.Y H:i' }}{% else %}Можно отметить только в течение 8 часов после звонка{% endif %}"
+                          aria-label="Недоступно"
+                          aria-disabled="true"
                         {% else %}
-                          title="Отметить холодный (доступно 8 часов после звонка)"
-                          aria-label="Отметить холодный (доступно 8 часов после звонка)"
+                          title="Отметить холодный (доступно 8 часов после звонка, через 10 сек)"
+                          aria-label="Отметить холодный (доступно 8 часов после звонка, через 10 сек)"
                         {% endif %}
                       >
                         {% if company.primary_contact_is_cold_call %}
@@ -393,25 +442,28 @@
                       {% endif %}
                     </div>
                   </div>
-                  {% if can_edit_company %}
+                  {% if can_edit_company and is_cold_company %}
                     <div class="flex items-center gap-2">
                       <form method="post" action="/contacts/{{ c.id }}/cold-call/toggle/">
                         {% csrf_token %}
                         <button
-                          class="btn btn-outline"
+                          class="btn btn-outline js-cold-mark transition-opacity duration-300 {% if not c.cold_mark_available and not c.is_cold_call %}opacity-50 cursor-not-allowed{% endif %}"
                           style="padding:.25rem .5rem;font-size:.75rem;{% if c.is_cold_call %}background:#003D38;color:#fff;border-color:rgba(0,61,56,.35){% endif %}"
                           type="submit"
+                          data-cold-btn="contact-{{ c.id }}"
+                          data-cold-marked="{% if c.is_cold_call %}1{% else %}0{% endif %}"
                           {% if c.is_cold_call %}
                             disabled
                             title="Холодный уже отмечен (один раз)"
                             aria-label="Холодный уже отмечен (один раз)"
                           {% elif not c.cold_mark_available %}
-                            disabled
-                            title="{% if c.cold_mark_deadline %}Можно отметить до {{ c.cold_mark_deadline|date:'d.m.Y H:i' }}{% else %}Можно отметить только в течение 8 часов после звонка{% endif %}"
-                            aria-label="Можно отметить только в течение 8 часов после звонка"
+                            data-disabled="1"
+                            title="{% if c.cold_mark_unlocks_at %}Станет доступно {{ c.cold_mark_unlocks_at|date:'d.m.Y H:i:s' }}{% elif c.cold_mark_deadline %}Можно отметить до {{ c.cold_mark_deadline|date:'d.m.Y H:i' }}{% else %}Можно отметить только в течение 8 часов после звонка{% endif %}"
+                            aria-label="Недоступно"
+                            aria-disabled="true"
                           {% else %}
-                            title="Отметить холодный (доступно 8 часов после звонка)"
-                            aria-label="Отметить холодный (доступно 8 часов после звонка)"
+                            title="Отметить холодный (доступно 8 часов после звонка, через 10 сек)"
+                            aria-label="Отметить холодный (доступно 8 часов после звонка, через 10 сек)"
                           {% endif %}
                         >
                           {% if c.is_cold_call %}
@@ -715,6 +767,38 @@
       </div>
     {% endif %}
 
+    {% if can_request_lead_state %}
+      <div id="leadStateReqModal" class="fixed inset-0 z-[200] hidden">
+        <div class="fixed inset-0 bg-black/35" data-close-leadstate></div>
+        <div class="absolute inset-x-4 top-24 mx-auto max-w-lg">
+          <div class="card card-pad">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="font-medium">Запросить смену состояния карточки</div>
+                <div class="text-xs muted-2 mt-1">Запрос уйдёт РОП и директору филиала (после решения у второго уведомление исчезнет).</div>
+              </div>
+              <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" data-close-leadstate aria-label="Закрыть" title="Закрыть">✕</button>
+            </div>
+            <form method="post" action="/companies/{{ company.id }}/lead-state/request/" class="mt-3 space-y-2">
+              {% csrf_token %}
+              <input type="hidden" name="requested_state" value="{% if is_cold_company %}warm{% else %}cold{% endif %}" />
+              <div class="text-sm">
+                Запрос: <b>{% if is_cold_company %}сделать тёплой{% else %}сделать холодной{% endif %}</b>
+              </div>
+              <div>
+                <label class="block text-xs text-brand-dark/70 mb-1">Примечание (почему меняем)</label>
+                <textarea name="note" class="textarea" rows="4" placeholder="Коротко поясните причину"></textarea>
+              </div>
+              <div class="flex gap-2">
+                <button class="btn btn-primary" type="submit">Отправить</button>
+                <button class="btn btn-outline" type="button" data-close-leadstate>Отмена</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
     {% if can_delete_company %}
       <div id="deleteCompanyModal" class="fixed inset-0 z-[200] hidden">
         <div class="fixed inset-0 bg-black/35" data-close-delcompany></div>
@@ -767,6 +851,34 @@
               <div class="flex gap-2">
                 <button class="btn btn-outline" type="submit">Отменить запрос</button>
                 <button class="btn btn-outline" type="button" data-close-cancelreq>Отмена</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+    {% if can_decide_lead_state and lead_state_req %}
+      <div id="cancelLeadStateReqModal" class="fixed inset-0 z-[200] hidden">
+        <div class="fixed inset-0 bg-black/35" data-close-cancelleadstate></div>
+        <div class="absolute inset-x-4 top-24 mx-auto max-w-lg">
+          <div class="card card-pad">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="font-medium">Отклонить запрос смены состояния</div>
+                <div class="text-xs muted-2 mt-1">Менеджеру уйдёт уведомление с причиной.</div>
+              </div>
+              <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" data-close-cancelleadstate aria-label="Закрыть" title="Закрыть">✕</button>
+            </div>
+            <form method="post" action="/companies/{{ company.id }}/lead-state/request/{{ lead_state_req.id }}/cancel/" class="mt-3 space-y-2">
+              {% csrf_token %}
+              <div>
+                <label class="block text-xs text-brand-dark/70 mb-1">Почему отклонили?</label>
+                <textarea name="decision_note" class="textarea" rows="4" placeholder="Причина" required></textarea>
+              </div>
+              <div class="flex gap-2">
+                <button class="btn btn-outline" type="submit">Отклонить</button>
+                <button class="btn btn-outline" type="button" data-close-cancelleadstate>Отмена</button>
               </div>
             </form>
           </div>
@@ -877,7 +989,41 @@
           document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeM(); });
         }
 
+        const leadStateReqModal = document.getElementById('leadStateReqModal');
+        const openLeadStateReq = document.getElementById('openLeadStateReqModal');
+        if (leadStateReqModal && openLeadStateReq && !openLeadStateReq.disabled) {
+          const closeBtns = leadStateReqModal.querySelectorAll('[data-close-leadstate]');
+          function openM() { leadStateReqModal.classList.remove('hidden'); }
+          function closeM() { leadStateReqModal.classList.add('hidden'); }
+          openLeadStateReq.addEventListener('click', openM);
+          closeBtns.forEach(b => b.addEventListener('click', closeM));
+          document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeM(); });
+        }
+
+        const cancelLeadStateReqModal = document.getElementById('cancelLeadStateReqModal');
+        const openCancelLeadStateReq = document.getElementById('openCancelLeadStateReqModal');
+        if (cancelLeadStateReqModal && openCancelLeadStateReq) {
+          const closeBtns = cancelLeadStateReqModal.querySelectorAll('[data-close-cancelleadstate]');
+          function openM() { cancelLeadStateReqModal.classList.remove('hidden'); }
+          function closeM() { cancelLeadStateReqModal.classList.add('hidden'); }
+          openCancelLeadStateReq.addEventListener('click', openM);
+          closeBtns.forEach(b => b.addEventListener('click', closeM));
+          document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeM(); });
+        }
+
         const csrftoken = getCookie('csrftoken');
+
+        // Если кнопка "холодный" визуально выключена — не отправляем POST, а показываем подсказку.
+        document.querySelectorAll('.js-cold-mark').forEach(btn => {
+          btn.addEventListener('click', (e) => {
+            if (btn.getAttribute('data-disabled') === '1') {
+              e.preventDefault();
+              showToast(btn.title || 'Недоступно', 'info');
+              return false;
+            }
+          });
+        });
+
         document.querySelectorAll('.js-call-phone').forEach(btn => {
           btn.addEventListener('click', async () => {
             const phone = btn.dataset.phone || '';
@@ -899,6 +1045,25 @@
               const data = await res.json().catch(() => ({}));
               if (!res.ok || !data.ok) throw new Error(data.detail || 'Ошибка');
               showToast('Отправлено на телефон ✓', 'success');
+              // Через 10 секунд делаем активной кнопку "отметить холодный" рядом с тем номером/контактом, по которому звонили.
+              const key = contactId ? (`contact-${contactId}`) : 'primary';
+              const coldBtn = document.querySelector(`[data-cold-btn="${key}"]`);
+              if (coldBtn && coldBtn.getAttribute('data-cold-marked') !== '1') {
+                showToast('Можно отметить «холодный» через 10 секунд…', 'info');
+                setTimeout(() => {
+                  try {
+                    const b = document.querySelector(`[data-cold-btn="${key}"]`);
+                    if (!b) return;
+                    if (b.getAttribute('data-cold-marked') === '1') return;
+                    // Если кнопка была disabled по причине "не звонили" / "10 секунд" — включаем её без перезагрузки.
+                    b.removeAttribute('data-disabled');
+                    b.classList.remove('opacity-50');
+                    b.classList.remove('cursor-not-allowed');
+                    b.title = 'Отметить холодный (доступно 8 часов после звонка, через 10 сек)';
+                    b.setAttribute('aria-label', b.title);
+                  } catch (_e) {}
+                }, 10000);
+              }
               btn.dataset.busy = '0';
               btn.classList.remove('opacity-60');
             } catch (e) {

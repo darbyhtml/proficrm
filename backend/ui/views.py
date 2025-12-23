@@ -19,7 +19,7 @@ from django.utils import timezone
 from accounts.models import Branch, User
 from audit.models import ActivityEvent
 from audit.service import log_event
-from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, CompanyDeletionRequest
+from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, CompanyDeletionRequest, CompanyLeadStateRequest
 from companies.permissions import can_edit_company as can_edit_company_perm, editable_company_qs as editable_company_qs_perm
 from tasksapp.models import Task, TaskType
 from notifications.models import Notification
@@ -80,6 +80,21 @@ def _company_branch_id(company: Company):
         return company.branch_id
     resp = getattr(company, "responsible", None)
     return getattr(resp, "branch_id", None)
+
+
+def _can_decide_company_lead_state(user: User, company: Company) -> bool:
+    """
+    Решать запрос смены состояния карточки могут:
+    - админ/суперпользователь/управляющий группой компаний
+    - РОП/директор филиала в рамках своего филиала
+    """
+    if not user or not user.is_authenticated or not user.is_active:
+        return False
+    if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+        return True
+    if user.role in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR) and user.branch_id:
+        return bool(_company_branch_id(company) == user.branch_id)
+    return False
 
 
 def _can_delete_company(user: User, company: Company) -> bool:
@@ -202,11 +217,12 @@ def _apply_company_filters(*, qs, params: dict):
     if contract_type:
         qs = qs.filter(contract_type=contract_type)
 
+    # Состояние карточки: холодная/тёплая
     cold_call = (params.get("cold_call") or "").strip()
     if cold_call == "1":
-        qs = qs.filter(Q(primary_contact_is_cold_call=True) | Q(has_cold_call_contact=True))
+        qs = qs.filter(lead_state=Company.LeadState.COLD)
     elif cold_call == "0":
-        qs = qs.filter(primary_contact_is_cold_call=False, has_cold_call_contact=False)
+        qs = qs.filter(lead_state=Company.LeadState.WARM)
 
     overdue = (params.get("overdue") or "").strip()
     if overdue == "1":
@@ -295,6 +311,105 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             "overdue": overdue,
             "tasks_week": tasks_week,
             "contracts_soon": contracts_soon,
+        },
+    )
+
+
+@login_required
+def analytics(request: HttpRequest) -> HttpResponse:
+    """
+    Аналитика по звонкам/отметкам для руководителей:
+    - РОП/директор: по своему филиалу
+    - управляющий/админ: по всем филиалам (с группировкой)
+    """
+    user: User = request.user
+    if not (user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD)):
+        messages.error(request, "Нет доступа к аналитике.")
+        return redirect("dashboard")
+
+    now = timezone.now()
+    local_now = timezone.localtime(now)
+    period = (request.GET.get("period") or "day").strip()  # day|month
+    if period not in ("day", "month"):
+        period = "day"
+
+    if period == "month":
+        start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end = (start + timedelta(days=32)).replace(day=1)
+        period_label = _month_label(timezone.localdate(now))
+    else:
+        start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=1)
+        period_label = timezone.localdate(now).strftime("%d.%m.%Y")
+
+    # Кого показываем
+    if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+        users_qs = User.objects.filter(is_active=True, role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]).select_related("branch")
+    else:
+        users_qs = User.objects.filter(is_active=True, branch_id=user.branch_id, role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]).select_related("branch")
+    users_list = list(users_qs.order_by("branch__name", "last_name", "first_name"))
+    user_ids = [u.id for u in users_list]
+
+    # Звонки за период (лимит на страницу, чтобы не убить UI)
+    calls_qs = (
+        CallRequest.objects.filter(created_by_id__in=user_ids, created_at__gte=start, created_at__lt=end)
+        .select_related("company", "contact", "created_by")
+        .order_by("-created_at")[:5000]
+    )
+    calls_by_user = {}
+    stats = {uid: {"calls_total": 0, "cold_calls": 0} for uid in user_ids}
+    for call in calls_qs:
+        uid = call.created_by_id
+        if uid not in stats:
+            continue
+        stats[uid]["calls_total"] += 1
+        if call.is_cold_call:
+            stats[uid]["cold_calls"] += 1
+        calls_by_user.setdefault(uid, []).append(call)
+
+    # Отметки "холодный" (контакты + основной контакт компании)
+    contact_marks = (
+        Contact.objects.filter(cold_marked_by_id__in=user_ids, cold_marked_at__isnull=False, cold_marked_at__gte=start, cold_marked_at__lt=end)
+        .values("cold_marked_by_id")
+        .annotate(cnt=Count("id"))
+    )
+    primary_marks = (
+        Company.objects.filter(primary_cold_marked_by_id__in=user_ids, primary_cold_marked_at__isnull=False, primary_cold_marked_at__gte=start, primary_cold_marked_at__lt=end)
+        .values("primary_cold_marked_by_id")
+        .annotate(cnt=Count("id"))
+    )
+    for row in contact_marks:
+        uid = row["cold_marked_by_id"]
+        stats.setdefault(uid, {"calls_total": 0, "cold_calls": 0})
+        stats[uid]["cold_marks"] = stats[uid].get("cold_marks", 0) + int(row["cnt"] or 0)
+    for row in primary_marks:
+        uid = row["primary_cold_marked_by_id"]
+        stats.setdefault(uid, {"calls_total": 0, "cold_calls": 0})
+        stats[uid]["cold_marks"] = stats[uid].get("cold_marks", 0) + int(row["cnt"] or 0)
+
+    # Группировка по филиалу (для управляющего) + готовые строки для шаблона
+    groups_map = {}
+    for u in users_list:
+        bid = getattr(u, "branch_id", None)
+        groups_map.setdefault(bid, {"branch": getattr(u, "branch", None), "rows": []})
+        s = stats.get(u.id, {})
+        groups_map[bid]["rows"].append(
+            {
+                "user": u,
+                "calls_total": int(s.get("calls_total", 0) or 0),
+                "cold_calls": int(s.get("cold_calls", 0) or 0),
+                "cold_marks": int(s.get("cold_marks", 0) or 0),
+                "calls": calls_by_user.get(u.id, [])[:50],
+            }
+        )
+
+    return render(
+        request,
+        "ui/analytics.html",
+        {
+            "period": period,
+            "period_label": period_label,
+            "groups": list(groups_map.values()),
         },
     )
 
@@ -966,6 +1081,15 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         .first()
     )
 
+    lead_state_req = (
+        CompanyLeadStateRequest.objects.filter(company=company, status=CompanyLeadStateRequest.Status.PENDING)
+        .select_related("requested_by", "decided_by")
+        .order_by("-created_at")
+        .first()
+    )
+    can_request_lead_state = bool(user.role == User.Role.MANAGER and company.responsible_id == user.id)
+    can_decide_lead_state = bool(lead_state_req and _can_decide_company_lead_state(user, company))
+
     # "Организация" (головная карточка) и "филиалы" (дочерние карточки клиента)
     head = company.head_company or company
     org_head = Company.objects.select_related("responsible", "branch").filter(id=head.id).first()
@@ -976,11 +1100,12 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     )
 
     contacts = Contact.objects.filter(company=company).prefetch_related("emails", "phones").order_by("last_name", "first_name")[:200]
-    has_cold_call = bool(company.primary_contact_is_cold_call or Contact.objects.filter(company=company, is_cold_call=True).exists())
+    is_cold_company = bool(company.lead_state == Company.LeadState.COLD)
 
-    # Окно доступности кнопки "холодный" — 8 часов после звонка
+    # Окно доступности кнопки "холодный" — 8 часов после звонка, но активируем кнопку только через 10 секунд
     now_ts = timezone.now()
     window_start = now_ts - timedelta(hours=8)
+    min_delay = timedelta(seconds=10)
     # Последний звонок по каждому контакту (только текущий пользователь)
     last_calls = (
         CallRequest.objects.filter(created_by=user, company=company, contact__isnull=False, created_at__gte=window_start)
@@ -992,15 +1117,19 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         last = last_by_contact.get(str(c.id))
         if last:
             deadline = last + timedelta(hours=8)
-            c.cold_mark_available = bool(now_ts <= deadline and not c.is_cold_call)  # type: ignore[attr-defined]
+            unlock_at = last + min_delay
+            c.cold_mark_available = bool(now_ts <= deadline and now_ts >= unlock_at and not c.is_cold_call)  # type: ignore[attr-defined]
+            c.cold_mark_unlocks_at = timezone.localtime(unlock_at)  # type: ignore[attr-defined]
             c.cold_mark_deadline = timezone.localtime(deadline)  # type: ignore[attr-defined]
         else:
             c.cold_mark_available = False  # type: ignore[attr-defined]
+            c.cold_mark_unlocks_at = None  # type: ignore[attr-defined]
             c.cold_mark_deadline = None  # type: ignore[attr-defined]
 
     # Основной контакт (company.phone)
     primary_cold_available = False
     primary_cold_deadline = None
+    primary_cold_unlocks_at = None
     try:
         phone = (company.phone or "").strip()
         normalized = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
@@ -1011,8 +1140,10 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         )
         if last_primary:
             d = last_primary + timedelta(hours=8)
-            primary_cold_available = bool(now_ts <= d and not company.primary_contact_is_cold_call)
+            unlock_at = last_primary + min_delay
+            primary_cold_available = bool(now_ts <= d and now_ts >= unlock_at and not company.primary_contact_is_cold_call)
             primary_cold_deadline = timezone.localtime(d)
+            primary_cold_unlocks_at = timezone.localtime(unlock_at)
     except Exception:
         pass
     pinned_note = (
@@ -1061,9 +1192,10 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "org_branches": org_branches,
             "can_edit_company": can_edit_company,
             "contacts": contacts,
-            "has_cold_call": has_cold_call,
+            "is_cold_company": is_cold_company,
             "primary_cold_available": primary_cold_available,
             "primary_cold_deadline": primary_cold_deadline,
+            "primary_cold_unlocks_at": primary_cold_unlocks_at,
             "notes": notes,
             "pinned_note": pinned_note,
             "note_form": note_form,
@@ -1073,6 +1205,9 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "can_delete_company": can_delete_company,
             "can_request_delete": can_request_delete,
             "delete_req": delete_req,
+            "lead_state_req": lead_state_req,
+            "can_request_lead_state": can_request_lead_state,
+            "can_decide_lead_state": can_decide_lead_state,
             "quick_form": quick_form,
             "contract_form": contract_form,
             "transfer_targets": transfer_targets,
@@ -1249,6 +1384,158 @@ def company_delete_direct(request: HttpRequest, company_id) -> HttpResponse:
     return redirect("company_list")
 
 
+def _dismiss_lead_state_req_notifications(*, req: CompanyLeadStateRequest, company: Company):
+    """
+    После решения запроса (approve/cancel) скрываем уведомление у всех руководителей,
+    чтобы у второго оно не висело.
+    """
+    key = str(req.id)
+    url = f"/companies/{company.id}/"
+    try:
+        Notification.objects.filter(kind=Notification.Kind.COMPANY, url=url, title__icontains=key, is_read=False).update(is_read=True)
+    except Exception:
+        pass
+
+
+@login_required
+def company_lead_state_request_create(request: HttpRequest, company_id) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not (user.role == User.Role.MANAGER and company.responsible_id == user.id):
+        messages.error(request, "Запросить смену состояния может только ответственный менеджер.")
+        return redirect("company_detail", company_id=company.id)
+
+    requested_state = (request.POST.get("requested_state") or "").strip()
+    if requested_state not in (Company.LeadState.COLD, Company.LeadState.WARM):
+        messages.error(request, "Некорректное состояние.")
+        return redirect("company_detail", company_id=company.id)
+    if requested_state == company.lead_state:
+        messages.info(request, "Состояние уже установлено.")
+        return redirect("company_detail", company_id=company.id)
+
+    existing = CompanyLeadStateRequest.objects.filter(company=company, status=CompanyLeadStateRequest.Status.PENDING).first()
+    if existing:
+        messages.info(request, "Запрос уже отправлен и ожидает решения.")
+        return redirect("company_detail", company_id=company.id)
+
+    note = (request.POST.get("note") or "").strip()
+    req = CompanyLeadStateRequest.objects.create(
+        company=company,
+        requested_by=user,
+        requested_state=requested_state,
+        note=note,
+        status=CompanyLeadStateRequest.Status.PENDING,
+    )
+    branch_id = _company_branch_id(company)
+    title = f"Запрос смены состояния ({req.id})"
+    state_label = "Тёплая" if requested_state == Company.LeadState.WARM else "Холодная"
+    body = f"{company.name}: запрос на смену состояния → {state_label}. {(note[:160] + '…') if len(note) > 160 else note}"
+    sent = _notify_branch_leads(branch_id=branch_id, title=title, body=body, url=f"/companies/{company.id}/", exclude_user_id=user.id)
+    messages.success(request, f"Запрос отправлен. Уведомлено руководителей: {sent}.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.CREATE,
+        entity_type="company_lead_state_request",
+        entity_id=str(req.id),
+        company_id=company.id,
+        message="Запрос смены состояния карточки",
+        meta={"requested_state": requested_state, "note": note[:500], "notified": sent},
+    )
+    return redirect("company_detail", company_id=company.id)
+
+
+@login_required
+def company_lead_state_request_cancel(request: HttpRequest, company_id, req_id) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_decide_company_lead_state(user, company):
+        messages.error(request, "Нет прав на обработку запроса смены состояния по этой компании.")
+        return redirect("company_detail", company_id=company.id)
+    req = get_object_or_404(CompanyLeadStateRequest.objects.select_related("requested_by"), id=req_id, company=company)
+    if req.status != CompanyLeadStateRequest.Status.PENDING:
+        messages.info(request, "Запрос уже обработан.")
+        return redirect("company_detail", company_id=company.id)
+    decision_note = (request.POST.get("decision_note") or "").strip()
+    if not decision_note:
+        messages.error(request, "Укажите причину отклонения.")
+        return redirect("company_detail", company_id=company.id)
+    req.status = CompanyLeadStateRequest.Status.CANCELLED
+    req.decided_by = user
+    req.decision_note = decision_note
+    req.decided_at = timezone.now()
+    req.save(update_fields=["status", "decided_by", "decision_note", "decided_at"])
+    _dismiss_lead_state_req_notifications(req=req, company=company)
+
+    if req.requested_by_id:
+        notify(
+            user=req.requested_by,
+            kind=Notification.Kind.COMPANY,
+            title="Смена состояния: отклонено",
+            body=f"{company.name}: {decision_note}",
+            url=f"/companies/{company.id}/",
+        )
+    messages.success(request, "Запрос отклонён. Менеджер уведомлён.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="company_lead_state_request",
+        entity_id=str(req.id),
+        company_id=company.id,
+        message="Отклонён запрос смены состояния карточки",
+        meta={"decision_note": decision_note[:500]},
+    )
+    return redirect("company_detail", company_id=company.id)
+
+
+@login_required
+def company_lead_state_request_approve(request: HttpRequest, company_id, req_id) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_decide_company_lead_state(user, company):
+        messages.error(request, "Нет прав на смену состояния по этой компании.")
+        return redirect("company_detail", company_id=company.id)
+    req = get_object_or_404(CompanyLeadStateRequest.objects.select_related("requested_by"), id=req_id, company=company)
+    if req.status != CompanyLeadStateRequest.Status.PENDING:
+        messages.info(request, "Запрос уже обработан.")
+        return redirect("company_detail", company_id=company.id)
+    req.status = CompanyLeadStateRequest.Status.APPROVED
+    req.decided_by = user
+    req.decided_at = timezone.now()
+    req.save(update_fields=["status", "decided_by", "decided_at"])
+
+    # Применяем состояние к компании
+    company.lead_state = req.requested_state
+    company.save(update_fields=["lead_state", "updated_at"])
+    _dismiss_lead_state_req_notifications(req=req, company=company)
+
+    if req.requested_by_id:
+        state_label = "Тёплая" if req.requested_state == Company.LeadState.WARM else "Холодная"
+        notify(
+            user=req.requested_by,
+            kind=Notification.Kind.COMPANY,
+            title="Смена состояния: подтверждено",
+            body=f"{company.name}: состояние изменено → {state_label}",
+            url=f"/companies/{company.id}/",
+        )
+    messages.success(request, "Состояние карточки изменено.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="company",
+        entity_id=str(company.id),
+        company_id=company.id,
+        message="Изменено состояние карточки",
+        meta={"requested_state": req.requested_state, "request_id": str(req.id)},
+    )
+    return redirect("company_detail", company_id=company.id)
+
+
 @login_required
 def company_contract_update(request: HttpRequest, company_id) -> HttpResponse:
     if request.method != "POST":
@@ -1288,6 +1575,9 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
     if not _can_edit_company(user, company):
         messages.error(request, "Нет прав на изменение признака 'Холодный звонок'.")
         return redirect("company_detail", company_id=company.id)
+    if company.lead_state != Company.LeadState.COLD:
+        messages.error(request, "Отметка «холодный звонок» доступна только для холодных карточек.")
+        return redirect("company_detail", company_id=company.id)
 
     # Новая логика: отметку можно поставить только 1 раз и только в течение 8 часов после звонка по основному номеру
     if company.primary_contact_is_cold_call:
@@ -1309,6 +1599,9 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
     )
     if not last_call:
         messages.error(request, "Отметка доступна только в течение 8 часов после звонка.")
+        return redirect("company_detail", company_id=company.id)
+    if last_call.created_at and last_call.created_at > (now - timedelta(seconds=10)):
+        messages.error(request, "Подождите 10 секунд после звонка и попробуйте снова.")
         return redirect("company_detail", company_id=company.id)
 
     company.primary_contact_is_cold_call = True
@@ -1347,6 +1640,9 @@ def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
     if not _can_edit_company(user, company):
         messages.error(request, "Нет прав на изменение контактов этой компании.")
         return redirect("company_detail", company_id=company.id)
+    if company.lead_state != Company.LeadState.COLD:
+        messages.error(request, "Отметка «холодный звонок» доступна только для холодных карточек.")
+        return redirect("company_detail", company_id=company.id)
 
     # Новая логика: отметку можно поставить только 1 раз и только в течение 8 часов после звонка по этому контакту
     if contact.is_cold_call:
@@ -1362,6 +1658,9 @@ def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
     )
     if not last_call:
         messages.error(request, "Отметка доступна только в течение 8 часов после звонка.")
+        return redirect("company_detail", company_id=company.id)
+    if last_call.created_at and last_call.created_at > (now - timedelta(seconds=10)):
+        messages.error(request, "Подождите 10 секунд после звонка и попробуйте снова.")
         return redirect("company_detail", company_id=company.id)
 
     contact.is_cold_call = True

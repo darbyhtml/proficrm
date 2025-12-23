@@ -77,11 +77,11 @@
         </select>
       </div>
       <div>
-        <label class="block text-sm text-brand-dark/80 mb-1">Холодный звонок</label>
+        <label class="block text-sm text-brand-dark/80 mb-1">Состояние</label>
         <select name="cold_call" class="select w-full">
           <option value="">Любой</option>
-          <option value="1" {% if cold_call == "1" %}selected{% endif %}>Да</option>
-          <option value="0" {% if cold_call == "0" %}selected{% endif %}>Нет</option>
+          <option value="1" {% if cold_call == "1" %}selected{% endif %}>Холодная</option>
+          <option value="0" {% if cold_call == "0" %}selected{% endif %}>Тёплая</option>
         </select>
       </div>
       <div class="col-span-full flex flex-col md:flex-row md:items-end md:flex-wrap gap-2">
@@ -175,8 +175,8 @@
                 {% if "name" in company_list_columns %}
                   <td>
                     <a class="link" href="/companies/{{ c.id }}/" onclick="event.stopPropagation()">{{ c.name }}</a>
-                    {% if c.primary_contact_is_cold_call or c.has_cold_call_contact %}
-                      <span class="badge badge-warn ml-2" style="padding:.1rem .35rem;font-size:.65rem">Холодный</span>
+                    {% if c.lead_state == 'cold' %}
+                      <span class="badge badge-warn ml-2" style="padding:.1rem .35rem;font-size:.65rem">Холодная</span>
                     {% endif %}
                     {% if "address" in company_list_columns %}
                       <div class="text-xs text-brand-dark/70">{{ c.address }}</div>

@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     path("", views.dashboard, name="dashboard"),
+    path("analytics/", views.analytics, name="analytics"),
     path("reports/cold-calls/day/", views.cold_calls_report_day, name="cold_calls_report_day"),
     path("reports/cold-calls/month/", views.cold_calls_report_month, name="cold_calls_report_month"),
     path("companies/", views.company_list, name="company_list"),
@@ -16,6 +17,17 @@ urlpatterns = [
     path("companies/<uuid:company_id>/update/", views.company_update, name="company_update"),
     path("companies/<uuid:company_id>/contract/update/", views.company_contract_update, name="company_contract_update"),
     path("companies/<uuid:company_id>/cold-call/toggle/", views.company_cold_call_toggle, name="company_cold_call_toggle"),
+    path("companies/<uuid:company_id>/lead-state/request/", views.company_lead_state_request_create, name="company_lead_state_request_create"),
+    path(
+        "companies/<uuid:company_id>/lead-state/request/<uuid:req_id>/approve/",
+        views.company_lead_state_request_approve,
+        name="company_lead_state_request_approve",
+    ),
+    path(
+        "companies/<uuid:company_id>/lead-state/request/<uuid:req_id>/cancel/",
+        views.company_lead_state_request_cancel,
+        name="company_lead_state_request_cancel",
+    ),
     path("companies/<uuid:company_id>/transfer/", views.company_transfer, name="company_transfer"),
     path("companies/<uuid:company_id>/delete-request/", views.company_delete_request_create, name="company_delete_request_create"),
     path("companies/<uuid:company_id>/delete-request/<int:req_id>/cancel/", views.company_delete_request_cancel, name="company_delete_request_cancel"),
