@@ -421,8 +421,7 @@
         function playSound(){
           if(!soundEnabled) return;
           // Важно: не используем await в user-gesture цепочке — некоторые браузеры “теряют” активацию.
-          // Всегда играем WebAudio — это наиболее предсказуемо и одинаково во всех браузерах.
-          webAudioBeep();
+          // Кастомный звук оставляем как запасной вариант (если системный звук уведомлений в браузере не работает).
           try{
             if(soundEl && soundEl.play){
               const canOgg = soundEl.canPlayType && soundEl.canPlayType('audio/ogg; codecs="vorbis"');
@@ -437,6 +436,7 @@
               return;
             }
           }catch(_e){}
+          webAudioBeep(); // fallback
         }
 
         function showBrowserNotification(n){
@@ -451,9 +451,8 @@
             const notif = new Notification(title, {
               body,
               tag: 'crm_' + (n.id || ''),
-              // Системный звук отличается по браузерам/ОС (и может быть выключен).
-              // Держим уведомления беззвучными и играем единый звук сами.
-              silent: true,
+              // Используем системный/браузерный звук уведомления (если браузер его поддерживает).
+              silent: false,
               icon: '/static/ui/favicon-v2.svg',
             });
             notif.onclick = () => {
@@ -584,9 +583,10 @@
                 btn.classList.add('ring-4','ring-brand-teal/15');
                 setTimeout(() => btn.classList.remove('ring-4','ring-brand-teal/15'), 1200);
               }
-              // звук + браузерное уведомление
-              playSound();
+              // Основной вариант: браузерное уведомление (и его системный звук, если он есть в браузере).
               if(newest) showBrowserNotification(newest);
+              // Кастомный звук — только как запасной вариант по кнопке "Звук".
+              if(soundEnabled) playSound();
             }
           }catch(_e){
           }finally{
