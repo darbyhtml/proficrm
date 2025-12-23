@@ -70,6 +70,10 @@ class CompanyViewSet(viewsets.ModelViewSet):
             # директор филиала назначает только внутри своего филиала
             if user.branch_id and responsible.branch_id and responsible.branch_id != user.branch_id:
                 raise PermissionDenied("Можно назначать ответственного только в своём филиале.")
+        if user.role == User.Role.SALES_HEAD:
+            # РОП назначает только внутри своего филиала
+            if user.branch_id and responsible.branch_id and responsible.branch_id != user.branch_id:
+                raise PermissionDenied("Можно назначать ответственного только в своём филиале.")
 
         # Автовывод филиала, если не задан
         if branch is None:
@@ -97,6 +101,12 @@ class CompanyViewSet(viewsets.ModelViewSet):
 
         if user.role == User.Role.BRANCH_DIRECTOR and user.branch_id:
             # директор филиала может переназначать только внутри филиала
+            if new_responsible and new_responsible.branch_id and new_responsible.branch_id != user.branch_id:
+                raise PermissionDenied("Можно назначать ответственного только в своём филиале.")
+            if new_branch and new_branch.id != user.branch_id:
+                raise PermissionDenied("Нельзя назначать компании другой филиал.")
+        if user.role == User.Role.SALES_HEAD and user.branch_id:
+            # РОП может переназначать только внутри филиала
             if new_responsible and new_responsible.branch_id and new_responsible.branch_id != user.branch_id:
                 raise PermissionDenied("Можно назначать ответственного только в своём филиале.")
             if new_branch and new_branch.id != user.branch_id:

@@ -134,10 +134,15 @@
           </div>
           <div>
             <div class="text-brand-dark/50">Договор</div>
-            <div class="text-sm">
-              {% if company.contract_type %}{{ company.get_contract_type_display }}{% else %}—{% endif %}
-              {% if company.contract_until %}
-                <span class="muted-2">· до {{ company.contract_until|date:"d.m.Y" }}</span>
+            <div class="flex items-start justify-between gap-2">
+              <div class="text-sm">
+                {% if company.contract_type %}{{ company.get_contract_type_display }}{% else %}—{% endif %}
+                {% if company.contract_until %}
+                  <span class="muted-2">· до {{ company.contract_until|date:"d.m.Y" }}</span>
+                {% endif %}
+              </div>
+              {% if can_edit_company %}
+                <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" id="openContractModal">Изменить</button>
               {% endif %}
             </div>
           </div>
@@ -149,12 +154,16 @@
                 <button
                   type="button"
                   class="btn btn-outline js-call-phone"
-                  style="padding:.25rem .5rem;font-size:.75rem"
+                  style="padding:.25rem .5rem"
                   data-phone="{{ company.phone }}"
                   data-company="{{ company.id }}"
                   data-contact=""
+                  title="Позвонить с телефона"
+                  aria-label="Позвонить с телефона"
                 >
-                  Позвонить с телефона
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
                 </button>
               {% endif %}
             </div>
@@ -183,27 +192,6 @@
           </div>
         </div>
 
-        {% if can_edit_company %}
-          <hr class="my-4 border-brand-soft" />
-          <div>
-            <div class="font-medium">Изменить договор</div>
-            <div class="text-xs muted-2 mt-1">Эта форма меняет только вид договора и срок действия.</div>
-            <form method="post" action="/companies/{{ company.id }}/contract/update/" class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
-              {% csrf_token %}
-              <div>
-                <label class="block text-xs text-brand-dark/70 mb-1">Вид</label>
-                {{ contract_form.contract_type }}
-              </div>
-              <div>
-                <label class="block text-xs text-brand-dark/70 mb-1">Действует до (не обязательно)</label>
-                {{ contract_form.contract_until }}
-              </div>
-              <div class="md:col-span-2 flex gap-2">
-                <button class="btn btn-outline" type="submit">Сохранить</button>
-              </div>
-            </form>
-          </div>
-        {% endif %}
       </section>
 
       <section class="card card-pad">
@@ -235,7 +223,7 @@
           </div>
         {% else %}
           <div class="rounded-xl border border-brand-orange/60 bg-brand-orange/20 px-4 py-3 text-sm text-brand-dark">
-            У вас доступ <b>только на просмотр</b>. Редактировать может создатель/ответственный/директор филиала/управляющий.
+            У вас доступ <b>только на просмотр</b>. Редактировать может ответственный / руководитель филиала / управляющий / администратор.
           </div>
         {% endif %}
         <div class="mt-4 border-t pt-4">
@@ -346,12 +334,16 @@
                         <button
                           type="button"
                           class="btn btn-outline js-call-phone"
-                          style="padding:.25rem .5rem;font-size:.75rem"
+                          style="padding:.25rem .5rem"
                           data-phone="{{ p.value }}"
                           data-company="{{ company.id }}"
                           data-contact="{{ c.id }}"
+                          title="Позвонить с телефона"
+                          aria-label="Позвонить с телефона"
                         >
-                          Позвонить с телефона
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
                         </button>
                       </div>
                     {% empty %}
@@ -404,26 +396,30 @@
 
       <section class="card card-pad">
         <div class="font-medium mb-3">Заметки</div>
-        <form class="space-y-2" method="post" action="/companies/{{ company.id }}/notes/add/" enctype="multipart/form-data" id="noteForm">
-          {% csrf_token %}
-          <div class="space-y-2">
-            {{ note_form.text }}
-            <div class="flex items-center justify-between gap-2">
-              <input id="noteFile" type="file" name="attachment" class="hidden" />
-              <button type="button" class="btn btn-outline" id="noteAttachBtn" title="Прикрепить файл" style="padding:.35rem .6rem;font-size:.75rem">
-                <span class="inline-flex items-center gap-1">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M8 12.5l7.1-7.1a3 3 0 014.2 4.2l-8.5 8.5a5 5 0 01-7.1-7.1l8.2-8.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                  <span>Файл</span>
-                </span>
-              </button>
-              <div class="text-xs muted-2 truncate" id="noteFileName"></div>
-              <button class="btn btn-primary" type="submit">Добавить</button>
+        {% if can_edit_company %}
+          <form class="space-y-2" method="post" action="/companies/{{ company.id }}/notes/add/" enctype="multipart/form-data" id="noteForm">
+            {% csrf_token %}
+            <div class="space-y-2">
+              {{ note_form.text }}
+              <div class="flex items-center justify-between gap-2">
+                <input id="noteFile" type="file" name="attachment" class="hidden" />
+                <button type="button" class="btn btn-outline" id="noteAttachBtn" title="Прикрепить файл" style="padding:.35rem .6rem;font-size:.75rem">
+                  <span class="inline-flex items-center gap-1">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M8 12.5l7.1-7.1a3 3 0 014.2 4.2l-8.5 8.5a5 5 0 01-7.1-7.1l8.2-8.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span>Файл</span>
+                  </span>
+                </button>
+                <div class="text-xs muted-2 truncate" id="noteFileName"></div>
+                <button class="btn btn-primary" type="submit">Добавить</button>
+              </div>
+              <div class="text-xs muted-2">Файл опционально. До 15 МБ. PDF/DOC/XLS/картинки и др.</div>
             </div>
-            <div class="text-xs muted-2">Файл опционально. До 15 МБ. PDF/DOC/XLS/картинки и др.</div>
-          </div>
-        </form>
+          </form>
+        {% else %}
+          <div class="text-sm text-brand-dark/70">Нет прав на добавление заметок по этой компании.</div>
+        {% endif %}
 
         <div class="mt-4 space-y-3">
           {% for n in notes %}
@@ -504,6 +500,46 @@
       </section>
     </div>
 
+    <div id="toast" class="fixed bottom-4 right-4 z-[80] hidden max-w-[92vw]">
+      <div id="toastInner" class="rounded-xl border border-brand-soft bg-white px-4 py-3 shadow-lg text-sm text-brand-dark"></div>
+    </div>
+
+    {% if can_edit_company %}
+      <div id="contractModal" class="fixed inset-0 z-[70] hidden">
+        <div class="absolute inset-0 bg-black/35" data-close-contract></div>
+        <div class="absolute inset-x-4 top-24 mx-auto max-w-lg">
+          <div class="card card-pad">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="font-medium">Изменить договор</div>
+                <div class="text-xs muted-2 mt-1">Меняем только вид договора и срок действия.</div>
+              </div>
+              <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" data-close-contract aria-label="Закрыть" title="Закрыть">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </div>
+            <form method="post" action="/companies/{{ company.id }}/contract/update/" class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-2">
+              {% csrf_token %}
+              <div>
+                <label class="block text-xs text-brand-dark/70 mb-1">Вид</label>
+                {{ contract_form.contract_type }}
+              </div>
+              <div>
+                <label class="block text-xs text-brand-dark/70 mb-1">Действует до (не обязательно)</label>
+                {{ contract_form.contract_until }}
+              </div>
+              <div class="md:col-span-2 flex gap-2">
+                <button class="btn btn-primary" type="submit">Сохранить</button>
+                <button class="btn btn-outline" type="button" data-close-contract>Отмена</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
     <script>
       (function(){
         function getCookie(name) {
@@ -512,6 +548,32 @@
           if (parts.length === 2) return parts.pop().split(';').shift();
           return '';
         }
+        const toast = document.getElementById('toast');
+        const toastInner = document.getElementById('toastInner');
+        let toastTimer = null;
+        function showToast(text, kind) {
+          if (!toast || !toastInner) return;
+          if (toastTimer) clearTimeout(toastTimer);
+          toastInner.textContent = text || '';
+          toastInner.style.borderColor = kind === 'error' ? 'rgba(239,68,68,.30)' : 'rgba(194,226,222,.95)';
+          toastInner.style.background = kind === 'error' ? 'rgba(239,68,68,.08)' : '#fff';
+          toast.classList.remove('hidden');
+          toastTimer = setTimeout(() => toast.classList.add('hidden'), kind === 'error' ? 4200 : 2400);
+        }
+
+        const contractModal = document.getElementById('contractModal');
+        const openContract = document.getElementById('openContractModal');
+        if (contractModal && openContract) {
+          const closeBtns = contractModal.querySelectorAll('[data-close-contract]');
+          function openM() { contractModal.classList.remove('hidden'); }
+          function closeM() { contractModal.classList.add('hidden'); }
+          openContract.addEventListener('click', openM);
+          closeBtns.forEach(b => b.addEventListener('click', closeM));
+          document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeM();
+          });
+        }
+
         const csrftoken = getCookie('csrftoken');
         document.querySelectorAll('.js-call-phone').forEach(btn => {
           btn.addEventListener('click', async () => {
@@ -519,8 +581,8 @@
             const companyId = btn.dataset.company || '';
             const contactId = btn.dataset.contact || '';
             btn.disabled = true;
-            const old = btn.textContent;
-            btn.textContent = 'Отправляю...';
+            btn.classList.add('opacity-60');
+            showToast('Отправляю команду на телефон…', 'info');
             try {
               const body = new URLSearchParams({phone, company_id: companyId, contact_id: contactId});
               const res = await fetch('/phone/call/', {
@@ -530,12 +592,13 @@
               });
               const data = await res.json().catch(() => ({}));
               if (!res.ok || !data.ok) throw new Error(data.detail || 'Ошибка');
-              btn.textContent = 'Отправлено ✓';
-              setTimeout(() => { btn.textContent = old; btn.disabled = false; }, 1200);
-            } catch (e) {
-              btn.textContent = old;
+              showToast('Отправлено на телефон ✓', 'success');
               btn.disabled = false;
-              alert('Не удалось отправить команду на телефон: ' + (e && e.message ? e.message : e));
+              btn.classList.remove('opacity-60');
+            } catch (e) {
+              btn.disabled = false;
+              btn.classList.remove('opacity-60');
+              showToast('Не удалось отправить на телефон: ' + (e && e.message ? e.message : e), 'error');
             }
           });
         });
@@ -556,23 +619,25 @@
       })();
     </script>
 
-    <details class="card card-pad">
-      <summary class="cursor-pointer font-medium">История действий</summary>
-      <div class="mt-3">
-        {% if activity %}
-          <div class="space-y-2">
-            {% for ev in activity %}
-              <div class="rounded-lg border p-3 text-sm">
-                <div class="text-xs text-brand-dark/70 mb-1">{{ ev.created_at }} · {{ ev.actor|default:"—" }}</div>
-                <div>{{ ev.message|default:ev.get_verb_display }}</div>
-              </div>
-            {% endfor %}
-          </div>
-        {% else %}
-          <div class="text-sm text-brand-dark/70">Пока пусто.</div>
-        {% endif %}
-      </div>
-    </details>
+    {% if can_view_activity %}
+      <details class="card card-pad">
+        <summary class="cursor-pointer font-medium">История действий</summary>
+        <div class="mt-3">
+          {% if activity %}
+            <div class="space-y-2">
+              {% for ev in activity %}
+                <div class="rounded-lg border p-3 text-sm">
+                  <div class="text-xs text-brand-dark/70 mb-1">{{ ev.created_at }} · {{ ev.actor|default:"—" }}</div>
+                  <div>{{ ev.message|default:ev.get_verb_display }}</div>
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-sm text-brand-dark/70">Пока пусто.</div>
+          {% endif %}
+        </div>
+      </details>
+    {% endif %}
   </div>
 {% endblock %}
 

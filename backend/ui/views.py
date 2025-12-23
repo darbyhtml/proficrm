@@ -590,6 +590,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     user: User = request.user
     company = get_object_or_404(Company.objects.select_related("responsible", "branch", "status", "head_company"), id=company_id)
     can_edit_company = _can_edit_company(user, company)
+    can_view_activity = bool(user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD))
 
     # "Организация" (головная карточка) и "филиалы" (дочерние карточки клиента)
     head = company.head_company or company
@@ -619,7 +620,9 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     )
 
     note_form = CompanyNoteForm()
-    activity = ActivityEvent.objects.filter(company_id=company.id).select_related("actor")[:50]
+    activity = []
+    if can_view_activity:
+        activity = ActivityEvent.objects.filter(company_id=company.id).select_related("actor")[:50]
     quick_form = CompanyQuickEditForm(instance=company)
     contract_form = CompanyContractForm(instance=company)
 
@@ -639,6 +642,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "note_form": note_form,
             "tasks": tasks,
             "activity": activity,
+            "can_view_activity": can_view_activity,
             "quick_form": quick_form,
             "contract_form": contract_form,
             "transfer_targets": transfer_targets,
@@ -1155,8 +1159,10 @@ def task_create(request: HttpRequest) -> HttpResponse:
             else:
                 if not task.assigned_to:
                     task.assigned_to = user
-                if user.role == User.Role.BRANCH_DIRECTOR and user.branch_id and task.assigned_to.branch_id != user.branch_id:
-                    task.assigned_to = user
+                if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+                    if task.assigned_to and task.assigned_to.branch_id and task.assigned_to.branch_id != user.branch_id:
+                        messages.error(request, "Можно назначать задачи только сотрудникам своего филиала.")
+                        return redirect("task_create")
 
             # Если включено "на все филиалы организации" — создаём копии по всем карточкам организации
             if apply_to_org and comp:
@@ -1252,12 +1258,28 @@ def task_create(request: HttpRequest) -> HttpResponse:
     # Ограничить назначаемых
     if user.role == User.Role.MANAGER:
         form.fields["assigned_to"].queryset = User.objects.filter(id=user.id)
-    elif user.role == User.Role.BRANCH_DIRECTOR and user.branch_id:
-        form.fields["assigned_to"].queryset = User.objects.filter(branch_id=user.branch_id).order_by("last_name", "first_name")
+    elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+        form.fields["assigned_to"].queryset = User.objects.filter(Q(id=user.id) | Q(branch_id=user.branch_id, role=User.Role.MANAGER)).order_by("last_name", "first_name")
     else:
         form.fields["assigned_to"].queryset = User.objects.order_by("last_name", "first_name")
 
     return render(request, "ui/task_create.html", {"form": form})
+
+def _can_manage_task_status_ui(user: User, task: Task) -> bool:
+    if not user or not user.is_authenticated or not user.is_active:
+        return False
+    if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+        return True
+    if task.assigned_to_id and task.assigned_to_id == user.id:
+        return True
+    if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+        branch_id = None
+        if task.company_id and getattr(task, "company", None):
+            branch_id = getattr(task.company, "branch_id", None)
+        if not branch_id and getattr(task, "assigned_to", None):
+            branch_id = getattr(task.assigned_to, "branch_id", None)
+        return bool(branch_id and branch_id == user.branch_id)
+    return False
 
 
 @login_required
@@ -1268,10 +1290,8 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
     user: User = request.user
     task = get_object_or_404(Task.objects.select_related("company", "company__responsible", "company__branch", "assigned_to"), id=task_id)
 
-    # Доступ: менять статус может только исполнитель задачи (assigned_to).
-    # Исключение: админ/суперпользователь.
-    if not (task.assigned_to_id == user.id or user.is_superuser or user.role == User.Role.ADMIN):
-        messages.error(request, "Менять статус может только исполнитель задачи.")
+    if not _can_manage_task_status_ui(user, task):
+        messages.error(request, "Нет прав на изменение статуса этой задачи.")
         return redirect("task_list")
 
     new_status = (request.POST.get("status") or "").strip()
@@ -1279,7 +1299,7 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
         messages.error(request, "Некорректный статус.")
         return redirect("task_list")
 
-    # Правило: менеджер может менять статус только своих задач
+    # Менеджер может менять статус только своих задач (явно, на случай будущих изменений правил)
     if user.role == User.Role.MANAGER and task.assigned_to_id != user.id:
         messages.error(request, "Менеджер может менять статус только своих задач.")
         return redirect("task_list")

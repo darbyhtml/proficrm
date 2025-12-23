@@ -8,6 +8,24 @@ from companies.permissions import can_edit_company
 from .models import Task, TaskType
 
 
+def _can_manage_task_status_api(user: User, task: Task) -> bool:
+    if not user or not user.is_authenticated or not user.is_active:
+        return False
+    if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+        return True
+    if task.assigned_to_id and task.assigned_to_id == user.id:
+        return True
+    if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+        # По задачам работаем по "филиалу компании" (карточка) в первую очередь.
+        branch_id = None
+        if getattr(task, "company_id", None) and getattr(task, "company", None):
+            branch_id = getattr(task.company, "branch_id", None)
+        if not branch_id and getattr(task, "assigned_to", None):
+            branch_id = getattr(task.assigned_to, "branch_id", None)
+        return bool(branch_id and branch_id == user.branch_id)
+    return False
+
+
 class TaskTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = TaskType
@@ -64,7 +82,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         if user.role == User.Role.MANAGER and assigned_to.id != user.id:
             raise PermissionDenied("Менеджер может назначать задачи только себе.")
 
-        if user.role == User.Role.BRANCH_DIRECTOR and user.branch_id:
+        if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
             if assigned_to.branch_id and assigned_to.branch_id != user.branch_id:
                 raise PermissionDenied("Можно назначать задачи только сотрудникам своего филиала.")
 
@@ -75,10 +93,9 @@ class TaskViewSet(viewsets.ModelViewSet):
         obj: Task = self.get_object()
         data = dict(serializer.validated_data)
 
-        # Доступ: обновлять/менять статус может только исполнитель (assigned_to).
-        # Исключение: админ/суперпользователь (админ всегда имеет полный доступ).
-        if not (obj.assigned_to_id == user.id or user.is_superuser or user.role == User.Role.ADMIN):
-            raise PermissionDenied("Менять задачу может только исполнитель.")
+        # Доступ: исполнитель, либо руководители (по филиалу), либо админ/управляющий.
+        if not _can_manage_task_status_api(user, obj):
+            raise PermissionDenied("Нет прав на изменение задачи.")
 
         if "assigned_to" in data:
             assigned_to = data["assigned_to"]
@@ -86,7 +103,7 @@ class TaskViewSet(viewsets.ModelViewSet):
             if user.role == User.Role.MANAGER and assigned_to.id != user.id:
                 raise PermissionDenied("Менеджер не может переназначать задачи другим.")
 
-            if user.role == User.Role.BRANCH_DIRECTOR and user.branch_id:
+            if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
                 if assigned_to.branch_id and assigned_to.branch_id != user.branch_id:
                     raise PermissionDenied("Можно переназначать задачи только внутри филиала.")
 
