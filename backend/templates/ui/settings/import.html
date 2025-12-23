@@ -5,8 +5,11 @@
   <div class="space-y-4">
     <div>
       <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> /</div>
-      <h1 class="text-2xl font-semibold">Импорт (только компании)</h1>
-      <div class="text-sm text-brand-dark/70">CSV в формате выгрузки amo/base.csv</div>
+      <h1 class="text-2xl font-semibold">Импорт (amo CSV)</h1>
+      <div class="text-sm text-brand-dark/70">
+        CSV в формате выгрузки amo/base.csv. Импортирует компании + основные телефоны/email/вид деятельности/статус/сферы,
+        а также (только при создании) создаёт заметку из “Примечаний” и один контакт с телефонами/email.
+      </div>
     </div>
 
     <form method="post" enctype="multipart/form-data" class="bg-white border rounded-2xl p-4 space-y-3">

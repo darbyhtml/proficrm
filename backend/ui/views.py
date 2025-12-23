@@ -2823,6 +2823,7 @@ def settings_import(request: HttpRequest) -> HttpResponse:
                     dry_run=dry_run,
                     companies_only=True,
                     limit_companies=limit_companies,
+                    actor=request.user,
                 )
                 if dry_run:
                     messages.success(request, "Проверка (dry-run) выполнена.")
