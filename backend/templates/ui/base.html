@@ -106,10 +106,14 @@
                 <div class="px-4 py-3 border-b border-brand-soft bg-white">
                   <div class="flex items-center justify-between">
                     <div class="font-medium">Уведомления</div>
-                    <form method="post" action="/notifications/mark-all-read/" id="notifMarkAllForm">
-                      {% csrf_token %}
-                      <button class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" type="submit">Прочитано</button>
-                    </form>
+                    <div class="flex items-center gap-2">
+                      <button id="notifEnableSound" type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" title="Включить/выключить звук">Звук</button>
+                      <button id="notifEnableBrowser" type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" title="Разрешить уведомления браузера">Браузер</button>
+                      <form method="post" action="/notifications/mark-all-read/" id="notifMarkAllForm">
+                        {% csrf_token %}
+                        <button class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" type="submit">Прочитано</button>
+                      </form>
+                    </div>
                   </div>
                   <div class="text-xs muted mt-1">
                     Новые: <b id="notifUnreadCount">{{ notif_unread_count|default:0 }}</b> · Напоминания: <b id="reminderCount">{{ reminder_count|default:0 }}</b>
@@ -282,6 +286,10 @@
       </div>
     </div>
 
+    <audio id="notifSound" preload="auto">
+      <source src="{% static 'ui/sounds/notify.ogg' %}" type="audio/ogg" />
+    </audio>
+
     <script>
       (function(){
         const btn = document.getElementById('notifBtn');
@@ -320,6 +328,91 @@
         const notifList = document.getElementById('notifList');
         const reminderList = document.getElementById('reminderList');
         const markAllForm = document.getElementById('notifMarkAllForm');
+        const enableSoundBtn = document.getElementById('notifEnableSound');
+        const enableBrowserBtn = document.getElementById('notifEnableBrowser');
+
+        const soundEl = document.getElementById('notifSound');
+        const SOUND_KEY = 'crm_notif_sound_enabled';
+        const BROWSER_KEY = 'crm_notif_browser_enabled';
+
+        function getBool(key, defVal){
+          try{
+            const v = localStorage.getItem(key);
+            if(v === null || v === undefined) return !!defVal;
+            return v === '1';
+          }catch(_e){
+            return !!defVal;
+          }
+        }
+        function setBool(key, val){
+          try{ localStorage.setItem(key, val ? '1' : '0'); }catch(_e){}
+        }
+        let soundEnabled = getBool(SOUND_KEY, false);
+        let browserEnabled = getBool(BROWSER_KEY, false);
+
+        function updateTogglesUI(){
+          if(enableSoundBtn){
+            enableSoundBtn.classList.toggle('btn-primary', !!soundEnabled);
+            enableSoundBtn.classList.toggle('btn-outline', !soundEnabled);
+          }
+          if(enableBrowserBtn){
+            enableBrowserBtn.classList.toggle('btn-primary', !!browserEnabled);
+            enableBrowserBtn.classList.toggle('btn-outline', !browserEnabled);
+          }
+        }
+
+        function webAudioBeep(){
+          try{
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if(!AudioCtx) return;
+            const ctx = new AudioCtx();
+            const o = ctx.createOscillator();
+            const g = ctx.createGain();
+            o.type = 'sine';
+            o.frequency.value = 880;
+            g.gain.value = 0.03; // тихо
+            o.connect(g);
+            g.connect(ctx.destination);
+            o.start();
+            setTimeout(() => {
+              o.stop();
+              ctx.close && ctx.close();
+            }, 140);
+          }catch(_e){}
+        }
+
+        async function playSound(){
+          if(!soundEnabled) return;
+          // Браузеры могут блокировать звук без user-gesture — поэтому включаем через кнопку.
+          try{
+            if(soundEl && soundEl.play){
+              soundEl.currentTime = 0;
+              soundEl.volume = 0.25;
+              await soundEl.play();
+              return;
+            }
+          }catch(_e){}
+          webAudioBeep(); // fallback (работает в Safari даже без ogg)
+        }
+
+        function showBrowserNotification(n){
+          if(!browserEnabled) return;
+          if(!('Notification' in window)) return;
+          if(!window.isSecureContext) return; // браузерные уведомления в небезопасном контексте часто запрещены
+          if(Notification.permission !== 'granted') return;
+          try{
+            const title = n.title || 'CRM ПРОФИ';
+            const body = (n.body || '').slice(0, 180);
+            const url = n.url || '';
+            const notif = new Notification(title, { body, tag: 'crm_' + (n.id || ''), silent: true });
+            notif.onclick = () => {
+              try{ window.focus(); }catch(_e){}
+              if(url) window.location.href = url;
+              notif.close && notif.close();
+            };
+            setTimeout(() => { try{ notif.close && notif.close(); }catch(_e){} }, 8000);
+          }catch(_e){}
+        }
 
         let lastIds = new Set();
         document.querySelectorAll('[data-notif-id]').forEach(el => {
@@ -426,6 +519,7 @@
 
             const newIds = new Set((data.notif_items || []).map(n => String(n.id)));
             const hasNew = Array.from(newIds).some(id => !lastIds.has(id));
+            const newest = (data.notif_items && data.notif_items.length) ? data.notif_items[0] : null;
             lastIds = newIds;
 
             renderReminders(data.reminder_items || []);
@@ -439,6 +533,12 @@
                 btn.classList.add('ring-4','ring-brand-teal/15');
                 setTimeout(() => btn.classList.remove('ring-4','ring-brand-teal/15'), 1200);
               }
+              // звук + браузерное уведомление
+              playSound();
+              if(newest){
+                // показываем только когда вкладка не активна, чтобы не раздражало
+                if(document.hidden) showBrowserNotification(newest);
+              }
             }
           }catch(_e){
           }finally{
@@ -447,6 +547,39 @@
         }
 
         bindNotifActions();
+        updateTogglesUI();
+
+        if(enableSoundBtn && !enableSoundBtn.__bound){
+          enableSoundBtn.__bound = true;
+          enableSoundBtn.addEventListener('click', async () => {
+            soundEnabled = !soundEnabled;
+            setBool(SOUND_KEY, soundEnabled);
+            updateTogglesUI();
+            // попытка "разблокировать" звук user-gesture'ом
+            if(soundEnabled) await playSound();
+          });
+        }
+        if(enableBrowserBtn && !enableBrowserBtn.__bound){
+          enableBrowserBtn.__bound = true;
+          enableBrowserBtn.addEventListener('click', async () => {
+            if(!('Notification' in window)){
+              alert('Браузерные уведомления не поддерживаются.');
+              return;
+            }
+            if(!window.isSecureContext){
+              alert('Браузерные уведомления работают только по HTTPS.');
+              return;
+            }
+            try{
+              const perm = await Notification.requestPermission();
+              browserEnabled = (perm === 'granted');
+              setBool(BROWSER_KEY, browserEnabled);
+              updateTogglesUI();
+              if(!browserEnabled) alert('Разрешение не выдано. Уведомления браузера отключены.');
+            }catch(_e){}
+          });
+        }
+
         pollOnce();
         setInterval(pollOnce, 15000);
       })();
