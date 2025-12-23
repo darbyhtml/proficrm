@@ -199,20 +199,45 @@
             <div class="flex items-center justify-between gap-2">
               <div class="font-mono text-xs">{{ company.phone|default:"—" }}</div>
               {% if company.phone %}
-                <button
-                  type="button"
-                  class="btn btn-outline js-call-phone"
-                  style="padding:.25rem .5rem"
-                  data-phone="{{ company.phone }}"
-                  data-company="{{ company.id }}"
-                  data-contact=""
-                  title="Позвонить с телефона"
-                  aria-label="Позвонить с телефона"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </button>
+                <div class="flex items-center gap-2 shrink-0">
+                  {% if can_edit_company %}
+                    <form method="post" action="/companies/{{ company.id }}/cold-call/toggle/" style="display:inline">
+                      {% csrf_token %}
+                      <button
+                        type="submit"
+                        class="btn btn-outline"
+                        style="padding:.25rem .5rem;font-size:.75rem;{% if company.primary_contact_is_cold_call %}background:#003D38;color:#fff;border-color:rgba(0,61,56,.35){% endif %}"
+                        title="{% if company.primary_contact_is_cold_call %}Снять «Холодный» (осн. контакт){% else %}Поставить «Холодный» (осн. контакт){% endif %}"
+                        aria-label="{% if company.primary_contact_is_cold_call %}Снять «Холодный» (осн. контакт){% else %}Поставить «Холодный» (осн. контакт){% endif %}"
+                      >
+                        {% if company.primary_contact_is_cold_call %}
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                        {% else %}
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M12 2v20M4 6l16 12M20 6 4 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M6 4l12 16M18 4 6 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".35"/>
+                          </svg>
+                        {% endif %}
+                      </button>
+                    </form>
+                  {% endif %}
+                  <button
+                    type="button"
+                    class="btn btn-outline js-call-phone"
+                    style="padding:.25rem .5rem"
+                    data-phone="{{ company.phone }}"
+                    data-company="{{ company.id }}"
+                    data-contact=""
+                    title="Позвонить с телефона"
+                    aria-label="Позвонить с телефона"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </div>
               {% endif %}
             </div>
           </div>
@@ -246,15 +271,7 @@
         <div class="font-medium mb-3">Быстро</div>
         {% if can_edit_company %}
           <a class="btn btn-primary w-full" href="/tasks/new/?company={{ company.id }}">+ Поставить задачу</a>
-          <div class="mt-3">
-            <div class="text-xs text-brand-dark/70 mb-1">Холодный звонок (основной контакт)</div>
-            <form method="post" action="/companies/{{ company.id }}/cold-call/toggle/">
-              {% csrf_token %}
-              <button class="btn {% if company.primary_contact_is_cold_call %}btn-primary{% else %}btn-outline{% endif %} w-full" type="submit">
-                {% if company.primary_contact_is_cold_call %}Снять отметку{% else %}Поставить отметку{% endif %}
-              </button>
-            </form>
-          </div>
+        {# переносим отметку холодного звонка (осн. контакт) к телефону в "Данные" #}
           <div class="mt-3">
             <div class="text-xs text-brand-dark/70 mb-1">Передать другому менеджеру</div>
             <form method="post" action="/companies/{{ company.id }}/transfer/" class="flex gap-2">
@@ -370,15 +387,31 @@
                     <div class="flex items-center gap-2">
                       <form method="post" action="/contacts/{{ c.id }}/cold-call/toggle/">
                         {% csrf_token %}
-                        <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" type="submit" title="{% if c.is_cold_call %}Снять «Холодный»{% else %}Поставить «Холодный»{% endif %}" aria-label="{% if c.is_cold_call %}Снять «Холодный»{% else %}Поставить «Холодный»{% endif %}">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M12 2a10 10 0 1010 10A10 10 0 0012 2z" stroke="currentColor" stroke-width="2"/>
-                            <path d="M8 12h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                            <path d="M12 8v8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                          </svg>
+                        <button
+                          class="btn btn-outline"
+                          style="padding:.25rem .5rem;font-size:.75rem;{% if c.is_cold_call %}background:#003D38;color:#fff;border-color:rgba(0,61,56,.35){% endif %}"
+                          type="submit"
+                          title="{% if c.is_cold_call %}Снять «Холодный»{% else %}Поставить «Холодный»{% endif %}"
+                          aria-label="{% if c.is_cold_call %}Снять «Холодный»{% else %}Поставить «Холодный»{% endif %}"
+                        >
+                          {% if c.is_cold_call %}
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                          {% else %}
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path d="M12 2v20M4 6l16 12M20 6 4 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                              <path d="M6 4l12 16M18 4 6 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".35"/>
+                            </svg>
+                          {% endif %}
                         </button>
                       </form>
-                      <a class="text-sm link" href="/contacts/{{ c.id }}/edit/">Редактировать</a>
+                      <a class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" href="/contacts/{{ c.id }}/edit/" title="Редактировать" aria-label="Редактировать">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      </a>
                     </div>
                   {% endif %}
                 </div>
