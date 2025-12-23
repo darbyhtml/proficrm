@@ -374,10 +374,11 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
 @login_required
 def company_export(request: HttpRequest) -> HttpResponse:
     """
-    Экспорт компаний (по текущим фильтрам) в CSV, с учётом выбранных колонок.
+    Экспорт компаний (по текущим фильтрам) в CSV.
+    Доступ: только администратор.
+    Экспорт: максимально полный (данные + контакты + заметки + задачи + статусы/сферы/филиалы и т.п.).
     """
     import csv
-    from django.utils.text import slugify
 
     user: User = request.user
     if not _require_admin(user):
@@ -411,40 +412,152 @@ def company_export(request: HttpRequest) -> HttpResponse:
         .prefetch_related("spheres")
         .order_by("-updated_at")
     )
-    qs = _apply_company_filters(qs=qs, params=request.GET)["qs"]
+    f = _apply_company_filters(qs=qs, params=request.GET)
+    qs = f["qs"]
 
-    cfg = UiGlobalConfig.load()
-    cols = cfg.company_list_columns or ["name"]
-    if "name" not in cols:
-        cols = ["name"] + cols
+    # Полный экспорт: данные компании + агрегированные связанные сущности.
+    # Важно: для больших объёмов соединяем связанные сущности в одну ячейку (Excel-friendly).
+    qs = qs.select_related("head_company").prefetch_related(
+        "contacts__emails",
+        "contacts__phones",
+        "notes__author",
+        "tasks__assigned_to",
+        "tasks__created_by",
+        "tasks__type",
+    )
 
-    header_map = dict(UiGlobalConfig.COMPANY_LIST_COLUMNS)
-    headers = [header_map.get(c, c) for c in cols if c != "address"]  # address идёт внутри "Компания"
+    def _contract_type_display(company: Company) -> str:
+        try:
+            return company.get_contract_type_display() if company.contract_type else ""
+        except Exception:
+            return company.contract_type or ""
+
+    headers = [
+        "ID",
+        "Компания",
+        "Юр.название",
+        "ИНН",
+        "КПП",
+        "Адрес",
+        "Сайт",
+        "Вид деятельности",
+        "Холодный звонок",
+        "Вид договора",
+        "Договор до",
+        "Статус",
+        "Сферы",
+        "Ответственный",
+        "Филиал",
+        "Головная организация",
+        "Создано",
+        "Обновлено",
+        "Контакт (ФИО) [из данных]",
+        "Контакт (должность) [из данных]",
+        "Телефон (осн.) [из данных]",
+        "Email (осн.) [из данных]",
+        "Контакты (добавленные)",
+        "Заметки",
+        "Задачи",
+        "Есть просроченные задачи",
+    ]
+
+    def _fmt_dt(dt):
+        if not dt:
+            return ""
+        try:
+            return timezone.localtime(dt).strftime("%d.%m.%Y %H:%M")
+        except Exception:
+            return str(dt)
+
+    def _fmt_date(d):
+        if not d:
+            return ""
+        try:
+            return d.strftime("%d.%m.%Y")
+        except Exception:
+            return str(d)
+
+    def _join_nonempty(parts, sep="; "):
+        parts = [p for p in parts if p]
+        return sep.join(parts)
+
+    def _contacts_blob(company: Company) -> str:
+        items = []
+        for c in getattr(company, "contacts", []).all():
+            phones = ", ".join([p.value for p in c.phones.all()])
+            emails = ", ".join([e.value for e in c.emails.all()])
+            name = " ".join([c.last_name or "", c.first_name or ""]).strip()
+            head = _join_nonempty([name, c.position or ""], " — ")
+            tail = _join_nonempty(
+                [
+                    f"тел: {phones}" if phones else "",
+                    f"email: {emails}" if emails else "",
+                    f"прим: {c.note.strip()}" if (c.note or "").strip() else "",
+                ],
+                "; ",
+            )
+            if head or tail:
+                items.append(_join_nonempty([head, tail], " | "))
+        return " || ".join(items)
+
+    def _notes_blob(company: Company) -> str:
+        items = []
+        for n in getattr(company, "notes", []).all().order_by("created_at"):
+            txt = (n.text or "").strip()
+            if n.attachment:
+                txt = _join_nonempty([txt, f"файл: {n.attachment_name or 'file'}"], " | ")
+            line = _join_nonempty([_fmt_dt(n.created_at), str(n.author) if n.author else "", txt], " — ")
+            if line:
+                items.append(line)
+        return " || ".join(items)
+
+    def _tasks_blob(company: Company) -> str:
+        items = []
+        for t in getattr(company, "tasks", []).all().order_by("created_at"):
+            title = (t.title or "").strip()
+            meta = _join_nonempty(
+                [
+                    f"статус: {t.get_status_display()}",
+                    f"тип: {t.type.name}" if t.type else "",
+                    f"кому: {t.assigned_to}" if t.assigned_to else "",
+                    f"дедлайн: {_fmt_dt(t.due_at)}" if t.due_at else "",
+                ],
+                "; ",
+            )
+            line = _join_nonempty([title, meta], " | ")
+            if line:
+                items.append(line)
+        return " || ".join(items)
 
     def row_for(company: Company):
-        row = []
-        for c in cols:
-            if c == "name":
-                row.append(company.name)
-            elif c == "address":
-                continue
-            elif c == "overdue":
-                row.append("Да" if getattr(company, "has_overdue", False) else "Нет")
-            elif c == "inn":
-                row.append(company.inn or "")
-            elif c == "status":
-                row.append(company.status.name if company.status else "")
-            elif c == "spheres":
-                row.append(", ".join([s.name for s in company.spheres.all()]))
-            elif c == "responsible":
-                row.append(str(company.responsible) if company.responsible else "")
-            elif c == "branch":
-                row.append(str(company.branch) if company.branch else "")
-            elif c == "updated_at":
-                row.append(company.updated_at.isoformat(sep=" ", timespec="seconds") if company.updated_at else "")
-            else:
-                row.append("")
-        return row
+        return [
+            str(company.id),
+            company.name or "",
+            company.legal_name or "",
+            company.inn or "",
+            company.kpp or "",
+            (company.address or "").replace("\n", " ").strip(),
+            company.website or "",
+            company.activity_kind or "",
+            "Да" if company.is_cold_call else "Нет",
+            _contract_type_display(company),
+            _fmt_date(company.contract_until),
+            company.status.name if company.status else "",
+            ", ".join([s.name for s in company.spheres.all()]),
+            str(company.responsible) if company.responsible else "",
+            str(company.branch) if company.branch else "",
+            (company.head_company.name if company.head_company else ""),
+            _fmt_dt(company.created_at),
+            _fmt_dt(company.updated_at),
+            company.contact_name or "",
+            company.contact_position or "",
+            company.phone or "",
+            company.email or "",
+            _contacts_blob(company),
+            _notes_blob(company),
+            _tasks_blob(company),
+            "Да" if getattr(company, "has_overdue", False) else "Нет",
+        ]
 
     import uuid
     export_id = str(uuid.uuid4())
@@ -488,8 +601,16 @@ def company_export(request: HttpRequest) -> HttpResponse:
             "export_id": export_id,
             "ip": request.META.get("REMOTE_ADDR"),
             "user_agent": request.META.get("HTTP_USER_AGENT", "")[:200],
-            "filters": {"q": q, "responsible": responsible, "status": status, "branch": branch, "sphere": sphere, "overdue": only_overdue},
-            "columns": cols,
+            "filters": {
+                "q": f["q"],
+                "responsible": f["responsible"],
+                "status": f["status"],
+                "branch": f["branch"],
+                "sphere": f["sphere"],
+                "contract_type": f["contract_type"],
+                "cold_call": f["cold_call"],
+                "overdue": f["overdue"],
+            },
             "row_count": row_count,
         },
     )
