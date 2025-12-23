@@ -28,6 +28,8 @@ from companies.api import CompanyNoteViewSet, CompanyViewSet, ContactViewSet
 from tasksapp.api import TaskTypeViewSet, TaskViewSet
 from phonebridge.api import PullCallView, RegisterDeviceView
 
+handler404 = "crm.views.handler404"
+
 
 admin.site.site_header = "CRM — Админка"
 admin.site.site_title = "CRM Admin"

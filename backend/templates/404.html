@@ -1,0 +1,45 @@
+{% extends "ui/base.html" %}
+{% block title %}404 — Страница не найдена{% endblock %}
+
+{% block content %}
+  <div class="space-y-6">
+    <div class="card card-pad">
+      <div class="flex items-start justify-between gap-4">
+        <div>
+          <div class="text-sm text-brand-dark/70">Что-то пошло не так…</div>
+          <h1 class="text-2xl font-semibold mt-1">404 — Страница не найдена</h1>
+          <div class="text-sm text-brand-dark/70 mt-2 space-y-1">
+            <div>Похоже, вы искали страницу, которой больше нет.</div>
+            <div class="muted-2">
+              Возможно, компания была удалена, ссылка устарела, или администратор решил “пошутить” над CRM.
+            </div>
+          </div>
+          {% if path %}
+            <div class="mt-3 text-xs muted-2">
+              Запрошенный путь: <span class="font-mono">{{ path }}</span>
+            </div>
+          {% endif %}
+        </div>
+        <div class="shrink-0">
+          <div class="rounded-2xl border border-brand-soft bg-brand-soft/25 px-4 py-3 text-brand-dark">
+            <div class="text-5xl font-semibold leading-none">404</div>
+            <div class="text-xs muted-2 mt-1">не туда свернули</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-5 flex flex-wrap gap-2">
+        <a class="btn btn-primary" href="/">На главную</a>
+        <a class="btn btn-outline" href="/companies/">Списки компаний</a>
+        <a class="btn btn-outline" href="/tasks/">Задачи</a>
+        <button type="button" class="btn btn-outline" onclick="history.back()">Назад</button>
+      </div>
+    </div>
+
+    <div class="text-sm text-brand-dark/70">
+      Совет: если вы переходили в карточку компании из уведомления — попробуйте открыть список компаний и найти её по ИНН/названию.
+    </div>
+  </div>
+{% endblock %}
+
+
