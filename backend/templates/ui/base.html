@@ -362,23 +362,35 @@
           }
         }
 
-        function webAudioBeep(){
+        // WebAudio fallback (наиболее совместимый способ сделать звук во всех браузерах).
+        let audioCtx = null;
+        async function ensureAudioCtx(){
+          const AudioCtx = window.AudioContext || window.webkitAudioContext;
+          if(!AudioCtx) return null;
+          if(!audioCtx) audioCtx = new AudioCtx();
           try{
-            const AudioCtx = window.AudioContext || window.webkitAudioContext;
-            if(!AudioCtx) return;
-            const ctx = new AudioCtx();
+            if(audioCtx.state === 'suspended') await audioCtx.resume();
+          }catch(_e){}
+          return audioCtx;
+        }
+        async function webAudioBeep(){
+          try{
+            const ctx = await ensureAudioCtx();
+            if(!ctx) return;
             const o = ctx.createOscillator();
             const g = ctx.createGain();
+            const now = ctx.currentTime;
+            // чуть громче, но всё ещё аккуратно
+            g.gain.setValueAtTime(0.0001, now);
+            g.gain.exponentialRampToValueAtTime(0.06, now + 0.01);
+            g.gain.exponentialRampToValueAtTime(0.0001, now + 0.20);
             o.type = 'sine';
-            o.frequency.value = 880;
-            g.gain.value = 0.03; // тихо
+            o.frequency.setValueAtTime(880, now);
+            o.frequency.exponentialRampToValueAtTime(660, now + 0.20);
             o.connect(g);
             g.connect(ctx.destination);
-            o.start();
-            setTimeout(() => {
-              o.stop();
-              ctx.close && ctx.close();
-            }, 140);
+            o.start(now);
+            o.stop(now + 0.22);
           }catch(_e){}
         }
 
@@ -387,13 +399,17 @@
           // Браузеры могут блокировать звук без user-gesture — поэтому включаем через кнопку.
           try{
             if(soundEl && soundEl.play){
+              // если формат не поддержан — сразу fallback
+              const canOgg = soundEl.canPlayType && soundEl.canPlayType('audio/ogg; codecs="vorbis"');
+              if(!canOgg) throw new Error('no ogg support');
               soundEl.currentTime = 0;
               soundEl.volume = 0.25;
+              soundEl.muted = false;
               await soundEl.play();
               return;
             }
           }catch(_e){}
-          webAudioBeep(); // fallback (работает в Safari даже без ogg)
+          await webAudioBeep(); // fallback
         }
 
         function showBrowserNotification(n){
@@ -559,7 +575,10 @@
             setBool(SOUND_KEY, soundEnabled);
             updateTogglesUI();
             // попытка "разблокировать" звук user-gesture'ом
-            if(soundEnabled) await playSound();
+            if(soundEnabled){
+              await ensureAudioCtx(); // явный resume на user gesture
+              await playSound();
+            }
           });
         }
         if(enableBrowserBtn && !enableBrowserBtn.__bound){
