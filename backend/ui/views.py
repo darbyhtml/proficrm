@@ -104,6 +104,42 @@ def _notify_branch_leads(*, branch_id, title: str, body: str, url: str, exclude_
     return sent
 
 
+def _detach_client_branches(*, head_company: Company) -> list[Company]:
+    """
+    Если удаляется "головная организация" клиента, её дочерние карточки должны стать самостоятельными:
+    head_company=NULL.
+    Возвращает список "бывших филиалов" (до 200 для сообщений/логов).
+    """
+    children_qs = Company.objects.filter(head_company_id=head_company.id).select_related("responsible", "branch").order_by("name")
+    children = list(children_qs[:200])
+    if children:
+        now_ts = timezone.now()
+        Company.objects.filter(head_company_id=head_company.id).update(head_company=None, updated_at=now_ts)
+    return children
+
+
+def _notify_head_deleted_with_branches(*, actor: User, head_company: Company, detached: list[Company]):
+    """
+    Уведомление о том, что удалили головную компанию клиента, и её филиалы стали самостоятельными.
+    По ТЗ уведомляем руководителей (РОП/директор) соответствующего внутреннего филиала.
+    """
+    if not detached:
+        return 0
+    branch_id = _company_branch_id(head_company)
+    body = f"{head_company.name}: удалена головная организация. Филиалов стало головными: {len(detached)}."
+    # В body добавим первые несколько названий (чтобы было понятно о чём речь)
+    sample = ", ".join([c.name for c in detached[:5] if c.name])
+    if sample:
+        body = body + f" Примеры: {sample}."
+    return _notify_branch_leads(
+        branch_id=branch_id,
+        title="Удалена головная организация (филиалы стали самостоятельными)",
+        body=body,
+        url="/companies/",
+        exclude_user_id=actor.id,
+    )
+
+
 def _companies_with_overdue_flag(*, now):
     """
     Базовый QS компаний с вычисляемым флагом просроченных задач `has_overdue`.
@@ -916,6 +952,11 @@ def company_delete_request_approve(request: HttpRequest, company_id, req_id: int
     req.decided_by = user
     req.decided_at = timezone.now()
     req.save(update_fields=["status", "decided_by", "decided_at"])
+
+    # Если удаляем "головную" компанию клиента — дочерние карточки становятся самостоятельными.
+    detached = _detach_client_branches(head_company=company)
+    branches_notified = _notify_head_deleted_with_branches(actor=user, head_company=company, detached=detached)
+
     if req.requested_by_id:
         notify(
             user=req.requested_by,
@@ -931,7 +972,12 @@ def company_delete_request_approve(request: HttpRequest, company_id, req_id: int
         entity_id=str(company.id),
         company_id=company.id,
         message="Компания удалена (по запросу)",
-        meta={"request_id": req.id},
+        meta={
+            "request_id": req.id,
+            "detached_branches": [str(c.id) for c in detached[:50]],
+            "detached_count": len(detached),
+            "branches_notified": branches_notified,
+        },
     )
     company.delete()
     messages.success(request, "Компания удалена.")
@@ -948,6 +994,8 @@ def company_delete_direct(request: HttpRequest, company_id) -> HttpResponse:
         messages.error(request, "Нет прав на удаление этой компании.")
         return redirect("company_detail", company_id=company.id)
     reason = (request.POST.get("reason") or "").strip()
+    detached = _detach_client_branches(head_company=company)
+    branches_notified = _notify_head_deleted_with_branches(actor=user, head_company=company, detached=detached)
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.DELETE,
@@ -955,7 +1003,12 @@ def company_delete_direct(request: HttpRequest, company_id) -> HttpResponse:
         entity_id=str(company.id),
         company_id=company.id,
         message="Компания удалена",
-        meta={"reason": reason[:500]},
+        meta={
+            "reason": reason[:500],
+            "detached_branches": [str(c.id) for c in detached[:50]],
+            "detached_count": len(detached),
+            "branches_notified": branches_notified,
+        },
     )
     company.delete()
     messages.success(request, "Компания удалена.")
