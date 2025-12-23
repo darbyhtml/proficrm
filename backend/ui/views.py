@@ -363,7 +363,7 @@ def analytics(request: HttpRequest) -> HttpResponse:
         end = start + timedelta(days=1)
         period_label = timezone.localdate(now).strftime("%d.%m.%Y")
 
-    # Кого показываем
+    # Кого показываем (админ НЕ отображается как субъект аналитики)
     if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
         users_qs = User.objects.filter(is_active=True, role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]).select_related("branch")
     else:
@@ -408,7 +408,7 @@ def analytics(request: HttpRequest) -> HttpResponse:
         stats.setdefault(uid, {"calls_total": 0, "cold_calls": 0})
         stats[uid]["cold_marks"] = stats[uid].get("cold_marks", 0) + int(row["cnt"] or 0)
 
-    # Группировка по филиалу (для управляющего) + готовые строки для шаблона
+    # Группировка по филиалу (для управляющего) + карточки для шаблона
     groups_map = {}
     for u in users_list:
         bid = getattr(u, "branch_id", None)
@@ -420,7 +420,7 @@ def analytics(request: HttpRequest) -> HttpResponse:
                 "calls_total": int(s.get("calls_total", 0) or 0),
                 "cold_calls": int(s.get("cold_calls", 0) or 0),
                 "cold_marks": int(s.get("cold_marks", 0) or 0),
-                "calls": calls_by_user.get(u.id, [])[:50],
+                "url": f"/analytics/users/{u.id}/?period={period}",
             }
         )
 
@@ -431,6 +431,77 @@ def analytics(request: HttpRequest) -> HttpResponse:
             "period": period,
             "period_label": period_label,
             "groups": list(groups_map.values()),
+        },
+    )
+
+
+@login_required
+def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
+    """
+    Страница конкретного сотрудника (менеджера/РОП/директора).
+    Страница не хранится в БД: существует пока существует пользователь.
+    """
+    viewer: User = request.user
+    if not (viewer.is_superuser or viewer.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD)):
+        messages.error(request, "Нет доступа к аналитике.")
+        return redirect("dashboard")
+
+    target = get_object_or_404(User.objects.select_related("branch"), id=user_id, is_active=True)
+    # Админа не показываем как субъект
+    if target.role == User.Role.ADMIN:
+        raise Http404()
+
+    if viewer.is_superuser or viewer.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+        pass
+    else:
+        if not viewer.branch_id or viewer.branch_id != target.branch_id:
+            messages.error(request, "Нет доступа к аналитике сотрудника из другого филиала.")
+            return redirect("analytics")
+
+    period = (request.GET.get("period") or "day").strip()  # day|month
+    if period not in ("day", "month"):
+        period = "day"
+    now = timezone.now()
+    local_now = timezone.localtime(now)
+    if period == "month":
+        start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end = (start + timedelta(days=32)).replace(day=1)
+        period_label = _month_label(timezone.localdate(now))
+    else:
+        start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=1)
+        period_label = timezone.localdate(now).strftime("%d.%m.%Y")
+
+    calls = (
+        CallRequest.objects.filter(created_by=target, created_at__gte=start, created_at__lt=end)
+        .select_related("company", "contact")
+        .order_by("-created_at")[:300]
+    )
+    cold_calls = [c for c in calls if c.is_cold_call]
+
+    contact_marks = list(
+        Contact.objects.filter(cold_marked_by=target, cold_marked_at__isnull=False, cold_marked_at__gte=start, cold_marked_at__lt=end)
+        .select_related("company")
+        .order_by("-cold_marked_at")[:200]
+    )
+    primary_marks = list(
+        Company.objects.filter(primary_cold_marked_by=target, primary_cold_marked_at__isnull=False, primary_cold_marked_at__gte=start, primary_cold_marked_at__lt=end)
+        .order_by("-primary_cold_marked_at")[:200]
+    )
+
+    return render(
+        request,
+        "ui/analytics_user.html",
+        {
+            "period": period,
+            "period_label": period_label,
+            "target": target,
+            "calls": calls,
+            "cold_calls_count": len(cold_calls),
+            "calls_count": len(calls),
+            "marks_total": len(contact_marks) + len(primary_marks),
+            "contact_marks": contact_marks,
+            "primary_marks": primary_marks,
         },
     )
 

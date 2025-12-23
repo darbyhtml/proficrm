@@ -1,0 +1,106 @@
+{% extends "ui/base.html" %}
+{% block title %}Аналитика — {{ target }}{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div class="text-sm text-brand-dark/70">
+      <a class="underline" href="/analytics/">Аналитика</a> /
+      <span>{{ target }}</span>
+    </div>
+
+    <div class="flex items-end justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-semibold">{{ target }}</h1>
+        <div class="text-sm text-brand-dark/70">
+          {% if target.branch %}Филиал: {{ target.branch.name }} · {% endif %}
+          Период: <b>{% if period == "month" %}Месяц{% else %}День{% endif %}</b> · {{ period_label }}
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <a class="btn btn-outline" href="/analytics/users/{{ target.id }}/?period=day">День</a>
+        <a class="btn btn-outline" href="/analytics/users/{{ target.id }}/?period=month">Месяц</a>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div class="card card-pad">
+        <div class="text-xs muted-2">Всего звонков</div>
+        <div class="text-2xl font-semibold mt-1">{{ calls_count }}</div>
+      </div>
+      <div class="card card-pad">
+        <div class="text-xs muted-2">Холодных (подтв.)</div>
+        <div class="text-2xl font-semibold mt-1">{{ cold_calls_count }}</div>
+      </div>
+      <div class="card card-pad">
+        <div class="text-xs muted-2">Отметок «холодный»</div>
+        <div class="text-2xl font-semibold mt-1">{{ marks_total }}</div>
+      </div>
+    </div>
+
+    <section class="card card-pad">
+      <div class="font-medium">Звонки (последние {{ calls|length }})</div>
+      <div class="mt-3 space-y-2 text-sm">
+        {% for call in calls %}
+          <div class="rounded-lg border p-3 flex flex-wrap items-center gap-2">
+            <span class="font-mono text-xs">{{ call.created_at|date:"d.m.Y H:i:s" }}</span>
+            <span class="font-mono text-xs">{{ call.phone_raw }}</span>
+            {% if call.is_cold_call %}
+              <span class="badge badge-warn" style="padding:.1rem .35rem;font-size:.65rem">Холодный</span>
+            {% endif %}
+            {% if call.contact %}
+              <span class="muted-2">· {{ call.contact }}</span>
+            {% endif %}
+            {% if call.company %}
+              <a class="link" href="/companies/{{ call.company.id }}/">({{ call.company.name }})</a>
+            {% endif %}
+          </div>
+        {% empty %}
+          <div class="muted-2">Нет звонков за период.</div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <section class="card card-pad">
+        <div class="font-medium">Отметки «холодный» (контакты)</div>
+        <div class="mt-3 space-y-2 text-sm">
+          {% for c in contact_marks %}
+            <div class="rounded-lg border p-3 flex items-center justify-between gap-2">
+              <div class="min-w-0">
+                <div class="font-medium truncate">{{ c }}</div>
+                <div class="text-xs muted-2 mt-1">
+                  {{ c.cold_marked_at|date:"d.m.Y H:i:s" }}
+                  {% if c.company %} · <a class="link" href="/companies/{{ c.company.id }}/">{{ c.company.name }}</a>{% endif %}
+                </div>
+              </div>
+              <span class="badge">Контакт</span>
+            </div>
+          {% empty %}
+            <div class="muted-2">Нет отметок.</div>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="card card-pad">
+        <div class="font-medium">Отметки «холодный» (основной номер компании)</div>
+        <div class="mt-3 space-y-2 text-sm">
+          {% for c in primary_marks %}
+            <div class="rounded-lg border p-3 flex items-center justify-between gap-2">
+              <div class="min-w-0">
+                <div class="font-medium truncate">
+                  <a class="link" href="/companies/{{ c.id }}/">{{ c.name }}</a>
+                </div>
+                <div class="text-xs muted-2 mt-1">{{ c.primary_cold_marked_at|date:"d.m.Y H:i:s" }}</div>
+              </div>
+              <span class="badge">Компания</span>
+            </div>
+          {% empty %}
+            <div class="muted-2">Нет отметок.</div>
+          {% endfor %}
+        </div>
+      </section>
+    </div>
+  </div>
+{% endblock %}
+
+
