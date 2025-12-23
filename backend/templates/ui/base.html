@@ -313,12 +313,13 @@
           return '';
         }
         function escapeHtml(s){
+          // replaceAll может отсутствовать в некоторых браузерах — используем регулярки
           return String(s || '')
-            .replaceAll('&', '&amp;')
-            .replaceAll('<', '&lt;')
-            .replaceAll('>', '&gt;')
-            .replaceAll('"', '&quot;')
-            .replaceAll("'", '&#039;');
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
         }
 
         const csrftoken = getCookie('csrftoken');
@@ -404,7 +405,12 @@
             const title = n.title || 'CRM ПРОФИ';
             const body = (n.body || '').slice(0, 180);
             const url = n.url || '';
-            const notif = new Notification(title, { body, tag: 'crm_' + (n.id || ''), silent: true });
+            const notif = new Notification(title, {
+              body,
+              tag: 'crm_' + (n.id || ''),
+              silent: true,
+              icon: '/static/ui/favicon-v2.svg',
+            });
             notif.onclick = () => {
               try{ window.focus(); }catch(_e){}
               if(url) window.location.href = url;
@@ -535,10 +541,7 @@
               }
               // звук + браузерное уведомление
               playSound();
-              if(newest){
-                // показываем только когда вкладка не активна, чтобы не раздражало
-                if(document.hidden) showBrowserNotification(newest);
-              }
+              if(newest) showBrowserNotification(newest);
             }
           }catch(_e){
           }finally{
@@ -575,7 +578,12 @@
               browserEnabled = (perm === 'granted');
               setBool(BROWSER_KEY, browserEnabled);
               updateTogglesUI();
-              if(!browserEnabled) alert('Разрешение не выдано. Уведомления браузера отключены.');
+              if(!browserEnabled) {
+                alert('Разрешение не выдано. Уведомления браузера отключены.');
+              } else {
+                // тестовое уведомление, чтобы было понятно что всё включилось
+                showBrowserNotification({id:'test', title:'CRM ПРОФИ', body:'Браузерные уведомления включены', url:''});
+              }
             }catch(_e){}
           });
         }
