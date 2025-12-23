@@ -3,11 +3,11 @@
   <div class="flex gap-2">
     {% if page.has_previous %}
       <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40"
-         href="?{% if qs %}{{ qs }}&{% endif %}page={{ page.previous_page_number }}">Назад</a>
+         href="?{% if qs %}{{ qs }}&{% endif %}{{ page_param|default:"page" }}={{ page.previous_page_number }}">Назад</a>
     {% endif %}
     {% if page.has_next %}
       <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40"
-         href="?{% if qs %}{{ qs }}&{% endif %}page={{ page.next_page_number }}">Вперёд</a>
+         href="?{% if qs %}{{ qs }}&{% endif %}{{ page_param|default:"page" }}={{ page.next_page_number }}">Вперёд</a>
     {% endif %}
   </div>
 </div>

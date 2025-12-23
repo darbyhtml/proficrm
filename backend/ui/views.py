@@ -510,6 +510,10 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
     cold_page = cold_p.get_page(cold_page_num)
     events_page = events_p.get_page(events_page_num)
 
+    cold_qs = _qs_without_page(request, page_key="cold_page")
+    calls_qs_str = _qs_without_page(request, page_key="calls_page")
+    events_qs_str = _qs_without_page(request, page_key="events_page")
+
     return render(
         request,
         "ui/analytics_user.html",
@@ -520,6 +524,9 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
             "calls_page": calls_page,
             "cold_page": cold_page,
             "events_page": events_page,
+            "cold_qs": cold_qs,
+            "calls_qs": calls_qs_str,
+            "events_qs": events_qs_str,
             "cold_calls_count": cold_calls_qs.count(),
             "calls_count": calls_qs.count(),
             "events_count": events_qs.count(),

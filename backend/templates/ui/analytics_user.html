@@ -58,17 +58,7 @@
           <div class="muted-2">Нет холодных звонков за период.</div>
         {% endfor %}
       </div>
-      <div class="flex items-center justify-between px-4 py-3 border-t text-sm mt-3">
-        <div class="text-brand-dark/70">Стр. {{ cold_page.number }} / {{ cold_page.paginator.num_pages }}</div>
-        <div class="flex gap-2">
-          {% if cold_page.has_previous %}
-            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&cold_page={{ cold_page.previous_page_number }}&calls_page={{ calls_page.number }}&events_page={{ events_page.number }}">Назад</a>
-          {% endif %}
-          {% if cold_page.has_next %}
-            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&cold_page={{ cold_page.next_page_number }}&calls_page={{ calls_page.number }}&events_page={{ events_page.number }}">Вперёд</a>
-          {% endif %}
-        </div>
-      </div>
+      {% include "ui/_pagination.html" with page=cold_page qs=cold_qs page_param="cold_page" %}
     </section>
 
     <section class="card card-pad">
@@ -100,17 +90,7 @@
           <div class="muted-2">Нет звонков за период.</div>
         {% endfor %}
       </div>
-      <div class="flex items-center justify-between px-4 py-3 border-t text-sm mt-3">
-        <div class="text-brand-dark/70">Стр. {{ calls_page.number }} / {{ calls_page.paginator.num_pages }}</div>
-        <div class="flex gap-2">
-          {% if calls_page.has_previous %}
-            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&calls_page={{ calls_page.previous_page_number }}&cold_page={{ cold_page.number }}&events_page={{ events_page.number }}">Назад</a>
-          {% endif %}
-          {% if calls_page.has_next %}
-            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&calls_page={{ calls_page.next_page_number }}&cold_page={{ cold_page.number }}&events_page={{ events_page.number }}">Вперёд</a>
-          {% endif %}
-        </div>
-      </div>
+      {% include "ui/_pagination.html" with page=calls_page qs=calls_qs page_param="calls_page" %}
     </section>
 
     <section class="card card-pad">
@@ -136,17 +116,7 @@
             <div class="muted-2">Нет действий за период.</div>
           {% endfor %}
         </div>
-        <div class="flex items-center justify-between px-4 py-3 border-t text-sm mt-3">
-          <div class="text-brand-dark/70">Стр. {{ events_page.number }} / {{ events_page.paginator.num_pages }}</div>
-          <div class="flex gap-2">
-            {% if events_page.has_previous %}
-              <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&events_page={{ events_page.previous_page_number }}&calls_page={{ calls_page.number }}&cold_page={{ cold_page.number }}">Назад</a>
-            {% endif %}
-            {% if events_page.has_next %}
-              <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&events_page={{ events_page.next_page_number }}&calls_page={{ calls_page.number }}&cold_page={{ cold_page.number }}">Вперёд</a>
-            {% endif %}
-          </div>
-        </div>
+        {% include "ui/_pagination.html" with page=events_page qs=events_qs page_param="events_page" %}
       </details>
     </section>
   </div>
