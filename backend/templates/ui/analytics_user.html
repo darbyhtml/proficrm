@@ -28,7 +28,7 @@
         <div class="text-2xl font-semibold mt-1">{{ calls_count }}</div>
       </div>
       <div class="card card-pad">
-        <div class="text-xs muted-2">Холодных (подтв.)</div>
+        <div class="text-xs muted-2">Холодных (подтв., по кнопке)</div>
         <div class="text-2xl font-semibold mt-1">{{ cold_calls_count }}</div>
       </div>
       <div class="card card-pad">
@@ -38,14 +38,78 @@
     </div>
 
     <section class="card card-pad">
-      <div class="font-medium">Звонки (последние {{ calls|length }})</div>
+      <div class="flex items-end justify-between gap-3">
+        <div>
+          <div class="font-medium">Холодные звонки</div>
+          <div class="text-xs muted-2 mt-1">Только: “Позвонить с телефона” → в течение 8 часов подтверждено отметкой “холодный”.</div>
+        </div>
+        <div class="text-sm text-brand-dark/70">Всего: <b>{{ cold_calls_count }}</b></div>
+      </div>
       <div class="mt-3 space-y-2 text-sm">
-        {% for call in calls %}
+        {% for call in cold_page %}
+          <div class="rounded-lg border p-3 flex flex-wrap items-center gap-2">
+            <span class="font-mono text-xs">{{ call.created_at|date:"d.m.Y H:i:s" }}</span>
+            <span class="font-mono text-xs">{{ call.phone_raw }}</span>
+            <span class="badge badge-warn" style="padding:.1rem .35rem;font-size:.65rem">Холодный</span>
+            {% if call.contact %}
+              <span class="muted-2">· {{ call.contact }}</span>
+            {% endif %}
+            {% if call.company %}
+              <a class="link" href="/companies/{{ call.company.id }}/">({{ call.company.name }})</a>
+            {% endif %}
+          </div>
+        {% empty %}
+          <div class="muted-2">Нет холодных звонков за период.</div>
+        {% endfor %}
+      </div>
+      <div class="flex items-center justify-between px-4 py-3 border-t text-sm mt-3">
+        <div class="text-brand-dark/70">Стр. {{ cold_page.number }} / {{ cold_page.paginator.num_pages }}</div>
+        <div class="flex gap-2">
+          {% if cold_page.has_previous %}
+            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&cold_page={{ cold_page.previous_page_number }}&calls_page={{ calls_page.number }}">Назад</a>
+          {% endif %}
+          {% if cold_page.has_next %}
+            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&cold_page={{ cold_page.next_page_number }}&calls_page={{ calls_page.number }}">Вперёд</a>
+          {% endif %}
+        </div>
+      </div>
+    </section>
+
+    <section class="card card-pad">
+      <div class="font-medium">Последние действия в CRM</div>
+      <div class="mt-3 space-y-2 text-sm">
+        {% for e in events %}
+          <div class="rounded-lg border p-3 flex flex-wrap items-center gap-2">
+            <span class="font-mono text-xs">{{ e.created_at|date:"d.m.Y H:i:s" }}</span>
+            <span class="badge" style="padding:.1rem .35rem;font-size:.65rem">{{ e.get_verb_display }}</span>
+            <span class="muted-2">{{ e.message|default:e.entity_type }}</span>
+            {% if e.company_id %}
+              <a class="link" href="/companies/{{ e.company_id }}/">(компания)</a>
+            {% endif %}
+          </div>
+        {% empty %}
+          <div class="muted-2">Нет действий за период.</div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="card card-pad">
+      <div class="flex items-end justify-between gap-3">
+        <div>
+          <div class="font-medium">Звонки</div>
+          <div class="text-xs muted-2 mt-1">Все звонки за период (и тёплые, и холодные), инициированные кнопкой “Позвонить с телефона”.</div>
+        </div>
+        <div class="text-sm text-brand-dark/70">Всего: <b>{{ calls_count }}</b></div>
+      </div>
+      <div class="mt-3 space-y-2 text-sm">
+        {% for call in calls_page %}
           <div class="rounded-lg border p-3 flex flex-wrap items-center gap-2">
             <span class="font-mono text-xs">{{ call.created_at|date:"d.m.Y H:i:s" }}</span>
             <span class="font-mono text-xs">{{ call.phone_raw }}</span>
             {% if call.is_cold_call %}
               <span class="badge badge-warn" style="padding:.1rem .35rem;font-size:.65rem">Холодный</span>
+            {% else %}
+              <span class="badge" style="padding:.1rem .35rem;font-size:.65rem">Тёплый</span>
             {% endif %}
             {% if call.contact %}
               <span class="muted-2">· {{ call.contact }}</span>
@@ -57,6 +121,17 @@
         {% empty %}
           <div class="muted-2">Нет звонков за период.</div>
         {% endfor %}
+      </div>
+      <div class="flex items-center justify-between px-4 py-3 border-t text-sm mt-3">
+        <div class="text-brand-dark/70">Стр. {{ calls_page.number }} / {{ calls_page.paginator.num_pages }}</div>
+        <div class="flex gap-2">
+          {% if calls_page.has_previous %}
+            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&calls_page={{ calls_page.previous_page_number }}&cold_page={{ cold_page.number }}">Назад</a>
+          {% endif %}
+          {% if calls_page.has_next %}
+            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&calls_page={{ calls_page.next_page_number }}&cold_page={{ cold_page.number }}">Вперёд</a>
+          {% endif %}
+        </div>
       </div>
     </section>
 

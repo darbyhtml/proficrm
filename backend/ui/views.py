@@ -6,7 +6,7 @@ from datetime import timedelta
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db.models import Exists, OuterRef, Q
+from django.db.models import Exists, OuterRef, Q, F
 from django.db.models import Count, Max
 from django.http import HttpRequest, HttpResponse
 from django.http import StreamingHttpResponse
@@ -472,12 +472,30 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
         end = start + timedelta(days=1)
         period_label = timezone.localdate(now).strftime("%d.%m.%Y")
 
-    calls = (
-        CallRequest.objects.filter(created_by=target, created_at__gte=start, created_at__lt=end)
+    # Все звонки — только те, что инициированы через кнопку "Позвонить с телефона" (note="UI click")
+    calls_qs = (
+        CallRequest.objects.filter(created_by=target, created_at__gte=start, created_at__lt=end, note="UI click")
+        .exclude(status=CallRequest.Status.CANCELLED)
         .select_related("company", "contact")
-        .order_by("-created_at")[:300]
+        .order_by("-created_at")
     )
-    cold_calls = [c for c in calls if c.is_cold_call]
+
+    # Холодные звонки (строгая логика):
+    # - звонок инициирован через кнопку (note="UI click")
+    # - у звонка is_cold_call=True
+    # - и именно этот звонок был подтверждён отметкой (FK marked_call) в пределах 8 часов (это проверяется в момент отметки)
+    cold_calls_qs = (
+        calls_qs.filter(is_cold_call=True)
+        .filter(Q(company__primary_cold_marked_call_id=F("id")) | Q(contact__cold_marked_call_id=F("id")))
+        .order_by("-created_at")
+    )
+
+    calls_p = Paginator(calls_qs, 10)
+    cold_p = Paginator(cold_calls_qs, 10)
+    calls_page_num = int((request.GET.get("calls_page") or "1") or 1)
+    cold_page_num = int((request.GET.get("cold_page") or "1") or 1)
+    calls_page = calls_p.get_page(calls_page_num)
+    cold_page = cold_p.get_page(cold_page_num)
 
     contact_marks = list(
         Contact.objects.filter(cold_marked_by=target, cold_marked_at__isnull=False, cold_marked_at__gte=start, cold_marked_at__lt=end)
@@ -489,6 +507,12 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
         .order_by("-primary_cold_marked_at")[:200]
     )
 
+    # Последние действия в CRM (по текущему периоду)
+    events = (
+        ActivityEvent.objects.filter(actor=target, created_at__gte=start, created_at__lt=end)
+        .order_by("-created_at")[:30]
+    )
+
     return render(
         request,
         "ui/analytics_user.html",
@@ -496,12 +520,14 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
             "period": period,
             "period_label": period_label,
             "target": target,
-            "calls": calls,
-            "cold_calls_count": len(cold_calls),
-            "calls_count": len(calls),
+            "calls_page": calls_page,
+            "cold_page": cold_page,
+            "cold_calls_count": cold_calls_qs.count(),
+            "calls_count": calls_qs.count(),
             "marks_total": len(contact_marks) + len(primary_marks),
             "contact_marks": contact_marks,
             "primary_marks": primary_marks,
+            "events": events,
         },
     )
 
