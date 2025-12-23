@@ -22,6 +22,7 @@ urlpatterns = [
     path("companies/<uuid:company_id>/contacts/new/", views.contact_create, name="contact_create"),
     path("contacts/<uuid:contact_id>/edit/", views.contact_edit, name="contact_edit"),
     path("companies/<uuid:company_id>/notes/add/", views.company_note_add, name="company_note_add"),
+    path("companies/<uuid:company_id>/notes/<int:note_id>/edit/", views.company_note_edit, name="company_note_edit"),
     path("companies/<uuid:company_id>/notes/<int:note_id>/delete/", views.company_note_delete, name="company_note_delete"),
     path("companies/<uuid:company_id>/notes/<int:note_id>/pin/", views.company_note_pin_toggle, name="company_note_pin_toggle"),
     path("companies/<uuid:company_id>/notes/<int:note_id>/file/open/", views.company_note_attachment_open, name="company_note_attachment_open"),

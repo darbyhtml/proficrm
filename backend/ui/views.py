@@ -1421,6 +1421,44 @@ def company_note_add(request: HttpRequest, company_id) -> HttpResponse:
 
 
 @login_required
+def company_note_edit(request: HttpRequest, company_id, note_id: int) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+
+    user: User = request.user
+    company = get_object_or_404(Company.objects.all(), id=company_id)
+
+    # Редактировать заметки:
+    # - админ/суперпользователь/управляющий: любые
+    # - остальные: только свои
+    if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+        note = get_object_or_404(CompanyNote.objects.select_related("author"), id=note_id, company_id=company.id)
+    else:
+        note = get_object_or_404(CompanyNote.objects.select_related("author"), id=note_id, company_id=company.id, author_id=user.id)
+
+    text = (request.POST.get("text") or "").strip()
+    # Не даём превратить заметку в пустую (если нет вложения)
+    if not text and not note.attachment:
+        messages.error(request, "Заметка не может быть пустой.")
+        return redirect("company_detail", company_id=company.id)
+
+    note.text = text
+    note.edited_at = timezone.now()
+    note.save(update_fields=["text", "edited_at"])
+
+    messages.success(request, "Заметка обновлена.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="note",
+        entity_id=str(note.id),
+        company_id=company.id,
+        message="Изменена заметка",
+    )
+    return redirect("company_detail", company_id=company.id)
+
+
+@login_required
 def company_note_delete(request: HttpRequest, company_id, note_id: int) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)

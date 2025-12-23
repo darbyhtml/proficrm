@@ -128,6 +128,7 @@ class CompanyNote(models.Model):
         related_name="pinned_company_notes",
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    edited_at = models.DateTimeField("Редактировано", null=True, blank=True, db_index=True)
 
     def __str__(self) -> str:
         return f"Note({self.company_id})"
