@@ -492,26 +492,22 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
 
     calls_p = Paginator(calls_qs, 10)
     cold_p = Paginator(cold_calls_qs, 10)
-    calls_page_num = int((request.GET.get("calls_page") or "1") or 1)
-    cold_page_num = int((request.GET.get("cold_page") or "1") or 1)
+    events_qs = ActivityEvent.objects.filter(actor=target, created_at__gte=start, created_at__lt=end).order_by("-created_at")
+    events_p = Paginator(events_qs, 10)
+
+    def _safe_int(v: str, default: int = 1) -> int:
+        try:
+            return max(int(v), 1)
+        except Exception:
+            return default
+
+    calls_page_num = _safe_int((request.GET.get("calls_page") or "1"))
+    cold_page_num = _safe_int((request.GET.get("cold_page") or "1"))
+    events_page_num = _safe_int((request.GET.get("events_page") or "1"))
+
     calls_page = calls_p.get_page(calls_page_num)
     cold_page = cold_p.get_page(cold_page_num)
-
-    contact_marks = list(
-        Contact.objects.filter(cold_marked_by=target, cold_marked_at__isnull=False, cold_marked_at__gte=start, cold_marked_at__lt=end)
-        .select_related("company")
-        .order_by("-cold_marked_at")[:200]
-    )
-    primary_marks = list(
-        Company.objects.filter(primary_cold_marked_by=target, primary_cold_marked_at__isnull=False, primary_cold_marked_at__gte=start, primary_cold_marked_at__lt=end)
-        .order_by("-primary_cold_marked_at")[:200]
-    )
-
-    # Последние действия в CRM (по текущему периоду)
-    events = (
-        ActivityEvent.objects.filter(actor=target, created_at__gte=start, created_at__lt=end)
-        .order_by("-created_at")[:30]
-    )
+    events_page = events_p.get_page(events_page_num)
 
     return render(
         request,
@@ -522,12 +518,10 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
             "target": target,
             "calls_page": calls_page,
             "cold_page": cold_page,
+            "events_page": events_page,
             "cold_calls_count": cold_calls_qs.count(),
             "calls_count": calls_qs.count(),
-            "marks_total": len(contact_marks) + len(primary_marks),
-            "contact_marks": contact_marks,
-            "primary_marks": primary_marks,
-            "events": events,
+            "events_count": events_qs.count(),
         },
     )
 

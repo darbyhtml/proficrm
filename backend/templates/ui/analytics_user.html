@@ -22,7 +22,7 @@
       </div>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
       <div class="card card-pad">
         <div class="text-xs muted-2">Всего звонков</div>
         <div class="text-2xl font-semibold mt-1">{{ calls_count }}</div>
@@ -30,10 +30,6 @@
       <div class="card card-pad">
         <div class="text-xs muted-2">Холодных (подтв., по кнопке)</div>
         <div class="text-2xl font-semibold mt-1">{{ cold_calls_count }}</div>
-      </div>
-      <div class="card card-pad">
-        <div class="text-xs muted-2">Отметок «холодный»</div>
-        <div class="text-2xl font-semibold mt-1">{{ marks_total }}</div>
       </div>
     </div>
 
@@ -66,30 +62,12 @@
         <div class="text-brand-dark/70">Стр. {{ cold_page.number }} / {{ cold_page.paginator.num_pages }}</div>
         <div class="flex gap-2">
           {% if cold_page.has_previous %}
-            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&cold_page={{ cold_page.previous_page_number }}&calls_page={{ calls_page.number }}">Назад</a>
+            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&cold_page={{ cold_page.previous_page_number }}&calls_page={{ calls_page.number }}&events_page={{ events_page.number }}">Назад</a>
           {% endif %}
           {% if cold_page.has_next %}
-            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&cold_page={{ cold_page.next_page_number }}&calls_page={{ calls_page.number }}">Вперёд</a>
+            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&cold_page={{ cold_page.next_page_number }}&calls_page={{ calls_page.number }}&events_page={{ events_page.number }}">Вперёд</a>
           {% endif %}
         </div>
-      </div>
-    </section>
-
-    <section class="card card-pad">
-      <div class="font-medium">Последние действия в CRM</div>
-      <div class="mt-3 space-y-2 text-sm">
-        {% for e in events %}
-          <div class="rounded-lg border p-3 flex flex-wrap items-center gap-2">
-            <span class="font-mono text-xs">{{ e.created_at|date:"d.m.Y H:i:s" }}</span>
-            <span class="badge" style="padding:.1rem .35rem;font-size:.65rem">{{ e.get_verb_display }}</span>
-            <span class="muted-2">{{ e.message|default:e.entity_type }}</span>
-            {% if e.company_id %}
-              <a class="link" href="/companies/{{ e.company_id }}/">(компания)</a>
-            {% endif %}
-          </div>
-        {% empty %}
-          <div class="muted-2">Нет действий за период.</div>
-        {% endfor %}
       </div>
     </section>
 
@@ -126,55 +104,51 @@
         <div class="text-brand-dark/70">Стр. {{ calls_page.number }} / {{ calls_page.paginator.num_pages }}</div>
         <div class="flex gap-2">
           {% if calls_page.has_previous %}
-            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&calls_page={{ calls_page.previous_page_number }}&cold_page={{ cold_page.number }}">Назад</a>
+            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&calls_page={{ calls_page.previous_page_number }}&cold_page={{ cold_page.number }}&events_page={{ events_page.number }}">Назад</a>
           {% endif %}
           {% if calls_page.has_next %}
-            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&calls_page={{ calls_page.next_page_number }}&cold_page={{ cold_page.number }}">Вперёд</a>
+            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&calls_page={{ calls_page.next_page_number }}&cold_page={{ cold_page.number }}&events_page={{ events_page.number }}">Вперёд</a>
           {% endif %}
         </div>
       </div>
     </section>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <section class="card card-pad">
-        <div class="font-medium">Отметки «холодный» (контакты)</div>
+    <section class="card card-pad">
+      <details>
+        <summary class="flex items-center justify-between gap-3 cursor-pointer select-none">
+          <div>
+            <span class="font-medium">Последние действия в CRM</span>
+            <span class="text-xs muted-2 ml-2">({{ events_count }})</span>
+          </div>
+          <span class="text-xs muted-2">Нажмите, чтобы развернуть</span>
+        </summary>
         <div class="mt-3 space-y-2 text-sm">
-          {% for c in contact_marks %}
-            <div class="rounded-lg border p-3 flex items-center justify-between gap-2">
-              <div class="min-w-0">
-                <div class="font-medium truncate">{{ c }}</div>
-                <div class="text-xs muted-2 mt-1">
-                  {{ c.cold_marked_at|date:"d.m.Y H:i:s" }}
-                  {% if c.company %} · <a class="link" href="/companies/{{ c.company.id }}/">{{ c.company.name }}</a>{% endif %}
-                </div>
-              </div>
-              <span class="badge">Контакт</span>
+          {% for e in events_page %}
+            <div class="rounded-lg border p-3 flex flex-wrap items-center gap-2">
+              <span class="font-mono text-xs">{{ e.created_at|date:"d.m.Y H:i:s" }}</span>
+              <span class="badge" style="padding:.1rem .35rem;font-size:.65rem">{{ e.get_verb_display }}</span>
+              <span class="muted-2">{{ e.message|default:e.entity_type }}</span>
+              {% if e.company_id %}
+                <a class="link" href="/companies/{{ e.company_id }}/">(компания)</a>
+              {% endif %}
             </div>
           {% empty %}
-            <div class="muted-2">Нет отметок.</div>
+            <div class="muted-2">Нет действий за период.</div>
           {% endfor %}
         </div>
-      </section>
-
-      <section class="card card-pad">
-        <div class="font-medium">Отметки «холодный» (основной номер компании)</div>
-        <div class="mt-3 space-y-2 text-sm">
-          {% for c in primary_marks %}
-            <div class="rounded-lg border p-3 flex items-center justify-between gap-2">
-              <div class="min-w-0">
-                <div class="font-medium truncate">
-                  <a class="link" href="/companies/{{ c.id }}/">{{ c.name }}</a>
-                </div>
-                <div class="text-xs muted-2 mt-1">{{ c.primary_cold_marked_at|date:"d.m.Y H:i:s" }}</div>
-              </div>
-              <span class="badge">Компания</span>
-            </div>
-          {% empty %}
-            <div class="muted-2">Нет отметок.</div>
-          {% endfor %}
+        <div class="flex items-center justify-between px-4 py-3 border-t text-sm mt-3">
+          <div class="text-brand-dark/70">Стр. {{ events_page.number }} / {{ events_page.paginator.num_pages }}</div>
+          <div class="flex gap-2">
+            {% if events_page.has_previous %}
+              <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&events_page={{ events_page.previous_page_number }}&calls_page={{ calls_page.number }}&cold_page={{ cold_page.number }}">Назад</a>
+            {% endif %}
+            {% if events_page.has_next %}
+              <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="/analytics/users/{{ target.id }}/?period={{ period }}&events_page={{ events_page.next_page_number }}&calls_page={{ calls_page.number }}&cold_page={{ cold_page.number }}">Вперёд</a>
+            {% endif %}
+          </div>
         </div>
-      </section>
-    </div>
+      </details>
+    </section>
   </div>
 {% endblock %}
 
