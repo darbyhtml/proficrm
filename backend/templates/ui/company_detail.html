@@ -551,6 +551,7 @@
                       data-note-edit
                       data-note-id="{{ n.id }}"
                       data-note-text="{{ n.text|default:''|escapejs }}"
+                      data-note-file="{{ n.attachment_name|default:''|escapejs }}"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                         <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -625,12 +626,33 @@
             </div>
             <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" data-close-noteedit aria-label="Закрыть" title="Закрыть">✕</button>
           </div>
-          <form method="post" id="noteEditForm" class="mt-3 space-y-2">
+          <form method="post" id="noteEditForm" class="mt-3 space-y-2" enctype="multipart/form-data">
             {% csrf_token %}
             <div>
               <label class="block text-xs text-brand-dark/70 mb-1">Текст</label>
               <textarea name="text" id="noteEditText" class="textarea" rows="5" placeholder="Текст заметки..."></textarea>
-              <div class="text-xs muted-2 mt-1">Файл (если был) не меняется — редактируем только текст.</div>
+              <div class="text-xs muted-2 mt-1">Можно заменить/добавить файл или удалить текущий.</div>
+            </div>
+            <div class="rounded-xl border border-brand-soft bg-brand-soft/10 p-3">
+              <div class="flex items-center justify-between gap-2">
+                <div class="text-xs text-brand-dark/70">Файл</div>
+                <label class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem;cursor:pointer">
+                  Выбрать файл
+                  <input type="file" name="attachment" id="noteEditFile" class="hidden" />
+                </label>
+              </div>
+              <div class="mt-2 text-xs">
+                <div class="muted-2" id="noteEditFileCurrent">Текущий файл: —</div>
+                <div class="muted-2" id="noteEditFileSelected"></div>
+              </div>
+              <div class="mt-2 flex items-center justify-between gap-2">
+                <label class="inline-flex items-center gap-2 text-xs">
+                  <input type="checkbox" id="noteEditRemoveFile" />
+                  <span>Удалить текущий файл</span>
+                </label>
+                <input type="hidden" name="remove_attachment" id="noteEditRemoveHidden" value="0" />
+              </div>
+              <div class="text-[11px] muted-2 mt-2">Если выбрать новый файл — старый будет удалён с сервера.</div>
             </div>
             <div class="flex gap-2">
               <button class="btn btn-primary" type="submit">Сохранить</button>
@@ -868,11 +890,21 @@
         const noteEditModal = document.getElementById('noteEditModal');
         const noteEditForm = document.getElementById('noteEditForm');
         const noteEditText = document.getElementById('noteEditText');
+        const noteEditFile = document.getElementById('noteEditFile');
+        const noteEditFileCurrent = document.getElementById('noteEditFileCurrent');
+        const noteEditFileSelected = document.getElementById('noteEditFileSelected');
+        const noteEditRemoveFile = document.getElementById('noteEditRemoveFile');
+        const noteEditRemoveHidden = document.getElementById('noteEditRemoveHidden');
         if (noteEditModal && noteEditForm && noteEditText) {
           const closeBtns = noteEditModal.querySelectorAll('[data-close-noteedit]');
-          function openNoteEdit(noteId, noteText) {
+          function openNoteEdit(noteId, noteText, fileName) {
             noteEditForm.action = `/companies/{{ company.id }}/notes/${noteId}/edit/`;
             noteEditText.value = noteText || '';
+            if (noteEditFile) noteEditFile.value = '';
+            if (noteEditFileSelected) noteEditFileSelected.textContent = '';
+            if (noteEditRemoveFile) noteEditRemoveFile.checked = false;
+            if (noteEditRemoveHidden) noteEditRemoveHidden.value = '0';
+            if (noteEditFileCurrent) noteEditFileCurrent.textContent = 'Текущий файл: ' + (fileName ? fileName : '—');
             noteEditModal.classList.remove('hidden');
             setTimeout(() => { try{ noteEditText.focus(); }catch(_e){} }, 0);
           }
@@ -881,13 +913,31 @@
             btn.addEventListener('click', () => {
               const id = btn.getAttribute('data-note-id');
               const txt = btn.getAttribute('data-note-text') || '';
-              if (id) openNoteEdit(id, txt);
+              const fn = btn.getAttribute('data-note-file') || '';
+              if (id) openNoteEdit(id, txt, fn);
             });
           });
           closeBtns.forEach(b => b.addEventListener('click', closeNoteEdit));
           document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeNoteEdit();
           });
+          if (noteEditFile && noteEditFileSelected) {
+            noteEditFile.addEventListener('change', () => {
+              const f = noteEditFile.files && noteEditFile.files.length ? noteEditFile.files[0] : null;
+              noteEditFileSelected.textContent = f ? ('Выбран: ' + f.name) : '';
+              if (noteEditRemoveFile) noteEditRemoveFile.checked = false;
+              if (noteEditRemoveHidden) noteEditRemoveHidden.value = '0';
+            });
+          }
+          if (noteEditRemoveFile) {
+            noteEditRemoveFile.addEventListener('change', () => {
+              if (noteEditRemoveHidden) noteEditRemoveHidden.value = noteEditRemoveFile.checked ? '1' : '0';
+              if (noteEditRemoveFile.checked && noteEditFile) {
+                noteEditFile.value = '';
+                if (noteEditFileSelected) noteEditFileSelected.textContent = '';
+              }
+            });
+          }
         }
       })();
     </script>

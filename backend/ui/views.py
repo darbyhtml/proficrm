@@ -1621,14 +1621,48 @@ def company_note_edit(request: HttpRequest, company_id, note_id: int) -> HttpRes
         note = get_object_or_404(CompanyNote.objects.select_related("author"), id=note_id, company_id=company.id, author_id=user.id)
 
     text = (request.POST.get("text") or "").strip()
-    # Не даём превратить заметку в пустую (если нет вложения)
+    remove_attachment = (request.POST.get("remove_attachment") or "").strip() == "1"
+    new_file = request.FILES.get("attachment")
+
+    old_file = note.attachment  # storage object
+    old_name = getattr(old_file, "name", "") if old_file else ""
+
+    # Если попросили удалить файл — удалим привязку (и сам файл ниже)
+    if remove_attachment and note.attachment:
+        note.attachment = None
+        note.attachment_name = ""
+        note.attachment_ext = ""
+        note.attachment_size = 0
+        note.attachment_content_type = ""
+
+    # Если загрузили новый файл — заменяем
+    if new_file:
+        note.attachment = new_file
+        try:
+            note.attachment_name = (getattr(new_file, "name", "") or "").split("/")[-1].split("\\")[-1]
+            note.attachment_ext = (note.attachment_name.rsplit(".", 1)[-1].lower() if "." in note.attachment_name else "")[:16]
+            note.attachment_size = int(getattr(new_file, "size", 0) or 0)
+            note.attachment_content_type = (getattr(new_file, "content_type", "") or "").strip()[:120]
+        except Exception:
+            pass
+
+    # Не даём превратить заметку в пустую (без текста и без файла)
     if not text and not note.attachment:
-        messages.error(request, "Заметка не может быть пустой.")
+        messages.error(request, "Заметка не может быть пустой (нужен текст или файл).")
         return redirect("company_detail", company_id=company.id)
 
     note.text = text
     note.edited_at = timezone.now()
-    note.save(update_fields=["text", "edited_at"])
+    note.save()
+
+    # Удаляем старый файл из storage, если он был удалён/заменён
+    try:
+        new_name = getattr(note.attachment, "name", "") if note.attachment else ""
+        should_delete_old = bool(old_file and old_name and (remove_attachment or (new_file is not None)) and old_name != new_name)
+        if should_delete_old:
+            old_file.delete(save=False)
+    except Exception:
+        pass
 
     messages.success(request, "Заметка обновлена.")
     log_event(
