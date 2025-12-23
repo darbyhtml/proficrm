@@ -1088,7 +1088,9 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         .first()
     )
     can_request_lead_state = bool(user.role == User.Role.MANAGER and company.responsible_id == user.id)
-    can_decide_lead_state = bool(lead_state_req and _can_decide_company_lead_state(user, company))
+    # Важно: право руководителя/админа менять состояние существует независимо от того, есть ли активный запрос.
+    # Запрос влияет только на то, что показываем блок согласования.
+    can_decide_lead_state = bool(_can_decide_company_lead_state(user, company))
 
     # "Организация" (головная карточка) и "филиалы" (дочерние карточки клиента)
     head = company.head_company or company
