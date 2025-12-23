@@ -342,12 +342,9 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
     day_end = day_start + timedelta(days=1)
     day_label = timezone.localdate(now).strftime("%d.%m.%Y")
 
-    # Считаем "холодными" звонки:
-    # - помеченные в момент клика (call.is_cold_call)
-    # - или если контакт/основной контакт компании отмечены как холодные сейчас
+    # Холодные звонки = подтверждённые (is_cold_call=True).
     qs = (
-        CallRequest.objects.filter(created_by=user, created_at__gte=day_start, created_at__lt=day_end)
-        .filter(Q(is_cold_call=True) | Q(contact__is_cold_call=True) | Q(company__primary_contact_is_cold_call=True))
+        CallRequest.objects.filter(created_by=user, is_cold_call=True, created_at__gte=day_start, created_at__lt=day_end)
         .select_related("company", "contact")
         .order_by("created_at")
     )
@@ -394,11 +391,7 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
     available = []
     for ms in candidates:
         me = _add_months(ms, 1)
-        exists = (
-            CallRequest.objects.filter(created_by=user, created_at__date__gte=ms, created_at__date__lt=me)
-            .filter(Q(is_cold_call=True) | Q(contact__is_cold_call=True) | Q(company__primary_contact_is_cold_call=True))
-            .exists()
-        )
+        exists = CallRequest.objects.filter(created_by=user, is_cold_call=True, created_at__date__gte=ms, created_at__date__lt=me).exists()
         if exists:
             available.append(ms)
 
@@ -415,8 +408,7 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
 
     month_end = _add_months(selected, 1)
     qs = (
-        CallRequest.objects.filter(created_by=user, created_at__date__gte=selected, created_at__date__lt=month_end)
-        .filter(Q(is_cold_call=True) | Q(contact__is_cold_call=True) | Q(company__primary_contact_is_cold_call=True))
+        CallRequest.objects.filter(created_by=user, is_cold_call=True, created_at__date__gte=selected, created_at__date__lt=month_end)
         .select_related("company", "contact")
         .order_by("created_at")
     )
@@ -985,6 +977,44 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
 
     contacts = Contact.objects.filter(company=company).prefetch_related("emails", "phones").order_by("last_name", "first_name")[:200]
     has_cold_call = bool(company.primary_contact_is_cold_call or Contact.objects.filter(company=company, is_cold_call=True).exists())
+
+    # Окно доступности кнопки "холодный" — 8 часов после звонка
+    now_ts = timezone.now()
+    window_start = now_ts - timedelta(hours=8)
+    # Последний звонок по каждому контакту (только текущий пользователь)
+    last_calls = (
+        CallRequest.objects.filter(created_by=user, company=company, contact__isnull=False, created_at__gte=window_start)
+        .values("contact_id")
+        .annotate(last=Max("created_at"))
+    )
+    last_by_contact = {str(x["contact_id"]): x["last"] for x in last_calls if x.get("contact_id")}
+    for c in contacts:
+        last = last_by_contact.get(str(c.id))
+        if last:
+            deadline = last + timedelta(hours=8)
+            c.cold_mark_available = bool(now_ts <= deadline and not c.is_cold_call)  # type: ignore[attr-defined]
+            c.cold_mark_deadline = timezone.localtime(deadline)  # type: ignore[attr-defined]
+        else:
+            c.cold_mark_available = False  # type: ignore[attr-defined]
+            c.cold_mark_deadline = None  # type: ignore[attr-defined]
+
+    # Основной контакт (company.phone)
+    primary_cold_available = False
+    primary_cold_deadline = None
+    try:
+        phone = (company.phone or "").strip()
+        normalized = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+        last_primary = (
+            CallRequest.objects.filter(created_by=user, company=company, contact__isnull=True, phone_raw=normalized, created_at__gte=window_start)
+            .aggregate(last=Max("created_at"))
+            .get("last")
+        )
+        if last_primary:
+            d = last_primary + timedelta(hours=8)
+            primary_cold_available = bool(now_ts <= d and not company.primary_contact_is_cold_call)
+            primary_cold_deadline = timezone.localtime(d)
+    except Exception:
+        pass
     pinned_note = (
         CompanyNote.objects.filter(company=company, is_pinned=True)
         .select_related("author", "pinned_by")
@@ -1032,6 +1062,8 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "can_edit_company": can_edit_company,
             "contacts": contacts,
             "has_cold_call": has_cold_call,
+            "primary_cold_available": primary_cold_available,
+            "primary_cold_deadline": primary_cold_deadline,
             "notes": notes,
             "pinned_note": pinned_note,
             "note_form": note_form,
@@ -1257,17 +1289,47 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
         messages.error(request, "Нет прав на изменение признака 'Холодный звонок'.")
         return redirect("company_detail", company_id=company.id)
 
-    company.primary_contact_is_cold_call = not bool(company.primary_contact_is_cold_call)
-    company.save(update_fields=["primary_contact_is_cold_call", "updated_at"])
+    # Новая логика: отметку можно поставить только 1 раз и только в течение 8 часов после звонка по основному номеру
+    if company.primary_contact_is_cold_call:
+        messages.info(request, "Основной контакт уже отмечен как холодный.")
+        return redirect("company_detail", company_id=company.id)
 
-    messages.success(request, "Отметка 'Холодный звонок' (основной контакт) обновлена.")
+    phone = (company.phone or "").strip()
+    if not phone:
+        messages.error(request, "У компании не задан основной телефон.")
+        return redirect("company_detail", company_id=company.id)
+
+    normalized = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    now = timezone.now()
+    window_start = now - timedelta(hours=8)
+    last_call = (
+        CallRequest.objects.filter(created_by=user, company=company, contact__isnull=True, phone_raw=normalized, created_at__gte=window_start)
+        .order_by("-created_at")
+        .first()
+    )
+    if not last_call:
+        messages.error(request, "Отметка доступна только в течение 8 часов после звонка.")
+        return redirect("company_detail", company_id=company.id)
+
+    company.primary_contact_is_cold_call = True
+    company.primary_cold_marked_at = now
+    company.primary_cold_marked_by = user
+    company.primary_cold_marked_call = last_call
+    company.save(update_fields=["primary_contact_is_cold_call", "primary_cold_marked_at", "primary_cold_marked_by", "primary_cold_marked_call", "updated_at"])
+
+    if not last_call.is_cold_call:
+        last_call.is_cold_call = True
+        last_call.save(update_fields=["is_cold_call"])
+
+    messages.success(request, "Отмечено: холодный звонок (основной контакт).")
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.UPDATE,
         entity_type="company",
         entity_id=company.id,
         company_id=company.id,
-        message=("Отмечено: холодный звонок (осн. контакт)" if company.primary_contact_is_cold_call else "Снято: холодный звонок (осн. контакт)"),
+        message="Отмечено: холодный звонок (осн. контакт)",
+        meta={"call_id": str(last_call.id)},
     )
     return redirect("company_detail", company_id=company.id)
 
@@ -1286,17 +1348,41 @@ def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
         messages.error(request, "Нет прав на изменение контактов этой компании.")
         return redirect("company_detail", company_id=company.id)
 
-    contact.is_cold_call = not bool(contact.is_cold_call)
-    contact.save(update_fields=["is_cold_call", "updated_at"])
-    messages.success(request, "Отметка 'Холодный звонок' по контакту обновлена.")
+    # Новая логика: отметку можно поставить только 1 раз и только в течение 8 часов после звонка по этому контакту
+    if contact.is_cold_call:
+        messages.info(request, "Контакт уже отмечен как холодный.")
+        return redirect("company_detail", company_id=company.id)
+
+    now = timezone.now()
+    window_start = now - timedelta(hours=8)
+    last_call = (
+        CallRequest.objects.filter(created_by=user, contact=contact, created_at__gte=window_start)
+        .order_by("-created_at")
+        .first()
+    )
+    if not last_call:
+        messages.error(request, "Отметка доступна только в течение 8 часов после звонка.")
+        return redirect("company_detail", company_id=company.id)
+
+    contact.is_cold_call = True
+    contact.cold_marked_at = now
+    contact.cold_marked_by = user
+    contact.cold_marked_call = last_call
+    contact.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call", "updated_at"])
+
+    if not last_call.is_cold_call:
+        last_call.is_cold_call = True
+        last_call.save(update_fields=["is_cold_call"])
+
+    messages.success(request, "Отмечено: холодный звонок (контакт).")
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.UPDATE,
         entity_type="contact",
         entity_id=str(contact.id),
         company_id=company.id,
-        message=("Отмечено: холодный звонок (контакт)" if contact.is_cold_call else "Снято: холодный звонок (контакт)"),
-        meta={"contact_id": str(contact.id)},
+        message="Отмечено: холодный звонок (контакт)",
+        meta={"contact_id": str(contact.id), "call_id": str(last_call.id)},
     )
     return redirect("company_detail", company_id=company.id)
 
@@ -1777,20 +1863,6 @@ def phone_call_create(request: HttpRequest) -> HttpResponse:
         phone_raw=normalized,
         note="UI click",
     )
-    # Пометка "холодный звонок" на уровне контакта (или основного контакта компании)
-    try:
-        is_cold = False
-        if contact_id:
-            c = Contact.objects.filter(id=contact_id).only("id", "is_cold_call").first()
-            is_cold = bool(getattr(c, "is_cold_call", False))
-        elif company_id:
-            c0 = Company.objects.filter(id=company_id).only("id", "primary_contact_is_cold_call").first()
-            is_cold = bool(getattr(c0, "primary_contact_is_cold_call", False))
-        if is_cold:
-            call.is_cold_call = True
-            call.save(update_fields=["is_cold_call"])
-    except Exception:
-        pass
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.CREATE,

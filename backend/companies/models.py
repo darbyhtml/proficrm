@@ -56,6 +56,23 @@ class Company(models.Model):
     # но в UI/логике используем отметки на контактах.
     is_cold_call = models.BooleanField("Холодный звонок (устар.)", default=False, db_index=True)
     primary_contact_is_cold_call = models.BooleanField("Холодный звонок (основной контакт)", default=False, db_index=True)
+    primary_cold_marked_at = models.DateTimeField("Холодный (осн. контакт): когда отметили", null=True, blank=True, db_index=True)
+    primary_cold_marked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Холодный (осн. контакт): кто отметил",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="primary_cold_marks",
+    )
+    primary_cold_marked_call = models.ForeignKey(
+        "phonebridge.CallRequest",
+        verbose_name="Холодный (осн. контакт): звонок",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
 
     contract_type = models.CharField(
         "Вид договора",
@@ -161,6 +178,23 @@ class Contact(models.Model):
     status = models.CharField("Статус", max_length=120, blank=True, default="")
     note = models.TextField("Примечание", blank=True, default="")
     is_cold_call = models.BooleanField("Холодный звонок", default=False, db_index=True)
+    cold_marked_at = models.DateTimeField("Холодный: когда отметили", null=True, blank=True, db_index=True)
+    cold_marked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Холодный: кто отметил",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="contact_cold_marks",
+    )
+    cold_marked_call = models.ForeignKey(
+        "phonebridge.CallRequest",
+        verbose_name="Холодный: звонок",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
 
     amocrm_contact_id = models.BigIntegerField("ID контакта (amo)", null=True, blank=True, db_index=True)
 

@@ -207,8 +207,18 @@
                         type="submit"
                         class="btn btn-outline"
                         style="padding:.25rem .5rem;font-size:.75rem;{% if company.primary_contact_is_cold_call %}background:#003D38;color:#fff;border-color:rgba(0,61,56,.35){% endif %}"
-                        title="{% if company.primary_contact_is_cold_call %}Снять «Холодный» (осн. контакт){% else %}Поставить «Холодный» (осн. контакт){% endif %}"
-                        aria-label="{% if company.primary_contact_is_cold_call %}Снять «Холодный» (осн. контакт){% else %}Поставить «Холодный» (осн. контакт){% endif %}"
+                        {% if company.primary_contact_is_cold_call %}
+                          disabled
+                          title="Холодный уже отмечен (один раз)"
+                          aria-label="Холодный уже отмечен (один раз)"
+                        {% elif not primary_cold_available %}
+                          disabled
+                          title="{% if primary_cold_deadline %}Можно отметить до {{ primary_cold_deadline|date:'d.m.Y H:i' }}{% else %}Можно отметить только в течение 8 часов после звонка{% endif %}"
+                          aria-label="Можно отметить только в течение 8 часов после звонка"
+                        {% else %}
+                          title="Отметить холодный (доступно 8 часов после звонка)"
+                          aria-label="Отметить холодный (доступно 8 часов после звонка)"
+                        {% endif %}
                       >
                         {% if company.primary_contact_is_cold_call %}
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -391,8 +401,18 @@
                           class="btn btn-outline"
                           style="padding:.25rem .5rem;font-size:.75rem;{% if c.is_cold_call %}background:#003D38;color:#fff;border-color:rgba(0,61,56,.35){% endif %}"
                           type="submit"
-                          title="{% if c.is_cold_call %}Снять «Холодный»{% else %}Поставить «Холодный»{% endif %}"
-                          aria-label="{% if c.is_cold_call %}Снять «Холодный»{% else %}Поставить «Холодный»{% endif %}"
+                          {% if c.is_cold_call %}
+                            disabled
+                            title="Холодный уже отмечен (один раз)"
+                            aria-label="Холодный уже отмечен (один раз)"
+                          {% elif not c.cold_mark_available %}
+                            disabled
+                            title="{% if c.cold_mark_deadline %}Можно отметить до {{ c.cold_mark_deadline|date:'d.m.Y H:i' }}{% else %}Можно отметить только в течение 8 часов после звонка{% endif %}"
+                            aria-label="Можно отметить только в течение 8 часов после звонка"
+                          {% else %}
+                            title="Отметить холодный (доступно 8 часов после звонка)"
+                            aria-label="Отметить холодный (доступно 8 часов после звонка)"
+                          {% endif %}
                         >
                           {% if c.is_cold_call %}
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
