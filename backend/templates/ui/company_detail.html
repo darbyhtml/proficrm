@@ -863,7 +863,10 @@
             const phone = btn.dataset.phone || '';
             const companyId = btn.dataset.company || '';
             const contactId = btn.dataset.contact || '';
-            btn.disabled = true;
+            // Не делаем btn.disabled=true: на disabled в ряде браузеров пропадает подсказка (title).
+            // Вместо этого ставим лок и защищаемся от повторных кликов.
+            if (btn.dataset.busy === '1') return;
+            btn.dataset.busy = '1';
             btn.classList.add('opacity-60');
             showToast('Отправляю команду на телефон…', 'info');
             try {
@@ -876,10 +879,10 @@
               const data = await res.json().catch(() => ({}));
               if (!res.ok || !data.ok) throw new Error(data.detail || 'Ошибка');
               showToast('Отправлено на телефон ✓', 'success');
-              btn.disabled = false;
+              btn.dataset.busy = '0';
               btn.classList.remove('opacity-60');
             } catch (e) {
-              btn.disabled = false;
+              btn.dataset.busy = '0';
               btn.classList.remove('opacity-60');
               showToast('Не удалось отправить на телефон: ' + (e && e.message ? e.message : e), 'error');
             }

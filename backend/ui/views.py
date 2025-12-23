@@ -354,7 +354,17 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
     items = []
     lines = [f"Отчёт: холодные звонки за {day_label}", f"Всего: {qs.count()}", ""]
     i = 0
+    # Дедупликация: если пользователь несколько раз подряд кликает "позвонить" на один и тот же номер/контакт,
+    # скрываем повторы в отчёте.
+    dedupe_window_s = 60
+    last_seen = {}  # (phone, company_id, contact_id) -> created_at
     for call in qs:
+        key = (call.phone_raw or "", str(call.company_id or ""), str(call.contact_id or ""))
+        prev = last_seen.get(key)
+        if prev and (call.created_at - prev).total_seconds() < dedupe_window_s:
+            continue
+        last_seen[key] = call.created_at
+
         i += 1
         t = timezone.localtime(call.created_at).strftime("%H:%M")
         company_name = getattr(call.company, "name", "") if call.company_id else ""
@@ -414,7 +424,15 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
     items = []
     lines = [f"Отчёт: холодные звонки за {_month_label(selected)}", f"Всего: {qs.count()}", ""]
     i = 0
+    dedupe_window_s = 60
+    last_seen = {}  # (phone, company_id, contact_id) -> created_at
     for call in qs:
+        key = (call.phone_raw or "", str(call.company_id or ""), str(call.contact_id or ""))
+        prev = last_seen.get(key)
+        if prev and (call.created_at - prev).total_seconds() < dedupe_window_s:
+            continue
+        last_seen[key] = call.created_at
+
         i += 1
         dt = timezone.localtime(call.created_at)
         t = dt.strftime("%d.%m %H:%M")
@@ -1730,6 +1748,26 @@ def phone_call_create(request: HttpRequest) -> HttpResponse:
 
     # минимальная нормализация для tel: (Android ACTION_DIAL)
     normalized = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+
+    # Дедупликация на сервере: если пользователь несколько раз подряд нажимает "позвонить" на тот же номер/контакт,
+    # не создаём новые записи (иначе отчёты раздуваются).
+    now = timezone.now()
+    recent = now - timedelta(seconds=60)
+    existing = (
+        CallRequest.objects.filter(created_by=user, phone_raw=normalized, created_at__gte=recent)
+        .exclude(status=CallRequest.Status.CANCELLED)
+    )
+    if company_id:
+        existing = existing.filter(company_id=company_id)
+    else:
+        existing = existing.filter(company__isnull=True)
+    if contact_id:
+        existing = existing.filter(contact_id=contact_id)
+    else:
+        existing = existing.filter(contact__isnull=True)
+    prev_call = existing.order_by("-created_at").first()
+    if prev_call:
+        return JsonResponse({"ok": True, "id": str(prev_call.id), "phone": normalized, "dedup": True})
 
     call = CallRequest.objects.create(
         user=user,
