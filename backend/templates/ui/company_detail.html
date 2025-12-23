@@ -74,22 +74,36 @@
         {% endif %}
         {% if lead_state_req %}
           {% if can_decide_lead_state or can_request_lead_state %}
-            <div class="mt-3 rounded-xl border border-brand-soft bg-brand-soft/15 px-4 py-3 text-sm text-brand-dark">
+            <div class="mt-3 rounded-xl border border-brand-orange/60 bg-brand-orange/15 px-4 py-3 text-sm text-brand-dark">
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                   <div class="font-medium">Запрос смены состояния</div>
                   <div class="text-xs muted-2 mt-1">
                     От: <b>{{ lead_state_req.requested_by|default:"—" }}</b> · {{ lead_state_req.created_at }}
-                    · Запрошено:
-                    <b>{% if lead_state_req.requested_state == "warm" %}Теплый контакт{% else %}Холодный контакт{% endif %}</b>
+                  </div>
+                  <div class="mt-2 flex flex-wrap items-center gap-2">
+                    <span class="badge badge-warn" style="padding:.1rem .35rem;font-size:.65rem">Нужно изменить</span>
+                    <span class="text-sm">
+                      → <b>{% if lead_state_req.requested_state == "warm" %}Теплый контакт{% else %}Холодный контакт{% endif %}</b>
+                    </span>
                   </div>
                   {% if lead_state_req.note %}
                     <div class="mt-2 whitespace-pre-line">{{ lead_state_req.note }}</div>
                   {% endif %}
+                  <div class="text-xs muted-2 mt-2">
+                    После решения запрос будет закрыт, а уведомление у второго руководителя исчезнет.
+                  </div>
                 </div>
                 {% if can_decide_lead_state %}
                   <div class="flex flex-col gap-2 shrink-0">
-                    <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="openCancelLeadStateReqModal">Отклонить</button>
+                    <button
+                      type="button"
+                      class="btn btn-outline"
+                      style="padding:.35rem .6rem;font-size:.75rem;border-color:rgba(239,68,68,.35);color:#b91c1c;background:rgba(239,68,68,.06)"
+                      id="openCancelLeadStateReqModal"
+                    >
+                      Отклонить
+                    </button>
                     <form method="post" action="/companies/{{ company.id }}/lead-state/request/{{ lead_state_req.id }}/approve/" onsubmit="return confirm('Подтвердить смену состояния карточки?');">
                       {% csrf_token %}
                       <button type="submit" class="btn btn-primary" style="padding:.35rem .6rem;font-size:.75rem">Подтвердить</button>
