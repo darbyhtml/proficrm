@@ -97,31 +97,29 @@
                   <path d="M18 8a6 6 0 10-12 0c0 7-3 7-3 7h18s-3 0-3-7"/>
                   <path d="M13.73 21a2 2 0 01-3.46 0"/>
                 </svg>
-                {% if bell_count and bell_count > 0 %}
-                  <span class="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-brand-orange text-brand-dark text-[11px] font-semibold border border-white">
-                    {{ bell_count }}
-                  </span>
-                {% endif %}
+                <span id="bellBadge" class="absolute -top-1 -right-1 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-brand-orange text-brand-dark text-[11px] font-semibold border border-white {% if not bell_count or bell_count <= 0 %}hidden{% endif %}">
+                  {{ bell_count|default:0 }}
+                </span>
               </button>
 
               <div id="notifPanel" class="hidden absolute right-0 mt-2 w-[360px] max-w-[90vw] card overflow-hidden z-50">
                 <div class="px-4 py-3 border-b border-brand-soft bg-white">
                   <div class="flex items-center justify-between">
                     <div class="font-medium">Уведомления</div>
-                    <form method="post" action="/notifications/mark-all-read/">
+                    <form method="post" action="/notifications/mark-all-read/" id="notifMarkAllForm">
                       {% csrf_token %}
                       <button class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" type="submit">Прочитано</button>
                     </form>
                   </div>
                   <div class="text-xs muted mt-1">
-                    Новые: <b>{{ notif_unread_count|default:0 }}</b> · Напоминания: <b>{{ reminder_count|default:0 }}</b>
+                    Новые: <b id="notifUnreadCount">{{ notif_unread_count|default:0 }}</b> · Напоминания: <b id="reminderCount">{{ reminder_count|default:0 }}</b>
                   </div>
                 </div>
 
                 <div class="max-h-[420px] overflow-auto bg-white">
                   {% if reminder_items %}
                     <div class="px-4 pt-3 pb-2 text-xs muted">Напоминания</div>
-                    <div class="px-2 pb-2">
+                    <div class="px-2 pb-2" id="reminderList">
                       {% for r in reminder_items %}
                         <a class="block rounded-xl border border-brand-soft px-3 py-2 mb-2 hover:bg-brand-soft/25" href="{{ r.url }}">
                           <div class="text-sm font-medium">{{ r.title }}</div>
@@ -131,29 +129,27 @@
                     </div>
                   {% endif %}
 
-                  <div class="px-4 pt-3 pb-2 text-xs muted">Новые/последние</div>
-                  <div class="px-2 pb-3">
+                  <div class="px-4 pt-3 pb-2 text-xs muted">Новые</div>
+                  <div class="px-2 pb-3" id="notifList">
                     {% for n in notif_items %}
-                      <div class="rounded-xl border border-brand-soft px-3 py-2 mb-2 {% if not n.is_read %}bg-brand-soft/20{% else %}bg-white{% endif %}">
+                      <div class="rounded-xl border border-brand-soft px-3 py-2 mb-2 bg-brand-soft/20" data-notif-id="{{ n.id }}">
                         <div class="flex items-start justify-between gap-2">
                           <div>
                             <div class="text-sm font-medium">{{ n.title }}</div>
                             {% if n.body %}<div class="text-xs muted mt-0.5">{{ n.body|truncatechars:140 }}</div>{% endif %}
                             <div class="text-[11px] muted-2 mt-1">{{ n.created_at }}</div>
                           </div>
-                          {% if not n.is_read %}
-                            <form method="post" action="/notifications/{{ n.id }}/read/">
-                              {% csrf_token %}
-                              <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" type="submit">✓</button>
-                            </form>
-                          {% endif %}
+                          <form method="post" action="/notifications/{{ n.id }}/read/" class="js-notif-read-form">
+                            {% csrf_token %}
+                            <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" type="submit" title="Отметить прочитанным">✓</button>
+                          </form>
                         </div>
                         {% if n.url %}
                           <a class="link text-sm mt-2 inline-block" href="{{ n.url }}">Открыть</a>
                         {% endif %}
                       </div>
                     {% empty %}
-                      <div class="px-2 pb-3 muted text-sm">Уведомлений пока нет.</div>
+                      <div class="px-2 pb-3 muted text-sm" id="notifEmpty">Уведомлений пока нет.</div>
                     {% endfor %}
                   </div>
                 </div>
@@ -297,6 +293,162 @@
         panel.addEventListener('click', function(e){ e.stopPropagation(); });
         document.addEventListener('click', close);
         document.addEventListener('keydown', function(e){ if(e.key === 'Escape') close(); });
+      })();
+    </script>
+    <script>
+      // Live notifications (polling). Без WebSocket, безопасно: если JS не работает — всё как раньше.
+      (function(){
+        function getCookie(name) {
+          const value = `; ${document.cookie}`;
+          const parts = value.split(`; ${name}=`);
+          if (parts.length === 2) return parts.pop().split(';').shift();
+          return '';
+        }
+        function escapeHtml(s){
+          return String(s || '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+        }
+
+        const csrftoken = getCookie('csrftoken');
+        const badge = document.getElementById('bellBadge');
+        const notifCountEl = document.getElementById('notifUnreadCount');
+        const reminderCountEl = document.getElementById('reminderCount');
+        const notifList = document.getElementById('notifList');
+        const reminderList = document.getElementById('reminderList');
+        const markAllForm = document.getElementById('notifMarkAllForm');
+
+        let lastIds = new Set();
+        document.querySelectorAll('[data-notif-id]').forEach(el => {
+          const id = el.getAttribute('data-notif-id');
+          if (id) lastIds.add(id);
+        });
+
+        function updateBadge(count){
+          if(!badge) return;
+          const c = Number(count || 0);
+          badge.textContent = String(c);
+          if(c > 0) badge.classList.remove('hidden');
+          else badge.classList.add('hidden');
+        }
+
+        function bindNotifActions(){
+          // AJAX mark read
+          document.querySelectorAll('.js-notif-read-form').forEach(f => {
+            if (f.__bound) return;
+            f.__bound = true;
+            f.addEventListener('submit', async (e) => {
+              e.preventDefault();
+              const action = f.getAttribute('action') || '';
+              try{
+                await fetch(action, {method:'POST', headers:{'X-CSRFToken': csrftoken}, credentials:'same-origin'});
+              }catch(_e){}
+              pollOnce();
+            });
+          });
+          // AJAX mark all
+          if(markAllForm && !markAllForm.__bound){
+            markAllForm.__bound = true;
+            markAllForm.addEventListener('submit', async (e) => {
+              e.preventDefault();
+              const action = markAllForm.getAttribute('action') || '';
+              try{
+                await fetch(action, {method:'POST', headers:{'X-CSRFToken': csrftoken}, credentials:'same-origin'});
+              }catch(_e){}
+              pollOnce();
+            });
+          }
+        }
+
+        function renderReminders(items){
+          if(!reminderList) return;
+          const arr = Array.isArray(items) ? items : [];
+          if(!arr.length){
+            reminderList.innerHTML = '';
+            return;
+          }
+          reminderList.innerHTML = arr.map(r => {
+            const title = escapeHtml(r.title);
+            const subtitle = escapeHtml(r.subtitle || '');
+            const url = escapeHtml(r.url || '#');
+            return `<a class="block rounded-xl border border-brand-soft px-3 py-2 mb-2 hover:bg-brand-soft/25" href="${url}">
+              <div class="text-sm font-medium">${title}</div>
+              ${subtitle ? `<div class="text-xs muted mt-0.5">${subtitle}</div>` : ''}
+            </a>`;
+          }).join('');
+        }
+
+        function renderNotifs(items){
+          if(!notifList) return;
+          const arr = Array.isArray(items) ? items : [];
+          if(!arr.length){
+            notifList.innerHTML = '<div class="px-2 pb-3 muted text-sm" id="notifEmpty">Уведомлений пока нет.</div>';
+            return;
+          }
+          notifList.innerHTML = arr.map(n => {
+            const id = escapeHtml(n.id);
+            const title = escapeHtml(n.title);
+            const body = escapeHtml(n.body || '');
+            const created = escapeHtml(n.created_at || '');
+            const url = escapeHtml(n.url || '');
+            const openLink = url ? `<a class="link text-sm mt-2 inline-block" href="${url}">Открыть</a>` : '';
+            const bodyShort = body ? (body.length > 140 ? body.slice(0, 140) + '…' : body) : '';
+            return `<div class="rounded-xl border border-brand-soft px-3 py-2 mb-2 bg-brand-soft/20" data-notif-id="${id}">
+              <div class="flex items-start justify-between gap-2">
+                <div>
+                  <div class="text-sm font-medium">${title}</div>
+                  ${bodyShort ? `<div class="text-xs muted mt-0.5">${bodyShort}</div>` : ''}
+                  <div class="text-[11px] muted-2 mt-1">${created}</div>
+                </div>
+                <form method="post" action="/notifications/${id}/read/" class="js-notif-read-form">
+                  <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" type="submit" title="Отметить прочитанным">✓</button>
+                </form>
+              </div>
+              ${openLink}
+            </div>`;
+          }).join('');
+        }
+
+        let pollInFlight = false;
+        async function pollOnce(){
+          if(pollInFlight) return;
+          pollInFlight = true;
+          try{
+            const res = await fetch('/notifications/poll/', {credentials:'same-origin'});
+            const data = await res.json().catch(() => null);
+            if(!data || !data.ok) return;
+            updateBadge(data.bell_count);
+            if(notifCountEl) notifCountEl.textContent = String(data.notif_unread_count || 0);
+            if(reminderCountEl) reminderCountEl.textContent = String(data.reminder_count || 0);
+
+            const newIds = new Set((data.notif_items || []).map(n => String(n.id)));
+            const hasNew = Array.from(newIds).some(id => !lastIds.has(id));
+            lastIds = newIds;
+
+            renderReminders(data.reminder_items || []);
+            renderNotifs(data.notif_items || []);
+            bindNotifActions();
+
+            // лёгкий лайв-сигнал: кольцо на колокольчике
+            if(hasNew){
+              const btn = document.getElementById('notifBtn');
+              if(btn){
+                btn.classList.add('ring-4','ring-brand-teal/15');
+                setTimeout(() => btn.classList.remove('ring-4','ring-brand-teal/15'), 1200);
+              }
+            }
+          }catch(_e){
+          }finally{
+            pollInFlight = false;
+          }
+        }
+
+        bindNotifActions();
+        pollOnce();
+        setInterval(pollOnce, 15000);
       })();
     </script>
     <script>

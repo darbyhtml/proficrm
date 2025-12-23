@@ -22,7 +22,8 @@ def notifications_panel(request):
         return {}
 
     notif_unread_count = Notification.objects.filter(user=user, is_read=False).count()
-    notif_items = Notification.objects.filter(user=user).order_by("-created_at")[:10]
+    # В выпадающем списке показываем только актуальные (непрочитанные), чтобы после галочки они исчезали.
+    notif_items = Notification.objects.filter(user=user, is_read=False).order_by("-created_at")[:10]
 
     now = timezone.now()
     # напоминания: мои задачи (назначенные пользователю)
