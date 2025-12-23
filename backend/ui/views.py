@@ -372,8 +372,10 @@ def analytics(request: HttpRequest) -> HttpResponse:
     user_ids = [u.id for u in users_list]
 
     # Звонки за период (лимит на страницу, чтобы не убить UI)
+    # Для консистентности с аналитикой сотрудника считаем только клики "Позвонить с телефона" (note="UI click").
     calls_qs = (
-        CallRequest.objects.filter(created_by_id__in=user_ids, created_at__gte=start, created_at__lt=end)
+        CallRequest.objects.filter(created_by_id__in=user_ids, created_at__gte=start, created_at__lt=end, note="UI click")
+        .exclude(status=CallRequest.Status.CANCELLED)
         .select_related("company", "contact", "created_by")
         .order_by("-created_at")[:5000]
     )
@@ -384,7 +386,15 @@ def analytics(request: HttpRequest) -> HttpResponse:
         if uid not in stats:
             continue
         stats[uid]["calls_total"] += 1
-        if call.is_cold_call:
+        # "Холодный" считаем строго: is_cold_call=True + подтверждение marked_call
+        is_strict_cold = bool(
+            getattr(call, "is_cold_call", False)
+            and (
+                (getattr(call, "company", None) and getattr(call.company, "primary_cold_marked_call_id", None) == call.id)
+                or (getattr(call, "contact", None) and getattr(call.contact, "cold_marked_call_id", None) == call.id)
+            )
+        )
+        if is_strict_cold:
             stats[uid]["cold_calls"] += 1
         calls_by_user.setdefault(uid, []).append(call)
 
@@ -548,12 +558,18 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
     day_end = day_start + timedelta(days=1)
     day_label = timezone.localdate(now).strftime("%d.%m.%Y")
 
-    # Холодные звонки = подтверждённые (is_cold_call=True).
-    qs = (
-        CallRequest.objects.filter(created_by=user, is_cold_call=True, created_at__gte=day_start, created_at__lt=day_end)
+    # Строгая логика холодных звонков:
+    # - инициированы через кнопку "Позвонить с телефона" (note="UI click")
+    # - is_cold_call=True
+    # - и подтверждены отметкой (marked_call) в допустимое окно (проверяется в момент отметки)
+    qs_base = (
+        CallRequest.objects.filter(created_by=user, created_at__gte=day_start, created_at__lt=day_end, note="UI click")
+        .exclude(status=CallRequest.Status.CANCELLED)
         .select_related("company", "contact")
-        .order_by("created_at")
     )
+    qs = qs_base.filter(is_cold_call=True).filter(
+        Q(company__primary_cold_marked_call_id=F("id")) | Q(contact__cold_marked_call_id=F("id"))
+    ).order_by("created_at")
     items = []
     lines = [f"Отчёт: холодные звонки за {day_label}", f"Всего: {qs.count()}", ""]
     i = 0
@@ -597,7 +613,13 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
     available = []
     for ms in candidates:
         me = _add_months(ms, 1)
-        exists = CallRequest.objects.filter(created_by=user, is_cold_call=True, created_at__date__gte=ms, created_at__date__lt=me).exists()
+        exists = (
+            CallRequest.objects.filter(created_by=user, created_at__date__gte=ms, created_at__date__lt=me, note="UI click")
+            .exclude(status=CallRequest.Status.CANCELLED)
+            .filter(is_cold_call=True)
+            .filter(Q(company__primary_cold_marked_call_id=F("id")) | Q(contact__cold_marked_call_id=F("id")))
+            .exists()
+        )
         if exists:
             available.append(ms)
 
@@ -613,11 +635,14 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
             break
 
     month_end = _add_months(selected, 1)
-    qs = (
-        CallRequest.objects.filter(created_by=user, is_cold_call=True, created_at__date__gte=selected, created_at__date__lt=month_end)
+    qs_base = (
+        CallRequest.objects.filter(created_by=user, created_at__date__gte=selected, created_at__date__lt=month_end, note="UI click")
+        .exclude(status=CallRequest.Status.CANCELLED)
         .select_related("company", "contact")
-        .order_by("created_at")
     )
+    qs = qs_base.filter(is_cold_call=True).filter(
+        Q(company__primary_cold_marked_call_id=F("id")) | Q(contact__cold_marked_call_id=F("id"))
+    ).order_by("created_at")
 
     items = []
     lines = [f"Отчёт: холодные звонки за {_month_label(selected)}", f"Всего: {qs.count()}", ""]
