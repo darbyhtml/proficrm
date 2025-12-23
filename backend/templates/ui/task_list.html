@@ -100,17 +100,7 @@
         </table>
       </div>
 
-      <div class="flex items-center justify-between px-4 py-3 border-t text-sm">
-        <div class="text-brand-dark/70">Стр. {{ page.number }} / {{ page.paginator.num_pages }}</div>
-        <div class="flex gap-2">
-          {% if page.has_previous %}
-            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="?status={{ status }}&mine={{ mine }}&today={{ today }}&overdue={{ overdue }}&page={{ page.previous_page_number }}">Назад</a>
-          {% endif %}
-          {% if page.has_next %}
-            <a class="rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" href="?status={{ status }}&mine={{ mine }}&today={{ today }}&overdue={{ overdue }}&page={{ page.next_page_number }}">Вперёд</a>
-          {% endif %}
-        </div>
-      </div>
+      {% include "ui/_pagination.html" with page=page qs=qs %}
     </div>
   </div>
 {% endblock %}

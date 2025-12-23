@@ -264,6 +264,18 @@ def _apply_company_filters(*, qs, params: dict):
     }
 
 
+def _qs_without_page(request: HttpRequest, *, page_key: str = "page") -> str:
+    """
+    Для пагинации: сохранить все текущие GET-параметры, кроме номера страницы.
+    Возвращает строку формата "a=1&b=2" (без ведущего "?").
+    """
+    params = request.GET.copy()
+    try:
+        params.pop(page_key, None)
+    except Exception:
+        pass
+    return params.urlencode()
+
 @login_required
 def dashboard(request: HttpRequest) -> HttpResponse:
     user: User = request.user
@@ -726,6 +738,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
 
     paginator = Paginator(qs, 25)
     page = paginator.get_page(request.GET.get("page"))
+    qs_no_page = _qs_without_page(request)
     ui_cfg = UiGlobalConfig.load()
     columns = ui_cfg.company_list_columns or ["name"]
 
@@ -734,6 +747,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
         "ui/company_list.html",
         {
             "page": page,
+            "qs": qs_no_page,
             "q": f["q"],
             "responsible": f["responsible"],
             "status": f["status"],
@@ -2393,13 +2407,18 @@ def task_list(request: HttpRequest) -> HttpResponse:
 
     paginator = Paginator(qs, 25)
     page = paginator.get_page(request.GET.get("page"))
+    qs_no_page = _qs_without_page(request)
 
     # Для шаблона: не делаем сложные выражения в {% if %}, чтобы не ловить TemplateSyntaxError.
     # Проставим флаг прямо в объекты текущей страницы.
     for t in page.object_list:
         t.can_manage_status = _can_manage_task_status_ui(user, t)  # type: ignore[attr-defined]
 
-    return render(request, "ui/task_list.html", {"now": now, "page": page, "status": status, "mine": mine, "overdue": overdue, "today": today})
+    return render(
+        request,
+        "ui/task_list.html",
+        {"now": now, "page": page, "qs": qs_no_page, "status": status, "mine": mine, "overdue": overdue, "today": today},
+    )
 
 
 @login_required
