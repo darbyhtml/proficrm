@@ -1430,7 +1430,7 @@ def company_lead_state_request_create(request: HttpRequest, company_id) -> HttpR
     )
     branch_id = _company_branch_id(company)
     title = f"Запрос смены состояния ({req.id})"
-    state_label = "Тёплая" if requested_state == Company.LeadState.WARM else "Холодная"
+    state_label = "Теплый контакт" if requested_state == Company.LeadState.WARM else "Холодный контакт"
     body = f"{company.name}: запрос на смену состояния → {state_label}. {(note[:160] + '…') if len(note) > 160 else note}"
     sent = _notify_branch_leads(branch_id=branch_id, title=title, body=body, url=f"/companies/{company.id}/", exclude_user_id=user.id)
     messages.success(request, f"Запрос отправлен. Уведомлено руководителей: {sent}.")
@@ -1515,7 +1515,7 @@ def company_lead_state_request_approve(request: HttpRequest, company_id, req_id)
     _dismiss_lead_state_req_notifications(req=req, company=company)
 
     if req.requested_by_id:
-        state_label = "Тёплая" if req.requested_state == Company.LeadState.WARM else "Холодная"
+        state_label = "Теплый контакт" if req.requested_state == Company.LeadState.WARM else "Холодный контакт"
         notify(
             user=req.requested_by,
             kind=Notification.Kind.COMPANY,

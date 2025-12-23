@@ -53,16 +53,16 @@ class Company(models.Model):
     website = models.CharField("Сайт", max_length=255, blank=True, default="")
     activity_kind = models.CharField("Вид деятельности", max_length=255, blank=True, default="", db_index=True)
     class LeadState(models.TextChoices):
-        COLD = "cold", "Холодная"
-        WARM = "warm", "Тёплая"
+        COLD = "cold", "Холодный контакт"
+        WARM = "warm", "Теплый контакт"
 
     lead_state = models.CharField(
-        "Состояние карточки",
+        "Состояние контакта",
         max_length=8,
         choices=LeadState.choices,
         default=LeadState.WARM,
         db_index=True,
-        help_text="Холодная/тёплая карточка (влияет на доступность отметок «холодный звонок»).",
+        help_text="Холодный/тёплый контакт (влияет на доступность отметок «холодный звонок»).",
     )
     # Устаревшее: раньше отметка была на всю компанию. Оставляем поле для обратной совместимости/данных,
     # но в UI/логике используем отметки на контактах.

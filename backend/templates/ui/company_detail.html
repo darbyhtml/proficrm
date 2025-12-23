@@ -10,9 +10,9 @@
           <h1 class="text-2xl font-semibold">
             {{ company.name }}
             {% if is_cold_company %}
-              <span class="badge badge-warn ml-2" style="padding:.15rem .45rem;font-size:.7rem">Холодная</span>
+              <span class="badge badge-warn ml-2" style="padding:.15rem .45rem;font-size:.7rem">Холодный контакт</span>
             {% else %}
-              <span class="badge ml-2" style="padding:.15rem .45rem;font-size:.7rem">Тёплая</span>
+              <span class="badge ml-2" style="padding:.15rem .45rem;font-size:.7rem">Теплый контакт</span>
             {% endif %}
           </h1>
           <div class="flex items-center gap-2 shrink-0">
@@ -81,7 +81,7 @@
                   <div class="text-xs muted-2 mt-1">
                     От: <b>{{ lead_state_req.requested_by|default:"—" }}</b> · {{ lead_state_req.created_at }}
                     · Запрошено:
-                    <b>{% if lead_state_req.requested_state == "warm" %}Тёплая{% else %}Холодная{% endif %}</b>
+                    <b>{% if lead_state_req.requested_state == "warm" %}Теплый контакт{% else %}Холодный контакт{% endif %}</b>
                   </div>
                   {% if lead_state_req.note %}
                     <div class="mt-2 whitespace-pre-line">{{ lead_state_req.note }}</div>
@@ -220,9 +220,9 @@
             <div class="text-brand-dark/50">Состояние</div>
             <div class="flex flex-wrap items-center gap-2">
               {% if is_cold_company %}
-                <span class="badge badge-warn" style="padding:.1rem .35rem;font-size:.65rem">Холодная</span>
+                <span class="badge badge-warn" style="padding:.1rem .35rem;font-size:.65rem">Холодный контакт</span>
               {% else %}
-                <span class="badge" style="padding:.1rem .35rem;font-size:.65rem">Тёплая</span>
+                <span class="badge" style="padding:.1rem .35rem;font-size:.65rem">Теплый контакт</span>
               {% endif %}
               {% if can_request_lead_state %}
                 <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" id="openLeadStateReqModal2" {% if lead_state_req %}disabled{% endif %}>
@@ -233,7 +233,7 @@
                   {% csrf_token %}
                   <input type="hidden" name="lead_state" value="{% if is_cold_company %}warm{% else %}cold{% endif %}" />
                   <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" type="submit">
-                    {% if is_cold_company %}Сделать тёплой{% else %}Сделать холодной{% endif %}
+                    {% if is_cold_company %}Сделать теплым{% else %}Сделать холодным{% endif %}
                   </button>
                 </form>
               {% endif %}
@@ -354,6 +354,38 @@
         {% if can_edit_company %}
           <a class="btn btn-primary w-full" href="/tasks/new/?company={{ company.id }}">+ Поставить задачу</a>
         {# переносим отметку холодного звонка (осн. контакт) к телефону в "Данные" #}
+          <div class="mt-4 border-t pt-4">
+            <div class="font-medium mb-2">Состояние контакта</div>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="text-sm">
+                {% if is_cold_company %}
+                  <span class="badge badge-warn" style="padding:.1rem .35rem;font-size:.65rem">Холодный контакт</span>
+                {% else %}
+                  <span class="badge" style="padding:.1rem .35rem;font-size:.65rem">Теплый контакт</span>
+                {% endif %}
+              </div>
+              <div class="shrink-0">
+                {% if can_request_lead_state %}
+                  <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" id="openLeadStateReqModalQuick" {% if lead_state_req %}disabled{% endif %}>
+                    Запросить смену
+                  </button>
+                {% elif can_decide_lead_state and not lead_state_req %}
+                  <form method="post" action="/companies/{{ company.id }}/lead-state/set/">
+                    {% csrf_token %}
+                    <input type="hidden" name="lead_state" value="{% if is_cold_company %}warm{% else %}cold{% endif %}" />
+                    <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" type="submit">
+                      {% if is_cold_company %}Сделать теплым{% else %}Сделать холодным{% endif %}
+                    </button>
+                  </form>
+                {% else %}
+                  <div class="text-xs muted-2">Нет прав на смену состояния.</div>
+                {% endif %}
+              </div>
+            </div>
+            {% if lead_state_req %}
+              <div class="text-xs muted-2 mt-2">Есть запрос на смену состояния — дождитесь решения руководителя.</div>
+            {% endif %}
+          </div>
           <div class="mt-3">
             <div class="text-xs text-brand-dark/70 mb-1">Передать другому менеджеру</div>
             <form method="post" action="/companies/{{ company.id }}/transfer/" class="flex gap-2">
@@ -1026,6 +1058,11 @@
         if (leadStateReqModal && openLeadStateReq2 && !openLeadStateReq2.disabled) {
           function openM() { leadStateReqModal.classList.remove('hidden'); }
           openLeadStateReq2.addEventListener('click', openM);
+        }
+        const openLeadStateReqQuick = document.getElementById('openLeadStateReqModalQuick');
+        if (leadStateReqModal && openLeadStateReqQuick && !openLeadStateReqQuick.disabled) {
+          function openM() { leadStateReqModal.classList.remove('hidden'); }
+          openLeadStateReqQuick.addEventListener('click', openM);
         }
 
         const cancelLeadStateReqModal = document.getElementById('cancelLeadStateReqModal');
