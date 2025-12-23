@@ -296,6 +296,12 @@ class ImportCompaniesForm(forms.Form):
     dry_run = forms.BooleanField(label="Только проверить (dry-run)", required=False, initial=True)
 
 
+class ImportTasksIcsForm(forms.Form):
+    ics_file = forms.FileField(label="ICS файл (.ics)")
+    limit_events = forms.IntegerField(label="Сколько задач импортировать", min_value=1, max_value=20000, initial=500)
+    dry_run = forms.BooleanField(label="Только проверить (dry-run)", required=False, initial=True)
+
+
 class CompanyListColumnsForm(forms.Form):
     columns = forms.MultipleChoiceField(
         label="Поля в таблице компаний",

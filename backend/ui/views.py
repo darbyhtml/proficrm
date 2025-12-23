@@ -45,6 +45,7 @@ from .forms import (
     UserCreateForm,
     UserEditForm,
     ImportCompaniesForm,
+    ImportTasksIcsForm,
     CompanyListColumnsForm,
 )
 from ui.models import UiGlobalConfig
@@ -2838,6 +2839,53 @@ def settings_import(request: HttpRequest) -> HttpResponse:
         form = ImportCompaniesForm()
 
     return render(request, "ui/settings/import.html", {"form": form, "result": result})
+
+
+@login_required
+def settings_import_tasks(request: HttpRequest) -> HttpResponse:
+    if not _require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    result = None
+    if request.method == "POST":
+        form = ImportTasksIcsForm(request.POST, request.FILES)
+        if form.is_valid():
+            import tempfile
+            from pathlib import Path
+
+            f = form.cleaned_data["ics_file"]
+            limit_events = int(form.cleaned_data["limit_events"])
+            dry_run = bool(form.cleaned_data.get("dry_run"))
+
+            fd, tmp_path = tempfile.mkstemp(suffix=".ics")
+            Path(tmp_path).write_bytes(f.read())
+            try:
+                from tasksapp.importer_ics import import_amocrm_ics
+
+                result = import_amocrm_ics(
+                    ics_path=tmp_path,
+                    encoding="utf-8",
+                    dry_run=dry_run,
+                    limit_events=limit_events,
+                    actor=request.user,
+                )
+                if dry_run:
+                    messages.success(request, "Проверка (dry-run) выполнена.")
+                else:
+                    messages.success(
+                        request,
+                        f"Импорт выполнен: добавлено задач {result.created_tasks}, пропущено (уже было) {result.skipped_existing}.",
+                    )
+            finally:
+                try:
+                    Path(tmp_path).unlink(missing_ok=True)
+                except Exception:
+                    pass
+    else:
+        form = ImportTasksIcsForm()
+
+    return render(request, "ui/settings/import_tasks.html", {"form": form, "result": result})
 
 # UI settings (admin only)
 @login_required

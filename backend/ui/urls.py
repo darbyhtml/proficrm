@@ -63,6 +63,7 @@ urlpatterns = [
     path("settings/dicts/task-type/new/", views.settings_task_type_create, name="settings_task_type_create"),
     path("settings/activity/", views.settings_activity, name="settings_activity"),
     path("settings/import/", views.settings_import, name="settings_import"),
+    path("settings/import/tasks/", views.settings_import_tasks, name="settings_import_tasks"),
     path("settings/company-columns/", views.settings_company_columns, name="settings_company_columns"),
     path("settings/security/", views.settings_security, name="settings_security"),
 ]

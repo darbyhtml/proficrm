@@ -39,6 +39,10 @@ class Task(models.Model):
     # Повторяющиеся задачи: храним RRULE (iCal) строкой; генерацию экземпляров можно добавить позже cron'ом.
     recurrence_rrule = models.CharField("Повтор (RRULE)", max_length=500, blank=True, default="")
 
+    # Импорт/интеграции (amo и т.п.) — для дедупликации и трассировки источника
+    external_source = models.CharField("Внешний источник", max_length=32, blank=True, default="", db_index=True)
+    external_uid = models.CharField("Внешний UID", max_length=120, blank=True, default="", db_index=True)
+
     def __str__(self) -> str:
         return self.title
 
