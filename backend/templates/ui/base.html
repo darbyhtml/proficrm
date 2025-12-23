@@ -394,22 +394,48 @@
           }catch(_e){}
         }
 
-        async function playSound(){
+        function showToast(text){
+          try{
+            const id = 'notifToast';
+            let el = document.getElementById(id);
+            if(!el){
+              el = document.createElement('div');
+              el.id = id;
+              el.style.position = 'fixed';
+              el.style.right = '16px';
+              el.style.bottom = '16px';
+              el.style.zIndex = '90';
+              el.style.maxWidth = '92vw';
+              el.style.display = 'none';
+              el.innerHTML = '<div style="border:1px solid rgba(194,226,222,.95);background:#fff;border-radius:12px;padding:10px 12px;box-shadow:0 12px 30px rgba(0,61,56,.10);font-size:13px;color:#003D38"></div>';
+              document.body.appendChild(el);
+            }
+            const box = el.firstElementChild;
+            if(box) box.textContent = text || '';
+            el.style.display = 'block';
+            clearTimeout(el.__t);
+            el.__t = setTimeout(() => { el.style.display = 'none'; }, 2400);
+          }catch(_e){}
+        }
+
+        function playSound(){
           if(!soundEnabled) return;
-          // Браузеры могут блокировать звук без user-gesture — поэтому включаем через кнопку.
+          // Важно: не используем await в user-gesture цепочке — некоторые браузеры “теряют” активацию.
           try{
             if(soundEl && soundEl.play){
-              // если формат не поддержан — сразу fallback
               const canOgg = soundEl.canPlayType && soundEl.canPlayType('audio/ogg; codecs="vorbis"');
               if(!canOgg) throw new Error('no ogg support');
               soundEl.currentTime = 0;
-              soundEl.volume = 0.25;
+              soundEl.volume = 0.35;
               soundEl.muted = false;
-              await soundEl.play();
+              const p = soundEl.play();
+              if(p && p.catch){
+                p.catch(() => webAudioBeep());
+              }
               return;
             }
           }catch(_e){}
-          await webAudioBeep(); // fallback
+          webAudioBeep(); // fallback
         }
 
         function showBrowserNotification(n){
@@ -424,7 +450,8 @@
             const notif = new Notification(title, {
               body,
               tag: 'crm_' + (n.id || ''),
-              silent: true,
+              // Даем ОС/браузеру возможность проиграть стандартный звук уведомления
+              silent: false,
               icon: '/static/ui/favicon-v2.svg',
             });
             notif.onclick = () => {
@@ -570,14 +597,18 @@
 
         if(enableSoundBtn && !enableSoundBtn.__bound){
           enableSoundBtn.__bound = true;
-          enableSoundBtn.addEventListener('click', async () => {
+          enableSoundBtn.addEventListener('click', () => {
             soundEnabled = !soundEnabled;
             setBool(SOUND_KEY, soundEnabled);
             updateTogglesUI();
             // попытка "разблокировать" звук user-gesture'ом
             if(soundEnabled){
-              await ensureAudioCtx(); // явный resume на user gesture
-              await playSound();
+              ensureAudioCtx().then(() => {
+                playSound();
+                showToast('Звук включён');
+              });
+            } else {
+              showToast('Звук выключен');
             }
           });
         }
