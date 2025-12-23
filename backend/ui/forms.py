@@ -317,6 +317,24 @@ class ImportTasksIcsForm(forms.Form):
     )
 
 
+class AmoApiConfigForm(forms.Form):
+    domain = forms.CharField(label="Домен amoCRM", initial="kmrprofi.amocrm.ru")
+    client_id = forms.CharField(label="Client ID")
+    client_secret = forms.CharField(label="Client Secret", required=False, widget=forms.PasswordInput(render_value=True))
+    redirect_uri = forms.CharField(label="Redirect URI", required=False, help_text="Если пусто — возьмём автоматически (callback URL).")
+
+
+class AmoMigrateFilterForm(forms.Form):
+    dry_run = forms.BooleanField(label="Только проверить (dry-run)", required=False, initial=True)
+    limit_companies = forms.IntegerField(label="Лимит компаний", min_value=1, max_value=5000, initial=200, required=False)
+    responsible_user_id = forms.IntegerField(label="Ответственный (amo user id)")
+    custom_field_id = forms.IntegerField(label="Кастомное поле (id)")
+    custom_value_label = forms.CharField(label="Значение (текст)", required=False, initial="Новая CRM")
+    custom_value_enum_id = forms.IntegerField(label="Значение (enum id)", required=False)
+    import_tasks = forms.BooleanField(label="Импортировать задачи", required=False, initial=True)
+    import_notes = forms.BooleanField(label="Импортировать заметки", required=False, initial=True)
+
+
 class CompanyListColumnsForm(forms.Form):
     columns = forms.MultipleChoiceField(
         label="Поля в таблице компаний",

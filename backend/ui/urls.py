@@ -64,6 +64,10 @@ urlpatterns = [
     path("settings/activity/", views.settings_activity, name="settings_activity"),
     path("settings/import/", views.settings_import, name="settings_import"),
     path("settings/import/tasks/", views.settings_import_tasks, name="settings_import_tasks"),
+    path("settings/amocrm/", views.settings_amocrm, name="settings_amocrm"),
+    path("settings/amocrm/callback/", views.settings_amocrm_callback, name="settings_amocrm_callback"),
+    path("settings/amocrm/disconnect/", views.settings_amocrm_disconnect, name="settings_amocrm_disconnect"),
+    path("settings/amocrm/migrate/", views.settings_amocrm_migrate, name="settings_amocrm_migrate"),
     path("settings/company-columns/", views.settings_company_columns, name="settings_company_columns"),
     path("settings/security/", views.settings_security, name="settings_security"),
 ]

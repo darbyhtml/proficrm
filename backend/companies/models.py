@@ -161,6 +161,8 @@ class CompanyNote(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     edited_at = models.DateTimeField("Редактировано", null=True, blank=True, db_index=True)
+    external_source = models.CharField("Внешний источник", max_length=32, blank=True, default="", db_index=True)
+    external_uid = models.CharField("Внешний UID", max_length=120, blank=True, default="", db_index=True)
 
     def __str__(self) -> str:
         return f"Note({self.company_id})"

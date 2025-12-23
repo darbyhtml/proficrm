@@ -46,3 +46,35 @@ class UiGlobalConfig(models.Model):
 
     def __str__(self) -> str:
         return "UI config"
+
+
+class AmoApiConfig(models.Model):
+    """
+    Настройки подключения к amoCRM API (одноразово для миграции).
+    Храним одну запись с pk=1.
+    """
+
+    domain = models.CharField("Домен amoCRM", max_length=255, blank=True, default="")  # kmrprofi.amocrm.ru
+    client_id = models.CharField("OAuth Client ID", max_length=255, blank=True, default="")
+    client_secret = models.CharField("OAuth Client Secret", max_length=255, blank=True, default="")
+    redirect_uri = models.CharField("Redirect URI", max_length=500, blank=True, default="")
+
+    access_token = models.TextField("Access token", blank=True, default="")
+    refresh_token = models.TextField("Refresh token", blank=True, default="")
+    token_type = models.CharField("Token type", max_length=32, blank=True, default="Bearer")
+    expires_at = models.DateTimeField("Token expires at", null=True, blank=True)
+
+    last_error = models.TextField("Последняя ошибка", blank=True, default="")
+    updated_at = models.DateTimeField("Обновлено", auto_now=True)
+
+    class Meta:
+        verbose_name = "Интеграция amoCRM"
+        verbose_name_plural = "Интеграция amoCRM"
+
+    @classmethod
+    def load(cls) -> "AmoApiConfig":
+        obj, _ = cls.objects.get_or_create(pk=1, defaults={"domain": "kmrprofi.amocrm.ru"})
+        return obj
+
+    def is_connected(self) -> bool:
+        return bool(self.access_token and self.refresh_token and self.domain and self.client_id and self.client_secret)

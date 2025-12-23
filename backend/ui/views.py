@@ -46,9 +46,14 @@ from .forms import (
     UserEditForm,
     ImportCompaniesForm,
     ImportTasksIcsForm,
+    AmoApiConfigForm,
+    AmoMigrateFilterForm,
     CompanyListColumnsForm,
 )
-from ui.models import UiGlobalConfig
+from ui.models import UiGlobalConfig, AmoApiConfig
+
+from amocrm.client import AmoApiError, AmoClient
+from amocrm.migrate import fetch_amo_users, fetch_company_custom_fields, migrate_filtered
 
 
 def _dup_reasons(*, c: Company, inn: str, kpp: str, name: str, address: str) -> list[str]:
@@ -2891,6 +2896,178 @@ def settings_import_tasks(request: HttpRequest) -> HttpResponse:
         form = ImportTasksIcsForm()
 
     return render(request, "ui/settings/import_tasks.html", {"form": form, "result": result})
+
+
+@login_required
+def settings_amocrm(request: HttpRequest) -> HttpResponse:
+    if not _require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    cfg = AmoApiConfig.load()
+    if request.method == "POST":
+        form = AmoApiConfigForm(request.POST)
+        if form.is_valid():
+            cfg.domain = (form.cleaned_data.get("domain") or "").strip().replace("https://", "").replace("http://", "").strip("/")
+            cfg.client_id = (form.cleaned_data.get("client_id") or "").strip()
+            secret = (form.cleaned_data.get("client_secret") or "").strip()
+            if secret:
+                cfg.client_secret = secret
+            # redirect uri: если пусто — построим из request
+            ru = (form.cleaned_data.get("redirect_uri") or "").strip()
+            if not ru:
+                ru = request.build_absolute_uri("/settings/amocrm/callback/")
+            cfg.redirect_uri = ru
+            cfg.save(update_fields=["domain", "client_id", "client_secret", "redirect_uri", "updated_at"])
+            messages.success(request, "Настройки amoCRM сохранены.")
+            return redirect("settings_amocrm")
+    else:
+        form = AmoApiConfigForm(
+            initial={
+                "domain": cfg.domain or "kmrprofi.amocrm.ru",
+                "client_id": cfg.client_id,
+                "client_secret": cfg.client_secret,
+                "redirect_uri": cfg.redirect_uri or request.build_absolute_uri("/settings/amocrm/callback/"),
+            }
+        )
+
+    auth_url = ""
+    if cfg.domain and cfg.client_id and cfg.redirect_uri:
+        try:
+            auth_url = AmoClient(cfg).authorize_url()
+        except Exception:
+            auth_url = ""
+
+    return render(
+        request,
+        "ui/settings/amocrm.html",
+        {"form": form, "cfg": cfg, "auth_url": auth_url},
+    )
+
+
+@login_required
+def settings_amocrm_callback(request: HttpRequest) -> HttpResponse:
+    if not _require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    code = (request.GET.get("code") or "").strip()
+    if not code:
+        messages.error(request, "amoCRM не вернул code (или доступ не разрешён).")
+        return redirect("settings_amocrm")
+
+    cfg = AmoApiConfig.load()
+    try:
+        AmoClient(cfg).exchange_code(code)
+        messages.success(request, "amoCRM подключен. Токены сохранены.")
+    except AmoApiError as e:
+        cfg.last_error = str(e)
+        cfg.save(update_fields=["last_error", "updated_at"])
+        messages.error(request, f"Ошибка подключения amoCRM: {e}")
+    return redirect("settings_amocrm")
+
+
+@login_required
+def settings_amocrm_disconnect(request: HttpRequest) -> HttpResponse:
+    if not _require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+    cfg = AmoApiConfig.load()
+    cfg.access_token = ""
+    cfg.refresh_token = ""
+    cfg.expires_at = None
+    cfg.last_error = ""
+    cfg.save(update_fields=["access_token", "refresh_token", "expires_at", "last_error", "updated_at"])
+    messages.success(request, "amoCRM отключен (токены удалены).")
+    return redirect("settings_amocrm")
+
+
+@login_required
+def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
+    if not _require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    cfg = AmoApiConfig.load()
+    if not cfg.is_connected():
+        messages.error(request, "Сначала подключите amoCRM (OAuth).")
+        return redirect("settings_amocrm")
+
+    client = AmoClient(cfg)
+    users = []
+    fields = []
+    try:
+        users = fetch_amo_users(client)
+        fields = fetch_company_custom_fields(client)
+        cfg.last_error = ""
+        cfg.save(update_fields=["last_error", "updated_at"])
+    except AmoApiError as e:
+        cfg.last_error = str(e)
+        cfg.save(update_fields=["last_error", "updated_at"])
+        messages.error(request, f"Ошибка API amoCRM: {e}")
+
+    # default guesses
+    def _find_field_id(names: list[str]) -> int | None:
+        for f in fields:
+            nm = str(f.get("name") or "")
+            if any(n.lower() in nm.lower() for n in names):
+                try:
+                    return int(f.get("id") or 0) or None
+                except Exception:
+                    pass
+        return None
+
+    guessed_field_id = _find_field_id(["Сферы деятельности", "Статусы", "Сферы"]) or 0
+
+    result = None
+    if request.method == "POST":
+        form = AmoMigrateFilterForm(request.POST)
+        if form.is_valid():
+            try:
+                result = migrate_filtered(
+                    client=client,
+                    actor=request.user,
+                    responsible_user_id=int(form.cleaned_data["responsible_user_id"]),
+                    sphere_field_id=int(form.cleaned_data["custom_field_id"]),
+                    sphere_option_id=form.cleaned_data.get("custom_value_enum_id") or None,
+                    sphere_label=form.cleaned_data.get("custom_value_label") or None,
+                    limit_companies=int(form.cleaned_data.get("limit_companies") or 0),
+                    dry_run=bool(form.cleaned_data.get("dry_run")),
+                    import_tasks=bool(form.cleaned_data.get("import_tasks")),
+                    import_notes=bool(form.cleaned_data.get("import_notes")),
+                )
+                if form.cleaned_data.get("dry_run"):
+                    messages.success(request, "Проверка (dry-run) выполнена.")
+                else:
+                    messages.success(request, "Импорт выполнен.")
+            except AmoApiError as e:
+                messages.error(request, f"Ошибка миграции: {e}")
+    else:
+        # попытка найти ответственную по имени "Иванова Юлия"
+        default_resp = None
+        for u in users:
+            nm = str(u.get("name") or "")
+            if "иванова" in nm.lower() and "юлия" in nm.lower():
+                default_resp = int(u.get("id") or 0)
+                break
+
+        form = AmoMigrateFilterForm(
+            initial={
+                "dry_run": True,
+                "limit_companies": 200,
+                "responsible_user_id": default_resp or "",
+                "custom_field_id": guessed_field_id or "",
+                "custom_value_label": "Новая CRM",
+                "import_tasks": True,
+                "import_notes": True,
+            }
+        )
+
+    return render(
+        request,
+        "ui/settings/amocrm_migrate.html",
+        {"cfg": cfg, "form": form, "users": users, "fields": fields, "result": result},
+    )
 
 # UI settings (admin only)
 @login_required

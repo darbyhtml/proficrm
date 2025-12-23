@@ -1,0 +1,118 @@
+{% extends "ui/base.html" %}
+{% block title %}amoCRM — миграция{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div>
+      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> / <a class="underline" href="/settings/amocrm/">amoCRM</a> /</div>
+      <h1 class="text-2xl font-semibold">Миграция из amoCRM (по фильтру)</h1>
+      <div class="text-sm text-brand-dark/70">
+        Фильтр: ответственный + кастомное поле (например “Сферы деятельности”/“Статусы”) со значением “Новая CRM”.
+      </div>
+      <div class="mt-2 rounded-xl border border-brand-orange/60 bg-brand-orange/20 px-4 py-2 text-sm text-brand-dark">
+        Рекомендуем сначала <b>dry-run</b> на лимите 100–200, чтобы увидеть сколько компаний/задач/заметок будет перенесено.
+      </div>
+    </div>
+
+    <div class="card card-pad space-y-3">
+      <form method="post" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {% csrf_token %}
+
+        <div class="flex items-end">
+          <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
+            <input type="checkbox" name="dry_run" value="on" {% if form.dry_run.value %}checked{% endif %} />
+            Только проверить (dry-run)
+          </label>
+        </div>
+
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Лимит компаний (опционально)</label>
+          <input class="input" type="number" name="limit_companies" value="{{ form.limit_companies.value|default:200 }}" min="1" max="5000" />
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-sm text-brand-dark/80 mb-1">Ответственный (amo)</label>
+          <select class="select w-full" name="responsible_user_id" required>
+            <option value="">— выберите —</option>
+            {% for u in users %}
+              <option value="{{ u.id }}" {% if form.responsible_user_id.value|stringformat:"s" == u.id|stringformat:"s" %}selected{% endif %}>{{ u.name }} (id={{ u.id }})</option>
+            {% endfor %}
+          </select>
+          <div class="text-xs muted-2 mt-1">Если не нашли человека — уточните имя в amo (в users list).</div>
+        </div>
+
+        <div class="md:col-span-2">
+          <label class="block text-sm text-brand-dark/80 mb-1">Кастомное поле компании</label>
+          <select class="select w-full" name="custom_field_id" required>
+            <option value="">— выберите поле —</option>
+            {% for f in fields %}
+              <option value="{{ f.id }}" {% if form.custom_field_id.value|stringformat:"s" == f.id|stringformat:"s" %}selected{% endif %}>{{ f.name }} (id={{ f.id }})</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Значение (текст)</label>
+          <input class="input" type="text" name="custom_value_label" value="{{ form.custom_value_label.value|default:'Новая CRM' }}" placeholder="Новая CRM" />
+          <div class="text-xs muted-2 mt-1">Обычно достаточно текста. Если поле мультиселект — можно указать enum id ниже.</div>
+        </div>
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Значение (enum id, опционально)</label>
+          <input class="input" type="number" name="custom_value_enum_id" value="{{ form.custom_value_enum_id.value|default:'' }}" placeholder="например 123456" />
+        </div>
+
+        <div class="flex items-end">
+          <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
+            <input type="checkbox" name="import_tasks" value="on" {% if form.import_tasks.value %}checked{% endif %} />
+            Импортировать задачи
+          </label>
+        </div>
+        <div class="flex items-end">
+          <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
+            <input type="checkbox" name="import_notes" value="on" {% if form.import_notes.value %}checked{% endif %} />
+            Импортировать заметки
+          </label>
+        </div>
+
+        <div class="md:col-span-2 flex gap-2">
+          <button class="btn btn-primary" type="submit">Запустить</button>
+          <a class="btn btn-outline" href="/settings/amocrm/">Назад</a>
+        </div>
+      </form>
+    </div>
+
+    {% if result %}
+      <div class="card card-pad">
+        <div class="font-medium mb-2">Результат</div>
+        <div class="text-sm text-brand-dark/80">
+          Компаний найдено у ответственного: <b>{{ result.companies_seen }}</b>,
+          по фильтру: <b>{{ result.companies_matched }}</b>,
+          создано: <b>{{ result.companies_created }}</b>,
+          обновлено: <b>{{ result.companies_updated }}</b>
+        </div>
+        <div class="text-sm text-brand-dark/80 mt-2">
+          Задач: найдено <b>{{ result.tasks_seen }}</b>, добавлено <b>{{ result.tasks_created }}</b>, пропущено (уже было) <b>{{ result.tasks_skipped_existing }}</b>
+        </div>
+        <div class="text-sm text-brand-dark/80 mt-1">
+          Заметок: найдено <b>{{ result.notes_seen }}</b>, добавлено <b>{{ result.notes_created }}</b>, пропущено (уже было) <b>{{ result.notes_skipped_existing }}</b>
+        </div>
+
+        {% if result.preview %}
+          <div class="mt-3">
+            <div class="text-sm text-brand-dark/70 mb-2">Превью компаний</div>
+            <div class="space-y-2 text-sm">
+              {% for p in result.preview %}
+                <div class="rounded-lg border p-3">
+                  <div class="font-medium">{{ p.company }}</div>
+                  <div class="text-xs muted-2 mt-1">amo id: {{ p.amo_id }}</div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
+
+
