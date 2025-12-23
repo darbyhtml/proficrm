@@ -1133,6 +1133,11 @@ def task_list(request: HttpRequest) -> HttpResponse:
     paginator = Paginator(qs, 25)
     page = paginator.get_page(request.GET.get("page"))
 
+    # Для шаблона: не делаем сложные выражения в {% if %}, чтобы не ловить TemplateSyntaxError.
+    # Проставим флаг прямо в объекты текущей страницы.
+    for t in page.object_list:
+        t.can_manage_status = _can_manage_task_status_ui(user, t)  # type: ignore[attr-defined]
+
     return render(request, "ui/task_list.html", {"now": now, "page": page, "status": status, "mine": mine, "overdue": overdue, "today": today})
 
 
