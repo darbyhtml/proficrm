@@ -1030,8 +1030,16 @@ def migrate_filtered(
                     
                     # custom_fields_values для телефонов/почт/должности
                     custom_fields = ac.get("custom_fields_values") or []
-                    for cf in custom_fields:
+                    # ОТЛАДКА: логируем структуру custom_fields для первых контактов
+                    debug_count_for_extraction = getattr(res, '_debug_contacts_logged', 0)
+                    if debug_count_for_extraction < 3:
+                        print(f"[AMOCRM DEBUG] Extracting data from custom_fields for contact {amo_contact_id}:")
+                        print(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}")
+                    
+                    for cf_idx, cf in enumerate(custom_fields):
                         if not isinstance(cf, dict):
+                            if debug_count_for_extraction < 3:
+                                print(f"  - [field {cf_idx}] Skipped: not a dict, type={type(cf)}")
                             continue
                         field_id = int(cf.get("field_id") or 0)
                         field_code = str(cf.get("code") or "").upper()  # PHONE, EMAIL в верхнем регистре
@@ -1039,33 +1047,59 @@ def migrate_filtered(
                         field_type = str(cf.get("type") or "").lower()
                         values = cf.get("values") or []
                         if not isinstance(values, list):
+                            if debug_count_for_extraction < 3:
+                                print(f"  - [field {cf_idx}] Skipped: values not a list, type={type(values)}")
                             continue
-                        for v in values:
+                        
+                        if debug_count_for_extraction < 3:
+                            print(f"  - [field {cf_idx}] field_id={field_id}, code={field_code}, name={field_name}, type={field_type}, values_count={len(values)}")
+                        
+                        for v_idx, v in enumerate(values):
                             # Значение может быть как dict (с ключом "value"), так и строкой
                             if isinstance(v, dict):
                                 val = str(v.get("value") or "").strip()
+                                enum_id = v.get("enum_id")
+                                enum_code = v.get("enum_code")
                             elif isinstance(v, str):
                                 val = v.strip()
+                                enum_id = None
+                                enum_code = None
                             else:
                                 val = str(v).strip() if v else ""
+                                enum_id = None
+                                enum_code = None
                             if not val:
                                 continue
+                            
                             # Телефоны: проверяем code="PHONE", type="phone", или название содержит "телефон"
-                            if (field_code == "PHONE" or field_type == "phone" or 
-                                field_code.lower() in ("phone", "phone_number", "mobile", "work_phone") or 
-                                "телефон" in field_name):
-                                phones.extend(_split_multi(val))
+                            is_phone = (field_code == "PHONE" or field_type == "phone" or 
+                                       field_code.lower() in ("phone", "phone_number", "mobile", "work_phone") or 
+                                       "телефон" in field_name)
                             # Email: проверяем code="EMAIL", type="email", или название содержит "email"/"почта"
-                            elif (field_code == "EMAIL" or field_type == "email" or
-                                  field_code.lower() in ("email", "email_address") or 
-                                  "email" in field_name or "почта" in field_name):
-                                emails.append(val)
+                            is_email = (field_code == "EMAIL" or field_type == "email" or
+                                       field_code.lower() in ("email", "email_address") or 
+                                       "email" in field_name or "почта" in field_name)
                             # Должность: проверяем code="POSITION" или название содержит "должность"/"позиция"
-                            elif (field_code == "POSITION" or
-                                  field_code.lower() in ("position", "job_title") or 
-                                  "должность" in field_name or "позиция" in field_name):
+                            is_position = (field_code == "POSITION" or
+                                          field_code.lower() in ("position", "job_title") or 
+                                          "должность" in field_name or "позиция" in field_name)
+                            
+                            if debug_count_for_extraction < 3:
+                                print(f"    [value {v_idx}] val={val[:50]}, is_phone={is_phone}, is_email={is_email}, is_position={is_position}")
+                            
+                            if is_phone:
+                                phones.extend(_split_multi(val))
+                                if debug_count_for_extraction < 3:
+                                    print(f"      -> Added to phones: {_split_multi(val)}")
+                            elif is_email:
+                                emails.append(val)
+                                if debug_count_for_extraction < 3:
+                                    print(f"      -> Added to emails: {val}")
+                            elif is_position:
                                 if not position:
                                     position = val
+                                    if debug_count_for_extraction < 3:
+                                        print(f"      -> Set position: {val}")
                     
                     # Убираем дубликаты
                     phones = list(dict.fromkeys(phones))  # сохраняет порядок
