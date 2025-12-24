@@ -189,6 +189,7 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
     fid_phone = _find_field_id(field_meta, codes=["phone"], name_contains=["телефон"])
     fid_email = _find_field_id(field_meta, codes=["email"], name_contains=["email", "e-mail", "почта"])
     fid_web = _find_field_id(field_meta, codes=["web"], name_contains=["сайт", "web"])
+    fid_director = _find_field_id(field_meta, name_contains=["руководитель", "директор", "генеральный"])
 
     return {
         "inn": first(fid_inn),
@@ -198,6 +199,7 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
         "phones": list_vals(fid_phone),
         "emails": list_vals(fid_email),
         "website": first(fid_web),
+        "director": first(fid_director),
     }
 
 
@@ -366,6 +368,44 @@ def fetch_notes_for_companies(client: AmoClient, company_ids: list[int]) -> list
     return out
 
 
+def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> list[dict[str, Any]]:
+    """
+    Получает контакты компаний из amoCRM.
+    В amoCRM контакты связаны с компаниями через /api/v4/companies/{id}/links (или через /api/v4/contacts?filter[company_id]=...)
+    """
+    if not company_ids:
+        return []
+    out: list[dict[str, Any]] = []
+    # amo v4: можно получить контакты через /api/v4/contacts?filter[company_id][]=...
+    # Но лучше через /api/v4/companies/{id}/links, если доступно
+    # Попробуем оба варианта
+    batch = 50
+    for i in range(0, len(company_ids), batch):
+        ids = company_ids[i : i + batch]
+        try:
+            # Вариант 1: через filter[company_id]
+            contacts = client.get_all_pages(
+                "/api/v4/contacts",
+                params={f"filter[company_id][]": ids},
+                embedded_key="contacts",
+                limit=250,
+                max_pages=200,
+            )
+            out.extend(contacts)
+        except Exception:
+            # Вариант 2: через links для каждой компании
+            for cid in ids:
+                try:
+                    links_data = client.get(f"/api/v4/companies/{int(cid)}/links") or {}
+                    embedded = links_data.get("_embedded") or {}
+                    contacts = embedded.get("contacts") or []
+                    if isinstance(contacts, list):
+                        out.extend(contacts)
+                except Exception:
+                    pass
+    return out
+
+
 def _upsert_company_from_amo(
     *,
     amo_company: dict[str, Any],
@@ -403,12 +443,18 @@ def _apply_spheres_from_custom(
     company: Company,
     field_id: int,
     dry_run: bool,
+    exclude_label: str | None = None,
 ) -> None:
+    """
+    Применяет сферы из кастомного поля amoCRM к компании.
+    exclude_label: если указано, исключает эту сферу из импорта (например "Новая CRM").
+    """
     values = _extract_custom_values(amo_company, field_id)
     labels = []
+    exclude_norm = _norm(exclude_label) if exclude_label else ""
     for v in values:
         lab = str(v.get("value") or "").strip()
-        if lab:
+        if lab and _norm(lab) != exclude_norm:
             labels.append(lab)
     if not labels or dry_run:
         return
@@ -492,6 +538,10 @@ def migrate_filtered(
             if extra.get("website") and not (comp.website or "").strip():
                 comp.website = extra["website"][:255]
                 changed = True
+            # Руководитель (contact_name) — заполняем из amo, если пусто
+            if extra.get("director") and not (comp.contact_name or "").strip():
+                comp.contact_name = extra["director"][:255]
+                changed = True
             if changed and not dry_run:
                 comp.save()
 
@@ -540,7 +590,8 @@ def migrate_filtered(
                 res.companies_created += 1
             else:
                 res.companies_updated += 1
-            _apply_spheres_from_custom(amo_company=amo_c, company=comp, field_id=sphere_field_id, dry_run=dry_run)
+            # Сферы: исключаем "Новая CRM" (она только для фильтра), но ставим остальные
+            _apply_spheres_from_custom(amo_company=amo_c, company=comp, field_id=sphere_field_id, dry_run=dry_run, exclude_label="Новая CRM")
             local_companies.append(comp)
             if res.preview is not None and len(res.preview) < 15:
                 res.preview.append({"company": comp.name, "amo_id": comp.amocrm_company_id})
@@ -774,6 +825,100 @@ def migrate_filtered(
                 res.notes_seen = 0
                 res.notes_created = 0
                 res.notes_skipped_existing = 0
+
+        # Импорт контактов компаний из amoCRM
+        if amo_ids:
+            try:
+                amo_contacts = fetch_contacts_for_companies(client, amo_ids)
+                for ac in amo_contacts:
+                    amo_contact_id = int(ac.get("id") or 0)
+                    if not amo_contact_id:
+                        continue
+                    # Связь контакта с компанией: в amo это через links или company_id в самом контакте
+                    company_ids_in_contact = []
+                    # Вариант 1: company_id в самом контакте
+                    cid = int(ac.get("company_id") or 0)
+                    if cid:
+                        company_ids_in_contact.append(cid)
+                    # Вариант 2: через _embedded/companies
+                    embedded = ac.get("_embedded") or {}
+                    companies = embedded.get("companies") or []
+                    if isinstance(companies, list):
+                        for c in companies:
+                            cid2 = int(c.get("id") or 0)
+                            if cid2:
+                                company_ids_in_contact.append(cid2)
+                    if not company_ids_in_contact:
+                        continue
+                    # Находим локальную компанию
+                    local_company = None
+                    for cid3 in company_ids_in_contact:
+                        local_company = Company.objects.filter(amocrm_company_id=cid3).first()
+                        if local_company:
+                            break
+                    if not local_company:
+                        continue
+                    # Проверяем, не импортировали ли уже этот контакт
+                    existing_contact = Contact.objects.filter(amocrm_contact_id=amo_contact_id, company=local_company).first()
+                    if existing_contact:
+                        continue
+                    # Извлекаем данные контакта
+                    first_name = str(ac.get("first_name") or "").strip()
+                    last_name = str(ac.get("last_name") or "").strip()
+                    # custom_fields_values для телефонов/почт/должности
+                    custom_fields = ac.get("custom_fields_values") or []
+                    phones = []
+                    emails = []
+                    position = ""
+                    for cf in custom_fields:
+                        if not isinstance(cf, dict):
+                            continue
+                        field_id = int(cf.get("field_id") or 0)
+                        field_code = str(cf.get("code") or "").lower()
+                        field_name = str(cf.get("name") or "").lower()
+                        values = cf.get("values") or []
+                        if not isinstance(values, list):
+                            continue
+                        for v in values:
+                            val = str(v.get("value") or "").strip()
+                            if not val:
+                                continue
+                            # Телефоны
+                            if field_code in ("phone", "phone_number", "mobile", "work_phone") or "телефон" in field_name:
+                                phones.extend(_split_multi(val))
+                            # Email
+                            elif field_code in ("email", "email_address") or "email" in field_name or "почта" in field_name:
+                                emails.append(val)
+                            # Должность
+                            elif field_code in ("position", "job_title") or "должность" in field_name or "позиция" in field_name:
+                                if not position:
+                                    position = val
+                    # Создаём контакт
+                    contact = Contact(
+                        company=local_company,
+                        first_name=first_name[:120],
+                        last_name=last_name[:120],
+                        position=position[:255],
+                        amocrm_contact_id=amo_contact_id,
+                        raw_fields={"source": "amo_api"},
+                    )
+                    if not dry_run:
+                        contact.save()
+                        # Добавляем телефоны и почты
+                        for p in phones:
+                            pv = str(p).strip()[:50]
+                            if pv and not ContactPhone.objects.filter(contact=contact, value=pv).exists():
+                                ContactPhone.objects.create(contact=contact, type=ContactPhone.PhoneType.WORK, value=pv)
+                        for e in emails:
+                            ev = str(e).strip()[:254]
+                            if ev and not ContactEmail.objects.filter(contact=contact, value__iexact=ev).exists():
+                                try:
+                                    ContactEmail.objects.create(contact=contact, type=ContactEmail.EmailType.WORK, value=ev)
+                                except Exception:
+                                    pass
+            except Exception:
+                # Если контакты недоступны — не валим всю миграцию
+                pass
 
         if dry_run:
             transaction.set_rollback(True)

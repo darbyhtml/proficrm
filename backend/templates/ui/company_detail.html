@@ -231,6 +231,10 @@
             <div>{{ company.activity_kind|default:"—" }}</div>
           </div>
           <div>
+            <div class="text-brand-dark/50">Руководитель</div>
+            <div>{{ company.contact_name|default:"—" }}</div>
+          </div>
+          <div>
             <div class="text-brand-dark/50">Состояние</div>
             <div class="flex flex-wrap items-center gap-2">
               {% if is_cold_company %}
