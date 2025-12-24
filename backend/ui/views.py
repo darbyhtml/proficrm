@@ -26,6 +26,7 @@ from notifications.models import Notification
 from notifications.service import notify
 from phonebridge.models import CallRequest
 import mimetypes
+import os
 from datetime import date as _date
 
 from .forms import (
@@ -2896,13 +2897,11 @@ def settings_import(request: HttpRequest) -> HttpResponse:
             # Сохраняем во временный файл, чтобы использовать общий импортёр
             fd, tmp_path = tempfile.mkstemp(suffix=".csv")
             try:
-                import os
                 Path(tmp_path).write_bytes(f.read())
                 os.close(fd)  # Закрываем файловый дескриптор после записи
                 fd = None
             except Exception:
                 if fd:
-                    import os
                     os.close(fd)
                 raise
 
@@ -2955,13 +2954,11 @@ def settings_import_tasks(request: HttpRequest) -> HttpResponse:
 
             fd, tmp_path = tempfile.mkstemp(suffix=".ics")
             try:
-                import os
                 Path(tmp_path).write_bytes(f.read())
                 os.close(fd)  # Закрываем файловый дескриптор после записи
                 fd = None
             except Exception:
                 if fd:
-                    import os
                     os.close(fd)
                 raise
 
