@@ -1,0 +1,57 @@
+{% extends "ui/base.html" %}
+{% block title %}Редактировать задачу — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div>
+      <div class="text-sm text-brand-dark/70"><a class="underline" href="/tasks/">Задачи</a> /</div>
+      <h1 class="text-2xl font-semibold">Редактировать задачу</h1>
+      <div class="text-sm text-brand-dark/70">
+        {% if task.company %}Компания: <a class="link" href="/companies/{{ task.company.id }}/">{{ task.company.name }}</a>{% endif %}
+      </div>
+    </div>
+
+    <form method="post" class="bg-white border rounded-2xl p-4 space-y-3">
+      {% csrf_token %}
+
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Название</label>
+        {{ form.title }}
+      </div>
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Описание</label>
+        {{ form.description }}
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Тип</label>
+          {{ form.type }}
+        </div>
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Дедлайн</label>
+          {{ form.due_at }}
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Повтор (RRULE)</label>
+        {{ form.recurrence_rrule }}
+        <div class="text-xs text-brand-dark/70 mt-1">Можно оставить пустым.</div>
+      </div>
+
+      {% if form.errors %}
+        <div class="rounded-lg border border-brand-orange/60 bg-brand-orange/20 p-3 text-sm text-brand-dark">
+          Проверь поля формы.
+        </div>
+      {% endif %}
+
+      <div class="flex gap-2">
+        <button class="btn btn-primary" type="submit">Сохранить</button>
+        <a class="btn btn-outline" href="/tasks/">Отмена</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}
+
+

@@ -185,6 +185,25 @@ class TaskForm(forms.ModelForm):
             "recurrence_rrule": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
 
+
+class TaskEditForm(forms.ModelForm):
+    due_at = forms.DateTimeField(
+        required=False,
+        input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"],
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local", "class": "w-full rounded-lg border px-3 py-2"}),
+        label="Дедлайн",
+    )
+
+    class Meta:
+        model = Task
+        fields = ["title", "description", "type", "due_at", "recurrence_rrule"]
+        widgets = {
+            "title": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "description": forms.Textarea(attrs={"rows": 4, "class": "w-full rounded-lg border px-3 py-2"}),
+            "type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "recurrence_rrule": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+        }
+
 class BranchForm(forms.ModelForm):
     class Meta:
         model = Branch

@@ -38,6 +38,7 @@ from .forms import (
     ContactForm,
     ContactPhoneFormSet,
     TaskForm,
+    TaskEditForm,
     BranchForm,
     CompanySphereForm,
     CompanyStatusForm,
@@ -1309,6 +1310,8 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         .select_related("assigned_to", "type")
         .order_by("-created_at")[:25]
     )
+    for t in tasks:
+        t.can_edit_task = _can_edit_task_ui(user, t)  # type: ignore[attr-defined]
 
     note_form = CompanyNoteForm()
     activity = []
@@ -2426,6 +2429,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
     # Проставим флаг прямо в объекты текущей страницы.
     for t in page.object_list:
         t.can_manage_status = _can_manage_task_status_ui(user, t)  # type: ignore[attr-defined]
+        t.can_edit_task = _can_edit_task_ui(user, t)  # type: ignore[attr-defined]
 
     return render(
         request,
@@ -2580,6 +2584,23 @@ def _can_manage_task_status_ui(user: User, task: Task) -> bool:
     return False
 
 
+def _can_edit_task_ui(user: User, task: Task) -> bool:
+    # Создатель всегда может редактировать свою задачу
+    if task.created_by_id and task.created_by_id == user.id:
+        return True
+    # Админ/управляющий — любые задачи
+    if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+        return True
+    # РОП/директор — задачи своего филиала
+    if user.role in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR) and user.branch_id and task.company_id:
+        try:
+            if getattr(task.company, "branch_id", None) == user.branch_id:
+                return True
+        except Exception:
+            pass
+    return False
+
+
 @login_required
 def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
     if request.method != "POST":
@@ -2628,6 +2649,34 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
             meta={"status": new_status},
         )
     return redirect(request.META.get("HTTP_REFERER") or "/tasks/")
+
+
+@login_required
+def task_edit(request: HttpRequest, task_id) -> HttpResponse:
+    user: User = request.user
+    task = get_object_or_404(Task.objects.select_related("company", "assigned_to", "created_by", "type"), id=task_id)
+    if not _can_edit_task_ui(user, task):
+        messages.error(request, "Нет прав на редактирование этой задачи.")
+        return redirect("task_list")
+
+    if request.method == "POST":
+        form = TaskEditForm(request.POST, instance=task)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Задача обновлена.")
+            log_event(
+                actor=user,
+                verb=ActivityEvent.Verb.UPDATE,
+                entity_type="task",
+                entity_id=task.id,
+                company_id=task.company_id,
+                message=f"Обновлена задача: {task.title}",
+            )
+            return redirect("task_list")
+    else:
+        form = TaskEditForm(instance=task)
+
+    return render(request, "ui/task_edit.html", {"form": form, "task": task})
 
 
 def _require_admin(user: User) -> bool:

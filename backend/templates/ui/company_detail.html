@@ -527,42 +527,44 @@
                       {% endif %}
                     </div>
                   </div>
-                  {% if can_edit_company and is_cold_company %}
+                  {% if can_edit_company %}
                     <div class="flex items-center gap-2">
-                      <form method="post" action="/contacts/{{ c.id }}/cold-call/toggle/">
-                        {% csrf_token %}
-                        <button
-                          class="btn btn-outline js-cold-mark transition-opacity duration-300 {% if not c.cold_mark_available and not c.is_cold_call %}opacity-50 cursor-not-allowed{% endif %}"
-                          style="padding:.25rem .5rem;font-size:.75rem;{% if c.is_cold_call %}background:#003D38;color:#fff;border-color:rgba(0,61,56,.35){% endif %}"
-                          type="submit"
-                          data-cold-btn="contact-{{ c.id }}"
-                          data-cold-marked="{% if c.is_cold_call %}1{% else %}0{% endif %}"
-                          {% if c.is_cold_call %}
-                            disabled
-                            title="Холодный уже отмечен (один раз)"
-                            aria-label="Холодный уже отмечен (один раз)"
-                          {% elif not c.cold_mark_available %}
-                            data-disabled="1"
-                            title="{% if c.cold_mark_unlocks_at %}Станет доступно {{ c.cold_mark_unlocks_at|date:'d.m.Y H:i:s' }}{% elif c.cold_mark_deadline %}Можно отметить до {{ c.cold_mark_deadline|date:'d.m.Y H:i' }}{% else %}Можно отметить только в течение 8 часов после звонка{% endif %}"
-                            aria-label="Недоступно"
-                            aria-disabled="true"
-                          {% else %}
-                            title="Отметить холодный (доступно 8 часов после звонка, через 10 сек)"
-                            aria-label="Отметить холодный (доступно 8 часов после звонка, через 10 сек)"
-                          {% endif %}
-                        >
-                          {% if c.is_cold_call %}
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                              <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                          {% else %}
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                              <path d="M12 2v20M4 6l16 12M20 6 4 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                              <path d="M6 4l12 16M18 4 6 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".35"/>
-                            </svg>
-                          {% endif %}
-                        </button>
-                      </form>
+                      {% if is_cold_company %}
+                        <form method="post" action="/contacts/{{ c.id }}/cold-call/toggle/">
+                          {% csrf_token %}
+                          <button
+                            class="btn btn-outline js-cold-mark transition-opacity duration-300 {% if not c.cold_mark_available and not c.is_cold_call %}opacity-50 cursor-not-allowed{% endif %}"
+                            style="padding:.25rem .5rem;font-size:.75rem;{% if c.is_cold_call %}background:#003D38;color:#fff;border-color:rgba(0,61,56,.35){% endif %}"
+                            type="submit"
+                            data-cold-btn="contact-{{ c.id }}"
+                            data-cold-marked="{% if c.is_cold_call %}1{% else %}0{% endif %}"
+                            {% if c.is_cold_call %}
+                              disabled
+                              title="Холодный уже отмечен (один раз)"
+                              aria-label="Холодный уже отмечен (один раз)"
+                            {% elif not c.cold_mark_available %}
+                              data-disabled="1"
+                              title="{% if c.cold_mark_unlocks_at %}Станет доступно {{ c.cold_mark_unlocks_at|date:'d.m.Y H:i:s' }}{% elif c.cold_mark_deadline %}Можно отметить до {{ c.cold_mark_deadline|date:'d.m.Y H:i' }}{% else %}Можно отметить только в течение 8 часов после звонка{% endif %}"
+                              aria-label="Недоступно"
+                              aria-disabled="true"
+                            {% else %}
+                              title="Отметить холодный (доступно 8 часов после звонка, через 10 сек)"
+                              aria-label="Отметить холодный (доступно 8 часов после звонка, через 10 сек)"
+                            {% endif %}
+                          >
+                            {% if c.is_cold_call %}
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                              </svg>
+                            {% else %}
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path d="M12 2v20M4 6l16 12M20 6 4 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M6 4l12 16M18 4 6 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".35"/>
+                              </svg>
+                            {% endif %}
+                          </button>
+                        </form>
+                      {% endif %}
                       <a class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" href="/contacts/{{ c.id }}/edit/" title="Редактировать" aria-label="Редактировать">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                           <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -629,8 +631,20 @@
                       {% if t.assigned_to %} · {{ t.assigned_to }}{% endif %}
                     </div>
                   </div>
-                  <div class="text-xs text-brand-dark/70">
-                    {% if t.due_at %}дедлайн: {{ t.due_at }}{% else %}—{% endif %}
+                  <div class="text-right">
+                    <div class="text-xs text-brand-dark/70">
+                      {% if t.due_at %}дедлайн: {{ t.due_at }}{% else %}—{% endif %}
+                    </div>
+                    {% if t.can_edit_task %}
+                      <div class="mt-1">
+                        <a class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" href="/tasks/{{ t.id }}/edit/" title="Редактировать" aria-label="Редактировать">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                        </a>
+                      </div>
+                    {% endif %}
                   </div>
                 </div>
                 {% if t.description %}
@@ -730,7 +744,7 @@
                   {% endif %}
                 </div>
               </div>
-              <div class="text-sm whitespace-pre-line">{{ n.text }}</div>
+              <div class="text-sm whitespace-pre-line wrap-anywhere">{{ n.text }}</div>
               {% if n.attachment %}
                 <div class="mt-2 rounded-lg border border-brand-soft bg-brand-soft/15 px-3 py-2">
                   <div class="flex items-center justify-between gap-2">

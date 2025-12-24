@@ -82,15 +82,26 @@
                   <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
                 </td>
                 <td>
-                  {% if t.can_manage_status %}
-                    <form method="post" action="/tasks/{{ t.id }}/status/" class="flex flex-wrap gap-2">
-                      {% csrf_token %}
-                      <button name="status" value="in_progress" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem">В работу</button>
-                      <button name="status" value="done" class="btn btn-primary" style="padding:.35rem .6rem;font-size:.75rem">Выполнено</button>
-                    </form>
-                  {% else %}
-                    <span class="muted-2 text-xs">—</span>
-                  {% endif %}
+                  <div class="flex flex-wrap items-center gap-2">
+                    {% if t.can_edit_task %}
+                      <a class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" href="/tasks/{{ t.id }}/edit/" title="Редактировать" aria-label="Редактировать">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                      </a>
+                    {% endif %}
+                    {% if t.can_manage_status %}
+                      <form method="post" action="/tasks/{{ t.id }}/status/" class="flex flex-wrap gap-2">
+                        {% csrf_token %}
+                        <button name="status" value="in_progress" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem">В работу</button>
+                        <button name="status" value="done" class="btn btn-primary" style="padding:.35rem .6rem;font-size:.75rem">Выполнено</button>
+                      </form>
+                    {% endif %}
+                    {% if not t.can_edit_task and not t.can_manage_status %}
+                      <span class="muted-2 text-xs">—</span>
+                    {% endif %}
+                  </div>
                 </td>
               </tr>
             {% empty %}

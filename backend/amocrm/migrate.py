@@ -495,6 +495,20 @@ def migrate_filtered(
             if changed and not dry_run:
                 comp.save()
 
+            # Нормализация уже заполненных значений (часто там "номер1, номер2"):
+            # оставляем в "Данные" только первый, остальные переносим в служебный контакт.
+            norm_phone_parts = _split_multi(comp.phone or "")
+            norm_email_parts = _split_multi(comp.email or "")
+            if len(norm_phone_parts) > 1 and not dry_run:
+                comp.phone = norm_phone_parts[0][:50]
+                comp.save(update_fields=["phone"])
+                # добавим остальные как контактные телефоны
+                phones = list(dict.fromkeys([*phones, *norm_phone_parts]))
+            if len(norm_email_parts) > 1 and not dry_run:
+                comp.email = norm_email_parts[0][:254]
+                comp.save(update_fields=["email"])
+                emails = list(dict.fromkeys([*emails, *norm_email_parts]))
+
             # Остальные телефоны/почты — в "Контакты" отдельной записью (stub)
             extra_phones = [p for p in phones[1:] if str(p).strip()]
             extra_emails = [e for e in emails[1:] if str(e).strip()]
