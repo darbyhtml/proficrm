@@ -1254,9 +1254,9 @@ def migrate_filtered(
                                 custom_fields_debug.append({
                                     "index": cf_idx,
                                     "field_id": cf.get("field_id"),
-                                    "code": cf.get("code"),
-                                    "name": cf.get("name"),
-                                    "type": cf.get("type"),
+                                    "code": cf.get("field_code"),  # ВАЖНО: используем field_code, не code
+                                    "name": cf.get("field_name"),  # ВАЖНО: используем field_name, не name
+                                    "type": cf.get("field_type"),  # ВАЖНО: используем field_type, не type
                                     "values_count": len(cf.get("values") or []),
                                     "first_value": first_val,
                                 })
