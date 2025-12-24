@@ -375,38 +375,53 @@ def fetch_notes_for_companies(client: AmoClient, company_ids: list[int]) -> list
 def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> list[dict[str, Any]]:
     """
     Получает контакты компаний из amoCRM.
-    В amoCRM контакты связаны с компаниями через /api/v4/companies/{id}/links (или через /api/v4/contacts?filter[company_id]=...)
+    В amoCRM контакты связаны с компаниями через /api/v4/companies/{id}/links.
+    Согласно документации: https://www.amocrm.ru/developers/content/crm_platform/contacts-api
     """
     if not company_ids:
         return []
     out: list[dict[str, Any]] = []
-    # amo v4: можно получить контакты через /api/v4/contacts?filter[company_id][]=...
-    # Но лучше через /api/v4/companies/{id}/links, если доступно
-    # Попробуем оба варианта
-    batch = 50
-    for i in range(0, len(company_ids), batch):
-        ids = company_ids[i : i + batch]
+    # Используем /api/v4/companies/{id}/links для каждой компании отдельно
+    # Это более надежный способ, чем filter[company_id][], который может вернуть все контакты
+    for cid in company_ids:
         try:
-            # Вариант 1: через filter[company_id]
-            contacts = client.get_all_pages(
-                "/api/v4/contacts",
-                params={f"filter[company_id][]": ids},
-                embedded_key="contacts",
-                limit=250,
-                max_pages=200,
-            )
-            out.extend(contacts)
-        except Exception:
-            # Вариант 2: через links для каждой компании
-            for cid in ids:
-                try:
-                    links_data = client.get(f"/api/v4/companies/{int(cid)}/links") or {}
-                    embedded = links_data.get("_embedded") or {}
-                    contacts = embedded.get("contacts") or []
-                    if isinstance(contacts, list):
+            links_data = client.get(f"/api/v4/companies/{int(cid)}/links") or {}
+            embedded = links_data.get("_embedded") or {}
+            # В links могут быть contact_ids, но не полные объекты контактов
+            contact_ids = []
+            if "contacts" in embedded:
+                contacts_data = embedded.get("contacts") or []
+                if isinstance(contacts_data, list):
+                    # Это может быть список ID или список объектов
+                    for item in contacts_data:
+                        if isinstance(item, dict):
+                            contact_id = int(item.get("id") or item.get("contact_id") or 0)
+                            if contact_id:
+                                contact_ids.append(contact_id)
+                        elif isinstance(item, int):
+                            contact_ids.append(item)
+            
+            # Теперь получаем полные данные контактов по их ID
+            if contact_ids:
+                # Получаем контакты батчами
+                batch = 50
+                for i in range(0, len(contact_ids), batch):
+                    ids_batch = contact_ids[i : i + batch]
+                    try:
+                        # Согласно документации amoCRM, фильтр по ID: filter[id][]
+                        contacts = client.get_all_pages(
+                            "/api/v4/contacts",
+                            params={"filter[id][]": ids_batch},  # правильный формат фильтра
+                            embedded_key="contacts",
+                            limit=250,
+                            max_pages=10,
+                        )
                         out.extend(contacts)
-                except Exception:
-                    pass
+                    except Exception as e:
+                        print(f"[AMOCRM DEBUG] Error fetching contacts for company {cid}: {e}")
+        except Exception as e:
+            print(f"[AMOCRM DEBUG] Error fetching links for company {cid}: {e}")
+            pass
     return out
 
 
