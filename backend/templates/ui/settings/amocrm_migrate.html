@@ -205,31 +205,32 @@
                         </div>
                       {% else %}
                         <div class="font-medium mb-2">{{ c.last_name }} {{ c.first_name }} (amo id: {{ c.amo_contact_id }})</div>
-                      <div class="space-y-1">
-                        <div><b>Телефоны найдены:</b> {{ c.phones_found|default:"—" }}</div>
-                        <div><b>Email найдены:</b> {{ c.emails_found|default:"—" }}</div>
-                        <div><b>Должность найдена:</b> {{ c.position_found|default:"—" }}</div>
-                        <div><b>custom_fields_values:</b> {{ c.custom_fields_count }} полей</div>
-                        {% if c.custom_fields_sample %}
-                          <div class="mt-2">
-                            <b>Примеры полей:</b>
-                            <div class="space-y-1 mt-1 pl-2 border-l-2">
-                              {% for cf in c.custom_fields_sample %}
-                                <div>
-                                  [{{ cf.index }}] <b>code:</b> {{ cf.code|default:"—" }}, 
-                                  <b>name:</b> {{ cf.name|default:"—" }}, 
-                                  <b>type:</b> {{ cf.type|default:"—" }}, 
-                                  <b>values:</b> {{ cf.values_count }}, 
-                                  <b>first_value:</b> {{ cf.first_value|default:"—"|truncatewords:10 }}
-                                </div>
-                              {% endfor %}
+                        <div class="space-y-1">
+                          <div><b>Телефоны найдены:</b> {{ c.phones_found|default:"—" }}</div>
+                          <div><b>Email найдены:</b> {{ c.emails_found|default:"—" }}</div>
+                          <div><b>Должность найдена:</b> {{ c.position_found|default:"—" }}</div>
+                          <div><b>custom_fields_values:</b> {{ c.custom_fields_count }} полей</div>
+                          {% if c.custom_fields_sample %}
+                            <div class="mt-2">
+                              <b>Примеры полей:</b>
+                              <div class="space-y-1 mt-1 pl-2 border-l-2">
+                                {% for cf in c.custom_fields_sample %}
+                                  <div>
+                                    [{{ cf.index }}] <b>code:</b> {{ cf.code|default:"—" }}, 
+                                    <b>name:</b> {{ cf.name|default:"—" }}, 
+                                    <b>type:</b> {{ cf.type|default:"—" }}, 
+                                    <b>values:</b> {{ cf.values_count }}, 
+                                    <b>first_value:</b> {{ cf.first_value|default:"—"|truncatewords:10 }}
+                                  </div>
+                                {% endfor %}
+                              </div>
                             </div>
+                          {% endif %}
+                          <div class="mt-1 text-xs muted-2">
+                            <b>Ключи контакта:</b> {{ c.raw_contact_keys|join:", " }}
                           </div>
-                        {% endif %}
-                        <div class="mt-1 text-xs muted-2">
-                          <b>Ключи контакта:</b> {{ c.raw_contact_keys|join:", " }}
                         </div>
-                      </div>
+                      {% endif %}
                     </div>
                   {% endfor %}
                 </div>
