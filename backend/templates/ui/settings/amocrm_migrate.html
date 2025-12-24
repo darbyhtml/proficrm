@@ -235,6 +235,12 @@
                             <b>has_phone_field:</b> {{ c.has_phone_field|yesno:"Да,Нет" }}, 
                             <b>has_email_field:</b> {{ c.has_email_field|yesno:"Да,Нет" }}
                           </div>
+                          {% if c.full_structure %}
+                            <div class="mt-2 p-2 bg-gray-50 rounded text-xs font-mono overflow-auto max-h-60">
+                              <b>Полная структура контакта (JSON):</b>
+                              <pre class="whitespace-pre-wrap break-words">{{ c.full_structure }}</pre>
+                            </div>
+                          {% endif %}
                         </div>
                       {% endif %}
                     </div>
