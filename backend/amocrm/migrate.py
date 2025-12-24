@@ -1138,8 +1138,14 @@ def migrate_filtered(
                         print(f"  - position found: {position}")
                         print(f"  - custom_fields_values count: {len(custom_fields)}")
                         if custom_fields:
-                            print(f"  - custom_fields sample (first): {custom_fields[0]}")
+                            print(f"  - custom_fields sample (first 3):")
+                            for idx, cf in enumerate(custom_fields[:3]):
+                                print(f"    [{idx}] field_id={cf.get('field_id')}, code={cf.get('code')}, name={cf.get('name')}, type={cf.get('type')}, values={cf.get('values')}")
+                        else:
+                            print(f"  - ⚠️ custom_fields_values пуст или отсутствует")
                         print(f"  - raw contact top-level keys: {list(ac.keys())[:15]}")
+                        print(f"  - has phone field: {bool(ac.get('phone'))}")
+                        print(f"  - has email field: {bool(ac.get('email'))}")
                     
                     # Создаём контакт
                     contact = Contact(
