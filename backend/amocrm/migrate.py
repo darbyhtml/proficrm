@@ -1092,9 +1092,9 @@ def migrate_filtered(
                         res.contacts_preview = []
                     # Увеличиваем лимит до 10 для лучшей отладки
                     if debug_count < 10:
-                        # Собираем информацию о custom_fields для отладки
+                        # Собираем информацию о custom_fields для отладки (первые 5 полей для лучшей диагностики)
                         custom_fields_debug = []
-                        for cf_idx, cf in enumerate(custom_fields[:3]):  # первые 3 поля
+                        for cf_idx, cf in enumerate(custom_fields[:5]):  # первые 5 полей
                             if isinstance(cf, dict):
                                 first_val = ""
                                 if cf.get("values") and len(cf.get("values", [])) > 0:
