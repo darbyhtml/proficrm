@@ -3125,6 +3125,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                 "import_tasks": True,
                 "import_notes": True,
                 "import_contacts": False,  # по умолчанию выключено
+                "import_contacts": False,  # по умолчанию выключено
             }
         )
 
