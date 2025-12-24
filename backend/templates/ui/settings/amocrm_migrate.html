@@ -164,11 +164,35 @@
             {% endif %}
             {% if result.contacts_preview %}
               <div class="text-sm text-brand-dark/80 mt-4">
-                <div class="font-medium">Контакты (первые 5) — отладка</div>
+                <div class="font-medium">Контакты — отладка</div>
                 <div class="space-y-2 mt-2">
                   {% for c in result.contacts_preview %}
-                    <div class="rounded-lg border p-3 text-xs">
-                      <div class="font-medium mb-2">{{ c.last_name }} {{ c.first_name }} (amo id: {{ c.amo_contact_id }})</div>
+                    <div class="rounded-lg border p-3 text-xs {% if c.status == 'NO_CONTACTS_FOUND' or c.status == 'SKIPPED_NO_COMPANY_LINK' or c.status == 'SKIPPED_NO_LOCAL_COMPANY' %}bg-red-50{% endif %}">
+                      {% if c.status == 'NO_CONTACTS_FOUND' %}
+                        <div class="font-medium mb-2 text-red-600">⚠️ Контакты не найдены</div>
+                        <div class="space-y-1">
+                          <div><b>Проверено компаний:</b> {{ c.companies_checked }}</div>
+                          <div><b>ID компаний:</b> {{ c.company_ids|join:", " }}</div>
+                          <div class="text-xs muted-2 mt-1">{{ c.message }}</div>
+                        </div>
+                      {% elif c.status == 'SKIPPED_NO_COMPANY_LINK' %}
+                        <div class="font-medium mb-2 text-orange-600">⚠️ Пропущен: нет связи с компанией</div>
+                        <div class="space-y-1">
+                          <div><b>Контакт:</b> {{ c.last_name }} {{ c.first_name }} (amo id: {{ c.amo_contact_id }})</div>
+                          <div><b>company_id в контакте:</b> {{ c.company_id_in_contact|default:"—" }}</div>
+                          <div><b>Входит в amo_ids_set:</b> {{ c.company_id_in_amo_ids_set|yesno:"Да,Нет" }}</div>
+                          <div><b>Есть company_id:</b> {{ c.has_company_id|yesno:"Да,Нет" }}</div>
+                          <div><b>Есть _embedded.companies:</b> {{ c.has_embedded_companies|yesno:"Да,Нет" }}</div>
+                          <div class="text-xs muted-2 mt-1"><b>Ключи контакта:</b> {{ c.raw_contact_keys|join:", " }}</div>
+                        </div>
+                      {% elif c.status == 'SKIPPED_NO_LOCAL_COMPANY' %}
+                        <div class="font-medium mb-2 text-orange-600">⚠️ Пропущен: локальная компания не найдена</div>
+                        <div class="space-y-1">
+                          <div><b>Контакт:</b> {{ c.last_name }} {{ c.first_name }} (amo id: {{ c.amo_contact_id }})</div>
+                          <div><b>ID компаний в контакте:</b> {{ c.company_ids_in_contact|join:", "|default:"—" }}</div>
+                        </div>
+                      {% else %}
+                        <div class="font-medium mb-2">{{ c.last_name }} {{ c.first_name }} (amo id: {{ c.amo_contact_id }})</div>
                       <div class="space-y-1">
                         <div><b>Телефоны найдены:</b> {{ c.phones_found|default:"—" }}</div>
                         <div><b>Email найдены:</b> {{ c.emails_found|default:"—" }}</div>
