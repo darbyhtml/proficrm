@@ -120,25 +120,40 @@ def fetch_tasks_for_companies(client: AmoClient, company_ids: list[int]) -> list
     if not company_ids:
         return []
     # amo v4 tasks: /api/v4/tasks?filter[entity_type]=companies&filter[entity_id][]=...
-    return client.get_all_pages(
-        "/api/v4/tasks",
-        params={f"filter[entity_type]": "companies", f"filter[entity_id]": company_ids},
-        embedded_key="tasks",
-        limit=250,
-        max_pages=200,
-    )
+    # Важно: режем на пачки, иначе URL может стать слишком длинным.
+    out: list[dict[str, Any]] = []
+    batch = 50
+    for i in range(0, len(company_ids), batch):
+        ids = company_ids[i : i + batch]
+        out.extend(
+            client.get_all_pages(
+                "/api/v4/tasks",
+                params={f"filter[entity_type]": "companies", f"filter[entity_id][]": ids},
+                embedded_key="tasks",
+                limit=250,
+                max_pages=200,
+            )
+        )
+    return out
 
 
 def fetch_notes_for_companies(client: AmoClient, company_ids: list[int]) -> list[dict[str, Any]]:
     if not company_ids:
         return []
-    return client.get_all_pages(
-        "/api/v4/notes",
-        params={f"filter[entity_type]": "companies", f"filter[entity_id]": company_ids},
-        embedded_key="notes",
-        limit=250,
-        max_pages=200,
-    )
+    # В amoCRM заметки обычно берутся не общим /notes, а из сущности:
+    # /api/v4/companies/{id}/notes
+    out: list[dict[str, Any]] = []
+    for cid in company_ids:
+        out.extend(
+            client.get_all_pages(
+                f"/api/v4/companies/{int(cid)}/notes",
+                params={},
+                embedded_key="notes",
+                limit=250,
+                max_pages=50,
+            )
+        )
+    return out
 
 
 def _upsert_company_from_amo(
@@ -279,31 +294,43 @@ def migrate_filtered(
                 res.tasks_created += 1
 
         if import_notes and amo_ids:
-            notes = fetch_notes_for_companies(client, amo_ids)
-            res.notes_seen = len(notes)
-            for n in notes:
-                nid = int(n.get("id") or 0)
-                if nid and CompanyNote.objects.filter(external_source="amo_api", external_uid=str(nid)).exists():
-                    res.notes_skipped_existing += 1
-                    continue
-                entity_id = int((n.get("entity_id") or 0) or 0)
-                company = Company.objects.filter(amocrm_company_id=entity_id).first() if entity_id else None
-                if not company:
-                    continue
-                text = str(n.get("text") or n.get("note") or n.get("params") or "").strip()
-                if not text:
-                    # минимальный текст, чтобы заметка была видна
-                    text = f"Импорт из amo (note id {nid})"
-                note = CompanyNote(
-                    company=company,
-                    author=actor,
-                    text=text[:8000],
-                    external_source="amo_api",
-                    external_uid=str(nid) if nid else "",
-                )
-                if not dry_run:
-                    note.save()
-                res.notes_created += 1
+            try:
+                notes = fetch_notes_for_companies(client, amo_ids)
+                res.notes_seen = len(notes)
+                for n in notes:
+                    nid = int(n.get("id") or 0)
+                    if nid and CompanyNote.objects.filter(external_source="amo_api", external_uid=str(nid)).exists():
+                        res.notes_skipped_existing += 1
+                        continue
+
+                    # В карточечных notes entity_id часто = id компании в amo
+                    entity_id = int((n.get("entity_id") or 0) or 0)
+                    company = Company.objects.filter(amocrm_company_id=entity_id).first() if entity_id else None
+                    if not company:
+                        continue
+
+                    # В разных типах notes текст может лежать по-разному
+                    params = n.get("params") or {}
+                    text = str(n.get("text") or params.get("text") or n.get("note") or "").strip()
+                    if not text:
+                        # минимальный текст, чтобы заметка была видна
+                        text = f"Импорт из amo (note id {nid})"
+
+                    note = CompanyNote(
+                        company=company,
+                        author=actor,
+                        text=text[:8000],
+                        external_source="amo_api",
+                        external_uid=str(nid) if nid else "",
+                    )
+                    if not dry_run:
+                        note.save()
+                    res.notes_created += 1
+            except Exception:
+                # Если заметки недоступны в конкретном аккаунте/тарифе/правах — не валим всю миграцию.
+                res.notes_seen = 0
+                res.notes_created = 0
+                res.notes_skipped_existing = 0
 
         if dry_run:
             transaction.set_rollback(True)
