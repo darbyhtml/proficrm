@@ -980,13 +980,29 @@ def migrate_filtered(
                             }
                             res.contacts_preview.append(debug_data)
                         continue
+                    # Извлекаем данные контакта (делаем это ДО проверки на existing, чтобы всегда было в preview)
+                    first_name = str(ac.get("first_name") or "").strip()
+                    last_name = str(ac.get("last_name") or "").strip()
+                    
                     # Проверяем, не импортировали ли уже этот контакт
                     existing_contact = Contact.objects.filter(amocrm_contact_id=amo_contact_id, company=local_company).first()
                     if existing_contact:
+                        # ОТЛАДКА: контакт уже существует
+                        debug_count = getattr(res, '_debug_contacts_logged', 0)
+                        if res.contacts_preview is None:
+                            res.contacts_preview = []
+                        if debug_count < 5:
+                            res._debug_contacts_logged = debug_count + 1
+                            debug_data = {
+                                "status": "SKIPPED_ALREADY_EXISTS",
+                                "amo_contact_id": amo_contact_id,
+                                "last_name": last_name,
+                                "first_name": first_name,
+                                "amo_company_id_for_contact": amo_company_id_for_contact,
+                                "local_company_id": str(local_company.id) if local_company else None,
+                            }
+                            res.contacts_preview.append(debug_data)
                         continue
-                    # Извлекаем данные контакта
-                    first_name = str(ac.get("first_name") or "").strip()
-                    last_name = str(ac.get("last_name") or "").strip()
                     
                     # В amoCRM телефоны и email могут быть:
                     # 1. В стандартных полях (phone, email) - если они есть
