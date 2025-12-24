@@ -386,9 +386,17 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
     for cid in company_ids:
         try:
             links_data = client.get(f"/api/v4/companies/{int(cid)}/links") or {}
+            # ОТЛАДКА: логируем структуру ответа для первых 2 компаний
+            if len(out) == 0:
+                print(f"[AMOCRM DEBUG] Links response for company {cid}: keys={list(links_data.keys())}")
+                if "_embedded" in links_data:
+                    print(f"[AMOCRM DEBUG] _embedded keys: {list(links_data.get('_embedded', {}).keys())}")
+            
             embedded = links_data.get("_embedded") or {}
             # В links могут быть contact_ids, но не полные объекты контактов
             contact_ids = []
+            
+            # Проверяем разные возможные структуры ответа
             if "contacts" in embedded:
                 contacts_data = embedded.get("contacts") or []
                 if isinstance(contacts_data, list):
@@ -400,6 +408,22 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
                                 contact_ids.append(contact_id)
                         elif isinstance(item, int):
                             contact_ids.append(item)
+            
+            # Альтернатива: может быть в корне links_data
+            if not contact_ids and "contacts" in links_data:
+                contacts_data = links_data.get("contacts") or []
+                if isinstance(contacts_data, list):
+                    for item in contacts_data:
+                        if isinstance(item, dict):
+                            contact_id = int(item.get("id") or item.get("contact_id") or 0)
+                            if contact_id:
+                                contact_ids.append(contact_id)
+                        elif isinstance(item, int):
+                            contact_ids.append(item)
+            
+            # ОТЛАДКА: логируем найденные contact_ids
+            if len(out) == 0:
+                print(f"[AMOCRM DEBUG] Company {cid}: found {len(contact_ids)} contact_ids: {contact_ids[:5]}")
             
             # Теперь получаем полные данные контактов по их ID
             if contact_ids:
@@ -417,10 +441,32 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
                             max_pages=10,
                         )
                         out.extend(contacts)
+                        if len(out) <= 5:
+                            print(f"[AMOCRM DEBUG] Fetched {len(contacts)} contacts for company {cid}")
                     except Exception as e:
                         print(f"[AMOCRM DEBUG] Error fetching contacts for company {cid}: {e}")
+            else:
+                # ОТЛАДКА: если contact_ids пустой, пробуем альтернативный способ
+                if len(out) == 0:
+                    print(f"[AMOCRM DEBUG] No contact_ids found for company {cid}, trying alternative method...")
+                    # Альтернатива: используем filter[company_id] для этой конкретной компании
+                    try:
+                        contacts = client.get_all_pages(
+                            "/api/v4/contacts",
+                            params={"filter[company_id][]": [cid]},
+                            embedded_key="contacts",
+                            limit=250,
+                            max_pages=5,  # ограничиваем для одной компании
+                        )
+                        if contacts:
+                            print(f"[AMOCRM DEBUG] Alternative method found {len(contacts)} contacts for company {cid}")
+                            out.extend(contacts)
+                    except Exception as e:
+                        print(f"[AMOCRM DEBUG] Alternative method also failed for company {cid}: {e}")
         except Exception as e:
             print(f"[AMOCRM DEBUG] Error fetching links for company {cid}: {e}")
+            import traceback
+            print(f"[AMOCRM DEBUG] Traceback: {traceback.format_exc()}")
             pass
     return out
 
