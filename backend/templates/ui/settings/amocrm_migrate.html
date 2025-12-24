@@ -115,6 +115,38 @@
           </div>
         {% endif %}
 
+        {% if form.dry_run.value %}
+          <div class="mt-4 border-t pt-4">
+            <div class="font-medium mb-2">Debug (dry-run)</div>
+            {% if result.tasks_preview %}
+              <div class="text-sm text-brand-dark/80">
+                <div class="font-medium">Задачи (первые 5)</div>
+                <div class="space-y-2 mt-2">
+                  {% for t in result.tasks_preview %}
+                    <div class="rounded-lg border p-3 text-xs">
+                      <div><b>id:</b> {{ t.id }} · <b>raw_ts:</b> {{ t.raw_ts }} · <b>parsed:</b> {{ t.parsed_due|default:"—" }}</div>
+                      <div class="muted-2 mt-1"><b>keys:</b> {{ t.keys }}</div>
+                    </div>
+                  {% endfor %}
+                </div>
+              </div>
+            {% endif %}
+            {% if result.notes_preview %}
+              <div class="text-sm text-brand-dark/80 mt-4">
+                <div class="font-medium">Заметки (первые 5)</div>
+                <div class="space-y-2 mt-2">
+                  {% for n in result.notes_preview %}
+                    <div class="rounded-lg border p-3 text-xs">
+                      <div><b>id:</b> {{ n.id }} · <b>type:</b> {{ n.type|default:"—" }}</div>
+                      <div class="mt-1 whitespace-pre-line">{{ n.text_head }}</div>
+                    </div>
+                  {% endfor %}
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        {% endif %}
+
         {% if result.companies_has_more and not form.dry_run.value %}
           <div class="mt-4 border-t pt-4">
             <form method="post" class="flex flex-wrap gap-2 items-center">

@@ -75,6 +75,30 @@ def _custom_values_text(company: dict[str, Any], field_id: int) -> list[str]:
     return out
 
 
+def _split_multi(s: str) -> list[str]:
+    """
+    В amo часто телефоны/почты лежат в одной строке через запятую/точку с запятой/переносы.
+    """
+    if not s:
+        return []
+    raw = str(s).replace("\r", "\n")
+    parts: list[str] = []
+    for chunk in raw.split("\n"):
+        for p in chunk.replace(";", ",").split(","):
+            v = p.strip()
+            if v:
+                parts.append(v)
+    out: list[str] = []
+    seen = set()
+    for v in parts:
+        k = v.lower()
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(v)
+    return out
+
+
 def _find_field_id(field_meta: dict[int, dict[str, Any]], *, codes: list[str] | None = None, name_contains: list[str] | None = None) -> int | None:
     codes_l = [c.lower() for c in (codes or [])]
     name_l = [n.lower() for n in (name_contains or [])]
@@ -102,7 +126,10 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
         if not fid:
             return []
         vals = _custom_values_text(amo_company, fid)
-        return vals
+        out: list[str] = []
+        for s in vals:
+            out.extend(_split_multi(s))
+        return out
 
     fid_inn = _find_field_id(field_meta, codes=["inn"], name_contains=["инн"])
     fid_kpp = _find_field_id(field_meta, codes=["kpp"], name_contains=["кпп"])
@@ -202,11 +229,13 @@ class AmoMigrateResult:
     tasks_created: int = 0
     tasks_skipped_existing: int = 0
     tasks_updated: int = 0
+    tasks_preview: list[dict] | None = None
 
     notes_seen: int = 0
     notes_created: int = 0
     notes_skipped_existing: int = 0
     notes_updated: int = 0
+    notes_preview: list[dict] | None = None
 
     preview: list[dict] | None = None
 
@@ -355,7 +384,7 @@ def migrate_filtered(
     import_notes: bool = True,
     company_fields_meta: list[dict[str, Any]] | None = None,
 ) -> AmoMigrateResult:
-    res = AmoMigrateResult(preview=[])
+    res = AmoMigrateResult(preview=[], tasks_preview=[], notes_preview=[])
 
     amo_users = fetch_amo_users(client)
     amo_user_by_id = {int(u.get("id") or 0): u for u in amo_users if int(u.get("id") or 0)}
@@ -470,6 +499,15 @@ def migrate_filtered(
                 if ts in (None, "", 0, "0"):
                     ts = t.get("due_at", None)
                 due_at = _parse_amo_due(ts)
+                if res.tasks_preview is not None and len(res.tasks_preview) < 5:
+                    res.tasks_preview.append(
+                        {
+                            "id": tid,
+                            "raw_ts": ts,
+                            "parsed_due": str(due_at) if due_at else "",
+                            "keys": sorted(list(t.keys()))[:30],
+                        }
+                    )
                 assigned_to = None
                 rid = int(t.get("responsible_user_id") or 0)
                 if rid:
@@ -613,6 +651,14 @@ def migrate_filtered(
                     if meta_bits:
                         prefix += " (" + ", ".join(meta_bits) + ")"
                     text_full = prefix + "\n" + text
+                    if res.notes_preview is not None and len(res.notes_preview) < 5:
+                        res.notes_preview.append(
+                            {
+                                "id": nid,
+                                "type": note_type,
+                                "text_head": (text_full[:140] + ("…" if len(text_full) > 140 else "")),
+                            }
+                        )
 
                     if existing_note:
                         # если раньше создали "пустышку" — обновим
@@ -620,7 +666,16 @@ def migrate_filtered(
                         if existing_note.company_id != company.id:
                             existing_note.company = company
                             upd = True
-                        if existing_note.text.strip().startswith("Импорт из amo (note id") or len(existing_note.text.strip()) < 40:
+                        old_text = (existing_note.text or "").strip()
+                        # Переписываем также любые почтовые записи, которые раньше импортировали как JSON-простыню.
+                        should_rewrite = (
+                            old_text.startswith("Импорт из amo (note id")
+                            or len(old_text) < 40
+                            or ("type: amomail" in old_text.lower())
+                            or ("\"thread_id\"" in old_text)
+                            or note_type.lower().startswith("amomail")
+                        )
+                        if should_rewrite:
                             existing_note.text = text_full[:8000]
                             upd = True
                         if existing_note.author_id == actor.id and (author is None or author.id != actor.id):
