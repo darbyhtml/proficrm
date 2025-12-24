@@ -1045,8 +1045,7 @@
           if (parts.length === 2) return parts.pop().split(';').shift();
           return '';
         }
-        const uiToast = (window.uiToast || function(text){ try{ console.log('[toast]', text); }catch(_e){} });
-
+        
         const contractModal = document.getElementById('contractModal');
         const openContract = document.getElementById('openContractModal');
         if (contractModal && openContract) {
@@ -1125,68 +1124,90 @@
           document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeM(); });
         }
 
-        const csrftoken = getCookie('csrftoken');
-
-        // Если кнопка "холодный" визуально выключена — не отправляем POST, а показываем подсказку.
-        document.querySelectorAll('.js-cold-mark').forEach(btn => {
-          btn.addEventListener('click', (e) => {
-            if (btn.getAttribute('data-disabled') === '1') {
-              e.preventDefault();
-              uiToast(btn.title || 'Недоступно', 'info');
-              return false;
-            }
-          });
-        });
-
-        document.querySelectorAll('.js-call-phone').forEach(btn => {
-          btn.addEventListener('click', async () => {
-            const phone = btn.dataset.phone || '';
-            const companyId = btn.dataset.company || '';
-            const contactId = btn.dataset.contact || '';
-            // Не делаем btn.disabled=true: на disabled в ряде браузеров пропадает подсказка (title).
-            // Вместо этого ставим лок и защищаемся от повторных кликов.
-            if (btn.dataset.busy === '1') return;
-            btn.dataset.busy = '1';
-            btn.classList.add('opacity-60');
-            uiToast('Отправляю команду на телефон…', 'info');
+        // Ждем, пока DOM готов и uiToast определена
+        function initCallPhone() {
+          const uiToast = window.uiToast || function(text, type) {
             try {
-              const body = new URLSearchParams({phone, company_id: companyId, contact_id: contactId});
-              const res = await fetch('/phone/call/', {
-                method: 'POST',
-                headers: {'X-CSRFToken': csrftoken, 'Content-Type': 'application/x-www-form-urlencoded'},
-                body: body.toString()
-              });
-              const data = await res.json().catch(() => ({}));
-              if (!res.ok || !data.ok) throw new Error(data.detail || 'Ошибка');
-              uiToast('Отправлено на телефон ✓', 'success');
-              // Через 10 секунд делаем активной кнопку "отметить холодный" рядом с тем номером/контактом, по которому звонили.
-              const key = contactId ? (`contact-${contactId}`) : 'primary';
-              const coldBtn = document.querySelector(`[data-cold-btn="${key}"]`);
-              if (coldBtn && coldBtn.getAttribute('data-cold-marked') !== '1') {
-                uiToast('Можно отметить «холодный» через 10 секунд…', 'info');
-                setTimeout(() => {
-                  try {
-                    const b = document.querySelector(`[data-cold-btn="${key}"]`);
-                    if (!b) return;
-                    if (b.getAttribute('data-cold-marked') === '1') return;
-                    // Если кнопка была disabled по причине "не звонили" / "10 секунд" — включаем её без перезагрузки.
-                    b.removeAttribute('data-disabled');
-                    b.classList.remove('opacity-50');
-                    b.classList.remove('cursor-not-allowed');
-                    b.title = 'Отметить холодный (доступно 8 часов после звонка, через 10 сек)';
-                    b.setAttribute('aria-label', b.title);
-                  } catch (_e) {}
-                }, 10000);
+              console.log('[toast]', text, type);
+              // Простой fallback: показываем alert, если uiToast не загружена
+              if (type === 'error') {
+                alert('Ошибка: ' + text);
+              } else {
+                alert(text);
               }
-              btn.dataset.busy = '0';
-              btn.classList.remove('opacity-60');
-            } catch (e) {
-              btn.dataset.busy = '0';
-              btn.classList.remove('opacity-60');
-              uiToast('Не удалось отправить на телефон: ' + (e && e.message ? e.message : e), 'error');
-            }
+            } catch(_e) {}
+          };
+          const csrftoken = getCookie('csrftoken');
+          
+          // Если кнопка "холодный" визуально выключена — не отправляем POST, а показываем подсказку.
+          document.querySelectorAll('.js-cold-mark').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              if (btn.getAttribute('data-disabled') === '1') {
+                e.preventDefault();
+                uiToast(btn.title || 'Недоступно', 'info');
+                return false;
+              }
+            });
           });
-        });
+
+          document.querySelectorAll('.js-call-phone').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const phone = btn.dataset.phone || '';
+              const companyId = btn.dataset.company || '';
+              const contactId = btn.dataset.contact || '';
+              // Не делаем btn.disabled=true: на disabled в ряде браузеров пропадает подсказка (title).
+              // Вместо этого ставим лок и защищаемся от повторных кликов.
+              if (btn.dataset.busy === '1') return;
+              btn.dataset.busy = '1';
+              btn.classList.add('opacity-60');
+              uiToast('Отправляю команду на телефон…', 'info');
+              try {
+                const body = new URLSearchParams({phone, company_id: companyId, contact_id: contactId});
+                const res = await fetch('/phone/call/', {
+                  method: 'POST',
+                  headers: {'X-CSRFToken': csrftoken, 'Content-Type': 'application/x-www-form-urlencoded'},
+                  body: body.toString()
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok || !data.ok) throw new Error(data.detail || 'Ошибка');
+                uiToast('Отправлено на телефон ✓', 'success');
+                // Через 10 секунд делаем активной кнопку "отметить холодный" рядом с тем номером/контактом, по которому звонили.
+                const key = contactId ? (`contact-${contactId}`) : 'primary';
+                const coldBtn = document.querySelector(`[data-cold-btn="${key}"]`);
+                if (coldBtn && coldBtn.getAttribute('data-cold-marked') !== '1') {
+                  uiToast('Можно отметить «холодный» через 10 секунд…', 'info');
+                  setTimeout(() => {
+                    try {
+                      const b = document.querySelector(`[data-cold-btn="${key}"]`);
+                      if (!b) return;
+                      if (b.getAttribute('data-cold-marked') === '1') return;
+                      // Если кнопка была disabled по причине "не звонили" / "10 секунд" — включаем её без перезагрузки.
+                      b.removeAttribute('data-disabled');
+                      b.classList.remove('opacity-50');
+                      b.classList.remove('cursor-not-allowed');
+                      b.title = 'Отметить холодный (доступно 8 часов после звонка, через 10 сек)';
+                      b.setAttribute('aria-label', b.title);
+                    } catch (_e) {}
+                  }, 10000);
+                }
+                btn.dataset.busy = '0';
+                btn.classList.remove('opacity-60');
+              } catch (e) {
+                btn.dataset.busy = '0';
+                btn.classList.remove('opacity-60');
+                uiToast('Не удалось отправить на телефон: ' + (e && e.message ? e.message : e), 'error');
+              }
+            });
+          });
+        }
+        
+        // Инициализируем после загрузки DOM и проверяем, что uiToast доступна
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', initCallPhone);
+        } else {
+          // Если DOM уже загружен, ждем немного, чтобы uiToast успела определиться
+          setTimeout(initCallPhone, 100);
+        }
 
         // Note edit modal
         const noteEditModal = document.getElementById('noteEditModal');
