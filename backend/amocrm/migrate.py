@@ -842,10 +842,14 @@ def migrate_filtered(
         # Импорт контактов компаний из amoCRM (опционально, т.к. может быть медленно)
         # Важно: импортируем контакты ТОЛЬКО для компаний из текущей пачки (amo_ids)
         if import_contacts and amo_ids:
+            res.contacts_seen = 0
+            res.contacts_created = 0
+            res._debug_contacts_logged = 0  # счетчик для отладки
             try:
                 # Создаём set для быстрой проверки: контакты должны быть связаны только с компаниями из текущей пачки
                 amo_ids_set = set(amo_ids)
                 amo_contacts = fetch_contacts_for_companies(client, amo_ids)
+                res.contacts_seen = len(amo_contacts)
                 for ac in amo_contacts:
                     amo_contact_id = int(ac.get("id") or 0)
                     if not amo_contact_id:
@@ -938,6 +942,42 @@ def migrate_filtered(
                     # Убираем дубликаты
                     phones = list(dict.fromkeys(phones))  # сохраняет порядок
                     emails = list(dict.fromkeys(emails))
+                    
+                    # ОТЛАДКА: сохраняем сырые данные для анализа
+                    debug_data = {
+                        "source": "amo_api",
+                        "amo_contact_id": amo_contact_id,
+                        "first_name": first_name,
+                        "last_name": last_name,
+                        "extracted_phones": phones,
+                        "extracted_emails": emails,
+                        "extracted_position": position,
+                        "custom_fields_count": len(custom_fields),
+                        "custom_fields_sample": custom_fields[:3] if custom_fields else [],  # первые 3 для отладки
+                        "has_phone_field": bool(ac.get("phone")),
+                        "has_email_field": bool(ac.get("email")),
+                    }
+                    
+                    # Логируем в консоль для отладки (первые 5 контактов)
+                    debug_count = getattr(res, '_debug_contacts_logged', 0)
+                    if debug_count < 5:
+                        print(f"[AMOCRM DEBUG] Contact {amo_contact_id}:")
+                        print(f"  - first_name: {first_name}")
+                        print(f"  - last_name: {last_name}")
+                        print(f"  - phones found: {phones}")
+                        print(f"  - emails found: {emails}")
+                        print(f"  - position found: {position}")
+                        print(f"  - custom_fields_values count: {len(custom_fields)}")
+                        if custom_fields:
+                            print(f"  - custom_fields sample (first): {custom_fields[0]}")
+                            if len(custom_fields) > 1:
+                                print(f"  - custom_fields sample (second): {custom_fields[1]}")
+                        print(f"  - raw contact top-level keys: {list(ac.keys())[:15]}")
+                        # Показываем полную структуру первого custom_field для отладки
+                        if custom_fields and len(custom_fields) > 0:
+                            print(f"  - FULL custom_field[0] structure: {custom_fields[0]}")
+                        res._debug_contacts_logged = debug_count + 1
+                    
                     # Создаём контакт
                     contact = Contact(
                         company=local_company,
@@ -945,22 +985,32 @@ def migrate_filtered(
                         last_name=last_name[:120],
                         position=position[:255],
                         amocrm_contact_id=amo_contact_id,
-                        raw_fields={"source": "amo_api"},
+                        raw_fields=debug_data,
                     )
                     if not dry_run:
                         contact.save()
+                        res.contacts_created += 1
                         # Добавляем телефоны и почты
+                        phones_added = 0
                         for p in phones:
                             pv = str(p).strip()[:50]
                             if pv and not ContactPhone.objects.filter(contact=contact, value=pv).exists():
                                 ContactPhone.objects.create(contact=contact, type=ContactPhone.PhoneType.WORK, value=pv)
+                                phones_added += 1
+                        emails_added = 0
                         for e in emails:
                             ev = str(e).strip()[:254]
                             if ev and not ContactEmail.objects.filter(contact=contact, value__iexact=ev).exists():
                                 try:
                                     ContactEmail.objects.create(contact=contact, type=ContactEmail.EmailType.WORK, value=ev)
+                                    emails_added += 1
                                 except Exception:
                                     pass
+                        # Логируем результат сохранения
+                        if debug_count < 5:
+                            print(f"  - Saved: phones={phones_added}, emails={emails_added}, position={bool(position)}")
+                    else:
+                        res.contacts_created += 1
             except Exception:
                 # Если контакты недоступны — не валим всю миграцию
                 pass
