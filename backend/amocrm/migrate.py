@@ -66,7 +66,11 @@ def _custom_has_value(company: dict[str, Any], field_id: int, *, option_id: int 
 @dataclass
 class AmoMigrateResult:
     companies_seen: int = 0
-    companies_matched: int = 0
+    companies_matched: int = 0  # всего по фильтру
+    companies_batch: int = 0  # обработано в этой пачке
+    companies_offset: int = 0
+    companies_next_offset: int = 0
+    companies_has_more: bool = False
     companies_created: int = 0
     companies_updated: int = 0
 
@@ -218,7 +222,8 @@ def migrate_filtered(
     sphere_field_id: int,
     sphere_option_id: int | None,
     sphere_label: str | None,
-    limit_companies: int = 0,
+    limit_companies: int = 0,  # размер пачки
+    offset: int = 0,
     dry_run: bool = True,
     import_tasks: bool = True,
     import_notes: bool = True,
@@ -231,18 +236,26 @@ def migrate_filtered(
 
     companies = fetch_companies_by_responsible(client, responsible_user_id)
     res.companies_seen = len(companies)
-    matched = []
+    matched_all = []
     for c in companies:
         if _custom_has_value(c, sphere_field_id, option_id=sphere_option_id, label=sphere_label):
-            matched.append(c)
-    if limit_companies and limit_companies > 0:
-        matched = matched[: int(limit_companies)]
-    res.companies_matched = len(matched)
+            matched_all.append(c)
+    res.companies_matched = len(matched_all)
+
+    off = max(int(offset or 0), 0)
+    batch_size = int(limit_companies or 0)
+    if batch_size <= 0:
+        batch_size = 50
+    batch = matched_all[off : off + batch_size]
+    res.companies_offset = off
+    res.companies_batch = len(batch)
+    res.companies_next_offset = off + len(batch)
+    res.companies_has_more = res.companies_next_offset < len(matched_all)
 
     @transaction.atomic
     def _run():
         local_companies: list[Company] = []
-        for amo_c in matched:
+        for amo_c in batch:
             comp, created = _upsert_company_from_amo(amo_company=amo_c, actor=actor, responsible=responsible_local, dry_run=dry_run)
             if created:
                 res.companies_created += 1
@@ -253,7 +266,7 @@ def migrate_filtered(
             if res.preview is not None and len(res.preview) < 15:
                 res.preview.append({"company": comp.name, "amo_id": comp.amocrm_company_id})
 
-        amo_ids = [int(c.get("id") or 0) for c in matched if int(c.get("id") or 0)]
+        amo_ids = [int(c.get("id") or 0) for c in batch if int(c.get("id") or 0)]
 
         if import_tasks and amo_ids:
             tasks = fetch_tasks_for_companies(client, amo_ids)

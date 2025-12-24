@@ -332,7 +332,8 @@ class AmoApiConfigForm(forms.Form):
 
 class AmoMigrateFilterForm(forms.Form):
     dry_run = forms.BooleanField(label="Только проверить (dry-run)", required=False, initial=True)
-    limit_companies = forms.IntegerField(label="Лимит компаний", min_value=1, max_value=5000, initial=200, required=False)
+    limit_companies = forms.IntegerField(label="Размер пачки компаний", min_value=1, max_value=5000, initial=50, required=False)
+    offset = forms.IntegerField(label="Offset", required=False, initial=0)
     responsible_user_id = forms.IntegerField(label="Ответственный (amo user id)")
     custom_field_id = forms.IntegerField(label="Кастомное поле (id)")
     custom_value_label = forms.CharField(label="Значение (текст)", required=False, initial="Новая CRM")

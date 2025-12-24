@@ -3029,6 +3029,12 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
         form = AmoMigrateFilterForm(request.POST)
         if form.is_valid():
             try:
+                # Защита от nginx 504: если импортируем заметки, не даём слишком большой пачки за один запрос.
+                batch_size = int(form.cleaned_data.get("limit_companies") or 0)
+                if batch_size <= 0:
+                    batch_size = 50
+                if form.cleaned_data.get("import_notes"):
+                    batch_size = min(batch_size, 25)
                 result = migrate_filtered(
                     client=client,
                     actor=request.user,
@@ -3036,7 +3042,8 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                     sphere_field_id=int(form.cleaned_data["custom_field_id"]),
                     sphere_option_id=form.cleaned_data.get("custom_value_enum_id") or None,
                     sphere_label=form.cleaned_data.get("custom_value_label") or None,
-                    limit_companies=int(form.cleaned_data.get("limit_companies") or 0),
+                    limit_companies=batch_size,
+                    offset=int(form.cleaned_data.get("offset") or 0),
                     dry_run=bool(form.cleaned_data.get("dry_run")),
                     import_tasks=bool(form.cleaned_data.get("import_tasks")),
                     import_notes=bool(form.cleaned_data.get("import_notes")),
@@ -3059,7 +3066,8 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
         form = AmoMigrateFilterForm(
             initial={
                 "dry_run": True,
-                "limit_companies": 200,
+                "limit_companies": 50,
+                "offset": 0,
                 "responsible_user_id": default_resp or "",
                 "custom_field_id": guessed_field_id or "",
                 "custom_value_label": "Новая CRM",

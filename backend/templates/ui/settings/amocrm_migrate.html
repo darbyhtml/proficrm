@@ -17,6 +17,7 @@
     <div class="card card-pad space-y-3">
       <form method="post" class="grid grid-cols-1 md:grid-cols-2 gap-3">
         {% csrf_token %}
+        <input type="hidden" name="offset" value="{{ form.offset.value|default:0 }}" />
 
         <div class="flex items-end">
           <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
@@ -26,8 +27,9 @@
         </div>
 
         <div>
-          <label class="block text-sm text-brand-dark/80 mb-1">Лимит компаний (опционально)</label>
-          <input class="input" type="number" name="limit_companies" value="{{ form.limit_companies.value|default:200 }}" min="1" max="5000" />
+          <label class="block text-sm text-brand-dark/80 mb-1">Размер пачки компаний</label>
+          <input class="input" type="number" name="limit_companies" value="{{ form.limit_companies.value|default:50 }}" min="1" max="5000" />
+          <div class="text-xs muted-2 mt-1">Если включены заметки — рекомендуем 10–25, чтобы не ловить 504.</div>
         </div>
 
         <div class="md:col-span-2">
@@ -87,6 +89,8 @@
         <div class="text-sm text-brand-dark/80">
           Компаний найдено у ответственного: <b>{{ result.companies_seen }}</b>,
           по фильтру: <b>{{ result.companies_matched }}</b>,
+          обработано в этой пачке: <b>{{ result.companies_batch }}</b>,
+          прогресс: <b>{{ result.companies_next_offset }}</b> / <b>{{ result.companies_matched }}</b>
           создано: <b>{{ result.companies_created }}</b>,
           обновлено: <b>{{ result.companies_updated }}</b>
         </div>
@@ -108,6 +112,25 @@
                 </div>
               {% endfor %}
             </div>
+          </div>
+        {% endif %}
+
+        {% if result.companies_has_more and not form.dry_run.value %}
+          <div class="mt-4 border-t pt-4">
+            <form method="post" class="flex flex-wrap gap-2 items-center">
+              {% csrf_token %}
+              <input type="hidden" name="dry_run" value="" />
+              <input type="hidden" name="limit_companies" value="{{ form.limit_companies.value|default:50 }}" />
+              <input type="hidden" name="offset" value="{{ result.companies_next_offset }}" />
+              <input type="hidden" name="responsible_user_id" value="{{ form.responsible_user_id.value }}" />
+              <input type="hidden" name="custom_field_id" value="{{ form.custom_field_id.value }}" />
+              <input type="hidden" name="custom_value_label" value="{{ form.custom_value_label.value }}" />
+              <input type="hidden" name="custom_value_enum_id" value="{{ form.custom_value_enum_id.value }}" />
+              {% if form.import_tasks.value %}<input type="hidden" name="import_tasks" value="on" />{% endif %}
+              {% if form.import_notes.value %}<input type="hidden" name="import_notes" value="on" />{% endif %}
+              <button class="btn btn-primary" type="submit">Продолжить (следующая пачка)</button>
+              <span class="text-xs muted-2">Следующий offset: {{ result.companies_next_offset }}</span>
+            </form>
           </div>
         {% endif %}
       </div>
