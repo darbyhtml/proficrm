@@ -134,6 +134,23 @@ class Company(models.Model):
         if self.branch_id is None and self.responsible_id is not None:
             # Филиал компании по умолчанию = филиалу ответственного (если не задан явно).
             self.branch = getattr(self.responsible, "branch", None)
+        # Защита от длинных значений (особенно важно при импорте из amoCRM)
+        if self.inn and len(self.inn) > 20:
+            self.inn = self.inn[:20]
+        if self.kpp and len(self.kpp) > 20:
+            self.kpp = self.kpp[:20]
+        if self.legal_name and len(self.legal_name) > 255:
+            self.legal_name = self.legal_name[:255]
+        if self.address and len(self.address) > 500:
+            self.address = self.address[:500]
+        if self.website and len(self.website) > 255:
+            self.website = self.website[:255]
+        if self.contact_name and len(self.contact_name) > 255:
+            self.contact_name = self.contact_name[:255]
+        if self.contact_position and len(self.contact_position) > 255:
+            self.contact_position = self.contact_position[:255]
+        if self.activity_kind and len(self.activity_kind) > 255:
+            self.activity_kind = self.activity_kind[:255]
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
