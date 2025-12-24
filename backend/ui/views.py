@@ -400,7 +400,6 @@ def analytics(request: HttpRequest) -> HttpResponse:
         .select_related("company", "contact", "created_by")
         .order_by("-created_at")[:5000]
     )
-    calls_by_user = {}
     stats = {uid: {"calls_total": 0, "cold_calls": 0} for uid in user_ids}
     for call in calls_qs:
         uid = call.created_by_id
@@ -417,7 +416,6 @@ def analytics(request: HttpRequest) -> HttpResponse:
         )
         if is_strict_cold:
             stats[uid]["cold_calls"] += 1
-        calls_by_user.setdefault(uid, []).append(call)
 
     # Группировка по филиалу (для управляющего) + карточки для шаблона
     groups_map = {}
@@ -536,9 +534,9 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
             "cold_qs": cold_qs,
             "calls_qs": calls_qs_str,
             "events_qs": events_qs_str,
-            "cold_calls_count": cold_calls_qs.count(),
-            "calls_count": calls_qs.count(),
-            "events_count": events_qs.count(),
+            "cold_calls_count": cold_p.count,
+            "calls_count": calls_p.count,
+            "events_count": events_p.count,
         },
     )
 
