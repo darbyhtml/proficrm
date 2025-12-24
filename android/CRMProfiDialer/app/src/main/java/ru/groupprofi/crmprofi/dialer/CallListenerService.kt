@@ -159,7 +159,7 @@ class CallListenerService : Service() {
 
     private fun pullCallWithRefresh(baseUrl: String, token: String, refresh: String, deviceId: String): Pair<Int, String?> {
         val url = "$baseUrl/api/phone/calls/pull/?device_id=$deviceId"
-        fun doPull(access: String): Pair<Int, String> {
+        fun doPull(access: String): Pair<Int, String?> {
             val req = Request.Builder()
                 .url(url)
                 .get()
