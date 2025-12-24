@@ -214,11 +214,11 @@
         </table>
       </div>
 
-      <div class="flex items-center justify-between gap-4 flex-wrap">
-        <div class="flex items-center gap-3">
+      <div class="border-t px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
+        <div class="flex items-center gap-2">
           <form method="get" class="flex items-center gap-2" id="perPageForm">
-            <label class="text-sm text-brand-dark/70">На странице:</label>
-            <select name="per_page" class="select" onchange="document.getElementById('perPageForm').submit()" style="padding:.25rem .5rem;font-size:.875rem">
+            <label class="text-sm text-brand-dark/70 whitespace-nowrap">На странице:</label>
+            <select name="per_page" class="select" onchange="document.getElementById('perPageForm').submit()" style="padding:.25rem .5rem;font-size:.875rem;min-width:auto">
               <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
               <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
               <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
