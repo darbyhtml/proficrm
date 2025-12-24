@@ -8,6 +8,19 @@ from .models import Company, Contact, CompanyNote
 
 
 class CompanySerializer(serializers.ModelSerializer):
+    # Валидация полей с ограничением длины (защита от StringDataRightTruncation)
+    inn = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    kpp = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    legal_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    address = serializers.CharField(max_length=500, required=False, allow_blank=True)
+    website = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    contact_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    contact_position = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    activity_kind = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    name = serializers.CharField(max_length=255)
+    phone = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    email = serializers.EmailField(max_length=254, required=False, allow_blank=True)
+    
     class Meta:
         model = Company
         fields = [
