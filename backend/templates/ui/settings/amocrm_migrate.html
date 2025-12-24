@@ -162,10 +162,21 @@
 
         {% if result.companies_has_more and not form.dry_run.value %}
           <div class="mt-4 border-t pt-4">
-            <form method="post" class="flex flex-wrap gap-2 items-center">
+            <div id="auto-continue-status" class="mb-3 rounded-xl border border-brand-blue/60 bg-brand-blue/20 px-4 py-3">
+              <div class="flex items-center justify-between">
+                <div class="text-sm text-brand-dark">
+                  <b>Автоматическое продолжение:</b> следующая пачка запустится через <span id="countdown">5</span> сек.
+                  <span class="text-xs muted-2 block mt-1">
+                    Прогресс: {{ result.companies_next_offset }} / {{ result.companies_matched }} компаний
+                  </span>
+                </div>
+                <button id="stop-auto-continue" class="btn btn-outline text-sm" type="button">Остановить</button>
+              </div>
+            </div>
+            <form id="continue-form" method="post" class="flex flex-wrap gap-2 items-center">
               {% csrf_token %}
               <input type="hidden" name="dry_run" value="" />
-              <input type="hidden" name="limit_companies" value="{{ form.limit_companies.value|default:50 }}" />
+              <input type="hidden" name="limit_companies" value="{{ form.limit_companies.value|default:10 }}" />
               <input type="hidden" name="offset" value="{{ result.companies_next_offset }}" />
               <input type="hidden" name="responsible_user_id" value="{{ form.responsible_user_id.value }}" />
               <input type="hidden" name="custom_field_id" value="{{ form.custom_field_id.value }}" />
@@ -173,10 +184,56 @@
               <input type="hidden" name="custom_value_enum_id" value="{{ form.custom_value_enum_id.value }}" />
               {% if form.import_tasks.value %}<input type="hidden" name="import_tasks" value="on" />{% endif %}
               {% if form.import_notes.value %}<input type="hidden" name="import_notes" value="on" />{% endif %}
+              {% if form.import_contacts.value %}<input type="hidden" name="import_contacts" value="on" />{% endif %}
               <button class="btn btn-primary" type="submit">Продолжить (следующая пачка)</button>
               <span class="text-xs muted-2">Следующий offset: {{ result.companies_next_offset }}</span>
             </form>
           </div>
+          <script>
+            (function() {
+              // Скролл к результатам при загрузке страницы
+              const resultCard = document.querySelector('.card.card-pad');
+              if (resultCard) {
+                setTimeout(function() {
+                  resultCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+              }
+              
+              // Автоматическое продолжение
+              let countdown = 5;
+              let autoContinue = true;
+              const countdownEl = document.getElementById('countdown');
+              const statusEl = document.getElementById('auto-continue-status');
+              const stopBtn = document.getElementById('stop-auto-continue');
+              const form = document.getElementById('continue-form');
+              
+              if (!countdownEl || !statusEl || !stopBtn || !form) return;
+              
+              stopBtn.addEventListener('click', function() {
+                autoContinue = false;
+                statusEl.innerHTML = '<div class="text-sm text-brand-dark">Автоматическое продолжение остановлено. Нажмите кнопку "Продолжить" вручную.</div>';
+              });
+              
+              const timer = setInterval(function() {
+                if (!autoContinue) {
+                  clearInterval(timer);
+                  return;
+                }
+                countdown--;
+                if (countdownEl) {
+                  countdownEl.textContent = countdown;
+                }
+                if (countdown <= 0) {
+                  clearInterval(timer);
+                  if (autoContinue) {
+                    // Показываем индикатор загрузки
+                    statusEl.innerHTML = '<div class="text-sm text-brand-dark">Запускается следующая пачка...</div>';
+                    form.submit();
+                  }
+                }
+              }, 1000);
+            })();
+          </script>
         {% endif %}
       </div>
     {% endif %}
