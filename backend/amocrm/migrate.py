@@ -845,11 +845,13 @@ def migrate_filtered(
             res.contacts_seen = 0
             res.contacts_created = 0
             res._debug_contacts_logged = 0  # счетчик для отладки
+            print(f"[AMOCRM DEBUG] Starting contact import for {len(amo_ids)} companies")
             try:
                 # Создаём set для быстрой проверки: контакты должны быть связаны только с компаниями из текущей пачки
                 amo_ids_set = set(amo_ids)
                 amo_contacts = fetch_contacts_for_companies(client, amo_ids)
                 res.contacts_seen = len(amo_contacts)
+                print(f"[AMOCRM DEBUG] Fetched {res.contacts_seen} contacts from amoCRM API")
                 for ac in amo_contacts:
                     amo_contact_id = int(ac.get("id") or 0)
                     if not amo_contact_id:
