@@ -202,12 +202,14 @@ class CallListenerService : Service() {
             if (code2 == 0) return Pair(0, null) // Сетевая ошибка
             if (code2 == 204) return Pair(204, null)
             if (code2 != 200) return Pair(code2, null)
-            val obj2 = JSONObject(body2)
+            val body2Str = body2 ?: return Pair(code2, null)
+            val obj2 = JSONObject(body2Str)
             val phone2 = obj2.optString("phone", "")
             return Pair(200, phone2.ifBlank { null })
         }
         if (code1 != 200) return Pair(code1, null)
-        val obj = JSONObject(body1)
+        val body1Str = body1 ?: return Pair(code1, null)
+        val obj = JSONObject(body1Str)
         val phone = obj.optString("phone", "")
         return Pair(200, phone.ifBlank { null })
     }
