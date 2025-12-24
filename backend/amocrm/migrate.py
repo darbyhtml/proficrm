@@ -1018,35 +1018,40 @@ def migrate_filtered(
                 structure_logged_count = 0
                 
                 # Теперь обрабатываем полные данные контактов
-                for ac in full_contacts:
+                for ac_idx, ac in enumerate(full_contacts):
                     # ОТЛАДКА: логируем сырую структуру контакта для первых 3
                     if structure_logged_count < 3:
-                        print(f"[AMOCRM DEBUG] ===== RAW CONTACT STRUCTURE ({structure_logged_count + 1}) =====")
-                        print(f"  - Type: {type(ac)}")
-                        if isinstance(ac, dict):
-                            print(f"  - Keys: {list(ac.keys())}")
-                            print(f"  - Has 'id': {'id' in ac}, id value: {ac.get('id')}")
-                            print(f"  - Has 'first_name': {'first_name' in ac}, value: {ac.get('first_name')}")
-                            print(f"  - Has 'last_name': {'last_name' in ac}, value: {ac.get('last_name')}")
-                            print(f"  - Has 'custom_fields_values': {'custom_fields_values' in ac}")
+                        print(f"[AMOCRM DEBUG] ===== RAW CONTACT STRUCTURE ({structure_logged_count + 1}) [index {ac_idx}] =====", flush=True)
+                        print(f"  - Type: {type(ac)}", flush=True)
+                        print(f"  - ac is None: {ac is None}", flush=True)
+                        if ac is None:
+                            print(f"  - ⚠️ Contact is None!", flush=True)
+                        elif isinstance(ac, dict):
+                            print(f"  - Keys: {list(ac.keys())}", flush=True)
+                            print(f"  - Has 'id': {'id' in ac}, id value: {ac.get('id')}", flush=True)
+                            print(f"  - Has 'first_name': {'first_name' in ac}, value: {ac.get('first_name')}", flush=True)
+                            print(f"  - Has 'last_name': {'last_name' in ac}, value: {ac.get('last_name')}", flush=True)
+                            print(f"  - Has 'custom_fields_values': {'custom_fields_values' in ac}", flush=True)
                             if 'custom_fields_values' in ac:
                                 cfv = ac.get('custom_fields_values')
-                                print(f"  - custom_fields_values type: {type(cfv)}, length: {len(cfv) if isinstance(cfv, list) else 'not_list'}")
+                                print(f"  - custom_fields_values type: {type(cfv)}, length: {len(cfv) if isinstance(cfv, list) else 'not_list'}", flush=True)
                                 if isinstance(cfv, list) and len(cfv) > 0:
-                                    print(f"  - First custom_field: {cfv[0]}")
-                            print(f"  - Has 'phone': {'phone' in ac}, value: {ac.get('phone')}")
-                            print(f"  - Has 'email': {'email' in ac}, value: {ac.get('email')}")
+                                    print(f"  - First custom_field: {cfv[0]}", flush=True)
+                            print(f"  - Has 'phone': {'phone' in ac}, value: {ac.get('phone')}", flush=True)
+                            print(f"  - Has 'email': {'email' in ac}, value: {ac.get('email')}", flush=True)
                             # Полная JSON-структура
                             import json
                             try:
                                 json_str = json.dumps(ac, ensure_ascii=False, indent=2)
-                                print(f"  - Full JSON (first 1500 chars):\n{json_str[:1500]}")
+                                print(f"  - Full JSON (first 2000 chars):\n{json_str[:2000]}", flush=True)
                             except Exception as e:
-                                print(f"  - JSON dump error: {e}")
-                                print(f"  - Full contact (first 500 chars): {str(ac)[:500]}")
+                                print(f"  - JSON dump error: {e}", flush=True)
+                                import traceback
+                                print(f"  - Traceback: {traceback.format_exc()}", flush=True)
+                                print(f"  - Full contact (first 500 chars): {str(ac)[:500]}", flush=True)
                         else:
-                            print(f"  - Contact is not a dict: {ac}")
-                        print(f"[AMOCRM DEBUG] ===== END RAW STRUCTURE =====")
+                            print(f"  - Contact is not a dict: {ac}, type: {type(ac)}", flush=True)
+                        print(f"[AMOCRM DEBUG] ===== END RAW STRUCTURE =====", flush=True)
                         structure_logged_count += 1
                     
                     amo_contact_id = int(ac.get("id") or 0)
