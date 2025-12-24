@@ -975,6 +975,7 @@ def migrate_filtered(
                         batch_size = 50
                         for i in range(0, len(contact_ids), batch_size):
                             ids_batch = contact_ids[i : i + batch_size]
+                            print(f"[AMOCRM DEBUG] Requesting contacts with IDs: {ids_batch[:10]}... (total {len(ids_batch)})", flush=True)
                             contacts_batch = client.get_all_pages(
                                 "/api/v4/contacts",
                                 params={"filter[id][]": ids_batch, "with": "custom_fields"},
@@ -982,8 +983,12 @@ def migrate_filtered(
                                 limit=250,
                                 max_pages=10,
                             )
-                            full_contacts.extend(contacts_batch)
-                            print(f"[AMOCRM DEBUG] Fetched {len(contacts_batch)} full contacts for batch {i//batch_size + 1}")
+                            print(f"[AMOCRM DEBUG] get_all_pages returned: type={type(contacts_batch)}, length={len(contacts_batch) if isinstance(contacts_batch, list) else 'not_list'}", flush=True)
+                            if isinstance(contacts_batch, list):
+                                full_contacts.extend(contacts_batch)
+                                print(f"[AMOCRM DEBUG] Fetched {len(contacts_batch)} full contacts for batch {i//batch_size + 1}", flush=True)
+                            else:
+                                print(f"[AMOCRM DEBUG] ⚠️ contacts_batch is not a list: {contacts_batch}", flush=True)
                             
                             # ОТЛАДКА: детальная структура первого контакта из батча
                             if i == 0 and contacts_batch:
