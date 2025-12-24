@@ -3078,12 +3078,20 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
         form = AmoMigrateFilterForm(request.POST)
         if form.is_valid():
             try:
-                # Защита от nginx 504: если импортируем заметки, не даём слишком большой пачки за один запрос.
+                # Защита от nginx 504: уменьшаем batch_size в зависимости от того, что импортируем
                 batch_size = int(form.cleaned_data.get("limit_companies") or 0)
                 if batch_size <= 0:
-                    batch_size = 50
-                if form.cleaned_data.get("import_notes"):
-                    batch_size = min(batch_size, 25)
+                    batch_size = 10  # дефолт уменьшен с 50 до 10
+                import_notes = bool(form.cleaned_data.get("import_notes"))
+                import_contacts = bool(form.cleaned_data.get("import_contacts"))
+                if import_notes and import_contacts:
+                    batch_size = min(batch_size, 3)  # если оба включены - очень маленькая пачка
+                elif import_notes:
+                    batch_size = min(batch_size, 5)  # только заметки
+                elif import_contacts:
+                    batch_size = min(batch_size, 5)  # только контакты
+                else:
+                    batch_size = min(batch_size, 10)  # только компании/задачи
                 result = migrate_filtered(
                     client=client,
                     actor=request.user,
@@ -3117,14 +3125,13 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
         form = AmoMigrateFilterForm(
             initial={
                 "dry_run": True,
-                "limit_companies": 50,
+                "limit_companies": 10,  # уменьшено с 50 до 10
                 "offset": 0,
                 "responsible_user_id": default_resp or "",
                 "custom_field_id": guessed_field_id or "",
                 "custom_value_label": "Новая CRM",
                 "import_tasks": True,
                 "import_notes": True,
-                "import_contacts": False,  # по умолчанию выключено
                 "import_contacts": False,  # по умолчанию выключено
             }
         )

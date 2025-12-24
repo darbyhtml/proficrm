@@ -10,7 +10,10 @@
         Фильтр: ответственный + кастомное поле (например “Сферы деятельности”/“Статусы”) со значением “Новая CRM”.
       </div>
       <div class="mt-2 rounded-xl border border-brand-orange/60 bg-brand-orange/20 px-4 py-2 text-sm text-brand-dark">
-        Рекомендуем сначала <b>dry-run</b> на лимите 100–200, чтобы увидеть сколько компаний/задач/заметок будет перенесено.
+        Рекомендуем сначала <b>dry-run</b> на лимите 50–100, чтобы увидеть сколько компаний/задач/заметок будет перенесено.
+      </div>
+      <div class="mt-2 rounded-xl border border-red-500/60 bg-red-500/20 px-4 py-2 text-sm text-brand-dark">
+        <b>⚠️ Если получаете 504 Gateway Time-out:</b> увеличьте таймаут nginx для этого endpoint (см. инструкцию ниже) или уменьшите размер пачки до 3–5 компаний.
       </div>
     </div>
 
@@ -28,8 +31,11 @@
 
         <div>
           <label class="block text-sm text-brand-dark/80 mb-1">Размер пачки компаний</label>
-          <input class="input" type="number" name="limit_companies" value="{{ form.limit_companies.value|default:50 }}" min="1" max="5000" />
-          <div class="text-xs muted-2 mt-1">Если включены заметки — рекомендуем 10–25, чтобы не ловить 504.</div>
+          <input class="input" type="number" name="limit_companies" value="{{ form.limit_companies.value|default:10 }}" min="1" max="5000" />
+          <div class="text-xs muted-2 mt-1">
+            <b>Автоматически уменьшается:</b> если включены заметки → до 5, если контакты → до 5, если оба → до 3.
+            При 504 ошибке уменьшите до 3–5 или увеличьте таймаут nginx.
+          </div>
         </div>
 
         <div class="md:col-span-2">
@@ -79,7 +85,7 @@
           <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
             <input type="checkbox" name="import_contacts" value="on" {% if form.import_contacts.value %}checked{% endif %} />
             Импортировать контакты
-            <span class="text-xs muted-2">(может быть медленно, лучше отключить при больших пачках)</span>
+            <span class="text-xs muted-2">(может быть медленно, автоматически уменьшает пачку до 5)</span>
           </label>
         </div>
 
@@ -174,6 +180,26 @@
         {% endif %}
       </div>
     {% endif %}
+
+    <div class="card card-pad">
+      <div class="font-medium mb-2">📋 Инструкция: увеличение таймаута nginx (если получаете 504)</div>
+      <div class="text-sm text-brand-dark/80 space-y-2">
+        <p>Если миграция падает с ошибкой <code class="bg-brand-soft px-1 rounded">504 Gateway Time-out</code>, нужно увеличить таймаут nginx для этого endpoint.</p>
+        <p><b>Вариант 1 (рекомендуется):</b> Добавьте в конфиг nginx (обычно <code class="bg-brand-soft px-1 rounded">/etc/nginx/sites-available/your-site</code>):</p>
+        <pre class="bg-brand-soft p-3 rounded text-xs overflow-x-auto"><code>location /settings/amocrm/migrate/ {
+    proxy_read_timeout 300s;  # 5 минут
+    proxy_connect_timeout 60s;
+    proxy_send_timeout 300s;
+    # ... остальные proxy_* настройки
+}</code></pre>
+        <p><b>Вариант 2:</b> Увеличьте глобальный таймаут в <code class="bg-brand-soft px-1 rounded">http {}</code> блоке:</p>
+        <pre class="bg-brand-soft p-3 rounded text-xs overflow-x-auto"><code>http {
+    proxy_read_timeout 300s;
+    # ...
+}</code></pre>
+        <p>После изменения конфига выполните: <code class="bg-brand-soft px-1 rounded">sudo nginx -t && sudo systemctl reload nginx</code></p>
+      </div>
+    </div>
   </div>
 {% endblock %}
 
