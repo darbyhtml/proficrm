@@ -951,7 +951,48 @@ def migrate_filtered(
                     }
                     res.contacts_preview.append(debug_info)
                 
+                # ВАЖНО: в _embedded.contacts приходят только ссылки (id), а не полные объекты
+                # Нужно сделать отдельный запрос к /api/v4/contacts для получения полных данных
+                contact_ids: list[int] = []
+                contact_id_to_company_map: dict[int, int] = {}  # contact_id -> amo_company_id
                 for ac in amo_contacts:
+                    if isinstance(ac, dict):
+                        contact_id = int(ac.get("id") or 0)
+                        if contact_id:
+                            contact_ids.append(contact_id)
+                            # Находим компанию для этого контакта
+                            for cid, contacts_list in companies_with_contacts.items():
+                                if ac in contacts_list:
+                                    contact_id_to_company_map[contact_id] = cid
+                                    break
+                
+                # Получаем полные данные контактов по их ID
+                full_contacts: list[dict[str, Any]] = []
+                if contact_ids:
+                    print(f"[AMOCRM DEBUG] Fetching full contact data for {len(contact_ids)} contact IDs...")
+                    try:
+                        # Запрашиваем контакты батчами по 50 ID (лимит amoCRM)
+                        batch_size = 50
+                        for i in range(0, len(contact_ids), batch_size):
+                            ids_batch = contact_ids[i : i + batch_size]
+                            contacts_batch = client.get_all_pages(
+                                "/api/v4/contacts",
+                                params={"filter[id][]": ids_batch, "with": "custom_fields"},
+                                embedded_key="contacts",
+                                limit=250,
+                                max_pages=10,
+                            )
+                            full_contacts.extend(contacts_batch)
+                            print(f"[AMOCRM DEBUG] Fetched {len(contacts_batch)} full contacts for batch {i//batch_size + 1}")
+                    except Exception as e:
+                        print(f"[AMOCRM DEBUG] Error fetching full contact data: {type(e).__name__}: {e}")
+                        import traceback
+                        print(f"[AMOCRM DEBUG] Traceback:\n{traceback.format_exc()}")
+                
+                print(f"[AMOCRM DEBUG] Total full contacts fetched: {len(full_contacts)}")
+                
+                # Теперь обрабатываем полные данные контактов
+                for ac in full_contacts:
                     # ОТЛАДКА: логируем сырую структуру контакта для первых 3
                     debug_count_raw = getattr(res, '_debug_contacts_logged', 0)
                     if debug_count_raw < 3:
@@ -983,20 +1024,16 @@ def migrate_filtered(
                             })
                         continue
                     
-                    # НОВЫЙ ПОДХОД: находим компанию, из которой извлекли этот контакт
-                    # Контакт был в _embedded.contacts какой-то компании из batch
+                    # Находим компанию для этого контакта через contact_id_to_company_map
                     local_company = None
                     amo_company_id_for_contact = None
                     
-                    # Ищем, из какой компании этот контакт (проверяем companies_with_contacts)
-                    for cid, contacts_list in companies_with_contacts.items():
-                        if ac in contacts_list:
-                            amo_company_id_for_contact = cid
-                            local_company = Company.objects.filter(amocrm_company_id=cid).first()
-                            if local_company:
-                                break
+                    contact_id = int(ac.get("id") or 0)
+                    if contact_id in contact_id_to_company_map:
+                        amo_company_id_for_contact = contact_id_to_company_map[contact_id]
+                        local_company = Company.objects.filter(amocrm_company_id=amo_company_id_for_contact).first()
                     
-                    # Fallback: если не нашли через _embedded, пробуем через company_id в контакте
+                    # Fallback: если не нашли через map, пробуем через company_id в самом контакте
                     if not local_company:
                         cid = int(ac.get("company_id") or 0)
                         if cid and cid in amo_ids_set:
