@@ -920,6 +920,16 @@ def migrate_filtered(
                 amo_contacts = fetch_contacts_for_companies(client, amo_ids)
                 res.contacts_seen = len(amo_contacts)
                 print(f"[AMOCRM DEBUG] Fetched {res.contacts_seen} contacts from amoCRM API")
+                
+                # ОТЛАДКА: если контактов не найдено, сохраняем информацию о попытке
+                if res.contacts_seen == 0 and res.contacts_preview is not None:
+                    debug_info = {
+                        "status": "NO_CONTACTS_FOUND",
+                        "companies_checked": len(amo_ids),
+                        "company_ids": list(amo_ids)[:5],  # первые 5 для отладки
+                        "message": "Контакты не найдены через /api/v4/companies/{id}/links. Проверьте логи сервера для деталей.",
+                    }
+                    res.contacts_preview.append(debug_info)
                 for ac in amo_contacts:
                     amo_contact_id = int(ac.get("id") or 0)
                     if not amo_contact_id:
