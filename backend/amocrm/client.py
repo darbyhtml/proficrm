@@ -84,11 +84,17 @@ class AmoClient:
         self.refresh_token()
 
     def authorize_url(self) -> str:
-        # amo: /oauth?client_id=...&redirect_uri=...&response_type=code
+        # amo: /oauth2/authorize?client_id=...&redirect_uri=...&response_type=code
         qs = urllib.parse.urlencode(
-            {"client_id": self.cfg.client_id, "redirect_uri": self.cfg.redirect_uri, "response_type": "code"}
+            {
+                "client_id": self.cfg.client_id,
+                "redirect_uri": self.cfg.redirect_uri,
+                "response_type": "code",
+                # state сейчас используем как простую метку (можно усилить до CSRF-проверки при желании)
+                "state": "proficrm_migrate",
+            }
         )
-        return f"{self.base}/oauth?{qs}"
+        return f"{self.base}/oauth2/authorize?{qs}"
 
     def exchange_code(self, code: str) -> None:
         url = f"{self.base}/oauth2/access_token"
