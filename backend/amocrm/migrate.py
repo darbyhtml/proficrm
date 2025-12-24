@@ -479,6 +479,7 @@ def migrate_filtered(
     dry_run: bool = True,
     import_tasks: bool = True,
     import_notes: bool = True,
+    import_contacts: bool = False,  # по умолчанию выключено, т.к. может быть медленно
     company_fields_meta: list[dict[str, Any]] | None = None,
 ) -> AmoMigrateResult:
     res = AmoMigrateResult(preview=[], tasks_preview=[], notes_preview=[])
@@ -826,8 +827,8 @@ def migrate_filtered(
                 res.notes_created = 0
                 res.notes_skipped_existing = 0
 
-        # Импорт контактов компаний из amoCRM
-        if amo_ids:
+        # Импорт контактов компаний из amoCRM (опционально, т.к. может быть медленно)
+        if import_contacts and amo_ids:
             try:
                 amo_contacts = fetch_contacts_for_companies(client, amo_ids)
                 for ac in amo_contacts:

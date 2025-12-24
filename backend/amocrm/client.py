@@ -141,7 +141,7 @@ class AmoClient:
 
         req = urllib.request.Request(url=url, method=method.upper(), headers=headers, data=data_bytes)
         try:
-            with urllib.request.urlopen(req, timeout=30) as resp:
+            with urllib.request.urlopen(req, timeout=15) as resp:  # уменьшили таймаут с 30 до 15 сек
                 raw = resp.read() or b""
                 data = _json_loads(raw)
                 return AmoResponse(status=int(resp.status), data=data, headers={k.lower(): v for k, v in resp.headers.items()})

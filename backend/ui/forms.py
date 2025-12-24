@@ -359,6 +359,7 @@ class AmoMigrateFilterForm(forms.Form):
     custom_value_enum_id = forms.IntegerField(label="Значение (enum id)", required=False)
     import_tasks = forms.BooleanField(label="Импортировать задачи", required=False, initial=True)
     import_notes = forms.BooleanField(label="Импортировать заметки", required=False, initial=True)
+    import_contacts = forms.BooleanField(label="Импортировать контакты (может быть медленно)", required=False, initial=False)
 
 
 class CompanyListColumnsForm(forms.Form):

@@ -3096,6 +3096,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                     dry_run=bool(form.cleaned_data.get("dry_run")),
                     import_tasks=bool(form.cleaned_data.get("import_tasks")),
                     import_notes=bool(form.cleaned_data.get("import_notes")),
+                    import_contacts=bool(form.cleaned_data.get("import_contacts")),
                     company_fields_meta=fields,
                 )
                 if form.cleaned_data.get("dry_run"):
@@ -3123,6 +3124,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                 "custom_value_label": "Новая CRM",
                 "import_tasks": True,
                 "import_notes": True,
+                "import_contacts": False,  # по умолчанию выключено
             }
         )
 

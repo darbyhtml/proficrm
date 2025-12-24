@@ -75,6 +75,13 @@
             Импортировать заметки
           </label>
         </div>
+        <div class="flex items-end">
+          <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
+            <input type="checkbox" name="import_contacts" value="on" {% if form.import_contacts.value %}checked{% endif %} />
+            Импортировать контакты
+            <span class="text-xs muted-2">(может быть медленно, лучше отключить при больших пачках)</span>
+          </label>
+        </div>
 
         <div class="md:col-span-2 flex gap-2">
           <button class="btn btn-primary" type="submit">Запустить</button>
