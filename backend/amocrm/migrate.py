@@ -593,14 +593,20 @@ def migrate_filtered(
             norm_phone_parts = _split_multi(comp.phone or "")
             norm_email_parts = _split_multi(comp.email or "")
             if len(norm_phone_parts) > 1 and not dry_run:
-                comp.phone = norm_phone_parts[0][:50]
-                comp.save(update_fields=["phone"])
-                # добавим остальные как контактные телефоны
-                phones = list(dict.fromkeys([*phones, *norm_phone_parts]))
+                try:
+                    comp.phone = norm_phone_parts[0][:50]
+                    comp.save(update_fields=["phone"])
+                    # добавим остальные как контактные телефоны
+                    phones = list(dict.fromkeys([*phones, *norm_phone_parts]))
+                except Exception as e:
+                    print(f"[AMOCRM ERROR] Failed to save phone for company {comp.name}: {e}")
             if len(norm_email_parts) > 1 and not dry_run:
-                comp.email = norm_email_parts[0][:254]
-                comp.save(update_fields=["email"])
-                emails = list(dict.fromkeys([*emails, *norm_email_parts]))
+                try:
+                    comp.email = norm_email_parts[0][:254]
+                    comp.save(update_fields=["email"])
+                    emails = list(dict.fromkeys([*emails, *norm_email_parts]))
+                except Exception as e:
+                    print(f"[AMOCRM ERROR] Failed to save email for company {comp.name}: {e}")
 
             # Остальные телефоны/почты — в "Контакты" отдельной записью (stub)
             extra_phones = [p for p in phones[1:] if str(p).strip()]
