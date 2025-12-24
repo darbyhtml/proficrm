@@ -61,11 +61,11 @@
           </thead>
           <tbody>
             {% for t in page.object_list %}
-              <tr class="{% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %}">
+              <tr class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %}">
                 <td>
                   <div class="flex items-start justify-between gap-3">
                     <div class="font-medium">{{ t.title }}</div>
-                    {% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}
+                    {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}
                       <span class="badge badge-danger flex-shrink-0">Просрочено</span>
                     {% endif %}
                   </div>
@@ -76,7 +76,7 @@
                 </td>
                 <td>{{ t.assigned_to }}</td>
                 <td class="muted">
-                  <span class="{% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}">{{ t.due_at|default:"—" }}</span>
+                  <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}">{{ t.due_at|default:"—" }}</span>
                 </td>
                 <td style="min-width:140px">
                   <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>

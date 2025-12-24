@@ -2459,7 +2459,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
     return render(
         request,
         "ui/task_list.html",
-        {"now": now, "page": page, "qs": qs_no_page, "status": status, "mine": mine, "overdue": overdue, "today": today},
+        {"now": now, "local_now": local_now, "page": page, "qs": qs_no_page, "status": status, "mine": mine, "overdue": overdue, "today": today},
     )
 
 
@@ -2478,7 +2478,9 @@ def task_create(request: HttpRequest) -> HttpResponse:
                 comp = Company.objects.select_related("responsible", "branch", "head_company").filter(id=task.company_id).first()
                 if comp and not _can_edit_company(user, comp):
                     messages.error(request, "Нет прав на постановку задач по этой компании.")
-                    return redirect("company_detail", company_id=comp.id)
+                    if comp:
+                        return redirect("company_detail", company_id=comp.id)
+                    return redirect("task_create")
 
             # RBAC как в API:
             if user.role == User.Role.MANAGER:
