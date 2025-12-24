@@ -1108,6 +1108,21 @@ def migrate_filtered(
                     # Извлекаем данные контакта (делаем это ДО проверки на existing, чтобы всегда было в preview)
                     first_name = str(ac.get("first_name") or "").strip()
                     last_name = str(ac.get("last_name") or "").strip()
+                    # Если first_name и last_name пустые, используем name
+                    if not first_name and not last_name:
+                        name = str(ac.get("name") or "").strip()
+                        if name:
+                            first_name = name
+                    
+                    # ОТЛАДКА: логируем начало обработки контакта
+                    preview_count_before = len(res.contacts_preview) if res.contacts_preview else 0
+                    if preview_count_before < 3:
+                        print(f"[AMOCRM DEBUG] Processing contact {amo_contact_id} (first_name={first_name}, last_name={last_name})", flush=True)
+                        print(f"  - local_company: {local_company.id if local_company else None}", flush=True)
+                        print(f"  - has custom_fields_values: {'custom_fields_values' in ac if isinstance(ac, dict) else False}", flush=True)
+                        if isinstance(ac, dict) and 'custom_fields_values' in ac:
+                            cfv = ac.get('custom_fields_values')
+                            print(f"  - custom_fields_values: type={type(cfv)}, length={len(cfv) if isinstance(cfv, list) else 'not_list'}", flush=True)
                     
                     # Проверяем, не импортировали ли уже этот контакт
                     existing_contact = Contact.objects.filter(amocrm_contact_id=amo_contact_id, company=local_company).first()
