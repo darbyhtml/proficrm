@@ -239,19 +239,20 @@ def import_amo_csv(
 
                     created = False
                     if company is None:
+                        # Обрезаем значения до max_length перед созданием
                         company = Company(
-                            name=name or "(без названия)",
-                            legal_name=legal_name,
-                            inn=inn,
-                            kpp=kpp,
-                            address=address,
-                            website=website,
+                            name=(name or "(без названия)")[:255],
+                            legal_name=legal_name[:255] if legal_name else "",
+                            inn=inn[:20] if inn else "",
+                            kpp=kpp[:20] if kpp else "",
+                            address=address[:500] if address else "",
+                            website=website[:255] if website else "",
                             responsible=responsible,
-                            phone=phone,
-                            email=email,
-                            contact_name=contact_person_raw,
-                            contact_position=contact_position,
-                            activity_kind=activity_short,
+                            phone=phone[:50] if phone else "",
+                            email=email[:254] if email else "",
+                            contact_name=contact_person_raw[:255] if contact_person_raw else "",
+                            contact_position=contact_position[:255] if contact_position else "",
+                            activity_kind=activity_short[:255] if activity_short else "",
                             amocrm_company_id=int(amo_id) if str(amo_id).isdigit() else None,
                             raw_fields={"source": "amo_import", "amo_row": row},
                         )
@@ -261,6 +262,20 @@ def import_amo_csv(
                         created = True
                     else:
                         changed = False
+                        # Обрезаем значения до max_length перед установкой
+                        field_max_lengths = {
+                            "name": 255,
+                            "legal_name": 255,
+                            "inn": 20,
+                            "kpp": 20,
+                            "address": 500,
+                            "website": 255,
+                            "phone": 50,
+                            "email": 254,
+                            "contact_name": 255,
+                            "contact_position": 255,
+                            "activity_kind": 255,
+                        }
                         for field, value in (
                             ("name", name),
                             ("legal_name", legal_name),
@@ -274,9 +289,13 @@ def import_amo_csv(
                             ("contact_position", contact_position),
                             ("activity_kind", activity_short),
                         ):
-                            if value and getattr(company, field) != value:
-                                setattr(company, field, value)
-                                changed = True
+                            if value:
+                                # Обрезаем значение до max_length
+                                max_len = field_max_lengths.get(field, 255)
+                                value_truncated = str(value).strip()[:max_len]
+                                if getattr(company, field) != value_truncated:
+                                    setattr(company, field, value_truncated)
+                                    changed = True
                         if responsible and company.responsible_id != responsible.id and set_responsible:
                             company.responsible = responsible
                             changed = True

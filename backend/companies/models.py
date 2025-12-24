@@ -135,22 +135,29 @@ class Company(models.Model):
             # Филиал компании по умолчанию = филиалу ответственного (если не задан явно).
             self.branch = getattr(self.responsible, "branch", None)
         # Защита от длинных значений (особенно важно при импорте из amoCRM)
-        if self.inn and len(self.inn) > 20:
-            self.inn = self.inn[:20]
-        if self.kpp and len(self.kpp) > 20:
-            self.kpp = self.kpp[:20]
-        if self.legal_name and len(self.legal_name) > 255:
-            self.legal_name = self.legal_name[:255]
-        if self.address and len(self.address) > 500:
-            self.address = self.address[:500]
-        if self.website and len(self.website) > 255:
-            self.website = self.website[:255]
-        if self.contact_name and len(self.contact_name) > 255:
-            self.contact_name = self.contact_name[:255]
-        if self.contact_position and len(self.contact_position) > 255:
-            self.contact_position = self.contact_position[:255]
-        if self.activity_kind and len(self.activity_kind) > 255:
-            self.activity_kind = self.activity_kind[:255]
+        # ВАЖНО: обрезаем ВСЕГДА, даже если значение уже установлено (защита от любых источников данных)
+        if self.inn:
+            self.inn = str(self.inn).strip()[:20]
+        if self.kpp:
+            self.kpp = str(self.kpp).strip()[:20]
+        if self.legal_name:
+            self.legal_name = str(self.legal_name).strip()[:255]
+        if self.address:
+            self.address = str(self.address).strip()[:500]
+        if self.website:
+            self.website = str(self.website).strip()[:255]
+        if self.contact_name:
+            self.contact_name = str(self.contact_name).strip()[:255]
+        if self.contact_position:
+            self.contact_position = str(self.contact_position).strip()[:255]
+        if self.activity_kind:
+            self.activity_kind = str(self.activity_kind).strip()[:255]
+        if self.name:
+            self.name = str(self.name).strip()[:255]
+        if self.phone:
+            self.phone = str(self.phone).strip()[:50]
+        if self.email:
+            self.email = str(self.email).strip()[:254]
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
