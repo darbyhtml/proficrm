@@ -920,6 +920,18 @@ def migrate_filtered(
                     embedded = amo_c.get("_embedded") or {}
                     contacts_in_company = embedded.get("contacts") or []
                     if isinstance(contacts_in_company, list) and contacts_in_company:
+                        # ОТЛАДКА: проверяем структуру первого контакта
+                        if len(contacts_in_company) > 0:
+                            first_contact = contacts_in_company[0]
+                            print(f"[AMOCRM DEBUG] Company {amo_company_id} first contact structure:")
+                            print(f"  - Type: {type(first_contact)}")
+                            if isinstance(first_contact, dict):
+                                print(f"  - Keys: {list(first_contact.keys())}")
+                                print(f"  - Has 'id': {'id' in first_contact}")
+                                print(f"  - Has 'custom_fields_values': {'custom_fields_values' in first_contact}")
+                                print(f"  - Has 'first_name': {'first_name' in first_contact}")
+                                print(f"  - Has 'last_name': {'last_name' in first_contact}")
+                                print(f"  - Sample (first 300 chars): {str(first_contact)[:300]}")
                         companies_with_contacts[amo_company_id] = contacts_in_company
                         amo_contacts.extend(contacts_in_company)
                         print(f"[AMOCRM DEBUG] Company {amo_company_id} has {len(contacts_in_company)} contacts in _embedded.contacts")
