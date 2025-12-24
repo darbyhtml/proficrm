@@ -6,9 +6,11 @@ import json
 
 from django.db import transaction
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime, parse_date
+from datetime import datetime, time, timezone as dt_timezone
 
 from accounts.models import User
-from companies.models import Company, CompanyNote, CompanySphere
+from companies.models import Company, CompanyNote, CompanySphere, Contact, ContactEmail, ContactPhone
 from tasksapp.models import Task
 
 from .client import AmoClient
@@ -96,11 +98,11 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
         vals = _custom_values_text(amo_company, fid)
         return vals[0] if vals else ""
 
-    def join(fid: int | None) -> str:
+    def list_vals(fid: int | None) -> list[str]:
         if not fid:
-            return ""
+            return []
         vals = _custom_values_text(amo_company, fid)
-        return ", ".join(vals)[:500]
+        return vals
 
     fid_inn = _find_field_id(field_meta, codes=["inn"], name_contains=["инн"])
     fid_kpp = _find_field_id(field_meta, codes=["kpp"], name_contains=["кпп"])
@@ -115,10 +117,61 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
         "kpp": first(fid_kpp),
         "legal_name": first(fid_legal),
         "address": first(fid_addr),
-        "phone": join(fid_phone),
-        "email": join(fid_email),
+        "phones": list_vals(fid_phone),
+        "emails": list_vals(fid_email),
         "website": first(fid_web),
     }
+
+
+def _parse_amo_due(ts: Any) -> timezone.datetime | None:
+    """
+    amo может отдавать дедлайн как:
+    - unix seconds int
+    - unix ms int
+    - строка с цифрами
+    - ISO datetime string
+    - ISO date string
+    """
+    if ts is None:
+        return None
+    UTC = getattr(timezone, "UTC", dt_timezone.utc)
+    # dict wrapper
+    if isinstance(ts, dict):
+        for k in ("timestamp", "ts", "value"):
+            if k in ts:
+                return _parse_amo_due(ts.get(k))
+        return None
+
+    # numeric string / int
+    if isinstance(ts, (int, float)) or (isinstance(ts, str) and ts.strip().isdigit()):
+        try:
+            ts_int = int(str(ts).strip())
+        except Exception:
+            ts_int = 0
+        if ts_int <= 0:
+            return None
+        if ts_int > 10**12:
+            ts_int = int(ts_int / 1000)
+        try:
+            return timezone.datetime.fromtimestamp(ts_int, tz=UTC)
+        except Exception:
+            return None
+
+    # datetime string
+    if isinstance(ts, str):
+        s = ts.strip()
+        if not s:
+            return None
+        dt = parse_datetime(s)
+        if dt:
+            if timezone.is_naive(dt):
+                dt = timezone.make_aware(dt, timezone=UTC)
+            return dt
+        d = parse_date(s)
+        if d:
+            dt2 = datetime.combine(d, time(12, 0))
+            return timezone.make_aware(dt2, timezone=UTC)
+    return None
 
 def _custom_has_value(company: dict[str, Any], field_id: int, *, option_id: int | None = None, label: str | None = None) -> bool:
     values = _extract_custom_values(company, field_id)
@@ -347,17 +400,48 @@ def migrate_filtered(
             if extra.get("address") and not (comp.address or "").strip():
                 comp.address = extra["address"]
                 changed = True
-            if extra.get("phone") and not (comp.phone or "").strip():
-                comp.phone = extra["phone"][:50]
+            phones = extra.get("phones") or []
+            emails = extra.get("emails") or []
+            # основной телефон/почта — в "Данные", остальные — в отдельный контакт (даже без ФИО/должности)
+            if phones and not (comp.phone or "").strip():
+                comp.phone = str(phones[0])[:50]
                 changed = True
-            if extra.get("email") and not (comp.email or "").strip():
-                comp.email = extra["email"][:254]
+            if emails and not (comp.email or "").strip():
+                comp.email = str(emails[0])[:254]
                 changed = True
             if extra.get("website") and not (comp.website or "").strip():
                 comp.website = extra["website"][:255]
                 changed = True
             if changed and not dry_run:
                 comp.save()
+
+            # Остальные телефоны/почты — в "Контакты" отдельной записью (stub)
+            extra_phones = [p for p in phones[1:] if str(p).strip()]
+            extra_emails = [e for e in emails[1:] if str(e).strip()]
+            if (extra_phones or extra_emails) and not dry_run:
+                # sentinel: amocrm_contact_id = -amocrm_company_id, чтобы не плодить дубли на повторных запусках
+                sentinel = -int(comp.amocrm_company_id or 0) if comp.amocrm_company_id else 0
+                c = None
+                if sentinel:
+                    c = Contact.objects.filter(company=comp, amocrm_contact_id=sentinel).first()
+                if c is None:
+                    c = Contact(company=comp, amocrm_contact_id=sentinel or None, raw_fields={"source": "amo_api_company_channels"})
+                    c.save()
+                for p in extra_phones:
+                    v = str(p).strip()[:50]
+                    if not v:
+                        continue
+                    if not ContactPhone.objects.filter(contact=c, value=v).exists():
+                        ContactPhone.objects.create(contact=c, type=ContactPhone.PhoneType.OTHER, value=v)
+                for e in extra_emails:
+                    v = str(e).strip()[:254]
+                    if not v:
+                        continue
+                    if not ContactEmail.objects.filter(contact=c, value__iexact=v).exists():
+                        try:
+                            ContactEmail.objects.create(contact=c, type=ContactEmail.EmailType.OTHER, value=v)
+                        except Exception:
+                            pass
             if created:
                 res.companies_created += 1
             else:
@@ -379,16 +463,13 @@ def migrate_filtered(
                 company = Company.objects.filter(amocrm_company_id=entity_id).first() if entity_id else None
                 title = str(t.get("text") or t.get("result") or t.get("name") or "Задача (amo)").strip()[:255]
                 due_at = None
-                ts = t.get("complete_till") or t.get("complete_till_at") or None
-                try:
-                    if ts is not None and str(ts).strip():
-                        ts_int = int(str(ts).strip())
-                        if ts_int > 10**12:
-                            ts_int = int(ts_int / 1000)
-                        if ts_int > 0:
-                            due_at = timezone.datetime.fromtimestamp(ts_int, tz=timezone.utc)
-                except Exception:
-                    due_at = None
+                # важно: не используем "or", потому что 0/"" могут скрыть реальные значения
+                ts = t.get("complete_till", None)
+                if ts in (None, "", 0, "0"):
+                    ts = t.get("complete_till_at", None)
+                if ts in (None, "", 0, "0"):
+                    ts = t.get("due_at", None)
+                due_at = _parse_amo_due(ts)
                 assigned_to = None
                 rid = int(t.get("responsible_user_id") or 0)
                 if rid:
@@ -402,7 +483,7 @@ def migrate_filtered(
                     if existing.description and "[Amo task id:" in existing.description:
                         existing.description = ""
                         upd = True
-                    if due_at and existing.due_at is None:
+                    if due_at and (existing.due_at is None or existing.due_at != due_at):
                         existing.due_at = due_at
                         upd = True
                     if company and existing.company_id is None:
@@ -486,6 +567,40 @@ def migrate_filtered(
                         created_label = ""
 
                     prefix = "Импорт из amo"
+                    # amomail_message — это по сути история почты; делаем читабельным, без JSON
+                    if note_type.lower().startswith("amomail"):
+                        incoming = bool(params.get("income")) if isinstance(params, dict) else False
+                        subj = str(params.get("subject") or "").strip()
+                        frm = params.get("from") or {}
+                        to = params.get("to") or {}
+                        frm_s = ""
+                        to_s = ""
+                        try:
+                            frm_s = f"{(frm.get('name') or '').strip()} <{(frm.get('email') or '').strip()}>".strip()
+                        except Exception:
+                            frm_s = ""
+                        try:
+                            to_s = f"{(to.get('name') or '').strip()} <{(to.get('email') or '').strip()}>".strip()
+                        except Exception:
+                            to_s = ""
+                        summ = str(params.get("content_summary") or "").strip()
+                        attach_cnt = params.get("attach_cnt")
+                        lines = []
+                        lines.append("Письмо (amoMail) · " + ("Входящее" if incoming else "Исходящее"))
+                        if subj:
+                            lines.append("Тема: " + subj)
+                        if frm_s:
+                            lines.append("От: " + frm_s)
+                        if to_s:
+                            lines.append("Кому: " + to_s)
+                        if summ:
+                            lines.append("Кратко: " + summ)
+                        if attach_cnt not in (None, "", 0, "0"):
+                            lines.append("Вложений: " + str(attach_cnt))
+                        # для такого типа не подставляем автора как "вы"
+                        author = None
+                        text = "\n".join(lines) if lines else "Письмо (amoMail)"
+                        prefix = "Импорт из amo"
                     meta_bits = []
                     if author_amo_name:
                         meta_bits.append(f"автор: {author_amo_name}")
