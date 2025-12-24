@@ -940,6 +940,23 @@ def migrate_filtered(
                     res.contacts_preview.append(debug_info)
                 
                 for ac in amo_contacts:
+                    # ОТЛАДКА: логируем сырую структуру контакта для первых 3
+                    debug_count_raw = getattr(res, '_debug_contacts_logged', 0)
+                    if debug_count_raw < 3:
+                        print(f"[AMOCRM DEBUG] ===== RAW CONTACT STRUCTURE =====")
+                        print(f"  - Type: {type(ac)}")
+                        if isinstance(ac, dict):
+                            print(f"  - Keys: {list(ac.keys())}")
+                            print(f"  - Has 'id': {'id' in ac}")
+                            print(f"  - Has 'custom_fields_values': {'custom_fields_values' in ac}")
+                            if 'custom_fields_values' in ac:
+                                cfv = ac.get('custom_fields_values')
+                                print(f"  - custom_fields_values type: {type(cfv)}, length: {len(cfv) if isinstance(cfv, list) else 'not_list'}")
+                            print(f"  - Full contact (first 500 chars): {str(ac)[:500]}")
+                        else:
+                            print(f"  - Contact is not a dict: {ac}")
+                        print(f"[AMOCRM DEBUG] ===== END RAW STRUCTURE =====")
+                    
                     amo_contact_id = int(ac.get("id") or 0)
                     if not amo_contact_id:
                         # ОТЛАДКА: контакт без ID
