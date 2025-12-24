@@ -3047,10 +3047,11 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
         messages.error(request, "Сначала подключите amoCRM (OAuth).")
         return redirect("settings_amocrm")
 
-    client = AmoClient(cfg)
+    client = None
     users = []
     fields = []
     try:
+        client = AmoClient(cfg)
         users = fetch_amo_users(client)
         fields = fetch_company_custom_fields(client)
         cfg.last_error = ""
@@ -3059,6 +3060,17 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
         cfg.last_error = str(e)
         cfg.save(update_fields=["last_error", "updated_at"])
         messages.error(request, f"Ошибка API amoCRM: {e}")
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"AMOCRM_MIGRATE_INIT_ERROR: {error_details}")
+        messages.error(request, f"Ошибка инициализации: {str(e)}. Проверьте логи сервера.")
+        if not client:
+            return render(
+                request,
+                "ui/settings/amocrm_migrate.html",
+                {"cfg": cfg, "form": None, "users": [], "fields": [], "result": None},
+            )
 
     # default guesses
     def _find_field_id(names: list[str]) -> int | None:
