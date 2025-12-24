@@ -3,6 +3,64 @@
 from django.db import migrations
 
 
+def truncate_long_values(apps, schema_editor):
+    """
+    Обрезает длинные значения в существующих записях Company до max_length.
+    Это защищает от ошибки StringDataRightTruncation при сохранении.
+    """
+    Company = apps.get_model('companies', 'Company')
+    
+    # Обрезаем все строковые поля до их max_length
+    for company in Company.objects.all():
+        changed = False
+        updates = {}
+        
+        if company.inn and len(company.inn) > 20:
+            updates['inn'] = company.inn[:20]
+            changed = True
+        if company.kpp and len(company.kpp) > 20:
+            updates['kpp'] = company.kpp[:20]
+            changed = True
+        if company.legal_name and len(company.legal_name) > 255:
+            updates['legal_name'] = company.legal_name[:255]
+            changed = True
+        if company.address and len(company.address) > 500:
+            updates['address'] = company.address[:500]
+            changed = True
+        if company.website and len(company.website) > 255:
+            updates['website'] = company.website[:255]
+            changed = True
+        if company.contact_name and len(company.contact_name) > 255:
+            updates['contact_name'] = company.contact_name[:255]
+            changed = True
+        if company.contact_position and len(company.contact_position) > 255:
+            updates['contact_position'] = company.contact_position[:255]
+            changed = True
+        if company.activity_kind and len(company.activity_kind) > 255:
+            updates['activity_kind'] = company.activity_kind[:255]
+            changed = True
+        if company.name and len(company.name) > 255:
+            updates['name'] = company.name[:255]
+            changed = True
+        if company.phone and len(company.phone) > 50:
+            updates['phone'] = company.phone[:50]
+            changed = True
+        if company.email and len(company.email) > 254:
+            updates['email'] = company.email[:254]
+            changed = True
+        
+        if changed:
+            # Используем update() чтобы избежать вызова save() (который может вызвать другие проблемы)
+            Company.objects.filter(pk=company.pk).update(**updates)
+
+
+def reverse_truncate(apps, schema_editor):
+    """
+    Обратная операция не требуется - мы только обрезаем значения.
+    """
+    pass
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -10,4 +68,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.RunPython(truncate_long_values, reverse_truncate),
     ]
