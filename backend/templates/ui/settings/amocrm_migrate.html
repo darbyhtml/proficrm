@@ -203,6 +203,31 @@
                           <div><b>Контакт:</b> {{ c.last_name }} {{ c.first_name }} (amo id: {{ c.amo_contact_id }})</div>
                           <div><b>ID компаний в контакте:</b> {{ c.company_ids_in_contact|join:", "|default:"—" }}</div>
                         </div>
+                      {% elif c.status == 'SKIPPED_ALREADY_EXISTS' %}
+                        <div class="font-medium mb-2 text-yellow-600">⚠️ Пропущен: контакт уже существует</div>
+                        <div class="space-y-1">
+                          <div><b>Контакт:</b> {{ c.last_name }} {{ c.first_name }} (amo id: {{ c.amo_contact_id }})</div>
+                          <div><b>Телефоны найдены:</b> {% if c.phones_found %}{{ c.phones_found|join:", " }}{% else %}—{% endif %}</div>
+                          <div><b>Email найдены:</b> {% if c.emails_found %}{{ c.emails_found|join:", " }}{% else %}—{% endif %}</div>
+                          <div><b>Должность найдена:</b> {{ c.position_found|default:"—" }}</div>
+                          <div><b>custom_fields_values:</b> {{ c.custom_fields_count|default:0 }} полей</div>
+                          {% if c.custom_fields_sample %}
+                            <div class="mt-2">
+                              <b>Примеры полей (первые 5):</b>
+                              <div class="space-y-1 mt-1 pl-2 border-l-2">
+                                {% for cf in c.custom_fields_sample %}
+                                  <div class="text-xs">
+                                    [{{ cf.index }}] <b>code:</b> {{ cf.code|default:"—" }}, 
+                                    <b>name:</b> {{ cf.name|default:"—" }}, 
+                                    <b>type:</b> {{ cf.type|default:"—" }}, 
+                                    <b>values:</b> {{ cf.values_count }}, 
+                                    <b>first_value:</b> {{ cf.first_value|default:"—"|truncatewords:15 }}
+                                  </div>
+                                {% endfor %}
+                              </div>
+                            </div>
+                          {% endif %}
+                        </div>
                       {% else %}
                         <div class="font-medium mb-2">{{ c.last_name }} {{ c.first_name }} (amo id: {{ c.amo_contact_id }})</div>
                         <div class="space-y-1">
