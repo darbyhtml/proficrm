@@ -2895,7 +2895,16 @@ def settings_import(request: HttpRequest) -> HttpResponse:
 
             # Сохраняем во временный файл, чтобы использовать общий импортёр
             fd, tmp_path = tempfile.mkstemp(suffix=".csv")
-            Path(tmp_path).write_bytes(f.read())
+            try:
+                import os
+                Path(tmp_path).write_bytes(f.read())
+                os.close(fd)  # Закрываем файловый дескриптор после записи
+                fd = None
+            except Exception:
+                if fd:
+                    import os
+                    os.close(fd)
+                raise
 
             try:
                 from companies.importer import import_amo_csv
@@ -2945,7 +2954,17 @@ def settings_import_tasks(request: HttpRequest) -> HttpResponse:
                 unmatched_mode = "skip"
 
             fd, tmp_path = tempfile.mkstemp(suffix=".ics")
-            Path(tmp_path).write_bytes(f.read())
+            try:
+                import os
+                Path(tmp_path).write_bytes(f.read())
+                os.close(fd)  # Закрываем файловый дескриптор после записи
+                fd = None
+            except Exception:
+                if fd:
+                    import os
+                    os.close(fd)
+                raise
+
             try:
                 from tasksapp.importer_ics import import_amocrm_ics
 
