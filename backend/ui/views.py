@@ -320,9 +320,9 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     )
 
     # Новые задачи (назначено сотруднику): показываем последние, чтобы при входе было сразу видно.
+    # Примечание: фильтр по status=NEW уже исключает DONE и CANCELLED, поэтому дополнительный exclude не нужен
     tasks_new = (
         Task.objects.filter(assigned_to=user, status=Task.Status.NEW)
-        .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
         .select_related("company", "created_by")
         .order_by("-created_at")[:20]
     )
@@ -346,11 +346,13 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         "ui/dashboard.html",
         {
             "now": now,
+            "local_now": local_now,  # Для корректного сравнения дат в шаблоне
             "tasks_new": tasks_new,
             "tasks_today": tasks_today,
             "overdue": overdue,
             "tasks_week": tasks_week,
             "contracts_soon": contracts_soon,
+            "can_view_cold_call_reports": _can_view_cold_call_reports(user),
         },
     )
 

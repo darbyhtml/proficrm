@@ -41,11 +41,11 @@
         {% if tasks_today %}
           <ul class="space-y-2">
             {% for t in tasks_today %}
-              <li class="rounded-lg border p-3 {% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %}">
+              <li class="rounded-lg border p-3 {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %}">
                 <div class="flex items-start justify-between gap-3">
                   <div class="text-sm font-medium">{{ t.title }}</div>
                   <div class="flex items-center gap-2 flex-shrink-0">
-                    {% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}
+                    {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}
                       <span class="badge badge-danger">Срочно</span>
                     {% endif %}
                     <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
@@ -53,7 +53,7 @@
                 </div>
                 <div class="text-xs text-brand-dark/70">
                   {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>{% endif %}
-                  {% if t.due_at %} · <span class="{% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}">{{ t.due_at }}</span>{% endif %}
+                  {% if t.due_at %} · <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}">{{ t.due_at }}</span>{% endif %}
                 </div>
               </li>
             {% endfor %}
@@ -154,11 +154,11 @@
         {% if tasks_week %}
           <ul class="space-y-2">
             {% for t in tasks_week %}
-              <li class="rounded-lg border p-3 {% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %}">
+              <li class="rounded-lg border p-3 {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %}">
                 <div class="flex items-start justify-between gap-3">
                   <div class="text-sm font-medium">{{ t.title }}</div>
                   <div class="flex items-center gap-2 flex-shrink-0">
-                    {% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}
+                    {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}
                       <span class="badge badge-danger">Просрочено</span>
                     {% endif %}
                     <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
@@ -166,7 +166,7 @@
                 </div>
                 <div class="text-xs text-brand-dark/70">
                   {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>{% endif %}
-                  {% if t.due_at %} · <span class="{% if t.due_at and t.due_at < now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}">{{ t.due_at }}</span>{% endif %}
+                  {% if t.due_at %} · <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}">{{ t.due_at }}</span>{% endif %}
                 </div>
               </li>
             {% endfor %}
