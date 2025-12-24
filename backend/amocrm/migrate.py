@@ -828,8 +828,11 @@ def migrate_filtered(
                 res.notes_skipped_existing = 0
 
         # Импорт контактов компаний из amoCRM (опционально, т.к. может быть медленно)
+        # Важно: импортируем контакты ТОЛЬКО для компаний из текущей пачки (amo_ids)
         if import_contacts and amo_ids:
             try:
+                # Создаём set для быстрой проверки: контакты должны быть связаны только с компаниями из текущей пачки
+                amo_ids_set = set(amo_ids)
                 amo_contacts = fetch_contacts_for_companies(client, amo_ids)
                 for ac in amo_contacts:
                     amo_contact_id = int(ac.get("id") or 0)
@@ -839,7 +842,7 @@ def migrate_filtered(
                     company_ids_in_contact = []
                     # Вариант 1: company_id в самом контакте
                     cid = int(ac.get("company_id") or 0)
-                    if cid:
+                    if cid and cid in amo_ids_set:  # проверяем, что компания из текущей пачки
                         company_ids_in_contact.append(cid)
                     # Вариант 2: через _embedded/companies
                     embedded = ac.get("_embedded") or {}
@@ -847,18 +850,18 @@ def migrate_filtered(
                     if isinstance(companies, list):
                         for c in companies:
                             cid2 = int(c.get("id") or 0)
-                            if cid2:
+                            if cid2 and cid2 in amo_ids_set:  # проверяем, что компания из текущей пачки
                                 company_ids_in_contact.append(cid2)
                     if not company_ids_in_contact:
-                        continue
-                    # Находим локальную компанию
+                        continue  # пропускаем контакты, не связанные с компаниями из текущей пачки
+                    # Находим локальную компанию (должна быть из текущей пачки)
                     local_company = None
                     for cid3 in company_ids_in_contact:
                         local_company = Company.objects.filter(amocrm_company_id=cid3).first()
                         if local_company:
                             break
                     if not local_company:
-                        continue
+                        continue  # пропускаем, если локальная компания не найдена (не должна случиться, но на всякий случай)
                     # Проверяем, не импортировали ли уже этот контакт
                     existing_contact = Contact.objects.filter(amocrm_contact_id=amo_contact_id, company=local_company).first()
                     if existing_contact:
