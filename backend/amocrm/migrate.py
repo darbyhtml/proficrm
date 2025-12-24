@@ -1131,7 +1131,7 @@ def migrate_filtered(
                     
                     # В amoCRM телефоны и email могут быть:
                     # 1. В стандартных полях (phone, email) - если они есть
-                    # 2. В custom_fields_values с code="PHONE"/"EMAIL" или по field_id
+                    # 2. В custom_fields_values с field_code="PHONE"/"EMAIL" или по field_name
                     # 3. В custom_fields_values по названию поля
                     phones = []
                     emails = []
@@ -1148,26 +1148,27 @@ def migrate_filtered(
                     # ОТЛАДКА: логируем структуру custom_fields для первых контактов
                     debug_count_for_extraction = getattr(res, '_debug_contacts_logged', 0)
                     if debug_count_for_extraction < 3:
-                        print(f"[AMOCRM DEBUG] Extracting data from custom_fields for contact {amo_contact_id}:")
-                        print(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}")
+                        print(f"[AMOCRM DEBUG] Extracting data from custom_fields for contact {amo_contact_id}:", flush=True)
+                        print(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}", flush=True)
                     
                     for cf_idx, cf in enumerate(custom_fields):
                         if not isinstance(cf, dict):
                             if debug_count_for_extraction < 3:
-                                print(f"  - [field {cf_idx}] Skipped: not a dict, type={type(cf)}")
+                                print(f"  - [field {cf_idx}] Skipped: not a dict, type={type(cf)}", flush=True)
                             continue
                         field_id = int(cf.get("field_id") or 0)
-                        field_code = str(cf.get("code") or "").upper()  # PHONE, EMAIL в верхнем регистре
-                        field_name = str(cf.get("name") or "").lower()
-                        field_type = str(cf.get("type") or "").lower()
+                        # ВАЖНО: в amoCRM используется field_code (не code) и field_name (не name)
+                        field_code = str(cf.get("field_code") or "").upper()  # PHONE, EMAIL в верхнем регистре
+                        field_name = str(cf.get("field_name") or "").lower()  # "телефон", "должность"
+                        field_type = str(cf.get("field_type") or "").lower()  # "multitext", "text", "date"
                         values = cf.get("values") or []
                         if not isinstance(values, list):
                             if debug_count_for_extraction < 3:
-                                print(f"  - [field {cf_idx}] Skipped: values not a list, type={type(values)}")
+                                print(f"  - [field {cf_idx}] Skipped: values not a list, type={type(values)}", flush=True)
                             continue
                         
                         if debug_count_for_extraction < 3:
-                            print(f"  - [field {cf_idx}] field_id={field_id}, code={field_code}, name={field_name}, type={field_type}, values_count={len(values)}")
+                            print(f"  - [field {cf_idx}] field_id={field_id}, field_code={field_code}, field_name={field_name}, field_type={field_type}, values_count={len(values)}", flush=True)
                         
                         for v_idx, v in enumerate(values):
                             # Значение может быть как dict (с ключом "value"), так и строкой
@@ -1186,35 +1187,33 @@ def migrate_filtered(
                             if not val:
                                 continue
                             
-                            # Телефоны: проверяем code="PHONE", type="phone", или название содержит "телефон"
-                            is_phone = (field_code == "PHONE" or field_type == "phone" or 
-                                       field_code.lower() in ("phone", "phone_number", "mobile", "work_phone") or 
+                            # Телефоны: проверяем field_code="PHONE" или field_name содержит "телефон"
+                            # В amoCRM field_type для телефонов обычно "multitext"
+                            is_phone = (field_code == "PHONE" or 
                                        "телефон" in field_name)
-                            # Email: проверяем code="EMAIL", type="email", или название содержит "email"/"почта"
-                            is_email = (field_code == "EMAIL" or field_type == "email" or
-                                       field_code.lower() in ("email", "email_address") or 
-                                       "email" in field_name or "почта" in field_name)
-                            # Должность: проверяем code="POSITION" или название содержит "должность"/"позиция"
+                            # Email: проверяем field_code="EMAIL" или field_name содержит "email"/"почта"
+                            is_email = (field_code == "EMAIL" or
+                                       "email" in field_name or "почта" in field_name or "e-mail" in field_name)
+                            # Должность: проверяем field_code="POSITION" или field_name содержит "должность"/"позиция"
                             is_position = (field_code == "POSITION" or
-                                          field_code.lower() in ("position", "job_title") or 
                                           "должность" in field_name or "позиция" in field_name)
                             
                             if debug_count_for_extraction < 3:
-                                print(f"    [value {v_idx}] val={val[:50]}, is_phone={is_phone}, is_email={is_email}, is_position={is_position}")
+                                print(f"    [value {v_idx}] val={val[:50]}, is_phone={is_phone}, is_email={is_email}, is_position={is_position}", flush=True)
                             
                             if is_phone:
                                 phones.extend(_split_multi(val))
                                 if debug_count_for_extraction < 3:
-                                    print(f"      -> Added to phones: {_split_multi(val)}")
+                                    print(f"      -> Added to phones: {_split_multi(val)}", flush=True)
                             elif is_email:
                                 emails.append(val)
                                 if debug_count_for_extraction < 3:
-                                    print(f"      -> Added to emails: {val}")
+                                    print(f"      -> Added to emails: {val}", flush=True)
                             elif is_position:
                                 if not position:
                                     position = val
                                     if debug_count_for_extraction < 3:
-                                        print(f"      -> Set position: {val}")
+                                        print(f"      -> Set position: {val}", flush=True)
                     
                     # Убираем дубликаты
                     phones = list(dict.fromkeys(phones))  # сохраняет порядок
