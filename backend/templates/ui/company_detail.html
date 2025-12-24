@@ -348,6 +348,14 @@
                 </div>
               {% endif %}
             </div>
+            {% if company.primary_contact_is_cold_call and company.primary_cold_marked_at %}
+              <div class="mt-1 text-xs text-brand-dark/60">
+                Холодный звонок: {{ company.primary_cold_marked_at|date:"d.m.Y H:i" }}
+                {% if company.primary_cold_marked_by %}
+                  ({{ company.primary_cold_marked_by }})
+                {% endif %}
+              </div>
+            {% endif %}
           </div>
           <div>
             <div class="text-brand-dark/50">Email (основной)</div>
@@ -522,7 +530,7 @@
             {% for c in contacts %}
               <div class="rounded-lg border p-3">
                 <div class="flex items-start justify-between gap-3">
-                  <div>
+                  <div class="flex-1">
                     <div class="text-sm font-medium">{{ c.last_name }} {{ c.first_name }}</div>
                     <div class="text-xs text-brand-dark/70">
                       {{ c.position }}
@@ -530,6 +538,14 @@
                         <span class="badge badge-warn ml-2" style="padding:.1rem .35rem;font-size:.65rem">Холодный</span>
                       {% endif %}
                     </div>
+                    {% if c.is_cold_call and c.cold_marked_at %}
+                      <div class="mt-1 text-xs text-brand-dark/60">
+                        Холодный звонок: {{ c.cold_marked_at|date:"d.m.Y H:i" }}
+                        {% if c.cold_marked_by %}
+                          ({{ c.cold_marked_by }})
+                        {% endif %}
+                      </div>
+                    {% endif %}
                   </div>
                   {% if can_edit_company %}
                     <div class="flex items-center gap-2">
