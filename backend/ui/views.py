@@ -807,6 +807,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "company_list_columns": columns,
             "transfer_targets": User.objects.filter(is_active=True, role__in=[User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD]).order_by("last_name", "first_name"),
             "per_page": per_page,
+            "is_admin": _require_admin(user),
         },
     )
 
@@ -921,14 +922,16 @@ def company_export(request: HttpRequest) -> HttpResponse:
                 "allowed": False,
                 "ip": request.META.get("REMOTE_ADDR"),
                 "user_agent": request.META.get("HTTP_USER_AGENT", "")[:200],
-                "filters": {
-                    "q": (request.GET.get("q") or "").strip(),
-                    "responsible": (request.GET.get("responsible") or "").strip(),
-                    "status": (request.GET.get("status") or "").strip(),
-                    "branch": (request.GET.get("branch") or "").strip(),
-                    "sphere": (request.GET.get("sphere") or "").strip(),
-                    "overdue": (request.GET.get("overdue") or "").strip(),
-                },
+            "filters": {
+                "q": (request.GET.get("q") or "").strip(),
+                "responsible": (request.GET.get("responsible") or "").strip(),
+                "status": (request.GET.get("status") or "").strip(),
+                "branch": (request.GET.get("branch") or "").strip(),
+                "sphere": (request.GET.get("sphere") or "").strip(),
+                "contract_type": (request.GET.get("contract_type") or "").strip(),
+                "cold_call": (request.GET.get("cold_call") or "").strip(),
+                "overdue": (request.GET.get("overdue") or "").strip(),
+            },
             },
         )
         messages.error(request, "Экспорт доступен только администратору.")
