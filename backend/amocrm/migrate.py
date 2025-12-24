@@ -501,14 +501,26 @@ def migrate_filtered(
     batch_size = int(limit_companies or 0)
     if batch_size <= 0:
         batch_size = 50
-    batch = matched_all[off : off + batch_size]
-    res.companies_offset = off
-    res.companies_batch = len(batch)
-    res.companies_next_offset = off + len(batch)
-    res.companies_has_more = res.companies_next_offset < len(matched_all)
+    # Защита от offset за пределами списка
+    if off >= len(matched_all):
+        batch = []
+        res.companies_offset = off
+        res.companies_batch = 0
+        res.companies_next_offset = off
+        res.companies_has_more = False
+    else:
+        batch = matched_all[off : off + batch_size]
+        res.companies_offset = off
+        res.companies_batch = len(batch)
+        res.companies_next_offset = off + len(batch)
+        res.companies_has_more = res.companies_next_offset < len(matched_all)
 
     @transaction.atomic
     def _run():
+        # Защита от пустого batch (когда offset за пределами списка)
+        if not batch:
+            return res
+        
         local_companies: list[Company] = []
         for amo_c in batch:
             extra = _extract_company_fields(amo_c, field_meta) if field_meta else {}

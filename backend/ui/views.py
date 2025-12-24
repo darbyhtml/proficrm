@@ -3113,6 +3113,13 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                     messages.success(request, "Импорт выполнен.")
             except AmoApiError as e:
                 messages.error(request, f"Ошибка миграции: {e}")
+            except Exception as e:
+                # Логируем полную ошибку для отладки
+                import traceback
+                error_details = traceback.format_exc()
+                messages.error(request, f"Ошибка миграции: {str(e)}. Проверьте логи сервера для деталей.")
+                # В продакшене можно логировать в файл или sentry
+                print(f"AMOCRM_MIGRATE_ERROR: {error_details}")
     else:
         # попытка найти ответственную по имени "Иванова Юлия"
         default_resp = None
