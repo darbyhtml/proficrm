@@ -881,34 +881,63 @@ def migrate_filtered(
                     # Извлекаем данные контакта
                     first_name = str(ac.get("first_name") or "").strip()
                     last_name = str(ac.get("last_name") or "").strip()
-                    # custom_fields_values для телефонов/почт/должности
-                    custom_fields = ac.get("custom_fields_values") or []
+                    
+                    # В amoCRM телефоны и email могут быть:
+                    # 1. В стандартных полях (phone, email) - если они есть
+                    # 2. В custom_fields_values с code="PHONE"/"EMAIL" или по field_id
+                    # 3. В custom_fields_values по названию поля
                     phones = []
                     emails = []
                     position = ""
+                    
+                    # Стандартные поля (если есть)
+                    if ac.get("phone"):
+                        phones.extend(_split_multi(str(ac.get("phone"))))
+                    if ac.get("email"):
+                        emails.append(str(ac.get("email")).strip())
+                    
+                    # custom_fields_values для телефонов/почт/должности
+                    custom_fields = ac.get("custom_fields_values") or []
                     for cf in custom_fields:
                         if not isinstance(cf, dict):
                             continue
                         field_id = int(cf.get("field_id") or 0)
-                        field_code = str(cf.get("code") or "").lower()
+                        field_code = str(cf.get("code") or "").upper()  # PHONE, EMAIL в верхнем регистре
                         field_name = str(cf.get("name") or "").lower()
+                        field_type = str(cf.get("type") or "").lower()
                         values = cf.get("values") or []
                         if not isinstance(values, list):
                             continue
                         for v in values:
-                            val = str(v.get("value") or "").strip()
+                            # Значение может быть как dict (с ключом "value"), так и строкой
+                            if isinstance(v, dict):
+                                val = str(v.get("value") or "").strip()
+                            elif isinstance(v, str):
+                                val = v.strip()
+                            else:
+                                val = str(v).strip() if v else ""
                             if not val:
                                 continue
-                            # Телефоны
-                            if field_code in ("phone", "phone_number", "mobile", "work_phone") or "телефон" in field_name:
+                            # Телефоны: проверяем code="PHONE", type="phone", или название содержит "телефон"
+                            if (field_code == "PHONE" or field_type == "phone" or 
+                                field_code.lower() in ("phone", "phone_number", "mobile", "work_phone") or 
+                                "телефон" in field_name):
                                 phones.extend(_split_multi(val))
-                            # Email
-                            elif field_code in ("email", "email_address") or "email" in field_name or "почта" in field_name:
+                            # Email: проверяем code="EMAIL", type="email", или название содержит "email"/"почта"
+                            elif (field_code == "EMAIL" or field_type == "email" or
+                                  field_code.lower() in ("email", "email_address") or 
+                                  "email" in field_name or "почта" in field_name):
                                 emails.append(val)
-                            # Должность
-                            elif field_code in ("position", "job_title") or "должность" in field_name or "позиция" in field_name:
+                            # Должность: проверяем code="POSITION" или название содержит "должность"/"позиция"
+                            elif (field_code == "POSITION" or
+                                  field_code.lower() in ("position", "job_title") or 
+                                  "должность" in field_name or "позиция" in field_name):
                                 if not position:
                                     position = val
+                    
+                    # Убираем дубликаты
+                    phones = list(dict.fromkeys(phones))  # сохраняет порядок
+                    emails = list(dict.fromkeys(emails))
                     # Создаём контакт
                     contact = Contact(
                         company=local_company,
