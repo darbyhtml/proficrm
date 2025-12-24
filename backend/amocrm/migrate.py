@@ -578,7 +578,15 @@ def migrate_filtered(
                 comp.contact_name = extra["director"][:255]
                 changed = True
             if changed and not dry_run:
-                comp.save()
+                try:
+                    comp.save()
+                except Exception as e:
+                    # Если ошибка при сохранении - логируем и пропускаем эту компанию
+                    print(f"[AMOCRM ERROR] Failed to save company {comp.name} (amo_id={comp.amocrm_company_id}): {e}")
+                    import traceback
+                    print(f"[AMOCRM ERROR] Traceback: {traceback.format_exc()}")
+                    # Пропускаем эту компанию, продолжаем со следующей
+                    continue
 
             # Нормализация уже заполненных значений (часто там "номер1, номер2"):
             # оставляем в "Данные" только первый, остальные переносим в служебный контакт.
