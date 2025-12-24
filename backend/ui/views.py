@@ -3095,46 +3095,46 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                 try:
                     # Защита от nginx 504: уменьшаем batch_size в зависимости от того, что импортируем
                     batch_size = int(form.cleaned_data.get("limit_companies") or 0)
-                if batch_size <= 0:
-                    batch_size = 10  # дефолт уменьшен с 50 до 10
-                import_notes = bool(form.cleaned_data.get("import_notes"))
-                import_contacts = bool(form.cleaned_data.get("import_contacts"))
-                if import_notes and import_contacts:
-                    batch_size = min(batch_size, 3)  # если оба включены - очень маленькая пачка
-                elif import_notes:
-                    batch_size = min(batch_size, 5)  # только заметки
-                elif import_contacts:
-                    batch_size = min(batch_size, 5)  # только контакты
-                else:
-                    batch_size = min(batch_size, 10)  # только компании/задачи
-                result = migrate_filtered(
-                    client=client,
-                    actor=request.user,
-                    responsible_user_id=int(form.cleaned_data["responsible_user_id"]),
-                    sphere_field_id=int(form.cleaned_data["custom_field_id"]),
-                    sphere_option_id=form.cleaned_data.get("custom_value_enum_id") or None,
-                    sphere_label=form.cleaned_data.get("custom_value_label") or None,
-                    limit_companies=batch_size,
-                    offset=int(form.cleaned_data.get("offset") or 0),
-                    dry_run=bool(form.cleaned_data.get("dry_run")),
-                    import_tasks=bool(form.cleaned_data.get("import_tasks")),
-                    import_notes=bool(form.cleaned_data.get("import_notes")),
-                    import_contacts=bool(form.cleaned_data.get("import_contacts")),
-                    company_fields_meta=fields,
-                )
-                if form.cleaned_data.get("dry_run"):
-                    messages.success(request, "Проверка (dry-run) выполнена.")
-                else:
-                    messages.success(request, "Импорт выполнен.")
-            except AmoApiError as e:
-                messages.error(request, f"Ошибка миграции: {e}")
-            except Exception as e:
-                # Логируем полную ошибку для отладки
-                import traceback
-                error_details = traceback.format_exc()
-                messages.error(request, f"Ошибка миграции: {str(e)}. Проверьте логи сервера для деталей.")
-                # В продакшене можно логировать в файл или sentry
-                print(f"AMOCRM_MIGRATE_ERROR: {error_details}")
+                    if batch_size <= 0:
+                        batch_size = 10  # дефолт уменьшен с 50 до 10
+                    import_notes = bool(form.cleaned_data.get("import_notes"))
+                    import_contacts = bool(form.cleaned_data.get("import_contacts"))
+                    if import_notes and import_contacts:
+                        batch_size = min(batch_size, 3)  # если оба включены - очень маленькая пачка
+                    elif import_notes:
+                        batch_size = min(batch_size, 5)  # только заметки
+                    elif import_contacts:
+                        batch_size = min(batch_size, 5)  # только контакты
+                    else:
+                        batch_size = min(batch_size, 10)  # только компании/задачи
+                    result = migrate_filtered(
+                        client=client,
+                        actor=request.user,
+                        responsible_user_id=int(form.cleaned_data["responsible_user_id"]),
+                        sphere_field_id=int(form.cleaned_data["custom_field_id"]),
+                        sphere_option_id=form.cleaned_data.get("custom_value_enum_id") or None,
+                        sphere_label=form.cleaned_data.get("custom_value_label") or None,
+                        limit_companies=batch_size,
+                        offset=int(form.cleaned_data.get("offset") or 0),
+                        dry_run=bool(form.cleaned_data.get("dry_run")),
+                        import_tasks=bool(form.cleaned_data.get("import_tasks")),
+                        import_notes=bool(form.cleaned_data.get("import_notes")),
+                        import_contacts=bool(form.cleaned_data.get("import_contacts")),
+                        company_fields_meta=fields,
+                    )
+                    if form.cleaned_data.get("dry_run"):
+                        messages.success(request, "Проверка (dry-run) выполнена.")
+                    else:
+                        messages.success(request, "Импорт выполнен.")
+                except AmoApiError as e:
+                    messages.error(request, f"Ошибка миграции: {e}")
+                except Exception as e:
+                    # Логируем полную ошибку для отладки
+                    import traceback
+                    error_details = traceback.format_exc()
+                    messages.error(request, f"Ошибка миграции: {str(e)}. Проверьте логи сервера для деталей.")
+                    # В продакшене можно логировать в файл или sentry
+                    print(f"AMOCRM_MIGRATE_ERROR: {error_details}")
     else:
         # попытка найти ответственную по имени "Иванова Юлия"
         default_resp = None
