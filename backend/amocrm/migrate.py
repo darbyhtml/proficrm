@@ -171,7 +171,7 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
         if not fid:
             return ""
         vals = _custom_values_text(amo_company, fid)
-        return vals[0] if vals else ""
+        return (vals[0] if vals else "")[:500]  # обрезаем до разумного максимума (для дальнейшей обрезки по полям)
 
     def list_vals(fid: int | None) -> list[str]:
         if not fid:
@@ -527,19 +527,40 @@ def migrate_filtered(
             extra = _extract_company_fields(amo_c, field_meta) if field_meta else {}
             comp, created = _upsert_company_from_amo(amo_company=amo_c, actor=actor, responsible=responsible_local, dry_run=dry_run)
             # заполнение "Данные" (только если поле пустое, чтобы не затереть уже заполненное вручную)
+            # ВАЖНО: всегда обрезаем значения до max_length, даже если поле уже заполнено (защита от длинных значений)
             changed = False
-            if extra.get("legal_name") and not (comp.legal_name or "").strip():
-                comp.legal_name = str(extra["legal_name"])[:255]  # max_length=255
-                changed = True
-            if extra.get("inn") and not (comp.inn or "").strip():
-                comp.inn = str(extra["inn"])[:20]  # max_length=20
-                changed = True
-            if extra.get("kpp") and not (comp.kpp or "").strip():
-                comp.kpp = str(extra["kpp"])[:20]  # max_length=20
-                changed = True
-            if extra.get("address") and not (comp.address or "").strip():
-                comp.address = str(extra["address"])[:500]  # max_length=500
-                changed = True
+            if extra.get("legal_name"):
+                new_legal = str(extra["legal_name"])[:255].strip()  # max_length=255
+                if not (comp.legal_name or "").strip():
+                    comp.legal_name = new_legal
+                    changed = True
+                elif len(comp.legal_name) > 255:  # защита: если уже заполнено, но слишком длинное
+                    comp.legal_name = comp.legal_name[:255]
+                    changed = True
+            if extra.get("inn"):
+                new_inn = str(extra["inn"])[:20].strip()  # max_length=20
+                if not (comp.inn or "").strip():
+                    comp.inn = new_inn
+                    changed = True
+                elif len(comp.inn) > 20:  # защита: если уже заполнено, но слишком длинное
+                    comp.inn = comp.inn[:20]
+                    changed = True
+            if extra.get("kpp"):
+                new_kpp = str(extra["kpp"])[:20].strip()  # max_length=20
+                if not (comp.kpp or "").strip():
+                    comp.kpp = new_kpp
+                    changed = True
+                elif len(comp.kpp) > 20:  # защита: если уже заполнено, но слишком длинное
+                    comp.kpp = comp.kpp[:20]
+                    changed = True
+            if extra.get("address"):
+                new_addr = str(extra["address"])[:500].strip()  # max_length=500
+                if not (comp.address or "").strip():
+                    comp.address = new_addr
+                    changed = True
+                elif len(comp.address) > 500:  # защита: если уже заполнено, но слишком длинное
+                    comp.address = comp.address[:500]
+                    changed = True
             phones = extra.get("phones") or []
             emails = extra.get("emails") or []
             # основной телефон/почта — в "Данные", остальные — в отдельный контакт (даже без ФИО/должности)
