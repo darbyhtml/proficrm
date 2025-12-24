@@ -1119,7 +1119,17 @@ def migrate_filtered(
         if dry_run:
             transaction.set_rollback(True)
 
-    _run()
+    try:
+        _run()
+    except Exception as e:
+        # Логируем ошибку, но не падаем - возвращаем частичный результат
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"[AMOCRM ERROR] Migration failed: {type(e).__name__}: {e}")
+        print(f"[AMOCRM ERROR] Traceback:\n{error_details}")
+        # Устанавливаем флаг ошибки в результате
+        res.error = str(e)
+        res.error_traceback = error_details
     return res
 
 
