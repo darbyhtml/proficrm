@@ -415,7 +415,7 @@ def _upsert_company_from_amo(
     dry_run: bool,
 ) -> tuple[Company, bool]:
     amo_id = int(amo_company.get("id") or 0)
-    name = str(amo_company.get("name") or "").strip() or "(без названия)"
+    name = str(amo_company.get("name") or "").strip()[:255] or "(без названия)"  # обрезаем name сразу
     company = Company.objects.filter(amocrm_company_id=amo_id).first()
     created = False
     if company is None:
@@ -423,7 +423,7 @@ def _upsert_company_from_amo(
         created = True
     else:
         if name and company.name != name:
-            company.name = name
+            company.name = name[:255]  # обрезаем name при обновлении
     # сохраняем raw_fields (не ломаем существующие)
     try:
         rf = dict(company.raw_fields or {})
