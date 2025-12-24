@@ -20,6 +20,74 @@ def _norm(s: str) -> str:
     return (s or "").strip().lower()
 
 
+def _parse_fio(name_str: str, first_name_str: str = "", last_name_str: str = "") -> tuple[str, str]:
+    """
+    Парсит ФИО из строк amoCRM в (last_name, first_name).
+    
+    Логика:
+    - Если есть и first_name и last_name - используем их как есть
+    - Если есть только name - парсим "Фамилия Имя Отчество" -> (Фамилия, Имя Отчество)
+    - Если есть name и first_name - парсим name как полное ФИО
+    - Если есть name и last_name - парсим name как полное ФИО
+    
+    Args:
+        name_str: Полное имя из поля "name"
+        first_name_str: Имя из поля "first_name"
+        last_name_str: Фамилия из поля "last_name"
+    
+    Returns:
+        tuple[str, str]: (last_name, first_name)
+    """
+    first_name = (first_name_str or "").strip()
+    last_name = (last_name_str or "").strip()
+    name = (name_str or "").strip()
+    
+    # Если есть и first_name и last_name - используем их
+    if first_name and last_name:
+        return (last_name[:120], first_name[:120])
+    
+    # Если есть только name - парсим его
+    if name and not first_name and not last_name:
+        parts = [p for p in name.split() if p.strip()]
+        if len(parts) >= 2:
+            # "Фамилия Имя Отчество" -> last_name="Фамилия", first_name="Имя Отчество"
+            return (parts[0][:120], " ".join(parts[1:])[:120])
+        elif len(parts) == 1:
+            # Только одно слово - считаем именем
+            return ("", parts[0][:120])
+    
+    # Если есть name и first_name - парсим name как полное ФИО
+    if name and first_name and not last_name:
+        parts = [p for p in name.split() if p.strip()]
+        if len(parts) >= 2:
+            # Если name содержит больше слов, чем first_name - парсим name
+            return (parts[0][:120], " ".join(parts[1:])[:120])
+        else:
+            # Иначе используем first_name
+            return ("", first_name[:120])
+    
+    # Если есть name и last_name - парсим name как полное ФИО
+    if name and last_name and not first_name:
+        parts = [p for p in name.split() if p.strip()]
+        if len(parts) >= 2:
+            # Если name содержит больше слов, чем last_name - парсим name
+            return (parts[0][:120], " ".join(parts[1:])[:120])
+        else:
+            # Иначе используем last_name
+            return (last_name[:120], "")
+    
+    # Если есть только first_name
+    if first_name and not last_name:
+        return ("", first_name[:120])
+    
+    # Если есть только last_name
+    if last_name and not first_name:
+        return (last_name[:120], "")
+    
+    # Если ничего нет
+    return ("", "")
+
+
 def _map_amo_user_to_local(amo_user: dict[str, Any]) -> User | None:
     """
     Best-effort сопоставление пользователя amo -> локальный User по имени.
@@ -1106,18 +1174,17 @@ def migrate_filtered(
                             res.contacts_preview.append(debug_data)
                         continue
                     # Извлекаем данные контакта (делаем это ДО проверки на existing, чтобы всегда было в preview)
-                    first_name = str(ac.get("first_name") or "").strip()
-                    last_name = str(ac.get("last_name") or "").strip()
-                    # Если first_name и last_name пустые, используем name
-                    if not first_name and not last_name:
-                        name = str(ac.get("name") or "").strip()
-                        if name:
-                            first_name = name
+                    # Парсим ФИО с помощью функции _parse_fio
+                    name_str = str(ac.get("name") or "").strip()
+                    first_name_raw = str(ac.get("first_name") or "").strip()
+                    last_name_raw = str(ac.get("last_name") or "").strip()
+                    last_name, first_name = _parse_fio(name_str, first_name_raw, last_name_raw)
                     
                     # ОТЛАДКА: логируем начало обработки контакта
                     preview_count_before = len(res.contacts_preview) if res.contacts_preview else 0
                     if preview_count_before < 3:
-                        print(f"[AMOCRM DEBUG] Processing contact {amo_contact_id} (first_name={first_name}, last_name={last_name})", flush=True)
+                        print(f"[AMOCRM DEBUG] Processing contact {amo_contact_id} (parsed: last_name={last_name}, first_name={first_name})", flush=True)
+                        print(f"  - raw: name={name_str}, first_name={first_name_raw}, last_name={last_name_raw}", flush=True)
                         print(f"  - local_company: {local_company.id if local_company else None}", flush=True)
                         print(f"  - has custom_fields_values: {'custom_fields_values' in ac if isinstance(ac, dict) else False}", flush=True)
                         if isinstance(ac, dict) and 'custom_fields_values' in ac:
@@ -1126,77 +1193,6 @@ def migrate_filtered(
                     
                     # Проверяем, не импортировали ли уже этот контакт
                     existing_contact = Contact.objects.filter(amocrm_contact_id=amo_contact_id, company=local_company).first()
-                    if existing_contact:
-                        # ОТЛАДКА: контакт уже существует - но все равно извлекаем данные для preview
-                        # Извлекаем данные для отображения в дебаге
-                        phones = []
-                        emails = []
-                        position = ""
-                        custom_fields = ac.get("custom_fields_values") or []
-                        for cf in custom_fields:
-                            if not isinstance(cf, dict):
-                                continue
-                            field_code = str(cf.get("field_code") or "").upper()
-                            field_name = str(cf.get("field_name") or "").lower()
-                            values = cf.get("values") or []
-                            for v in values:
-                                if isinstance(v, dict):
-                                    val = str(v.get("value") or "").strip()
-                                else:
-                                    val = str(v).strip() if v else ""
-                                if not val:
-                                    continue
-                                if field_code == "PHONE" or "телефон" in field_name:
-                                    phones.extend(_split_multi(val))
-                                elif field_code == "EMAIL" or "email" in field_name or "почта" in field_name:
-                                    emails.append(val)
-                                elif field_code == "POSITION" or "должность" in field_name or "позиция" in field_name:
-                                    if not position:
-                                        position = val
-                        
-                        # ОТЛАДКА: контакт уже существует
-                        debug_count = getattr(res, '_debug_contacts_logged', 0)
-                        if res.contacts_preview is None:
-                            res.contacts_preview = []
-                        if debug_count < 10:
-                            res._debug_contacts_logged = debug_count + 1
-                            # Собираем custom_fields_debug для отображения
-                            custom_fields_debug = []
-                            for cf_idx, cf in enumerate(custom_fields[:5]):
-                                if isinstance(cf, dict):
-                                    first_val = ""
-                                    if cf.get("values") and len(cf.get("values", [])) > 0:
-                                        v = cf.get("values")[0]
-                                        if isinstance(v, dict):
-                                            first_val = str(v.get("value", ""))[:100]
-                                        else:
-                                            first_val = str(v)[:100]
-                                    custom_fields_debug.append({
-                                        "index": cf_idx,
-                                        "field_id": cf.get("field_id"),
-                                        "code": cf.get("field_code"),
-                                        "name": cf.get("field_name"),
-                                        "type": cf.get("field_type"),
-                                        "values_count": len(cf.get("values") or []),
-                                        "first_value": first_val,
-                                    })
-                            
-                            debug_data = {
-                                "status": "SKIPPED_ALREADY_EXISTS",
-                                "amo_contact_id": amo_contact_id,
-                                "last_name": last_name,
-                                "first_name": first_name,
-                                "amo_company_id_for_contact": amo_company_id_for_contact,
-                                "local_company_id": str(local_company.id) if local_company else None,
-                                "phones_found": phones,
-                                "emails_found": emails,
-                                "position_found": position,
-                                "custom_fields_count": len(custom_fields),
-                                "custom_fields_sample": custom_fields_debug,
-                                "raw_contact_keys": list(ac.keys())[:20] if isinstance(ac, dict) else [],
-                            }
-                            res.contacts_preview.append(debug_data)
-                        continue
                     
                     # В amoCRM телефоны и email могут быть:
                     # 1. В стандартных полях (phone, email) - если они есть
@@ -1344,6 +1340,7 @@ def migrate_filtered(
                                 full_contact_structure = f"JSON error: {e}\n{str(ac)[:2000]}"
                         
                         contact_debug = {
+                            "status": "UPDATED" if existing_contact else "CREATED",
                             "amo_contact_id": amo_contact_id,
                             "first_name": first_name,
                             "last_name": last_name,
@@ -1386,40 +1383,88 @@ def migrate_filtered(
                         print(f"  - has phone field: {bool(ac.get('phone'))}")
                         print(f"  - has email field: {bool(ac.get('email'))}")
                     
-                    # Создаём контакт
-                    contact = Contact(
-                        company=local_company,
-                        first_name=first_name[:120],
-                        last_name=last_name[:120],
-                        position=position[:255],
-                        amocrm_contact_id=amo_contact_id,
-                        raw_fields=debug_data,
-                    )
-                    if not dry_run:
-                        contact.save()
-                        res.contacts_created += 1
-                        # Добавляем телефоны и почты
-                        phones_added = 0
-                        for p in phones:
-                            pv = str(p).strip()[:50]
-                            if pv and not ContactPhone.objects.filter(contact=contact, value=pv).exists():
-                                ContactPhone.objects.create(contact=contact, type=ContactPhone.PhoneType.WORK, value=pv)
-                                phones_added += 1
-                        emails_added = 0
-                        for e in emails:
-                            ev = str(e).strip()[:254]
-                            if ev and not ContactEmail.objects.filter(contact=contact, value__iexact=ev).exists():
-                                try:
-                                    ContactEmail.objects.create(contact=contact, type=ContactEmail.EmailType.WORK, value=ev)
-                                    emails_added += 1
-                                except Exception:
-                                    pass
-                        # Логируем результат сохранения
-                        debug_count_after = getattr(res, '_debug_contacts_logged', 0)
-                        if debug_count_after < 10:
-                            print(f"  - Saved: phones={phones_added}, emails={emails_added}, position={bool(position)}")
+                    # Обновляем или создаём контакт
+                    if existing_contact:
+                        # ОБНОВЛЯЕМ существующий контакт
+                        contact = existing_contact
+                        contact.first_name = first_name[:120]
+                        contact.last_name = last_name[:120]
+                        if position:
+                            contact.position = position[:255]
+                        # Обновляем raw_fields
+                        try:
+                            rf = dict(contact.raw_fields or {})
+                        except Exception:
+                            rf = {}
+                        rf.update(debug_data)
+                        contact.raw_fields = rf
+                        
+                        if not dry_run:
+                            contact.save()
+                            res.contacts_created += 1  # Используем тот же счётчик для обновлённых
+                            
+                            # Обновляем телефоны: удаляем старые, добавляем новые
+                            ContactPhone.objects.filter(contact=contact).delete()
+                            phones_added = 0
+                            for p in phones:
+                                pv = str(p).strip()[:50]
+                                if pv:
+                                    ContactPhone.objects.create(contact=contact, type=ContactPhone.PhoneType.WORK, value=pv)
+                                    phones_added += 1
+                            
+                            # Обновляем email: удаляем старые, добавляем новые
+                            ContactEmail.objects.filter(contact=contact).delete()
+                            emails_added = 0
+                            for e in emails:
+                                ev = str(e).strip()[:254]
+                                if ev:
+                                    try:
+                                        ContactEmail.objects.create(contact=contact, type=ContactEmail.EmailType.WORK, value=ev)
+                                        emails_added += 1
+                                    except Exception:
+                                        pass
+                            
+                            # Логируем результат обновления
+                            debug_count_after = getattr(res, '_debug_contacts_logged', 0)
+                            if debug_count_after < 10:
+                                print(f"  - Updated: phones={phones_added}, emails={emails_added}, position={bool(position)}")
+                        else:
+                            res.contacts_created += 1
                     else:
-                        res.contacts_created += 1
+                        # СОЗДАЁМ новый контакт
+                        contact = Contact(
+                            company=local_company,
+                            first_name=first_name[:120],
+                            last_name=last_name[:120],
+                            position=position[:255],
+                            amocrm_contact_id=amo_contact_id,
+                            raw_fields=debug_data,
+                        )
+                        if not dry_run:
+                            contact.save()
+                            res.contacts_created += 1
+                            # Добавляем телефоны и почты
+                            phones_added = 0
+                            for p in phones:
+                                pv = str(p).strip()[:50]
+                                if pv and not ContactPhone.objects.filter(contact=contact, value=pv).exists():
+                                    ContactPhone.objects.create(contact=contact, type=ContactPhone.PhoneType.WORK, value=pv)
+                                    phones_added += 1
+                            emails_added = 0
+                            for e in emails:
+                                ev = str(e).strip()[:254]
+                                if ev and not ContactEmail.objects.filter(contact=contact, value__iexact=ev).exists():
+                                    try:
+                                        ContactEmail.objects.create(contact=contact, type=ContactEmail.EmailType.WORK, value=ev)
+                                        emails_added += 1
+                                    except Exception:
+                                        pass
+                            # Логируем результат сохранения
+                            debug_count_after = getattr(res, '_debug_contacts_logged', 0)
+                            if debug_count_after < 10:
+                                print(f"  - Saved: phones={phones_added}, emails={emails_added}, position={bool(position)}")
+                        else:
+                            res.contacts_created += 1
             except Exception as e:
                 # Если контакты недоступны — не валим всю миграцию
                 print(f"[AMOCRM DEBUG] ERROR importing contacts: {type(e).__name__}: {e}")
