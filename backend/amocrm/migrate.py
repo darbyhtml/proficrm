@@ -845,6 +845,10 @@ def migrate_filtered(
 
         # Импорт контактов компаний из amoCRM (опционально, т.к. может быть медленно)
         # Важно: импортируем контакты ТОЛЬКО для компаний из текущей пачки (amo_ids)
+        # Инициализируем счетчики контактов всегда (даже если импорт выключен)
+        res.contacts_seen = 0
+        res.contacts_created = 0
+        
         print(f"[AMOCRM DEBUG] Contact import check: import_contacts={import_contacts}, amo_ids={bool(amo_ids)}, len={len(amo_ids) if amo_ids else 0}")
         if import_contacts and amo_ids:
             res.contacts_seen = 0

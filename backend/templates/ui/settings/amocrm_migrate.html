@@ -113,6 +113,11 @@
         <div class="text-sm text-brand-dark/80 mt-1">
           Заметок: найдено <b>{{ result.notes_seen }}</b>, добавлено <b>{{ result.notes_created }}</b>, пропущено (уже было) <b>{{ result.notes_skipped_existing }}</b>
         </div>
+        {% if form.import_contacts.value %}
+          <div class="text-sm text-brand-dark/80 mt-1">
+            Контактов: найдено <b>{{ result.contacts_seen|default:0 }}</b>, создано <b>{{ result.contacts_created|default:0 }}</b>
+          </div>
+        {% endif %}
 
         {% if result.preview %}
           <div class="mt-3">
