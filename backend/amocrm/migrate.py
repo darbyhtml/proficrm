@@ -1014,9 +1014,16 @@ def migrate_filtered(
                             print(f"  - Saved: phones={phones_added}, emails={emails_added}, position={bool(position)}")
                     else:
                         res.contacts_created += 1
-            except Exception:
+            except Exception as e:
                 # Если контакты недоступны — не валим всю миграцию
+                print(f"[AMOCRM DEBUG] ERROR importing contacts: {type(e).__name__}: {e}")
+                import traceback
+                print(f"[AMOCRM DEBUG] Traceback:\n{traceback.format_exc()}")
                 pass
+            finally:
+                print(f"[AMOCRM DEBUG] ===== CONTACT IMPORT FINISHED: created={res.contacts_created}, seen={res.contacts_seen} =====")
+        else:
+            print(f"[AMOCRM DEBUG] Contact import SKIPPED: import_contacts={import_contacts}, amo_ids={bool(amo_ids)}")
 
         if dry_run:
             transaction.set_rollback(True)
