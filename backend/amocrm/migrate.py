@@ -1076,11 +1076,12 @@ def migrate_filtered(
                         "has_email_field": bool(ac.get("email")),
                     }
                     
-                    # Сохраняем отладочную информацию для dry-run (первые 5 контактов)
+                    # Сохраняем отладочную информацию для dry-run (первые 10 контактов)
                     debug_count = getattr(res, '_debug_contacts_logged', 0)
                     if res.contacts_preview is None:
                         res.contacts_preview = []
-                    if debug_count < 5:
+                    # Увеличиваем лимит до 10 для лучшей отладки
+                    if debug_count < 10:
                         # Собираем информацию о custom_fields для отладки
                         custom_fields_debug = []
                         for cf_idx, cf in enumerate(custom_fields[:3]):  # первые 3 поля
