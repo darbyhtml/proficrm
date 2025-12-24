@@ -15,7 +15,7 @@ from companies.models import Company
 from accounts.models import Branch
 from companies.models import CompanySphere, CompanyStatus, ContactEmail, Contact
 from mailer.forms import CampaignForm, CampaignGenerateRecipientsForm, CampaignRecipientAddForm, MailAccountForm, GlobalMailAccountForm, EmailSignatureForm
-from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe
+from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, UnsubscribeToken
 from mailer.smtp_sender import build_message, send_via_smtp
 from mailer.utils import html_to_text
 
@@ -447,7 +447,17 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
     batch = list(camp.recipients.filter(status=CampaignRecipient.Status.PENDING)[:allowed])
     if not batch:
         messages.info(request, "Очередь пуста.")
+        # Если все отправлено, обновляем статус кампании
+        if camp.recipients.filter(status=CampaignRecipient.Status.PENDING).count() == 0:
+            if camp.status == Campaign.Status.SENDING:
+                camp.status = Campaign.Status.SENT
+                camp.save(update_fields=["status", "updated_at"])
         return redirect("campaign_detail", campaign_id=camp.id)
+
+    # Обновляем статус кампании на SENDING при начале отправки
+    if camp.status == Campaign.Status.READY:
+        camp.status = Campaign.Status.SENDING
+        camp.save(update_fields=["status", "updated_at"])
 
     sent = 0
     failed = 0
@@ -486,6 +496,13 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
 
     messages.success(request, f"Отправлено: {sent}, ошибок: {failed}.")
     log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Отправка батча", meta={"sent": sent, "failed": failed})
+    
+    # Если все отправлено, обновляем статус кампании на SENT
+    pending_count = camp.recipients.filter(status=CampaignRecipient.Status.PENDING).count()
+    if pending_count == 0 and camp.status == Campaign.Status.SENDING:
+        camp.status = Campaign.Status.SENT
+        camp.save(update_fields=["status", "updated_at"])
+    
     return redirect("campaign_detail", campaign_id=camp.id)
 
 
