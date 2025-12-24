@@ -50,3 +50,6 @@ backend/_compile_templates.py
 **/.gradle/
 **/local.properties
 
+# Local notes (personal)
+Новинки.txt
+
