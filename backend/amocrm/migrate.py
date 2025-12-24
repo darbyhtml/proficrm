@@ -984,6 +984,29 @@ def migrate_filtered(
                             )
                             full_contacts.extend(contacts_batch)
                             print(f"[AMOCRM DEBUG] Fetched {len(contacts_batch)} full contacts for batch {i//batch_size + 1}")
+                            
+                            # ОТЛАДКА: детальная структура первого контакта из батча
+                            if i == 0 and contacts_batch:
+                                first_full_contact = contacts_batch[0]
+                                print(f"[AMOCRM DEBUG] ===== FIRST FULL CONTACT STRUCTURE =====")
+                                print(f"  - Type: {type(first_full_contact)}")
+                                if isinstance(first_full_contact, dict):
+                                    print(f"  - Keys: {list(first_full_contact.keys())}")
+                                    print(f"  - Has 'id': {'id' in first_full_contact}")
+                                    print(f"  - Has 'first_name': {'first_name' in first_full_contact}, value: {first_full_contact.get('first_name')}")
+                                    print(f"  - Has 'last_name': {'last_name' in first_full_contact}, value: {first_full_contact.get('last_name')}")
+                                    print(f"  - Has 'custom_fields_values': {'custom_fields_values' in first_full_contact}")
+                                    if 'custom_fields_values' in first_full_contact:
+                                        cfv = first_full_contact.get('custom_fields_values')
+                                        print(f"  - custom_fields_values type: {type(cfv)}, length: {len(cfv) if isinstance(cfv, list) else 'not_list'}")
+                                        if isinstance(cfv, list) and len(cfv) > 0:
+                                            print(f"  - First custom_field: {cfv[0]}")
+                                    print(f"  - Has 'phone': {'phone' in first_full_contact}, value: {first_full_contact.get('phone')}")
+                                    print(f"  - Has 'email': {'email' in first_full_contact}, value: {first_full_contact.get('email')}")
+                                    # Показываем полную структуру (первые 1000 символов)
+                                    import json
+                                    print(f"  - Full structure (first 1000 chars): {json.dumps(first_full_contact, ensure_ascii=False, indent=2)[:1000]}")
+                                print(f"[AMOCRM DEBUG] ===== END FIRST FULL CONTACT =====")
                     except Exception as e:
                         print(f"[AMOCRM DEBUG] Error fetching full contact data: {type(e).__name__}: {e}")
                         import traceback
