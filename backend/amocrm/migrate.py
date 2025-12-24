@@ -528,16 +528,16 @@ def migrate_filtered(
             # заполнение "Данные" (только если поле пустое, чтобы не затереть уже заполненное вручную)
             changed = False
             if extra.get("legal_name") and not (comp.legal_name or "").strip():
-                comp.legal_name = extra["legal_name"]
+                comp.legal_name = str(extra["legal_name"])[:255]  # max_length=255
                 changed = True
             if extra.get("inn") and not (comp.inn or "").strip():
-                comp.inn = extra["inn"]
+                comp.inn = str(extra["inn"])[:20]  # max_length=20
                 changed = True
             if extra.get("kpp") and not (comp.kpp or "").strip():
-                comp.kpp = extra["kpp"]
+                comp.kpp = str(extra["kpp"])[:20]  # max_length=20
                 changed = True
             if extra.get("address") and not (comp.address or "").strip():
-                comp.address = extra["address"]
+                comp.address = str(extra["address"])[:500]  # max_length=500
                 changed = True
             phones = extra.get("phones") or []
             emails = extra.get("emails") or []
