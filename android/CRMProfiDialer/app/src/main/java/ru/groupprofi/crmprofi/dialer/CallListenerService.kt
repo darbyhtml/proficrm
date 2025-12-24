@@ -288,24 +288,46 @@ class CallListenerService : Service() {
 
     private fun showCallNotification(phone: String) {
         val uri = Uri.parse("tel:$phone")
-        val dialIntent = Intent(Intent.ACTION_DIAL, uri)
+        val dialIntent = Intent(Intent.ACTION_DIAL, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val pi = PendingIntent.getActivity(
             this,
             2,
             dialIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
         )
+        
+        // Красивое уведомление с номером и иконкой телефона
         val n = NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.sym_action_call)
-            .setContentTitle("Открыть номер")
-            .setContentText(phone)
+            .setContentTitle("CRM ПРОФИ — Звонок")
+            .setContentText("Номер: $phone")
+            .setStyle(NotificationCompat.BigTextStyle()
+                .bigText("Нажмите, чтобы открыть набор номера\n$phone"))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
             .setAutoCancel(true)
             .setContentIntent(pi)
-            .addAction(android.R.drawable.sym_action_call, "Открыть", pi)
+            .addAction(android.R.drawable.sym_action_call, "Позвонить", pi)
+            .setShowWhen(true)
+            .setWhen(System.currentTimeMillis())
             .build()
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(NOTIF_CALL_ID, n)
+        
+        // Также открываем набор номера сразу, если приложение в фоне
+        if (!AppState.isForeground) {
+            try {
+                Handler(Looper.getMainLooper()).postDelayed({
+                    try {
+                        startActivity(dialIntent)
+                    } catch (_: Throwable) {
+                        // ignore
+                    }
+                }, 500)
+            } catch (_: Throwable) {
+                // ignore
+            }
+        }
     }
 
     companion object {

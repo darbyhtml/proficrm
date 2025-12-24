@@ -94,16 +94,17 @@
                     android:text="Настройки уведомлений"
                     app:cornerRadius="12dp" />
 
-                <com.google.android.material.materialswitch.MaterialSwitch
-                    android:id="@+id/listenSwitch"
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/logoutBtn"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:text="Слушать команды (работает в фоне)"
-                    android:textOn="Вкл"
-                    android:textOff="Выкл"
-                    app:showText="false"
-                    android:textColor="@color/brand_dark" />
+                    android:layout_marginTop="8dp"
+                    android:text="Выйти из аккаунта"
+                    android:textColor="#EF4444"
+                    app:strokeColor="#EF4444"
+                    app:cornerRadius="12dp"
+                    android:visibility="gone" />
 
                 <TextView
                     android:id="@+id/status"

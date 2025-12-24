@@ -12,7 +12,6 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import com.google.android.material.materialswitch.MaterialSwitch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -31,7 +30,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var passwordEl: EditText
     private lateinit var loginBtn: Button
     private lateinit var notifBtn: Button
-    private lateinit var listenSwitch: MaterialSwitch
+    private lateinit var logoutBtn: Button
     private lateinit var statusEl: TextView
 
     private var accessToken: String? = null
@@ -52,7 +51,7 @@ class MainActivity : AppCompatActivity() {
         passwordEl = findViewById(R.id.password)
         loginBtn = findViewById(R.id.loginBtn)
         notifBtn = findViewById(R.id.notifBtn)
-        listenSwitch = findViewById(R.id.listenSwitch)
+        logoutBtn = findViewById(R.id.logoutBtn)
         statusEl = findViewById(R.id.status)
 
         val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
@@ -68,18 +67,34 @@ class MainActivity : AppCompatActivity() {
             usernameEl.visibility = android.view.View.GONE
             passwordEl.visibility = android.view.View.GONE
             loginBtn.visibility = android.view.View.GONE
+            logoutBtn.visibility = android.view.View.VISIBLE
+            // Автоматически запускаем сервис после входа
+            startListeningServiceAuto()
         } else {
             accountStatusEl.text = "Аккаунт: не выполнен вход"
             statusEl.text = "Статус: не подключено"
+            logoutBtn.visibility = android.view.View.GONE
         }
 
-        listenSwitch.isEnabled = false
-        // Prevent state-restore crash loops: we don't auto-start listening on launch.
-        listenSwitch.isSaveEnabled = false
-        listenSwitch.setOnCheckedChangeListener(null)
-        listenSwitch.isChecked = false
-
         notifBtn.setOnClickListener { openNotificationSettings() }
+        
+        logoutBtn.setOnClickListener {
+            val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+            prefs.edit().clear().apply()
+            accessToken = null
+            refreshToken = null
+            stopService(Intent(this, CallListenerService::class.java))
+            accountStatusEl.text = "Аккаунт: не выполнен вход"
+            statusEl.text = "Статус: не подключено"
+            usernameEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.VISIBLE }
+            passwordEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.VISIBLE }
+            usernameEl.visibility = android.view.View.VISIBLE
+            passwordEl.visibility = android.view.View.VISIBLE
+            loginBtn.visibility = android.view.View.VISIBLE
+            logoutBtn.visibility = android.view.View.GONE
+            usernameEl.text.clear()
+            passwordEl.text.clear()
+        }
 
         loginBtn.setOnClickListener {
             CoroutineScope(Dispatchers.IO).launch {
@@ -106,8 +121,6 @@ class MainActivity : AppCompatActivity() {
                     apiRegisterDevice(BASE_URL, accessToken!!, deviceId, android.os.Build.MODEL ?: "Android")
 
                     runOnUiThread {
-                        listenSwitch.isEnabled = true
-                        listenSwitch.isChecked = false
                         accountStatusEl.text = "Аккаунт: $username (вход выполнен)"
                         // Скрываем поля логина/пароля после успешного входа
                         usernameEl.visibility = android.view.View.GONE
@@ -115,15 +128,16 @@ class MainActivity : AppCompatActivity() {
                         usernameEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.GONE }
                         passwordEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.GONE }
                         loginBtn.visibility = android.view.View.GONE
+                        logoutBtn.visibility = android.view.View.VISIBLE
                     }
                     setStatus("Статус: подключено. device_id=$deviceId")
+                    // Автоматически запускаем сервис после входа
+                    startListeningServiceAuto()
                 } catch (e: Exception) {
                     accessToken = null
                     refreshToken = null
                     prefs.edit().remove(KEY_ACCESS).remove(KEY_REFRESH).apply()
                     runOnUiThread {
-                        listenSwitch.isEnabled = false
-                        listenSwitch.isChecked = false
                         accountStatusEl.text = "Аккаунт: не выполнен вход"
                         // Показываем поля логина/пароля при ошибке
                         usernameEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.VISIBLE }
@@ -131,14 +145,11 @@ class MainActivity : AppCompatActivity() {
                         usernameEl.visibility = android.view.View.VISIBLE
                         passwordEl.visibility = android.view.View.VISIBLE
                         loginBtn.visibility = android.view.View.VISIBLE
+                        logoutBtn.visibility = android.view.View.GONE
                     }
                     setStatus("Ошибка: ${e.message}")
                 }
             }
-        }
-
-        listenSwitch.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked) startListeningService() else stopListeningService()
         }
     }
 
@@ -160,12 +171,11 @@ class MainActivity : AppCompatActivity() {
         super.onPause()
     }
 
-    private fun startListeningService() {
+    private fun startListeningServiceAuto() {
         val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
         val token = accessToken ?: prefs.getString(KEY_ACCESS, null)
         val refresh = refreshToken ?: prefs.getString(KEY_REFRESH, null)
         if (token.isNullOrBlank() || refresh.isNullOrBlank()) {
-            listenSwitch.isChecked = false
             setStatus("Статус: сначала войдите")
             return
         }
@@ -173,7 +183,6 @@ class MainActivity : AppCompatActivity() {
         // На Android 8+ foreground-service обязан показывать уведомление.
         // Если уведомления для приложения отключены, фон «не виден» и может работать нестабильно.
         if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) {
-            listenSwitch.isChecked = false
             setStatus("Статус: включите уведомления для приложения (иначе фон не работает)")
             openNotificationSettings()
             return
@@ -200,12 +209,7 @@ class MainActivity : AppCompatActivity() {
         } else {
             startService(i)
         }
-        setStatus("Статус: слушаю команды (в фоне тоже)…")
-    }
-
-    private fun stopListeningService() {
-        stopService(Intent(this, CallListenerService::class.java))
-        setStatus("Статус: подключено (слушание выключено)")
+        setStatus("Статус: слушаю команды (работает в фоне)")
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -214,15 +218,10 @@ class MainActivity : AppCompatActivity() {
             val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
             if (granted && pendingStartListening) {
                 pendingStartListening = false
-                startListeningService()
+                startListeningServiceAuto()
                 return
             }
             pendingStartListening = false
-            listenSwitch.setOnCheckedChangeListener(null)
-            listenSwitch.isChecked = false
-            listenSwitch.setOnCheckedChangeListener { _, isChecked ->
-                if (isChecked) startListeningService() else stopListeningService()
-            }
             setStatus("Статус: без уведомлений фон не работает (разрешение отклонено)")
         }
     }
