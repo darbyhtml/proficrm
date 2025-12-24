@@ -3047,6 +3047,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                     dry_run=bool(form.cleaned_data.get("dry_run")),
                     import_tasks=bool(form.cleaned_data.get("import_tasks")),
                     import_notes=bool(form.cleaned_data.get("import_notes")),
+                    company_fields_meta=fields,
                 )
                 if form.cleaned_data.get("dry_run"):
                     messages.success(request, "Проверка (dry-run) выполнена.")

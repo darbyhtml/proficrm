@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+import json
 
 from django.db import transaction
 from django.utils import timezone
@@ -49,6 +50,76 @@ def _extract_custom_values(company: dict[str, Any], field_id: int) -> list[dict[
     return []
 
 
+def _build_field_meta(fields: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
+    out: dict[int, dict[str, Any]] = {}
+    for f in fields or []:
+        try:
+            fid = int(f.get("id") or 0)
+        except Exception:
+            fid = 0
+        if not fid:
+            continue
+        out[fid] = {"id": fid, "name": str(f.get("name") or ""), "code": str(f.get("code") or ""), "type": f.get("type")}
+    return out
+
+
+def _custom_values_text(company: dict[str, Any], field_id: int) -> list[str]:
+    vals = _extract_custom_values(company, field_id)
+    out = []
+    for v in vals:
+        s = str(v.get("value") or "").strip()
+        if s:
+            out.append(s)
+    return out
+
+
+def _find_field_id(field_meta: dict[int, dict[str, Any]], *, codes: list[str] | None = None, name_contains: list[str] | None = None) -> int | None:
+    codes_l = [c.lower() for c in (codes or [])]
+    name_l = [n.lower() for n in (name_contains or [])]
+    for fid, m in field_meta.items():
+        code = str(m.get("code") or "").lower()
+        name = str(m.get("name") or "").lower()
+        if codes_l and code and any(code == c for c in codes_l):
+            return fid
+        if name_l and name and any(n in name for n in name_l):
+            return fid
+    return None
+
+
+def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, dict[str, Any]]) -> dict[str, str]:
+    """
+    Best-effort извлечение полей компании из custom_fields_values.
+    """
+    def first(fid: int | None) -> str:
+        if not fid:
+            return ""
+        vals = _custom_values_text(amo_company, fid)
+        return vals[0] if vals else ""
+
+    def join(fid: int | None) -> str:
+        if not fid:
+            return ""
+        vals = _custom_values_text(amo_company, fid)
+        return ", ".join(vals)[:500]
+
+    fid_inn = _find_field_id(field_meta, codes=["inn"], name_contains=["инн"])
+    fid_kpp = _find_field_id(field_meta, codes=["kpp"], name_contains=["кпп"])
+    fid_legal = _find_field_id(field_meta, name_contains=["юрид", "юр."])
+    fid_addr = _find_field_id(field_meta, codes=["address"], name_contains=["адрес"])
+    fid_phone = _find_field_id(field_meta, codes=["phone"], name_contains=["телефон"])
+    fid_email = _find_field_id(field_meta, codes=["email"], name_contains=["email", "e-mail", "почта"])
+    fid_web = _find_field_id(field_meta, codes=["web"], name_contains=["сайт", "web"])
+
+    return {
+        "inn": first(fid_inn),
+        "kpp": first(fid_kpp),
+        "legal_name": first(fid_legal),
+        "address": first(fid_addr),
+        "phone": join(fid_phone),
+        "email": join(fid_email),
+        "website": first(fid_web),
+    }
+
 def _custom_has_value(company: dict[str, Any], field_id: int, *, option_id: int | None = None, label: str | None = None) -> bool:
     values = _extract_custom_values(company, field_id)
     if option_id is not None:
@@ -77,10 +148,12 @@ class AmoMigrateResult:
     tasks_seen: int = 0
     tasks_created: int = 0
     tasks_skipped_existing: int = 0
+    tasks_updated: int = 0
 
     notes_seen: int = 0
     notes_created: int = 0
     notes_skipped_existing: int = 0
+    notes_updated: int = 0
 
     preview: list[dict] | None = None
 
@@ -227,12 +300,14 @@ def migrate_filtered(
     dry_run: bool = True,
     import_tasks: bool = True,
     import_notes: bool = True,
+    company_fields_meta: list[dict[str, Any]] | None = None,
 ) -> AmoMigrateResult:
     res = AmoMigrateResult(preview=[])
 
     amo_users = fetch_amo_users(client)
     amo_user_by_id = {int(u.get("id") or 0): u for u in amo_users if int(u.get("id") or 0)}
     responsible_local = _map_amo_user_to_local(amo_user_by_id.get(int(responsible_user_id)) or {})
+    field_meta = _build_field_meta(company_fields_meta or [])
 
     companies = fetch_companies_by_responsible(client, responsible_user_id)
     res.companies_seen = len(companies)
@@ -256,7 +331,33 @@ def migrate_filtered(
     def _run():
         local_companies: list[Company] = []
         for amo_c in batch:
+            extra = _extract_company_fields(amo_c, field_meta) if field_meta else {}
             comp, created = _upsert_company_from_amo(amo_company=amo_c, actor=actor, responsible=responsible_local, dry_run=dry_run)
+            # заполнение "Данные" (только если поле пустое, чтобы не затереть уже заполненное вручную)
+            changed = False
+            if extra.get("legal_name") and not (comp.legal_name or "").strip():
+                comp.legal_name = extra["legal_name"]
+                changed = True
+            if extra.get("inn") and not (comp.inn or "").strip():
+                comp.inn = extra["inn"]
+                changed = True
+            if extra.get("kpp") and not (comp.kpp or "").strip():
+                comp.kpp = extra["kpp"]
+                changed = True
+            if extra.get("address") and not (comp.address or "").strip():
+                comp.address = extra["address"]
+                changed = True
+            if extra.get("phone") and not (comp.phone or "").strip():
+                comp.phone = extra["phone"][:50]
+                changed = True
+            if extra.get("email") and not (comp.email or "").strip():
+                comp.email = extra["email"][:254]
+                changed = True
+            if extra.get("website") and not (comp.website or "").strip():
+                comp.website = extra["website"][:255]
+                changed = True
+            if changed and not dry_run:
+                comp.save()
             if created:
                 res.companies_created += 1
             else:
@@ -273,27 +374,52 @@ def migrate_filtered(
             res.tasks_seen = len(tasks)
             for t in tasks:
                 tid = int(t.get("id") or 0)
-                if tid and Task.objects.filter(external_source="amo_api", external_uid=str(tid)).exists():
-                    res.tasks_skipped_existing += 1
-                    continue
+                existing = Task.objects.filter(external_source="amo_api", external_uid=str(tid)).first() if tid else None
                 entity_id = int((t.get("entity_id") or 0) or 0)
                 company = Company.objects.filter(amocrm_company_id=entity_id).first() if entity_id else None
                 title = str(t.get("text") or t.get("result") or t.get("name") or "Задача (amo)").strip()[:255]
-                desc = str(t.get("text") or "").strip()
                 due_at = None
                 ts = t.get("complete_till") or t.get("complete_till_at") or None
                 try:
-                    if ts:
-                        due_at = timezone.datetime.fromtimestamp(int(ts), tz=timezone.utc)
+                    if ts is not None and str(ts).strip():
+                        ts_int = int(str(ts).strip())
+                        if ts_int > 10**12:
+                            ts_int = int(ts_int / 1000)
+                        if ts_int > 0:
+                            due_at = timezone.datetime.fromtimestamp(ts_int, tz=timezone.utc)
                 except Exception:
                     due_at = None
                 assigned_to = None
                 rid = int(t.get("responsible_user_id") or 0)
                 if rid:
                     assigned_to = _map_amo_user_to_local(amo_user_by_id.get(rid) or {})
+                if existing:
+                    # апдейтим то, что у вас сейчас выглядит "криво": дедлайн + убрать мусорный id в описании
+                    upd = False
+                    if title and (existing.title or "").strip() != title:
+                        existing.title = title
+                        upd = True
+                    if existing.description and "[Amo task id:" in existing.description:
+                        existing.description = ""
+                        upd = True
+                    if due_at and existing.due_at is None:
+                        existing.due_at = due_at
+                        upd = True
+                    if company and existing.company_id is None:
+                        existing.company = company
+                        upd = True
+                    if assigned_to and existing.assigned_to_id != assigned_to.id:
+                        existing.assigned_to = assigned_to
+                        upd = True
+                    if upd and not dry_run:
+                        existing.save()
+                    res.tasks_updated += 1
+                    res.tasks_skipped_existing += 1
+                    continue
+
                 task = Task(
                     title=title,
-                    description=(desc or "") + f"\n\n[Amo task id: {tid}]",
+                    description="",
                     due_at=due_at,
                     company=company,
                     created_by=actor,
@@ -312,9 +438,7 @@ def migrate_filtered(
                 res.notes_seen = len(notes)
                 for n in notes:
                     nid = int(n.get("id") or 0)
-                    if nid and CompanyNote.objects.filter(external_source="amo_api", external_uid=str(nid)).exists():
-                        res.notes_skipped_existing += 1
-                        continue
+                    existing_note = CompanyNote.objects.filter(external_source="amo_api", external_uid=str(nid)).first() if nid else None
 
                     # В карточечных notes entity_id часто = id компании в amo
                     entity_id = int((n.get("entity_id") or 0) or 0)
@@ -324,15 +448,79 @@ def migrate_filtered(
 
                     # В разных типах notes текст может лежать по-разному
                     params = n.get("params") or {}
-                    text = str(n.get("text") or params.get("text") or n.get("note") or "").strip()
+                    note_type = str(n.get("note_type") or n.get("type") or "").strip()
+                    text = str(
+                        n.get("text")
+                        or params.get("text")
+                        or params.get("comment")
+                        or params.get("note")
+                        or n.get("note")
+                        or ""
+                    ).strip()
                     if not text:
-                        # минимальный текст, чтобы заметка была видна
-                        text = f"Импорт из amo (note id {nid})"
+                        try:
+                            text = json.dumps(params, ensure_ascii=False)[:1200] if params else ""
+                        except Exception:
+                            text = ""
+                        if not text:
+                            text = f"(без текста) note_type={note_type}"
+
+                    # автор заметки (если можем определить)
+                    author = None
+                    author_amo_name = ""
+                    creator_id = int(n.get("created_by") or n.get("created_by_id") or n.get("responsible_user_id") or 0)
+                    if creator_id:
+                        au = amo_user_by_id.get(creator_id) or {}
+                        author_amo_name = str(au.get("name") or "")
+                        author = _map_amo_user_to_local(au)
+
+                    created_ts = n.get("created_at") or n.get("created_at_ts") or None
+                    created_label = ""
+                    try:
+                        if created_ts:
+                            ct = int(str(created_ts))
+                            if ct > 10**12:
+                                ct = int(ct / 1000)
+                            created_label = timezone.datetime.fromtimestamp(ct, tz=timezone.utc).strftime("%d.%m.%Y %H:%M")
+                    except Exception:
+                        created_label = ""
+
+                    prefix = "Импорт из amo"
+                    meta_bits = []
+                    if author_amo_name:
+                        meta_bits.append(f"автор: {author_amo_name}")
+                    if created_label:
+                        meta_bits.append(f"дата: {created_label}")
+                    if note_type:
+                        meta_bits.append(f"type: {note_type}")
+                    if nid:
+                        meta_bits.append(f"id: {nid}")
+                    if meta_bits:
+                        prefix += " (" + ", ".join(meta_bits) + ")"
+                    text_full = prefix + "\n" + text
+
+                    if existing_note:
+                        # если раньше создали "пустышку" — обновим
+                        upd = False
+                        if existing_note.company_id != company.id:
+                            existing_note.company = company
+                            upd = True
+                        if existing_note.text.strip().startswith("Импорт из amo (note id") or len(existing_note.text.strip()) < 40:
+                            existing_note.text = text_full[:8000]
+                            upd = True
+                        if existing_note.author_id == actor.id and (author is None or author.id != actor.id):
+                            existing_note.author = author  # может быть None
+                            upd = True
+                        if upd and not dry_run:
+                            existing_note.save()
+                        res.notes_updated += 1
+                        res.notes_skipped_existing += 1
+                        continue
 
                     note = CompanyNote(
                         company=company,
-                        author=actor,
-                        text=text[:8000],
+                        author=author,  # НЕ actor, чтобы не выглядело "как будто вы писали"
+                        text=text_full[:8000],
                         external_source="amo_api",
                         external_uid=str(nid) if nid else "",
                     )
