@@ -116,29 +116,37 @@ class CallListenerService : Service() {
                         }
                         
                         if (!phone.isNullOrBlank()) {
+                            android.util.Log.i("CallListenerService", "Processing call command: phone=$phone")
                             // 1) Всегда показываем уведомление с действием (работает и в фоне).
                             try {
                                 showCallNotification(phone)
-                            } catch (_: Throwable) {
-                                // ignore
+                                android.util.Log.i("CallListenerService", "Call notification shown for $phone")
+                            } catch (e: Throwable) {
+                                android.util.Log.e("CallListenerService", "Error showing notification: ${e.message}")
                             }
                             // 2) Если приложение на экране — открываем звонилку сразу.
                             if (AppState.isForeground) {
                                 try {
                                     val uri = Uri.parse("tel:$phone")
                                     val dial = Intent(Intent.ACTION_DIAL, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    android.util.Log.i("CallListenerService", "Opening dialer for $phone (foreground)")
                                     // запуск activity делаем на main thread, чтобы не словить странные краши на прошивках
                                     Handler(Looper.getMainLooper()).post {
                                         try {
                                             startActivity(dial)
-                                        } catch (_: Throwable) {
-                                            // ignore — уведомление уже показали
+                                            android.util.Log.i("CallListenerService", "Dialer opened successfully")
+                                        } catch (e: Throwable) {
+                                            android.util.Log.e("CallListenerService", "Error opening dialer: ${e.message}")
                                         }
                                     }
-                                } catch (_: Throwable) {
-                                    // ignore — уведомление уже показали
+                                } catch (e: Throwable) {
+                                    android.util.Log.e("CallListenerService", "Error creating dial intent: ${e.message}")
                                 }
+                            } else {
+                                android.util.Log.d("CallListenerService", "App in background, notification only")
                             }
+                        } else {
+                            android.util.Log.d("CallListenerService", "Phone is blank, skipping")
                         }
                     } catch (_: Exception) {
                         // silent for MVP
@@ -183,9 +191,14 @@ class CallListenerService : Service() {
 
         // 1) try with current access
         val (code1, body1) = doPull(token)
+        android.util.Log.d("CallListenerService", "PullCall: code=$code1, body length=${body1?.length ?: 0}")
         if (code1 == 0) return Pair(0, null) // Сетевая ошибка
-        if (code1 == 204) return Pair(204, null)
+        if (code1 == 204) {
+            android.util.Log.d("CallListenerService", "PullCall: No pending calls (204)")
+            return Pair(204, null)
+        }
         if (code1 == 401) {
+            android.util.Log.w("CallListenerService", "PullCall: Unauthorized (401), refreshing token")
             // 2) refresh + retry once
             val newAccess = refreshAccess(baseUrl, refresh)
             if (newAccess == null) {
@@ -207,11 +220,20 @@ class CallListenerService : Service() {
             val phone2 = obj2.optString("phone", "")
             return Pair(200, phone2.ifBlank { null })
         }
-        if (code1 != 200) return Pair(code1, null)
+        if (code1 != 200) {
+            android.util.Log.w("CallListenerService", "PullCall: Unexpected code $code1, body: ${body1?.take(200)}")
+            return Pair(code1, null)
+        }
         val body1Str = body1 ?: return Pair(code1, null)
-        val obj = JSONObject(body1Str)
-        val phone = obj.optString("phone", "")
-        return Pair(200, phone.ifBlank { null })
+        try {
+            val obj = JSONObject(body1Str)
+            val phone = obj.optString("phone", "")
+            android.util.Log.i("CallListenerService", "PullCall: Received call command, phone=$phone")
+            return Pair(200, phone.ifBlank { null })
+        } catch (e: Exception) {
+            android.util.Log.e("CallListenerService", "PullCall: JSON parse error: ${e.message}, body: $body1Str")
+            return Pair(code1, null)
+        }
     }
 
     private fun refreshAccess(baseUrl: String, refresh: String): String? {
