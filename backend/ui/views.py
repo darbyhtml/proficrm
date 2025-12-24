@@ -2381,6 +2381,7 @@ def phone_call_create(request: HttpRequest) -> HttpResponse:
 
     # Дедупликация на сервере: если пользователь несколько раз подряд нажимает "позвонить" на тот же номер/контакт,
     # не создаём новые записи (иначе отчёты раздуваются).
+    # НО: если предыдущий запрос уже был получен телефоном (CONSUMED), создаём новый, чтобы можно было позвонить повторно.
     now = timezone.now()
     recent = now - timedelta(seconds=60)
     existing = (
@@ -2396,7 +2397,9 @@ def phone_call_create(request: HttpRequest) -> HttpResponse:
     else:
         existing = existing.filter(contact__isnull=True)
     prev_call = existing.order_by("-created_at").first()
-    if prev_call:
+    # Если есть предыдущий запрос И он еще не был получен телефоном (PENDING) - возвращаем его
+    # Если он уже CONSUMED - создаём новый, чтобы можно было позвонить повторно
+    if prev_call and prev_call.status == CallRequest.Status.PENDING:
         return JsonResponse({"ok": True, "id": str(prev_call.id), "phone": normalized, "dedup": True})
 
     call = CallRequest.objects.create(
