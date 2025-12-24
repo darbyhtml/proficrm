@@ -41,6 +41,57 @@ def _map_amo_user_to_local(amo_user: dict[str, Any]) -> User | None:
     return None
 
 
+def _fmt_duration(seconds: Any) -> str:
+    try:
+        s = int(seconds or 0)
+    except Exception:
+        s = 0
+    if s <= 0:
+        return "0с"
+    m, sec = divmod(s, 60)
+    h, m = divmod(m, 60)
+    if h:
+        return f"{h}ч {m}м"
+    if m:
+        return f"{m}м {sec}с"
+    return f"{sec}с"
+
+
+def _as_text(v: Any) -> str:
+    try:
+        return str(v or "").strip()
+    except Exception:
+        return ""
+
+
+def _format_call_note(note_type: str, params: Any) -> str:
+    p = params if isinstance(params, dict) else {}
+    incoming = note_type.lower().endswith("_in") or bool(p.get("incoming"))
+    direction = "Входящий" if incoming else "Исходящий"
+    src = _as_text(p.get("source"))
+    uniq = _as_text(p.get("uniq") or p.get("unique") or p.get("call_id"))
+    dur = _fmt_duration(p.get("duration"))
+    phone = _as_text(p.get("phone") or p.get("phone_number") or p.get("number") or p.get("to") or p.get("from"))
+    result = _as_text(p.get("result") or p.get("status") or p.get("call_status"))
+    link = _as_text(p.get("link") or p.get("record_link") or p.get("record_url"))
+
+    lines = []
+    lines.append(f"Звонок · {direction}")
+    if phone:
+        lines.append("Номер: " + phone)
+    if dur:
+        lines.append("Длительность: " + dur)
+    if src:
+        lines.append("Источник: " + src)
+    if uniq:
+        lines.append("ID: " + uniq)
+    if result:
+        lines.append("Статус: " + result)
+    if link:
+        lines.append("Запись: " + link)
+    return "\n".join(lines) if lines else "Звонок"
+
+
 def _extract_custom_values(company: dict[str, Any], field_id: int) -> list[dict[str, Any]]:
     vals = company.get("custom_fields_values") or []
     if not isinstance(vals, list):
@@ -639,6 +690,11 @@ def migrate_filtered(
                         author = None
                         text = "\n".join(lines) if lines else "Письмо (amoMail)"
                         prefix = "Импорт из amo"
+                    elif note_type.lower() in ("call_out", "call_in", "call"):
+                        # звонки — тоже форматируем, иначе будет JSON-каша
+                        text = _format_call_note(note_type, params)
+                        author = None
+                        prefix = "Импорт из amo"
                     meta_bits = []
                     if author_amo_name:
                         meta_bits.append(f"автор: {author_amo_name}")
@@ -674,6 +730,8 @@ def migrate_filtered(
                             or ("type: amomail" in old_text.lower())
                             or ("\"thread_id\"" in old_text)
                             or note_type.lower().startswith("amomail")
+                            or ("\"uniq\"" in old_text)
+                            or note_type.lower().startswith("call_")
                         )
                         if should_rewrite:
                             existing_note.text = text_full[:8000]
