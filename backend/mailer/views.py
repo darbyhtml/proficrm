@@ -394,7 +394,7 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
         "sphere": sphere,
         "limit": limit,
     }
-    camp.save(update_fields=["status", "updated_at"])
+    camp.save(update_fields=["status", "filter_meta", "updated_at"])
 
     messages.success(request, f"Получатели сгенерированы: +{created}")
     log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Сгенерированы получатели", meta={"added": created})
