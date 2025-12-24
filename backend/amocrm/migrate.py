@@ -851,8 +851,6 @@ def migrate_filtered(
         
         print(f"[AMOCRM DEBUG] Contact import check: import_contacts={import_contacts}, amo_ids={bool(amo_ids)}, len={len(amo_ids) if amo_ids else 0}")
         if import_contacts and amo_ids:
-            res.contacts_seen = 0
-            res.contacts_created = 0
             res._debug_contacts_logged = 0  # счетчик для отладки
             print(f"[AMOCRM DEBUG] ===== STARTING CONTACT IMPORT for {len(amo_ids)} companies =====")
             try:
