@@ -509,6 +509,43 @@ def _upsert_company_from_amo(
     company.raw_fields = rf
     if responsible and company.responsible_id != responsible.id:
         company.responsible = responsible
+    
+    # Извлекаем данные о холодном звонке из custom_fields компании
+    cold_call_timestamp = None
+    custom_fields = amo_company.get("custom_fields_values") or []
+    for cf in custom_fields:
+        if not isinstance(cf, dict):
+            continue
+        field_name = str(cf.get("field_name") or "").lower()
+        field_type = str(cf.get("field_type") or "").lower()
+        # Проверяем поле "Холодный звонок" с типом "date"
+        if field_type == "date" and ("холодный" in field_name and "звонок" in field_name):
+            values = cf.get("values") or []
+            if values and isinstance(values, list):
+                for v in values:
+                    if isinstance(v, dict):
+                        val = v.get("value")
+                    else:
+                        val = v
+                    if val:
+                        try:
+                            cold_call_timestamp = int(float(val))
+                            break  # Берем первое значение
+                        except (ValueError, TypeError):
+                            pass
+    
+    # Устанавливаем данные о холодном звонке для компании
+    if cold_call_timestamp:
+        try:
+            UTC = getattr(timezone, "UTC", dt_timezone.utc)
+            cold_marked_at_dt = timezone.datetime.fromtimestamp(cold_call_timestamp, tz=UTC)
+            company.primary_contact_is_cold_call = True
+            company.primary_cold_marked_at = cold_marked_at_dt
+            company.primary_cold_marked_by = responsible or company.created_by or actor
+            # primary_cold_marked_call оставляем NULL, т.к. в amoCRM нет связи с CallRequest
+        except Exception:
+            pass  # Если не удалось распарсить timestamp - пропускаем
+    
     if not dry_run:
         try:
             company.save()
@@ -1201,6 +1238,7 @@ def migrate_filtered(
                     phones = []
                     emails = []
                     position = ""
+                    cold_call_timestamp = None  # Timestamp холодного звонка из amoCRM
                     
                     # Стандартные поля (если есть)
                     if ac.get("phone"):
@@ -1263,9 +1301,12 @@ def migrate_filtered(
                             # Должность: проверяем field_code="POSITION" или field_name содержит "должность"/"позиция"
                             is_position = (field_code == "POSITION" or
                                           "должность" in field_name or "позиция" in field_name)
+                            # Холодный звонок: проверяем field_name содержит "холодный звонок" и field_type="date"
+                            is_cold_call_date = (field_type == "date" and
+                                                ("холодный" in field_name and "звонок" in field_name))
                             
                             if debug_count_for_extraction < 3:
-                                print(f"    [value {v_idx}] val={val[:50]}, is_phone={is_phone}, is_email={is_email}, is_position={is_position}", flush=True)
+                                print(f"    [value {v_idx}] val={val[:50]}, is_phone={is_phone}, is_email={is_email}, is_position={is_position}, is_cold_call_date={is_cold_call_date}", flush=True)
                             
                             if is_phone:
                                 phones.extend(_split_multi(val))
@@ -1280,6 +1321,19 @@ def migrate_filtered(
                                     position = val
                                     if debug_count_for_extraction < 3:
                                         print(f"      -> Set position: {val}", flush=True)
+                            elif is_cold_call_date:
+                                # Холодный звонок: val - это timestamp (Unix timestamp)
+                                # Сохраняем для последующей обработки (берем первое значение, если их несколько)
+                                if cold_call_timestamp is None:
+                                    try:
+                                        cold_call_timestamp = int(float(val))
+                                        # Будем использовать это значение при создании/обновлении контакта
+                                        if debug_count_for_extraction < 3:
+                                            print(f"      -> Found cold call date: {cold_call_timestamp}", flush=True)
+                                    except (ValueError, TypeError):
+                                        if debug_count_for_extraction < 3:
+                                            print(f"      -> Invalid cold call timestamp: {val}", flush=True)
+                                        cold_call_timestamp = None
                     
                     # Убираем дубликаты
                     phones = list(dict.fromkeys(phones))  # сохраняет порядок
@@ -1384,6 +1438,22 @@ def migrate_filtered(
                         print(f"  - has email field: {bool(ac.get('email'))}")
                     
                     # Обновляем или создаём контакт
+                    # Обрабатываем данные о холодном звонке из amoCRM
+                    cold_marked_at_dt = None
+                    if cold_call_timestamp:
+                        try:
+                            UTC = getattr(timezone, "UTC", dt_timezone.utc)
+                            cold_marked_at_dt = timezone.datetime.fromtimestamp(cold_call_timestamp, tz=UTC)
+                        except Exception:
+                            cold_marked_at_dt = None
+                    
+                    # Определяем, кто отметил холодный звонок (используем ответственного или создателя компании)
+                    cold_marked_by_user = None
+                    if local_company:
+                        cold_marked_by_user = local_company.responsible or local_company.created_by or actor
+                    else:
+                        cold_marked_by_user = actor
+                    
                     if existing_contact:
                         # ОБНОВЛЯЕМ существующий контакт
                         contact = existing_contact
@@ -1391,6 +1461,12 @@ def migrate_filtered(
                         contact.last_name = last_name[:120]
                         if position:
                             contact.position = position[:255]
+                        # Обновляем данные о холодном звонке из amoCRM
+                        if cold_marked_at_dt:
+                            contact.is_cold_call = True
+                            contact.cold_marked_at = cold_marked_at_dt
+                            contact.cold_marked_by = cold_marked_by_user
+                            # cold_marked_call оставляем NULL, т.к. в amoCRM нет связи с CallRequest
                         # Обновляем raw_fields
                         try:
                             rf = dict(contact.raw_fields or {})
@@ -1440,6 +1516,12 @@ def migrate_filtered(
                             amocrm_contact_id=amo_contact_id,
                             raw_fields=debug_data,
                         )
+                        # Устанавливаем данные о холодном звонке из amoCRM
+                        if cold_marked_at_dt:
+                            contact.is_cold_call = True
+                            contact.cold_marked_at = cold_marked_at_dt
+                            contact.cold_marked_by = cold_marked_by_user
+                            # cold_marked_call оставляем NULL, т.к. в amoCRM нет связи с CallRequest
                         if not dry_run:
                             contact.save()
                             res.contacts_created += 1
