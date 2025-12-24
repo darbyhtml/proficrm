@@ -51,6 +51,11 @@ class PullCallView(APIView):
         if not device_id:
             return Response({"detail": "device_id is required"}, status=400)
 
+        # Проверяем, что device_id принадлежит текущему пользователю (безопасность)
+        device_exists = PhoneDevice.objects.filter(user=request.user, device_id=device_id).exists()
+        if not device_exists:
+            return Response({"detail": "Device not found or access denied"}, status=403)
+
         # обновим last_seen
         PhoneDevice.objects.filter(user=request.user, device_id=device_id).update(last_seen_at=timezone.now())
 
