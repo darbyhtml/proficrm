@@ -1112,12 +1112,60 @@ def migrate_filtered(
                     # Проверяем, не импортировали ли уже этот контакт
                     existing_contact = Contact.objects.filter(amocrm_contact_id=amo_contact_id, company=local_company).first()
                     if existing_contact:
+                        # ОТЛАДКА: контакт уже существует - но все равно извлекаем данные для preview
+                        # Извлекаем данные для отображения в дебаге
+                        phones = []
+                        emails = []
+                        position = ""
+                        custom_fields = ac.get("custom_fields_values") or []
+                        for cf in custom_fields:
+                            if not isinstance(cf, dict):
+                                continue
+                            field_code = str(cf.get("field_code") or "").upper()
+                            field_name = str(cf.get("field_name") or "").lower()
+                            values = cf.get("values") or []
+                            for v in values:
+                                if isinstance(v, dict):
+                                    val = str(v.get("value") or "").strip()
+                                else:
+                                    val = str(v).strip() if v else ""
+                                if not val:
+                                    continue
+                                if field_code == "PHONE" or "телефон" in field_name:
+                                    phones.extend(_split_multi(val))
+                                elif field_code == "EMAIL" or "email" in field_name or "почта" in field_name:
+                                    emails.append(val)
+                                elif field_code == "POSITION" or "должность" in field_name or "позиция" in field_name:
+                                    if not position:
+                                        position = val
+                        
                         # ОТЛАДКА: контакт уже существует
                         debug_count = getattr(res, '_debug_contacts_logged', 0)
                         if res.contacts_preview is None:
                             res.contacts_preview = []
                         if debug_count < 10:
                             res._debug_contacts_logged = debug_count + 1
+                            # Собираем custom_fields_debug для отображения
+                            custom_fields_debug = []
+                            for cf_idx, cf in enumerate(custom_fields[:5]):
+                                if isinstance(cf, dict):
+                                    first_val = ""
+                                    if cf.get("values") and len(cf.get("values", [])) > 0:
+                                        v = cf.get("values")[0]
+                                        if isinstance(v, dict):
+                                            first_val = str(v.get("value", ""))[:100]
+                                        else:
+                                            first_val = str(v)[:100]
+                                    custom_fields_debug.append({
+                                        "index": cf_idx,
+                                        "field_id": cf.get("field_id"),
+                                        "code": cf.get("field_code"),
+                                        "name": cf.get("field_name"),
+                                        "type": cf.get("field_type"),
+                                        "values_count": len(cf.get("values") or []),
+                                        "first_value": first_val,
+                                    })
+                            
                             debug_data = {
                                 "status": "SKIPPED_ALREADY_EXISTS",
                                 "amo_contact_id": amo_contact_id,
@@ -1125,6 +1173,12 @@ def migrate_filtered(
                                 "first_name": first_name,
                                 "amo_company_id_for_contact": amo_company_id_for_contact,
                                 "local_company_id": str(local_company.id) if local_company else None,
+                                "phones_found": phones,
+                                "emails_found": emails,
+                                "position_found": position,
+                                "custom_fields_count": len(custom_fields),
+                                "custom_fields_sample": custom_fields_debug,
+                                "raw_contact_keys": list(ac.keys())[:20] if isinstance(ac, dict) else [],
                             }
                             res.contacts_preview.append(debug_data)
                         continue
