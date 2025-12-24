@@ -1253,14 +1253,16 @@ def migrate_filtered(
                                 })
                         
                         # ОТЛАДКА: сохраняем полную структуру контакта для анализа (первые 3)
+                        # Используем отдельный счетчик, чтобы не зависеть от debug_count
+                        preview_count = len(res.contacts_preview) if res.contacts_preview else 0
                         full_contact_structure = None
-                        if debug_count < 3 and isinstance(ac, dict):
+                        if preview_count < 3 and isinstance(ac, dict):
                             import json
                             try:
                                 # Сохраняем полную структуру (ограничиваем размер для UI)
-                                full_contact_structure = json.dumps(ac, ensure_ascii=False, indent=2)[:2000]
-                            except Exception:
-                                full_contact_structure = str(ac)[:2000]
+                                full_contact_structure = json.dumps(ac, ensure_ascii=False, indent=2)[:3000]
+                            except Exception as e:
+                                full_contact_structure = f"JSON error: {e}\n{str(ac)[:2000]}"
                         
                         contact_debug = {
                             "amo_contact_id": amo_contact_id,
