@@ -290,6 +290,10 @@ class AmoMigrateResult:
     notes_updated: int = 0
     notes_preview: list[dict] | None = None
 
+    contacts_seen: int = 0
+    contacts_created: int = 0
+    contacts_preview: list[dict] | None = None  # для dry-run отладки
+
     preview: list[dict] | None = None
 
 
@@ -482,7 +486,7 @@ def migrate_filtered(
     import_contacts: bool = False,  # по умолчанию выключено, т.к. может быть медленно
     company_fields_meta: list[dict[str, Any]] | None = None,
 ) -> AmoMigrateResult:
-    res = AmoMigrateResult(preview=[], tasks_preview=[], notes_preview=[])
+    res = AmoMigrateResult(preview=[], tasks_preview=[], notes_preview=[], contacts_preview=[])
 
     amo_users = fetch_amo_users(client)
     amo_user_by_id = {int(u.get("id") or 0): u for u in amo_users if int(u.get("id") or 0)}
@@ -961,9 +965,47 @@ def migrate_filtered(
                         "has_email_field": bool(ac.get("email")),
                     }
                     
-                    # Логируем в консоль для отладки (первые 5 контактов)
+                    # Сохраняем отладочную информацию для dry-run (первые 5 контактов)
                     debug_count = getattr(res, '_debug_contacts_logged', 0)
-                    if debug_count < 5:
+                    if res.contacts_preview is not None and debug_count < 5:
+                        # Собираем информацию о custom_fields для отладки
+                        custom_fields_debug = []
+                        for cf_idx, cf in enumerate(custom_fields[:3]):  # первые 3 поля
+                            if isinstance(cf, dict):
+                                first_val = ""
+                                if cf.get("values") and len(cf.get("values", [])) > 0:
+                                    v = cf.get("values")[0]
+                                    if isinstance(v, dict):
+                                        first_val = str(v.get("value", ""))[:100]
+                                    else:
+                                        first_val = str(v)[:100]
+                                custom_fields_debug.append({
+                                    "index": cf_idx,
+                                    "field_id": cf.get("field_id"),
+                                    "code": cf.get("code"),
+                                    "name": cf.get("name"),
+                                    "type": cf.get("type"),
+                                    "values_count": len(cf.get("values") or []),
+                                    "first_value": first_val,
+                                })
+                        
+                        contact_debug = {
+                            "amo_contact_id": amo_contact_id,
+                            "first_name": first_name,
+                            "last_name": last_name,
+                            "phones_found": phones,
+                            "emails_found": emails,
+                            "position_found": position,
+                            "custom_fields_count": len(custom_fields),
+                            "custom_fields_sample": custom_fields_debug,
+                            "raw_contact_keys": list(ac.keys())[:15],
+                            "has_phone_field": bool(ac.get("phone")),
+                            "has_email_field": bool(ac.get("email")),
+                        }
+                        res.contacts_preview.append(contact_debug)
+                        res._debug_contacts_logged = debug_count + 1
+                        
+                        # Также логируем в консоль
                         print(f"[AMOCRM DEBUG] Contact {amo_contact_id}:")
                         print(f"  - first_name: {first_name}")
                         print(f"  - last_name: {last_name}")
@@ -973,13 +1015,7 @@ def migrate_filtered(
                         print(f"  - custom_fields_values count: {len(custom_fields)}")
                         if custom_fields:
                             print(f"  - custom_fields sample (first): {custom_fields[0]}")
-                            if len(custom_fields) > 1:
-                                print(f"  - custom_fields sample (second): {custom_fields[1]}")
                         print(f"  - raw contact top-level keys: {list(ac.keys())[:15]}")
-                        # Показываем полную структуру первого custom_field для отладки
-                        if custom_fields and len(custom_fields) > 0:
-                            print(f"  - FULL custom_field[0] structure: {custom_fields[0]}")
-                        res._debug_contacts_logged = debug_count + 1
                     
                     # Создаём контакт
                     contact = Contact(
