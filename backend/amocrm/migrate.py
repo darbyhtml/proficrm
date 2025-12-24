@@ -295,6 +295,9 @@ class AmoMigrateResult:
     contacts_preview: list[dict] | None = None  # для dry-run отладки
 
     preview: list[dict] | None = None
+    
+    error: str | None = None  # ошибка миграции (если была)
+    error_traceback: str | None = None  # полный traceback ошибки
 
 
 def fetch_amo_users(client: AmoClient) -> list[dict[str, Any]]:

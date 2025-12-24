@@ -99,6 +99,18 @@
     {% if result %}
       <div class="card card-pad">
         <div class="font-medium mb-2">Результат</div>
+        {% if result.error %}
+          <div class="mb-4 rounded-xl border border-red-500/60 bg-red-500/20 px-4 py-3 text-sm text-red-700">
+            <div class="font-medium mb-1">⚠️ Ошибка миграции:</div>
+            <div>{{ result.error }}</div>
+            {% if result.error_traceback %}
+              <details class="mt-2">
+                <summary class="cursor-pointer text-xs">Показать детали ошибки</summary>
+                <pre class="mt-2 text-xs overflow-auto max-h-60 bg-red-50 p-2 rounded">{{ result.error_traceback }}</pre>
+              </details>
+            {% endif %}
+          </div>
+        {% endif %}
         <div class="text-sm text-brand-dark/80">
           Компаний найдено у ответственного: <b>{{ result.companies_seen }}</b>,
           по фильтру: <b>{{ result.companies_matched }}</b>,
