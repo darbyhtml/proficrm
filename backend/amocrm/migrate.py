@@ -1358,7 +1358,15 @@ def migrate_filtered(
                             "full_structure": full_contact_structure,  # Полная структура для первых 3 контактов
                         }
                         res.contacts_preview.append(contact_debug)
-                        res._debug_contacts_logged = debug_count + 1
+                        # ОТЛАДКА: логируем, что добавили в preview
+                        if preview_count < 3:
+                            print(f"[AMOCRM DEBUG] Added contact {amo_contact_id} to preview:", flush=True)
+                            print(f"  - phones_found: {phones}", flush=True)
+                            print(f"  - emails_found: {emails}", flush=True)
+                            print(f"  - position_found: {position}", flush=True)
+                            print(f"  - custom_fields_count: {len(custom_fields)}", flush=True)
+                            print(f"  - custom_fields_sample length: {len(custom_fields_debug)}", flush=True)
+                        # Не увеличиваем _debug_contacts_logged здесь, т.к. используем preview_count
                         
                         # Также логируем в консоль
                         print(f"[AMOCRM DEBUG] Contact {amo_contact_id}:")
