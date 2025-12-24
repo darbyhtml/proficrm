@@ -24,7 +24,7 @@ from companies.permissions import can_edit_company as can_edit_company_perm, edi
 from tasksapp.models import Task, TaskType
 from notifications.models import Notification
 from notifications.service import notify
-from phonebridge.models import CallRequest
+from phonebridge.models import CallRequest, PhoneDevice
 import mimetypes
 import os
 from datetime import date as _date
@@ -2407,6 +2407,12 @@ def phone_call_create(request: HttpRequest) -> HttpResponse:
         phone_raw=normalized,
         note="UI click",
     )
+    
+    # Логируем для отладки
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"phone_call_create: created CallRequest {call.id} for user {user.id}, phone {normalized}, device check: {PhoneDevice.objects.filter(user=user).exists()}")
+    
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.CREATE,

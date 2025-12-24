@@ -47,18 +47,27 @@ class PullCallView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        import logging
+        logger = logging.getLogger(__name__)
+        
         device_id = (request.query_params.get("device_id") or "").strip()
         if not device_id:
+            logger.warning(f"PullCallView: device_id missing for user {request.user.id}")
             return Response({"detail": "device_id is required"}, status=400)
 
         # Проверяем, что device_id принадлежит текущему пользователю (безопасность)
         device_exists = PhoneDevice.objects.filter(user=request.user, device_id=device_id).exists()
         if not device_exists:
+            logger.warning(f"PullCallView: device_id {device_id} not found for user {request.user.id}")
             return Response({"detail": "Device not found or access denied"}, status=403)
 
         # обновим last_seen
         PhoneDevice.objects.filter(user=request.user, device_id=device_id).update(last_seen_at=timezone.now())
 
+        # Проверяем наличие pending запросов для этого пользователя
+        pending_count = CallRequest.objects.filter(user=request.user, status=CallRequest.Status.PENDING).count()
+        logger.debug(f"PullCallView: user {request.user.id}, device {device_id}, pending calls: {pending_count}")
+        
         call = (
             CallRequest.objects.filter(user=request.user, status=CallRequest.Status.PENDING)
             .order_by("created_at")
@@ -72,6 +81,8 @@ class PullCallView(APIView):
         call.delivered_at = now
         call.consumed_at = now
         call.save(update_fields=["status", "delivered_at", "consumed_at"])
+        
+        logger.info(f"PullCallView: delivered call {call.id} to user {request.user.id}, phone {call.phone_raw}")
 
         return Response(
             {

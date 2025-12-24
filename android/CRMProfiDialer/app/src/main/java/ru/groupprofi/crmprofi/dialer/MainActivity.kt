@@ -62,6 +62,12 @@ class MainActivity : AppCompatActivity() {
         if (!savedUsername.isNullOrBlank() && !refreshToken.isNullOrBlank()) {
             accountStatusEl.text = "Аккаунт: $savedUsername (вход выполнен)"
             statusEl.text = "Статус: готово. device_id=$deviceId"
+            // Скрываем поля логина/пароля если уже вошли
+            usernameEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.GONE }
+            passwordEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.GONE }
+            usernameEl.visibility = android.view.View.GONE
+            passwordEl.visibility = android.view.View.GONE
+            loginBtn.visibility = android.view.View.GONE
         } else {
             accountStatusEl.text = "Аккаунт: не выполнен вход"
             statusEl.text = "Статус: не подключено"
@@ -103,6 +109,12 @@ class MainActivity : AppCompatActivity() {
                         listenSwitch.isEnabled = true
                         listenSwitch.isChecked = false
                         accountStatusEl.text = "Аккаунт: $username (вход выполнен)"
+                        // Скрываем поля логина/пароля после успешного входа
+                        usernameEl.visibility = android.view.View.GONE
+                        passwordEl.visibility = android.view.View.GONE
+                        usernameEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.GONE }
+                        passwordEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.GONE }
+                        loginBtn.visibility = android.view.View.GONE
                     }
                     setStatus("Статус: подключено. device_id=$deviceId")
                 } catch (e: Exception) {
@@ -113,6 +125,12 @@ class MainActivity : AppCompatActivity() {
                         listenSwitch.isEnabled = false
                         listenSwitch.isChecked = false
                         accountStatusEl.text = "Аккаунт: не выполнен вход"
+                        // Показываем поля логина/пароля при ошибке
+                        usernameEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.VISIBLE }
+                        passwordEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.VISIBLE }
+                        usernameEl.visibility = android.view.View.VISIBLE
+                        passwordEl.visibility = android.view.View.VISIBLE
+                        loginBtn.visibility = android.view.View.VISIBLE
                     }
                     setStatus("Ошибка: ${e.message}")
                 }
