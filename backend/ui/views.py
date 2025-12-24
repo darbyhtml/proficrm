@@ -3089,7 +3089,10 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = AmoMigrateFilterForm(request.POST)
         if form.is_valid():
-            try:
+            if not client:
+                messages.error(request, "Ошибка: клиент amoCRM не инициализирован. Проверьте настройки подключения.")
+            else:
+                try:
                 # Защита от nginx 504: уменьшаем batch_size в зависимости от того, что импортируем
                 batch_size = int(form.cleaned_data.get("limit_companies") or 0)
                 if batch_size <= 0:
