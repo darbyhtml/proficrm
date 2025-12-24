@@ -324,11 +324,16 @@ def _field_options(field: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
-def fetch_companies_by_responsible(client: AmoClient, responsible_user_id: int, *, limit_pages: int = 200) -> list[dict[str, Any]]:
+def fetch_companies_by_responsible(client: AmoClient, responsible_user_id: int, *, limit_pages: int = 200, with_contacts: bool = False) -> list[dict[str, Any]]:
     # amo v4: /api/v4/companies?filter[responsible_user_id]=...
+    # with_contacts: если True, запрашиваем компании с контактами через with=contacts
+    params = {f"filter[responsible_user_id]": responsible_user_id, "with": "custom_fields"}
+    if with_contacts:
+        # Добавляем contacts в with, чтобы получить контакты в _embedded.contacts
+        params["with"] = "custom_fields,contacts"
     return client.get_all_pages(
         "/api/v4/companies",
-        params={f"filter[responsible_user_id]": responsible_user_id, "with": "custom_fields"},
+        params=params,
         embedded_key="companies",
         limit=250,
         max_pages=limit_pages,
