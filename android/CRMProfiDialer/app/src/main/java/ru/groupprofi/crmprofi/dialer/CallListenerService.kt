@@ -99,7 +99,22 @@ class CallListenerService : Service() {
                             .putString(KEY_LAST_POLL_AT, nowStr)
                             .putInt(KEY_LAST_POLL_CODE, code)
                             .apply()
-                        updateListeningNotification("Опрос: $code · $nowStr")
+                        
+                        // Обработка ошибок авторизации - останавливаем сервис
+                        if (code == 401) {
+                            updateListeningNotification("Ошибка: требуется повторный вход")
+                            delay(5000) // Даем время увидеть сообщение
+                            stopSelf()
+                            return@launch
+                        }
+                        
+                        // Сетевые ошибки (код 0) - просто логируем, продолжаем работу
+                        if (code == 0) {
+                            updateListeningNotification("Нет подключения · $nowStr")
+                        } else {
+                            updateListeningNotification("Опрос: $code · $nowStr")
+                        }
+                        
                         if (!phone.isNullOrBlank()) {
                             // 1) Всегда показываем уведомление с действием (работает и в фоне).
                             try {
@@ -150,19 +165,41 @@ class CallListenerService : Service() {
                 .get()
                 .addHeader("Authorization", "Bearer $access")
                 .build()
-            http.newCall(req).execute().use { res ->
-                return Pair(res.code, res.body?.string() ?: "")
+            try {
+                http.newCall(req).execute().use { res ->
+                    return Pair(res.code, res.body?.string() ?: "")
+                }
+            } catch (e: java.net.UnknownHostException) {
+                // Нет интернета - возвращаем специальный код
+                return Pair(0, null)
+            } catch (e: java.net.SocketTimeoutException) {
+                // Таймаут - возвращаем специальный код
+                return Pair(0, null)
+            } catch (e: Exception) {
+                // Другие сетевые ошибки
+                return Pair(0, null)
             }
         }
 
         // 1) try with current access
         val (code1, body1) = doPull(token)
+        if (code1 == 0) return Pair(0, null) // Сетевая ошибка
         if (code1 == 204) return Pair(204, null)
         if (code1 == 401) {
             // 2) refresh + retry once
-            val newAccess = refreshAccess(baseUrl, refresh) ?: return Pair(401, null)
+            val newAccess = refreshAccess(baseUrl, refresh)
+            if (newAccess == null) {
+                // Refresh token истек - нужно перелогиниться
+                // Очищаем токены, чтобы пользователь перелогинился
+                getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                    .remove(KEY_TOKEN)
+                    .remove(KEY_REFRESH)
+                    .apply()
+                return Pair(401, null)
+            }
             getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_TOKEN, newAccess).apply()
             val (code2, body2) = doPull(newAccess)
+            if (code2 == 0) return Pair(0, null) // Сетевая ошибка
             if (code2 == 204) return Pair(204, null)
             if (code2 != 200) return Pair(code2, null)
             val obj2 = JSONObject(body2)

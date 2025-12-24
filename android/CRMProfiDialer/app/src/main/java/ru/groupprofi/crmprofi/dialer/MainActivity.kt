@@ -225,11 +225,33 @@ class MainActivity : AppCompatActivity() {
             .url(url)
             .post(bodyJson.toRequestBody(jsonMedia))
             .build()
-        http.newCall(req).execute().use { res ->
-            val raw = res.body?.string() ?: ""
-            if (!res.isSuccessful) throw RuntimeException("Login failed: HTTP ${res.code} $raw")
-            val obj = JSONObject(raw)
-            return Pair(obj.getString("access"), obj.getString("refresh"))
+        try {
+            http.newCall(req).execute().use { res ->
+                val raw = res.body?.string() ?: ""
+                if (!res.isSuccessful) {
+                    val errorMsg = try {
+                        val errorObj = JSONObject(raw)
+                        errorObj.optString("detail", "Ошибка входа")
+                    } catch (_: Exception) {
+                        "Ошибка входа: HTTP ${res.code}"
+                    }
+                    throw RuntimeException(errorMsg)
+                }
+                val obj = JSONObject(raw)
+                val access = obj.optString("access", "")
+                val refresh = obj.optString("refresh", "")
+                if (access.isBlank() || refresh.isBlank()) {
+                    throw RuntimeException("Неверный формат ответа сервера")
+                }
+                return Pair(access, refresh)
+            }
+        } catch (e: java.net.UnknownHostException) {
+            throw RuntimeException("Нет подключения к интернету")
+        } catch (e: java.net.SocketTimeoutException) {
+            throw RuntimeException("Превышено время ожидания ответа")
+        } catch (e: Exception) {
+            if (e is RuntimeException) throw e
+            throw RuntimeException("Ошибка сети: ${e.message}")
         }
     }
 
@@ -244,9 +266,17 @@ class MainActivity : AppCompatActivity() {
             .post(bodyJson.toRequestBody(jsonMedia))
             .addHeader("Authorization", "Bearer $token")
             .build()
-        http.newCall(req).execute().use { res ->
-            val raw = res.body?.string() ?: ""
-            if (!res.isSuccessful) throw RuntimeException("Register device failed: HTTP ${res.code} $raw")
+        try {
+            http.newCall(req).execute().use { res ->
+                val raw = res.body?.string() ?: ""
+                if (!res.isSuccessful) {
+                    // Регистрация устройства не критична, логируем но не падаем
+                    android.util.Log.w("MainActivity", "Register device failed: HTTP ${res.code} $raw")
+                }
+            }
+        } catch (e: Exception) {
+            // Регистрация устройства не критична, логируем но не падаем
+            android.util.Log.w("MainActivity", "Register device error: ${e.message}")
         }
     }
 
