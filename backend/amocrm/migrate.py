@@ -375,99 +375,35 @@ def fetch_notes_for_companies(client: AmoClient, company_ids: list[int]) -> list
 def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> list[dict[str, Any]]:
     """
     Получает контакты компаний из amoCRM.
-    В amoCRM контакты связаны с компаниями через /api/v4/companies/{id}/links.
     Согласно документации: https://www.amocrm.ru/developers/content/crm_platform/contacts-api
+    Используем filter[company_id][] для получения контактов, связанных с компаниями.
     """
     if not company_ids:
         return []
     out: list[dict[str, Any]] = []
-    # Используем /api/v4/companies/{id}/links для каждой компании отдельно
-    # Это более надежный способ, чем filter[company_id][], который может вернуть все контакты
-    for cid in company_ids:
+    # Согласно документации amoCRM, контакты можно получить через filter[company_id][]
+    # Получаем контакты батчами по 50 компаний, чтобы не превысить лимиты URL
+    batch = 50
+    for i in range(0, len(company_ids), batch):
+        ids_batch = company_ids[i : i + batch]
         try:
-            links_data = client.get(f"/api/v4/companies/{int(cid)}/links") or {}
-            # ОТЛАДКА: логируем структуру ответа для первых 2 компаний
-            if len(out) == 0:
-                print(f"[AMOCRM DEBUG] Links response for company {cid}: keys={list(links_data.keys())}")
-                if "_embedded" in links_data:
-                    print(f"[AMOCRM DEBUG] _embedded keys: {list(links_data.get('_embedded', {}).keys())}")
-            
-            embedded = links_data.get("_embedded") or {}
-            # В links могут быть contact_ids, но не полные объекты контактов
-            contact_ids = []
-            
-            # Проверяем разные возможные структуры ответа
-            if "contacts" in embedded:
-                contacts_data = embedded.get("contacts") or []
-                if isinstance(contacts_data, list):
-                    # Это может быть список ID или список объектов
-                    for item in contacts_data:
-                        if isinstance(item, dict):
-                            contact_id = int(item.get("id") or item.get("contact_id") or 0)
-                            if contact_id:
-                                contact_ids.append(contact_id)
-                        elif isinstance(item, int):
-                            contact_ids.append(item)
-            
-            # Альтернатива: может быть в корне links_data
-            if not contact_ids and "contacts" in links_data:
-                contacts_data = links_data.get("contacts") or []
-                if isinstance(contacts_data, list):
-                    for item in contacts_data:
-                        if isinstance(item, dict):
-                            contact_id = int(item.get("id") or item.get("contact_id") or 0)
-                            if contact_id:
-                                contact_ids.append(contact_id)
-                        elif isinstance(item, int):
-                            contact_ids.append(item)
-            
-            # ОТЛАДКА: логируем найденные contact_ids
-            if len(out) == 0:
-                print(f"[AMOCRM DEBUG] Company {cid}: found {len(contact_ids)} contact_ids: {contact_ids[:5]}")
-            
-            # Теперь получаем полные данные контактов по их ID
-            if contact_ids:
-                # Получаем контакты батчами
-                batch = 50
-                for i in range(0, len(contact_ids), batch):
-                    ids_batch = contact_ids[i : i + batch]
-                    try:
-                        # Согласно документации amoCRM, фильтр по ID: filter[id][]
-                        contacts = client.get_all_pages(
-                            "/api/v4/contacts",
-                            params={"filter[id][]": ids_batch},  # правильный формат фильтра
-                            embedded_key="contacts",
-                            limit=250,
-                            max_pages=10,
-                        )
-                        out.extend(contacts)
-                        if len(out) <= 5:
-                            print(f"[AMOCRM DEBUG] Fetched {len(contacts)} contacts for company {cid}")
-                    except Exception as e:
-                        print(f"[AMOCRM DEBUG] Error fetching contacts for company {cid}: {e}")
-            else:
-                # ОТЛАДКА: если contact_ids пустой, пробуем альтернативный способ
-                if len(out) == 0:
-                    print(f"[AMOCRM DEBUG] No contact_ids found for company {cid}, trying alternative method...")
-                    # Альтернатива: используем filter[company_id] для этой конкретной компании
-                    try:
-                        contacts = client.get_all_pages(
-                            "/api/v4/contacts",
-                            params={"filter[company_id][]": [cid]},
-                            embedded_key="contacts",
-                            limit=250,
-                            max_pages=5,  # ограничиваем для одной компании
-                        )
-                        if contacts:
-                            print(f"[AMOCRM DEBUG] Alternative method found {len(contacts)} contacts for company {cid}")
-                            out.extend(contacts)
-                    except Exception as e:
-                        print(f"[AMOCRM DEBUG] Alternative method also failed for company {cid}: {e}")
+            # Используем filter[company_id][] согласно документации
+            contacts = client.get_all_pages(
+                "/api/v4/contacts",
+                params={"filter[company_id][]": ids_batch},
+                embedded_key="contacts",
+                limit=250,
+                max_pages=50,  # ограничиваем для безопасности
+            )
+            out.extend(contacts)
+            if i == 0 and len(out) > 0:
+                print(f"[AMOCRM DEBUG] Fetched {len(contacts)} contacts for first batch of {len(ids_batch)} companies")
         except Exception as e:
-            print(f"[AMOCRM DEBUG] Error fetching links for company {cid}: {e}")
+            print(f"[AMOCRM DEBUG] Error fetching contacts for companies batch: {e}")
             import traceback
             print(f"[AMOCRM DEBUG] Traceback: {traceback.format_exc()}")
-            pass
+            # Продолжаем для следующих батчей
+            continue
     return out
 
 
@@ -922,12 +858,14 @@ def migrate_filtered(
                 print(f"[AMOCRM DEBUG] Fetched {res.contacts_seen} contacts from amoCRM API")
                 
                 # ОТЛАДКА: если контактов не найдено, сохраняем информацию о попытке
-                if res.contacts_seen == 0 and res.contacts_preview is not None:
+                if res.contacts_seen == 0:
+                    if res.contacts_preview is None:
+                        res.contacts_preview = []
                     debug_info = {
                         "status": "NO_CONTACTS_FOUND",
                         "companies_checked": len(amo_ids),
                         "company_ids": list(amo_ids)[:5],  # первые 5 для отладки
-                        "message": "Контакты не найдены через /api/v4/companies/{id}/links. Проверьте логи сервера для деталей.",
+                        "message": "Контакты не найдены через filter[company_id][]. Проверьте логи сервера для деталей.",
                     }
                     res.contacts_preview.append(debug_info)
                 for ac in amo_contacts:
@@ -1040,7 +978,9 @@ def migrate_filtered(
                     
                     # Сохраняем отладочную информацию для dry-run (первые 5 контактов)
                     debug_count = getattr(res, '_debug_contacts_logged', 0)
-                    if res.contacts_preview is not None and debug_count < 5:
+                    if res.contacts_preview is None:
+                        res.contacts_preview = []
+                    if debug_count < 5:
                         # Собираем информацию о custom_fields для отладки
                         custom_fields_debug = []
                         for cf_idx, cf in enumerate(custom_fields[:3]):  # первые 3 поля
