@@ -942,6 +942,16 @@ def migrate_filtered(
                 for ac in amo_contacts:
                     amo_contact_id = int(ac.get("id") or 0)
                     if not amo_contact_id:
+                        # ОТЛАДКА: контакт без ID
+                        debug_count = getattr(res, '_debug_contacts_logged', 0)
+                        if res.contacts_preview is None:
+                            res.contacts_preview = []
+                        if debug_count < 10:
+                            res._debug_contacts_logged = debug_count + 1
+                            res.contacts_preview.append({
+                                "status": "SKIPPED_NO_ID",
+                                "raw_contact_keys": list(ac.keys())[:10] if isinstance(ac, dict) else "not_dict",
+                            })
                         continue
                     
                     # НОВЫЙ ПОДХОД: находим компанию, из которой извлекли этот контакт
@@ -969,7 +979,7 @@ def migrate_filtered(
                         debug_count = getattr(res, '_debug_contacts_logged', 0)
                         if res.contacts_preview is None:
                             res.contacts_preview = []
-                        if debug_count < 5:
+                        if debug_count < 10:
                             res._debug_contacts_logged = debug_count + 1
                             debug_data = {
                                 "status": "SKIPPED_NO_LOCAL_COMPANY",
@@ -991,7 +1001,7 @@ def migrate_filtered(
                         debug_count = getattr(res, '_debug_contacts_logged', 0)
                         if res.contacts_preview is None:
                             res.contacts_preview = []
-                        if debug_count < 5:
+                        if debug_count < 10:
                             res._debug_contacts_logged = debug_count + 1
                             debug_data = {
                                 "status": "SKIPPED_ALREADY_EXISTS",
@@ -1160,7 +1170,8 @@ def migrate_filtered(
                                 except Exception:
                                     pass
                         # Логируем результат сохранения
-                        if debug_count < 5:
+                        debug_count_after = getattr(res, '_debug_contacts_logged', 0)
+                        if debug_count_after < 10:
                             print(f"  - Saved: phones={phones_added}, emails={emails_added}, position={bool(position)}")
                     else:
                         res.contacts_created += 1
