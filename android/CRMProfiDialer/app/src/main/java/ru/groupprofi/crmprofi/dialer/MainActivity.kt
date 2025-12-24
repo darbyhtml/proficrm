@@ -79,8 +79,7 @@ class MainActivity : AppCompatActivity() {
         notifBtn.setOnClickListener { openNotificationSettings() }
         
         logoutBtn.setOnClickListener {
-            val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
-            prefs.edit().clear().apply()
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().clear().apply()
             accessToken = null
             refreshToken = null
             stopService(Intent(this, CallListenerService::class.java))
