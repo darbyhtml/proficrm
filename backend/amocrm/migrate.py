@@ -904,9 +904,28 @@ def migrate_filtered(
             try:
                 # Создаём set для быстрой проверки: контакты должны быть связаны только с компаниями из текущей пачки
                 amo_ids_set = set(amo_ids)
-                amo_contacts = fetch_contacts_for_companies(client, amo_ids)
+                
+                # НОВЫЙ ПОДХОД: извлекаем контакты из _embedded.contacts каждого объекта компании
+                # Это более эффективно, чем отдельный запрос filter[company_id][]
+                amo_contacts: list[dict[str, Any]] = []
+                companies_with_contacts: dict[int, list[dict[str, Any]]] = {}  # amo_id -> список контактов
+                
+                # Собираем контакты из _embedded.contacts компаний из текущей пачки
+                for amo_c in batch:
+                    amo_company_id = int(amo_c.get("id") or 0)
+                    if amo_company_id not in amo_ids_set:
+                        continue  # пропускаем компании не из текущей пачки
+                    
+                    # Извлекаем контакты из _embedded.contacts
+                    embedded = amo_c.get("_embedded") or {}
+                    contacts_in_company = embedded.get("contacts") or []
+                    if isinstance(contacts_in_company, list) and contacts_in_company:
+                        companies_with_contacts[amo_company_id] = contacts_in_company
+                        amo_contacts.extend(contacts_in_company)
+                        print(f"[AMOCRM DEBUG] Company {amo_company_id} has {len(contacts_in_company)} contacts in _embedded.contacts")
+                
                 res.contacts_seen = len(amo_contacts)
-                print(f"[AMOCRM DEBUG] Fetched {res.contacts_seen} contacts from amoCRM API")
+                print(f"[AMOCRM DEBUG] Extracted {res.contacts_seen} contacts from _embedded.contacts of {len(companies_with_contacts)} companies")
                 
                 # ОТЛАДКА: если контактов не найдено, сохраняем информацию о попытке
                 if res.contacts_seen == 0:
@@ -916,37 +935,51 @@ def migrate_filtered(
                         "status": "NO_CONTACTS_FOUND",
                         "companies_checked": len(amo_ids),
                         "company_ids": list(amo_ids)[:5],  # первые 5 для отладки
-                        "message": "Контакты не найдены через filter[company_id][]. Проверьте логи сервера для деталей.",
+                        "message": "Контакты не найдены в _embedded.contacts компаний. Убедитесь, что запрашиваете компании с параметром with=contacts.",
                     }
                     res.contacts_preview.append(debug_info)
+                
                 for ac in amo_contacts:
                     amo_contact_id = int(ac.get("id") or 0)
                     if not amo_contact_id:
                         continue
-                    # Связь контакта с компанией: в amo это через links или company_id в самом контакте
-                    company_ids_in_contact = []
-                    # Вариант 1: company_id в самом контакте
-                    cid = int(ac.get("company_id") or 0)
-                    if cid and cid in amo_ids_set:  # проверяем, что компания из текущей пачки
-                        company_ids_in_contact.append(cid)
-                    # Вариант 2: через _embedded/companies
-                    embedded = ac.get("_embedded") or {}
-                    companies = embedded.get("companies") or []
-                    if isinstance(companies, list):
-                        for c in companies:
-                            cid2 = int(c.get("id") or 0)
-                            if cid2 and cid2 in amo_ids_set:  # проверяем, что компания из текущей пачки
-                                company_ids_in_contact.append(cid2)
-                    if not company_ids_in_contact:
-                        continue  # пропускаем контакты, не связанные с компаниями из текущей пачки
-                    # Находим локальную компанию (должна быть из текущей пачки)
+                    
+                    # НОВЫЙ ПОДХОД: находим компанию, из которой извлекли этот контакт
+                    # Контакт был в _embedded.contacts какой-то компании из batch
                     local_company = None
-                    for cid3 in company_ids_in_contact:
-                        local_company = Company.objects.filter(amocrm_company_id=cid3).first()
-                        if local_company:
-                            break
+                    amo_company_id_for_contact = None
+                    
+                    # Ищем, из какой компании этот контакт (проверяем companies_with_contacts)
+                    for cid, contacts_list in companies_with_contacts.items():
+                        if ac in contacts_list:
+                            amo_company_id_for_contact = cid
+                            local_company = Company.objects.filter(amocrm_company_id=cid).first()
+                            if local_company:
+                                break
+                    
+                    # Fallback: если не нашли через _embedded, пробуем через company_id в контакте
                     if not local_company:
-                        continue  # пропускаем, если локальная компания не найдена (не должна случиться, но на всякий случай)
+                        cid = int(ac.get("company_id") or 0)
+                        if cid and cid in amo_ids_set:
+                            local_company = Company.objects.filter(amocrm_company_id=cid).first()
+                            amo_company_id_for_contact = cid
+                    
+                    if not local_company:
+                        # ОТЛАДКА: контакт не связан с компанией из текущей пачки
+                        debug_count = getattr(res, '_debug_contacts_logged', 0)
+                        if res.contacts_preview is None:
+                            res.contacts_preview = []
+                        if debug_count < 5:
+                            res._debug_contacts_logged = debug_count + 1
+                            debug_data = {
+                                "status": "SKIPPED_NO_LOCAL_COMPANY",
+                                "amo_contact_id": amo_contact_id,
+                                "last_name": str(ac.get("last_name") or ""),
+                                "first_name": str(ac.get("first_name") or ""),
+                                "amo_company_id_for_contact": amo_company_id_for_contact,
+                            }
+                            res.contacts_preview.append(debug_data)
+                        continue
                     # Проверяем, не импортировали ли уже этот контакт
                     existing_contact = Contact.objects.filter(amocrm_contact_id=amo_contact_id, company=local_company).first()
                     if existing_contact:
