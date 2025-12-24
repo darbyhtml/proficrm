@@ -2913,12 +2913,15 @@ def settings_amocrm(request: HttpRequest) -> HttpResponse:
             secret = (form.cleaned_data.get("client_secret") or "").strip()
             if secret:
                 cfg.client_secret = secret
+            token = (form.cleaned_data.get("long_lived_token") or "").strip()
+            if token:
+                cfg.long_lived_token = token
             # redirect uri: если пусто — построим из request
             ru = (form.cleaned_data.get("redirect_uri") or "").strip()
             if not ru:
                 ru = request.build_absolute_uri("/settings/amocrm/callback/")
             cfg.redirect_uri = ru
-            cfg.save(update_fields=["domain", "client_id", "client_secret", "redirect_uri", "updated_at"])
+            cfg.save(update_fields=["domain", "client_id", "client_secret", "redirect_uri", "long_lived_token", "updated_at"])
             messages.success(request, "Настройки amoCRM сохранены.")
             return redirect("settings_amocrm")
     else:
@@ -2928,6 +2931,7 @@ def settings_amocrm(request: HttpRequest) -> HttpResponse:
                 "client_id": cfg.client_id,
                 "client_secret": cfg.client_secret,
                 "redirect_uri": cfg.redirect_uri or request.build_absolute_uri("/settings/amocrm/callback/"),
+                "long_lived_token": cfg.long_lived_token,
             }
         )
 
@@ -2975,9 +2979,10 @@ def settings_amocrm_disconnect(request: HttpRequest) -> HttpResponse:
     cfg = AmoApiConfig.load()
     cfg.access_token = ""
     cfg.refresh_token = ""
+    cfg.long_lived_token = ""
     cfg.expires_at = None
     cfg.last_error = ""
-    cfg.save(update_fields=["access_token", "refresh_token", "expires_at", "last_error", "updated_at"])
+    cfg.save(update_fields=["access_token", "refresh_token", "long_lived_token", "expires_at", "last_error", "updated_at"])
     messages.success(request, "amoCRM отключен (токены удалены).")
     return redirect("settings_amocrm")
 

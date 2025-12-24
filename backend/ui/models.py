@@ -61,6 +61,7 @@ class AmoApiConfig(models.Model):
 
     access_token = models.TextField("Access token", blank=True, default="")
     refresh_token = models.TextField("Refresh token", blank=True, default="")
+    long_lived_token = models.TextField("Долгосрочный токен (если используете)", blank=True, default="")
     token_type = models.CharField("Token type", max_length=32, blank=True, default="Bearer")
     expires_at = models.DateTimeField("Token expires at", null=True, blank=True)
 
@@ -77,4 +78,7 @@ class AmoApiConfig(models.Model):
         return obj
 
     def is_connected(self) -> bool:
+        # Либо OAuth (access+refresh), либо долгосрочный токен
+        if self.long_lived_token and self.domain:
+            return True
         return bool(self.access_token and self.refresh_token and self.domain and self.client_id and self.client_secret)

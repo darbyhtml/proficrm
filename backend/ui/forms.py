@@ -322,6 +322,12 @@ class AmoApiConfigForm(forms.Form):
     client_id = forms.CharField(label="Client ID")
     client_secret = forms.CharField(label="Client Secret", required=False, widget=forms.PasswordInput(render_value=True))
     redirect_uri = forms.CharField(label="Redirect URI", required=False, help_text="Если пусто — возьмём автоматически (callback URL).")
+    long_lived_token = forms.CharField(
+        label="Долгосрочный токен (рекомендуем для миграции)",
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2"}),
+        help_text="Можно использовать вместо OAuth. Скопируйте из amoCRM: Ключи и доступы → Долгосрочный токен.",
+    )
 
 
 class AmoMigrateFilterForm(forms.Form):

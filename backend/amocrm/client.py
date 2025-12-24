@@ -47,6 +47,9 @@ class AmoClient:
         return f"https://{dom}"
 
     def _token_valid(self) -> bool:
+        # Long-lived token не истекает (для целей миграции)
+        if self.cfg.long_lived_token:
+            return True
         if not self.cfg.access_token:
             return False
         if not self.cfg.expires_at:
@@ -79,6 +82,8 @@ class AmoClient:
         self.cfg.save(update_fields=["access_token", "refresh_token", "token_type", "expires_at", "last_error", "updated_at"])
 
     def ensure_token(self) -> None:
+        if self.cfg.long_lived_token:
+            return
         if self._token_valid():
             return
         self.refresh_token()
@@ -130,7 +135,7 @@ class AmoClient:
 
         if auth:
             self.ensure_token()
-            tok = self.cfg.access_token
+            tok = self.cfg.long_lived_token or self.cfg.access_token
             ttype = self.cfg.token_type or "Bearer"
             headers["Authorization"] = f"{ttype} {tok}"
 
