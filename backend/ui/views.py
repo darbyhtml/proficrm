@@ -3150,31 +3150,49 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
     else:
         # попытка найти ответственную по имени "Иванова Юлия"
         default_resp = None
-        for u in users:
-            nm = str(u.get("name") or "")
-            if "иванова" in nm.lower() and "юлия" in nm.lower():
-                default_resp = int(u.get("id") or 0)
-                break
+        try:
+            for u in users:
+                nm = str(u.get("name") or "")
+                if "иванова" in nm.lower() and "юлия" in nm.lower():
+                    default_resp = int(u.get("id") or 0)
+                    break
+        except Exception as e:
+            print(f"AMOCRM_MIGRATE_ERROR: Failed to find default responsible: {e}")
 
-        form = AmoMigrateFilterForm(
-            initial={
-                "dry_run": True,
-                "limit_companies": 10,  # уменьшено с 50 до 10
-                "offset": 0,
-                "responsible_user_id": default_resp or "",
-                "custom_field_id": guessed_field_id or "",
-                "custom_value_label": "Новая CRM",
-                "import_tasks": True,
-                "import_notes": True,
-                "import_contacts": False,  # по умолчанию выключено
-            }
+        try:
+            form = AmoMigrateFilterForm(
+                initial={
+                    "dry_run": True,
+                    "limit_companies": 10,  # уменьшено с 50 до 10
+                    "offset": 0,
+                    "responsible_user_id": default_resp or "",
+                    "custom_field_id": guessed_field_id or "",
+                    "custom_value_label": "Новая CRM",
+                    "import_tasks": True,
+                    "import_notes": True,
+                    "import_contacts": False,  # по умолчанию выключено
+                }
+            )
+        except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"AMOCRM_MIGRATE_ERROR: Failed to create form: {error_details}")
+            # Создаём минимальную форму
+            form = AmoMigrateFilterForm(initial={"dry_run": True, "limit_companies": 10, "offset": 0})
+
+    try:
+        return render(
+            request,
+            "ui/settings/amocrm_migrate.html",
+            {"cfg": cfg, "form": form, "users": users, "fields": fields, "result": result},
         )
-
-    return render(
-        request,
-        "ui/settings/amocrm_migrate.html",
-        {"cfg": cfg, "form": form, "users": users, "fields": fields, "result": result},
-    )
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"AMOCRM_MIGRATE_ERROR: Failed to render template: {error_details}")
+        # Возвращаем простую страницу с ошибкой
+        from django.http import HttpResponse
+        return HttpResponse(f"Ошибка рендеринга страницы миграции: {str(e)}. Проверьте логи сервера для деталей.", status=500)
 
 # UI settings (admin only)
 @login_required
