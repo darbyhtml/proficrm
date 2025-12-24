@@ -750,9 +750,31 @@ def company_list(request: HttpRequest) -> HttpResponse:
     companies_filtered = qs.order_by().count()
     filter_active = f["filter_active"]
 
-    paginator = Paginator(qs, 25)
+    # Количество элементов на странице: из GET или из сессии (по умолчанию 25)
+    per_page_param = request.GET.get("per_page", "").strip()
+    if per_page_param:
+        try:
+            per_page = int(per_page_param)
+            # Разрешенные значения: 25, 50, 100, 200
+            if per_page in [25, 50, 100, 200]:
+                request.session["company_list_per_page"] = per_page
+            else:
+                per_page = request.session.get("company_list_per_page", 25)
+        except (ValueError, TypeError):
+            per_page = request.session.get("company_list_per_page", 25)
+    else:
+        per_page = request.session.get("company_list_per_page", 25)
+
+    paginator = Paginator(qs, per_page)
     page = paginator.get_page(request.GET.get("page"))
+    # Формируем qs для пагинации, включая per_page если он отличается от значения по умолчанию
     qs_no_page = _qs_without_page(request)
+    if per_page != 25:
+        # Добавляем per_page в параметры, если он отличается от значения по умолчанию
+        from urllib.parse import urlencode, parse_qs
+        params = parse_qs(qs_no_page) if qs_no_page else {}
+        params["per_page"] = [str(per_page)]
+        qs_no_page = urlencode(params, doseq=True)
     ui_cfg = UiGlobalConfig.load()
     columns = ui_cfg.company_list_columns or ["name"]
 
@@ -782,6 +804,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "contract_types": Company.ContractType.choices,
             "company_list_columns": columns,
             "transfer_targets": User.objects.filter(is_active=True, role__in=[User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD]).order_by("last_name", "first_name"),
+            "per_page": per_page,
         },
     )
 

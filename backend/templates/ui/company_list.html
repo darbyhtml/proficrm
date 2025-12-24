@@ -214,7 +214,32 @@
         </table>
       </div>
 
-      {% include "ui/_pagination.html" with page=page qs=qs %}
+      <div class="flex items-center justify-between gap-4 flex-wrap">
+        <div class="flex items-center gap-3">
+          <form method="get" class="flex items-center gap-2" id="perPageForm">
+            <label class="text-sm text-brand-dark/70">На странице:</label>
+            <select name="per_page" class="select" onchange="document.getElementById('perPageForm').submit()" style="padding:.25rem .5rem;font-size:.875rem">
+              <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+              <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+              <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+              <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
+            </select>
+            {% if q %}<input type="hidden" name="q" value="{{ q }}" />{% endif %}
+            {% if responsible %}<input type="hidden" name="responsible" value="{{ responsible }}" />{% endif %}
+            {% if status %}<input type="hidden" name="status" value="{{ status }}" />{% endif %}
+            {% if branch %}<input type="hidden" name="branch" value="{{ branch }}" />{% endif %}
+            {% if sphere %}<input type="hidden" name="sphere" value="{{ sphere }}" />{% endif %}
+            {% if contract_type %}<input type="hidden" name="contract_type" value="{{ contract_type }}" />{% endif %}
+            {% if cold_call %}<input type="hidden" name="cold_call" value="{{ cold_call }}" />{% endif %}
+            {% if overdue %}<input type="hidden" name="overdue" value="{{ overdue }}" />{% endif %}
+            {% if sort %}<input type="hidden" name="sort" value="{{ sort }}" />{% endif %}
+            {% if dir %}<input type="hidden" name="dir" value="{{ dir }}" />{% endif %}
+          </form>
+        </div>
+        <div>
+          {% include "ui/_pagination.html" with page=page qs=qs %}
+        </div>
+      </div>
     </div>
   </div>
 
