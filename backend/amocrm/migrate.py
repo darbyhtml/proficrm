@@ -1200,10 +1200,11 @@ def migrate_filtered(
                     # custom_fields_values для телефонов/почт/должности
                     custom_fields = ac.get("custom_fields_values") or []
                     # ОТЛАДКА: логируем структуру custom_fields для первых контактов
-                    debug_count_for_extraction = getattr(res, '_debug_contacts_logged', 0)
+                    debug_count_for_extraction = len(res.contacts_preview) if res.contacts_preview else 0
                     if debug_count_for_extraction < 3:
                         print(f"[AMOCRM DEBUG] Extracting data from custom_fields for contact {amo_contact_id}:", flush=True)
                         print(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}", flush=True)
+                        print(f"  - ac.get('custom_fields_values'): {ac.get('custom_fields_values')}", flush=True)
                     
                     for cf_idx, cf in enumerate(custom_fields):
                         if not isinstance(cf, dict):
