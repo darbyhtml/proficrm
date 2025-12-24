@@ -3038,52 +3038,51 @@ def settings_amocrm_disconnect(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
+    if not _require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    cfg = None
     try:
-        if not _require_admin(request.user):
-            messages.error(request, "Доступ запрещён.")
-            return redirect("dashboard")
+        cfg = AmoApiConfig.load()
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"AMOCRM_MIGRATE_ERROR: Failed to load AmoApiConfig: {error_details}")
+        messages.error(request, f"Ошибка загрузки настроек amoCRM: {str(e)}. Проверьте логи сервера.")
+        # Создаём пустой объект для рендера
+        cfg = AmoApiConfig(domain="kmrprofi.amocrm.ru")
+    
+    if not cfg.is_connected():
+        messages.error(request, "Сначала подключите amoCRM (OAuth).")
+        return redirect("settings_amocrm")
 
-        cfg = None
-        try:
-            cfg = AmoApiConfig.load()
-        except Exception as e:
-            import traceback
-            error_details = traceback.format_exc()
-            print(f"AMOCRM_MIGRATE_ERROR: Failed to load AmoApiConfig: {error_details}")
-            messages.error(request, f"Ошибка загрузки настроек amoCRM: {str(e)}. Проверьте логи сервера.")
-            # Создаём пустой объект для рендера
-            cfg = AmoApiConfig(domain="kmrprofi.amocrm.ru")
-        
-        if not cfg.is_connected():
-            messages.error(request, "Сначала подключите amoCRM (OAuth).")
-            return redirect("settings_amocrm")
-
-        client = None
-        users = []
-        fields = []
-        try:
-            client = AmoClient(cfg)
-            users = fetch_amo_users(client)
-            fields = fetch_company_custom_fields(client)
-            cfg.last_error = ""
-            cfg.save(update_fields=["last_error", "updated_at"])
-        except AmoApiError as e:
-            cfg.last_error = str(e)
-            cfg.save(update_fields=["last_error", "updated_at"])
-            messages.error(request, f"Ошибка API amoCRM: {e}")
-        except Exception as e:
-            import traceback
-            error_details = traceback.format_exc()
-            print(f"AMOCRM_MIGRATE_INIT_ERROR: {error_details}")
-            messages.error(request, f"Ошибка инициализации: {str(e)}. Проверьте логи сервера.")
-            if not client:
-                # Возвращаем страницу с пустыми данными, но с формой
-                form = AmoMigrateFilterForm(initial={"dry_run": True, "limit_companies": 10, "offset": 0})
-                return render(
-                    request,
-                    "ui/settings/amocrm_migrate.html",
-                    {"cfg": cfg, "form": form, "users": [], "fields": [], "result": None},
-                )
+    client = None
+    users = []
+    fields = []
+    try:
+        client = AmoClient(cfg)
+        users = fetch_amo_users(client)
+        fields = fetch_company_custom_fields(client)
+        cfg.last_error = ""
+        cfg.save(update_fields=["last_error", "updated_at"])
+    except AmoApiError as e:
+        cfg.last_error = str(e)
+        cfg.save(update_fields=["last_error", "updated_at"])
+        messages.error(request, f"Ошибка API amoCRM: {e}")
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        print(f"AMOCRM_MIGRATE_INIT_ERROR: {error_details}")
+        messages.error(request, f"Ошибка инициализации: {str(e)}. Проверьте логи сервера.")
+        if not client:
+            # Возвращаем страницу с пустыми данными, но с формой
+            form = AmoMigrateFilterForm(initial={"dry_run": True, "limit_companies": 10, "offset": 0})
+            return render(
+                request,
+                "ui/settings/amocrm_migrate.html",
+                {"cfg": cfg, "form": form, "users": [], "fields": [], "result": None},
+            )
 
     # default guesses
     def _find_field_id(names: list[str]) -> int | None:
