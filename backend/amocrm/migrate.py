@@ -434,7 +434,14 @@ def _upsert_company_from_amo(
     if responsible and company.responsible_id != responsible.id:
         company.responsible = responsible
     if not dry_run:
-        company.save()
+        try:
+            company.save()
+        except Exception as e:
+            # Если ошибка при сохранении - логируем, но не падаем (company уже создан в памяти)
+            print(f"[AMOCRM ERROR] Failed to save company in _upsert_company_from_amo (amo_id={amo_id}): {e}")
+            import traceback
+            print(f"[AMOCRM ERROR] Traceback: {traceback.format_exc()}")
+            # Продолжаем - company уже создан в памяти, просто не сохранен в БД
     return company, created
 
 
