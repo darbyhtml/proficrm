@@ -505,7 +505,8 @@ def migrate_filtered(
     responsible_local = _map_amo_user_to_local(amo_user_by_id.get(int(responsible_user_id)) or {})
     field_meta = _build_field_meta(company_fields_meta or [])
 
-    companies = fetch_companies_by_responsible(client, responsible_user_id)
+    # Запрашиваем компании с контактами, если включен импорт контактов
+    companies = fetch_companies_by_responsible(client, responsible_user_id, with_contacts=import_contacts)
     res.companies_seen = len(companies)
     matched_all = []
     for c in companies:
