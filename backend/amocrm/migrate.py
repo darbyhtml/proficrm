@@ -1236,6 +1236,16 @@ def migrate_filtered(
                                     "first_value": first_val,
                                 })
                         
+                        # ОТЛАДКА: сохраняем полную структуру контакта для анализа (первые 3)
+                        full_contact_structure = None
+                        if debug_count < 3 and isinstance(ac, dict):
+                            import json
+                            try:
+                                # Сохраняем полную структуру (ограничиваем размер для UI)
+                                full_contact_structure = json.dumps(ac, ensure_ascii=False, indent=2)[:2000]
+                            except Exception:
+                                full_contact_structure = str(ac)[:2000]
+                        
                         contact_debug = {
                             "amo_contact_id": amo_contact_id,
                             "first_name": first_name,
@@ -1245,9 +1255,10 @@ def migrate_filtered(
                             "position_found": position,
                             "custom_fields_count": len(custom_fields),
                             "custom_fields_sample": custom_fields_debug,
-                            "raw_contact_keys": list(ac.keys())[:15],
-                            "has_phone_field": bool(ac.get("phone")),
-                            "has_email_field": bool(ac.get("email")),
+                            "raw_contact_keys": list(ac.keys())[:20] if isinstance(ac, dict) else [],
+                            "has_phone_field": bool(ac.get("phone")) if isinstance(ac, dict) else False,
+                            "has_email_field": bool(ac.get("email")) if isinstance(ac, dict) else False,
+                            "full_structure": full_contact_structure,  # Полная структура для первых 3 контактов
                         }
                         res.contacts_preview.append(contact_debug)
                         res._debug_contacts_logged = debug_count + 1
