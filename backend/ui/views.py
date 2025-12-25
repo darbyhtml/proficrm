@@ -1291,7 +1291,11 @@ def company_duplicates(request: HttpRequest) -> HttpResponse:
 @login_required
 def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch", "status", "head_company"), id=company_id)
+    # Загружаем компанию с связанными объектами, включая поля для истории холодных звонков
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch", "status", "head_company", "primary_cold_marked_by", "primary_cold_marked_call"),
+        id=company_id
+    )
     can_edit_company = _can_edit_company(user, company)
     can_view_activity = bool(user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD))
     can_delete_company = _can_delete_company(user, company)
@@ -1325,7 +1329,8 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         .order_by("name")[:200]
     )
 
-    contacts = Contact.objects.filter(company=company).prefetch_related("emails", "phones").order_by("last_name", "first_name")[:200]
+    # Загружаем контакты с связанными объектами для истории холодных звонков
+    contacts = Contact.objects.filter(company=company).select_related("cold_marked_by", "cold_marked_call").prefetch_related("emails", "phones").order_by("last_name", "first_name")[:200]
     is_cold_company = bool(company.lead_state == Company.LeadState.COLD)
 
     # Окно доступности кнопки "холодный" — 8 часов после звонка, но активируем кнопку только через 10 секунд
