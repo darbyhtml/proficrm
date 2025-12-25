@@ -1342,7 +1342,10 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         if last:
             deadline = last + timedelta(hours=8)
             unlock_at = last + min_delay
-            c.cold_mark_available = bool(now_ts <= deadline and now_ts >= unlock_at and not c.is_cold_call)  # type: ignore[attr-defined]
+            # Для новых контактов (не отмеченных как холодные) разрешаем отметку даже в теплых компаниях
+            # Для уже отмеченных - только в холодных компаниях
+            can_mark = (is_cold_company or not c.is_cold_call) and (now_ts <= deadline and now_ts >= unlock_at and not c.is_cold_call)
+            c.cold_mark_available = bool(can_mark)  # type: ignore[attr-defined]
             c.cold_mark_unlocks_at = timezone.localtime(unlock_at)  # type: ignore[attr-defined]
             c.cold_mark_deadline = timezone.localtime(deadline)  # type: ignore[attr-defined]
         else:
@@ -1934,8 +1937,10 @@ def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
     if not _can_edit_company(user, company):
         messages.error(request, "Нет прав на изменение контактов этой компании.")
         return redirect("company_detail", company_id=company.id)
-    if company.lead_state != Company.LeadState.COLD:
-        messages.error(request, "Отметка «холодный звонок» доступна только для холодных карточек.")
+    # Разрешаем отмечать новый контакт как холодный, даже если компания теплая
+    # Но только если контакт еще не был отмечен как холодный
+    if company.lead_state != Company.LeadState.COLD and contact.is_cold_call:
+        messages.error(request, "Отметка «холодный звонок» доступна только для холодных карточек или новых контактов.")
         return redirect("company_detail", company_id=company.id)
 
     # Новая логика: отметку можно поставить только 1 раз и только в течение 8 часов после звонка по этому контакту

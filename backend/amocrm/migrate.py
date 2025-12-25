@@ -891,8 +891,10 @@ def migrate_filtered(
                         created_label = ""
 
                     prefix = "Импорт из amo"
-                    # amomail_message — это по сути история почты; делаем читабельным, без JSON
+                    # amomail_message — это по сути история почты; пропускаем такие заметки
                     if note_type.lower().startswith("amomail"):
+                        # Пропускаем импорт писем из amoCRM
+                        continue
                         incoming = bool(params.get("income")) if isinstance(params, dict) else False
                         subj = str(params.get("subject") or "").strip()
                         frm = params.get("from") or {}
@@ -958,13 +960,15 @@ def migrate_filtered(
                             existing_note.company = company
                             upd = True
                         old_text = (existing_note.text or "").strip()
+                        # НО: если это amomail - пропускаем (не обновляем и не создаем)
+                        if note_type.lower().startswith("amomail"):
+                            continue
                         # Переписываем также любые почтовые записи, которые раньше импортировали как JSON-простыню.
                         should_rewrite = (
                             old_text.startswith("Импорт из amo (note id")
                             or len(old_text) < 40
                             or ("type: amomail" in old_text.lower())
                             or ("\"thread_id\"" in old_text)
-                            or note_type.lower().startswith("amomail")
                             or ("\"uniq\"" in old_text)
                             or note_type.lower().startswith("call_")
                         )

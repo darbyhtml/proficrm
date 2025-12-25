@@ -349,7 +349,7 @@
                 </div>
               {% endif %}
             </div>
-            {% if company.primary_contact_is_cold_call and company.primary_cold_marked_at %}
+            {% if company.primary_cold_marked_at %}
               <div class="mt-1 text-xs text-brand-dark/60">
                 Холодный звонок: {{ company.primary_cold_marked_at|date:"d.m.Y H:i" }}
                 {% if company.primary_cold_marked_by %}
@@ -539,7 +539,7 @@
                         <span class="badge badge-warn ml-2" style="padding:.1rem .35rem;font-size:.65rem">Холодный</span>
                       {% endif %}
                     </div>
-                    {% if c.is_cold_call and c.cold_marked_at %}
+                    {% if c.cold_marked_at %}
                       <div class="mt-1 text-xs text-brand-dark/60">
                         Холодный звонок: {{ c.cold_marked_at|date:"d.m.Y H:i" }}
                         {% if c.cold_marked_by %}
@@ -550,7 +550,7 @@
                   </div>
                   {% if can_edit_company %}
                     <div class="flex items-center gap-2">
-                      {% if is_cold_company %}
+                      {% if is_cold_company or not c.is_cold_call %}
                         <form method="post" action="/contacts/{{ c.id }}/cold-call/toggle/">
                           {% csrf_token %}
                           <button
