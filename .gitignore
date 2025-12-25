@@ -53,3 +53,7 @@ backend/_compile_templates.py
 # Local notes (personal)
 Новинки.txt
 
+# Оценка проекта и инструкции (не нужны в репозитории)
+PROJECT_EVALUATION.md
+DELETE_AMOMAIL_NOTES.md
+
