@@ -155,7 +155,25 @@ class Company(models.Model):
         if self.name:
             self.name = str(self.name).strip()[:255]
         if self.phone:
-            self.phone = str(self.phone).strip()[:50]
+            # Нормализуем номер телефона: убираем форматирование, оставляем только цифры и +7
+            phone = str(self.phone).strip()
+            # Убираем все нецифровые символы, кроме + в начале
+            digits = ''.join(c for c in phone if c.isdigit() or (c == '+' and phone.startswith('+')))
+            # Если начинается с +7, оставляем как есть
+            if digits.startswith('+7') and len(digits) == 12:
+                self.phone = digits[:50]
+            # Если начинается с 8 и 11 цифр, заменяем на +7
+            elif digits.startswith('8') and len(digits) == 11:
+                self.phone = '+7' + digits[1:][:50]
+            # Если начинается с 7 и 11 цифр, добавляем +
+            elif digits.startswith('7') and len(digits) == 11:
+                self.phone = '+' + digits[:50]
+            # Если 10 цифр, добавляем +7
+            elif len(digits) == 10:
+                self.phone = '+7' + digits[:50]
+            # Иначе обрезаем до 50 символов
+            else:
+                self.phone = phone[:50]
         if self.email:
             self.email = str(self.email).strip()[:254]
         super().save(*args, **kwargs)
@@ -276,6 +294,29 @@ class ContactPhone(models.Model):
 
     class Meta:
         indexes = [models.Index(fields=["value"])]
+
+    def save(self, *args, **kwargs):
+        if self.value:
+            # Нормализуем номер телефона: убираем форматирование, оставляем только цифры и +7
+            phone = str(self.value).strip()
+            # Убираем все нецифровые символы, кроме + в начале
+            digits = ''.join(c for c in phone if c.isdigit() or (c == '+' and phone.startswith('+')))
+            # Если начинается с +7, оставляем как есть
+            if digits.startswith('+7') and len(digits) == 12:
+                self.value = digits[:50]
+            # Если начинается с 8 и 11 цифр, заменяем на +7
+            elif digits.startswith('8') and len(digits) == 11:
+                self.value = '+7' + digits[1:][:50]
+            # Если начинается с 7 и 11 цифр, добавляем +
+            elif digits.startswith('7') and len(digits) == 11:
+                self.value = '+' + digits[:50]
+            # Если 10 цифр, добавляем +7
+            elif len(digits) == 10:
+                self.value = '+7' + digits[:50]
+            # Иначе обрезаем до 50 символов
+            else:
+                self.value = phone[:50]
+        super().save(*args, **kwargs)
 
     def __str__(self) -> str:
         return self.value
