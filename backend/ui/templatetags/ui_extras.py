@@ -27,3 +27,39 @@ def external_url(value: str) -> str:
     return "https://" + s
 
 
+@register.filter(name="format_phone")
+def format_phone(value: str) -> str:
+    """
+    Форматирует номер телефона в формат: +7 (912) 345-6789
+    Убирает все нецифровые символы, кроме + в начале, затем форматирует.
+    """
+    if value is None:
+        return ""
+    s = str(value).strip()
+    if not s:
+        return ""
+    
+    # Убираем все символы, кроме цифр и + в начале
+    digits = re.sub(r"[^\d+]", "", s)
+    
+    # Если начинается с +7 или 8, обрабатываем как российский номер
+    if digits.startswith("+7"):
+        digits = digits[2:]  # Убираем +7
+    elif digits.startswith("8") and len(digits) >= 11:
+        digits = digits[1:]  # Убираем 8
+    elif digits.startswith("7") and len(digits) >= 11:
+        digits = digits[1:]  # Убираем 7
+    
+    # Если осталось 10 цифр, форматируем как +7 (XXX) XXX-XXXX
+    if len(digits) == 10:
+        return f"+7 ({digits[0:3]}) {digits[3:6]}-{digits[6:10]}"
+    
+    # Если осталось 11 цифр (возможно с лишней 7 или 8), берем последние 10
+    if len(digits) == 11:
+        digits = digits[-10:]
+        return f"+7 ({digits[0:3]}) {digits[3:6]}-{digits[6:10]}"
+    
+    # Если не подходит под формат, возвращаем как есть
+    return s
+
+

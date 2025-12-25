@@ -292,7 +292,7 @@
           <div>
             <div class="text-brand-dark/50">Телефон (основной)</div>
             <div class="flex items-center justify-between gap-2">
-              <div class="font-mono text-xs">{{ company.phone|default:"—" }}</div>
+              <div class="font-mono text-xs">{{ company.phone|format_phone|default:"—" }}</div>
               {% if company.phone %}
                 <div class="flex items-center gap-2 shrink-0">
                   {% if can_edit_company and is_cold_company %}
@@ -607,7 +607,7 @@
                     <div class="text-brand-dark/50 text-xs">Телефон</div>
                     {% for p in c.phones.all %}
                       <div class="flex items-center justify-between gap-2">
-                        <div class="font-mono text-xs">{{ p.value }}</div>
+                        <div class="font-mono text-xs">{{ p.value|format_phone }}</div>
                         <button
                           type="button"
                           class="btn btn-outline js-call-phone"
@@ -1152,7 +1152,20 @@
 
           document.querySelectorAll('.js-call-phone').forEach(btn => {
             btn.addEventListener('click', async () => {
-              const phone = btn.dataset.phone || '';
+              // Получаем номер из data-phone (он уже без форматирования, так как берется из БД)
+              let phone = btn.dataset.phone || '';
+              // На всякий случай убираем форматирование, если оно есть
+              phone = phone.replace(/\D/g, '');
+              // Если начинается с 7, оставляем как есть, если с 8 - заменяем на 7
+              if (phone.startsWith('8') && phone.length >= 11) {
+                phone = '7' + phone.substring(1);
+              } else if (phone.startsWith('7') && phone.length === 11) {
+                phone = phone.substring(1); // Убираем первую 7
+              }
+              // Если 10 цифр, добавляем 7 в начало
+              if (phone.length === 10) {
+                phone = '7' + phone;
+              }
               const companyId = btn.dataset.company || '';
               const contactId = btn.dataset.contact || '';
               // Не делаем btn.disabled=true: на disabled в ряде браузеров пропадает подсказка (title).
