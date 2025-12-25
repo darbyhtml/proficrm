@@ -69,40 +69,53 @@
         </div>
         <div class="text-sm text-brand-dark/70">Всего: <b>{{ calls_count }}</b></div>
       </div>
-      <div class="mt-3 space-y-2 text-sm">
+      <div class="mt-3 space-y-3 text-sm">
         {% for call in calls_page %}
-          <div class="rounded-lg border p-3">
-            <div class="flex flex-wrap items-center gap-2 mb-2">
-              <span class="font-mono text-xs">{{ call.created_at|date:"d.m.Y H:i:s" }}</span>
-              <span class="font-mono text-xs">{{ call.phone_raw }}</span>
+          <div class="rounded-lg border p-4 hover:bg-brand-soft/10 transition">
+            <div class="flex flex-wrap items-center gap-2 mb-3">
+              <span class="font-mono text-xs text-brand-dark/70">{{ call.created_at|date:"d.m.Y H:i:s" }}</span>
+              <span class="font-mono text-sm font-medium">{{ call.phone_raw }}</span>
               {% if call.is_cold_call %}
-                <span class="badge badge-warn" style="padding:.1rem .35rem;font-size:.65rem">Холодный</span>
+                <span class="badge badge-warn" style="padding:.2rem .5rem;font-size:.7rem">Холодный</span>
               {% else %}
-                <span class="badge" style="padding:.1rem .35rem;font-size:.65rem">Тёплый</span>
+                <span class="badge" style="padding:.2rem .5rem;font-size:.7rem">Тёплый</span>
               {% endif %}
               {% if call.contact %}
                 <span class="muted-2">· {{ call.contact }}</span>
               {% endif %}
               {% if call.company %}
-                <a class="link" href="/companies/{{ call.company.id }}/">({{ call.company.name }})</a>
+                <a class="link font-medium" href="/companies/{{ call.company.id }}/">({{ call.company.name }})</a>
               {% endif %}
             </div>
             {% if call.call_status or call.call_started_at or call.call_duration_seconds %}
-              <div class="text-xs muted-2 space-y-1 mt-2 pt-2 border-t border-brand-soft/50">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3 pt-3 border-t border-brand-soft/50">
                 {% if call.call_status %}
-                  <div><strong>Статус:</strong> {{ call.get_call_status_display }}</div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs muted-2">Статус:</span>
+                    <span class="font-medium {% if call.call_status == 'connected' %}text-green-600{% elif call.call_status == 'no_answer' %}text-orange-600{% elif call.call_status == 'busy' %}text-yellow-600{% elif call.call_status == 'rejected' %}text-red-600{% else %}text-brand-dark{% endif %}">
+                      {{ call.get_call_status_display }}
+                    </span>
+                  </div>
                 {% endif %}
                 {% if call.call_started_at %}
-                  <div><strong>Начало звонка:</strong> {{ call.call_started_at|date:"d.m.Y H:i:s" }}</div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs muted-2">Начало:</span>
+                    <span class="font-mono text-xs">{{ call.call_started_at|date:"d.m.Y H:i:s" }}</span>
+                  </div>
                 {% endif %}
                 {% if call.duration_formatted %}
-                  <div><strong>Длительность:</strong> {{ call.duration_formatted }}</div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs muted-2">Длительность:</span>
+                    <span class="font-medium">{{ call.duration_formatted }}</span>
+                  </div>
                 {% endif %}
               </div>
+            {% else %}
+              <div class="text-xs muted-2 mt-2 italic">Данные о звонке не получены</div>
             {% endif %}
           </div>
         {% empty %}
-          <div class="muted-2">Нет звонков за период.</div>
+          <div class="muted-2 text-center py-4">Нет звонков за период.</div>
         {% endfor %}
       </div>
       {% include "ui/_pagination.html" with page=calls_page qs=calls_qs page_param="calls_page" %}

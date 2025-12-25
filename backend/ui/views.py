@@ -526,6 +526,15 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
             call.duration_formatted = f"{minutes} мин. {seconds} сек." if minutes > 0 else f"{seconds} сек."
         else:
             call.duration_formatted = None
+    
+    # Также для холодных звонков
+    for call in cold_page:
+        if call.call_duration_seconds:
+            minutes = call.call_duration_seconds // 60
+            seconds = call.call_duration_seconds % 60
+            call.duration_formatted = f"{minutes} мин. {seconds} сек." if minutes > 0 else f"{seconds} сек."
+        else:
+            call.duration_formatted = None
 
     cold_qs = _qs_without_page(request, page_key="cold_page")
     calls_qs_str = _qs_without_page(request, page_key="calls_page")
