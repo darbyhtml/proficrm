@@ -441,13 +441,19 @@ class CallListenerService : Service() {
                     val duration = it.getLong(it.getColumnIndexOrThrow(CallLog.Calls.DURATION))
                     val date = it.getLong(it.getColumnIndexOrThrow(CallLog.Calls.DATE))
                     
-                    // TYPE: 1=входящий, 2=исходящий, 3=пропущенный, 4=отклоненный, 5=занято
+                    // TYPE: 1=входящий, 2=исходящий, 3=пропущенный, 4=голосовая почта, 5=отклоненный (API 29+)
                     val status = when (type) {
                         CallLog.Calls.OUTGOING_TYPE -> "connected" // Исходящий - считаем дозвонился
                         CallLog.Calls.MISSED_TYPE -> "no_answer" // Пропущенный
-                        CallLog.Calls.REJECTED_TYPE -> "rejected" // Отклоненный
-                        CallLog.Calls.BUSY_TYPE -> "busy" // Занято
-                        else -> "connected"
+                        CallLog.Calls.INCOMING_TYPE -> {
+                            // Для входящих: если длительность 0 - не дозвонился, иначе - дозвонился
+                            if (duration > 0) "connected" else "no_answer"
+                        }
+                        5 -> "rejected" // REJECTED_TYPE (доступен с API 29+)
+                        else -> {
+                            // Для других случаев (VOICEMAIL_TYPE=4 и т.д.)
+                            if (duration == 0L) "no_answer" else "connected"
+                        }
                     }
                     
                     return Triple(status, duration, date)
