@@ -159,9 +159,17 @@ class Company(models.Model):
             phone = str(self.phone).strip()
             # Убираем все нецифровые символы, кроме + в начале
             digits = ''.join(c for c in phone if c.isdigit() or (c == '+' and phone.startswith('+')))
-            # Если начинается с +7, оставляем как есть
-            if digits.startswith('+7') and len(digits) == 12:
-                self.phone = digits[:50]
+            # Если начинается с +7, проверяем следующую цифру
+            if digits.startswith('+7'):
+                digits_only = digits[2:]  # Убираем +7
+                # Если после +7 идет 8, убираем её (например +78XXXXXXXXX -> +7XXXXXXXXX)
+                if digits_only.startswith('8') and len(digits_only) > 10:
+                    digits_only = digits_only[1:]
+                # Если осталось 10 цифр, формируем +7XXXXXXXXXX
+                if len(digits_only) == 10:
+                    self.phone = '+7' + digits_only[:50]
+                else:
+                    self.phone = phone[:50]
             # Если начинается с 8 и 11 цифр, заменяем на +7
             elif digits.startswith('8') and len(digits) == 11:
                 self.phone = '+7' + digits[1:][:50]
@@ -301,9 +309,17 @@ class ContactPhone(models.Model):
             phone = str(self.value).strip()
             # Убираем все нецифровые символы, кроме + в начале
             digits = ''.join(c for c in phone if c.isdigit() or (c == '+' and phone.startswith('+')))
-            # Если начинается с +7, оставляем как есть
-            if digits.startswith('+7') and len(digits) == 12:
-                self.value = digits[:50]
+            # Если начинается с +7, проверяем следующую цифру
+            if digits.startswith('+7'):
+                digits_only = digits[2:]  # Убираем +7
+                # Если после +7 идет 8, убираем её (например +78XXXXXXXXX -> +7XXXXXXXXX)
+                if digits_only.startswith('8') and len(digits_only) > 10:
+                    digits_only = digits_only[1:]
+                # Если осталось 10 цифр, формируем +7XXXXXXXXXX
+                if len(digits_only) == 10:
+                    self.value = '+7' + digits_only[:50]
+                else:
+                    self.value = phone[:50]
             # Если начинается с 8 и 11 цифр, заменяем на +7
             elif digits.startswith('8') and len(digits) == 11:
                 self.value = '+7' + digits[1:][:50]

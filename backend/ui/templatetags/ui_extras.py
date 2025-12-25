@@ -42,9 +42,12 @@ def format_phone(value: str) -> str:
     # Убираем все символы, кроме цифр и + в начале
     digits = re.sub(r"[^\d+]", "", s)
     
-    # Если начинается с +7 или 8, обрабатываем как российский номер
+    # Если начинается с +7, обрабатываем как российский номер
     if digits.startswith("+7"):
         digits = digits[2:]  # Убираем +7
+        # Если после +7 идет 8, убираем её (например +78XXXXXXXXX -> +7XXXXXXXXX)
+        if digits.startswith("8") and len(digits) > 10:
+            digits = digits[1:]
     elif digits.startswith("8") and len(digits) >= 11:
         digits = digits[1:]  # Убираем 8
     elif digits.startswith("7") and len(digits) >= 11:
