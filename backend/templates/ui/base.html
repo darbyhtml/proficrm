@@ -905,16 +905,22 @@
             // Находим все поля телефонов в форме
             form.querySelectorAll('input[name="phone"], input[name*="phone"], input[name*="value"]').forEach(input => {
               if (input.value) {
-                // Убираем все нецифровые символы, кроме + в начале
+                // Убираем все нецифровые символы
                 let value = input.value.replace(/\D/g, '');
-                // Если начинается с 8, заменяем на 7
-                if (value.startsWith('8') && value.length >= 11) {
-                  value = '7' + value.substring(1);
-                }
+                
                 // Если начинается с 7 и длина 11, убираем первую 7 (оставляем 10 цифр)
                 if (value.startsWith('7') && value.length === 11) {
                   value = value.substring(1);
                 }
+                // Если начинается с 8 и длина 11, убираем 8 (оставляем 10 цифр)
+                else if (value.startsWith('8') && value.length === 11) {
+                  value = value.substring(1);
+                }
+                // Если начинается с 78 и длина 12, убираем 78 (оставляем 10 цифр)
+                else if (value.startsWith('78') && value.length === 12) {
+                  value = value.substring(2);
+                }
+                
                 // Если 10 цифр, добавляем +7
                 if (value.length === 10) {
                   input.value = '+7' + value;
