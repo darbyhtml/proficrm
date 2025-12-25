@@ -499,10 +499,24 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
         .order_by("-created_at")
     )
 
-    calls_p = Paginator(calls_qs, 10)
-    cold_p = Paginator(cold_calls_qs, 10)
+    # Пагинация с выбором per_page (как в company_list)
+    per_page_param = request.GET.get("per_page", "").strip()
+    if per_page_param:
+        try:
+            per_page = int(per_page_param)
+            if per_page in [25, 50, 100, 200]:
+                request.session["analytics_user_per_page"] = per_page
+            else:
+                per_page = request.session.get("analytics_user_per_page", 25)
+        except (ValueError, TypeError):
+            per_page = request.session.get("analytics_user_per_page", 25)
+    else:
+        per_page = request.session.get("analytics_user_per_page", 25)
+
+    calls_p = Paginator(calls_qs, per_page)
+    cold_p = Paginator(cold_calls_qs, per_page)
     events_qs = ActivityEvent.objects.filter(actor=target, created_at__gte=start, created_at__lt=end).order_by("-created_at")
-    events_p = Paginator(events_qs, 10)
+    events_p = Paginator(events_qs, per_page)
 
     def _safe_int(v: str, default: int = 1) -> int:
         try:
@@ -536,9 +550,25 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
         else:
             call.duration_formatted = None
 
-    cold_qs = _qs_without_page(request, page_key="cold_page")
+    # Формируем qs для пагинации, включая per_page если он отличается от значения по умолчанию
     calls_qs_str = _qs_without_page(request, page_key="calls_page")
+    cold_qs = _qs_without_page(request, page_key="cold_page")
     events_qs_str = _qs_without_page(request, page_key="events_page")
+    
+    if per_page != 25:
+        from urllib.parse import urlencode, parse_qs
+        if calls_qs_str:
+            params = parse_qs(calls_qs_str)
+            params["per_page"] = [str(per_page)]
+            calls_qs_str = urlencode(params, doseq=True)
+        if cold_qs:
+            params = parse_qs(cold_qs)
+            params["per_page"] = [str(per_page)]
+            cold_qs = urlencode(params, doseq=True)
+        if events_qs_str:
+            params = parse_qs(events_qs_str)
+            params["per_page"] = [str(per_page)]
+            events_qs_str = urlencode(params, doseq=True)
 
     return render(
         request,
@@ -556,6 +586,7 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
             "cold_calls_count": cold_p.count,
             "calls_count": calls_p.count,
             "events_count": events_p.count,
+            "per_page": per_page,
         },
     )
 
@@ -2475,9 +2506,28 @@ def task_list(request: HttpRequest) -> HttpResponse:
     if today == "1":
         qs = qs.filter(due_at__gte=today_start, due_at__lt=tomorrow_start).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
 
-    paginator = Paginator(qs, 25)
+    # Пагинация с выбором per_page (как в company_list)
+    per_page_param = request.GET.get("per_page", "").strip()
+    if per_page_param:
+        try:
+            per_page = int(per_page_param)
+            if per_page in [25, 50, 100, 200]:
+                request.session["task_list_per_page"] = per_page
+            else:
+                per_page = request.session.get("task_list_per_page", 25)
+        except (ValueError, TypeError):
+            per_page = request.session.get("task_list_per_page", 25)
+    else:
+        per_page = request.session.get("task_list_per_page", 25)
+
+    paginator = Paginator(qs, per_page)
     page = paginator.get_page(request.GET.get("page"))
     qs_no_page = _qs_without_page(request)
+    if per_page != 25:
+        from urllib.parse import urlencode, parse_qs
+        params = parse_qs(qs_no_page) if qs_no_page else {}
+        params["per_page"] = [str(per_page)]
+        qs_no_page = urlencode(params, doseq=True)
 
     # Для шаблона: не делаем сложные выражения в {% if %}, чтобы не ловить TemplateSyntaxError.
     # Проставим флаг прямо в объекты текущей страницы.
@@ -2485,10 +2535,29 @@ def task_list(request: HttpRequest) -> HttpResponse:
         t.can_manage_status = _can_manage_task_status_ui(user, t)  # type: ignore[attr-defined]
         t.can_edit_task = _can_edit_task_ui(user, t)  # type: ignore[attr-defined]
 
+    is_admin = _require_admin(user)
+    transfer_targets = []
+    if is_admin:
+        transfer_targets = User.objects.filter(
+            is_active=True, role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]
+        ).order_by("last_name", "first_name")
+
     return render(
         request,
         "ui/task_list.html",
-        {"now": now, "local_now": local_now, "page": page, "qs": qs_no_page, "status": status, "mine": mine, "overdue": overdue, "today": today},
+        {
+            "now": now,
+            "local_now": local_now,
+            "page": page,
+            "qs": qs_no_page,
+            "status": status,
+            "mine": mine,
+            "overdue": overdue,
+            "today": today,
+            "per_page": per_page,
+            "is_admin": is_admin,
+            "transfer_targets": transfer_targets,
+        },
     )
 
 
@@ -2655,6 +2724,99 @@ def _can_edit_task_ui(user: User, task: Task) -> bool:
         except Exception:
             pass
     return False
+
+
+@login_required
+def task_bulk_reassign(request: HttpRequest) -> HttpResponse:
+    """
+    Массовое переназначение задач:
+    - либо по выбранным task_ids[]
+    - либо по текущему фильтру (apply_mode=filtered)
+    Доступно только администраторам.
+    """
+    if request.method != "POST":
+        return redirect("task_list")
+
+    user: User = request.user
+    if not _require_admin(user):
+        messages.error(request, "Нет прав на массовое переназначение задач.")
+        return redirect("task_list")
+
+    new_assigned_id = (request.POST.get("assigned_to_id") or "").strip()
+    apply_mode = (request.POST.get("apply_mode") or "selected").strip().lower()
+    if not new_assigned_id:
+        messages.error(request, "Выберите нового ответственного.")
+        return redirect("task_list")
+
+    new_assigned = get_object_or_404(User, id=new_assigned_id, is_active=True)
+    if new_assigned.role not in (User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR):
+        messages.error(request, "Нового ответственного можно выбрать только из: менеджер / РОП / директор филиала.")
+        return redirect("task_list")
+
+    # Режим "по фильтру" — применяем фильтры из POST
+    if apply_mode == "filtered":
+        now = timezone.now()
+        local_now = timezone.localtime(now)
+        today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        tomorrow_start = today_start + timedelta(days=1)
+
+        qs = Task.objects.select_related("company", "assigned_to", "created_by", "type").order_by("-created_at").distinct()
+
+        status = (request.POST.get("status") or "").strip()
+        if status:
+            qs = qs.filter(status=status)
+
+        mine = (request.POST.get("mine") or "").strip()
+        if mine == "1":
+            qs = qs.filter(assigned_to=user)
+
+        overdue = (request.POST.get("overdue") or "").strip()
+        if overdue == "1":
+            qs = qs.filter(due_at__lt=now).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+
+        today = (request.POST.get("today") or "").strip()
+        if today == "1":
+            qs = qs.filter(due_at__gte=today_start, due_at__lt=tomorrow_start).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+
+        # safety cap
+        cap = 5000
+        ids = list(qs.values_list("id", flat=True)[:cap])
+        if not ids:
+            messages.error(request, "Нет задач для переназначения.")
+            return redirect("task_list")
+        if len(ids) >= cap:
+            messages.warning(request, f"Выбрано слишком много задач (>{cap}). Сузьте фильтр и повторите.")
+            return redirect("task_list")
+    else:
+        ids = request.POST.getlist("task_ids") or []
+        ids = [i for i in ids if i]
+        if not ids:
+            messages.error(request, "Выберите хотя бы одну задачу (чекбоксы слева).")
+            return redirect("task_list")
+
+    now_ts = timezone.now()
+    with transaction.atomic():
+        qs_to_update = Task.objects.filter(id__in=ids)
+        updated = qs_to_update.update(assigned_to=new_assigned, updated_at=now_ts)
+
+    messages.success(request, f"Переназначено задач: {updated}. Новый ответственный: {new_assigned}.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="task_bulk_reassign",
+        entity_id=str(new_assigned.id),
+        message="Массовое переназначение задач",
+        meta={"count": updated, "to": str(new_assigned), "mode": apply_mode},
+    )
+    if new_assigned.id != user.id:
+        notify(
+            user=new_assigned,
+            kind=Notification.Kind.TASK,
+            title="Вам назначены задачи",
+            body=f"Количество: {updated}",
+            url="/tasks/?mine=1",
+        )
+    return redirect("task_list")
 
 
 @login_required

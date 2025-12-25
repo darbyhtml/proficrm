@@ -99,7 +99,23 @@
           <div class="muted-2 text-center py-4">Нет холодных звонков за период.</div>
         {% endfor %}
       </div>
-      {% include "ui/_pagination.html" with page=cold_page qs=cold_qs page_param="cold_page" %}
+      <div class="border-t px-4 py-3 flex items-center justify-between gap-4 flex-wrap mt-3">
+        <div class="flex items-center gap-2">
+          <form method="get" class="flex items-center gap-2" id="perPageFormCold">
+            <label class="text-sm text-brand-dark/70 whitespace-nowrap">На странице:</label>
+            <select name="per_page" class="select" onchange="document.getElementById('perPageFormCold').submit()" style="padding:.25rem .5rem;font-size:.875rem;min-width:auto">
+              <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+              <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+              <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+              <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
+            </select>
+            <input type="hidden" name="period" value="{{ period }}" />
+          </form>
+        </div>
+        <div>
+          {% include "ui/_pagination.html" with page=cold_page qs=cold_qs page_param="cold_page" %}
+        </div>
+      </div>
     </section>
 
     <section class="card card-pad">
@@ -159,7 +175,24 @@
           <div class="muted-2 text-center py-4">Нет звонков за период.</div>
         {% endfor %}
       </div>
-      {% include "ui/_pagination.html" with page=calls_page qs=calls_qs page_param="calls_page" %}
+      <div class="border-t px-4 py-3 flex items-center justify-between gap-4 flex-wrap mt-3">
+        <div class="flex items-center gap-2">
+          <form method="get" class="flex items-center gap-2" id="perPageFormCalls">
+            <label class="text-sm text-brand-dark/70 whitespace-nowrap">На странице:</label>
+            <select name="per_page" class="select" onchange="document.getElementById('perPageFormCalls').submit()" style="padding:.25rem .5rem;font-size:.875rem;min-width:auto">
+              <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+              <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+              <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+              <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
+            </select>
+            <input type="hidden" name="period" value="{{ period }}" />
+            {% if calls_qs %}{% for key, value in calls_qs.items %}{% if key != 'per_page' and key != 'calls_page' %}<input type="hidden" name="{{ key }}" value="{{ value }}" />{% endif %}{% endfor %}{% endif %}
+          </form>
+        </div>
+        <div>
+          {% include "ui/_pagination.html" with page=calls_page qs=calls_qs page_param="calls_page" %}
+        </div>
+      </div>
     </section>
 
     <section class="card card-pad">
@@ -185,7 +218,23 @@
             <div class="muted-2">Нет действий за период.</div>
           {% endfor %}
         </div>
-        {% include "ui/_pagination.html" with page=events_page qs=events_qs page_param="events_page" %}
+        <div class="border-t px-4 py-3 flex items-center justify-between gap-4 flex-wrap mt-3">
+          <div class="flex items-center gap-2">
+            <form method="get" class="flex items-center gap-2" id="perPageFormEvents">
+              <label class="text-sm text-brand-dark/70 whitespace-nowrap">На странице:</label>
+              <select name="per_page" class="select" onchange="document.getElementById('perPageFormEvents').submit()" style="padding:.25rem .5rem;font-size:.875rem;min-width:auto">
+                <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
+              </select>
+              <input type="hidden" name="period" value="{{ period }}" />
+            </form>
+          </div>
+          <div>
+            {% include "ui/_pagination.html" with page=events_page qs=events_qs page_param="events_page" %}
+          </div>
+        </div>
       </details>
     </section>
   </div>

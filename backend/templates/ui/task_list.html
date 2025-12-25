@@ -46,11 +46,41 @@
       </div>
     </form>
 
+    {% if is_admin %}
+      <form method="post" action="/tasks/bulk-reassign/" id="bulkReassignForm" class="bg-white border rounded-2xl p-4 mb-4">
+        {% csrf_token %}
+        <div class="flex flex-wrap items-end gap-3">
+          <div class="flex-1 min-w-[200px]">
+            <label class="block text-sm text-brand-dark/80 mb-1">Переназначить на:</label>
+            <select name="assigned_to_id" class="select w-full" required>
+              <option value="">Выберите сотрудника</option>
+              {% for u in transfer_targets %}
+                <option value="{{ u.id }}">{{ u }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="flex gap-2">
+            <button type="submit" name="apply_mode" value="selected" class="btn btn-primary">Переназначить выбранные</button>
+            <button type="submit" name="apply_mode" value="filtered" class="btn btn-outline">Переназначить все по фильтру</button>
+          </div>
+        </div>
+        <input type="hidden" name="status" value="{{ status }}" />
+        <input type="hidden" name="mine" value="{{ mine }}" />
+        <input type="hidden" name="overdue" value="{{ overdue }}" />
+        <input type="hidden" name="today" value="{{ today }}" />
+      </form>
+    {% endif %}
+
     <div class="bg-white border rounded-2xl overflow-hidden">
       <div class="overflow-x-auto">
         <table class="table">
           <thead>
             <tr>
+              {% if is_admin %}
+                <th class="text-left px-4 py-3" style="width:40px">
+                  <input type="checkbox" id="bulkSelectAll" title="Выбрать все" />
+                </th>
+              {% endif %}
               <th class="text-left px-4 py-3">Задача</th>
               <th class="text-left px-4 py-3">Компания</th>
               <th class="text-left px-4 py-3">Кому</th>
@@ -62,6 +92,11 @@
           <tbody>
             {% for t in page.object_list %}
               <tr class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %}">
+                {% if is_admin %}
+                  <td>
+                    <input type="checkbox" name="task_ids" value="{{ t.id }}" form="bulkReassignForm" class="task-checkbox" />
+                  </td>
+                {% endif %}
                 <td>
                   <div class="flex items-start justify-between gap-3">
                     <div class="font-medium">{{ t.title }}</div>
@@ -105,15 +140,61 @@
                 </td>
               </tr>
             {% empty %}
-              <tr><td class="muted" colspan="6" style="padding:1.25rem 1rem">Задач нет.</td></tr>
+              <tr><td class="muted" colspan="{% if is_admin %}7{% else %}6{% endif %}" style="padding:1.25rem 1rem">Задач нет.</td></tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
 
-      {% include "ui/_pagination.html" with page=page qs=qs %}
+      <div class="border-t px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
+        <div class="flex items-center gap-2">
+          <form method="get" class="flex items-center gap-2" id="perPageForm">
+            <label class="text-sm text-brand-dark/70 whitespace-nowrap">На странице:</label>
+            <select name="per_page" class="select" onchange="document.getElementById('perPageForm').submit()" style="padding:.25rem .5rem;font-size:.875rem;min-width:auto">
+              <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+              <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+              <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+              <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
+            </select>
+            {% if status %}<input type="hidden" name="status" value="{{ status }}" />{% endif %}
+            {% if mine %}<input type="hidden" name="mine" value="{{ mine }}" />{% endif %}
+            {% if overdue %}<input type="hidden" name="overdue" value="{{ overdue }}" />{% endif %}
+            {% if today %}<input type="hidden" name="today" value="{{ today }}" />{% endif %}
+          </form>
+        </div>
+        <div>
+          {% include "ui/_pagination.html" with page=page qs=qs %}
+        </div>
+      </div>
     </div>
   </div>
+
+  {% if is_admin %}
+    <script>
+      (function(){
+        const form = document.getElementById('bulkReassignForm');
+        const selectAll = document.getElementById('bulkSelectAll');
+        const checkboxes = document.querySelectorAll('.task-checkbox');
+        
+        if (selectAll) {
+          selectAll.addEventListener('change', function() {
+            checkboxes.forEach(cb => cb.checked = this.checked);
+          });
+        }
+        
+        checkboxes.forEach(cb => {
+          cb.addEventListener('change', function() {
+            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+            const someChecked = Array.from(checkboxes).some(cb => cb.checked);
+            if (selectAll) {
+              selectAll.checked = allChecked;
+              selectAll.indeterminate = someChecked && !allChecked;
+            }
+          });
+        });
+      })();
+    </script>
+  {% endif %}
 {% endblock %}
 
 
