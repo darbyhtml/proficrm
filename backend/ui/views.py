@@ -121,8 +121,10 @@ def _apply_company_become_warm(*, company: Company):
     """
     now_ts = timezone.now()
     # основной контакт компании
+    # ВАЖНО: сбрасываем только is_cold_call, НЕ трогаем cold_marked_* поля (они остаются для истории)
     Company.objects.filter(id=company.id).update(primary_contact_is_cold_call=False, updated_at=now_ts)
     # контакты компании
+    # ВАЖНО: сбрасываем только is_cold_call, НЕ трогаем cold_marked_* поля (они остаются для истории)
     Contact.objects.filter(company_id=company.id).update(is_cold_call=False, updated_at=now_ts)
 
 
