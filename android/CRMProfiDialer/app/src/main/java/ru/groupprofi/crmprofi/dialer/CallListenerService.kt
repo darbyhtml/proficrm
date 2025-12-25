@@ -146,8 +146,8 @@ class CallListenerService : Service() {
                                                     .putLong("pending_call_time_$phone", System.currentTimeMillis())
                                                     .apply()
                                                 // Проверяем CallLog через 5 секунд
-                                                val latestToken = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_TOKEN, null) ?: token
-                                                checkCallLogAndSend(BASE_URL, latestToken, phone)
+                                                val currentToken = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_TOKEN, null) ?: token
+                                                checkCallLogAndSend(BASE_URL, currentToken, phone)
                                             }
                                         } catch (e: Throwable) {
                                             android.util.Log.e("CallListenerService", "Error opening dialer: ${e.message}")
@@ -164,8 +164,8 @@ class CallListenerService : Service() {
                                         .putString("pending_call_$phone", callRequestId)
                                         .putLong("pending_call_time_$phone", System.currentTimeMillis())
                                         .apply()
-                                    val latestToken = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_TOKEN, null) ?: token
-                                    checkCallLogAndSend(BASE_URL, latestToken, phone)
+                                    val currentToken = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_TOKEN, null) ?: token
+                                    checkCallLogAndSend(BASE_URL, currentToken, phone)
                                 }
                             }
                         } else {
