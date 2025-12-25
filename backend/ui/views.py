@@ -1313,11 +1313,17 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         .order_by("-created_at")
         .first()
     )
-    # Менеджер может запросить смену только в одну сторону: cold -> warm
-    can_request_lead_state = bool(user.role == User.Role.MANAGER and company.responsible_id == user.id and company.lead_state == Company.LeadState.COLD)
-    # Важно: право руководителя/админа менять состояние существует независимо от того, есть ли активный запрос.
-    # Запрос влияет только на то, что показываем блок согласования.
+    # Менеджер может самостоятельно переводить cold -> warm (для своих компаний)
+    # Руководители/админы могут переводить cold -> warm
+    can_set_warm = bool(
+        (user.role == User.Role.MANAGER and company.responsible_id == user.id and company.lead_state == Company.LeadState.COLD) or
+        (_can_decide_company_lead_state(user, company) and company.lead_state == Company.LeadState.COLD)
+    )
+    # Старая логика запросов больше не используется для менеджеров (оставляем для совместимости)
+    can_request_lead_state = False
+    # Право руководителя/админа менять состояние
     can_decide_lead_state = bool(_can_decide_company_lead_state(user, company))
+    # Только администратор может вернуть warm -> cold
     can_revert_lead_state = bool(company.lead_state == Company.LeadState.WARM and not lead_state_req and _can_revert_company_lead_state(user))
 
     # "Организация" (головная карточка) и "филиалы" (дочерние карточки клиента)
@@ -1443,6 +1449,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "delete_req": delete_req,
             "lead_state_req": lead_state_req,
             "can_request_lead_state": can_request_lead_state,
+            "can_set_warm": can_set_warm,
             "can_decide_lead_state": can_decide_lead_state,
             "can_revert_lead_state": can_revert_lead_state,
             "quick_form": quick_form,
@@ -1786,16 +1793,15 @@ def company_lead_state_request_approve(request: HttpRequest, company_id, req_id)
 @login_required
 def company_lead_state_set(request: HttpRequest, company_id) -> HttpResponse:
     """
-    Прямое изменение состояния карточки руководителем (без запроса).
-    Используем для РОП/директора/управляющего/админа.
+    Прямое изменение состояния карточки.
+    - Менеджеры могут переводить cold -> warm (для своих компаний)
+    - Руководители/админы могут переводить cold -> warm
+    - Только администратор может переводить warm -> cold
     """
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
     user: User = request.user
     company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
-    if not _can_decide_company_lead_state(user, company):
-        messages.error(request, "Нет прав на изменение состояния по этой компании.")
-        return redirect("company_detail", company_id=company.id)
 
     # Если есть активный запрос — сначала его обработайте, чтобы не было рассинхрона.
     pending = CompanyLeadStateRequest.objects.filter(company=company, status=CompanyLeadStateRequest.Status.PENDING).first()
@@ -1808,13 +1814,23 @@ def company_lead_state_set(request: HttpRequest, company_id) -> HttpResponse:
         messages.error(request, "Некорректное состояние.")
         return redirect("company_detail", company_id=company.id)
 
-    # Разрешаем:
-    # - руководителям/управляющему/админу: только cold -> warm
-    # - администратору/суперпользователю: warm -> cold (откат, если ошиблись)
     if requested_state == Company.LeadState.WARM:
+        # Перевод cold -> warm: разрешен менеджерам (для своих компаний) и руководителям/админам
         if company.lead_state != Company.LeadState.COLD:
             messages.info(request, "Перевести в «Теплый контакт» можно только из «Холодный контакт».")
             return redirect("company_detail", company_id=company.id)
+        
+        # Проверяем права: менеджер может только для своих компаний, руководители/админы - для любых
+        can_change = False
+        if user.role == User.Role.MANAGER and company.responsible_id == user.id:
+            can_change = True
+        elif _can_decide_company_lead_state(user, company):
+            can_change = True
+        
+        if not can_change:
+            messages.error(request, "Нет прав на изменение состояния по этой компании.")
+            return redirect("company_detail", company_id=company.id)
+        
         company.lead_state = Company.LeadState.WARM
         company.save(update_fields=["lead_state", "updated_at"])
         _apply_company_become_warm(company=company)
@@ -1822,6 +1838,7 @@ def company_lead_state_set(request: HttpRequest, company_id) -> HttpResponse:
         company.refresh_from_db()
         messages.success(request, "Состояние изменено: «Теплый контакт».")
     else:
+        # Перевод warm -> cold: только администратор
         if not _can_revert_company_lead_state(user):
             messages.error(request, "Вернуть в «Холодный контакт» может только администратор.")
             return redirect("company_detail", company_id=company.id)

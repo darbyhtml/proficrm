@@ -243,11 +243,7 @@
               {% else %}
                 <span class="badge" style="padding:.1rem .35rem;font-size:.65rem">Теплый контакт</span>
               {% endif %}
-              {% if can_request_lead_state %}
-                <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" id="openLeadStateReqModal2" {% if lead_state_req %}disabled{% endif %}>
-                  Запросить смену
-                </button>
-              {% elif can_decide_lead_state and not lead_state_req and is_cold_company %}
+              {% if can_set_warm %}
                 <form method="post" action="/companies/{{ company.id }}/lead-state/set/">
                   {% csrf_token %}
                   <input type="hidden" name="lead_state" value="warm" />
@@ -400,11 +396,7 @@
                 {% endif %}
               </div>
               <div class="shrink-0">
-                {% if can_request_lead_state %}
-                  <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" id="openLeadStateReqModalQuick" {% if lead_state_req %}disabled{% endif %}>
-                    Запросить смену
-                  </button>
-                {% elif can_decide_lead_state and not lead_state_req and is_cold_company %}
+                {% if can_set_warm %}
                   <form method="post" action="/companies/{{ company.id }}/lead-state/set/">
                     {% csrf_token %}
                     <input type="hidden" name="lead_state" value="warm" />
