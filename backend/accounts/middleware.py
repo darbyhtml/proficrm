@@ -12,7 +12,8 @@ from accounts.security import get_client_ip, is_ip_rate_limited, RATE_LIMIT_API_
 class RateLimitMiddleware(MiddlewareMixin):
     """
     Middleware для защиты от DDoS через rate limiting.
-    Применяется ко всем запросам, кроме статических файлов.
+    Применяется только к критическим путям (логин, API токены).
+    Обычная навигация по сайту не ограничивается.
     """
     
     # Пути, которые не требуют rate limiting
@@ -22,8 +23,8 @@ class RateLimitMiddleware(MiddlewareMixin):
         "/favicon.ico",
     ]
     
-    # Пути с более строгим лимитом
-    STRICT_PATHS = [
+    # Пути с защитой от брутфорса (только эти пути защищаются)
+    PROTECTED_PATHS = [
         "/login/",
         "/api/token/",
         "/api/token/refresh/",
@@ -36,14 +37,18 @@ class RateLimitMiddleware(MiddlewareMixin):
             if path.startswith(exempt_path):
                 return None
         
+        # Применяем rate limiting ТОЛЬКО к защищенным путям
+        is_protected = any(path.startswith(p) for p in self.PROTECTED_PATHS)
+        if not is_protected:
+            return None  # Для остальных путей не применяем rate limiting
+        
         ip = get_client_ip(request)
         
-        # Для строгих путей (логин, токены) используем более жесткий лимит
-        is_strict = any(path.startswith(p) for p in self.STRICT_PATHS)
-        max_requests = 10 if is_strict else RATE_LIMIT_API_PER_MINUTE
+        # Для защищенных путей используем строгий лимит
+        max_requests = 10  # 10 попыток в минуту для логина/токенов
         
-        # Проверяем rate limit
-        if is_ip_rate_limited(ip, "general", max_requests, 60):
+        # Проверяем rate limit только для защищенных путей
+        if is_ip_rate_limited(ip, "protected", max_requests, 60):
             if request.path.startswith("/api/"):
                 return JsonResponse(
                     {"detail": "Превышен лимит запросов. Попробуйте позже."},
