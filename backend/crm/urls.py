@@ -21,9 +21,11 @@ from django.views.generic import RedirectView
 from django.templatetags.static import static
 
 from rest_framework import routers
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView
 
 from accounts.models import User
+from accounts.views import SecureLoginView
+from accounts.jwt_views import SecureTokenObtainPairView
 from companies.api import CompanyNoteViewSet, CompanyViewSet, ContactViewSet
 from tasksapp.api import TaskTypeViewSet, TaskViewSet
 from phonebridge.api import PullCallView, RegisterDeviceView, UpdateCallInfoView
@@ -59,10 +61,10 @@ urlpatterns = [
     path("", include("ui.urls")),
     path("", include("mailer.urls")),
     path("", include("notifications.urls")),
-    # Session auth for UI (without weird /login/login/ prefixes)
-    path("login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
+    # Session auth for UI (without weird /login/login/ prefixes) - с защитой от брутфорса
+    path("login/", SecureLoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
-    path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/token/", SecureTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/phone/devices/register/", RegisterDeviceView.as_view(), name="phone_register_device"),
     path("api/phone/calls/pull/", PullCallView.as_view(), name="phone_pull_call"),

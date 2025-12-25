@@ -29,9 +29,13 @@
         <div class="text-sm text-brand-dark/70">Используй логин/пароль сотрудника</div>
       </div>
 
-      {% if form.errors %}
+      {% if form.errors or error_message %}
         <div class="mb-4 rounded-lg border border-brand-orange/60 bg-brand-orange/20 p-3 text-sm text-brand-dark">
-          Проверь логин/пароль.
+          {% if error_message %}
+            {{ error_message }}
+          {% else %}
+            Проверь логин/пароль.
+          {% endif %}
         </div>
       {% endif %}
 

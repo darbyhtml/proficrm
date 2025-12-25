@@ -50,6 +50,14 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_SECURE_HSTS_SECONDS", "3600") or "3600")
     SECURE_HSTS_INCLUDE_SUBDOMAINS = os.getenv("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", "0") == "1"
     SECURE_HSTS_PRELOAD = os.getenv("DJANGO_SECURE_HSTS_PRELOAD", "0") == "1"
+    
+    # Дополнительные security headers для защиты от утечки информации
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_BROWSER_XSS_FILTER = True
+    X_FRAME_OPTIONS = "DENY"
+    
+    # Защита от утечки информации через ошибки
+    SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
 
 # Application definition
@@ -84,6 +92,7 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     # Serve static files in production (admin CSS/JS) without relying on DEBUG=1.
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'accounts.middleware.RateLimitMiddleware',  # Защита от DDoS и rate limiting
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -173,6 +182,12 @@ USE_I18N = True
 
 USE_TZ = True
 
+# Настройки сессий для безопасности
+SESSION_COOKIE_AGE = 86400  # 24 часа
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'  # Защита от CSRF
+SESSION_SAVE_EVERY_REQUEST = False  # Не сохранять сессию при каждом запросе (экономия ресурсов)
+
 # Mailer encryption key (Fernet). Generate once and store in env on VDS.
 MAILER_FERNET_KEY = os.getenv("MAILER_FERNET_KEY", "")
 
@@ -194,6 +209,8 @@ REST_FRAMEWORK = {
         "rest_framework.filters.SearchFilter",
         "rest_framework.filters.OrderingFilter",
     ),
+    # Защита от утечки информации через ошибки API
+    "EXCEPTION_HANDLER": "crm.exceptions.custom_exception_handler",
 }
 
 # Frontend dev CORS (Vite)
@@ -215,3 +232,12 @@ MEDIA_ROOT = BASE_DIR / "media"
 # Real per-file limit is validated in forms/models where needed.
 DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv("DJANGO_DATA_UPLOAD_MAX_MEMORY_SIZE", str(20 * 1024 * 1024)))
 FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv("DJANGO_FILE_UPLOAD_MAX_MEMORY_SIZE", str(20 * 1024 * 1024)))
+
+# Кеш для rate limiting и защиты от брутфорса
+# В production рекомендуется использовать Redis или Memcached
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "unique-snowflake",
+    }
+}
