@@ -518,6 +518,15 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
     cold_page = cold_p.get_page(cold_page_num)
     events_page = events_p.get_page(events_page_num)
 
+    # Добавляем форматированную длительность для каждого звонка
+    for call in calls_page:
+        if call.call_duration_seconds:
+            minutes = call.call_duration_seconds // 60
+            seconds = call.call_duration_seconds % 60
+            call.duration_formatted = f"{minutes} мин. {seconds} сек." if minutes > 0 else f"{seconds} сек."
+        else:
+            call.duration_formatted = None
+
     cold_qs = _qs_without_page(request, page_key="cold_page")
     calls_qs_str = _qs_without_page(request, page_key="calls_page")
     events_qs_str = _qs_without_page(request, page_key="events_page")

@@ -26,7 +26,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from accounts.models import User
 from companies.api import CompanyNoteViewSet, CompanyViewSet, ContactViewSet
 from tasksapp.api import TaskTypeViewSet, TaskViewSet
-from phonebridge.api import PullCallView, RegisterDeviceView
+from phonebridge.api import PullCallView, RegisterDeviceView, UpdateCallInfoView
 
 handler404 = "crm.views.handler404"
 
@@ -66,5 +66,6 @@ urlpatterns = [
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/phone/devices/register/", RegisterDeviceView.as_view(), name="phone_register_device"),
     path("api/phone/calls/pull/", PullCallView.as_view(), name="phone_pull_call"),
+    path("api/phone/calls/update/", UpdateCallInfoView.as_view(), name="phone_update_call_info"),
     path("api/", include(router.urls)),
 ]

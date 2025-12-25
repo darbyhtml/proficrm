@@ -72,6 +72,25 @@ class CallRequest(models.Model):
     delivered_at = models.DateTimeField(null=True, blank=True)
     consumed_at = models.DateTimeField(null=True, blank=True)
 
+    # Данные о фактическом звонке (отправляются из Android приложения)
+    class CallStatus(models.TextChoices):
+        CONNECTED = "connected", "Дозвонился"
+        NO_ANSWER = "no_answer", "Не дозвонился"
+        BUSY = "busy", "Занято"
+        REJECTED = "rejected", "Отклонен"
+        MISSED = "missed", "Пропущен"
+
+    call_status = models.CharField(
+        max_length=16,
+        choices=CallStatus.choices,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Статус звонка",
+    )
+    call_started_at = models.DateTimeField(null=True, blank=True, verbose_name="Время начала звонка")
+    call_duration_seconds = models.IntegerField(null=True, blank=True, verbose_name="Длительность звонка (секунды)")
+
     class Meta:
         indexes = [
             models.Index(fields=["user", "status", "created_at"]),

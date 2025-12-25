@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -94,5 +95,58 @@ class PullCallView(APIView):
                 "created_at": call.created_at,
             }
         )
+
+
+class UpdateCallInfoSerializer(serializers.Serializer):
+    call_request_id = serializers.UUIDField()
+    call_status = serializers.ChoiceField(choices=CallRequest.CallStatus.choices, required=False, allow_null=True)
+    call_started_at = serializers.DateTimeField(required=False, allow_null=True)
+    call_duration_seconds = serializers.IntegerField(required=False, allow_null=True, min_value=0)
+
+
+class UpdateCallInfoView(APIView):
+    """
+    Endpoint для отправки данных о фактическом звонке из Android приложения.
+    Android приложение собирает данные из CallLog и отправляет сюда.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        s = UpdateCallInfoSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        
+        call_request_id = s.validated_data["call_request_id"]
+        call_status = s.validated_data.get("call_status")
+        call_started_at = s.validated_data.get("call_started_at")
+        call_duration_seconds = s.validated_data.get("call_duration_seconds")
+
+        # Проверяем, что CallRequest принадлежит текущему пользователю
+        try:
+            call_request = CallRequest.objects.get(id=call_request_id, user=request.user)
+        except CallRequest.DoesNotExist:
+            logger.warning(f"UpdateCallInfo: CallRequest {call_request_id} not found for user {request.user.id}")
+            return Response({"detail": "CallRequest not found or access denied"}, status=404)
+
+        # Обновляем данные о звонке
+        update_fields = []
+        if call_status is not None:
+            call_request.call_status = call_status
+            update_fields.append("call_status")
+        if call_started_at is not None:
+            call_request.call_started_at = call_started_at
+            update_fields.append("call_started_at")
+        if call_duration_seconds is not None:
+            call_request.call_duration_seconds = call_duration_seconds
+            update_fields.append("call_duration_seconds")
+
+        if update_fields:
+            call_request.save(update_fields=update_fields)
+            logger.info(f"UpdateCallInfo: updated CallRequest {call_request_id} with {update_fields}")
+
+        return Response({"ok": True, "call_request_id": str(call_request.id)})
 
 

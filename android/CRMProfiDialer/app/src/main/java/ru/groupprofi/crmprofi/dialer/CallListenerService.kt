@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.provider.CallLog
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -93,7 +94,9 @@ class CallListenerService : Service() {
                     try {
                         val latestToken = prefs.getString(KEY_TOKEN, null) ?: token
                         val latestRefresh = prefs.getString(KEY_REFRESH, null) ?: refresh
-                        val (code, phone) = pullCallWithRefresh(baseUrl, latestToken, latestRefresh, deviceId)
+                        val (code, result) = pullCallWithRefresh(baseUrl, latestToken, latestRefresh, deviceId)
+                        val phone = result?.first
+                        val callRequestId = result?.second
                         val nowStr = timeFmt.format(Date())
                         prefs.edit()
                             .putString(KEY_LAST_POLL_AT, nowStr)
@@ -116,7 +119,8 @@ class CallListenerService : Service() {
                         }
                         
                         if (!phone.isNullOrBlank()) {
-                            android.util.Log.i("CallListenerService", "Processing call command: phone=$phone")
+                            android.util.Log.i("CallListenerService", "Processing call command: phone=$phone, id=$callRequestId")
+                            
                             // 1) Всегда показываем уведомление с действием (работает и в фоне).
                             try {
                                 showCallNotification(phone)
@@ -135,6 +139,16 @@ class CallListenerService : Service() {
                                         try {
                                             startActivity(dial)
                                             android.util.Log.i("CallListenerService", "Dialer opened successfully")
+                                            // Сохраняем call_request_id для последующей проверки CallLog
+                                            if (!callRequestId.isNullOrBlank()) {
+                                                getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                                                    .putString("pending_call_$phone", callRequestId)
+                                                    .putLong("pending_call_time_$phone", System.currentTimeMillis())
+                                                    .apply()
+                                                // Проверяем CallLog через 5 секунд
+                                                val latestToken = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_TOKEN, null) ?: token
+                                                checkCallLogAndSend(BASE_URL, latestToken, phone)
+                                            }
                                         } catch (e: Throwable) {
                                             android.util.Log.e("CallListenerService", "Error opening dialer: ${e.message}")
                                         }
@@ -144,6 +158,15 @@ class CallListenerService : Service() {
                                 }
                             } else {
                                 android.util.Log.d("CallListenerService", "App in background, notification only")
+                                // Даже в фоне сохраняем call_request_id и проверяем CallLog
+                                if (!callRequestId.isNullOrBlank()) {
+                                    getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                                        .putString("pending_call_$phone", callRequestId)
+                                        .putLong("pending_call_time_$phone", System.currentTimeMillis())
+                                        .apply()
+                                    val latestToken = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_TOKEN, null) ?: token
+                                    checkCallLogAndSend(BASE_URL, latestToken, phone)
+                                }
                             }
                         } else {
                             android.util.Log.d("CallListenerService", "Phone is blank, skipping")
@@ -165,7 +188,7 @@ class CallListenerService : Service() {
         super.onDestroy()
     }
 
-    private fun pullCallWithRefresh(baseUrl: String, token: String, refresh: String, deviceId: String): Pair<Int, String?> {
+    private fun pullCallWithRefresh(baseUrl: String, token: String, refresh: String, deviceId: String): Pair<Int, Pair<String?, String?>?> {
         val url = "$baseUrl/api/phone/calls/pull/?device_id=$deviceId"
         fun doPull(access: String): Pair<Int, String?> {
             val req = Request.Builder()
@@ -216,9 +239,16 @@ class CallListenerService : Service() {
             if (code2 == 204) return Pair(204, null)
             if (code2 != 200) return Pair(code2, null)
             val body2Str = body2 ?: return Pair(code2, null)
-            val obj2 = JSONObject(body2Str)
-            val phone2 = obj2.optString("phone", "")
-            return Pair(200, phone2.ifBlank { null })
+            try {
+                val obj2 = JSONObject(body2Str)
+                val phone2 = obj2.optString("phone", "")
+                val callRequestId2 = obj2.optString("id", "")
+                android.util.Log.i("CallListenerService", "PullCall: Received call command (after refresh), phone=$phone2, id=$callRequestId2")
+                return Pair(200, if (phone2.isNotBlank()) Pair(phone2, callRequestId2) else null)
+            } catch (e: Exception) {
+                android.util.Log.e("CallListenerService", "PullCall: JSON parse error (after refresh): ${e.message}, body: $body2Str")
+                return Pair(code2, null)
+            }
         }
         if (code1 != 200) {
             android.util.Log.w("CallListenerService", "PullCall: Unexpected code $code1, body: ${body1?.take(200)}")
@@ -228,8 +258,16 @@ class CallListenerService : Service() {
         try {
             val obj = JSONObject(body1Str)
             val phone = obj.optString("phone", "")
-            android.util.Log.i("CallListenerService", "PullCall: Received call command, phone=$phone")
-            return Pair(200, phone.ifBlank { null })
+            val callRequestId = obj.optString("id", "")
+            android.util.Log.i("CallListenerService", "PullCall: Received call command, phone=$phone, id=$callRequestId")
+            // Сохраняем call_request_id для последующей отправки данных о звонке
+            if (callRequestId.isNotBlank()) {
+                getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                    .putString("pending_call_${phone}", callRequestId)
+                    .putLong("pending_call_time_${phone}", System.currentTimeMillis())
+                    .apply()
+            }
+            return Pair(200, if (phone.isNotBlank()) Pair(phone, callRequestId) else null)
         } catch (e: Exception) {
             android.util.Log.e("CallListenerService", "PullCall: JSON parse error: ${e.message}, body: $body1Str")
             return Pair(code1, null)
@@ -349,6 +387,112 @@ class CallListenerService : Service() {
             } catch (_: Throwable) {
                 // ignore
             }
+        }
+    }
+
+    private fun checkCallLogAndSend(baseUrl: String, token: String, phone: String) {
+        // Проверяем CallLog через 5 секунд после открытия звонилки (даем время на звонок)
+        scope.launch {
+            delay(5000)
+            try {
+                val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+                val callRequestId = prefs.getString("pending_call_$phone", null)
+                if (callRequestId.isNullOrBlank()) {
+                    android.util.Log.d("CallListenerService", "No pending call request ID for $phone")
+                    return@launch
+                }
+
+                // Читаем CallLog для этого номера
+                val callInfo = readCallLogForPhone(phone)
+                if (callInfo != null) {
+                    android.util.Log.i("CallListenerService", "Found call in CallLog: status=${callInfo.first}, duration=${callInfo.second}, started=${callInfo.third}")
+                    sendCallInfoToCRM(baseUrl, token, callRequestId, callInfo.first, callInfo.third, callInfo.second)
+                    // Очищаем сохраненный ID
+                    prefs.edit().remove("pending_call_$phone").remove("pending_call_time_$phone").apply()
+                } else {
+                    android.util.Log.d("CallListenerService", "No call found in CallLog for $phone")
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("CallListenerService", "Error checking CallLog: ${e.message}")
+            }
+        }
+    }
+
+    private fun readCallLogForPhone(phone: String): Triple<String?, Long?, Long?>? {
+        // Нормализуем номер (убираем пробелы, скобки, дефисы)
+        val normalized = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+        
+        try {
+            val cursor = contentResolver.query(
+                CallLog.Calls.CONTENT_URI,
+                arrayOf(
+                    CallLog.Calls.TYPE,
+                    CallLog.Calls.DURATION,
+                    CallLog.Calls.DATE
+                ),
+                "${CallLog.Calls.NUMBER} LIKE ?",
+                arrayOf("%$normalized%"),
+                "${CallLog.Calls.DATE} DESC LIMIT 1"
+            )
+            
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val type = it.getInt(it.getColumnIndexOrThrow(CallLog.Calls.TYPE))
+                    val duration = it.getLong(it.getColumnIndexOrThrow(CallLog.Calls.DURATION))
+                    val date = it.getLong(it.getColumnIndexOrThrow(CallLog.Calls.DATE))
+                    
+                    // TYPE: 1=входящий, 2=исходящий, 3=пропущенный, 4=отклоненный, 5=занято
+                    val status = when (type) {
+                        CallLog.Calls.OUTGOING_TYPE -> "connected" // Исходящий - считаем дозвонился
+                        CallLog.Calls.MISSED_TYPE -> "no_answer" // Пропущенный
+                        CallLog.Calls.REJECTED_TYPE -> "rejected" // Отклоненный
+                        CallLog.Calls.BUSY_TYPE -> "busy" // Занято
+                        else -> "connected"
+                    }
+                    
+                    return Triple(status, duration, date)
+                }
+            }
+        } catch (e: SecurityException) {
+            android.util.Log.w("CallListenerService", "No permission to read CallLog: ${e.message}")
+        } catch (e: Exception) {
+            android.util.Log.e("CallListenerService", "Error reading CallLog: ${e.message}")
+        }
+        return null
+    }
+
+    private fun sendCallInfoToCRM(baseUrl: String, token: String, callRequestId: String, status: String?, startedAt: Long?, duration: Long?) {
+        try {
+            val url = "$baseUrl/api/phone/calls/update/"
+            val bodyJson = JSONObject().apply {
+                put("call_request_id", callRequestId)
+                if (status != null) put("call_status", status)
+                if (startedAt != null) {
+                    // Конвертируем миллисекунды в ISO datetime
+                    val date = java.util.Date(startedAt)
+                    val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US)
+                    sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
+                    put("call_started_at", sdf.format(date))
+                }
+                if (duration != null) put("call_duration_seconds", duration.toInt())
+            }.toString()
+            
+            val req = Request.Builder()
+                .url(url)
+                .post(bodyJson.toRequestBody(jsonMedia))
+                .addHeader("Authorization", "Bearer $token")
+                .build()
+            
+            http.newCall(req).execute().use { res ->
+                val raw = res.body?.string() ?: ""
+                if (res.isSuccessful) {
+                    android.util.Log.i("CallListenerService", "Call info sent successfully to CRM")
+                } else {
+                    android.util.Log.w("CallListenerService", "Failed to send call info: HTTP ${res.code}, $raw")
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("CallListenerService", "Error sending call info: ${e.message}")
         }
     }
 
