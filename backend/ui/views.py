@@ -1752,6 +1752,8 @@ def company_lead_state_request_approve(request: HttpRequest, company_id, req_id)
     company.lead_state = Company.LeadState.WARM
     company.save(update_fields=["lead_state", "updated_at"])
     _apply_company_become_warm(company=company)
+    # Обновляем объект в памяти, чтобы поля cold_marked_* остались доступными
+    company.refresh_from_db()
     _dismiss_lead_state_req_notifications(req=req, company=company)
 
     if req.requested_by_id:
@@ -1811,6 +1813,8 @@ def company_lead_state_set(request: HttpRequest, company_id) -> HttpResponse:
         company.lead_state = Company.LeadState.WARM
         company.save(update_fields=["lead_state", "updated_at"])
         _apply_company_become_warm(company=company)
+        # Обновляем объект в памяти, чтобы поля cold_marked_* остались доступными
+        company.refresh_from_db()
         messages.success(request, "Состояние изменено: «Теплый контакт».")
     else:
         if not _can_revert_company_lead_state(user):
