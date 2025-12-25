@@ -32,6 +32,20 @@
         <div class="text-2xl font-semibold mt-1">{{ cold_calls_count }}</div>
       </div>
     </div>
+    
+    {% if calls_count > 0 %}
+      <div class="card card-pad bg-brand-soft/10 border-brand-soft/30">
+        <div class="flex items-start gap-2">
+          <span class="text-lg">ℹ️</span>
+          <div>
+            <div class="text-xs font-medium muted-2 mb-1">Информация о звонках</div>
+            <div class="text-sm">
+              Данные о статусе, времени начала и длительности звонков собираются автоматически из Android приложения.
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endif %}
 
     <section class="card card-pad">
       <div class="flex items-end justify-between gap-3">
