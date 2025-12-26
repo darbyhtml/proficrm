@@ -56,4 +56,5 @@ backend/_compile_templates.py
 # Оценка проекта и инструкции (не нужны в репозитории)
 PROJECT_EVALUATION.md
 DELETE_AMOMAIL_NOTES.md
+SECURITY_ENHANCEMENTS.md
 

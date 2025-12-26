@@ -1,6 +1,7 @@
 """
 Общие views для обработки ошибок с защитой от утечки информации.
 """
+import os
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
 
@@ -22,6 +23,33 @@ def robots_txt(request):
 Disallow: /
 
 # Internal CRM system - indexing prohibited
+"""
+    response = HttpResponse(content, content_type="text/plain; charset=utf-8")
+    return response
+
+
+def security_txt(request):
+    """Security.txt для ответственного раскрытия уязвимостей."""
+    from datetime import datetime, timedelta
+    
+    # Получаем email из настроек или используем дефолтный
+    security_email = os.getenv("SECURITY_CONTACT_EMAIL", "security@example.com")
+    
+    # Дата истечения: через год от текущей даты
+    expires_date = (datetime.utcnow() + timedelta(days=365)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    
+    # Получаем домен из запроса (всегда используем HTTPS для canonical)
+    host = request.get_host()
+    canonical_url = f"https://{host}/.well-known/security.txt"
+    
+    content = f"""Contact: mailto:{security_email}
+Expires: {expires_date}
+Preferred-Languages: ru, en
+Canonical: {canonical_url}
+
+# Политика ответственного раскрытия уязвимостей
+# Пожалуйста, сообщайте о найденных уязвимостях на указанный email
+# Мы обязуемся ответить в течение 48 часов
 """
     response = HttpResponse(content, content_type="text/plain; charset=utf-8")
     return response

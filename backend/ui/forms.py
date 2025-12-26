@@ -1,3 +1,4 @@
+import mimetypes
 from django import forms
 from django.forms import inlineformset_factory, BaseInlineFormSet, ValidationError
 from django.contrib.auth.password_validation import validate_password
@@ -136,6 +137,24 @@ class CompanyNoteForm(forms.ModelForm):
         "png", "jpg", "jpeg", "gif", "webp",
         "txt", "csv",
     }
+    
+    # Соответствие расширений и MIME типов для дополнительной проверки
+    ALLOWED_MIME_TYPES = {
+        "pdf": ["application/pdf"],
+        "doc": ["application/msword"],
+        "docx": ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+        "xls": ["application/vnd.ms-excel"],
+        "xlsx": ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"],
+        "ppt": ["application/vnd.ms-powerpoint"],
+        "pptx": ["application/vnd.openxmlformats-officedocument.presentationml.presentation"],
+        "png": ["image/png"],
+        "jpg": ["image/jpeg"],
+        "jpeg": ["image/jpeg"],
+        "gif": ["image/gif"],
+        "webp": ["image/webp"],
+        "txt": ["text/plain"],
+        "csv": ["text/csv", "text/plain", "application/csv"],
+    }
 
     def clean(self):
         cleaned = super().clean()
@@ -151,10 +170,39 @@ class CompanyNoteForm(forms.ModelForm):
                 raise ValidationError("Пустой файл.")
             if size > self.MAX_SIZE:
                 raise ValidationError("Слишком большой файл. Максимум 15 МБ.")
+            
             name = (getattr(f, "name", "") or "").strip().lower()
             ext = name.rsplit(".", 1)[-1] if "." in name else ""
+            
             if ext and ext not in self.ALLOWED_EXT:
                 raise ValidationError("Формат файла не поддерживается. Разрешены: PDF, DOC/DOCX, XLS/XLSX, PPT/PPTX, изображения, TXT/CSV.")
+            
+            # Дополнительная проверка MIME типа
+            if ext:
+                # Читаем первые байты для определения реального типа файла
+                file_content = f.read(1024)  # Читаем первые 1024 байта
+                f.seek(0)  # Возвращаемся в начало файла
+                
+                # Определяем MIME тип по содержимому
+                detected_mime = None
+                if file_content.startswith(b'%PDF'):
+                    detected_mime = 'application/pdf'
+                elif file_content.startswith(b'\x89PNG'):
+                    detected_mime = 'image/png'
+                elif file_content.startswith(b'\xff\xd8\xff'):
+                    detected_mime = 'image/jpeg'
+                elif file_content.startswith(b'GIF'):
+                    detected_mime = 'image/gif'
+                elif file_content.startswith(b'RIFF') and b'WEBP' in file_content[:20]:
+                    detected_mime = 'image/webp'
+                else:
+                    # Используем стандартное определение MIME
+                    detected_mime = mimetypes.guess_type(name)[0]
+                
+                # Проверяем соответствие MIME типа расширению
+                allowed_mimes = self.ALLOWED_MIME_TYPES.get(ext, [])
+                if detected_mime and allowed_mimes and detected_mime not in allowed_mimes:
+                    raise ValidationError(f"Тип файла не соответствует расширению. Ожидался {ext}, обнаружен {detected_mime}.")
 
         return cleaned
 

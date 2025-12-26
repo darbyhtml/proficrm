@@ -58,6 +58,31 @@ if not DEBUG:
     
     # Защита от утечки информации через ошибки
     SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+    
+    # Content Security Policy (CSP) - защита от XSS
+    # Разрешаем только доверенные источники для скриптов и стилей
+    CSP_DEFAULT_SRC = os.getenv("CSP_DEFAULT_SRC", "'self'")
+    CSP_SCRIPT_SRC = os.getenv("CSP_SCRIPT_SRC", "'self' 'unsafe-inline' https://cdn.tailwindcss.com")
+    CSP_STYLE_SRC = os.getenv("CSP_STYLE_SRC", "'self' 'unsafe-inline' https://cdn.tailwindcss.com")
+    CSP_IMG_SRC = os.getenv("CSP_IMG_SRC", "'self' data: https:")
+    CSP_FONT_SRC = os.getenv("CSP_FONT_SRC", "'self' data:")
+    CSP_CONNECT_SRC = os.getenv("CSP_CONNECT_SRC", "'self'")
+    
+    # Формируем CSP заголовок (только в production)
+    CSP_HEADER = (
+        f"default-src {CSP_DEFAULT_SRC}; "
+        f"script-src {CSP_SCRIPT_SRC}; "
+        f"style-src {CSP_STYLE_SRC}; "
+        f"img-src {CSP_IMG_SRC}; "
+        f"font-src {CSP_FONT_SRC}; "
+        f"connect-src {CSP_CONNECT_SRC}; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self';"
+    )
+else:
+    # В development режиме CSP не применяется (может мешать разработке)
+    CSP_HEADER = None
 
 
 # Application definition
@@ -93,6 +118,7 @@ MIDDLEWARE = [
     # Serve static files in production (admin CSS/JS) without relying on DEBUG=1.
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'accounts.middleware.RateLimitMiddleware',  # Защита от DDoS и rate limiting
+    'crm.middleware.SecurityHeadersMiddleware',  # Дополнительные security headers (CSP, Permissions-Policy)
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
