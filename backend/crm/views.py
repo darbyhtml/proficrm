@@ -21,6 +21,7 @@ def robots_txt(request):
     content = """User-agent: *
 Disallow: /
 
-# Внутренняя CRM система - индексация запрещена
+# Internal CRM system - indexing prohibited
 """
-    return HttpResponse(content, content_type="text/plain")
+    response = HttpResponse(content, content_type="text/plain; charset=utf-8")
+    return response
