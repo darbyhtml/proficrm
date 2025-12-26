@@ -14,3 +14,13 @@ def handler500(request):
     """Обработчик 500 с защитой от утечки информации."""
     # В production не показываем детали ошибки
     return render(request, "500.html", status=500)
+
+
+def robots_txt(request):
+    """Запрет индексации CRM поисковыми системами."""
+    content = """User-agent: *
+Disallow: /
+
+# Внутренняя CRM система - индексация запрещена
+"""
+    return HttpResponse(content, content_type="text/plain")
