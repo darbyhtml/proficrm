@@ -140,7 +140,7 @@ class CampaignGenerateRecipientsForm(forms.Form):
         from companies.models import ContactEmail
         self.fields["contact_email_types"].choices = ContactEmail.EmailType.choices
         # По умолчанию выбираем все типы, если форма не была отправлена
-        if not self.data and not self.is_bound:
+        if not self.is_bound:
             self.fields["contact_email_types"].initial = [choice[0] for choice in ContactEmail.EmailType.choices]
 
 

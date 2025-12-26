@@ -224,7 +224,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
     }
     
     # Группируем получателей по компаниям для удобного отображения
-    recipients_qs = camp.recipients.select_related("contact").order_by("company_id", "-updated_at")
+    recipients_qs = camp.recipients.order_by("company_id", "-updated_at")
     recipients_by_company = {}
     for r in recipients_qs[:200]:  # Ограничиваем для производительности
         company_id = str(r.company_id) if r.company_id else "no_company"
@@ -249,7 +249,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             pass
     
     # Последние получатели с информацией о компаниях
-    recent = camp.recipients.select_related("contact").order_by("-updated_at")[:30]
+    recent = camp.recipients.order_by("-updated_at")[:30]
     # Загружаем компании для последних получателей
     recent_company_ids = [r.company_id for r in recent if r.company_id]
     recent_companies_map = {}
