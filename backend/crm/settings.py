@@ -220,6 +220,9 @@ MAILER_FERNET_KEY = os.getenv("MAILER_FERNET_KEY", "")
 # Public base URL for emails/unsubscribe (optional; example: https://crm.example.ru)
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
 
+# Security contact email for security.txt
+SECURITY_CONTACT_EMAIL = os.getenv("SECURITY_CONTACT_EMAIL", "")
+
 AUTH_USER_MODEL = "accounts.User"
 
 # DRF / JWT
