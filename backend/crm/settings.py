@@ -26,7 +26,11 @@ env_path = PROJECT_ROOT / ".env"
 if not env_path.exists():
     # Если нет в корне, пробуем в backend/
     env_path = BASE_DIR / ".env"
-load_dotenv(env_path)
+try:
+    load_dotenv(env_path)
+except Exception:
+    # Если не удалось загрузить, пробуем стандартный путь
+    load_dotenv(BASE_DIR / ".env")
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
