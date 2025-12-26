@@ -33,6 +33,8 @@ Desktop.ini
 *.csv
 *.xlsx
 *.xls
+export_columns.txt
+export_schema.json
 
 # Local helper binaries
 cloudflared.exe
