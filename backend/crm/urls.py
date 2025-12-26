@@ -29,7 +29,7 @@ from accounts.jwt_views import SecureTokenObtainPairView
 from companies.api import CompanyNoteViewSet, CompanyViewSet, ContactViewSet
 from tasksapp.api import TaskTypeViewSet, TaskViewSet
 from phonebridge.api import PullCallView, RegisterDeviceView, UpdateCallInfoView
-from crm.views import robots_txt
+from crm.views import robots_txt, security_txt
 
 handler404 = "crm.views.handler404"
 
@@ -58,6 +58,7 @@ router.register(r"tasks", TaskViewSet, basename="task")
 
 urlpatterns = [
     path("robots.txt", robots_txt, name="robots_txt"),
+    path(".well-known/security.txt", security_txt, name="security_txt"),
     path("favicon.ico", RedirectView.as_view(url=static("ui/favicon-v2.svg"), permanent=True)),
     path('admin/', admin.site.urls),
     path("", include("ui.urls")),
