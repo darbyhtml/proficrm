@@ -222,7 +222,43 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
         "unsub": camp.recipients.filter(status=CampaignRecipient.Status.UNSUBSCRIBED).count(),
         "total": camp.recipients.count(),
     }
-    recent = camp.recipients.order_by("-updated_at")[:30]
+    
+    # Группируем получателей по компаниям для удобного отображения
+    recipients_qs = camp.recipients.select_related("contact").order_by("company_id", "-updated_at")
+    recipients_by_company = {}
+    for r in recipients_qs[:200]:  # Ограничиваем для производительности
+        company_id = str(r.company_id) if r.company_id else "no_company"
+        if company_id not in recipients_by_company:
+            recipients_by_company[company_id] = {
+                "company": None,
+                "recipients": []
+            }
+        recipients_by_company[company_id]["recipients"].append(r)
+    
+    # Загружаем компании для отображения названий
+    company_ids = [cid for cid in recipients_by_company.keys() if cid != "no_company" and cid != "None"]
+    if company_ids:
+        try:
+            from uuid import UUID
+            valid_company_ids = [UUID(cid) for cid in company_ids]
+            companies_map = {str(c.id): c for c in Company.objects.filter(id__in=valid_company_ids).only("id", "name")}
+            for cid, data in recipients_by_company.items():
+                if cid in companies_map:
+                    data["company"] = companies_map[cid]
+        except (ValueError, TypeError):
+            pass
+    
+    # Последние получатели с информацией о компаниях
+    recent = camp.recipients.select_related("contact").order_by("-updated_at")[:30]
+    # Загружаем компании для последних получателей
+    recent_company_ids = [r.company_id for r in recent if r.company_id]
+    recent_companies_map = {}
+    if recent_company_ids:
+        recent_companies_map = {str(c.id): c for c in Company.objects.filter(id__in=recent_company_ids).only("id", "name")}
+    # Добавляем компании к получателям
+    for r in recent:
+        if r.company_id and str(r.company_id) in recent_companies_map:
+            r.company = recent_companies_map[str(r.company_id)]
 
     return render(
         request,
@@ -234,10 +270,12 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "smtp_from_email": (smtp_cfg.from_email or smtp_cfg.smtp_username or "").strip(),
             "smtp_from_name_default": (smtp_cfg.from_name or "CRM ПРОФИ").strip(),
             "recipient_add_form": CampaignRecipientAddForm(),
+            "generate_form": CampaignGenerateRecipientsForm(),
             "branches": Branch.objects.order_by("name"),
             "responsibles": User.objects.order_by("last_name", "first_name"),
             "statuses": CompanyStatus.objects.order_by("name"),
             "spheres": CompanySphere.objects.order_by("name"),
+            "recipients_by_company": recipients_by_company,
         },
     )
 
@@ -316,6 +354,15 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
         return redirect("campaign_detail", campaign_id=camp.id)
 
     limit = int(form.cleaned_data["limit"])
+    # Чекбоксы: если не отмечены, в POST их нет, поэтому используем get с default
+    include_company_email = bool(request.POST.get("include_company_email"))
+    include_contact_emails = bool(request.POST.get("include_contact_emails"))
+    contact_email_types = form.cleaned_data.get("contact_email_types", [])
+    
+    # Если включены email'ы контактов, но не выбраны типы - берем все
+    if include_contact_emails and not contact_email_types:
+        from companies.models import ContactEmail
+        contact_email_types = [choice[0] for choice in ContactEmail.EmailType.choices]
 
     # Компании (вся база видна всем пользователям) + простая сегментация (MVP)
     company_qs = Company.objects.all()
@@ -334,41 +381,53 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
     # Важно: при фильтрации по m2m (spheres) будут дубли без distinct()
     company_ids = company_qs.order_by().values_list("id", flat=True).distinct()
 
-    # 1) Берём email контактов, связанных с компаниями
-    emails_qs = (
-        ContactEmail.objects.filter(contact__company_id__in=company_ids)
-        .select_related("contact", "contact__company")
-        .order_by("value")
-    )
-
     created = 0
-    for e in emails_qs.iterator():
-        email = (e.value or "").strip().lower()
-        if not email:
-            continue
-        if Unsubscribe.objects.filter(email__iexact=email).exists():
-            CampaignRecipient.objects.get_or_create(
+    
+    # 1) Берём email контактов, связанных с компаниями (если включено)
+    if include_contact_emails:
+        emails_qs = (
+            ContactEmail.objects.filter(contact__company_id__in=company_ids)
+            .select_related("contact", "contact__company")
+        )
+        # Фильтруем по типам email'ов, если указаны
+        if contact_email_types:
+            emails_qs = emails_qs.filter(type__in=contact_email_types)
+        emails_qs = emails_qs.order_by("value")
+
+        for e in emails_qs.iterator():
+            if created >= limit:
+                break
+            email = (e.value or "").strip().lower()
+            if not email:
+                continue
+            if Unsubscribe.objects.filter(email__iexact=email).exists():
+                CampaignRecipient.objects.get_or_create(
+                    campaign=camp,
+                    email=email,
+                    defaults={"status": CampaignRecipient.Status.UNSUBSCRIBED, "contact_id": e.contact_id, "company_id": e.contact.company_id},
+                )
+                continue
+            _, was_created = CampaignRecipient.objects.get_or_create(
                 campaign=camp,
                 email=email,
-                defaults={"status": CampaignRecipient.Status.UNSUBSCRIBED, "contact_id": e.contact_id, "company_id": e.contact.company_id},
+                defaults={"contact_id": e.contact_id, "company_id": e.contact.company_id},
             )
-            continue
-        _, was_created = CampaignRecipient.objects.get_or_create(
-            campaign=camp,
-            email=email,
-            defaults={"contact_id": e.contact_id, "company_id": e.contact.company_id},
-        )
-        if was_created:
-            created += 1
-        if created >= limit:
-            break
+            if was_created:
+                created += 1
 
-    # 2) Добавляем основной email компании (если он заполнен)
-    if created < limit:
+    # 2) Добавляем основной email компании (если включено и лимит не достигнут)
+    if include_company_email and created < limit:
         for c in Company.objects.filter(id__in=company_ids).only("id", "email").iterator():
+            if created >= limit:
+                break
             email = (getattr(c, "email", "") or "").strip().lower()
             if not email:
                 continue
+            # Пропускаем, если этот email уже добавлен из контактов
+            if include_contact_emails:
+                # Проверяем, не был ли уже добавлен этот email из контактов
+                if CampaignRecipient.objects.filter(campaign=camp, email__iexact=email).exists():
+                    continue
             if Unsubscribe.objects.filter(email__iexact=email).exists():
                 CampaignRecipient.objects.get_or_create(
                     campaign=camp,
@@ -383,8 +442,6 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
             )
             if was_created:
                 created += 1
-            if created >= limit:
-                break
 
     camp.status = Campaign.Status.READY
     camp.filter_meta = {
@@ -393,6 +450,9 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
         "status": status,
         "sphere": sphere,
         "limit": limit,
+        "include_company_email": include_company_email,
+        "include_contact_emails": include_contact_emails,
+        "contact_email_types": contact_email_types,
     }
     camp.save(update_fields=["status", "filter_meta", "updated_at"])
 

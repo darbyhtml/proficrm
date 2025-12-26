@@ -114,6 +114,34 @@ class CampaignForm(forms.ModelForm):
 
 class CampaignGenerateRecipientsForm(forms.Form):
     limit = forms.IntegerField(label="Лимит получателей", min_value=1, max_value=5000, initial=200)
+    include_company_email = forms.BooleanField(
+        label="Включить основной email компании",
+        required=False,
+        initial=True,
+        help_text="Email из поля 'Email (основной)' в карточке компании"
+    )
+    include_contact_emails = forms.BooleanField(
+        label="Включить email'ы контактов",
+        required=False,
+        initial=True,
+        help_text="Email'ы из контактов компании"
+    )
+    contact_email_types = forms.MultipleChoiceField(
+        label="Типы email'ов контактов",
+        choices=[],
+        required=False,
+        widget=forms.CheckboxSelectMultiple(),
+        help_text="Выберите типы email'ов для включения (если включены email'ы контактов)"
+    )
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Импортируем здесь, чтобы избежать циклических зависимостей
+        from companies.models import ContactEmail
+        self.fields["contact_email_types"].choices = ContactEmail.EmailType.choices
+        # По умолчанию выбираем все типы, если форма не была отправлена
+        if not self.data and not self.is_bound:
+            self.fields["contact_email_types"].initial = [choice[0] for choice in ContactEmail.EmailType.choices]
 
 
 class CampaignRecipientAddForm(forms.Form):

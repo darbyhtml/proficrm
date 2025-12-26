@@ -48,12 +48,57 @@
           </div>
         </div>
 
+        {% if recipients_by_company %}
+          <div class="card card-pad">
+            <div class="font-medium mb-3">Получатели по компаниям</div>
+            <div class="space-y-4">
+              {% for company_id, data in recipients_by_company.items %}
+                <div class="border border-brand-soft rounded-lg p-3">
+                  <div class="font-medium mb-2 flex items-center gap-2">
+                    {% if data.company %}
+                      <a href="/companies/{{ data.company.id }}/" class="text-brand-teal hover:underline">{{ data.company.name }}</a>
+                    {% else %}
+                      <span class="muted">Без компании</span>
+                    {% endif %}
+                    <span class="badge">{{ data.recipients|length }} email{{ data.recipients|length|pluralize:",ов" }}</span>
+                  </div>
+                  <div class="space-y-1 ml-2">
+                    {% for r in data.recipients %}
+                      <div class="flex items-center justify-between gap-2 py-1 border-b border-brand-soft/30 last:border-0">
+                        <div class="flex-1">
+                          <div class="font-mono text-xs">{{ r.email }}</div>
+                          {% if r.contact_id %}
+                            <div class="text-xs muted">из контакта</div>
+                          {% else %}
+                            <div class="text-xs muted">основной email компании</div>
+                          {% endif %}
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <span class="badge {% if r.status == 'failed' %}badge-warn{% elif r.status == 'sent' %}bg-green-100 text-green-800{% elif r.status == 'unsubscribed' %}bg-gray-100 text-gray-800{% endif %}">{{ r.get_status_display }}</span>
+                          <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/{{ r.id }}/delete/" onsubmit="return confirm('Удалить получателя {{ r.email }}?');">
+                            {% csrf_token %}
+                            <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.7rem" type="submit" title="Удалить">×</button>
+                          </form>
+                        </div>
+                      </div>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+
         <div class="card overflow-hidden">
+          <div class="card-pad border-b border-brand-soft">
+            <div class="font-medium">Последние получатели ({{ counts.total }} всего)</div>
+          </div>
           <div class="overflow-x-auto">
             <table class="table">
               <thead>
                 <tr>
                   <th>Email</th>
+                  <th>Компания</th>
                   <th>Статус</th>
                   <th>Ошибка</th>
                   <th>Обновлено</th>
@@ -65,10 +110,24 @@
                   <tr>
                     <td class="font-mono text-xs">{{ r.email }}</td>
                     <td>
-                      <span class="badge {% if r.status == 'failed' %}badge-warn{% endif %}">{{ r.get_status_display }}</span>
+                      {% if r.company_id %}
+                        <a href="/companies/{{ r.company_id }}/" class="text-xs text-brand-teal hover:underline">
+                          {% if r.company %}{{ r.company.name|truncatechars:30 }}{% else %}ID: {{ r.company_id|slice:":8" }}{% endif %}
+                        </a>
+                        {% if r.contact_id %}
+                          <div class="text-xs muted-2">из контакта</div>
+                        {% else %}
+                          <div class="text-xs muted-2">основной</div>
+                        {% endif %}
+                      {% else %}
+                        <span class="text-xs muted">—</span>
+                      {% endif %}
                     </td>
-                    <td class="muted text-xs">{{ r.last_error }}</td>
-                    <td class="muted text-xs">{{ r.updated_at }}</td>
+                    <td>
+                      <span class="badge {% if r.status == 'failed' %}badge-warn{% elif r.status == 'sent' %}bg-green-100 text-green-800{% elif r.status == 'unsubscribed' %}bg-gray-100 text-gray-800{% endif %}">{{ r.get_status_display }}</span>
+                    </td>
+                    <td class="muted text-xs">{{ r.last_error|truncatechars:40 }}</td>
+                    <td class="muted text-xs">{{ r.updated_at|date:"d.m.Y H:i" }}</td>
                     <td>
                       <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/{{ r.id }}/delete/" onsubmit="return confirm('Удалить получателя {{ r.email }}?');">
                         {% csrf_token %}
@@ -77,7 +136,7 @@
                     </td>
                   </tr>
                 {% empty %}
-                  <tr><td class="muted" colspan="5" style="padding:1.25rem 1rem">Получателей пока нет.</td></tr>
+                  <tr><td class="muted" colspan="6" style="padding:1.25rem 1rem">Получателей пока нет.</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -112,50 +171,92 @@
         <form method="post" action="/mail/campaigns/{{ campaign.id }}/generate/" class="card card-pad space-y-3">
           {% csrf_token %}
           <div class="font-medium">Сгенерировать получателей</div>
-          <div class="grid grid-cols-1 gap-2">
-            <div>
-              <label class="block text-xs muted mb-1">Лимит</label>
-              <input class="input" type="number" name="limit" value="200" min="1" max="5000" />
-            </div>
-            <div>
-              <label class="block text-xs muted mb-1">Филиал</label>
-              <select class="select" name="branch">
-                <option value="">Любой</option>
-                {% for b in branches %}
-                  <option value="{{ b.id }}">{{ b.name }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs muted mb-1">Ответственный</label>
-              <select class="select" name="responsible">
-                <option value="">Любой</option>
-                {% for u in responsibles %}
-                  <option value="{{ u.id }}">{{ u }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs muted mb-1">Статус</label>
-              <select class="select" name="status">
-                <option value="">Любой</option>
-                {% for s in statuses %}
-                  <option value="{{ s.id }}">{{ s.name }}</option>
-                {% endfor %}
-              </select>
-            </div>
-            <div>
-              <label class="block text-xs muted mb-1">Сфера</label>
-              <select class="select" name="sphere">
-                <option value="">Любая</option>
-                {% for s in spheres %}
-                  <option value="{{ s.id }}">{{ s.name }}</option>
-                {% endfor %}
-              </select>
+          
+          <div class="space-y-3 border-t border-brand-soft pt-3">
+            <div class="text-sm font-medium">Фильтры по компаниям</div>
+            <div class="grid grid-cols-1 gap-2">
+              <div>
+                <label class="block text-xs muted mb-1">Лимит</label>
+                <input class="input" type="number" name="limit" value="{{ generate_form.limit.value|default:200 }}" min="1" max="5000" />
+              </div>
+              <div>
+                <label class="block text-xs muted mb-1">Филиал</label>
+                <select class="select" name="branch">
+                  <option value="">Любой</option>
+                  {% for b in branches %}
+                    <option value="{{ b.id }}">{{ b.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs muted mb-1">Ответственный</label>
+                <select class="select" name="responsible">
+                  <option value="">Любой</option>
+                  {% for u in responsibles %}
+                    <option value="{{ u.id }}">{{ u }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs muted mb-1">Статус</label>
+                <select class="select" name="status">
+                  <option value="">Любой</option>
+                  {% for s in statuses %}
+                    <option value="{{ s.id }}">{{ s.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs muted mb-1">Сфера</label>
+                <select class="select" name="sphere">
+                  <option value="">Любая</option>
+                  {% for s in spheres %}
+                    <option value="{{ s.id }}">{{ s.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
             </div>
           </div>
-          <button class="btn btn-outline" type="submit">Сгенерировать</button>
+
+          <div class="space-y-3 border-t border-brand-soft pt-3">
+            <div class="text-sm font-medium">Выбор email адресов</div>
+            <div class="space-y-2">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" name="include_company_email" value="1" {% if generate_form.include_company_email.value %}checked{% endif %} class="rounded" />
+                <span class="text-sm">Включить основной email компании</span>
+              </label>
+              <div class="text-xs muted-2 ml-6">Email из поля "Email (основной)" в карточке компании</div>
+              
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" name="include_contact_emails" value="1" {% if generate_form.include_contact_emails.value %}checked{% endif %} class="rounded" id="include_contact_emails" />
+                <span class="text-sm">Включить email'ы контактов</span>
+              </label>
+              <div class="text-xs muted-2 ml-6">Email'ы из контактов компании</div>
+              
+              <div class="ml-6 space-y-1 border-l-2 border-brand-soft pl-3" id="contact_email_types_container">
+                <div class="text-xs muted mb-1">Типы email'ов:</div>
+                {% for choice in generate_form.contact_email_types.field.choices %}
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="contact_email_types" value="{{ choice.0 }}" {% if choice.0 in generate_form.contact_email_types.value %}checked{% endif %} class="rounded" />
+                    <span class="text-xs">{{ choice.1 }}</span>
+                  </label>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+          
+          <button class="btn btn-primary w-full" type="submit">Сгенерировать получателей</button>
         </form>
+        
+        <script>
+          // Показываем/скрываем выбор типов email'ов в зависимости от чекбокса
+          document.getElementById('include_contact_emails').addEventListener('change', function() {
+            document.getElementById('contact_email_types_container').style.display = this.checked ? 'block' : 'none';
+          });
+          // Инициализация при загрузке
+          document.getElementById('contact_email_types_container').style.display = 
+            document.getElementById('include_contact_emails').checked ? 'block' : 'none';
+        </script>
       </div>
     </div>
 
