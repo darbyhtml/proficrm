@@ -19,7 +19,14 @@ from django.core.exceptions import ImproperlyConfigured
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-load_dotenv(BASE_DIR / ".env")
+# Загружаем .env из корня проекта (для Docker) или из backend/.env (для локальной разработки)
+# Сначала пробуем корень проекта (на уровень выше backend/)
+PROJECT_ROOT = BASE_DIR.parent
+env_path = PROJECT_ROOT / ".env"
+if not env_path.exists():
+    # Если нет в корне, пробуем в backend/
+    env_path = BASE_DIR / ".env"
+load_dotenv(env_path)
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
