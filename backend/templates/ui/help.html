@@ -1,0 +1,75 @@
+{% extends "ui/base.html" %}
+{% block title %}Помощь — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div>
+      <h1 class="text-2xl font-semibold">Помощь</h1>
+      <div class="text-sm text-brand-dark/70 mt-1">
+        Видеоуроки, инструкции и ответы на частые вопросы по работе с CRM
+      </div>
+    </div>
+
+    <div class="card card-pad">
+      <div class="text-center py-12">
+        <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-brand-soft/50 mb-4">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#01948E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+            <path d="M12 17h.01"/>
+          </svg>
+        </div>
+        <h2 class="text-xl font-semibold mb-2">Раздел в разработке</h2>
+        <p class="text-brand-dark/70 mb-6 max-w-md mx-auto">
+          Здесь будут размещены обучающие видео, инструкции по использованию CRM и ответы на частые вопросы для быстрого обучения работе в системе.
+        </p>
+        <div class="flex flex-wrap gap-3 justify-center text-sm">
+          <div class="px-4 py-2 bg-brand-soft/30 rounded-lg">
+            📹 Видеоуроки
+          </div>
+          <div class="px-4 py-2 bg-brand-soft/30 rounded-lg">
+            📖 Инструкции
+          </div>
+          <div class="px-4 py-2 bg-brand-soft/30 rounded-lg">
+            ❓ FAQ
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="card card-pad">
+        <h3 class="font-semibold mb-2">Быстрый старт</h3>
+        <p class="text-sm text-brand-dark/70 mb-3">
+          Основные функции CRM и как начать работу
+        </p>
+        <div class="text-xs muted-2">Скоро</div>
+      </div>
+
+      <div class="card card-pad">
+        <h3 class="font-semibold mb-2">Работа с компаниями</h3>
+        <p class="text-sm text-brand-dark/70 mb-3">
+          Создание, редактирование и управление компаниями
+        </p>
+        <div class="text-xs muted-2">Скоро</div>
+      </div>
+
+      <div class="card card-pad">
+        <h3 class="font-semibold mb-2">Задачи и напоминания</h3>
+        <p class="text-sm text-brand-dark/70 mb-3">
+          Как создавать задачи и настраивать напоминания
+        </p>
+        <div class="text-xs muted-2">Скоро</div>
+      </div>
+
+      <div class="card card-pad">
+        <h3 class="font-semibold mb-2">Частые вопросы</h3>
+        <p class="text-sm text-brand-dark/70 mb-3">
+          Ответы на наиболее часто задаваемые вопросы
+        </p>
+        <div class="text-xs muted-2">Скоро</div>
+      </div>
+    </div>
+  </div>
+{% endblock %}
+

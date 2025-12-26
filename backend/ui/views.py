@@ -447,6 +447,12 @@ def analytics(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@login_required
+def help_page(request: HttpRequest) -> HttpResponse:
+    """Страница помощи - ролики, FAQ, инструкции."""
+    return render(request, "ui/help.html")
+
+
 def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
     """
     Страница конкретного сотрудника (менеджера/РОП/директора).
