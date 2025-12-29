@@ -223,34 +223,9 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
         "total": camp.recipients.count(),
     }
     
-    # Группируем получателей по компаниям для удобного отображения
-    recipients_qs = camp.recipients.order_by("company_id", "-updated_at")
-    recipients_by_company = {}
-    for r in recipients_qs[:200]:  # Ограничиваем для производительности
-        company_id = str(r.company_id) if r.company_id else "no_company"
-        if company_id not in recipients_by_company:
-            recipients_by_company[company_id] = {
-                "company": None,
-                "recipients": []
-            }
-        recipients_by_company[company_id]["recipients"].append(r)
-    
-    # Загружаем компании для отображения названий
-    company_ids = [cid for cid in recipients_by_company.keys() if cid != "no_company" and cid != "None"]
-    if company_ids:
-        try:
-            from uuid import UUID
-            valid_company_ids = [UUID(cid) for cid in company_ids]
-            companies_map = {str(c.id): c for c in Company.objects.filter(id__in=valid_company_ids).only("id", "name")}
-            for cid, data in recipients_by_company.items():
-                if cid in companies_map:
-                    data["company"] = companies_map[cid]
-        except (ValueError, TypeError):
-            pass
-    
-    # Последние получатели с информацией о компаниях (увеличиваем лимит для массового удаления)
-    recent = camp.recipients.order_by("-updated_at")[:100]
-    # Загружаем компании для последних получателей
+    # Получатели с информацией о компаниях (увеличиваем лимит для массового удаления)
+    recent = list(camp.recipients.order_by("-updated_at")[:100])
+    # Загружаем компании для последних получателей одним запросом
     recent_company_ids = [r.company_id for r in recent if r.company_id]
     recent_companies_map = {}
     if recent_company_ids:
@@ -275,7 +250,6 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "responsibles": User.objects.order_by("last_name", "first_name"),
             "statuses": CompanyStatus.objects.order_by("name"),
             "spheres": CompanySphere.objects.order_by("name"),
-            "recipients_by_company": recipients_by_company,
         },
     )
 
@@ -350,11 +324,24 @@ def campaign_recipients_bulk_delete(request: HttpRequest, campaign_id) -> HttpRe
         messages.warning(request, "Не выбраны получатели для удаления.")
         return redirect("campaign_detail", campaign_id=camp.id)
 
+    # Валидация: проверяем формат UUID
+    try:
+        from uuid import UUID
+        valid_ids = [UUID(rid) for rid in recipient_ids]
+    except (ValueError, TypeError):
+        messages.error(request, "Некорректные ID получателей.")
+        return redirect("campaign_detail", campaign_id=camp.id)
+
     # Проверяем, что все ID принадлежат этой кампании
-    recipients = CampaignRecipient.objects.filter(id__in=recipient_ids, campaign=camp)
+    recipients = CampaignRecipient.objects.filter(id__in=valid_ids, campaign=camp)
     count = recipients.count()
     if count == 0:
         messages.warning(request, "Не найдено получателей для удаления.")
+        return redirect("campaign_detail", campaign_id=camp.id)
+    
+    # Ограничение на количество удаляемых за раз (защита от случайного массового удаления)
+    if count > 500:
+        messages.error(request, "За раз можно удалить не более 500 получателей.")
         return redirect("campaign_detail", campaign_id=camp.id)
 
     recipients.delete()
@@ -383,10 +370,19 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
         return redirect("campaign_detail", campaign_id=camp.id)
 
     limit = int(form.cleaned_data["limit"])
+    if limit < 1 or limit > 5000:
+        messages.error(request, "Лимит должен быть от 1 до 5000.")
+        return redirect("campaign_detail", campaign_id=camp.id)
+    
     # Чекбоксы: если не отмечены, в POST их нет, поэтому используем get с default
     include_company_email = bool(request.POST.get("include_company_email"))
     include_contact_emails = bool(request.POST.get("include_contact_emails"))
     contact_email_types = form.cleaned_data.get("contact_email_types", [])
+    
+    # Проверка: хотя бы один источник email должен быть выбран
+    if not include_company_email and not include_contact_emails:
+        messages.error(request, "Выберите хотя бы один источник email адресов.")
+        return redirect("campaign_detail", campaign_id=camp.id)
     
     # Если включены email'ы контактов, но не выбраны типы - берем все
     if include_contact_emails and not contact_email_types:

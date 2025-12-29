@@ -48,47 +48,6 @@
           </div>
         </div>
 
-        {% if recipients_by_company %}
-          <div class="card card-pad">
-            <div class="font-medium mb-3">Получатели по компаниям</div>
-            <div class="space-y-4">
-              {% for company_id, data in recipients_by_company.items %}
-                <div class="border border-brand-soft rounded-lg p-3">
-                  <div class="font-medium mb-2 flex items-center gap-2">
-                    {% if data.company %}
-                      <a href="/companies/{{ data.company.id }}/" class="text-brand-teal hover:underline">{{ data.company.name }}</a>
-                    {% else %}
-                      <span class="muted">Без компании</span>
-                    {% endif %}
-                    <span class="badge">{{ data.recipients|length }} email{{ data.recipients|length|pluralize:",ов" }}</span>
-                  </div>
-                  <div class="space-y-1 ml-2">
-                    {% for r in data.recipients %}
-                      <div class="flex items-center justify-between gap-2 py-1 border-b border-brand-soft/30 last:border-0">
-                        <div class="flex-1">
-                          <div class="font-mono text-xs">{{ r.email }}</div>
-                          {% if r.contact_id %}
-                            <div class="text-xs muted">из контакта</div>
-                          {% else %}
-                            <div class="text-xs muted">основной email компании</div>
-                          {% endif %}
-                        </div>
-                        <div class="flex items-center gap-2">
-                          <span class="badge {% if r.status == 'failed' %}badge-warn{% elif r.status == 'sent' %}bg-green-100 text-green-800{% elif r.status == 'unsubscribed' %}bg-gray-100 text-gray-800{% endif %}">{{ r.get_status_display }}</span>
-                          <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/{{ r.id }}/delete/" onsubmit="return confirm('Удалить получателя {{ r.email }}?');">
-                            {% csrf_token %}
-                            <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.7rem" type="submit" title="Удалить">×</button>
-                          </form>
-                        </div>
-                      </div>
-                    {% endfor %}
-                  </div>
-                </div>
-              {% endfor %}
-            </div>
-          </div>
-        {% endif %}
-
         <div class="card overflow-hidden">
           <div class="card-pad border-b border-brand-soft flex items-center justify-between">
             <div class="font-medium">Получатели ({{ counts.total }} всего)</div>
