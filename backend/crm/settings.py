@@ -19,6 +19,10 @@ from django.core.exceptions import ImproperlyConfigured
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Создаём директорию для логов, если её нет
+LOGS_DIR = BASE_DIR / "logs"
+LOGS_DIR.mkdir(exist_ok=True)
+
 # Загружаем .env из корня проекта (для Docker) или из backend/.env (для локальной разработки)
 # Сначала пробуем корень проекта (на уровень выше backend/)
 PROJECT_ROOT = BASE_DIR.parent
@@ -274,10 +278,54 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv("DJANGO_DATA_UPLOAD_MAX_MEMORY_SIZE"
 FILE_UPLOAD_MAX_MEMORY_SIZE = int(os.getenv("DJANGO_FILE_UPLOAD_MAX_MEMORY_SIZE", str(20 * 1024 * 1024)))
 
 # Кеш для rate limiting и защиты от брутфорса
-# В production рекомендуется использовать Redis или Memcached
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        "LOCATION": "unique-snowflake",
+# Используем Redis для production, LocMemCache для development
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+if REDIS_URL and not DEBUG:
+    CACHES = {
+        "default": {
+            "BACKEND": "django_redis.cache.RedisCache",
+            "LOCATION": REDIS_URL,
+            "OPTIONS": {
+                "CLIENT_CLASS": "django_redis.client.DefaultClient",
+                "SOCKET_CONNECT_TIMEOUT": 5,
+                "SOCKET_TIMEOUT": 5,
+                "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
+                "IGNORE_EXCEPTIONS": True,  # Не падать, если Redis недоступен
+            },
+            "KEY_PREFIX": "crm",
+            "TIMEOUT": 300,  # 5 минут по умолчанию
+        }
     }
+else:
+    # Для development используем локальный кеш
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "unique-snowflake",
+        }
+    }
+
+# Celery Configuration
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/1")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/2")
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 минут максимум на задачу
+CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 минут мягкий лимит
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # Не брать задачи заранее
+CELERY_TASK_ACKS_LATE = True  # Подтверждать задачи после выполнения
+
+# Celery Beat Schedule (периодические задачи)
+CELERY_BEAT_SCHEDULE = {
+    "send-pending-emails": {
+        "task": "mailer.tasks.send_pending_emails",
+        "schedule": 60.0,  # Каждую минуту
+    },
+    "clean-old-call-requests": {
+        "task": "phonebridge.tasks.clean_old_call_requests",
+        "schedule": 3600.0,  # Каждый час
+    },
 }

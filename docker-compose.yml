@@ -8,6 +8,12 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
 
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redisdata:/data
+    command: redis-server --appendonly yes
+
   web:
     image: python:3.13-slim
     working_dir: /app/backend
@@ -30,16 +36,76 @@ services:
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
       MAILER_FERNET_KEY: ${MAILER_FERNET_KEY:-}
       SECURITY_CONTACT_EMAIL: ${SECURITY_CONTACT_EMAIL:-}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
     depends_on:
       - db
+      - redis
     command: >
       sh -c "pip install -q -r /app/backend/requirements.txt &&
              python manage.py migrate &&
              python manage.py collectstatic --noinput &&
              python manage.py runserver 0.0.0.0:8000"
 
+  celery:
+    image: python:3.13-slim
+    working_dir: /app/backend
+    volumes:
+      - ./:/app
+    env_file:
+      - .env
+    environment:
+      DB_ENGINE: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-crm}
+      POSTGRES_USER: ${POSTGRES_USER:-crm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crm}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      DJANGO_DEBUG: "0"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-me}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      - db
+      - redis
+    command: >
+      sh -c "pip install -q -r /app/backend/requirements.txt &&
+             python manage.py migrate &&
+             celery -A crm worker --loglevel=info --concurrency=2"
+
+  celery-beat:
+    image: python:3.13-slim
+    working_dir: /app/backend
+    volumes:
+      - ./:/app
+    env_file:
+      - .env
+    environment:
+      DB_ENGINE: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-crm}
+      POSTGRES_USER: ${POSTGRES_USER:-crm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-crm}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      DJANGO_DEBUG: "0"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-change-me}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      - db
+      - redis
+    command: >
+      sh -c "pip install -q -r /app/backend/requirements.txt &&
+             python manage.py migrate &&
+             celery -A crm beat --loglevel=info"
+
 volumes:
   pgdata:
   media:
+  redisdata:
 
 

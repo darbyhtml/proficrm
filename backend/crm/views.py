@@ -2,7 +2,7 @@
 Общие views для обработки ошибок с защитой от утечки информации.
 """
 import os
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import render
 
 

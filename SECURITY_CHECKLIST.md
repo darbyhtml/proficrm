@@ -15,7 +15,7 @@
 ```bash
 curl https://ваш-домен/.well-known/security.txt
 ```
-
+66Hsfkj2-fsqe2
 **Ожидаемый результат**:
 ```
 Contact: mailto:ваш-email@домен.ru

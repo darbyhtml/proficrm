@@ -9,4 +9,7 @@ openpyxl==3.1.5
 django-cors-headers==4.9.0
 cryptography==46.0.3
 whitenoise==6.11.0
+celery==5.4.0
+redis==5.2.1
+django-redis==5.4.0
 
