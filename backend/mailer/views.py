@@ -4,6 +4,7 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -223,24 +224,46 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
         "total": camp.recipients.count(),
     }
     
-    # Группируем получателей по компаниям для удобного отображения
-    all_recipients = list(camp.recipients.order_by("company_id", "-updated_at")[:200])
+    # Пагинация с выбором per_page (как в company_list)
+    per_page_param = request.GET.get("per_page", "").strip()
+    if per_page_param:
+        try:
+            per_page = int(per_page_param)
+            # Разрешенные значения: 25, 50, 100, 200
+            if per_page in [25, 50, 100, 200]:
+                request.session["campaign_recipients_per_page"] = per_page
+            else:
+                per_page = request.session.get("campaign_recipients_per_page", 50)
+        except (ValueError, TypeError):
+            per_page = request.session.get("campaign_recipients_per_page", 50)
+    else:
+        per_page = request.session.get("campaign_recipients_per_page", 50)
+    
+    # Получаем всех получателей для группировки и пагинации
+    all_recipients_qs = camp.recipients.order_by("company_id", "-updated_at")
+    
+    # Пагинация для таблицы
+    paginator = Paginator(all_recipients_qs, per_page)
+    page = paginator.get_page(request.GET.get("page"))
+    
+    # Получаем получателей текущей страницы
+    page_recipients = list(page.object_list)
     
     # Загружаем компании одним запросом
-    company_ids = [r.company_id for r in all_recipients if r.company_id]
+    company_ids = [r.company_id for r in page_recipients if r.company_id]
     companies_map = {}
     if company_ids:
         companies_map = {str(c.id): c for c in Company.objects.filter(id__in=company_ids).only("id", "name", "contact_name", "contact_position")}
     
     # Загружаем контакты одним запросом
-    contact_ids = [r.contact_id for r in all_recipients if r.contact_id]
+    contact_ids = [r.contact_id for r in page_recipients if r.contact_id]
     contacts_map = {}
     if contact_ids:
         contacts_map = {str(c.id): c for c in Contact.objects.filter(id__in=contact_ids).only("id", "first_name", "last_name", "position")}
     
-    # Группируем получателей по компаниям
+    # Группируем получателей текущей страницы по компаниям
     recipients_by_company = {}
-    for r in all_recipients:
+    for r in page_recipients:
         company_id = str(r.company_id) if r.company_id else "no_company"
         if company_id not in recipients_by_company:
             recipients_by_company[company_id] = {
@@ -255,8 +278,15 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             r.company = companies_map[str(r.company_id)]
         recipients_by_company[company_id]["recipients"].append(r)
     
-    # Последние получатели для таблицы (для массового удаления)
-    recent = all_recipients[:100]
+    # Формируем query string для пагинации (без page, но с per_page если отличается от дефолта)
+    params = request.GET.copy()
+    params.pop("page", None)
+    if per_page != 50:
+        params["per_page"] = str(per_page)
+    qs_no_page = params.urlencode()
+    
+    # Для обратной совместимости (таблица)
+    recent = page_recipients
 
     return render(
         request,
@@ -274,6 +304,9 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "statuses": CompanyStatus.objects.order_by("name"),
             "spheres": CompanySphere.objects.order_by("name"),
             "recipients_by_company": recipients_by_company,
+            "page": page,
+            "qs": qs_no_page,
+            "per_page": per_page,
         },
     )
 
