@@ -31,8 +31,8 @@
         <div class="flex items-end justify-between gap-2 mb-2">
           <label class="block text-sm muted mb-1">Текст письма</label>
           <div class="flex gap-2">
-            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="btn-visual">Визуальный</button>
-            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="btn-html">HTML‑код</button>
+            <button type="button" class="btn btn-outline" style="padding:.3rem .55rem;font-size:.75rem" id="btn-visual">Визуальный</button>
+            <button type="button" class="btn btn-outline" style="padding:.3rem .55rem;font-size:.75rem" id="btn-html">HTML‑код</button>
           </div>
         </div>
 
@@ -48,20 +48,22 @@
 
         {# Визуальный редактор: contenteditable + панель инструментов #}
         <div id="visual-wrap">
-          <div class="flex flex-wrap gap-1 mb-2 text-sm">
-            <button type="button" class="btn btn-outline" data-cmd="bold" title="Жирный"><b>Ж</b></button>
-            <button type="button" class="btn btn-outline" data-cmd="italic" title="Курсив"><i>К</i></button>
-            <button type="button" class="btn btn-outline" data-cmd="underline" title="Подчёркивание"><u>Ч</u></button>
-            <button type="button" class="btn btn-outline" data-cmd="strikeThrough" title="Зачёркивание"><s>З</s></button>
+          <div class="rounded-lg border border-brand-soft bg-brand-soft/40 px-2 py-1 mb-2 flex flex-wrap items-center gap-1 text-xs">
+            <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-cmd="bold" title="Жирный"><b>Ж</b></button>
+            <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-cmd="italic" title="Курсив"><i>К</i></button>
+            <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-cmd="underline" title="Подчёркивание"><u>Ч</u></button>
+            <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-cmd="strikeThrough" title="Зачёркивание"><s>З</s></button>
 
-            <select id="mailFont" class="select !py-1 !px-2 text-xs">
+            <span class="mx-1 h-4 w-px bg-brand-soft"></span>
+
+            <select id="mailFont" class="select !py-1 !px-2 text-xs" title="Шрифт">
               <option value="">Шрифт</option>
               <option value="Arial">Arial</option>
               <option value="Tahoma">Tahoma</option>
               <option value="Times New Roman">Times New Roman</option>
               <option value="Courier New">Courier New</option>
             </select>
-            <select id="mailSize" class="select !py-1 !px-2 text-xs">
+            <select id="mailSize" class="select !py-1 !px-2 text-xs" title="Размер шрифта">
               <option value="">Размер</option>
               <option value="2">Маленький</option>
               <option value="3">Обычный</option>
@@ -69,19 +71,25 @@
               <option value="5">Очень крупный</option>
             </select>
 
-            <button type="button" class="btn btn-outline" data-cmd="justifyLeft" title="Выровнять по левому краю">⬅</button>
-            <button type="button" class="btn btn-outline" data-cmd="justifyCenter" title="По центру">↔</button>
-            <button type="button" class="btn btn-outline" data-cmd="justifyRight" title="Выровнять по правому краю">➡</button>
+            <span class="mx-1 h-4 w-px bg-brand-soft"></span>
 
-            <button type="button" class="btn btn-outline" data-cmd="insertUnorderedList" title="Маркированный список">• Список</button>
-            <button type="button" class="btn btn-outline" data-cmd="insertOrderedList" title="Нумерованный список">1.</button>
+            <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-cmd="justifyLeft" title="Выровнять по левому краю">⬅</button>
+            <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-cmd="justifyCenter" title="По центру">↔</button>
+            <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-cmd="justifyRight" title="Выровнять по правому краю">➡</button>
 
-            <button type="button" class="btn btn-outline" id="mailLinkBtn" title="Вставить ссылку">🔗</button>
-            <button type="button" class="btn btn-outline" data-cmd="removeFormat" title="Очистить форматирование">TX</button>
+            <span class="mx-1 h-4 w-px bg-brand-soft"></span>
+
+            <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-cmd="insertUnorderedList" title="Маркированный список">•</button>
+            <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-cmd="insertOrderedList" title="Нумерованный список">1.</button>
+
+            <span class="mx-1 h-4 w-px bg-brand-soft"></span>
+
+            <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" id="mailLinkBtn" title="Вставить ссылку">🔗</button>
+            <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-cmd="removeFormat" title="Очистить форматирование">Tx</button>
           </div>
 
           <div class="rounded-xl border border-brand-soft bg-white p-3 overflow-x-auto">
-            <div id="mailEditor" contenteditable="true" class="min-h-[260px] outline-none text-sm"></div>
+            <div id="mailEditor" contenteditable="true" class="min-h-[260px] outline-none text-sm" style="white-space:pre-wrap;"></div>
           </div>
           <div class="text-xs muted-2 mt-2">
             Визуальный редактор: шрифты, выравнивание, списки, ссылки. HTML‑код можно посмотреть во вкладке «HTML‑код».
@@ -195,6 +203,14 @@
       });
     })();
   </script>
+
+  <style>
+    #mailEditor:empty:before {
+      content: "Напишите текст письма...";
+      color: rgba(0, 61, 56, 0.45);
+      pointer-events: none;
+    }
+  </style>
 {% endblock %}
 
 
