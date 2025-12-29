@@ -399,7 +399,7 @@ LOGGING = {
             "propagate": False,
         },
         "celery": {
-            "handlers": ["console", "file"] if not DEBUG else ["console"],
+            "handlers": ["console"],  # Celery логирует только в консоль (Docker logs)
             "level": "INFO",
             "propagate": False,
         },
