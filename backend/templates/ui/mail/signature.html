@@ -16,34 +16,66 @@
       <a class="btn btn-outline" href="/mail/campaigns/">Назад</a>
     </div>
 
-    <form method="post" class="card card-pad space-y-3">
+    <form method="post" class="card card-pad space-y-3" id="sigForm">
       {% csrf_token %}
+
       <div>
         <div class="flex items-end justify-between gap-2 mb-2">
-          <label class="block text-sm muted">Подпись (HTML)</label>
+          <label class="block text-sm muted">Подпись</label>
           <div class="flex gap-2">
-            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="btn-visual">Визуальный</button>
-            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="btn-html">HTML‑код</button>
+            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="sigBtnVisual">Визуальный</button>
+            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="sigBtnHtml">HTML‑код</button>
           </div>
         </div>
 
-        {# Оригинальное поле формы — храним HTML сюда #}
-        <div id="html-wrap" class="hidden">
+        {# HTML-режим (оригинальное поле формы) #}
+        <div id="sigHtmlWrap" class="hidden">
           {{ form.signature_html }}
           <div class="text-xs muted-2 mt-1">Можно писать HTML вручную.</div>
         </div>
 
-        {# Визуальный редактор #}
-        <div id="visual-wrap">
-          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css">
-          <div id="quill-editor" style="min-height:260px;border-radius:12px"></div>
-          <div class="text-xs muted-2 mt-2">Редактор сохраняет результат в поле HTML автоматически.</div>
+        {# Визуальный редактор: contenteditable + панель инструментов #}
+        <div id="sigVisualWrap">
+          <div class="flex flex-wrap gap-1 mb-2 text-sm">
+            <button type="button" class="btn btn-outline" data-cmd="bold" title="Жирный"><b>Ж</b></button>
+            <button type="button" class="btn btn-outline" data-cmd="italic" title="Курсив"><i>К</i></button>
+            <button type="button" class="btn btn-outline" data-cmd="underline" title="Подчёркивание"><u>Ч</u></button>
+            <button type="button" class="btn btn-outline" data-cmd="strikeThrough" title="Зачёркивание"><s>З</s></button>
+
+            <select id="sigFont" class="select !py-1 !px-2 text-xs">
+              <option value="">Шрифт</option>
+              <option value="Arial">Arial</option>
+              <option value="Tahoma">Tahoma</option>
+              <option value="Times New Roman">Times New Roman</option>
+              <option value="Courier New">Courier New</option>
+            </select>
+            <select id="sigSize" class="select !py-1 !px-2 text-xs">
+              <option value="">Размер</option>
+              <option value="2">Маленький</option>
+              <option value="3">Обычный</option>
+              <option value="4">Крупный</option>
+              <option value="5">Очень крупный</option>
+            </select>
+
+            <button type="button" class="btn btn-outline" data-cmd="justifyLeft" title="Выровнять по левому краю">⬅</button>
+            <button type="button" class="btn btn-outline" data-cmd="justifyCenter" title="По центру">↔</button>
+            <button type="button" class="btn btn-outline" data-cmd="justifyRight" title="Выровнять по правому краю">➡</button>
+
+            <button type="button" class="btn btn-outline" data-cmd="insertUnorderedList" title="Маркированный список">• Список</button>
+            <button type="button" class="btn btn-outline" data-cmd="insertOrderedList" title="Нумерованный список">1.</button>
+
+            <button type="button" class="btn btn-outline" id="sigLinkBtn" title="Вставить ссылку">🔗</button>
+            <button type="button" class="btn btn-outline" data-cmd="removeFormat" title="Очистить форматирование">TX</button>
+          </div>
+
+          <div class="rounded-xl border border-brand-soft bg-white p-3 overflow-x-auto">
+            <div id="sigEditor" contenteditable="true" class="min-h-[220px] outline-none text-sm"></div>
+          </div>
+          <div class="text-xs muted-2 mt-2">
+            Можно форматировать текст, добавлять списки и ссылки. Подпись будет добавляться в конец письма как есть.
+          </div>
         </div>
       </div>
-
-      {% if form.errors %}
-        <div class="rounded-xl border border-brand-orange/60 bg-brand-orange/20 px-4 py-3 text-sm text-brand-dark">Проверь поля формы.</div>
-      {% endif %}
 
       <div class="flex gap-2">
         <button class="btn btn-primary" type="submit">Сохранить</button>
@@ -52,102 +84,98 @@
     </form>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
   <script>
     (function () {
-      const htmlWrap = document.getElementById("html-wrap");
-      const visualWrap = document.getElementById("visual-wrap");
-      const btnVisual = document.getElementById("btn-visual");
-      const btnHtml = document.getElementById("btn-html");
-      const htmlField = document.querySelector('textarea[name="signature_html"]');
+      const form = document.getElementById("sigForm");
+      const htmlWrap = document.getElementById("sigHtmlWrap");
+      const visualWrap = document.getElementById("sigVisualWrap");
+      const btnVisual = document.getElementById("sigBtnVisual");
+      const btnHtml = document.getElementById("sigBtnHtml");
+      const editor = document.getElementById("sigEditor");
+      const htmlField = document.getElementById("id_signature_html");
+      const linkBtn = document.getElementById("sigLinkBtn");
+      const fontSelect = document.getElementById("sigFont");
+      const sizeSelect = document.getElementById("sigSize");
 
-      function getQuillHtml(quill) {
-        const el = document.querySelector('#quill-editor .ql-editor');
-        return el ? el.innerHTML : "";
-      }
+      if (!form || !editor || !htmlField || !btnVisual || !btnHtml) return;
+
+      // Инициализация: подставляем существующую подпись
+      editor.innerHTML = htmlField.value || "";
 
       function setActive(btnOn, btnOff) {
         btnOn.classList.add("bg-brand-soft/40");
         btnOff.classList.remove("bg-brand-soft/40");
       }
 
-      // init quill с полным набором инструментов (как в письме)
-      const quill = new Quill('#quill-editor', {
-        theme: 'snow',
-        modules: {
-          toolbar: [
-            [{ 'header': [1, 2, 3, false] }],
-            [{ 'font': [] }, { 'size': [] }],
-            ['bold', 'italic', 'underline', 'strike'],
-            [{ 'color': [] }, { 'background': [] }],
-            [{ 'align': [] }],
-            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-            ['link', 'image'],
-            ['clean']
-          ]
-        }
-      });
-      let isUpdating = false;
-      let htmlDebounce = null;
-
-      function syncFromQuill() {
-        if (!htmlField) return;
-        if (isUpdating) return;
-        isUpdating = true;
-        const html = getQuillHtml(quill);
-        htmlField.value = html;
-        isUpdating = false;
+      function syncToTextarea() {
+        htmlField.value = editor.innerHTML || "";
       }
 
-      function syncFromHtmlField() {
-        if (!htmlField) return;
-        if (isUpdating) return;
-        isUpdating = true;
-        const html = htmlField.value || "";
-        quill.clipboard.dangerouslyPasteHTML(html);
-        isUpdating = false;
-      }
-
-      // initial sync
-      if (htmlField && htmlField.value) {
-        syncFromHtmlField();
-      }
-
-      quill.on('text-change', function() {
-        syncFromQuill();
+      // toolbar commands
+      document.querySelectorAll("[data-cmd]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const cmd = btn.getAttribute("data-cmd");
+          if (!cmd) return;
+          document.execCommand(cmd, false, null);
+          editor.focus();
+          syncToTextarea();
+        });
       });
 
-      if (htmlField) {
-        htmlField.addEventListener('input', () => {
-          if (htmlDebounce) clearTimeout(htmlDebounce);
-          htmlDebounce = setTimeout(() => {
-            syncFromHtmlField();
-          }, 250);
+      if (linkBtn) {
+        linkBtn.addEventListener("click", () => {
+          const url = prompt("Ссылка (https://...)");
+          if (!url) return;
+          document.execCommand("createLink", false, url);
+          editor.focus();
+          syncToTextarea();
         });
       }
+
+      if (fontSelect) {
+        fontSelect.addEventListener("change", () => {
+          const v = fontSelect.value;
+          if (!v) return;
+          document.execCommand("fontName", false, v);
+          editor.focus();
+          syncToTextarea();
+        });
+      }
+
+      if (sizeSelect) {
+        sizeSelect.addEventListener("change", () => {
+          const v = sizeSelect.value;
+          if (!v) return;
+          document.execCommand("fontSize", false, v);
+          editor.focus();
+          syncToTextarea();
+        });
+      }
+
+      editor.addEventListener("input", syncToTextarea);
 
       function showVisual() {
         htmlWrap.classList.add("hidden");
         visualWrap.classList.remove("hidden");
         setActive(btnVisual, btnHtml);
-        if (htmlField) syncFromHtmlField();
+        editor.innerHTML = htmlField.value || "";
       }
+
       function showHtml() {
         visualWrap.classList.add("hidden");
         htmlWrap.classList.remove("hidden");
         setActive(btnHtml, btnVisual);
-        syncFromQuill();
+        syncToTextarea();
       }
 
       btnVisual.addEventListener("click", showVisual);
       btnHtml.addEventListener("click", showHtml);
 
-      // default: visual
+      // По умолчанию открываем визуальный режим
       showVisual();
 
-      // При отправке формы синхронизируем из Quill в textarea
-      document.querySelector('form').addEventListener('submit', function() {
-        syncFromQuill();
+      form.addEventListener("submit", () => {
+        syncToTextarea();
       });
     })();
   </script>
