@@ -248,8 +248,8 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
         except (ValueError, TypeError):
             pass
     
-    # Последние получатели с информацией о компаниях
-    recent = camp.recipients.order_by("-updated_at")[:30]
+    # Последние получатели с информацией о компаниях (увеличиваем лимит для массового удаления)
+    recent = camp.recipients.order_by("-updated_at")[:100]
     # Загружаем компании для последних получателей
     recent_company_ids = [r.company_id for r in recent if r.company_id]
     recent_companies_map = {}
@@ -331,6 +331,35 @@ def campaign_recipient_delete(request: HttpRequest, campaign_id, recipient_id) -
     email = r.email
     r.delete()
     messages.success(request, f"Удалён получатель: {email}")
+    return redirect("campaign_detail", campaign_id=camp.id)
+
+
+@login_required
+def campaign_recipients_bulk_delete(request: HttpRequest, campaign_id) -> HttpResponse:
+    """Массовое удаление получателей."""
+    user: User = request.user
+    camp = get_object_or_404(Campaign, id=campaign_id)
+    if user.role == User.Role.MANAGER and camp.created_by_id != user.id:
+        messages.error(request, "Доступ запрещён.")
+        return redirect("campaigns")
+    if request.method != "POST":
+        return redirect("campaign_detail", campaign_id=camp.id)
+
+    recipient_ids = request.POST.getlist("recipient_ids")
+    if not recipient_ids:
+        messages.warning(request, "Не выбраны получатели для удаления.")
+        return redirect("campaign_detail", campaign_id=camp.id)
+
+    # Проверяем, что все ID принадлежат этой кампании
+    recipients = CampaignRecipient.objects.filter(id__in=recipient_ids, campaign=camp)
+    count = recipients.count()
+    if count == 0:
+        messages.warning(request, "Не найдено получателей для удаления.")
+        return redirect("campaign_detail", campaign_id=camp.id)
+
+    recipients.delete()
+    messages.success(request, f"Удалено получателей: {count}")
+    log_event(actor=user, verb=ActivityEvent.Verb.DELETE, entity_type="campaign", entity_id=camp.id, message=f"Массовое удаление получателей: {count}")
     return redirect("campaign_detail", campaign_id=camp.id)
 
 
