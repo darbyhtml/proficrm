@@ -74,8 +74,7 @@ services:
     command: >
       sh -c "pip install -q -r /app/backend/requirements.txt &&
              python manage.py migrate &&
-             mkdir -p logs && chmod 777 logs &&
-             celery -A crm worker --loglevel=info --concurrency=2 --uid=nobody --gid=nogroup"
+             celery -A crm worker --loglevel=info --concurrency=2"
 
   celery-beat:
     image: python:3.13-slim
@@ -102,8 +101,7 @@ services:
     command: >
       sh -c "pip install -q -r /app/backend/requirements.txt &&
              python manage.py migrate &&
-             mkdir -p logs && chmod 777 logs &&
-             celery -A crm beat --loglevel=info --uid=nobody --gid=nogroup"
+             celery -A crm beat --loglevel=info"
 
 volumes:
   pgdata:

@@ -320,6 +320,8 @@ CELERY_TASK_ACKS_LATE = True  # Подтверждать задачи после
 CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True  # Исправление предупреждения о broker_connection_retry
 CELERY_WORKER_HIJACK_ROOT_LOGGER = False  # Не перехватывать root logger
 CELERY_WORKER_LOG_COLOR = False  # Отключить цветной вывод в логах
+# Примечание: запуск Celery от root в Docker контейнере безопасен, так как контейнер изолирован
+# Предупреждение о root user можно игнорировать в Docker окружении
 
 # Celery Beat Schedule (периодические задачи)
 CELERY_BEAT_SCHEDULE = {
