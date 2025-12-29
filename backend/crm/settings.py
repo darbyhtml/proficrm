@@ -317,6 +317,9 @@ CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 минут максимум на зада
 CELERY_TASK_SOFT_TIME_LIMIT = 25 * 60  # 25 минут мягкий лимит
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1  # Не брать задачи заранее
 CELERY_TASK_ACKS_LATE = True  # Подтверждать задачи после выполнения
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True  # Исправление предупреждения о broker_connection_retry
+CELERY_WORKER_HIJACK_ROOT_LOGGER = False  # Не перехватывать root logger
+CELERY_WORKER_LOG_COLOR = False  # Отключить цветной вывод в логах
 
 # Celery Beat Schedule (периодические задачи)
 CELERY_BEAT_SCHEDULE = {
