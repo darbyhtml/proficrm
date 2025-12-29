@@ -54,3 +54,56 @@ Canonical: {canonical_url}
 """
     response = HttpResponse(content, content_type="text/plain; charset=utf-8")
     return response
+
+
+def health_check(request):
+    """
+    Health check endpoint для мониторинга состояния сервиса.
+    Проверяет доступность БД, Redis и Celery.
+    """
+    from django.db import connection
+    from django.core.cache import cache
+    from django.conf import settings
+    
+    health_status = {
+        "status": "ok",
+        "checks": {}
+    }
+    
+    # Проверка БД
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1")
+        health_status["checks"]["database"] = "ok"
+    except Exception as e:
+        health_status["checks"]["database"] = f"error: {str(e)}"
+        health_status["status"] = "degraded"
+    
+    # Проверка Redis (кеш)
+    try:
+        cache.set("health_check_test", "ok", 10)
+        test_value = cache.get("health_check_test")
+        if test_value == "ok":
+            health_status["checks"]["cache"] = "ok"
+        else:
+            health_status["checks"]["cache"] = "error: cache not working"
+            health_status["status"] = "degraded"
+    except Exception as e:
+        health_status["checks"]["cache"] = f"error: {str(e)}"
+        health_status["status"] = "degraded"
+    
+    # Проверка Celery (если настроен)
+    if hasattr(settings, "CELERY_BROKER_URL"):
+        try:
+            from celery import current_app
+            inspect = current_app.control.inspect()
+            stats = inspect.stats()
+            if stats:
+                health_status["checks"]["celery"] = "ok"
+            else:
+                health_status["checks"]["celery"] = "warning: no workers available"
+        except Exception as e:
+            health_status["checks"]["celery"] = f"warning: {str(e)}"
+    
+    status_code = 200 if health_status["status"] == "ok" else 503
+    return JsonResponse(health_status, status=status_code)
