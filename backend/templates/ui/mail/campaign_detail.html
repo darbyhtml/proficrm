@@ -161,122 +161,12 @@
             {% endif %}
           </div>
         {% endif %}
-
-        <div class="card overflow-hidden">
-          <div class="card-pad border-b border-brand-soft flex items-center justify-between">
-            <div class="font-medium">Все получатели ({{ counts.total }} всего)</div>
-            {% if page %}
-              <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/bulk-delete/" id="bulkDeleteFormTable" onsubmit="return confirm('Удалить выбранных получателей?');" style="display:none;">
-                {% csrf_token %}
-                <button type="submit" class="btn" style="background:#dc2626;color:#fff;padding:.5rem 1rem;font-size:.875rem">Удалить выбранные</button>
-              </form>
-            {% endif %}
-          </div>
-          <div class="overflow-x-auto">
-            <table class="table">
-              <thead>
-                <tr>
-                  <th style="width:40px">
-                    <input type="checkbox" id="selectAllRecipients" title="Выделить все" />
-                  </th>
-                  <th>Email</th>
-                  <th>Компания</th>
-                  <th>Статус</th>
-                  <th>Ошибка</th>
-                  <th>Обновлено</th>
-                  <th style="width:120px">Действия</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for r in page.object_list %}
-                  <tr>
-                    <td>
-                      <input type="checkbox" name="recipient_ids" value="{{ r.id }}" class="recipient-checkbox" />
-                    </td>
-                    <td class="font-mono text-xs">{{ r.email }}</td>
-                    <td>
-                      {% if r.company_id %}
-                        <a href="/companies/{{ r.company_id }}/" class="text-xs text-brand-teal hover:underline">
-                          {% if r.company %}{{ r.company.name|truncatechars:30 }}{% else %}ID: {{ r.company_id|slice:":8" }}{% endif %}
-                        </a>
-                        {% if r.contact_id %}
-                          <div class="text-xs muted-2">из контакта</div>
-                        {% else %}
-                          <div class="text-xs muted-2">основной</div>
-                        {% endif %}
-                      {% else %}
-                        <span class="text-xs muted">—</span>
-                      {% endif %}
-                    </td>
-                    <td>
-                      <span class="badge {% if r.status == 'failed' %}badge-warn{% elif r.status == 'sent' %}bg-green-100 text-green-800{% elif r.status == 'unsubscribed' %}bg-gray-100 text-gray-800{% endif %}">{{ r.get_status_display }}</span>
-                    </td>
-                    <td class="muted text-xs">{{ r.last_error|truncatechars:40 }}</td>
-                    <td class="muted text-xs">{{ r.updated_at|date:"d.m.Y H:i" }}</td>
-                    <td>
-                      <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/{{ r.id }}/delete/" onsubmit="return confirm('Удалить получателя {{ r.email }}?');" style="display:inline;">
-                        {% csrf_token %}
-                        <button class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" type="submit">Удалить</button>
-                      </form>
-                    </td>
-                  </tr>
-                {% empty %}
-                  <tr><td class="muted" colspan="7" style="padding:1.25rem 1rem">Получателей пока нет.</td></tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-          
-          {% if page.has_other_pages %}
-            <div class="border-t px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
-              <div class="flex items-center gap-2">
-                <form method="get" class="flex items-center gap-2" id="perPageFormTable">
-                  <label class="text-sm text-brand-dark/80">Показывать:</label>
-                  <select name="per_page" class="select" onchange="this.form.submit()" style="min-width:80px">
-                    <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
-                    <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
-                    <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
-                    <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
-                  </select>
-                  {% if qs %}
-                    <input type="hidden" name="qs" value="{{ qs }}" />
-                  {% endif %}
-                </form>
-              </div>
-              <div class="flex items-center gap-2">
-                {% if page.has_previous %}
-                  <a href="?page={{ page.previous_page_number }}{% if qs %}&{{ qs }}{% endif %}" class="btn btn-outline" style="padding:.35rem .75rem;font-size:.875rem">← Назад</a>
-                {% endif %}
-                <span class="text-sm text-brand-dark/80">
-                  Страница {{ page.number }} из {{ page.paginator.num_pages }}
-                </span>
-                {% if page.has_next %}
-                  <a href="?page={{ page.next_page_number }}{% if qs %}&{{ qs }}{% endif %}" class="btn btn-outline" style="padding:.35rem .75rem;font-size:.875rem">Вперёд →</a>
-                {% endif %}
-              </div>
-            </div>
-          {% else %}
-            <div class="border-t px-4 py-3">
-              <form method="get" class="flex items-center gap-2" id="perPageFormTable">
-                <label class="text-sm text-brand-dark/80">Показывать:</label>
-                <select name="per_page" class="select" onchange="this.form.submit()" style="min-width:80px">
-                  <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
-                  <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
-                  <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
-                  <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
-                </select>
-              </form>
-            </div>
-          {% endif %}
-        </div>
         
         <script>
           (function() {
-            const selectAllCheckbox = document.getElementById('selectAllRecipients');
             const selectAllGroupedCheckbox = document.getElementById('selectAllRecipientsGrouped');
             const recipientCheckboxes = document.querySelectorAll('.recipient-checkbox');
             const bulkDeleteForm = document.getElementById('bulkDeleteForm');
-            const bulkDeleteFormTable = document.getElementById('bulkDeleteFormTable');
             const companySelectAllCheckboxes = document.querySelectorAll('.company-select-all');
             
             // Функция для обновления видимости кнопок удаления
@@ -284,25 +174,22 @@
               const checked = document.querySelectorAll('.recipient-checkbox:checked');
               if (checked.length > 0) {
                 if (bulkDeleteForm) bulkDeleteForm.style.display = 'block';
-                if (bulkDeleteFormTable) bulkDeleteFormTable.style.display = 'block';
                 
-                // Обновляем обе формы
-                [bulkDeleteForm, bulkDeleteFormTable].forEach(form => {
-                  if (!form) return;
+                // Обновляем форму
+                if (bulkDeleteForm) {
                   // Удаляем старые скрытые поля
-                  form.querySelectorAll('input[name="recipient_ids"]').forEach(el => el.remove());
+                  bulkDeleteForm.querySelectorAll('input[name="recipient_ids"]').forEach(el => el.remove());
                   // Добавляем новые
                   checked.forEach(cb => {
                     const input = document.createElement('input');
                     input.type = 'hidden';
                     input.name = 'recipient_ids';
                     input.value = cb.value;
-                    form.appendChild(input);
+                    bulkDeleteForm.appendChild(input);
                   });
-                });
+                }
               } else {
                 if (bulkDeleteForm) bulkDeleteForm.style.display = 'none';
-                if (bulkDeleteFormTable) bulkDeleteFormTable.style.display = 'none';
               }
             }
             
@@ -310,11 +197,6 @@
             function updateSelectAllCheckboxes() {
               const allChecked = Array.from(recipientCheckboxes).every(c => c.checked);
               const someChecked = Array.from(recipientCheckboxes).some(c => c.checked);
-              
-              if (selectAllCheckbox) {
-                selectAllCheckbox.checked = allChecked;
-                selectAllCheckbox.indeterminate = !allChecked && someChecked;
-              }
               
               if (selectAllGroupedCheckbox) {
                 selectAllGroupedCheckbox.checked = allChecked;
@@ -342,30 +224,6 @@
                 companySelectAllCheckboxes.forEach(cb => {
                   cb.checked = this.checked;
                 });
-                // Обновляем чекбокс в таблице
-                if (selectAllCheckbox) {
-                  selectAllCheckbox.checked = this.checked;
-                  selectAllCheckbox.indeterminate = false;
-                }
-                updateBulkDeleteButtons();
-              });
-            }
-            
-            // Обработчик для "Выделить все" в таблице
-            if (selectAllCheckbox) {
-              selectAllCheckbox.addEventListener('change', function() {
-                recipientCheckboxes.forEach(cb => {
-                  cb.checked = this.checked;
-                });
-                // Обновляем чекбоксы "Выделить все" в компаниях
-                companySelectAllCheckboxes.forEach(cb => {
-                  cb.checked = this.checked;
-                });
-                // Обновляем чекбокс в группировке
-                if (selectAllGroupedCheckbox) {
-                  selectAllGroupedCheckbox.checked = this.checked;
-                  selectAllGroupedCheckbox.indeterminate = false;
-                }
                 updateBulkDeleteButtons();
               });
             }
