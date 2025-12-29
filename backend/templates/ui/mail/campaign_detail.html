@@ -51,7 +51,10 @@
         {% if recipients_by_company %}
           <div class="card card-pad">
             <div class="font-medium mb-3 flex items-center justify-between">
-              <span>Получатели по компаниям ({{ counts.total }} всего)</span>
+              <div class="flex items-center gap-2">
+                <input type="checkbox" id="selectAllRecipientsGrouped" title="Выделить все получатели на странице" />
+                <span>Получатели по компаниям ({{ counts.total }} всего)</span>
+              </div>
               {% if page %}
                 <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/bulk-delete/" id="bulkDeleteForm" onsubmit="return confirm('Удалить выбранных получателей?');" style="display:none;">
                   {% csrf_token %}
@@ -270,6 +273,7 @@
         <script>
           (function() {
             const selectAllCheckbox = document.getElementById('selectAllRecipients');
+            const selectAllGroupedCheckbox = document.getElementById('selectAllRecipientsGrouped');
             const recipientCheckboxes = document.querySelectorAll('.recipient-checkbox');
             const bulkDeleteForm = document.getElementById('bulkDeleteForm');
             const bulkDeleteFormTable = document.getElementById('bulkDeleteFormTable');
@@ -302,6 +306,51 @@
               }
             }
             
+            // Функция для обновления состояния всех чекбоксов "Выделить все"
+            function updateSelectAllCheckboxes() {
+              const allChecked = Array.from(recipientCheckboxes).every(c => c.checked);
+              const someChecked = Array.from(recipientCheckboxes).some(c => c.checked);
+              
+              if (selectAllCheckbox) {
+                selectAllCheckbox.checked = allChecked;
+                selectAllCheckbox.indeterminate = !allChecked && someChecked;
+              }
+              
+              if (selectAllGroupedCheckbox) {
+                selectAllGroupedCheckbox.checked = allChecked;
+                selectAllGroupedCheckbox.indeterminate = !allChecked && someChecked;
+              }
+              
+              // Обновляем чекбоксы компаний
+              companySelectAllCheckboxes.forEach(companyCheckbox => {
+                const companyId = companyCheckbox.getAttribute('data-company-id');
+                const companyCheckboxes = document.querySelectorAll('.company-' + companyId + '-checkbox');
+                const allCompanyChecked = Array.from(companyCheckboxes).every(c => c.checked);
+                const someCompanyChecked = Array.from(companyCheckboxes).some(c => c.checked);
+                companyCheckbox.checked = allCompanyChecked;
+                companyCheckbox.indeterminate = !allCompanyChecked && someCompanyChecked;
+              });
+            }
+            
+            // Обработчик для "Выделить все" в группировке (сверху)
+            if (selectAllGroupedCheckbox) {
+              selectAllGroupedCheckbox.addEventListener('change', function() {
+                recipientCheckboxes.forEach(cb => {
+                  cb.checked = this.checked;
+                });
+                // Обновляем чекбоксы "Выделить все" в компаниях
+                companySelectAllCheckboxes.forEach(cb => {
+                  cb.checked = this.checked;
+                });
+                // Обновляем чекбокс в таблице
+                if (selectAllCheckbox) {
+                  selectAllCheckbox.checked = this.checked;
+                  selectAllCheckbox.indeterminate = false;
+                }
+                updateBulkDeleteButtons();
+              });
+            }
+            
             // Обработчик для "Выделить все" в таблице
             if (selectAllCheckbox) {
               selectAllCheckbox.addEventListener('change', function() {
@@ -312,6 +361,11 @@
                 companySelectAllCheckboxes.forEach(cb => {
                   cb.checked = this.checked;
                 });
+                // Обновляем чекбокс в группировке
+                if (selectAllGroupedCheckbox) {
+                  selectAllGroupedCheckbox.checked = this.checked;
+                  selectAllGroupedCheckbox.indeterminate = false;
+                }
                 updateBulkDeleteButtons();
               });
             }
@@ -324,12 +378,7 @@
                 companyCheckboxes.forEach(cb => {
                   cb.checked = this.checked;
                 });
-                // Обновляем состояние "Выделить все" в таблице
-                if (selectAllCheckbox) {
-                  const allChecked = Array.from(recipientCheckboxes).every(c => c.checked);
-                  selectAllCheckbox.checked = allChecked;
-                  selectAllCheckbox.indeterminate = !allChecked && Array.from(recipientCheckboxes).some(c => c.checked);
-                }
+                updateSelectAllCheckboxes();
                 updateBulkDeleteButtons();
               });
             });
@@ -337,28 +386,13 @@
             // Обработчики для отдельных чекбоксов
             recipientCheckboxes.forEach(cb => {
               cb.addEventListener('change', function() {
-                // Обновляем состояние "Выделить все" в таблице
-                if (selectAllCheckbox) {
-                  const allChecked = Array.from(recipientCheckboxes).every(c => c.checked);
-                  selectAllCheckbox.checked = allChecked;
-                  selectAllCheckbox.indeterminate = !allChecked && Array.from(recipientCheckboxes).some(c => c.checked);
-                }
-                // Обновляем состояние "Выделить все" в компании
-                const companyIdMatch = this.className.match(/company-([^-]+)-checkbox/);
-                if (companyIdMatch) {
-                  const companyCheckbox = document.querySelector('.company-select-all[data-company-id="' + companyIdMatch[1] + '"]');
-                  if (companyCheckbox) {
-                    const companyCheckboxes = document.querySelectorAll('.company-' + companyIdMatch[1] + '-checkbox');
-                    const allCompanyChecked = Array.from(companyCheckboxes).every(c => c.checked);
-                    companyCheckbox.checked = allCompanyChecked;
-                    companyCheckbox.indeterminate = !allCompanyChecked && Array.from(companyCheckboxes).some(c => c.checked);
-                  }
-                }
+                updateSelectAllCheckboxes();
                 updateBulkDeleteButtons();
               });
             });
             
             // Инициализация при загрузке
+            updateSelectAllCheckboxes();
             updateBulkDeleteButtons();
           })();
         </script>
