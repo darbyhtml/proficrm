@@ -229,80 +229,148 @@
 
     .mail-icon-align {
       display:inline-block;
-      width:14px;
-      height:10px;
+      width:16px;
+      height:12px;
       position:relative;
     }
     .mail-icon-align::before,
     .mail-icon-align::after {
       content:"";
       position:absolute;
-      left:0;
-      right:0;
-      height:2px;
+      height:1.5px;
       background-color:#003D38;
-      border-radius:999px;
+      border-radius:1px;
     }
-    .mail-icon-align::before { top:1px; }
-    .mail-icon-align::after { bottom:1px; opacity:.7; }
+    .mail-icon-align-left::before,
+    .mail-icon-align-left::after { left:0; right:0; }
+    .mail-icon-align-center::before,
+    .mail-icon-align-center::after { left:2px; right:2px; }
+    .mail-icon-align-right::before,
+    .mail-icon-align-right::after { left:auto; right:0; }
+    .mail-icon-align-left::before { width:100%; }
+    .mail-icon-align-left::after { width:80%; }
+    .mail-icon-align-center::before { width:100%; }
+    .mail-icon-align-center::after { width:60%; }
+    .mail-icon-align-right::before { width:80%; }
+    .mail-icon-align-right::after { width:100%; }
+    .mail-icon-align::before { top:2px; }
+    .mail-icon-align::after { bottom:2px; }
 
     .mail-icon-list {
       display:inline-block;
-      width:14px;
-      height:10px;
+      width:16px;
+      height:12px;
       position:relative;
     }
     .mail-icon-list::before,
     .mail-icon-list::after {
       content:"";
       position:absolute;
-      left:5px;
+      left:0;
       right:0;
-      height:2px;
+      height:1.5px;
       background-color:#003D38;
-      border-radius:999px;
+      border-radius:1px;
     }
-    .mail-icon-list::before { top:1px; }
-    .mail-icon-list::after { bottom:1px; opacity:.7; }
+    .mail-icon-list-bullet::before { left:4px; }
+    .mail-icon-list-bullet::after { left:4px; }
+    .mail-icon-list-number::before { left:0; }
+    .mail-icon-list-number::after { left:0; }
+    .mail-icon-list-bullet::marker {
+      content:"•";
+      position:absolute;
+      left:0;
+      top:2px;
+      color:#003D38;
+      font-size:10px;
+    }
+    .mail-icon-list-number::marker {
+      content:"1";
+      position:absolute;
+      left:0;
+      top:2px;
+      color:#003D38;
+      font-size:9px;
+      font-weight:600;
+    }
+    .mail-icon-list::before { top:2px; }
+    .mail-icon-list::after { bottom:2px; }
 
     .mail-icon-link,
     .mail-icon-unlink {
       display:inline-block;
-      width:14px;
-      height:10px;
-      border-radius:999px;
-      border:1px solid #003D38;
+      width:16px;
+      height:12px;
       position:relative;
     }
-    .mail-icon-link::before,
+    .mail-icon-link::before {
+      content:"";
+      position:absolute;
+      width:8px;
+      height:8px;
+      border:1.5px solid #003D38;
+      border-radius:2px;
+      top:1px;
+      left:2px;
+    }
+    .mail-icon-link::after {
+      content:"";
+      position:absolute;
+      width:6px;
+      height:6px;
+      border-top:1.5px solid #003D38;
+      border-right:1.5px solid #003D38;
+      top:4px;
+      left:8px;
+      transform:rotate(45deg);
+    }
     .mail-icon-unlink::before {
       content:"";
       position:absolute;
-      top:3px;
-      bottom:3px;
-      left:3px;
-      right:3px;
-      border-top:1px solid #003D38;
+      width:8px;
+      height:8px;
+      border:1.5px solid #003D38;
+      border-radius:2px;
+      top:1px;
+      left:2px;
     }
     .mail-icon-unlink::after {
       content:"";
       position:absolute;
-      left:2px;
-      right:2px;
-      top:1px;
-      bottom:1px;
-      border-top:1px solid transparent;
-      border-left:1px solid #003D38;
-      transform:rotate(-45deg);
+      width:8px;
+      height:1.5px;
+      background-color:#003D38;
+      top:5px;
+      left:6px;
+      transform:rotate(45deg);
     }
 
     .mail-icon-eraser {
       display:inline-block;
-      width:12px;
-      height:9px;
-      border-radius:2px;
-      border:1px solid #003D38;
-      transform:skewX(-15deg);
+      width:14px;
+      height:10px;
+      position:relative;
+    }
+    .mail-icon-eraser::before {
+      content:"";
+      position:absolute;
+      width:10px;
+      height:8px;
+      border:1.5px solid #003D38;
+      border-radius:1px;
+      top:1px;
+      left:0;
+      transform:skewX(-10deg);
+    }
+    .mail-icon-eraser::after {
+      content:"";
+      position:absolute;
+      width:6px;
+      height:1.5px;
+      background-color:#003D38;
+      top:3px;
+      left:8px;
+      transform:rotate(45deg);
     }
   </style>
 {% endblock %}
