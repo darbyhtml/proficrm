@@ -223,17 +223,40 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
         "total": camp.recipients.count(),
     }
     
-    # Получатели с информацией о компаниях (увеличиваем лимит для массового удаления)
-    recent = list(camp.recipients.order_by("-updated_at")[:100])
-    # Загружаем компании для последних получателей одним запросом
-    recent_company_ids = [r.company_id for r in recent if r.company_id]
-    recent_companies_map = {}
-    if recent_company_ids:
-        recent_companies_map = {str(c.id): c for c in Company.objects.filter(id__in=recent_company_ids).only("id", "name")}
-    # Добавляем компании к получателям
-    for r in recent:
-        if r.company_id and str(r.company_id) in recent_companies_map:
-            r.company = recent_companies_map[str(r.company_id)]
+    # Группируем получателей по компаниям для удобного отображения
+    all_recipients = list(camp.recipients.order_by("company_id", "-updated_at")[:200])
+    
+    # Загружаем компании одним запросом
+    company_ids = [r.company_id for r in all_recipients if r.company_id]
+    companies_map = {}
+    if company_ids:
+        companies_map = {str(c.id): c for c in Company.objects.filter(id__in=company_ids).only("id", "name", "contact_name", "contact_position")}
+    
+    # Загружаем контакты одним запросом
+    contact_ids = [r.contact_id for r in all_recipients if r.contact_id]
+    contacts_map = {}
+    if contact_ids:
+        contacts_map = {str(c.id): c for c in Contact.objects.filter(id__in=contact_ids).only("id", "first_name", "last_name", "position")}
+    
+    # Группируем получателей по компаниям
+    recipients_by_company = {}
+    for r in all_recipients:
+        company_id = str(r.company_id) if r.company_id else "no_company"
+        if company_id not in recipients_by_company:
+            recipients_by_company[company_id] = {
+                "company": companies_map.get(company_id) if company_id != "no_company" else None,
+                "recipients": []
+            }
+        # Добавляем информацию о контакте, если есть
+        if r.contact_id and str(r.contact_id) in contacts_map:
+            r.contact = contacts_map[str(r.contact_id)]
+        # Добавляем информацию о компании
+        if r.company_id and str(r.company_id) in companies_map:
+            r.company = companies_map[str(r.company_id)]
+        recipients_by_company[company_id]["recipients"].append(r)
+    
+    # Последние получатели для таблицы (для массового удаления)
+    recent = all_recipients[:100]
 
     return render(
         request,
@@ -250,6 +273,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "responsibles": User.objects.order_by("last_name", "first_name"),
             "statuses": CompanyStatus.objects.order_by("name"),
             "spheres": CompanySphere.objects.order_by("name"),
+            "recipients_by_company": recipients_by_company,
         },
     )
 
