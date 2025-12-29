@@ -3,10 +3,10 @@
 ## ✅ Что было реализовано
 
 ### 1. Redis для кеширования и Celery
-- ✅ Добавлен сервис Redis в `docker-compose.yml`
-- ✅ Настроен Redis для кеширования (заменяет LocMemCache в production)
-- ✅ Настроен Celery для фоновых задач
-- ✅ Настроен Celery Beat для периодических задач
+- ✅ Добавлен сервис Redis в `docker-compose.yml` (используется и на VDS)
+- ✅ Настроен Redis для кеширования (через `CACHES` в `settings.py`)
+- ✅ Настроен Celery для фоновых задач (рассылки, очистка звонков)
+- ✅ Настроен Celery Beat для периодических задач (каждую минуту/час)
 
 ### 2. Фоновые задачи (Celery)
 - ✅ Перенесен `mailer_worker` в Celery task (`mailer.tasks.send_pending_emails`)

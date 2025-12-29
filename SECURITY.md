@@ -2,7 +2,7 @@
 
 ## Реализованные меры защиты
 
-### 1. Защита от DDoS атак
+### 1. Защита от DDoS атак и перегрузки API
 
 - **Rate Limiting Middleware** (`accounts.middleware.RateLimitMiddleware`)
   - Ограничение запросов по IP адресу

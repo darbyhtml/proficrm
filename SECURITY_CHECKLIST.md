@@ -13,15 +13,15 @@
 
 **Как проверить**:
 ```bash
-curl https://ваш-домен/.well-known/security.txt
+curl https://crm.groupprofi.ru/.well-known/security.txt
 ```
-66Hsfkj2-fsqe2
+
 **Ожидаемый результат**:
 ```
-Contact: mailto:ваш-email@домен.ru
-Expires: 2026-XX-XXTXX:XX:XX.000Z
+Contact: mailto:SECURITY_CONTACT_EMAIL_ИЗ_.env
+Expires: YYYY-XX-XXTXX:XX:XX.000Z
 Preferred-Languages: ru, en
-Canonical: https://ваш-домен/.well-known/security.txt
+Canonical: https://crm.groupprofi.ru/.well-known/security.txt
 ```
 
 ---

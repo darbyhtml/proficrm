@@ -3,19 +3,6 @@
 
 {% block content %}
   <div class="space-y-4">
-    <style>
-      /* Чтобы подпись в UI выглядела как в письме: без растягивания картинок */
-      #sigEditor img, #sigPreview img{
-        max-width: 100% !important;
-        height: auto !important;
-        width: auto;
-        object-fit: contain;
-      }
-      /* Ограничим слишком большие фото, чтобы не раздувало экран */
-      #sigEditor img, #sigPreview img{
-        max-height: 420px;
-      }
-    </style>
     <div class="flex items-end justify-between gap-3">
       <div>
         <div class="text-sm muted"><a class="link" href="/mail/campaigns/">Почта</a> /</div>
@@ -29,45 +16,34 @@
       <a class="btn btn-outline" href="/mail/campaigns/">Назад</a>
     </div>
 
-    <form method="post" class="card card-pad space-y-3" id="sigForm">
+    <form method="post" class="card card-pad space-y-3">
       {% csrf_token %}
-
-      <div class="space-y-4">
-        <div>
-          <div class="font-medium mb-2">Редактор</div>
-          <div class="flex flex-wrap gap-2 mb-2">
-            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" data-cmd="bold"><b>B</b></button>
-            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" data-cmd="italic"><i>I</i></button>
-            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" data-cmd="underline"><u>U</u></button>
-            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" data-cmd="insertUnorderedList">• Список</button>
-            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="sigLinkBtn">Ссылка</button>
-            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="sigImgBtn">Картинка</button>
-            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="sigClearBtn">Очистить</button>
+      <div>
+        <div class="flex items-end justify-between gap-2 mb-2">
+          <label class="block text-sm muted">Подпись (HTML)</label>
+          <div class="flex gap-2">
+            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="btn-visual">Визуальный</button>
+            <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="btn-html">HTML‑код</button>
           </div>
-
-          <div class="rounded-xl border border-brand-soft bg-white p-3 overflow-x-auto">
-            <div id="sigEditor" contenteditable="true" class="min-h-[220px] outline-none text-sm"></div>
-          </div>
-          <div class="text-xs muted-2 mt-2">
-            - **Картинки**: можно вставить через кнопку «Картинка» (файл будет встроен в подпись).<br>
-            - Также можно вставлять текст/картинки из буфера (если браузер поддерживает).<br>
-            - Если подпись пустая — ничего не добавляется.
-          </div>
-
-          <div class="hidden">
-            {{ form.signature_html }}
-          </div>
-          <input id="sigImgInput" type="file" accept="image/*" class="hidden" />
         </div>
 
-        <div>
-          <div class="font-medium mb-2">Предпросмотр</div>
-          <div class="rounded-xl border border-brand-soft bg-white p-3 overflow-x-auto">
-            <div class="text-xs muted-2 mb-2">Так подпись будет выглядеть в письме:</div>
-            <div id="sigPreview" class="text-sm"></div>
-          </div>
+        {# Оригинальное поле формы — храним HTML сюда #}
+        <div id="html-wrap" class="hidden">
+          {{ form.signature_html }}
+          <div class="text-xs muted-2 mt-1">Можно писать HTML вручную.</div>
+        </div>
+
+        {# Визуальный редактор #}
+        <div id="visual-wrap">
+          <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.snow.css">
+          <div id="quill-editor" style="min-height:260px;border-radius:12px"></div>
+          <div class="text-xs muted-2 mt-2">Редактор сохраняет результат в поле HTML автоматически.</div>
         </div>
       </div>
+
+      {% if form.errors %}
+        <div class="rounded-xl border border-brand-orange/60 bg-brand-orange/20 px-4 py-3 text-sm text-brand-dark">Проверь поля формы.</div>
+      {% endif %}
 
       <div class="flex gap-2">
         <button class="btn btn-primary" type="submit">Сохранить</button>
@@ -76,106 +52,102 @@
     </form>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/quill@1.3.7/dist/quill.min.js"></script>
   <script>
-    (function(){
-      const textarea = document.getElementById('id_signature_html');
-      const editor = document.getElementById('sigEditor');
-      const preview = document.getElementById('sigPreview');
-      const form = document.getElementById('sigForm');
-      const imgInput = document.getElementById('sigImgInput');
-      const imgBtn = document.getElementById('sigImgBtn');
-      const linkBtn = document.getElementById('sigLinkBtn');
-      const clearBtn = document.getElementById('sigClearBtn');
+    (function () {
+      const htmlWrap = document.getElementById("html-wrap");
+      const visualWrap = document.getElementById("visual-wrap");
+      const btnVisual = document.getElementById("btn-visual");
+      const btnHtml = document.getElementById("btn-html");
+      const htmlField = document.querySelector('textarea[name="signature_html"]');
 
-      if (!textarea || !editor || !preview || !form) return;
-
-      // init
-      editor.innerHTML = textarea.value || '';
-      preview.innerHTML = editor.innerHTML || '<span class="muted-2">—</span>';
-
-      function updatePreview() {
-        preview.innerHTML = editor.innerHTML || '<span class="muted-2">—</span>';
+      function getQuillHtml(quill) {
+        const el = document.querySelector('#quill-editor .ql-editor');
+        return el ? el.innerHTML : "";
       }
 
-      function normalizeImages(root) {
-        if (!root) return;
-        root.querySelectorAll('img').forEach(img => {
-          try {
-            // Убираем “ломающие” размеры, чтобы не растягивало
-            if (img.style) {
-              if (img.style.width && String(img.style.width).includes('%')) {
-                img.style.width = 'auto';
-              }
-              img.style.height = 'auto';
-              img.style.maxWidth = '100%';
-              img.style.objectFit = 'contain';
-            }
-          } catch (e) {}
-        });
+      function setActive(btnOn, btnOff) {
+        btnOn.classList.add("bg-brand-soft/40");
+        btnOff.classList.remove("bg-brand-soft/40");
       }
 
-      normalizeImages(editor);
-      normalizeImages(preview);
+      // init quill с полным набором инструментов (как в письме)
+      const quill = new Quill('#quill-editor', {
+        theme: 'snow',
+        modules: {
+          toolbar: [
+            [{ 'header': [1, 2, 3, false] }],
+            [{ 'font': [] }, { 'size': [] }],
+            ['bold', 'italic', 'underline', 'strike'],
+            [{ 'color': [] }, { 'background': [] }],
+            [{ 'align': [] }],
+            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+            ['link', 'image'],
+            ['clean']
+          ]
+        }
+      });
+      let isUpdating = false;
+      let htmlDebounce = null;
 
-      // toolbar commands
-      document.querySelectorAll('[data-cmd]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const cmd = btn.getAttribute('data-cmd');
-          if (!cmd) return;
-          document.execCommand(cmd, false);
-          editor.focus();
-          updatePreview();
-        });
+      function syncFromQuill() {
+        if (!htmlField) return;
+        if (isUpdating) return;
+        isUpdating = true;
+        const html = getQuillHtml(quill);
+        htmlField.value = html;
+        isUpdating = false;
+      }
+
+      function syncFromHtmlField() {
+        if (!htmlField) return;
+        if (isUpdating) return;
+        isUpdating = true;
+        const html = htmlField.value || "";
+        quill.clipboard.dangerouslyPasteHTML(html);
+        isUpdating = false;
+      }
+
+      // initial sync
+      if (htmlField && htmlField.value) {
+        syncFromHtmlField();
+      }
+
+      quill.on('text-change', function() {
+        syncFromQuill();
       });
 
-      if (linkBtn) {
-        linkBtn.addEventListener('click', () => {
-          const url = prompt('Ссылка (https://...)');
-          if (!url) return;
-          document.execCommand('createLink', false, url);
-          editor.focus();
-          updatePreview();
+      if (htmlField) {
+        htmlField.addEventListener('input', () => {
+          if (htmlDebounce) clearTimeout(htmlDebounce);
+          htmlDebounce = setTimeout(() => {
+            syncFromHtmlField();
+          }, 250);
         });
       }
 
-      if (clearBtn) {
-        clearBtn.addEventListener('click', () => {
-          if (!confirm('Очистить подпись?')) return;
-          editor.innerHTML = '';
-          updatePreview();
-        });
+      function showVisual() {
+        htmlWrap.classList.add("hidden");
+        visualWrap.classList.remove("hidden");
+        setActive(btnVisual, btnHtml);
+        if (htmlField) syncFromHtmlField();
+      }
+      function showHtml() {
+        visualWrap.classList.add("hidden");
+        htmlWrap.classList.remove("hidden");
+        setActive(btnHtml, btnVisual);
+        syncFromQuill();
       }
 
-      // image insert (embed as data URL)
-      function insertHtml(html) {
-        editor.focus();
-        document.execCommand('insertHTML', false, html);
-        updatePreview();
-      }
+      btnVisual.addEventListener("click", showVisual);
+      btnHtml.addEventListener("click", showHtml);
 
-      if (imgBtn && imgInput) {
-        imgBtn.addEventListener('click', () => imgInput.click());
-        imgInput.addEventListener('change', () => {
-          const f = imgInput.files && imgInput.files.length ? imgInput.files[0] : null;
-          if (!f) return;
-          const reader = new FileReader();
-          reader.onload = () => {
-            const src = String(reader.result || '');
-            if (!src) return;
-            insertHtml(`<img src="${src}" alt="img" style="max-width:220px;height:auto;display:block;margin:6px 0;" />`);
-            imgInput.value = '';
-          };
-          reader.readAsDataURL(f);
-        });
-      }
+      // default: visual
+      showVisual();
 
-      editor.addEventListener('input', updatePreview);
-      editor.addEventListener('blur', () => { normalizeImages(editor); updatePreview(); normalizeImages(preview); });
-      editor.addEventListener('paste', () => setTimeout(() => { normalizeImages(editor); updatePreview(); normalizeImages(preview); }, 0));
-
-      form.addEventListener('submit', () => {
-        normalizeImages(editor);
-        textarea.value = editor.innerHTML || '';
+      // При отправке формы синхронизируем из Quill в textarea
+      document.querySelector('form').addEventListener('submit', function() {
+        syncFromQuill();
       });
     })();
   </script>
