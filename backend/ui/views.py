@@ -230,7 +230,10 @@ def _apply_company_filters(*, qs, params: dict):
 
     responsible = (params.get("responsible") or "").strip()
     if responsible:
-        qs = qs.filter(responsible_id=responsible)
+        if responsible == "none":
+            qs = qs.filter(responsible__isnull=True)
+        else:
+            qs = qs.filter(responsible_id=responsible)
 
     status = (params.get("status") or "").strip()
     if status:
@@ -836,6 +839,9 @@ def company_list(request: HttpRequest) -> HttpResponse:
     ui_cfg = UiGlobalConfig.load()
     columns = ui_cfg.company_list_columns or ["name"]
 
+    # Проверяем наличие компаний без ответственного
+    has_companies_without_responsible = Company.objects.filter(responsible__isnull=True).exists()
+
     return render(
         request,
         "ui/company_list.html",
@@ -864,6 +870,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "transfer_targets": User.objects.filter(is_active=True, role__in=[User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD]).order_by("last_name", "first_name"),
             "per_page": per_page,
             "is_admin": _require_admin(user),
+            "has_companies_without_responsible": has_companies_without_responsible,
         },
     )
 

@@ -33,6 +33,9 @@
         <label class="block text-sm text-brand-dark/80 mb-1">Ответственный</label>
         <select name="responsible" class="select w-full">
           <option value="">Любой</option>
+          {% if has_companies_without_responsible %}
+            <option value="none" {% if responsible == "none" %}selected{% endif %}>None</option>
+          {% endif %}
           {% for u in responsibles %}
             <option value="{{ u.id }}" {% if responsible == u.id|stringformat:"s" %}selected{% endif %}>
               {{ u }}
