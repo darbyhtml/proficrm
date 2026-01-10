@@ -402,12 +402,24 @@ class AmoMigrateFilterForm(forms.Form):
     limit_companies = forms.IntegerField(label="Размер пачки компаний", min_value=1, max_value=5000, initial=50, required=False)
     offset = forms.IntegerField(label="Offset", required=False, initial=0)
     responsible_user_id = forms.IntegerField(label="Ответственный (amo user id)")
-    custom_field_id = forms.IntegerField(label="Кастомное поле (id)")
+    migrate_all_companies = forms.BooleanField(label="Мигрировать все компании ответственного (без фильтра по полю)", required=False, initial=False)
+    custom_field_id = forms.IntegerField(label="Кастомное поле (id)", required=False)
     custom_value_label = forms.CharField(label="Значение (текст)", required=False, initial="Новая CRM")
     custom_value_enum_id = forms.IntegerField(label="Значение (enum id)", required=False)
     import_tasks = forms.BooleanField(label="Импортировать задачи", required=False, initial=True)
     import_notes = forms.BooleanField(label="Импортировать заметки", required=False, initial=True)
     import_contacts = forms.BooleanField(label="Импортировать контакты (может быть медленно)", required=False, initial=False)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        migrate_all = cleaned_data.get("migrate_all_companies", False)
+        custom_field_id = cleaned_data.get("custom_field_id")
+        
+        # Если не выбрана миграция всех компаний, то кастомное поле обязательно
+        if not migrate_all and not custom_field_id:
+            raise forms.ValidationError("Выберите кастомное поле или включите опцию 'Мигрировать все компании ответственного'.")
+        
+        return cleaned_data
 
 
 class CompanyListColumnsForm(forms.Form):

@@ -3398,11 +3398,14 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                         batch_size = min(batch_size, 5)  # только контакты
                     else:
                         batch_size = min(batch_size, 10)  # только компании/задачи
+                    migrate_all = bool(form.cleaned_data.get("migrate_all_companies", False))
+                    custom_field_id = form.cleaned_data.get("custom_field_id") or 0
+                    
                     result = migrate_filtered(
                         client=client,
                         actor=request.user,
                         responsible_user_id=int(form.cleaned_data["responsible_user_id"]),
-                        sphere_field_id=int(form.cleaned_data["custom_field_id"]),
+                        sphere_field_id=int(custom_field_id),
                         sphere_option_id=form.cleaned_data.get("custom_value_enum_id") or None,
                         sphere_label=form.cleaned_data.get("custom_value_label") or None,
                         limit_companies=batch_size,
@@ -3412,6 +3415,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                         import_notes=bool(form.cleaned_data.get("import_notes")),
                         import_contacts=bool(form.cleaned_data.get("import_contacts")),
                         company_fields_meta=fields,
+                        skip_field_filter=migrate_all,
                     )
                     if form.cleaned_data.get("dry_run"):
                         messages.success(request, "Проверка (dry-run) выполнена.")

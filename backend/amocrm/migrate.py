@@ -602,6 +602,7 @@ def migrate_filtered(
     import_notes: bool = True,
     import_contacts: bool = False,  # по умолчанию выключено, т.к. может быть медленно
     company_fields_meta: list[dict[str, Any]] | None = None,
+    skip_field_filter: bool = False,  # если True, мигрируем все компании ответственного без фильтра по полю
 ) -> AmoMigrateResult:
     res = AmoMigrateResult(preview=[], tasks_preview=[], notes_preview=[], contacts_preview=[])
 
@@ -614,9 +615,14 @@ def migrate_filtered(
     companies = fetch_companies_by_responsible(client, responsible_user_id, with_contacts=import_contacts)
     res.companies_seen = len(companies)
     matched_all = []
-    for c in companies:
-        if _custom_has_value(c, sphere_field_id, option_id=sphere_option_id, label=sphere_label):
-            matched_all.append(c)
+    if skip_field_filter:
+        # Мигрируем все компании ответственного без фильтра по полю
+        matched_all = companies
+    else:
+        # Фильтруем по кастомному полю (как раньше)
+        for c in companies:
+            if _custom_has_value(c, sphere_field_id, option_id=sphere_option_id, label=sphere_label):
+                matched_all.append(c)
     res.companies_matched = len(matched_all)
 
     off = max(int(offset or 0), 0)
