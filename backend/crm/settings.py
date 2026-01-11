@@ -45,6 +45,23 @@ SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "dev-secret-key-change-me")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv("DJANGO_DEBUG", "1") == "1"
 
+# Проверка: в production DEBUG должен быть выключен
+# Если DJANGO_DEBUG не установлен явно, считаем это ошибкой конфигурации в production
+# (определяем production по наличию не-dev значений в ALLOWED_HOSTS или явному DJANGO_DEBUG=0)
+_django_debug_env = os.getenv("DJANGO_DEBUG", "").strip()
+_is_production_like = any(
+    h not in ("localhost", "127.0.0.1") 
+    for h in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",") 
+    if h.strip()
+)
+if _is_production_like and _django_debug_env != "0" and DEBUG:
+    import warnings
+    warnings.warn(
+        "⚠️ SECURITY WARNING: DEBUG=True detected in production-like environment. "
+        "Set DJANGO_DEBUG=0 explicitly. Continuing with DEBUG=True (unsafe).",
+        UserWarning
+    )
+
 ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()]
 # For Cloudflare Tunnel / proxies: add full origins with scheme, e.g. "https://*.trycloudflare.com"
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
@@ -232,6 +249,16 @@ SESSION_SAVE_EVERY_REQUEST = False  # Не сохранять сессию пр�
 # Mailer encryption key (Fernet). Generate once and store in env on VDS.
 MAILER_FERNET_KEY = os.getenv("MAILER_FERNET_KEY", "")
 
+# Проверка: в production MAILER_FERNET_KEY должен быть установлен, если используется mailer функциональность
+if not DEBUG and not MAILER_FERNET_KEY:
+    import warnings
+    warnings.warn(
+        "⚠️ SECURITY WARNING: MAILER_FERNET_KEY is not set in production. "
+        "Email account passwords cannot be encrypted. Set MAILER_FERNET_KEY in .env. "
+        "Generate: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"",
+        UserWarning
+    )
+
 # Public base URL for emails/unsubscribe (optional; example: https://crm.example.ru)
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
 
@@ -259,6 +286,18 @@ REST_FRAMEWORK = {
 
 # Frontend dev CORS (Vite)
 CORS_ALLOWED_ORIGINS = [o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",") if o.strip()]
+
+# Проверка: в production CORS_ALLOWED_ORIGINS не должен содержать localhost
+if not DEBUG:
+    localhost_origins = [o for o in CORS_ALLOWED_ORIGINS if "localhost" in o.lower() or "127.0.0.1" in o.lower()]
+    if localhost_origins:
+        import warnings
+        warnings.warn(
+            f"⚠️ SECURITY WARNING: CORS_ALLOWED_ORIGINS contains localhost origins in production: {localhost_origins}. "
+            "This is unsafe. Set CORS_ALLOWED_ORIGINS to your production domain(s) only.",
+            UserWarning
+        )
+
 CORS_ALLOW_CREDENTIALS = True
 
 
