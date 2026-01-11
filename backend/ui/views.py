@@ -58,6 +58,9 @@ from amocrm.client import AmoApiError, AmoClient
 from amocrm.migrate import fetch_amo_users, fetch_company_custom_fields, migrate_filtered
 from crm.utils import require_admin
 
+# Константы для фильтров
+RESPONSIBLE_FILTER_NONE = "none"  # Значение для фильтрации компаний без ответственного
+
 
 def _dup_reasons(*, c: Company, inn: str, kpp: str, name: str, address: str) -> list[str]:
     reasons: list[str] = []
@@ -231,22 +234,42 @@ def _apply_company_filters(*, qs, params: dict):
 
     responsible = (params.get("responsible") or "").strip()
     if responsible:
-        if responsible == "none":
+        if responsible == RESPONSIBLE_FILTER_NONE:
             qs = qs.filter(responsible__isnull=True)
         else:
-            qs = qs.filter(responsible_id=responsible)
+            try:
+                responsible_id = int(responsible)
+                qs = qs.filter(responsible_id=responsible_id)
+            except (ValueError, TypeError):
+                # Некорректный ID - пропускаем фильтр
+                pass
 
     status = (params.get("status") or "").strip()
     if status:
-        qs = qs.filter(status_id=status)
+        try:
+            status_id = int(status)
+            qs = qs.filter(status_id=status_id)
+        except (ValueError, TypeError):
+            # Некорректный ID - пропускаем фильтр
+            pass
 
     branch = (params.get("branch") or "").strip()
     if branch:
-        qs = qs.filter(branch_id=branch)
+        try:
+            branch_id = int(branch)
+            qs = qs.filter(branch_id=branch_id)
+        except (ValueError, TypeError):
+            # Некорректный ID - пропускаем фильтр
+            pass
 
     sphere = (params.get("sphere") or "").strip()
     if sphere:
-        qs = qs.filter(spheres__id=sphere)
+        try:
+            sphere_id = int(sphere)
+            qs = qs.filter(spheres__id=sphere_id)
+        except (ValueError, TypeError):
+            # Некорректный ID - пропускаем фильтр
+            pass
 
     contract_type = (params.get("contract_type") or "").strip()
     if contract_type:

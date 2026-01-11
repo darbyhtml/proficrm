@@ -287,12 +287,171 @@ docker-compose -f docker-compose.yml -f docker-compose.vds.yml up -d
 
 ## ЭТАП 4: PRODUCTION CHECKLIST
 
-(Будет заполнен после правок)
+### ✅ Выполненные улучшения
+
+**P0 (критичные):**
+- ✅ SEC-001: Проверка DEBUG в production
+- ✅ SEC-002: Проверка MAILER_FERNET_KEY
+- ✅ SEC-003: Проверка CORS_ALLOWED_ORIGINS
+
+**P1 (безопасные):**
+- ✅ SEC-006: Замена print() на logger
+- ✅ SEC-007: Логирование ошибок вместо pass
+- ✅ SEC-010: Вынос _require_admin() в общий модуль
+- ✅ REL-001: Добавление транзакции в bulk_transfer
+
+### 📋 Production Checklist
+
+#### Переменные окружения
+
+**Обязательные для production:**
+```bash
+# Django
+DJANGO_SECRET_KEY=<50+ символов, сгенерировать случайно>
+DJANGO_DEBUG=0
+DJANGO_ALLOWED_HOSTS=crm.groupprofi.ru,другие_домены
+DJANGO_CSRF_TRUSTED_ORIGINS=https://crm.groupprofi.ru
+
+# Database
+DB_ENGINE=postgres
+POSTGRES_DB=crm
+POSTGRES_USER=crm
+POSTGRES_PASSWORD=<сильный_пароль>
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
+
+# Security
+DJANGO_SECURE_SSL_REDIRECT=1
+DJANGO_SESSION_COOKIE_SECURE=1
+DJANGO_CSRF_COOKIE_SECURE=1
+DJANGO_SECURE_HSTS_SECONDS=3600
+
+# Mailer (если используется)
+MAILER_FERNET_KEY=<сгенерировать: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())">
+PUBLIC_BASE_URL=https://crm.groupprofi.ru
+
+# Security contact
+SECURITY_CONTACT_EMAIL=security@example.com
+
+# Redis/Celery
+REDIS_URL=redis://redis:6379/0
+CELERY_BROKER_URL=redis://redis:6379/1
+CELERY_RESULT_BACKEND=redis://redis:6379/2
+
+# CORS (если используется отдельный фронтенд)
+CORS_ALLOWED_ORIGINS=https://crm.groupprofi.ru
+```
+
+**Опциональные:**
+```bash
+DJANGO_LANGUAGE_CODE=ru-ru
+DJANGO_TIME_ZONE=Europe/Moscow
+DJANGO_DATA_UPLOAD_MAX_MEMORY_SIZE=20971520
+DJANGO_FILE_UPLOAD_MAX_MEMORY_SIZE=20971520
+```
+
+#### Команды запуска
+
+**Установка и сборка:**
+```bash
+# На сервере
+cd /opt/proficrm
+git pull
+docker-compose -f docker-compose.yml -f docker-compose.vds.yml up -d --build
+```
+
+**Миграции:**
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.vds.yml exec web python manage.py migrate
+```
+
+**Сбор статики:**
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.vds.yml exec web python manage.py collectstatic --noinput
+```
+
+**Создание суперпользователя:**
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.vds.yml exec web python manage.py createsuperuser
+```
+
+**Проверка конфигурации:**
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.vds.yml exec web python manage.py check --deploy
+```
+
+#### Наблюдаемость
+
+**Логи:**
+- Файл: `/app/backend/logs/crm.log` (в контейнере)
+- Ротация: 10 MB, 5 backup файлов
+- Уровень: INFO в production, DEBUG в development
+- Формат: структурированный (verbose)
+
+**Health Check:**
+- Endpoint: `/health/`
+- Проверяет: БД, Redis (cache), Celery
+- Формат: JSON `{"status": "ok", "checks": {...}}`
+
+**Мониторинг:**
+- Проверять логи на наличие ошибок: `docker-compose logs web | grep -i error`
+- Проверять health endpoint: `curl https://crm.groupprofi.ru/health/`
+- Проверять Celery: `docker-compose logs celery | tail -20`
+
+#### Security Hardening
+
+**Проверено:**
+- ✅ DEBUG=0 в production (с предупреждением если не установлено)
+- ✅ SECRET_KEY проверяется (50+ символов)
+- ✅ Security headers (CSP, X-Frame-Options, HSTS)
+- ✅ CSRF защита включена
+- ✅ Session cookies: HttpOnly, Secure, SameSite
+- ✅ Защита от брутфорса (rate limiting, lockout)
+- ✅ File upload валидация (размер, тип, MIME)
+
+**Рекомендации:**
+- Настроить регулярные бэкапы БД
+- Настроить мониторинг (Sentry, Prometheus или аналоги)
+- Регулярно обновлять зависимости (`pip list --outdated`)
+- Проверять логи на подозрительную активность
+
+#### Rollback Strategy
+
+**Откат изменений:**
+```bash
+cd /opt/proficrm
+git log --oneline -10  # найти нужный коммит
+git revert <commit_hash>  # или
+git reset --hard <commit_hash>
+docker-compose -f docker-compose.yml -f docker-compose.vds.yml restart web
+```
+
+**Откат миграций:**
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.vds.yml exec web python manage.py migrate <app_name> <migration_number>
+```
+
+#### Минимальные SLO
+
+- Health check должен возвращать `{"status": "ok"}` в течение 1 секунды
+- Основные страницы должны загружаться в течение 2 секунд
+- API endpoints должны отвечать в течение 1 секунды
+- Celery задачи должны выполняться в течение таймаута (30 мин)
 
 ---
 
-**Следующие шаги:**
-1. Просмотрите отчет
-2. Подтвердите, какие правки внести (рекомендую начать с P0)
-3. После подтверждения внесу изменения минимальными diff'ами
-4. После правок составлю финальный Production Checklist
+## Следующие улучшения (опционально)
+
+**Оставшиеся P1 (можно сделать позже):**
+- SEC-004: Убрать 'unsafe-inline' из CSP (требует тестирования)
+- SEC-005: Вынести магическую строку "none" в константу
+- SEC-008: Изоляция файлов по подпапкам
+- SEC-009: Убрать примеры паролей из env.example
+- PROD-001: Дополнить env.example всеми переменными
+- PROD-003: Добавить лимит на экспорт компаний
+- REL-002: Валидация типов в _apply_company_filters
+
+**P2 (низкий приоритет):**
+- PROD-002: Проверка Celery в health check (уже есть частично)
+- QUAL-001: Рефакторинг migrate_filtered()
+- PERF-001: Оптимизация N+1 запросов в API
