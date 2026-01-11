@@ -251,6 +251,7 @@ docker-compose -f docker-compose.yml -f docker-compose.vds.yml up -d
 **Изменение:** Добавлена проверка, которая выдает предупреждение, если `CORS_ALLOWED_ORIGINS` содержит localhost в production.  
 **Влияние:** Минимальное — только предупреждение, не блокирует запуск.  
 **Проверка:** При запуске с `DEBUG=0` и `CORS_ALLOWED_ORIGINS=http://localhost:5173` будет предупреждение.  
+**Статус:** ✅ Исправлено на сервере — `CORS_ALLOWED_ORIGINS=` установлено пустым, предупреждение исчезло.  
 **Откат:** Удалить строки 290-299.
 
 ### ✅ ВЫПОЛНЕНО: Критичные P1 (безопасные)
@@ -292,7 +293,7 @@ docker-compose -f docker-compose.yml -f docker-compose.vds.yml up -d
 **P0 (критичные):**
 - ✅ SEC-001: Проверка DEBUG в production
 - ✅ SEC-002: Проверка MAILER_FERNET_KEY
-- ✅ SEC-003: Проверка CORS_ALLOWED_ORIGINS
+- ✅ SEC-003: Проверка CORS_ALLOWED_ORIGINS (исправлено на сервере: `CORS_ALLOWED_ORIGINS=` установлено пустым)
 
 **P1 (безопасные):**
 - ✅ SEC-006: Замена print() на logger
@@ -342,8 +343,8 @@ REDIS_URL=redis://redis:6379/0
 CELERY_BROKER_URL=redis://redis:6379/1
 CELERY_RESULT_BACKEND=redis://redis:6379/2
 
-# CORS (если используется отдельный фронтенд)
-CORS_ALLOWED_ORIGINS=https://crm.groupprofi.ru
+# CORS (если используется отдельный фронтенд, иначе оставить пустым)
+CORS_ALLOWED_ORIGINS=
 ```
 
 **Опциональные:**
@@ -447,13 +448,9 @@ docker-compose -f docker-compose.yml -f docker-compose.vds.yml exec web python m
 ## Следующие улучшения (опционально)
 
 **Оставшиеся P1 (можно сделать позже):**
-- SEC-004: Убрать 'unsafe-inline' из CSP (требует тестирования)
-- SEC-005: Вынести магическую строку "none" в константу
-- SEC-008: Изоляция файлов по подпапкам
-- SEC-009: Убрать примеры паролей из env.example
-- PROD-001: Дополнить env.example всеми переменными
-- PROD-003: Добавить лимит на экспорт компаний
-- REL-002: Валидация типов в _apply_company_filters
+- SEC-004: Убрать 'unsafe-inline' из CSP (требует тестирования, может сломать UI)
+- SEC-008: Изоляция файлов по подпапкам (улучшение безопасности файлов)
+- PROD-003: Добавить лимит на экспорт компаний (защита от больших экспортов)
 
 **P2 (низкий приоритет):**
 - PROD-002: Проверка Celery в health check (уже есть частично)
