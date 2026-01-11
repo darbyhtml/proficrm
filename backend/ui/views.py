@@ -56,6 +56,7 @@ from ui.models import UiGlobalConfig, AmoApiConfig
 
 from amocrm.client import AmoApiError, AmoClient
 from amocrm.migrate import fetch_amo_users, fetch_company_custom_fields, migrate_filtered
+from crm.utils import require_admin
 
 
 def _dup_reasons(*, c: Company, inn: str, kpp: str, name: str, address: str) -> list[str]:
@@ -869,13 +870,14 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "company_list_columns": columns,
             "transfer_targets": User.objects.filter(is_active=True, role__in=[User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD]).order_by("last_name", "first_name"),
             "per_page": per_page,
-            "is_admin": _require_admin(user),
+            "is_admin": require_admin(user),
             "has_companies_without_responsible": has_companies_without_responsible,
         },
     )
 
 
 @login_required
+@transaction.atomic
 def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
     """
     Массовое переназначение ответственного:
@@ -938,11 +940,11 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
             return redirect("company_list")
 
     now_ts = timezone.now()
-    with transaction.atomic():
-        qs_to_update = Company.objects.filter(id__in=ids).select_related("responsible")
-        # фиксируем "старых" ответственных для лога (первых 20)
-        old_resps = list(qs_to_update.values_list("responsible_id", flat=True).distinct()[:20])
-        updated = qs_to_update.update(responsible=new_resp, branch=new_resp.branch, updated_at=now_ts)
+    # Транзакция обеспечивается декоратором @transaction.atomic на функции
+    qs_to_update = Company.objects.filter(id__in=ids).select_related("responsible")
+    # фиксируем "старых" ответственных для лога (первых 20)
+    old_resps = list(qs_to_update.values_list("responsible_id", flat=True).distinct()[:20])
+    updated = qs_to_update.update(responsible=new_resp, branch=new_resp.branch, updated_at=now_ts)
 
     messages.success(request, f"Переназначено компаний: {updated}. Новый ответственный: {new_resp}.")
     log_event(
@@ -974,7 +976,7 @@ def company_export(request: HttpRequest) -> HttpResponse:
     import csv
 
     user: User = request.user
-    if not _require_admin(user):
+    if not require_admin(user):
         log_event(
             actor=user,
             verb=ActivityEvent.Verb.UPDATE,
@@ -2581,7 +2583,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
         t.can_manage_status = _can_manage_task_status_ui(user, t)  # type: ignore[attr-defined]
         t.can_edit_task = _can_edit_task_ui(user, t)  # type: ignore[attr-defined]
 
-    is_admin = _require_admin(user)
+    is_admin = require_admin(user)
     transfer_targets = []
     if is_admin:
         transfer_targets = User.objects.filter(
@@ -2784,7 +2786,7 @@ def task_bulk_reassign(request: HttpRequest) -> HttpResponse:
         return redirect("task_list")
 
     user: User = request.user
-    if not _require_admin(user):
+    if not require_admin(user):
         messages.error(request, "Нет прав на массовое переназначение задач.")
         return redirect("task_list")
 
@@ -2943,13 +2945,12 @@ def task_edit(request: HttpRequest, task_id) -> HttpResponse:
     return render(request, "ui/task_edit.html", {"form": form, "task": task})
 
 
-def _require_admin(user: User) -> bool:
-    return bool(user.is_authenticated and user.is_active and (user.is_superuser or user.role == User.Role.ADMIN))
+# _require_admin moved to crm.utils.require_admin
 
 
 @login_required
 def settings_dashboard(request: HttpRequest) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
     return render(request, "ui/settings/dashboard.html", {})
@@ -2957,7 +2958,7 @@ def settings_dashboard(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def settings_branches(request: HttpRequest) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
     branches = Branch.objects.order_by("name")
@@ -2966,7 +2967,7 @@ def settings_branches(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def settings_branch_create(request: HttpRequest) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
     if request.method == "POST":
@@ -2982,7 +2983,7 @@ def settings_branch_create(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def settings_branch_edit(request: HttpRequest, branch_id: int) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
     branch = get_object_or_404(Branch, id=branch_id)
@@ -2999,7 +3000,7 @@ def settings_branch_edit(request: HttpRequest, branch_id: int) -> HttpResponse:
 
 @login_required
 def settings_users(request: HttpRequest) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
     users = User.objects.select_related("branch").order_by("username")
@@ -3008,7 +3009,7 @@ def settings_users(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def settings_user_create(request: HttpRequest) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
     if request.method == "POST":
@@ -3024,7 +3025,7 @@ def settings_user_create(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def settings_user_edit(request: HttpRequest, user_id: int) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
     u = get_object_or_404(User, id=user_id)
@@ -3041,7 +3042,7 @@ def settings_user_edit(request: HttpRequest, user_id: int) -> HttpResponse:
 
 @login_required
 def settings_dicts(request: HttpRequest) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
     return render(
@@ -3057,7 +3058,7 @@ def settings_dicts(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def settings_company_status_create(request: HttpRequest) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
     if request.method == "POST":
@@ -3073,7 +3074,7 @@ def settings_company_status_create(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def settings_company_sphere_create(request: HttpRequest) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
     if request.method == "POST":
@@ -3089,7 +3090,7 @@ def settings_company_sphere_create(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def settings_task_type_create(request: HttpRequest) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
     if request.method == "POST":
@@ -3105,7 +3106,7 @@ def settings_task_type_create(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def settings_activity(request: HttpRequest) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
     events = ActivityEvent.objects.select_related("actor").order_by("-created_at")[:500]
@@ -3114,7 +3115,7 @@ def settings_activity(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def settings_import(request: HttpRequest) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 
@@ -3168,7 +3169,7 @@ def settings_import(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def settings_import_tasks(request: HttpRequest) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 
@@ -3228,7 +3229,7 @@ def settings_import_tasks(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def settings_amocrm(request: HttpRequest) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 
@@ -3279,7 +3280,7 @@ def settings_amocrm(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def settings_amocrm_callback(request: HttpRequest) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 
@@ -3301,7 +3302,7 @@ def settings_amocrm_callback(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def settings_amocrm_disconnect(request: HttpRequest) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
     cfg = AmoApiConfig.load()
@@ -3317,7 +3318,7 @@ def settings_amocrm_disconnect(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 
@@ -3480,7 +3481,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
 # UI settings (admin only)
 @login_required
 def settings_company_columns(request: HttpRequest) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 
@@ -3500,7 +3501,7 @@ def settings_company_columns(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def settings_security(request: HttpRequest) -> HttpResponse:
-    if not _require_admin(request.user):
+    if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 

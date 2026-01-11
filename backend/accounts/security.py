@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import time
+import logging
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -16,6 +17,7 @@ from audit.models import ActivityEvent
 from audit.service import log_event
 
 User = get_user_model()
+logger = logging.getLogger(__name__)
 
 # Настройки защиты от брутфорса
 MAX_LOGIN_ATTEMPTS = 5  # Максимум неудачных попыток
@@ -103,8 +105,8 @@ def record_failed_login_attempt(username: str, ip: str, reason: str = "invalid_c
                 "reason": reason,
             },
         )
-    except Exception:
-        pass  # Не падаем, если логирование не удалось
+    except Exception as e:
+        logger.warning(f"Failed to log failed login attempt for {username_lower}: {e}", exc_info=True)
     
     # Блокируем пользователя при превышении лимита
     if attempts >= MAX_LOGIN_ATTEMPTS:
@@ -126,8 +128,8 @@ def record_failed_login_attempt(username: str, ip: str, reason: str = "invalid_c
                     "lockout_duration": LOCKOUT_DURATION_SECONDS,
                 },
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to log account lockout for {username_lower}: {e}", exc_info=True)
 
 
 def clear_login_attempts(username: str) -> None:

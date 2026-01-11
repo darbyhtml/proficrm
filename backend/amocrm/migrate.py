@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 import json
+import logging
 
 from django.db import transaction
 from django.utils import timezone
@@ -14,6 +15,8 @@ from companies.models import Company, CompanyNote, CompanySphere, Contact, Conta
 from tasksapp.models import Task
 
 from .client import AmoClient
+
+logger = logging.getLogger(__name__)
 
 
 def _norm(s: str) -> str:
@@ -473,11 +476,9 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
             )
             out.extend(contacts)
             if i == 0 and len(out) > 0:
-                print(f"[AMOCRM DEBUG] Fetched {len(contacts)} contacts for first batch of {len(ids_batch)} companies")
+                logger.debug(f"Fetched {len(contacts)} contacts for first batch of {len(ids_batch)} companies")
         except Exception as e:
-            print(f"[AMOCRM DEBUG] Error fetching contacts for companies batch: {e}")
-            import traceback
-            print(f"[AMOCRM DEBUG] Traceback: {traceback.format_exc()}")
+            logger.debug(f"Error fetching contacts for companies batch: {e}", exc_info=True)
             # Продолжаем для следующих батчей
             continue
     return out
@@ -551,9 +552,7 @@ def _upsert_company_from_amo(
             company.save()
         except Exception as e:
             # Если ошибка при сохранении - логируем, но не падаем (company уже создан в памяти)
-            print(f"[AMOCRM ERROR] Failed to save company in _upsert_company_from_amo (amo_id={amo_id}): {e}")
-            import traceback
-            print(f"[AMOCRM ERROR] Traceback: {traceback.format_exc()}")
+            logger.error(f"Failed to save company in _upsert_company_from_amo (amo_id={amo_id}): {e}", exc_info=True)
             # Продолжаем - company уже создан в памяти, просто не сохранен в БД
     return company, created
 
@@ -709,9 +708,7 @@ def migrate_filtered(
                     comp.save()
                 except Exception as e:
                     # Если ошибка при сохранении - логируем и пропускаем эту компанию
-                    print(f"[AMOCRM ERROR] Failed to save company {comp.name} (amo_id={comp.amocrm_company_id}): {e}")
-                    import traceback
-                    print(f"[AMOCRM ERROR] Traceback: {traceback.format_exc()}")
+                    logger.error(f"Failed to save company {comp.name} (amo_id={comp.amocrm_company_id}): {e}", exc_info=True)
                     # Пропускаем эту компанию, продолжаем со следующей
                     continue
 
@@ -726,14 +723,14 @@ def migrate_filtered(
                     # добавим остальные как контактные телефоны
                     phones = list(dict.fromkeys([*phones, *norm_phone_parts]))
                 except Exception as e:
-                    print(f"[AMOCRM ERROR] Failed to save phone for company {comp.name}: {e}")
+                    logger.error(f"Failed to save phone for company {comp.name}: {e}", exc_info=True)
             if len(norm_email_parts) > 1 and not dry_run:
                 try:
                     comp.email = norm_email_parts[0][:254]
                     comp.save(update_fields=["email"])
                     emails = list(dict.fromkeys([*emails, *norm_email_parts]))
                 except Exception as e:
-                    print(f"[AMOCRM ERROR] Failed to save email for company {comp.name}: {e}")
+                    logger.error(f"Failed to save email for company {comp.name}: {e}", exc_info=True)
 
             # Остальные телефоны/почты — в "Контакты" отдельной записью (stub)
             extra_phones = [p for p in phones[1:] if str(p).strip()]
@@ -1012,10 +1009,10 @@ def migrate_filtered(
         res.contacts_seen = 0
         res.contacts_created = 0
         
-        print(f"[AMOCRM DEBUG] Contact import check: import_contacts={import_contacts}, amo_ids={bool(amo_ids)}, len={len(amo_ids) if amo_ids else 0}")
+        logger.debug(f"Contact import check: import_contacts={import_contacts}, amo_ids={bool(amo_ids)}, len={len(amo_ids) if amo_ids else 0}")
         if import_contacts and amo_ids:
             res._debug_contacts_logged = 0  # счетчик для отладки
-            print(f"[AMOCRM DEBUG] ===== STARTING CONTACT IMPORT for {len(amo_ids)} companies =====")
+            logger.debug(f"===== STARTING CONTACT IMPORT for {len(amo_ids)} companies =====")
             try:
                 # Создаём set для быстрой проверки: контакты должны быть связаны только с компаниями из текущей пачки
                 amo_ids_set = set(amo_ids)
@@ -1038,21 +1035,21 @@ def migrate_filtered(
                         # ОТЛАДКА: проверяем структуру первого контакта
                         if len(contacts_in_company) > 0:
                             first_contact = contacts_in_company[0]
-                            print(f"[AMOCRM DEBUG] Company {amo_company_id} first contact structure:")
-                            print(f"  - Type: {type(first_contact)}")
+                            logger.debug(f"Company {amo_company_id} first contact structure:")
+                            logger.debug(f"  - Type: {type(first_contact)}")
                             if isinstance(first_contact, dict):
-                                print(f"  - Keys: {list(first_contact.keys())}")
-                                print(f"  - Has 'id': {'id' in first_contact}")
-                                print(f"  - Has 'custom_fields_values': {'custom_fields_values' in first_contact}")
-                                print(f"  - Has 'first_name': {'first_name' in first_contact}")
-                                print(f"  - Has 'last_name': {'last_name' in first_contact}")
-                                print(f"  - Sample (first 300 chars): {str(first_contact)[:300]}")
+                                logger.debug(f"  - Keys: {list(first_contact.keys())}")
+                                logger.debug(f"  - Has 'id': {'id' in first_contact}")
+                                logger.debug(f"  - Has 'custom_fields_values': {'custom_fields_values' in first_contact}")
+                                logger.debug(f"  - Has 'first_name': {'first_name' in first_contact}")
+                                logger.debug(f"  - Has 'last_name': {'last_name' in first_contact}")
+                                logger.debug(f"  - Sample (first 300 chars): {str(first_contact)[:300]}")
                         companies_with_contacts[amo_company_id] = contacts_in_company
                         amo_contacts.extend(contacts_in_company)
-                        print(f"[AMOCRM DEBUG] Company {amo_company_id} has {len(contacts_in_company)} contacts in _embedded.contacts")
+                        logger.debug(f"Company {amo_company_id} has {len(contacts_in_company)} contacts in _embedded.contacts")
                 
                 res.contacts_seen = len(amo_contacts)
-                print(f"[AMOCRM DEBUG] Extracted {res.contacts_seen} contacts from _embedded.contacts of {len(companies_with_contacts)} companies")
+                logger.debug(f"Extracted {res.contacts_seen} contacts from _embedded.contacts of {len(companies_with_contacts)} companies")
                 
                 # ОТЛАДКА: если контактов не найдено, сохраняем информацию о попытке
                 if res.contacts_seen == 0:
@@ -1084,13 +1081,13 @@ def migrate_filtered(
                 # Получаем полные данные контактов по их ID
                 full_contacts: list[dict[str, Any]] = []
                 if contact_ids:
-                    print(f"[AMOCRM DEBUG] Fetching full contact data for {len(contact_ids)} contact IDs...")
+                    logger.debug(f"Fetching full contact data for {len(contact_ids)} contact IDs...")
                     try:
                         # Запрашиваем контакты батчами по 50 ID (лимит amoCRM)
                         batch_size = 50
                         for i in range(0, len(contact_ids), batch_size):
                             ids_batch = contact_ids[i : i + batch_size]
-                            print(f"[AMOCRM DEBUG] Requesting contacts with IDs: {ids_batch[:10]}... (total {len(ids_batch)})", flush=True)
+                            logger.debug(f"Requesting contacts with IDs: {ids_batch[:10]}... (total {len(ids_batch)})")
                             contacts_batch = client.get_all_pages(
                                 "/api/v4/contacts",
                                 params={"filter[id][]": ids_batch, "with": "custom_fields"},
@@ -1098,41 +1095,39 @@ def migrate_filtered(
                                 limit=250,
                                 max_pages=10,
                             )
-                            print(f"[AMOCRM DEBUG] get_all_pages returned: type={type(contacts_batch)}, length={len(contacts_batch) if isinstance(contacts_batch, list) else 'not_list'}", flush=True)
+                            logger.debug(f"get_all_pages returned: type={type(contacts_batch)}, length={len(contacts_batch) if isinstance(contacts_batch, list) else 'not_list'}")
                             if isinstance(contacts_batch, list):
                                 full_contacts.extend(contacts_batch)
-                                print(f"[AMOCRM DEBUG] Fetched {len(contacts_batch)} full contacts for batch {i//batch_size + 1}", flush=True)
+                                logger.debug(f"Fetched {len(contacts_batch)} full contacts for batch {i//batch_size + 1}")
                             else:
-                                print(f"[AMOCRM DEBUG] ⚠️ contacts_batch is not a list: {contacts_batch}", flush=True)
+                                logger.debug(f"⚠️ contacts_batch is not a list: {contacts_batch}")
                             
                             # ОТЛАДКА: детальная структура первого контакта из батча
                             if i == 0 and contacts_batch:
                                 first_full_contact = contacts_batch[0]
-                                print(f"[AMOCRM DEBUG] ===== FIRST FULL CONTACT STRUCTURE =====")
-                                print(f"  - Type: {type(first_full_contact)}")
+                                logger.debug(f"===== FIRST FULL CONTACT STRUCTURE =====")
+                                logger.debug(f"  - Type: {type(first_full_contact)}")
                                 if isinstance(first_full_contact, dict):
-                                    print(f"  - Keys: {list(first_full_contact.keys())}")
-                                    print(f"  - Has 'id': {'id' in first_full_contact}")
-                                    print(f"  - Has 'first_name': {'first_name' in first_full_contact}, value: {first_full_contact.get('first_name')}")
-                                    print(f"  - Has 'last_name': {'last_name' in first_full_contact}, value: {first_full_contact.get('last_name')}")
-                                    print(f"  - Has 'custom_fields_values': {'custom_fields_values' in first_full_contact}")
+                                    logger.debug(f"  - Keys: {list(first_full_contact.keys())}")
+                                    logger.debug(f"  - Has 'id': {'id' in first_full_contact}")
+                                    logger.debug(f"  - Has 'first_name': {'first_name' in first_full_contact}, value: {first_full_contact.get('first_name')}")
+                                    logger.debug(f"  - Has 'last_name': {'last_name' in first_full_contact}, value: {first_full_contact.get('last_name')}")
+                                    logger.debug(f"  - Has 'custom_fields_values': {'custom_fields_values' in first_full_contact}")
                                     if 'custom_fields_values' in first_full_contact:
                                         cfv = first_full_contact.get('custom_fields_values')
-                                        print(f"  - custom_fields_values type: {type(cfv)}, length: {len(cfv) if isinstance(cfv, list) else 'not_list'}")
+                                        logger.debug(f"  - custom_fields_values type: {type(cfv)}, length: {len(cfv) if isinstance(cfv, list) else 'not_list'}")
                                         if isinstance(cfv, list) and len(cfv) > 0:
-                                            print(f"  - First custom_field: {cfv[0]}")
-                                    print(f"  - Has 'phone': {'phone' in first_full_contact}, value: {first_full_contact.get('phone')}")
-                                    print(f"  - Has 'email': {'email' in first_full_contact}, value: {first_full_contact.get('email')}")
+                                            logger.debug(f"  - First custom_field: {cfv[0]}")
+                                    logger.debug(f"  - Has 'phone': {'phone' in first_full_contact}, value: {first_full_contact.get('phone')}")
+                                    logger.debug(f"  - Has 'email': {'email' in first_full_contact}, value: {first_full_contact.get('email')}")
                                     # Показываем полную структуру (первые 1000 символов)
                                     import json
-                                    print(f"  - Full structure (first 1000 chars): {json.dumps(first_full_contact, ensure_ascii=False, indent=2)[:1000]}")
-                                print(f"[AMOCRM DEBUG] ===== END FIRST FULL CONTACT =====")
+                                    logger.debug(f"  - Full structure (first 1000 chars): {json.dumps(first_full_contact, ensure_ascii=False, indent=2)[:1000]}")
+                                logger.debug(f"===== END FIRST FULL CONTACT =====")
                     except Exception as e:
-                        print(f"[AMOCRM DEBUG] Error fetching full contact data: {type(e).__name__}: {e}")
-                        import traceback
-                        print(f"[AMOCRM DEBUG] Traceback:\n{traceback.format_exc()}")
+                        logger.debug(f"Error fetching full contact data: {type(e).__name__}: {e}", exc_info=True)
                 
-                print(f"[AMOCRM DEBUG] Total full contacts fetched: {len(full_contacts)}")
+                logger.debug(f"Total full contacts fetched: {len(full_contacts)}")
                 
                 # Отдельный счетчик для логирования структуры (не зависит от preview)
                 structure_logged_count = 0
@@ -1141,37 +1136,37 @@ def migrate_filtered(
                 for ac_idx, ac in enumerate(full_contacts):
                     # ОТЛАДКА: логируем сырую структуру контакта для первых 3
                     if structure_logged_count < 3:
-                        print(f"[AMOCRM DEBUG] ===== RAW CONTACT STRUCTURE ({structure_logged_count + 1}) [index {ac_idx}] =====", flush=True)
-                        print(f"  - Type: {type(ac)}", flush=True)
-                        print(f"  - ac is None: {ac is None}", flush=True)
+                        logger.debug(f"===== RAW CONTACT STRUCTURE ({structure_logged_count + 1}) [index {ac_idx}] =====")
+                        logger.debug(f"  - Type: {type(ac)}")
+                        logger.debug(f"  - ac is None: {ac is None}")
                         if ac is None:
-                            print(f"  - ⚠️ Contact is None!", flush=True)
+                            logger.debug(f"  - ⚠️ Contact is None!")
                         elif isinstance(ac, dict):
-                            print(f"  - Keys: {list(ac.keys())}", flush=True)
-                            print(f"  - Has 'id': {'id' in ac}, id value: {ac.get('id')}", flush=True)
-                            print(f"  - Has 'first_name': {'first_name' in ac}, value: {ac.get('first_name')}", flush=True)
-                            print(f"  - Has 'last_name': {'last_name' in ac}, value: {ac.get('last_name')}", flush=True)
-                            print(f"  - Has 'custom_fields_values': {'custom_fields_values' in ac}", flush=True)
+                            logger.debug(f"  - Keys: {list(ac.keys())}")
+                            logger.debug(f"  - Has 'id': {'id' in ac}, id value: {ac.get('id')}")
+                            logger.debug(f"  - Has 'first_name': {'first_name' in ac}, value: {ac.get('first_name')}")
+                            logger.debug(f"  - Has 'last_name': {'last_name' in ac}, value: {ac.get('last_name')}")
+                            logger.debug(f"  - Has 'custom_fields_values': {'custom_fields_values' in ac}")
                             if 'custom_fields_values' in ac:
                                 cfv = ac.get('custom_fields_values')
-                                print(f"  - custom_fields_values type: {type(cfv)}, length: {len(cfv) if isinstance(cfv, list) else 'not_list'}", flush=True)
+                                logger.debug(f"  - custom_fields_values type: {type(cfv)}, length: {len(cfv) if isinstance(cfv, list) else 'not_list'}")
                                 if isinstance(cfv, list) and len(cfv) > 0:
-                                    print(f"  - First custom_field: {cfv[0]}", flush=True)
-                            print(f"  - Has 'phone': {'phone' in ac}, value: {ac.get('phone')}", flush=True)
-                            print(f"  - Has 'email': {'email' in ac}, value: {ac.get('email')}", flush=True)
+                                    logger.debug(f"  - First custom_field: {cfv[0]}")
+                            logger.debug(f"  - Has 'phone': {'phone' in ac}, value: {ac.get('phone')}")
+                            logger.debug(f"  - Has 'email': {'email' in ac}, value: {ac.get('email')}")
                             # Полная JSON-структура
                             import json
                             try:
                                 json_str = json.dumps(ac, ensure_ascii=False, indent=2)
-                                print(f"  - Full JSON (first 2000 chars):\n{json_str[:2000]}", flush=True)
+                                logger.debug(f"  - Full JSON (first 2000 chars):\n{json_str[:2000]}")
                             except Exception as e:
-                                print(f"  - JSON dump error: {e}", flush=True)
+                                logger.debug(f"  - JSON dump error: {e}")
                                 import traceback
-                                print(f"  - Traceback: {traceback.format_exc()}", flush=True)
-                                print(f"  - Full contact (first 500 chars): {str(ac)[:500]}", flush=True)
+                                logger.debug(f"  - Traceback: {traceback.format_exc()}")
+                                logger.debug(f"  - Full contact (first 500 chars): {str(ac)[:500]}")
                         else:
-                            print(f"  - Contact is not a dict: {ac}, type: {type(ac)}", flush=True)
-                        print(f"[AMOCRM DEBUG] ===== END RAW STRUCTURE =====", flush=True)
+                            logger.debug(f"  - Contact is not a dict: {ac}, type: {type(ac)}")
+                        logger.debug(f"===== END RAW STRUCTURE =====")
                         structure_logged_count += 1
                     
                     amo_contact_id = int(ac.get("id") or 0)
@@ -1230,13 +1225,13 @@ def migrate_filtered(
                     # ОТЛАДКА: логируем начало обработки контакта
                     preview_count_before = len(res.contacts_preview) if res.contacts_preview else 0
                     if preview_count_before < 3:
-                        print(f"[AMOCRM DEBUG] Processing contact {amo_contact_id} (parsed: last_name={last_name}, first_name={first_name})", flush=True)
-                        print(f"  - raw: name={name_str}, first_name={first_name_raw}, last_name={last_name_raw}", flush=True)
-                        print(f"  - local_company: {local_company.id if local_company else None}", flush=True)
-                        print(f"  - has custom_fields_values: {'custom_fields_values' in ac if isinstance(ac, dict) else False}", flush=True)
+                        logger.debug(f"Processing contact {amo_contact_id} (parsed: last_name={last_name}, first_name={first_name})")
+                        logger.debug(f"  - raw: name={name_str}, first_name={first_name_raw}, last_name={last_name_raw}")
+                        logger.debug(f"  - local_company: {local_company.id if local_company else None}")
+                        logger.debug(f"  - has custom_fields_values: {'custom_fields_values' in ac if isinstance(ac, dict) else False}")
                         if isinstance(ac, dict) and 'custom_fields_values' in ac:
                             cfv = ac.get('custom_fields_values')
-                            print(f"  - custom_fields_values: type={type(cfv)}, length={len(cfv) if isinstance(cfv, list) else 'not_list'}", flush=True)
+                            logger.debug(f"  - custom_fields_values: type={type(cfv)}, length={len(cfv) if isinstance(cfv, list) else 'not_list'}")
                     
                     # Проверяем, не импортировали ли уже этот контакт
                     existing_contact = Contact.objects.filter(amocrm_contact_id=amo_contact_id, company=local_company).first()
@@ -1261,14 +1256,14 @@ def migrate_filtered(
                     # ОТЛАДКА: логируем структуру custom_fields для первых контактов
                     debug_count_for_extraction = len(res.contacts_preview) if res.contacts_preview else 0
                     if debug_count_for_extraction < 3:
-                        print(f"[AMOCRM DEBUG] Extracting data from custom_fields for contact {amo_contact_id}:", flush=True)
-                        print(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}", flush=True)
-                        print(f"  - ac.get('custom_fields_values'): {ac.get('custom_fields_values')}", flush=True)
+                        logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
+                        logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}")
+                        logger.debug(f"  - ac.get('custom_fields_values'): {ac.get('custom_fields_values')}")
                     
                     for cf_idx, cf in enumerate(custom_fields):
                         if not isinstance(cf, dict):
                             if debug_count_for_extraction < 3:
-                                print(f"  - [field {cf_idx}] Skipped: not a dict, type={type(cf)}", flush=True)
+                                logger.debug(f"  - [field {cf_idx}] Skipped: not a dict, type={type(cf)}")
                             continue
                         field_id = int(cf.get("field_id") or 0)
                         # ВАЖНО: в amoCRM используется field_code (не code) и field_name (не name)
@@ -1278,11 +1273,11 @@ def migrate_filtered(
                         values = cf.get("values") or []
                         if not isinstance(values, list):
                             if debug_count_for_extraction < 3:
-                                print(f"  - [field {cf_idx}] Skipped: values not a list, type={type(values)}", flush=True)
+                                logger.debug(f"  - [field {cf_idx}] Skipped: values not a list, type={type(values)}")
                             continue
                         
                         if debug_count_for_extraction < 3:
-                            print(f"  - [field {cf_idx}] field_id={field_id}, field_code={field_code}, field_name={field_name}, field_type={field_type}, values_count={len(values)}", flush=True)
+                            logger.debug(f"  - [field {cf_idx}] field_id={field_id}, field_code={field_code}, field_name={field_name}, field_type={field_type}, values_count={len(values)}")
                         
                         for v_idx, v in enumerate(values):
                             # Значение может быть как dict (с ключом "value"), так и строкой
@@ -1316,21 +1311,21 @@ def migrate_filtered(
                                                 ("холодный" in field_name and "звонок" in field_name))
                             
                             if debug_count_for_extraction < 3:
-                                print(f"    [value {v_idx}] val={val[:50]}, is_phone={is_phone}, is_email={is_email}, is_position={is_position}, is_cold_call_date={is_cold_call_date}", flush=True)
+                                logger.debug(f"    [value {v_idx}] val={val[:50]}, is_phone={is_phone}, is_email={is_email}, is_position={is_position}, is_cold_call_date={is_cold_call_date}")
                             
                             if is_phone:
                                 phones.extend(_split_multi(val))
                                 if debug_count_for_extraction < 3:
-                                    print(f"      -> Added to phones: {_split_multi(val)}", flush=True)
+                                    logger.debug(f"      -> Added to phones: {_split_multi(val)}")
                             elif is_email:
                                 emails.append(val)
                                 if debug_count_for_extraction < 3:
-                                    print(f"      -> Added to emails: {val}", flush=True)
+                                    logger.debug(f"      -> Added to emails: {val}")
                             elif is_position:
                                 if not position:
                                     position = val
                                     if debug_count_for_extraction < 3:
-                                        print(f"      -> Set position: {val}", flush=True)
+                                        logger.debug(f"      -> Set position: {val}")
                             elif is_cold_call_date:
                                 # Холодный звонок: val - это timestamp (Unix timestamp)
                                 # Сохраняем для последующей обработки (берем первое значение, если их несколько)
@@ -1339,10 +1334,10 @@ def migrate_filtered(
                                         cold_call_timestamp = int(float(val))
                                         # Будем использовать это значение при создании/обновлении контакта
                                         if debug_count_for_extraction < 3:
-                                            print(f"      -> Found cold call date: {cold_call_timestamp}", flush=True)
+                                            logger.debug(f"      -> Found cold call date: {cold_call_timestamp}")
                                     except (ValueError, TypeError):
                                         if debug_count_for_extraction < 3:
-                                            print(f"      -> Invalid cold call timestamp: {val}", flush=True)
+                                            logger.debug(f"      -> Invalid cold call timestamp: {val}")
                                         cold_call_timestamp = None
                     
                     # Убираем дубликаты
@@ -1421,31 +1416,31 @@ def migrate_filtered(
                         res.contacts_preview.append(contact_debug)
                         # ОТЛАДКА: логируем, что добавили в preview
                         if preview_count < 3:
-                            print(f"[AMOCRM DEBUG] Added contact {amo_contact_id} to preview:", flush=True)
-                            print(f"  - phones_found: {phones}", flush=True)
-                            print(f"  - emails_found: {emails}", flush=True)
-                            print(f"  - position_found: {position}", flush=True)
-                            print(f"  - custom_fields_count: {len(custom_fields)}", flush=True)
-                            print(f"  - custom_fields_sample length: {len(custom_fields_debug)}", flush=True)
+                            logger.debug(f"Added contact {amo_contact_id} to preview:")
+                            logger.debug(f"  - phones_found: {phones}")
+                            logger.debug(f"  - emails_found: {emails}")
+                            logger.debug(f"  - position_found: {position}")
+                            logger.debug(f"  - custom_fields_count: {len(custom_fields)}")
+                            logger.debug(f"  - custom_fields_sample length: {len(custom_fields_debug)}")
                         # Не увеличиваем _debug_contacts_logged здесь, т.к. используем preview_count
                         
                         # Также логируем в консоль
-                        print(f"[AMOCRM DEBUG] Contact {amo_contact_id}:")
-                        print(f"  - first_name: {first_name}")
-                        print(f"  - last_name: {last_name}")
-                        print(f"  - phones found: {phones}")
-                        print(f"  - emails found: {emails}")
-                        print(f"  - position found: {position}")
-                        print(f"  - custom_fields_values count: {len(custom_fields)}")
+                        logger.debug(f"Contact {amo_contact_id}:")
+                        logger.debug(f"  - first_name: {first_name}")
+                        logger.debug(f"  - last_name: {last_name}")
+                        logger.debug(f"  - phones found: {phones}")
+                        logger.debug(f"  - emails found: {emails}")
+                        logger.debug(f"  - position found: {position}")
+                        logger.debug(f"  - custom_fields_values count: {len(custom_fields)}")
                         if custom_fields:
-                            print(f"  - custom_fields sample (first 3):")
+                            logger.debug(f"  - custom_fields sample (first 3):")
                             for idx, cf in enumerate(custom_fields[:3]):
-                                print(f"    [{idx}] field_id={cf.get('field_id')}, code={cf.get('code')}, name={cf.get('name')}, type={cf.get('type')}, values={cf.get('values')}")
+                                logger.debug(f"    [{idx}] field_id={cf.get('field_id')}, code={cf.get('code')}, name={cf.get('name')}, type={cf.get('type')}, values={cf.get('values')}")
                         else:
-                            print(f"  - ⚠️ custom_fields_values пуст или отсутствует")
-                        print(f"  - raw contact top-level keys: {list(ac.keys())[:15]}")
-                        print(f"  - has phone field: {bool(ac.get('phone'))}")
-                        print(f"  - has email field: {bool(ac.get('email'))}")
+                            logger.debug(f"  - ⚠️ custom_fields_values пуст или отсутствует")
+                        logger.debug(f"  - raw contact top-level keys: {list(ac.keys())[:15]}")
+                        logger.debug(f"  - has phone field: {bool(ac.get('phone'))}")
+                        logger.debug(f"  - has email field: {bool(ac.get('email'))}")
                     
                     # Обновляем или создаём контакт
                     # Обрабатываем данные о холодном звонке из amoCRM
@@ -1513,7 +1508,7 @@ def migrate_filtered(
                             # Логируем результат обновления
                             debug_count_after = getattr(res, '_debug_contacts_logged', 0)
                             if debug_count_after < 10:
-                                print(f"  - Updated: phones={phones_added}, emails={emails_added}, position={bool(position)}")
+                                logger.debug(f"  - Updated: phones={phones_added}, emails={emails_added}, position={bool(position)}")
                         else:
                             res.contacts_created += 1
                     else:
@@ -1554,19 +1549,19 @@ def migrate_filtered(
                             # Логируем результат сохранения
                             debug_count_after = getattr(res, '_debug_contacts_logged', 0)
                             if debug_count_after < 10:
-                                print(f"  - Saved: phones={phones_added}, emails={emails_added}, position={bool(position)}")
+                                logger.debug(f"  - Saved: phones={phones_added}, emails={emails_added}, position={bool(position)}")
                         else:
                             res.contacts_created += 1
             except Exception as e:
                 # Если контакты недоступны — не валим всю миграцию
-                print(f"[AMOCRM DEBUG] ERROR importing contacts: {type(e).__name__}: {e}")
+                logger.debug(f"ERROR importing contacts: {type(e).__name__}: {e}")
                 import traceback
-                print(f"[AMOCRM DEBUG] Traceback:\n{traceback.format_exc()}")
+                logger.debug("Contact import error", exc_info=True)
                 pass
             finally:
-                print(f"[AMOCRM DEBUG] ===== CONTACT IMPORT FINISHED: created={res.contacts_created}, seen={res.contacts_seen} =====")
+                logger.debug(f"===== CONTACT IMPORT FINISHED: created={res.contacts_created}, seen={res.contacts_seen} =====")
         else:
-            print(f"[AMOCRM DEBUG] Contact import SKIPPED: import_contacts={import_contacts}, amo_ids={bool(amo_ids)}")
+            logger.debug(f"Contact import SKIPPED: import_contacts={import_contacts}, amo_ids={bool(amo_ids)}")
 
         if dry_run:
             transaction.set_rollback(True)
@@ -1577,8 +1572,8 @@ def migrate_filtered(
         # Логируем ошибку, но не падаем - возвращаем частичный результат
         import traceback
         error_details = traceback.format_exc()
-        print(f"[AMOCRM ERROR] Migration failed: {type(e).__name__}: {e}")
-        print(f"[AMOCRM ERROR] Traceback:\n{error_details}")
+        logger.error(f"Migration failed: {type(e).__name__}: {e}")
+        logger.error(f"Traceback:\n{error_details}")
         # Устанавливаем флаг ошибки в результате
         res.error = str(e)
         res.error_traceback = error_details

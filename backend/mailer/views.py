@@ -19,10 +19,7 @@ from mailer.forms import CampaignForm, CampaignGenerateRecipientsForm, CampaignR
 from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, UnsubscribeToken
 from mailer.smtp_sender import build_message, send_via_smtp
 from mailer.utils import html_to_text
-
-
-def _require_admin(user: User) -> bool:
-    return bool(user.is_authenticated and user.is_active and (user.is_superuser or user.role == User.Role.ADMIN))
+from crm.utils import require_admin
 
 def _contains_links(value: str) -> bool:
     v = (value or "").lower()
@@ -77,7 +74,7 @@ def mail_settings(request: HttpRequest) -> HttpResponse:
     Настройки SMTP. Редактирует только администратор (глобально для всей CRM).
     """
     user: User = request.user
-    is_admin = _require_admin(user)
+    is_admin = require_admin(user)
     cfg = GlobalMailAccount.load()
 
     if request.method == "POST":
