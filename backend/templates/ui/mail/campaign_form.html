@@ -31,17 +31,17 @@
         <label class="block text-sm muted mb-1">Вложение (опционально)</label>
         {{ form.attachment }}
         {% if mode == 'edit' and campaign.attachment %}
-          <div class="mt-2 p-3 bg-brand-soft/30 rounded-lg border border-brand-soft">
-            <div class="flex items-center justify-between">
-              <div>
-                <div class="text-sm font-medium">{{ campaign.attachment.name|slice:"-50:" }}</div>
-                <div class="text-xs muted-2 mt-1">
-                  Размер: {{ campaign.attachment.size|filesizeformat }} · 
-                  Формат: {{ campaign.attachment.name|slice:"-4:"|upper }}
-                </div>
+          <div class="mt-2 p-2 bg-brand-soft/30 rounded-lg border border-brand-soft flex items-center gap-2">
+            <svg class="w-4 h-4 text-brand-dark/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+            </svg>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium truncate">{{ campaign.attachment.name|slice:"-50:" }}</div>
+              <div class="text-xs muted-2 mt-0.5">
+                {{ campaign.attachment.size|filesizeformat }} · {{ campaign.attachment.name|slice:"-4:"|upper }}
               </div>
-              <a href="{{ campaign.attachment.url }}" target="_blank" class="btn btn-outline text-xs">Открыть</a>
             </div>
+            <a href="{{ campaign.attachment.url }}" target="_blank" class="btn btn-outline text-xs flex-shrink-0">Открыть</a>
           </div>
         {% endif %}
         <div class="text-xs muted-2 mt-1">Максимальный размер файла: 15 МБ. Файл будет прикреплен ко всем письмам кампании.</div>

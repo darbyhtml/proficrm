@@ -670,6 +670,10 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
         messages.error(request, "Некуда отправить тест (не задан email).")
         return redirect("campaign_detail", campaign_id=camp.id)
 
+    # ВАЖНО: Сохраняем текущие статусы получателей, чтобы убедиться, что они не изменятся
+    # (хотя в этой функции мы их не трогаем, это дополнительная защита)
+    recipients_before = list(camp.recipients.values_list("id", "status"))
+
     base_html, base_text = _apply_signature(user=user, body_html=(camp.body_html or ""), body_text=(html_to_text(camp.body_html or "") or camp.body_text or ""))
 
     msg = build_message(
@@ -685,9 +689,22 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
     )
     try:
         send_via_smtp(smtp_cfg, msg)
+        # ВАЖНО: Создаем SendLog БЕЗ recipient, чтобы не было связи с получателями
         SendLog.objects.create(campaign=camp, recipient=None, account=None, provider="smtp_global", status="sent", message_id=str(msg["Message-ID"]))
         messages.success(request, f"Тестовое письмо отправлено на {to_email}.")
     except Exception as ex:
         SendLog.objects.create(campaign=camp, recipient=None, account=None, provider="smtp_global", status="failed", error=str(ex))
         messages.error(request, f"Ошибка тестовой отправки: {ex}")
+    
+    # ВАЖНО: Проверяем, что статусы получателей не изменились (дополнительная защита)
+    recipients_after = list(camp.recipients.values_list("id", "status"))
+    if recipients_before != recipients_after:
+        # Если статусы изменились - это ошибка, логируем и восстанавливаем
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"КРИТИЧЕСКАЯ ОШИБКА: Статусы получателей изменились при отправке тестового письма! Campaign: {camp.id}")
+        # Восстанавливаем статусы
+        for r_id, old_status in recipients_before:
+            CampaignRecipient.objects.filter(id=r_id).update(status=old_status)
+    
     return redirect("campaign_detail", campaign_id=camp.id)
