@@ -3067,11 +3067,11 @@ def task_list(request: HttpRequest) -> HttpResponse:
             qs = qs.order_by("created_by__last_name", "created_by__first_name", "-created_at")
         else:
             qs = qs.order_by("-created_by__last_name", "-created_by__first_name", "-created_at")
-    elif sort_field == "type":
+    elif sort_field == "created_at":
         if sort_dir == "asc":
-            qs = qs.order_by("type__name", "-created_at")
+            qs = qs.order_by("created_at")
         else:
-            qs = qs.order_by("-type__name", "-created_at")
+            qs = qs.order_by("-created_at")
     elif sort_field == "title":
         if sort_dir == "asc":
             qs = qs.order_by("title", "-created_at")
