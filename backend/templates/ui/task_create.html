@@ -23,7 +23,16 @@
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label class="block text-sm text-brand-dark/80 mb-1">Компания</label>
-          {{ form.company }}
+          <div class="space-y-1">
+            <input
+              type="text"
+              id="task-company-search"
+              placeholder="Начните вводить название компании…"
+              class="w-full rounded-lg border px-3 py-2 text-sm"
+              autocomplete="off"
+            >
+            {{ form.company }}
+          </div>
         </div>
         <div>
           <label class="block text-sm text-brand-dark/80 mb-1">Тип</label>
@@ -69,6 +78,33 @@
       </div>
     </form>
   </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const searchInput = document.getElementById('task-company-search');
+      const companySelect = document.getElementById('id_company');
+      if (!searchInput || !companySelect) return;
+
+      searchInput.addEventListener('input', () => {
+        const q = searchInput.value.trim().toLowerCase();
+        if (!q) {
+          return;
+        }
+        let firstMatch = null;
+        for (const opt of companySelect.options) {
+          if (!opt.value) continue;
+          const text = (opt.text || '').toLowerCase();
+          if (text.includes(q)) {
+            firstMatch = opt;
+            break;
+          }
+        }
+        if (firstMatch) {
+          companySelect.value = firstMatch.value;
+        }
+      });
+    });
+  </script>
 {% endblock %}
 
 

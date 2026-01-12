@@ -255,7 +255,19 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
 
     fid_inn = _find_field_id(field_meta, codes=["inn"], name_contains=["инн"])
     fid_kpp = _find_field_id(field_meta, codes=["kpp"], name_contains=["кпп"])
-    fid_legal = _find_field_id(field_meta, name_contains=["юрид", "юр."])
+    # Юридическое название: пытаемся найти по разным вариантам названия поля
+    fid_legal = _find_field_id(
+        field_meta,
+        name_contains=[
+            "юрид",
+            "юр.",
+            "юр ",
+            "полное наимен",
+            "наименование юр",
+            "название юр",
+            "юрлицо",
+        ],
+    )
     fid_addr = _find_field_id(field_meta, codes=["address"], name_contains=["адрес"])
     fid_phone = _find_field_id(field_meta, codes=["phone"], name_contains=["телефон"])
     fid_email = _find_field_id(field_meta, codes=["email"], name_contains=["email", "e-mail", "почта"])
