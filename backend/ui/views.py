@@ -3200,6 +3200,11 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
 def task_edit(request: HttpRequest, task_id) -> HttpResponse:
     user: User = request.user
     task = get_object_or_404(Task.objects.select_related("company", "assigned_to", "created_by", "type"), id=task_id)
+    
+    # Если задача выполнена, редиректим на список с модальным окном просмотра
+    if task.status == Task.Status.DONE:
+        return redirect(f"/tasks/?view_task={task.id}")
+    
     if not _can_edit_task_ui(user, task):
         messages.error(request, "Нет прав на редактирование этой задачи.")
         return redirect("task_list")
