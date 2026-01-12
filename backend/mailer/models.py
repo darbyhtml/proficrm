@@ -117,6 +117,7 @@ class Campaign(models.Model):
     body_text = models.TextField("Текст письма (plain)", blank=True, default="")
     body_html = models.TextField("Текст письма (HTML)", blank=True, default="")
     sender_name = models.CharField("Имя отправителя", max_length=120, blank=True, default="")
+    attachment = models.FileField("Вложение", upload_to="campaign_attachments/%Y/%m/", blank=True, null=True, help_text="Файл, который будет прикреплен ко всем письмам кампании")
 
     # Снэпшот фильтра (пока просто сохраняем параметры)
     filter_meta = models.JSONField("Фильтр", default=dict, blank=True)

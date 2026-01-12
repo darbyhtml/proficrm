@@ -86,6 +86,7 @@ def send_pending_emails(self, batch_size: int = 50):
                         from_email=((smtp_cfg.from_email or "").strip() or (smtp_cfg.smtp_username or "").strip()),
                         from_name=((camp.sender_name or "").strip() or (smtp_cfg.from_name or "CRM ПРОФИ").strip()),
                         reply_to=(user.email or "").strip(),
+                        attachment=camp.attachment if camp.attachment else None,
                     )
                     
                     send_via_smtp(smtp_cfg, msg)

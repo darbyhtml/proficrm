@@ -103,13 +103,23 @@ class GlobalMailAccountForm(forms.ModelForm):
 class CampaignForm(forms.ModelForm):
     class Meta:
         model = Campaign
-        fields = ["name", "subject", "sender_name", "body_html"]
+        fields = ["name", "subject", "sender_name", "body_html", "attachment"]
         widgets = {
             "name": forms.TextInput(attrs={"class": "input"}),
             "subject": forms.TextInput(attrs={"class": "input"}),
             "sender_name": forms.TextInput(attrs={"class": "input", "placeholder": "Например: CRM ПРОФИ / Отдел продаж"}),
             "body_html": forms.Textarea(attrs={"class": "textarea", "rows": 10, "placeholder": "<p>...</p>", "id": "id_body_html"}),
+            "attachment": forms.FileInput(attrs={"class": "input", "accept": ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv,.zip,.rar"}),
         }
+    
+    def clean_attachment(self):
+        attachment = self.cleaned_data.get("attachment")
+        if attachment:
+            # Проверка размера файла (максимум 15 МБ)
+            max_size = 15 * 1024 * 1024  # 15 МБ
+            if attachment.size > max_size:
+                raise forms.ValidationError(f"Размер файла не должен превышать 15 МБ. Текущий размер: {attachment.size / 1024 / 1024:.2f} МБ")
+        return attachment
 
 
 class CampaignGenerateRecipientsForm(forms.Form):

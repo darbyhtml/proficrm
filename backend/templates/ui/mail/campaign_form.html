@@ -12,7 +12,7 @@
       </div>
     </div>
 
-    <form method="post" class="card card-pad space-y-3">
+    <form method="post" enctype="multipart/form-data" class="card card-pad space-y-3">
       {% csrf_token %}
       <div>
         <label class="block text-sm muted mb-1">Название</label>
@@ -26,6 +26,25 @@
         <label class="block text-sm muted mb-1">Имя отправителя (опционально)</label>
         {{ form.sender_name }}
         <div class="text-xs muted-2 mt-1">Если оставить пустым — будет использовано имя по умолчанию из Почта → Настройки.</div>
+      </div>
+      <div>
+        <label class="block text-sm muted mb-1">Вложение (опционально)</label>
+        {{ form.attachment }}
+        {% if mode == 'edit' and campaign.attachment %}
+          <div class="mt-2 p-3 bg-brand-soft/30 rounded-lg border border-brand-soft">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-sm font-medium">{{ campaign.attachment.name|slice:"-50:" }}</div>
+                <div class="text-xs muted-2 mt-1">
+                  Размер: {{ campaign.attachment.size|filesizeformat }} · 
+                  Формат: {{ campaign.attachment.name|slice:"-4:"|upper }}
+                </div>
+              </div>
+              <a href="{{ campaign.attachment.url }}" target="_blank" class="btn btn-outline text-xs">Открыть</a>
+            </div>
+          </div>
+        {% endif %}
+        <div class="text-xs muted-2 mt-1">Максимальный размер файла: 15 МБ. Файл будет прикреплен ко всем письмам кампании.</div>
       </div>
       <div>
         <div class="flex items-end justify-between gap-2 mb-2">

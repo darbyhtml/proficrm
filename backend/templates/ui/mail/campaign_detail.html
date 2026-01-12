@@ -13,6 +13,12 @@
           <span class="badge">From: <b class="ml-1">{{ smtp_from_email|default:"—" }}</b></span>
           <span class="badge">Имя: <b class="ml-1">{{ campaign.sender_name|default:smtp_from_name_default }}</b></span>
           <span class="badge">Reply‑To: <b class="ml-1">{{ request.user.email|default:"—" }}</b></span>
+          {% if campaign.attachment %}
+            <span class="badge bg-blue-100 text-blue-800">
+              📎 Вложение: <b class="ml-1">{{ campaign.attachment.name|slice:"-50:" }}</b>
+              ({{ campaign.attachment.size|filesizeformat }})
+            </span>
+          {% endif %}
         </div>
       </div>
     </div>

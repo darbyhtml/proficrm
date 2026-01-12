@@ -151,7 +151,7 @@ def campaign_create(request: HttpRequest) -> HttpResponse:
     user: User = request.user
     smtp_cfg = GlobalMailAccount.load()
     if request.method == "POST":
-        form = CampaignForm(request.POST)
+        form = CampaignForm(request.POST, request.FILES)
         if form.is_valid():
             camp: Campaign = form.save(commit=False)
             camp.created_by = user
@@ -184,7 +184,7 @@ def campaign_edit(request: HttpRequest, campaign_id) -> HttpResponse:
     smtp_cfg = GlobalMailAccount.load()
 
     if request.method == "POST":
-        form = CampaignForm(request.POST, instance=camp)
+        form = CampaignForm(request.POST, request.FILES, instance=camp)
         if form.is_valid():
             form.save()
             messages.success(request, "Кампания сохранена.")
@@ -617,6 +617,7 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
             from_email=((smtp_cfg.from_email or "").strip() or (smtp_cfg.smtp_username or "").strip()),
             from_name=((camp.sender_name or "").strip() or (smtp_cfg.from_name or "CRM ПРОФИ").strip()),
             reply_to=(user.email or "").strip(),
+            attachment=camp.attachment if camp.attachment else None,
         )
 
         try:
@@ -649,6 +650,9 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
 def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
     """
     Отправка тестового письма кампании на себя (на from_email/smtp_username).
+    
+    ВАЖНО: Тестовое письмо НЕ должно менять статус получателей (CampaignRecipient.status).
+    Тестовое письмо отправляется только для проверки содержимого и не создает запись CampaignRecipient.
     """
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
@@ -677,6 +681,7 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
         from_email=((smtp_cfg.from_email or "").strip() or (smtp_cfg.smtp_username or "").strip()),
         from_name=((camp.sender_name or "").strip() or (smtp_cfg.from_name or "CRM ПРОФИ").strip()),
         reply_to=(user.email or "").strip(),
+        attachment=camp.attachment if camp.attachment else None,
     )
     try:
         send_via_smtp(smtp_cfg, msg)

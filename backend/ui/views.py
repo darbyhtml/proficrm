@@ -211,12 +211,15 @@ def _companies_with_overdue_flag(*, now):
     )
 
 
-def _apply_company_filters(*, qs, params: dict):
+def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | None = None):
     """
     Единые фильтры компаний для:
     - списка компаний
     - экспорта
     - массового переназначения (apply_mode=filtered)
+    
+    Если default_responsible_id указан и параметр responsible отсутствует в params,
+    применяется фильтр по default_responsible_id.
     """
     q = (params.get("q") or "").strip()
     if q:
@@ -233,7 +236,11 @@ def _apply_company_filters(*, qs, params: dict):
         )
 
     responsible = (params.get("responsible") or "").strip()
-    if responsible:
+    # Если параметр responsible не указан и есть default_responsible_id, применяем фильтр по умолчанию
+    if not responsible and default_responsible_id is not None:
+        qs = qs.filter(responsible_id=default_responsible_id)
+        responsible = str(default_responsible_id)  # Для возврата в результатах
+    elif responsible:
         if responsible == RESPONSIBLE_FILTER_NONE:
             qs = qs.filter(responsible__isnull=True)
         else:
@@ -808,7 +815,11 @@ def company_list(request: HttpRequest) -> HttpResponse:
         .select_related("responsible", "branch", "status")
         .prefetch_related("spheres")
     )
-    f = _apply_company_filters(qs=qs, params=request.GET)
+    # По умолчанию фильтруем по текущему пользователю, если параметр responsible не указан
+    default_responsible_id = None
+    if "responsible" not in request.GET:
+        default_responsible_id = user.id
+    f = _apply_company_filters(qs=qs, params=request.GET, default_responsible_id=default_responsible_id)
     qs = f["qs"]
 
     # Sorting (asc/desc)
@@ -2566,7 +2577,8 @@ def task_list(request: HttpRequest) -> HttpResponse:
         qs = qs.filter(status=status)
 
     mine = (request.GET.get("mine") or "").strip()
-    if mine == "1":
+    # По умолчанию фильтруем по текущему пользователю, если не указан параметр mine
+    if mine == "1" or (mine == "" and "mine" not in request.GET):
         qs = qs.filter(assigned_to=user)
 
     overdue = (request.GET.get("overdue") or "").strip()

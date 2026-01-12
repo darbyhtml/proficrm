@@ -32,6 +32,7 @@ def build_message(
     from_email: Optional[str] = None,
     from_name: Optional[str] = None,
     reply_to: Optional[str] = None,
+    attachment: Optional[any] = None,
 ) -> EmailMessage:
     msg = EmailMessage()
     msg["Subject"] = subject
@@ -51,6 +52,27 @@ def build_message(
         msg.add_alternative(body_html, subtype="html", charset="utf-8")
     else:
         msg.set_content(body_text or " ", subtype="plain", charset="utf-8")
+
+    # Добавляем вложение, если оно есть
+    if attachment:
+        import mimetypes
+        attachment.open()
+        try:
+            content = attachment.read()
+            # Определяем MIME-тип по расширению файла
+            mime_type, _ = mimetypes.guess_type(attachment.name)
+            if mime_type:
+                maintype, subtype = mime_type.split('/', 1)
+            else:
+                maintype, subtype = "application", "octet-stream"
+            msg.add_attachment(
+                content,
+                maintype=maintype,
+                subtype=subtype,
+                filename=attachment.name,
+            )
+        finally:
+            attachment.close()
 
     return msg
 
