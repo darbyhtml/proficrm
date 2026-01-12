@@ -515,7 +515,7 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
                     created += 1
 
     # 2) Добавляем основной email компании (если включено и лимит не достигнут)
-    if include_company_email and created < limit:
+    if include_company_email and created < limit and company_ids:
         for c in Company.objects.filter(id__in=company_ids).only("id", "email").iterator():
             if created >= limit:
                 break
