@@ -346,7 +346,7 @@
                 </div>
               {% endif %}
             </div>
-            {% if company.primary_contact_is_cold_call %}
+            {% if company.primary_contact_is_cold_call or company.primary_cold_marked_at %}
               <div class="mt-1 text-xs text-brand-dark/60">
                 <span class="font-medium">Холодный звонок:</span>
                 {% if company.primary_cold_marked_at %}
@@ -354,6 +354,9 @@
                 {% endif %}
                 {% if company.primary_cold_marked_by %}
                   ({{ company.primary_cold_marked_by }})
+                {% endif %}
+                {% if not company.primary_contact_is_cold_call and company.primary_cold_marked_at %}
+                  <span class="text-brand-dark/40 ml-1">(откат)</span>
                 {% endif %}
               </div>
             {% endif %}
@@ -535,7 +538,7 @@
                         <span class="badge badge-warn ml-2" style="padding:.1rem .35rem;font-size:.65rem">Холодный</span>
                       {% endif %}
                     </div>
-                    {% if c.is_cold_call %}
+                    {% if c.is_cold_call or c.cold_marked_at %}
                       <div class="mt-1 text-xs text-brand-dark/60">
                         <span class="font-medium">Холодный звонок:</span>
                         {% if c.cold_marked_at %}
@@ -543,6 +546,9 @@
                         {% endif %}
                         {% if c.cold_marked_by %}
                           ({{ c.cold_marked_by }})
+                        {% endif %}
+                        {% if not c.is_cold_call and c.cold_marked_at %}
+                          <span class="text-brand-dark/40 ml-1">(откат)</span>
                         {% endif %}
                       </div>
                     {% endif %}

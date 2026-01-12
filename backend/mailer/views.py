@@ -452,7 +452,6 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
     
     # Если включены email'ы контактов, но не выбраны типы - берем все
     if include_contact_emails and not contact_email_types:
-        from companies.models import ContactEmail
         contact_email_types = [choice[0] for choice in ContactEmail.EmailType.choices]
 
     # Компании (вся база видна всем пользователям) + простая сегментация (MVP)
