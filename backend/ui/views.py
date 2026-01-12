@@ -2086,6 +2086,47 @@ def company_cold_call_reset(request: HttpRequest, company_id) -> HttpResponse:
 
 
 @login_required
+def contact_cold_call_reset(request: HttpRequest, contact_id) -> HttpResponse:
+    """
+    Откатить отметку холодного звонка для контакта.
+    Доступно только администраторам.
+    """
+    if request.method != "POST":
+        return redirect("dashboard")
+
+    user: User = request.user
+    if not require_admin(user):
+        messages.error(request, "Только администратор может откатить отметку холодного звонка.")
+        return redirect("dashboard")
+
+    contact = get_object_or_404(Contact.objects.select_related("company"), id=contact_id)
+    company = contact.company
+    if not company:
+        messages.error(request, "Контакт не привязан к компании.")
+        return redirect("dashboard")
+
+    if not contact.is_cold_call:
+        messages.info(request, "Контакт не отмечен как холодный.")
+        return redirect("company_detail", company_id=company.id)
+
+    # Откатываем отметку
+    contact.is_cold_call = False
+    contact.save(update_fields=["is_cold_call"])
+    # НЕ удаляем поля cold_marked_at, cold_marked_by, cold_marked_call для истории
+
+    messages.success(request, "Отметка холодного звонка отменена (контакт).")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="contact",
+        entity_id=str(contact.id),
+        company_id=company.id,
+        message="Откат: холодный звонок (контакт)",
+    )
+    return redirect("company_detail", company_id=company.id)
+
+
+@login_required
 def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> HttpResponse:
     """
     Отметить конкретный номер телефона контакта как холодный звонок.
