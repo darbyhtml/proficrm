@@ -106,7 +106,7 @@
                   </div>
                 </a>
               </th>
-              <th class="text-left px-2 py-2" style="width:161px;min-width:161px;max-width:161px">
+              <th class="text-left px-2 py-2" style="width:148px;min-width:148px;max-width:148px">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=company&dir={% if sort_field == 'company' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'company' %}text-brand-orange font-bold{% endif %}">
                   Компания
                   <div class="flex flex-col gap-0.5">
@@ -119,7 +119,7 @@
                   </div>
                 </a>
               </th>
-              <th class="text-left px-2 py-2" style="width:161px;min-width:161px;max-width:161px">
+              <th class="text-left px-2 py-2" style="width:148px;min-width:148px;max-width:148px">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=assignee&dir={% if sort_field == 'assignee' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'assignee' %}text-brand-orange font-bold{% endif %}">
                   Кому
                   <div class="flex flex-col gap-0.5">
@@ -132,7 +132,7 @@
                   </div>
                 </a>
               </th>
-              <th class="text-left px-2 py-2" style="width:161px;min-width:161px;max-width:161px">
+              <th class="text-left px-2 py-2" style="width:148px;min-width:148px;max-width:148px">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=created_by&dir={% if sort_field == 'created_by' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'created_by' %}text-brand-orange font-bold{% endif %}">
                   Кто
                   <div class="flex flex-col gap-0.5">
@@ -145,7 +145,7 @@
                   </div>
                 </a>
               </th>
-              <th class="text-left px-2 py-2" style="width:161px;min-width:161px;max-width:161px">
+              <th class="text-left px-2 py-2" style="width:148px;min-width:148px;max-width:148px">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=type&dir={% if sort_field == 'type' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'type' %}text-brand-orange font-bold{% endif %}">
                   Тип
                   <div class="flex flex-col gap-0.5">
@@ -158,7 +158,7 @@
                   </div>
                 </a>
               </th>
-              <th class="text-left px-2 py-2" style="width:161px;min-width:161px;max-width:161px">
+              <th class="text-left px-2 py-2" style="width:148px;min-width:148px;max-width:148px">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=due_at&dir={% if sort_field == 'due_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'due_at' %}text-brand-orange font-bold{% endif %}">
                   Дедлайн
                   <div class="flex flex-col gap-0.5">
@@ -171,7 +171,7 @@
                   </div>
                 </a>
               </th>
-              <th class="text-left px-2 py-2" style="width:161px;min-width:161px;max-width:161px">
+              <th class="text-left px-2 py-2" style="width:75px;min-width:75px;max-width:75px">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=status&dir={% if sort_field == 'status' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'status' %}text-brand-orange font-bold{% endif %}">
                   Статус
                   <div class="flex flex-col gap-0.5">
@@ -219,26 +219,26 @@
                     <div class="text-xs text-brand-dark/70 mt-1" style="line-height:1.3">{{ t.description }}</div>
                   {% endif %}
                 </td>
-                <td class="px-2 py-2" style="width:161px;min-width:161px;max-width:161px;word-wrap:break-word;overflow-wrap:break-word">
+                <td class="px-2 py-2" style="width:148px;min-width:148px;max-width:148px;word-wrap:break-word;overflow-wrap:break-word">
                   {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/" style="line-height:1.4">{{ t.company.name }}</a>{% else %}—{% endif %}
                 </td>
-                <td class="px-2 py-2" style="width:161px;min-width:161px;max-width:161px;word-wrap:break-word;overflow-wrap:break-word">
+                <td class="px-2 py-2" style="width:148px;min-width:148px;max-width:148px;word-wrap:break-word;overflow-wrap:break-word">
                   <span style="line-height:1.4">{{ t.assigned_to|default:"—" }}</span>
                 </td>
-                <td class="px-2 py-2" style="width:161px;min-width:161px;max-width:161px;word-wrap:break-word;overflow-wrap:break-word">
+                <td class="px-2 py-2" style="width:148px;min-width:148px;max-width:148px;word-wrap:break-word;overflow-wrap:break-word">
                   <span style="line-height:1.4">{{ t.created_by|default:"—" }}</span>
                 </td>
-                <td class="px-2 py-2" style="width:161px;min-width:161px;max-width:161px;word-wrap:break-word;overflow-wrap:break-word">
+                <td class="px-2 py-2" style="width:148px;min-width:148px;max-width:148px;word-wrap:break-word;overflow-wrap:break-word">
                   <span style="line-height:1.4">{% if t.type %}{{ t.type.name }}{% else %}Не выбран{% endif %}</span>
                 </td>
-                <td class="muted px-2 py-2" style="width:161px;min-width:161px;max-width:161px;word-wrap:break-word;overflow-wrap:break-word">
+                <td class="muted px-2 py-2" style="width:148px;min-width:148px;max-width:148px;word-wrap:break-word;overflow-wrap:break-word">
                   <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}" style="line-height:1.4">{{ t.due_at|default:"—" }}</span>
                 </td>
-                <td class="px-2 py-2" style="width:161px;min-width:161px;max-width:161px;word-wrap:break-word;overflow-wrap:break-word">
+                <td class="px-2 py-2" style="width:75px;min-width:75px;max-width:75px;word-wrap:break-word;overflow-wrap:break-word">
                   <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
                 </td>
                 <td class="px-2 py-2" style="width:75px;min-width:75px;max-width:75px">
-                  <div class="flex items-center gap-1 flex-wrap">
+                  <div class="grid grid-cols-2 gap-1">
                     {% if t.can_edit_task %}
                       <a class="flex items-center justify-center w-6 h-6 rounded bg-white border border-brand-soft hover:bg-brand-soft/40 transition-colors" href="/tasks/{{ t.id }}/edit/" title="Редактировать" aria-label="Редактировать">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -246,28 +246,38 @@
                           <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
                         </svg>
                       </a>
+                    {% else %}
+                      <div></div>
                     {% endif %}
-                    {% if t.can_manage_status %}
-                      {% if t.status != 'in_progress' %}
-                        <form method="post" action="/tasks/{{ t.id }}/status/" class="inline">
-                          {% csrf_token %}
-                          <button name="status" value="in_progress" class="flex items-center justify-center w-6 h-6 rounded bg-white border border-brand-soft hover:bg-brand-soft/40 transition-colors" title="В работу" aria-label="В работу">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M4 7h16M4 7v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7M4 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m-8 0h8"/>
-                            </svg>
-                          </button>
-                        </form>
-                      {% endif %}
-                      {% if t.status != 'done' %}
-                        <form method="post" action="/tasks/{{ t.id }}/status/" class="inline">
-                          {% csrf_token %}
-                          <button name="status" value="done" class="flex items-center justify-center w-6 h-6 rounded bg-brand-teal hover:bg-brand-dark text-white transition-colors" title="Выполнено" aria-label="Выполнено">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                              <polyline points="20 6 9 17 4 12"/>
-                            </svg>
-                          </button>
-                        </form>
-                      {% endif %}
+                    {% if t.can_manage_status and t.status != 'in_progress' %}
+                      <form method="post" action="/tasks/{{ t.id }}/status/" class="inline">
+                        {% csrf_token %}
+                        <button name="status" value="in_progress" class="flex items-center justify-center w-6 h-6 rounded bg-brand-orange hover:opacity-90 text-white transition-colors" title="В работу" aria-label="В работу">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>
+                            <path d="M8 2v4"/>
+                            <path d="M16 2v4"/>
+                            <path d="M8 10h8"/>
+                            <path d="M8 14h8"/>
+                          </svg>
+                        </button>
+                      </form>
+                    {% elif t.can_manage_status %}
+                      <div></div>
+                    {% else %}
+                      <div></div>
+                    {% endif %}
+                    {% if t.can_manage_status and t.status != 'done' %}
+                      <form method="post" action="/tasks/{{ t.id }}/status/" class="inline">
+                        {% csrf_token %}
+                        <button name="status" value="done" class="flex items-center justify-center w-6 h-6 rounded bg-brand-teal hover:bg-brand-dark text-white transition-colors" title="Выполнено" aria-label="Выполнено">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"/>
+                          </svg>
+                        </button>
+                      </form>
+                    {% else %}
+                      <div></div>
                     {% endif %}
                     {% if t.can_delete_task %}
                       <form method="post" action="/tasks/{{ t.id }}/delete/" onsubmit="return confirm('Удалить задачу?');" class="inline">
@@ -278,9 +288,8 @@
                           </svg>
                         </button>
                       </form>
-                    {% endif %}
-                    {% if not t.can_edit_task and not t.can_manage_status and not t.can_delete_task %}
-                      <span class="muted-2 text-xs">—</span>
+                    {% else %}
+                      <div></div>
                     {% endif %}
                   </div>
                 </td>
