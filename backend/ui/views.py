@@ -7,7 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Exists, OuterRef, Q, F
-from django.db.models import Count, Max
+from django.db.models import Count, Max, Prefetch
 from django.http import HttpRequest, HttpResponse
 from django.http import StreamingHttpResponse
 from django.http import JsonResponse
@@ -1385,7 +1385,6 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     )
 
     # Загружаем контакты с связанными объектами для истории холодных звонков
-    from django.db.models import Prefetch
     contacts = (
         Contact.objects.filter(company=company)
         .select_related("cold_marked_by", "cold_marked_call")
