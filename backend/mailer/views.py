@@ -337,8 +337,20 @@ def campaign_recipient_add(request: HttpRequest, campaign_id) -> HttpResponse:
         messages.warning(request, f"{email} в списке отписавшихся — добавлен как 'Отписался'.")
         return redirect("campaign_detail", campaign_id=camp.id)
 
-    _, created = CampaignRecipient.objects.get_or_create(campaign=camp, email=email)
-    if created:
+    # ВАЖНО: При добавлении получателя всегда создаем/обновляем со статусом PENDING
+    # даже если получатель уже существовал (например, был удален и добавлен снова)
+    recipient, created = CampaignRecipient.objects.get_or_create(
+        campaign=camp,
+        email=email,
+        defaults={"status": CampaignRecipient.Status.PENDING}
+    )
+    # Если получатель уже существовал, но его статус не PENDING - сбрасываем на PENDING
+    if not created and recipient.status != CampaignRecipient.Status.PENDING:
+        recipient.status = CampaignRecipient.Status.PENDING
+        recipient.last_error = ""
+        recipient.save(update_fields=["status", "last_error", "updated_at"])
+        messages.success(request, f"Получатель добавлен заново: {email} (статус сброшен на 'В очереди')")
+    elif created:
         messages.success(request, f"Добавлен получатель: {email}")
     else:
         messages.info(request, f"Получатель уже есть: {email}")

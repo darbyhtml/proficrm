@@ -28,25 +28,6 @@
         <div class="text-xs muted-2 mt-1">Если оставить пустым — будет использовано имя по умолчанию из Почта → Настройки.</div>
       </div>
       <div>
-        <label class="block text-sm muted mb-1">Вложение (опционально)</label>
-        {{ form.attachment }}
-        {% if mode == 'edit' and campaign.attachment %}
-          <div class="mt-2 p-2 bg-brand-soft/30 rounded-lg border border-brand-soft flex items-center gap-2">
-            <svg class="w-4 h-4 text-brand-dark/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
-            </svg>
-            <div class="flex-1 min-w-0">
-              <div class="text-sm font-medium truncate">{{ campaign.attachment.name|slice:"-50:" }}</div>
-              <div class="text-xs muted-2 mt-0.5">
-                {{ campaign.attachment.size|filesizeformat }} · {{ campaign.attachment.name|slice:"-4:"|upper }}
-              </div>
-            </div>
-            <a href="{{ campaign.attachment.url }}" target="_blank" class="btn btn-outline text-xs flex-shrink-0">Открыть</a>
-          </div>
-        {% endif %}
-        <div class="text-xs muted-2 mt-1">Максимальный размер файла: 15 МБ. Файл будет прикреплен ко всем письмам кампании.</div>
-      </div>
-      <div>
         <div class="flex items-end justify-between gap-2 mb-2">
           <label class="block text-sm muted mb-1">Текст письма</label>
           <div class="flex gap-2">
@@ -181,6 +162,32 @@
         </div>
       </div>
 
+      <div class="mt-4">
+        <label class="block text-sm text-brand-dark/80 mb-2">Вложение (опционально)</label>
+        <label class="cursor-pointer inline-flex items-center gap-2 px-3 py-2 border border-brand-soft rounded-lg hover:bg-brand-soft/30 transition-colors">
+          <svg class="w-4 h-4 text-brand-dark/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+          </svg>
+          <span class="text-sm text-brand-dark/70">Выберите файл</span>
+          {{ form.attachment }}
+        </label>
+        {% if mode == 'edit' and campaign.attachment %}
+          <div class="mt-2 p-2.5 bg-brand-soft/20 rounded-lg border border-brand-soft/60 flex items-center gap-2.5">
+            <svg class="w-4 h-4 text-brand-dark/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+            </svg>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-medium text-brand-dark/90 truncate">{{ campaign.attachment.name|slice:"-50:" }}</div>
+              <div class="text-xs text-brand-dark/50 mt-0.5">
+                {{ campaign.attachment.size|filesizeformat }} · {{ campaign.attachment.name|slice:"-4:"|upper }}
+              </div>
+            </div>
+            <a href="{{ campaign.attachment.url }}" target="_blank" class="text-xs text-brand-dark/70 hover:text-brand-dark transition-colors underline">Открыть</a>
+          </div>
+        {% endif %}
+        <div class="text-xs text-brand-dark/50 mt-1.5">Максимальный размер: 15 МБ. Файл будет прикреплен ко всем письмам кампании.</div>
+      </div>
+
       {% if form.errors %}
         <div class="rounded-xl border border-brand-orange/60 bg-brand-orange/20 px-4 py-3 text-sm text-brand-dark">Проверь поля формы.</div>
       {% endif %}
@@ -292,6 +299,24 @@
 
       showVisual();
 
+      // Обработка выбора файла
+      const fileInput = document.querySelector('input[type="file"][name="attachment"]');
+      const fileLabel = fileInput?.closest('label');
+      if (fileInput && fileLabel) {
+        fileInput.addEventListener('change', function(e) {
+          const file = e.target.files[0];
+          if (file) {
+            const fileSize = (file.size / 1024).toFixed(1);
+            const fileName = file.name.length > 30 ? '...' + file.name.slice(-30) : file.name;
+            const fileExt = file.name.split('.').pop().toUpperCase();
+            const span = fileLabel.querySelector('span');
+            if (span) {
+              span.textContent = `${fileName} (${fileSize} КБ, ${fileExt})`;
+            }
+          }
+        });
+      }
+
       document.querySelector("form").addEventListener("submit", () => {
         syncToTextarea();
       });
@@ -312,6 +337,23 @@
     }
     .btn-outline:hover svg {
       stroke: #002825;
+    }
+    /* Скрываем стандартный input[type="file"] */
+    input[type="file"] {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border-width: 0;
+    }
+    /* Стилизация для label с input[type="file"] */
+    label[for*="attachment"]:has(input[type="file"]),
+    label:has(input[type="file"]) {
+      position: relative;
     }
   </style>
 {% endblock %}
