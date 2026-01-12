@@ -242,6 +242,14 @@ class TaskEditForm(forms.ModelForm):
         label="Дедлайн",
     )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Форматируем дату для datetime-local input
+        if self.instance and self.instance.due_at:
+            from django.utils import timezone
+            local_dt = timezone.localtime(self.instance.due_at)
+            self.initial['due_at'] = local_dt.strftime('%Y-%m-%dT%H:%M')
+
     class Meta:
         model = Task
         fields = ["title", "description", "type", "due_at"]
