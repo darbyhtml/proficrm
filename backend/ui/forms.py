@@ -209,9 +209,9 @@ class CompanyNoteForm(forms.ModelForm):
 
 class TaskForm(forms.ModelForm):
     due_at = forms.DateTimeField(
-        required=False,
+        required=True,
         input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"],
-        widget=forms.DateTimeInput(attrs={"type": "datetime-local", "class": "w-full rounded-lg border px-3 py-2"}),
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local", "class": "w-full rounded-lg border px-3 py-2", "required": "required"}),
         label="Дедлайн",
     )
     apply_to_org_branches = forms.BooleanField(
@@ -236,19 +236,27 @@ class TaskForm(forms.ModelForm):
 
 class TaskEditForm(forms.ModelForm):
     due_at = forms.DateTimeField(
-        required=False,
+        required=True,
         input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"],
-        widget=forms.DateTimeInput(attrs={"type": "datetime-local", "class": "w-full rounded-lg border px-3 py-2"}),
+        widget=forms.DateTimeInput(attrs={"type": "datetime-local", "class": "w-full rounded-lg border px-3 py-2", "required": "required"}),
         label="Дедлайн",
     )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        from django.utils import timezone
+        from datetime import timedelta
+        
         # Форматируем дату для datetime-local input
         if self.instance and self.instance.due_at:
-            from django.utils import timezone
             local_dt = timezone.localtime(self.instance.due_at)
             self.initial['due_at'] = local_dt.strftime('%Y-%m-%dT%H:%M')
+        elif self.instance and not self.instance.due_at:
+            # Если у задачи нет дедлайна, устанавливаем дефолтный (завтра в 18:00)
+            local_now = timezone.localtime(timezone.now())
+            default_due = local_now + timedelta(days=1)
+            default_due = default_due.replace(hour=18, minute=0, second=0, microsecond=0)
+            self.initial['due_at'] = default_due.strftime('%Y-%m-%dT%H:%M')
 
     class Meta:
         model = Task
