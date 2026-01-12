@@ -2681,6 +2681,8 @@ def task_list(request: HttpRequest) -> HttpResponse:
         qs = qs.order_by(F("due_at").desc(nulls_last=True), "-created_at")
     elif sort == "status":
         qs = qs.order_by("status", "-created_at")
+    elif sort == "company":
+        qs = qs.order_by("company__name", "-created_at")
     elif sort == "assignee":
         qs = qs.order_by("assigned_to__last_name", "assigned_to__first_name", "-created_at")
     else:
@@ -3086,15 +3088,62 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
     task.save(update_fields=["status", "completed_at", "updated_at"])
 
     messages.success(request, "Статус задачи обновлён.")
-    # уведомление создателю (если не он меняет)
-    if task.created_by_id and task.created_by_id != user.id:
-        notify(
-            user=task.created_by,
-            kind=Notification.Kind.TASK,
-            title="Статус задачи изменён",
-            body=f"{task.title}: {task.get_status_display()}",
-            url="/tasks/",
-        )
+
+    task_url = f"/tasks/{task.id}/edit/"
+
+    if new_status == Task.Status.DONE:
+        # Уведомления о выполненной задаче:
+        # 1) Исполнитель (кто поменял статус)
+        # 2) Ответственный за задачу (assigned_to)
+        # 3) Создатель задачи
+        # 4) Директор филиала / РОП по филиалу компании/ответственного
+        # 5) Управляющие группой компаний
+        recipient_ids: set[int] = set()
+        recipient_ids.add(user.id)
+        if task.assigned_to_id:
+            recipient_ids.add(task.assigned_to_id)
+        if task.created_by_id:
+            recipient_ids.add(task.created_by_id)
+
+        branch_id = None
+        if task.company_id and getattr(task, "company", None):
+            branch_id = getattr(task.company, "branch_id", None)
+        if not branch_id and getattr(task, "assigned_to", None):
+            branch_id = getattr(task.assigned_to, "branch_id", None)
+
+        if branch_id:
+            for uid in User.objects.filter(
+                is_active=True,
+                role__in=[User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD],
+                branch_id=branch_id,
+            ).values_list("id", flat=True):
+                recipient_ids.add(int(uid))
+
+        for uid in User.objects.filter(is_active=True, role=User.Role.GROUP_MANAGER).values_list("id", flat=True):
+            recipient_ids.add(int(uid))
+
+        for uid in recipient_ids:
+            try:
+                u = User.objects.get(id=uid, is_active=True)
+            except User.DoesNotExist:
+                continue
+            notify(
+                user=u,
+                kind=Notification.Kind.TASK,
+                title="Задача выполнена",
+                body=f"{task.title}",
+                url=task_url,
+            )
+    else:
+        # Для остальных статусов сохраняем старую логику: уведомляем создателя (если это не он меняет)
+        if task.created_by_id and task.created_by_id != user.id:
+            notify(
+                user=task.created_by,
+                kind=Notification.Kind.TASK,
+                title="Статус задачи изменён",
+                body=f"{task.title}: {task.get_status_display()}",
+                url=task_url,
+            )
     if task.company_id:
         log_event(
             actor=user,

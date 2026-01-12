@@ -60,6 +60,7 @@
             <option value="">Новое сверху</option>
             <option value="due_asc" {% if sort == 'due_asc' %}selected{% endif %}>Дедлайн ↑</option>
             <option value="due_desc" {% if sort == 'due_desc' %}selected{% endif %}>Дедлайн ↓</option>
+            <option value="company" {% if sort == 'company' %}selected{% endif %}>По компании (группировать)</option>
             <option value="status" {% if sort == 'status' %}selected{% endif %}>По статусу</option>
             <option value="assignee" {% if sort == 'assignee' %}selected{% endif %}>По ответственным</option>
           </select>
@@ -116,6 +117,19 @@
           </thead>
           <tbody>
             {% for t in page.object_list %}
+              {% if sort == 'company' %}
+                {% ifchanged t.company_id %}
+                  <tr class="bg-brand-soft/20">
+                    <td class="px-4 py-2 text-xs text-brand-dark/70 font-medium" colspan="{% if is_admin %}7{% else %}6{% endif %}">
+                      {% if t.company %}
+                        Компания: <a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>
+                      {% else %}
+                        Без компании
+                      {% endif %}
+                    </td>
+                  </tr>
+                {% endifchanged %}
+              {% endif %}
               <tr class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %}">
                 {% if is_admin %}
                   <td>
