@@ -2725,6 +2725,39 @@ def task_list(request: HttpRequest) -> HttpResponse:
             is_active=True, role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]
         ).order_by("last_name", "first_name")
 
+    # Обработка параметра view_task для модального окна просмотра выполненной задачи
+    view_task_id = (request.GET.get("view_task") or "").strip()
+    view_task = None
+    view_task_overdue_days = None
+    if view_task_id:
+        try:
+            view_task = Task.objects.select_related("company", "assigned_to", "created_by", "type").filter(
+                id=view_task_id, status=Task.Status.DONE
+            ).first()
+            if view_task:
+                # Проверяем права на просмотр
+                can_view = False
+                if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+                    can_view = True
+                elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+                    if view_task.company_id and getattr(view_task.company, "branch_id", None) == user.branch_id:
+                        can_view = True
+                    elif view_task.assigned_to_id and getattr(view_task.assigned_to, "branch_id", None) == user.branch_id:
+                        can_view = True
+                elif view_task.assigned_to_id == user.id or view_task.created_by_id == user.id:
+                    can_view = True
+                if not can_view:
+                    view_task = None
+                else:
+                    # Вычисляем просрочку в днях
+                    if view_task.due_at and view_task.completed_at and view_task.completed_at > view_task.due_at:
+                        delta = view_task.completed_at - view_task.due_at
+                        view_task_overdue_days = delta.days
+                    # Добавляем флаг для прав на редактирование
+                    view_task.can_edit_task = _can_edit_task_ui(user, view_task)  # type: ignore[attr-defined]
+        except (ValueError, TypeError):
+            pass
+
     return render(
         request,
         "ui/task_list.html",
@@ -2742,6 +2775,8 @@ def task_list(request: HttpRequest) -> HttpResponse:
             "per_page": per_page,
             "is_admin": is_admin,
             "transfer_targets": transfer_targets,
+            "view_task": view_task,
+            "view_task_overdue_days": view_task_overdue_days,
         },
     )
 
@@ -3089,7 +3124,11 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
 
     messages.success(request, "Статус задачи обновлён.")
 
-    task_url = f"/tasks/{task.id}/edit/"
+    # Для выполненных задач ссылка ведет на список с модальным окном просмотра
+    if new_status == Task.Status.DONE:
+        task_url = f"/tasks/?view_task={task.id}"
+    else:
+        task_url = f"/tasks/{task.id}/edit/"
 
     if new_status == Task.Status.DONE:
         # Уведомления о выполненной задаче:

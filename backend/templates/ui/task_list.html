@@ -11,64 +11,63 @@
       <a href="/tasks/new/" class="btn btn-primary">+ Новая задача</a>
     </div>
 
-    <form class="bg-white border rounded-2xl p-4 grid grid-cols-1 md:grid-cols-6 gap-3" method="get">
-      <div>
-        <label class="block text-sm text-brand-dark/80 mb-1">Статус</label>
-        <div class="flex items-center gap-2 select-with-icon">
-          <svg class="w-4 h-4 text-brand-dark/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h12M4 18h8"/></svg>
-          <select name="status" class="select">
-            <option value="">Любой</option>
-            <option value="new" {% if status == 'new' %}selected{% endif %}>Новая</option>
-            <option value="in_progress" {% if status == 'in_progress' %}selected{% endif %}>В работе</option>
-            <option value="done" {% if status == 'done' %}selected{% endif %}>Выполнена</option>
-            <option value="cancelled" {% if status == 'cancelled' %}selected{% endif %}>Отменена</option>
-          </select>
-        </div>
+    <form class="bg-white border rounded-2xl p-3 flex flex-wrap items-end gap-3" method="get">
+      <div class="flex items-center gap-2">
+        <svg class="w-4 h-4 text-brand-dark/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <select name="status" class="select" style="min-width:140px">
+          <option value="">Любой статус</option>
+          <option value="new" {% if status == 'new' %}selected{% endif %}>Новая</option>
+          <option value="in_progress" {% if status == 'in_progress' %}selected{% endif %}>В работе</option>
+          <option value="done" {% if status == 'done' %}selected{% endif %}>Выполнена</option>
+          <option value="cancelled" {% if status == 'cancelled' %}selected{% endif %}>Отменена</option>
+        </select>
       </div>
-      <div>
-        <label class="block text-sm text-brand-dark/80 mb-1">Видимость</label>
-        <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
-          <input type="checkbox" name="mine" value="1" {% if mine == '1' %}checked{% endif %} />
-          Только мои
-        </label>
+      <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer">
+        <input type="checkbox" name="mine" value="1" {% if mine == '1' %}checked{% endif %} class="rounded" />
+        <svg class="w-4 h-4 text-brand-dark/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+        </svg>
+        <span>Только мои</span>
+      </label>
+      <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer">
+        <input type="checkbox" name="today" value="1" {% if today == '1' %}checked{% endif %} class="rounded" />
+        <svg class="w-4 h-4 text-brand-dark/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        <span>На сегодня</span>
+      </label>
+      <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer">
+        <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %} class="rounded" />
+        <svg class="w-4 h-4 text-brand-dark/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span>Просрочено</span>
+      </label>
+      <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer">
+        <input type="checkbox" name="show_done" value="1" {% if show_done == '1' %}checked{% endif %} class="rounded" />
+        <svg class="w-4 h-4 text-brand-dark/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+        <span>Показать выполненные</span>
+      </label>
+      <div class="flex items-center gap-2">
+        <svg class="w-4 h-4 text-brand-dark/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
+        </svg>
+        <select name="sort" class="select" style="min-width:180px">
+          <option value="">Новое сверху</option>
+          <option value="due_asc" {% if sort == 'due_asc' %}selected{% endif %}>Дедлайн ↑</option>
+          <option value="due_desc" {% if sort == 'due_desc' %}selected{% endif %}>Дедлайн ↓</option>
+          <option value="company" {% if sort == 'company' %}selected{% endif %}>По компании</option>
+          <option value="status" {% if sort == 'status' %}selected{% endif %}>По статусу</option>
+          <option value="assignee" {% if sort == 'assignee' %}selected{% endif %}>По ответственным</option>
+        </select>
       </div>
-      <div>
-        <label class="block text-sm text-brand-dark/80 mb-1">Срок</label>
-        <div class="space-y-1">
-          <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
-            <input type="checkbox" name="today" value="1" {% if today == '1' %}checked{% endif %} />
-            На сегодня
-          </label>
-          <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
-            <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %} />
-            Просрочено
-          </label>
-        </div>
-      </div>
-      <div>
-        <label class="block text-sm text-brand-dark/80 mb-1">Выполненные</label>
-        <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
-          <input type="checkbox" name="show_done" value="1" {% if show_done == '1' %}checked{% endif %} />
-          Показать
-        </label>
-      </div>
-      <div>
-        <label class="block text-sm text-brand-dark/80 mb-1">Сортировка</label>
-        <div class="flex items-center gap-2 select-with-icon">
-          <svg class="w-4 h-4 text-brand-dark/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
-          <select name="sort" class="select">
-            <option value="">Новое сверху</option>
-            <option value="due_asc" {% if sort == 'due_asc' %}selected{% endif %}>Дедлайн ↑</option>
-            <option value="due_desc" {% if sort == 'due_desc' %}selected{% endif %}>Дедлайн ↓</option>
-            <option value="company" {% if sort == 'company' %}selected{% endif %}>По компании (группировать)</option>
-            <option value="status" {% if sort == 'status' %}selected{% endif %}>По статусу</option>
-            <option value="assignee" {% if sort == 'assignee' %}selected{% endif %}>По ответственным</option>
-          </select>
-        </div>
-      </div>
-      <div class="flex items-end gap-2">
-        <button class="btn btn-primary" type="submit">Фильтр</button>
-        <a class="btn btn-outline" href="/tasks/">Сброс</a>
+      <div class="flex gap-2 ml-auto">
+        <button class="btn btn-primary" type="submit" style="padding:.5rem 1rem">Применить</button>
+        <a class="btn btn-outline" href="/tasks/" style="padding:.5rem 1rem">Сброс</a>
       </div>
     </form>
 
@@ -218,6 +217,124 @@
     </div>
   </div>
 
+  {% if view_task %}
+    <div id="taskViewModal" class="fixed inset-0 z-[200]" style="display:block">
+      <div class="fixed inset-0 bg-black/35" data-close-task-view></div>
+      <div class="absolute inset-x-4 top-12 mx-auto max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div class="card card-pad">
+          <div class="flex items-start justify-between gap-3 mb-4">
+            <div class="flex-1">
+              <div class="flex items-center gap-2 mb-2">
+                <span class="badge badge-done">Выполнена</span>
+                {% if view_task.can_edit_task %}
+                  <a href="/tasks/{{ view_task.id }}/edit/" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    Редактировать
+                  </a>
+                {% endif %}
+              </div>
+              <h2 class="text-xl font-semibold text-brand-dark">{{ view_task.title }}</h2>
+              {% if view_task.description %}
+                <div class="text-sm text-brand-dark/70 mt-2 whitespace-pre-wrap">{{ view_task.description }}</div>
+              {% endif %}
+            </div>
+            <button type="button" class="btn btn-outline flex-shrink-0" style="padding:.35rem .5rem;font-size:.875rem" data-close-task-view aria-label="Закрыть" title="Закрыть">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+          
+          <div class="space-y-3 pt-3 border-t">
+            {% if view_task.company %}
+              <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-brand-dark/60 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+                </svg>
+                <div class="flex-1 min-w-0">
+                  <div class="text-xs text-brand-dark/60 mb-0.5">Компания</div>
+                  <a href="/companies/{{ view_task.company.id }}/" class="link font-medium">{{ view_task.company.name }}</a>
+                </div>
+              </div>
+            {% endif %}
+            
+            <div class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-brand-dark/60 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+              </svg>
+              <div class="flex-1 min-w-0">
+                <div class="text-xs text-brand-dark/60 mb-0.5">Ответственный</div>
+                <div class="font-medium">{{ view_task.assigned_to|default:"Не назначен" }}</div>
+              </div>
+            </div>
+            
+            {% if view_task.created_at %}
+              <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-brand-dark/60 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div class="flex-1 min-w-0">
+                  <div class="text-xs text-brand-dark/60 mb-0.5">Поставлена</div>
+                  <div class="font-medium">{{ view_task.created_at|date:"d.m.Y H:i" }}</div>
+                </div>
+              </div>
+            {% endif %}
+            
+            {% if view_task.due_at %}
+              <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-brand-dark/60 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                <div class="flex-1 min-w-0">
+                  <div class="text-xs text-brand-dark/60 mb-0.5">Дедлайн</div>
+                  <div class="font-medium {% if view_task.due_at < local_now %}text-red-700{% endif %}">{{ view_task.due_at|date:"d.m.Y H:i" }}</div>
+                </div>
+              </div>
+            {% endif %}
+            
+            {% if view_task.completed_at %}
+              <div class="flex items-start gap-3">
+                <svg class="w-5 h-5 text-brand-dark/60 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div class="flex-1 min-w-0">
+                  <div class="text-xs text-brand-dark/60 mb-0.5">Выполнена</div>
+                  <div class="font-medium text-green-700">{{ view_task.completed_at|date:"d.m.Y H:i" }}</div>
+                </div>
+              </div>
+            {% endif %}
+            
+            {% if view_task_overdue_days and view_task_overdue_days > 0 %}
+              <div class="flex items-start gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <svg class="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <div class="flex-1 min-w-0">
+                  <div class="text-sm font-medium text-red-800">Задача была просрочена</div>
+                  <div class="text-xs text-red-600 mt-0.5">
+                    Выполнена на {{ view_task_overdue_days }} {% if view_task_overdue_days == 1 %}день{% elif view_task_overdue_days < 5 %}дня{% else %}дней{% endif %} позже дедлайна
+                  </div>
+                </div>
+              </div>
+            {% elif view_task.due_at and view_task.completed_at and view_task.completed_at <= view_task.due_at %}
+              <div class="flex items-start gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <svg class="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                <div class="flex-1 min-w-0">
+                  <div class="text-sm font-medium text-green-800">Задача выполнена в срок</div>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+
   {% if is_admin %}
     <script>
       (function(){
@@ -241,6 +358,40 @@
             }
           });
         });
+      })();
+    </script>
+  {% endif %}
+
+  {% if view_task %}
+    <script>
+      (function(){
+        const modal = document.getElementById('taskViewModal');
+        if (!modal) return;
+        
+        // Модальное окно уже видимо (нет класса hidden), но убедимся
+        modal.classList.remove('hidden');
+        
+        const closeBtns = modal.querySelectorAll('[data-close-task-view]');
+        function closeM() {
+          modal.style.display = 'none';
+          // Убираем параметр view_task из URL без перезагрузки
+          const url = new URL(window.location);
+          url.searchParams.delete('view_task');
+          window.history.replaceState({}, '', url);
+        }
+        
+        closeBtns.forEach(b => b.addEventListener('click', closeM));
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && modal.style.display !== 'none') closeM();
+        });
+        
+        // Закрытие при клике на затемнение
+        const overlay = modal.querySelector('.bg-black\\/35');
+        if (overlay) {
+          overlay.addEventListener('click', function(e) {
+            if (e.target === this) closeM();
+          });
+        }
       })();
     </script>
   {% endif %}
