@@ -297,6 +297,9 @@
                     {% endif %}
                   </div>
                 </td>
+                <td class="muted px-2 py-2" style="width:168px;min-width:168px;max-width:168px;word-wrap:break-word;overflow-wrap:break-word">
+                  <span style="line-height:1.4">{{ t.created_at|date:"d.m.Y H:i" }}</span>
+                </td>
               </tr>
             {% empty %}
               <tr><td class="muted" colspan="{% if is_admin %}8{% else %}7{% endif %}" style="padding:1.25rem 1rem">Задач нет.</td></tr>
