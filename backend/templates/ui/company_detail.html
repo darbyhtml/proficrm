@@ -1175,21 +1175,39 @@
             btn.addEventListener('click', async () => {
               // Получаем номер из data-phone (в БД хранится в виде +7XXXXXXXXXX)
               let phone = btn.dataset.phone || '';
-              // Разрешаем только цифры и ведущий +
-              phone = phone.replace(/[^\\d+]/g, '');
-              // Если начинается с +7 — оставляем
-              if (!phone.startsWith('+7')) {
-                // Если начинается с 8 и 11 цифр => +7XXXXXXXXXX
-                if (phone.startsWith('8') && phone.length === 11) {
-                  phone = '+7' + phone.substring(1);
+              // Убираем все нецифровые символы, кроме ведущего +
+              phone = phone.replace(/[^\d+]/g, '');
+              
+              // Если номер уже в формате +7XXXXXXXXXX (12 символов), оставляем как есть
+              if (phone.startsWith('+7') && phone.length === 12) {
+                // Уже нормализован, ничего не делаем
+              }
+              // Если начинается с +7, но длина не 12 - возможно лишние символы
+              else if (phone.startsWith('+7')) {
+                // Оставляем только +7 и следующие 10 цифр
+                const digits = phone.substring(2).replace(/\D/g, '');
+                if (digits.length === 10) {
+                  phone = '+7' + digits;
                 }
-                // Если начинается с 7 и 11 цифр => +7XXXXXXXXXX
-                else if (phone.startsWith('7') && phone.length === 11) {
-                  phone = '+7' + phone.substring(1);
-                }
-                // Если 10 цифр => +7XXXXXXXXXX
-                else if (/^\\d{10}$/.test(phone)) {
-                  phone = '+7' + phone;
+              }
+              // Если начинается с 8 и 11 цифр => +7XXXXXXXXXX
+              else if (phone.startsWith('8') && phone.length === 11) {
+                phone = '+7' + phone.substring(1);
+              }
+              // Если начинается с 7 и 11 цифр => +7XXXXXXXXXX
+              else if (phone.startsWith('7') && phone.length === 11) {
+                phone = '+7' + phone.substring(1);
+              }
+              // Если 10 цифр => +7XXXXXXXXXX
+              else if (/^\d{10}$/.test(phone)) {
+                phone = '+7' + phone;
+              }
+              // Если ничего не подошло, пытаемся извлечь 10 цифр из конца
+              else {
+                const digits = phone.replace(/\D/g, '');
+                if (digits.length >= 10) {
+                  const last10 = digits.slice(-10);
+                  phone = '+7' + last10;
                 }
               }
               const companyId = btn.dataset.company || '';

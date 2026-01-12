@@ -2562,25 +2562,39 @@ def phone_call_create(request: HttpRequest) -> HttpResponse:
     if not phone:
         return JsonResponse({"ok": False, "detail": "phone is required"}, status=400)
 
-    # Минимальная нормализация: оставляем цифры и ведущий +
+    # Нормализация номера телефона к формату +7XXXXXXXXXX
+    # Убираем все пробелы, дефисы, скобки
     raw = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-    # Разрешаем только цифры и ведущий +
-    normalized = "".join(ch for i, ch in enumerate(raw) if ch.isdigit() or (ch == "+" and i == 0))
-    # Приводим к формату +7XXXXXXXXXX для российских номеров
-    digits = normalized[1:] if normalized.startswith("+") else normalized
-    if digits.startswith("8") and len(digits) == 11:
-        normalized = "+7" + digits[1:]
-    elif digits.startswith("7") and len(digits) == 11:
-        normalized = "+7" + digits[1:]
-    elif len(digits) == 10:
-        normalized = "+7" + digits
-    elif normalized.startswith("8") and len(normalized) == 11:
-        normalized = "+7" + normalized[1:]
-    elif normalized.startswith("7") and len(normalized) == 11:
-        normalized = "+7" + normalized[1:]
-    elif normalized and not normalized.startswith("+") and len(normalized) >= 11 and normalized[0] in ("7", "8"):
-        # fallback: если прилетело без плюса, но с 11 цифрами и российским префиксом
-        normalized = "+7" + normalized[1:]
+    
+    # Если номер уже в правильном формате +7XXXXXXXXXX (12 символов), оставляем как есть
+    if raw.startswith("+7") and len(raw) == 12 and raw[2:].isdigit():
+        normalized = raw
+    else:
+        # Извлекаем только цифры
+        digits = "".join(ch for ch in raw if ch.isdigit())
+        
+        # Приводим к формату +7XXXXXXXXXX для российских номеров
+        if digits.startswith("8") and len(digits) == 11:
+            # 8XXXXXXXXXX => +7XXXXXXXXXX
+            normalized = "+7" + digits[1:]
+        elif digits.startswith("7") and len(digits) == 11:
+            # 7XXXXXXXXXX => +7XXXXXXXXXX
+            normalized = "+7" + digits[1:]
+        elif len(digits) == 10:
+            # XXXXXXXXXX => +7XXXXXXXXXX
+            normalized = "+7" + digits
+        elif digits.startswith("8") and len(digits) > 11:
+            # 8XXXXXXXXXX... => +7XXXXXXXXXX (берем первые 11 цифр)
+            normalized = "+7" + digits[1:11]
+        elif digits.startswith("7") and len(digits) > 11:
+            # 7XXXXXXXXXX... => +7XXXXXXXXXX (берем первые 11 цифр)
+            normalized = "+7" + digits[1:11]
+        elif len(digits) >= 10:
+            # Берем последние 10 цифр
+            normalized = "+7" + digits[-10:]
+        else:
+            # Если ничего не подошло, возвращаем как есть (но это ошибка)
+            normalized = raw
 
     # Дедупликация на сервере: если пользователь несколько раз подряд нажимает "позвонить" на тот же номер/контакт,
     # не создаём новые записи (иначе отчёты раздуваются).
