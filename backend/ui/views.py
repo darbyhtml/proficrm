@@ -2731,8 +2731,9 @@ def task_list(request: HttpRequest) -> HttpResponse:
     view_task_overdue_days = None
     if view_task_id:
         try:
+            # Показываем модалку для задачи в любом статусе.
             view_task = Task.objects.select_related("company", "assigned_to", "created_by", "type").filter(
-                id=view_task_id, status=Task.Status.DONE
+                id=view_task_id
             ).first()
             if view_task:
                 # Проверяем права на просмотр
@@ -2749,7 +2750,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
                 if not can_view:
                     view_task = None
                 else:
-                    # Вычисляем просрочку в днях
+                    # Вычисляем просрочку в днях (только если известны дедлайн и время завершения)
                     if view_task.due_at and view_task.completed_at and view_task.completed_at > view_task.due_at:
                         delta = view_task.completed_at - view_task.due_at
                         view_task_overdue_days = delta.days
@@ -2871,7 +2872,8 @@ def task_create(request: HttpRequest) -> HttpResponse:
                     kind=Notification.Kind.TASK,
                     title="Вам назначили задачу",
                     body=f"{task.title}",
-                    url="/tasks/",
+                    # Ведём сразу на список задач с модальным окном конкретной задачи.
+                    url=f"/tasks/?view_task={task.id}",
                 )
             if task.company_id:
                 log_event(
@@ -3124,11 +3126,8 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
 
     messages.success(request, "Статус задачи обновлён.")
 
-    # Для выполненных задач ссылка ведет на список с модальным окном просмотра
-    if new_status == Task.Status.DONE:
-        task_url = f"/tasks/?view_task={task.id}"
-    else:
-        task_url = f"/tasks/{task.id}/edit/"
+    # Для всех статусов ссылка ведёт на список задач с модальным окном просмотра конкретной задачи.
+    task_url = f"/tasks/?view_task={task.id}"
 
     if new_status == Task.Status.DONE:
         # Уведомления о выполненной задаче:
@@ -3200,11 +3199,7 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
 def task_edit(request: HttpRequest, task_id) -> HttpResponse:
     user: User = request.user
     task = get_object_or_404(Task.objects.select_related("company", "assigned_to", "created_by", "type"), id=task_id)
-    
-    # Если задача выполнена, редиректим на список с модальным окном просмотра
-    if task.status == Task.Status.DONE:
-        return redirect(f"/tasks/?view_task={task.id}")
-    
+
     if not _can_edit_task_ui(user, task):
         messages.error(request, "Нет прав на редактирование этой задачи.")
         return redirect("task_list")
