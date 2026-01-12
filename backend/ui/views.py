@@ -2237,13 +2237,13 @@ def contact_phone_cold_call_reset(request: HttpRequest, contact_phone_id) -> Htt
         messages.error(request, "Контакт не привязан к компании.")
         return redirect("dashboard")
 
-    if not contact_phone.is_cold_call:
+    if not contact_phone.is_cold_call and not contact_phone.cold_marked_at:
         messages.info(request, "Этот номер не отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
-    # Откатываем отметку
+    # Откатываем отметку (но сохраняем историю)
     contact_phone.is_cold_call = False
-    contact_phone.save(update_fields=["is_cold_call"])
+    contact_phone.save(update_fields=["is_cold_call", "updated_at"])
     # НЕ удаляем поля cold_marked_at, cold_marked_by, cold_marked_call для истории
 
     messages.success(request, f"Отметка холодного звонка отменена (номер {contact_phone.value}).")

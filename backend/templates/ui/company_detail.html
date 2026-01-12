@@ -567,15 +567,14 @@
                             <div class="font-mono text-xs">{{ p.value|format_phone }}</div>
                             {% if p.is_cold_call or p.cold_marked_at %}
                               <div class="mt-0.5 text-[10px] text-brand-dark/60">
-                                <span class="font-medium">Холодный звонок:</span>
-                                {% if p.cold_marked_at %}
-                                  {{ p.cold_marked_at|date:"d.m.Y H:i" }}
-                                {% endif %}
-                                {% if p.cold_marked_by %}
-                                  ({{ p.cold_marked_by.first_name }} {{ p.cold_marked_by.last_name|default:"" }})
-                                {% endif %}
-                                {% if not p.is_cold_call and p.cold_marked_at %}
-                                  <span class="text-brand-dark/40 ml-1">(откат)</span>
+                                {% if p.is_cold_call %}
+                                  <span class="font-medium">Холодный звонок:</span>
+                                  {% if p.cold_marked_at %}
+                                    {{ p.cold_marked_at|date:"d.m.Y H:i" }}
+                                  {% endif %}
+                                  {% if p.cold_marked_by %}
+                                    ({{ p.cold_marked_by.first_name }} {{ p.cold_marked_by.last_name|default:"" }})
+                                  {% endif %}
                                 {% endif %}
                               </div>
                             {% endif %}
@@ -602,7 +601,7 @@
                                 </form>
                               {% else %}
                                 {% if is_admin %}
-                                  {% if p.is_cold_call or p.cold_marked_at %}
+                                  {% if p.is_cold_call %}
                                     <form method="post" action="/contact-phones/{{ p.id }}/cold-call/reset/" style="display:inline">
                                       {% csrf_token %}
                                       <button
