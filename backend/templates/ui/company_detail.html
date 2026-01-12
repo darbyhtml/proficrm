@@ -293,7 +293,7 @@
               {% if company.phone %}
                 <div class="flex items-center gap-2 shrink-0">
                   {% if can_edit_company %}
-                    {% if not company.primary_contact_is_cold_call %}
+                    {% if not company.primary_contact_is_cold_call and not company.primary_cold_marked_at %}
                       <form method="post" action="/companies/{{ company.id }}/cold-call/toggle/" style="display:inline" class="js-cold-call-form" data-confirm="Вы действительно хотите отметить звонок как холодный?">
                         {% csrf_token %}
                         <input type="hidden" name="confirmed" value="1">
@@ -311,7 +311,7 @@
                           </svg>
                         </button>
                       </form>
-                    {% elif is_admin %}
+                    {% elif (company.primary_contact_is_cold_call or company.primary_cold_marked_at) and is_admin %}
                       <form method="post" action="/companies/{{ company.id }}/cold-call/reset/" style="display:inline">
                         {% csrf_token %}
                         <button
@@ -555,7 +555,7 @@
                   </div>
                   {% if can_edit_company %}
                     <div class="flex items-center gap-2">
-                      {% if not c.is_cold_call %}
+                      {% if not c.is_cold_call and not c.cold_marked_at %}
                         <form method="post" action="/contacts/{{ c.id }}/cold-call/toggle/" class="js-cold-call-form" data-confirm="Вы действительно хотите отметить звонок как холодный?">
                           {% csrf_token %}
                           <input type="hidden" name="confirmed" value="1">
@@ -573,7 +573,7 @@
                             </svg>
                           </button>
                         </form>
-                      {% elif is_admin %}
+                      {% elif (c.is_cold_call or c.cold_marked_at) and is_admin %}
                         <form method="post" action="/contacts/{{ c.id }}/cold-call/reset/">
                           {% csrf_token %}
                           <button
