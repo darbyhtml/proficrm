@@ -133,6 +133,14 @@
                         <button name="status" value="done" class="btn btn-primary" style="padding:.35rem .6rem;font-size:.75rem">Выполнено</button>
                       </form>
                     {% endif %}
+                    {% if t.can_delete_task %}
+                      <form method="post" action="/tasks/{{ t.id }}/delete/" onsubmit="return confirm('Удалить задачу?');">
+                        {% csrf_token %}
+                        <button class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem;border-color:rgba(220,38,38,.5);color:#b91c1c;">
+                          Удалить
+                        </button>
+                      </form>
+                    {% endif %}
                     {% if not t.can_edit_task and not t.can_manage_status %}
                       <span class="muted-2 text-xs">—</span>
                     {% endif %}

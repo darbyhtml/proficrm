@@ -53,6 +53,7 @@ urlpatterns = [
     path("tasks/new/", views.task_create, name="task_create"),
     path("tasks/<uuid:task_id>/edit/", views.task_edit, name="task_edit"),
     path("tasks/<uuid:task_id>/status/", views.task_set_status, name="task_set_status"),
+    path("tasks/<uuid:task_id>/delete/", views.task_delete, name="task_delete"),
 
     # Settings (admin only)
     path("settings/", views.settings_dashboard, name="settings_dashboard"),

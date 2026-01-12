@@ -2623,12 +2623,24 @@ def task_list(request: HttpRequest) -> HttpResponse:
 
     qs = Task.objects.select_related("company", "assigned_to", "created_by", "type").order_by("-created_at")
 
-    # Просмотр задач: всем доступны все задачи (без ограничения по компаниям/филиалам).
+    # Базовая видимость задач в зависимости от роли:
+    # - Админ / управляющий: все задачи
+    # - Директор филиала / РОП: задачи своего филиала
+    # - Остальные: фильтрация дальше по assigned_to (см. mine)
+    if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+        qs = qs.filter(
+            Q(company__branch_id=user.branch_id)
+            | Q(assigned_to__branch_id=user.branch_id)
+        )
+
     qs = qs.distinct()
 
     status = (request.GET.get("status") or "").strip()
     if status:
         qs = qs.filter(status=status)
+    else:
+        # По умолчанию не показываем выполненные задачи, чтобы они не мешали в списке.
+        qs = qs.exclude(status=Task.Status.DONE)
 
     mine = (request.GET.get("mine") or "").strip()
     # По умолчанию фильтруем по текущему пользователю, если не указан параметр mine
@@ -2671,6 +2683,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
     for t in page.object_list:
         t.can_manage_status = _can_manage_task_status_ui(user, t)  # type: ignore[attr-defined]
         t.can_edit_task = _can_edit_task_ui(user, t)  # type: ignore[attr-defined]
+        t.can_delete_task = _can_delete_task_ui(user, t)  # type: ignore[attr-defined]
 
     is_admin = require_admin(user)
     transfer_targets = []
@@ -2861,6 +2874,62 @@ def _can_edit_task_ui(user: User, task: Task) -> bool:
         except Exception:
             pass
     return False
+
+
+def _can_delete_task_ui(user: User, task: Task) -> bool:
+    """
+    Право на удаление задачи:
+    - Администратор / управляющий — любые задачи;
+    - Ответственный за карточку компании (company.responsible);
+    - Директор филиала / РОП — задачи своего филиала.
+    """
+    if not user or not user.is_authenticated or not user.is_active:
+        return False
+    if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+        return True
+    # Ответственный за компанию
+    if task.company_id and getattr(task, "company", None):
+        try:
+            if getattr(task.company, "responsible_id", None) == user.id:
+                return True
+        except Exception:
+            pass
+    # Директор филиала / РОП — внутри своего филиала
+    if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+        branch_id = None
+        if task.company_id and getattr(task, "company", None):
+            branch_id = getattr(task.company, "branch_id", None)
+        if not branch_id and getattr(task, "assigned_to", None):
+            branch_id = getattr(task.assigned_to, "branch_id", None)
+        if branch_id and branch_id == user.branch_id:
+            return True
+    return False
+
+
+@login_required
+def task_delete(request: HttpRequest, task_id) -> HttpResponse:
+    user: User = request.user
+    task = get_object_or_404(Task.objects.select_related("company", "assigned_to", "created_by", "type"), id=task_id)
+    if not _can_delete_task_ui(user, task):
+        messages.error(request, "Нет прав на удаление этой задачи.")
+        return redirect("task_list")
+
+    if request.method == "POST":
+        title = task.title
+        company_id = task.company_id
+        task.delete()
+        messages.success(request, f"Задача «{title}» удалена.")
+        log_event(
+            actor=user,
+            verb=ActivityEvent.Verb.DELETE,
+            entity_type="task",
+            entity_id=str(task_id),
+            company_id=company_id,
+            message=f"Удалена задача: {title}",
+        )
+        return redirect("task_list")
+
+    return redirect("task_list")
 
 
 @login_required
