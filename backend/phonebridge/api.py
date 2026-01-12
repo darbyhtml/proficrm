@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from django.db import transaction
 from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -49,8 +50,9 @@ class PullCallView(APIView):
 
     def get(self, request):
         import logging
+
         logger = logging.getLogger(__name__)
-        
+
         device_id = (request.query_params.get("device_id") or "").strip()
         if not device_id:
             logger.warning(f"PullCallView: device_id missing for user {request.user.id}")
@@ -65,24 +67,28 @@ class PullCallView(APIView):
         # обновим last_seen
         PhoneDevice.objects.filter(user=request.user, device_id=device_id).update(last_seen_at=timezone.now())
 
-        # Проверяем наличие pending запросов для этого пользователя
+        # Проверяем наличие pending запросов для этого пользователя (для логов/диагностики)
         pending_count = CallRequest.objects.filter(user=request.user, status=CallRequest.Status.PENDING).count()
         logger.debug(f"PullCallView: user {request.user.id}, device {device_id}, pending calls: {pending_count}")
-        
-        call = (
-            CallRequest.objects.filter(user=request.user, status=CallRequest.Status.PENDING)
-            .order_by("created_at")
-            .first()
-        )
-        if not call:
-            return Response(status=204)
 
-        call.status = CallRequest.Status.CONSUMED
-        now = timezone.now()
-        call.delivered_at = now
-        call.consumed_at = now
-        call.save(update_fields=["status", "delivered_at", "consumed_at"])
-        
+        # ВАЖНО: используем select_for_update(skip_locked=True), чтобы один и тот же звонок
+        # не был выдан одновременно двум устройствам при конкурентных запросах.
+        with transaction.atomic():
+            call = (
+                CallRequest.objects.select_for_update(skip_locked=True)
+                .filter(user=request.user, status=CallRequest.Status.PENDING)
+                .order_by("created_at")
+                .first()
+            )
+            if not call:
+                return Response(status=204)
+
+            now = timezone.now()
+            call.status = CallRequest.Status.CONSUMED
+            call.delivered_at = now
+            call.consumed_at = now
+            call.save(update_fields=["status", "delivered_at", "consumed_at"])
+
         logger.info(f"PullCallView: delivered call {call.id} to user {request.user.id}, phone {call.phone_raw}")
 
         return Response(

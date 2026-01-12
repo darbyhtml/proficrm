@@ -57,7 +57,13 @@ class CompanyViewSet(viewsets.ModelViewSet):
     ordering_fields = ("updated_at", "created_at", "name")
 
     def get_queryset(self):
-        return Company.objects.all().order_by("-updated_at")
+        # Используем select_related/prefetch_related, чтобы избежать N+1 и ускорить API,
+        # не меняя возвращаемые данные.
+        return (
+            Company.objects.select_related("responsible", "branch", "status", "head_company")
+            .prefetch_related("spheres")
+            .order_by("-updated_at")
+        )
 
     def perform_create(self, serializer):
         user: User = self.request.user

@@ -28,6 +28,8 @@ class RateLimitMiddleware(MiddlewareMixin):
         "/login/",
         "/api/token/",
         "/api/token/refresh/",
+        # Phone API (Android приложение) — защищаем от частых запросов
+        "/api/phone/",
     ]
     
     def process_request(self, request):
