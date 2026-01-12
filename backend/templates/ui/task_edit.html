@@ -46,9 +46,17 @@
         </div>
       {% endif %}
 
-      <div class="flex gap-2">
+      <div class="flex gap-2 items-center flex-wrap">
         <button class="btn btn-primary" type="submit">Сохранить</button>
         <a class="btn btn-outline" href="/tasks/">Отмена</a>
+        {% if can_delete_task %}
+          <form method="post" action="/tasks/{{ task.id }}/delete/" onsubmit="return confirm('Удалить задачу?');">
+            {% csrf_token %}
+            <button class="btn btn-outline" style="border-color:rgba(220,38,38,.5);color:#b91c1c;">
+              Удалить
+            </button>
+          </form>
+        {% endif %}
       </div>
     </form>
   </div>

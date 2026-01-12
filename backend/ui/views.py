@@ -2643,9 +2643,24 @@ def task_list(request: HttpRequest) -> HttpResponse:
         qs = qs.exclude(status=Task.Status.DONE)
 
     mine = (request.GET.get("mine") or "").strip()
-    # По умолчанию фильтруем по текущему пользователю, если не указан параметр mine
-    if mine == "1" or (mine == "" and "mine" not in request.GET):
+    # Логика mine:
+    # - Если mine=1: только мои
+    # - Если mine=0: не фильтруем по ответственному
+    # - Если параметра нет:
+    #     * админ/управляющий: показываем все (без mine)
+    #     * директор/РОП: показываем все своего филиала (фильтр филиала уже выше)
+    #     * остальные: по умолчанию только свои
+    if mine == "1":
         qs = qs.filter(assigned_to=user)
+    elif mine == "0":
+        pass
+    else:
+        if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+            pass  # без фильтра
+        elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD):
+            pass  # без фильтра, но уже ограничено филиалом выше
+        else:
+            qs = qs.filter(assigned_to=user)
 
     overdue = (request.GET.get("overdue") or "").strip()
     if overdue == "1":
@@ -3082,6 +3097,7 @@ def task_edit(request: HttpRequest, task_id) -> HttpResponse:
     if not _can_edit_task_ui(user, task):
         messages.error(request, "Нет прав на редактирование этой задачи.")
         return redirect("task_list")
+    can_delete_task = _can_delete_task_ui(user, task)
 
     if request.method == "POST":
         form = TaskEditForm(request.POST, instance=task)
@@ -3100,7 +3116,7 @@ def task_edit(request: HttpRequest, task_id) -> HttpResponse:
     else:
         form = TaskEditForm(instance=task)
 
-    return render(request, "ui/task_edit.html", {"form": form, "task": task})
+    return render(request, "ui/task_edit.html", {"form": form, "task": task, "can_delete_task": can_delete_task})
 
 
 # _require_admin moved to crm.utils.require_admin
