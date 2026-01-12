@@ -94,7 +94,7 @@
                 </th>
               {% endif %}
               <th class="text-left px-4 py-3">
-                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=title&dir={% if sort_field == 'title' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer {% if sort_field == 'title' %}text-brand-primary font-medium{% endif %}">
+                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=title&dir={% if sort_field == 'title' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer select-none {% if sort_field == 'title' %}text-brand-primary font-medium{% endif %}">
                   Задача
                   {% if sort_field == 'title' %}
                     {% if sort_dir == 'asc' %}
@@ -114,7 +114,7 @@
                 </a>
               </th>
               <th class="text-left px-4 py-3">
-                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=company&dir={% if sort_field == 'company' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer {% if sort_field == 'company' %}text-brand-primary font-medium{% endif %}">
+                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=company&dir={% if sort_field == 'company' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer select-none {% if sort_field == 'company' %}text-brand-primary font-medium{% endif %}">
                   Компания
                   {% if sort_field == 'company' %}
                     {% if sort_dir == 'asc' %}
@@ -134,7 +134,7 @@
                 </a>
               </th>
               <th class="text-left px-4 py-3">
-                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=assignee&dir={% if sort_field == 'assignee' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer {% if sort_field == 'assignee' %}text-brand-primary font-medium{% endif %}">
+                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=assignee&dir={% if sort_field == 'assignee' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer select-none {% if sort_field == 'assignee' %}text-brand-primary font-medium{% endif %}">
                   Кому
                   {% if sort_field == 'assignee' %}
                     {% if sort_dir == 'asc' %}
@@ -154,7 +154,7 @@
                 </a>
               </th>
               <th class="text-left px-4 py-3">
-                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=created_by&dir={% if sort_field == 'created_by' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer {% if sort_field == 'created_by' %}text-brand-primary font-medium{% endif %}">
+                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=created_by&dir={% if sort_field == 'created_by' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer select-none {% if sort_field == 'created_by' %}text-brand-primary font-medium{% endif %}">
                   Кто
                   {% if sort_field == 'created_by' %}
                     {% if sort_dir == 'asc' %}
@@ -174,7 +174,7 @@
                 </a>
               </th>
               <th class="text-left px-4 py-3">
-                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=type&dir={% if sort_field == 'type' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer {% if sort_field == 'type' %}text-brand-primary font-medium{% endif %}">
+                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=type&dir={% if sort_field == 'type' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer select-none {% if sort_field == 'type' %}text-brand-primary font-medium{% endif %}">
                   Тип
                   {% if sort_field == 'type' %}
                     {% if sort_dir == 'asc' %}
@@ -194,7 +194,7 @@
                 </a>
               </th>
               <th class="text-left px-4 py-3">
-                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=due_at&dir={% if sort_field == 'due_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer {% if sort_field == 'due_at' %}text-brand-primary font-medium{% endif %}">
+                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=due_at&dir={% if sort_field == 'due_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer select-none {% if sort_field == 'due_at' %}text-brand-primary font-medium{% endif %}">
                   Дедлайн
                   {% if sort_field == 'due_at' %}
                     {% if sort_dir == 'asc' %}
@@ -214,7 +214,7 @@
                 </a>
               </th>
               <th class="text-left px-4 py-3" style="min-width:140px">
-                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=status&dir={% if sort_field == 'status' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer {% if sort_field == 'status' %}text-brand-primary font-medium{% endif %}">
+                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=status&dir={% if sort_field == 'status' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer select-none {% if sort_field == 'status' %}text-brand-primary font-medium{% endif %}">
                   Статус
                   {% if sort_field == 'status' %}
                     {% if sort_dir == 'asc' %}
