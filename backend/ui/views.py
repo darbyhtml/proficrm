@@ -2562,8 +2562,25 @@ def phone_call_create(request: HttpRequest) -> HttpResponse:
     if not phone:
         return JsonResponse({"ok": False, "detail": "phone is required"}, status=400)
 
-    # минимальная нормализация для tel: (Android ACTION_DIAL)
-    normalized = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    # Минимальная нормализация: оставляем цифры и ведущий +
+    raw = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    # Разрешаем только цифры и ведущий +
+    normalized = "".join(ch for i, ch in enumerate(raw) if ch.isdigit() or (ch == "+" and i == 0))
+    # Приводим к формату +7XXXXXXXXXX для российских номеров
+    digits = normalized[1:] if normalized.startswith("+") else normalized
+    if digits.startswith("8") and len(digits) == 11:
+        normalized = "+7" + digits[1:]
+    elif digits.startswith("7") and len(digits) == 11:
+        normalized = "+7" + digits[1:]
+    elif len(digits) == 10:
+        normalized = "+7" + digits
+    elif normalized.startswith("8") and len(normalized) == 11:
+        normalized = "+7" + normalized[1:]
+    elif normalized.startswith("7") and len(normalized) == 11:
+        normalized = "+7" + normalized[1:]
+    elif normalized and not normalized.startswith("+") and len(normalized) >= 11 and normalized[0] in ("7", "8"):
+        # fallback: если прилетело без плюса, но с 11 цифрами и российским префиксом
+        normalized = "+7" + normalized[1:]
 
     # Дедупликация на сервере: если пользователь несколько раз подряд нажимает "позвонить" на тот же номер/контакт,
     # не создаём новые записи (иначе отчёты раздуваются).

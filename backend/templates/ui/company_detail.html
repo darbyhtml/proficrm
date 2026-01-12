@@ -1173,22 +1173,24 @@
 
           document.querySelectorAll('.js-call-phone').forEach(btn => {
             btn.addEventListener('click', async () => {
-              // Получаем номер из data-phone (он уже нормализован в БД как +7XXXXXXXXXX)
+              // Получаем номер из data-phone (в БД хранится в виде +7XXXXXXXXXX)
               let phone = btn.dataset.phone || '';
-              // Убираем все нецифровые символы для отправки на телефон
-              phone = phone.replace(/\D/g, '');
-              // Если начинается с 7, оставляем как есть
-              // Если начинается с 8, заменяем на 7
-              if (phone.startsWith('8') && phone.length >= 11) {
-                phone = '7' + phone.substring(1);
-              }
-              // Если 10 цифр, добавляем 7 в начало
-              if (phone.length === 10) {
-                phone = '7' + phone;
-              }
-              // Если номер начинается с +7, убираем + для отправки
-              if (phone.startsWith('7')) {
-                phone = phone; // Оставляем как есть (7XXXXXXXXXX)
+              // Разрешаем только цифры и ведущий +
+              phone = phone.replace(/[^\\d+]/g, '');
+              // Если начинается с +7 — оставляем
+              if (!phone.startsWith('+7')) {
+                // Если начинается с 8 и 11 цифр => +7XXXXXXXXXX
+                if (phone.startsWith('8') && phone.length === 11) {
+                  phone = '+7' + phone.substring(1);
+                }
+                // Если начинается с 7 и 11 цифр => +7XXXXXXXXXX
+                else if (phone.startsWith('7') && phone.length === 11) {
+                  phone = '+7' + phone.substring(1);
+                }
+                // Если 10 цифр => +7XXXXXXXXXX
+                else if (/^\\d{10}$/.test(phone)) {
+                  phone = '+7' + phone;
+                }
               }
               const companyId = btn.dataset.company || '';
               const contactId = btn.dataset.contact || '';
