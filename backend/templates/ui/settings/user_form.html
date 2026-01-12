@@ -50,20 +50,61 @@
       </div>
 
       {% if mode == 'create' %}
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label class="block text-sm text-brand-dark/80 mb-1">Пароль</label>
-            {{ form.password1 }}
+        <div class="space-y-3">
+          <div class="flex items-center gap-2">
+            <button type="button" id="generate-password-btn" class="btn btn-outline text-sm">🔑 Сгенерировать пароль</button>
           </div>
-          <div>
-            <label class="block text-sm text-brand-dark/80 mb-1">Пароль ещё раз</label>
-            {{ form.password2 }}
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-sm text-brand-dark/80 mb-1">Пароль</label>
+              <div class="relative">
+                {{ form.password1 }}
+                <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-brand-dark/60 hover:text-brand-dark" id="toggle-password1" title="Показать/скрыть пароль">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" id="eye-icon-password1">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                  </svg>
+                  <svg class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" id="eye-off-icon-password1">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.29 3.29m0 0A9.976 9.976 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm text-brand-dark/80 mb-1">Пароль ещё раз</label>
+              <div class="relative">
+                {{ form.password2 }}
+                <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-brand-dark/60 hover:text-brand-dark" id="toggle-password2" title="Показать/скрыть пароль">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" id="eye-icon-password2">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                  </svg>
+                  <svg class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" id="eye-off-icon-password2">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.29 3.29m0 0A9.976 9.976 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       {% else %}
         <div>
+          <div class="flex items-center gap-2 mb-2">
+            <button type="button" id="generate-password-btn" class="btn btn-outline text-sm">🔑 Сгенерировать пароль</button>
+          </div>
           <label class="block text-sm text-brand-dark/80 mb-1">Новый пароль (не обязательно)</label>
-          {{ form.new_password }}
+          <div class="relative">
+            {{ form.new_password }}
+            <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-brand-dark/60 hover:text-brand-dark" id="toggle-new-password" title="Показать/скрыть пароль">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" id="eye-icon-new-password">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+              </svg>
+              <svg class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" id="eye-off-icon-new-password">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.29 3.29m0 0A9.976 9.976 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+              </svg>
+            </button>
+          </div>
         </div>
       {% endif %}
 
@@ -77,6 +118,109 @@
       </div>
     </form>
   </div>
+
+  <script>
+    // Генератор пароля
+    function generatePassword(length = 16) {
+      const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+      const numbers = '0123456789';
+      const symbols = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+      const all = uppercase + lowercase + numbers + symbols;
+      
+      let password = '';
+      // Гарантируем минимум по одному символу каждого типа
+      password += uppercase[Math.floor(Math.random() * uppercase.length)];
+      password += lowercase[Math.floor(Math.random() * lowercase.length)];
+      password += numbers[Math.floor(Math.random() * numbers.length)];
+      password += symbols[Math.floor(Math.random() * symbols.length)];
+      
+      // Заполняем остальное случайными символами
+      for (let i = password.length; i < length; i++) {
+        password += all[Math.floor(Math.random() * all.length)];
+      }
+      
+      // Перемешиваем символы
+      return password.split('').sort(() => Math.random() - 0.5).join('');
+    }
+
+    // Функция для генерации и заполнения пароля
+    function handleGeneratePassword() {
+      const password = generatePassword(16);
+      
+      {% if mode == 'create' %}
+      const password1Field = document.getElementById('id_password1');
+      const password2Field = document.getElementById('id_password2');
+      if (password1Field && password2Field) {
+        password1Field.value = password;
+        password2Field.value = password;
+        // Сбрасываем к скрытому виду и обновляем иконки
+        if (password1Field.type === 'text') {
+          password1Field.type = 'password';
+          document.getElementById('eye-icon-password1').classList.remove('hidden');
+          document.getElementById('eye-off-icon-password1').classList.add('hidden');
+        }
+        if (password2Field.type === 'text') {
+          password2Field.type = 'password';
+          document.getElementById('eye-icon-password2').classList.remove('hidden');
+          document.getElementById('eye-off-icon-password2').classList.add('hidden');
+        }
+      }
+      {% else %}
+      const newPasswordField = document.getElementById('id_new_password');
+      if (newPasswordField) {
+        newPasswordField.value = password;
+        // Сбрасываем к скрытому виду и обновляем иконки
+        if (newPasswordField.type === 'text') {
+          newPasswordField.type = 'password';
+          document.getElementById('eye-icon-new-password').classList.remove('hidden');
+          document.getElementById('eye-off-icon-new-password').classList.add('hidden');
+        }
+      }
+      {% endif %}
+    }
+
+    // Функция для переключения показа/скрытия пароля
+    function togglePasswordVisibility(fieldId, toggleBtnId, eyeIconId, eyeOffIconId) {
+      const field = document.getElementById(fieldId);
+      const toggleBtn = document.getElementById(toggleBtnId);
+      const eyeIcon = document.getElementById(eyeIconId);
+      const eyeOffIcon = document.getElementById(eyeOffIconId);
+      
+      if (!field || !toggleBtn || !eyeIcon || !eyeOffIcon) return;
+      
+      toggleBtn.addEventListener('click', () => {
+        if (field.type === 'password') {
+          field.type = 'text';
+          eyeIcon.classList.add('hidden');
+          eyeOffIcon.classList.remove('hidden');
+        } else {
+          field.type = 'password';
+          eyeIcon.classList.remove('hidden');
+          eyeOffIcon.classList.add('hidden');
+        }
+      });
+    }
+
+    // Инициализация при загрузке страницы
+    document.addEventListener('DOMContentLoaded', () => {
+      // Кнопка генерации пароля
+      const generateBtn = document.getElementById('generate-password-btn');
+      if (generateBtn) {
+        generateBtn.addEventListener('click', handleGeneratePassword);
+      }
+
+      {% if mode == 'create' %}
+      // Переключение для password1
+      togglePasswordVisibility('id_password1', 'toggle-password1', 'eye-icon-password1', 'eye-off-icon-password1');
+      // Переключение для password2
+      togglePasswordVisibility('id_password2', 'toggle-password2', 'eye-icon-password2', 'eye-off-icon-password2');
+      {% else %}
+      // Переключение для new_password
+      togglePasswordVisibility('id_new_password', 'toggle-new-password', 'eye-icon-new-password', 'eye-off-icon-new-password');
+      {% endif %}
+    });
+  </script>
 {% endblock %}
 
 

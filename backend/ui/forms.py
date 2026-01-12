@@ -284,8 +284,8 @@ class TaskTypeForm(forms.ModelForm):
 
 
 class UserCreateForm(forms.ModelForm):
-    password1 = forms.CharField(label="Пароль", widget=forms.PasswordInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}))
-    password2 = forms.CharField(label="Пароль ещё раз", widget=forms.PasswordInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}))
+    password1 = forms.CharField(label="Пароль", widget=forms.PasswordInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "id": "id_password1"}))
+    password2 = forms.CharField(label="Пароль ещё раз", widget=forms.PasswordInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "id": "id_password2"}))
 
     class Meta:
         model = User
@@ -323,7 +323,7 @@ class UserEditForm(forms.ModelForm):
     new_password = forms.CharField(
         label="Новый пароль (не обязательно)",
         required=False,
-        widget=forms.PasswordInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+        widget=forms.PasswordInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "id": "id_new_password"}),
     )
 
     class Meta:
