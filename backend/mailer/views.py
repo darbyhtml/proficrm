@@ -470,41 +470,49 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
     if sphere:
         company_qs = company_qs.filter(spheres__id=sphere)
     # Важно: при фильтрации по m2m (spheres) будут дубли без distinct()
-    company_ids = company_qs.order_by().values_list("id", flat=True).distinct()
+    # Преобразуем QuerySet в список для использования в __in
+    company_ids = list(company_qs.order_by().values_list("id", flat=True).distinct())
 
     created = 0
     
     # 1) Берём email контактов, связанных с компаниями (если включено)
     if include_contact_emails:
-        emails_qs = (
-            ContactEmail.objects.filter(contact__company_id__in=company_ids)
-            .select_related("contact", "contact__company")
-        )
-        # Фильтруем по типам email'ов, если указаны
-        if contact_email_types:
-            emails_qs = emails_qs.filter(type__in=contact_email_types)
-        emails_qs = emails_qs.order_by("value")
+        # Если нет компаний после фильтрации, пропускаем
+        if not company_ids:
+            messages.info(request, "Нет компаний, соответствующих фильтрам.")
+        else:
+            emails_qs = (
+                ContactEmail.objects.filter(contact__company_id__in=company_ids)
+                .select_related("contact", "contact__company")
+            )
+            # Фильтруем по типам email'ов, если указаны
+            if contact_email_types:
+                emails_qs = emails_qs.filter(type__in=contact_email_types)
+            emails_qs = emails_qs.order_by("value")
 
-        for e in emails_qs.iterator():
-            if created >= limit:
-                break
-            email = (e.value or "").strip().lower()
-            if not email:
-                continue
-            if Unsubscribe.objects.filter(email__iexact=email).exists():
-                CampaignRecipient.objects.get_or_create(
+            for e in emails_qs.iterator():
+                if created >= limit:
+                    break
+                email = (e.value or "").strip().lower()
+                if not email:
+                    continue
+                # Проверяем, что контакт существует и привязан к компании
+                if not e.contact or not e.contact.company_id:
+                    continue
+                if Unsubscribe.objects.filter(email__iexact=email).exists():
+                    CampaignRecipient.objects.get_or_create(
+                        campaign=camp,
+                        email=email,
+                        defaults={"status": CampaignRecipient.Status.UNSUBSCRIBED, "contact_id": e.contact_id, "company_id": e.contact.company_id},
+                    )
+                    continue
+                _, was_created = CampaignRecipient.objects.get_or_create(
                     campaign=camp,
                     email=email,
-                    defaults={"status": CampaignRecipient.Status.UNSUBSCRIBED, "contact_id": e.contact_id, "company_id": e.contact.company_id},
+                    defaults={"contact_id": e.contact_id, "company_id": e.contact.company_id},
                 )
-                continue
-            _, was_created = CampaignRecipient.objects.get_or_create(
-                campaign=camp,
-                email=email,
-                defaults={"contact_id": e.contact_id, "company_id": e.contact.company_id},
-            )
-            if was_created:
-                created += 1
+                if was_created:
+                    created += 1
 
     # 2) Добавляем основной email компании (если включено и лимит не достигнут)
     if include_company_email and created < limit:
