@@ -2243,7 +2243,7 @@ def contact_phone_cold_call_reset(request: HttpRequest, contact_phone_id) -> Htt
 
     # Откатываем отметку (но сохраняем историю)
     contact_phone.is_cold_call = False
-    contact_phone.save(update_fields=["is_cold_call", "updated_at"])
+    contact_phone.save(update_fields=["is_cold_call"])
     # НЕ удаляем поля cold_marked_at, cold_marked_by, cold_marked_call для истории
 
     messages.success(request, f"Отметка холодного звонка отменена (номер {contact_phone.value}).")

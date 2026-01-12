@@ -565,16 +565,14 @@
                         <div class="flex items-center justify-between gap-2">
                           <div class="flex-1">
                             <div class="font-mono text-xs">{{ p.value|format_phone }}</div>
-                            {% if p.is_cold_call or p.cold_marked_at %}
+                            {% if p.is_cold_call %}
                               <div class="mt-0.5 text-[10px] text-brand-dark/60">
-                                {% if p.is_cold_call %}
-                                  <span class="font-medium">Холодный звонок:</span>
-                                  {% if p.cold_marked_at %}
-                                    {{ p.cold_marked_at|date:"d.m.Y H:i" }}
-                                  {% endif %}
-                                  {% if p.cold_marked_by %}
-                                    ({{ p.cold_marked_by.first_name }} {{ p.cold_marked_by.last_name|default:"" }})
-                                  {% endif %}
+                                <span class="font-medium">Холодный звонок:</span>
+                                {% if p.cold_marked_at %}
+                                  {{ p.cold_marked_at|date:"d.m.Y H:i" }}
+                                {% endif %}
+                                {% if p.cold_marked_by %}
+                                  ({{ p.cold_marked_by.first_name }} {{ p.cold_marked_by.last_name|default:"" }})
                                 {% endif %}
                               </div>
                             {% endif %}
