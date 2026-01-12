@@ -3039,7 +3039,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
     
     # Валидация направления сортировки
     if sort_dir not in ("asc", "desc"):
-        sort_dir = "desc"  # По умолчанию desc
+        sort_dir = "asc"  # По умолчанию asc для дедлайна (просроченные сверху)
     
     # Применяем сортировку
     if sort_field == "due_at":
@@ -3078,10 +3078,10 @@ def task_list(request: HttpRequest) -> HttpResponse:
         else:
             qs = qs.order_by("-title", "-created_at")
     else:
-        # По умолчанию: сортировка по дате создания (новые сверху)
-        sort_field = "created_at"
-        sort_dir = "desc"
-        qs = qs.order_by("-created_at")
+        # По умолчанию: сортировка по дедлайну (просроченные сверху)
+        sort_field = "due_at"
+        sort_dir = "asc"
+        qs = qs.order_by(F("due_at").asc(nulls_last=True), "-created_at")
 
     # Пагинация с выбором per_page (как в company_list)
     per_page_param = request.GET.get("per_page", "").strip()
