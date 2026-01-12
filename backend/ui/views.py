@@ -1418,6 +1418,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     )
     for t in tasks:
         t.can_edit_task = _can_edit_task_ui(user, t)  # type: ignore[attr-defined]
+        t.can_delete_task = _can_delete_task_ui(user, t)  # type: ignore[attr-defined]
 
     note_form = CompanyNoteForm()
     activity = []
@@ -2636,11 +2637,13 @@ def task_list(request: HttpRequest) -> HttpResponse:
     qs = qs.distinct()
 
     status = (request.GET.get("status") or "").strip()
+    show_done = (request.GET.get("show_done") or "").strip()
     if status:
         qs = qs.filter(status=status)
     else:
         # По умолчанию не показываем выполненные задачи, чтобы они не мешали в списке.
-        qs = qs.exclude(status=Task.Status.DONE)
+        if show_done != "1":
+            qs = qs.exclude(status=Task.Status.DONE)
 
     mine = (request.GET.get("mine") or "").strip()
     # Логика mine:
@@ -2669,6 +2672,19 @@ def task_list(request: HttpRequest) -> HttpResponse:
     today = (request.GET.get("today") or "").strip()
     if today == "1":
         qs = qs.filter(due_at__gte=today_start, due_at__lt=tomorrow_start).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+
+    # Сортировка
+    sort = (request.GET.get("sort") or "").strip()
+    if sort == "due_asc":
+        qs = qs.order_by(F("due_at").asc(nulls_last=True), "-created_at")
+    elif sort == "due_desc":
+        qs = qs.order_by(F("due_at").desc(nulls_last=True), "-created_at")
+    elif sort == "status":
+        qs = qs.order_by("status", "-created_at")
+    elif sort == "assignee":
+        qs = qs.order_by("assigned_to__last_name", "assigned_to__first_name", "-created_at")
+    else:
+        qs = qs.order_by("-created_at")
 
     # Пагинация с выбором per_page (как в company_list)
     per_page_param = request.GET.get("per_page", "").strip()
@@ -2716,9 +2732,11 @@ def task_list(request: HttpRequest) -> HttpResponse:
             "page": page,
             "qs": qs_no_page,
             "status": status,
+            "show_done": show_done,
             "mine": mine,
             "overdue": overdue,
             "today": today,
+            "sort": sort,
             "per_page": per_page,
             "is_admin": is_admin,
             "transfer_targets": transfer_targets,

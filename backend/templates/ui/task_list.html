@@ -11,34 +11,59 @@
       <a href="/tasks/new/" class="btn btn-primary">+ Новая задача</a>
     </div>
 
-    <form class="bg-white border rounded-2xl p-4 grid grid-cols-1 md:grid-cols-5 gap-3" method="get">
+    <form class="bg-white border rounded-2xl p-4 grid grid-cols-1 md:grid-cols-6 gap-3" method="get">
       <div>
         <label class="block text-sm text-brand-dark/80 mb-1">Статус</label>
-        <select name="status" class="select">
-          <option value="">Любой</option>
-          <option value="new" {% if status == 'new' %}selected{% endif %}>Новая</option>
-          <option value="in_progress" {% if status == 'in_progress' %}selected{% endif %}>В работе</option>
-          <option value="done" {% if status == 'done' %}selected{% endif %}>Выполнена</option>
-          <option value="cancelled" {% if status == 'cancelled' %}selected{% endif %}>Отменена</option>
-        </select>
+        <div class="flex items-center gap-2 select-with-icon">
+          <svg class="w-4 h-4 text-brand-dark/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h12M4 18h8"/></svg>
+          <select name="status" class="select">
+            <option value="">Любой</option>
+            <option value="new" {% if status == 'new' %}selected{% endif %}>Новая</option>
+            <option value="in_progress" {% if status == 'in_progress' %}selected{% endif %}>В работе</option>
+            <option value="done" {% if status == 'done' %}selected{% endif %}>Выполнена</option>
+            <option value="cancelled" {% if status == 'cancelled' %}selected{% endif %}>Отменена</option>
+          </select>
+        </div>
       </div>
-      <div class="flex items-end gap-2">
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Видимость</label>
         <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
           <input type="checkbox" name="mine" value="1" {% if mine == '1' %}checked{% endif %} />
-          Мои
+          Только мои
         </label>
       </div>
-      <div class="flex items-end gap-2">
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Срок</label>
+        <div class="space-y-1">
+          <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
+            <input type="checkbox" name="today" value="1" {% if today == '1' %}checked{% endif %} />
+            На сегодня
+          </label>
+          <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
+            <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %} />
+            Просрочено
+          </label>
+        </div>
+      </div>
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Выполненные</label>
         <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
-          <input type="checkbox" name="today" value="1" {% if today == '1' %}checked{% endif %} />
-          На сегодня
+          <input type="checkbox" name="show_done" value="1" {% if show_done == '1' %}checked{% endif %} />
+          Показать
         </label>
       </div>
-      <div class="flex items-end gap-2">
-        <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
-          <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %} />
-          Просрочено
-        </label>
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Сортировка</label>
+        <div class="flex items-center gap-2 select-with-icon">
+          <svg class="w-4 h-4 text-brand-dark/60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>
+          <select name="sort" class="select">
+            <option value="">Новое сверху</option>
+            <option value="due_asc" {% if sort == 'due_asc' %}selected{% endif %}>Дедлайн ↑</option>
+            <option value="due_desc" {% if sort == 'due_desc' %}selected{% endif %}>Дедлайн ↓</option>
+            <option value="status" {% if sort == 'status' %}selected{% endif %}>По статусу</option>
+            <option value="assignee" {% if sort == 'assignee' %}selected{% endif %}>По ответственным</option>
+          </select>
+        </div>
       </div>
       <div class="flex items-end gap-2">
         <button class="btn btn-primary" type="submit">Фильтр</button>
@@ -168,6 +193,8 @@
             {% if mine %}<input type="hidden" name="mine" value="{{ mine }}" />{% endif %}
             {% if overdue %}<input type="hidden" name="overdue" value="{{ overdue }}" />{% endif %}
             {% if today %}<input type="hidden" name="today" value="{{ today }}" />{% endif %}
+            {% if show_done %}<input type="hidden" name="show_done" value="{{ show_done }}" />{% endif %}
+            {% if sort %}<input type="hidden" name="sort" value="{{ sort }}" />{% endif %}
           </form>
         </div>
         <div>
