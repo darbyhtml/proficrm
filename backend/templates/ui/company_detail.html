@@ -1165,16 +1165,7 @@
           };
           const csrftoken = getCookie('csrftoken');
           
-          // Подтверждение перед отметкой холодного звонка
-          document.querySelectorAll('.js-cold-call-form').forEach(form => {
-            form.addEventListener('submit', function(e) {
-              const confirmMsg = form.getAttribute('data-confirm') || 'Вы действительно хотите отметить звонок как холодный?';
-              if (!confirm(confirmMsg)) {
-                e.preventDefault();
-                return false;
-              }
-            });
-          });
+          // Подтверждение перед отметкой холодного звонка обрабатывается в base.html
 
           // Старая логика с data-disabled больше не используется - кнопка показывается только если is_cold_call = False
 

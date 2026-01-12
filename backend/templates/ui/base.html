@@ -997,6 +997,8 @@
       // Обработчик подтверждения для форм холодного звонка
       document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.js-cold-call-form').forEach(function(form) {
+          if (form.__coldCallBound) return;
+          form.__coldCallBound = true;
           form.addEventListener('submit', function(e) {
             const confirmMessage = form.getAttribute('data-confirm');
             if (confirmMessage && !confirm(confirmMessage)) {
