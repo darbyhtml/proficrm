@@ -23,14 +23,15 @@ class RateLimitMiddleware(MiddlewareMixin):
         "/favicon.ico",
     ]
     
-    # Пути с защитой от брутфорса (только эти пути защищаются)
-    PROTECTED_PATHS = [
+    # Пути с защитой от брутфорса (строгий лимит для логина/токенов)
+    PROTECTED_AUTH_PATHS = [
         "/login/",
         "/api/token/",
         "/api/token/refresh/",
-        # Phone API (Android приложение) — защищаем от частых запросов
-        "/api/phone/",
     ]
+    
+    # Phone API (Android приложение) — более мягкий лимит, отдельный бакет
+    PHONE_API_PATH = "/api/phone/"
     
     def process_request(self, request):
         # Пропускаем статические файлы
@@ -39,28 +40,35 @@ class RateLimitMiddleware(MiddlewareMixin):
             if path.startswith(exempt_path):
                 return None
         
-        # Применяем rate limiting ТОЛЬКО к защищенным путям
-        is_protected = any(path.startswith(p) for p in self.PROTECTED_PATHS)
-        if not is_protected:
-            return None  # Для остальных путей не применяем rate limiting
-        
         ip = get_client_ip(request)
         
-        # Для защищенных путей используем строгий лимит
-        max_requests = 10  # 10 попыток в минуту для логина/токенов
-        
-        # Проверяем rate limit только для защищенных путей
-        if is_ip_rate_limited(ip, "protected", max_requests, 60):
-            if request.path.startswith("/api/"):
+        # Проверяем Phone API отдельно (более мягкий лимит)
+        if path.startswith(self.PHONE_API_PATH):
+            # Для телефонного API используем более мягкий лимит (60 запросов в минуту)
+            # Это позволяет приложению делать частые polling запросы
+            if is_ip_rate_limited(ip, "phone_api", RATE_LIMIT_API_PER_MINUTE, 60):
                 return JsonResponse(
                     {"detail": "Превышен лимит запросов. Попробуйте позже."},
                     status=429
                 )
-            else:
-                return HttpResponse(
-                    "Превышен лимит запросов. Попробуйте позже.",
-                    status=429
-                )
+            return None
+        
+        # Проверяем защищенные пути авторизации (строгий лимит)
+        is_auth_protected = any(path.startswith(p) for p in self.PROTECTED_AUTH_PATHS)
+        if is_auth_protected:
+            # Для логина/токенов используем строгий лимит (10 попыток в минуту)
+            # Отдельный бакет, чтобы телефонное приложение не блокировало браузерный логин
+            if is_ip_rate_limited(ip, "auth", 10, 60):
+                if request.path.startswith("/api/"):
+                    return JsonResponse(
+                        {"detail": "Превышен лимит запросов. Попробуйте позже."},
+                        status=429
+                    )
+                else:
+                    return HttpResponse(
+                        "Превышен лимит запросов. Попробуйте позже.",
+                        status=429
+                    )
         
         return None
 
