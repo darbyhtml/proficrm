@@ -212,10 +212,9 @@
                   <div class="flex items-start gap-2">
                     {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}
                       <div class="flex items-center justify-center w-5 h-5 rounded-full border-2 border-red-600 flex-shrink-0" title="Просрочено">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
                           <path d="M12 8v4"/>
                           <path d="M12 16h.01"/>
-                          <circle cx="12" cy="12" r="10"/>
                         </svg>
                       </div>
                     {% endif %}
