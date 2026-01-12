@@ -311,7 +311,8 @@
                           </svg>
                         </button>
                       </form>
-                    {% elif (company.primary_contact_is_cold_call or company.primary_cold_marked_at) and is_admin %}
+                    {% elif is_admin %}
+                      {% if company.primary_contact_is_cold_call or company.primary_cold_marked_at %}
                       <form method="post" action="/companies/{{ company.id }}/cold-call/reset/" style="display:inline">
                         {% csrf_token %}
                         <button
@@ -327,6 +328,7 @@
                           </svg>
                         </button>
                       </form>
+                      {% endif %}
                     {% endif %}
                   {% endif %}
                   <button
@@ -573,7 +575,8 @@
                             </svg>
                           </button>
                         </form>
-                      {% elif (c.is_cold_call or c.cold_marked_at) and is_admin %}
+                      {% elif is_admin %}
+                        {% if c.is_cold_call or c.cold_marked_at %}
                         <form method="post" action="/contacts/{{ c.id }}/cold-call/reset/">
                           {% csrf_token %}
                           <button
@@ -589,6 +592,7 @@
                             </svg>
                           </button>
                         </form>
+                        {% endif %}
                       {% endif %}
                       <a class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" href="/contacts/{{ c.id }}/edit/" title="Редактировать" aria-label="Редактировать">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
