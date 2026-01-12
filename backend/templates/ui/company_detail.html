@@ -572,7 +572,7 @@
                                   {{ p.cold_marked_at|date:"d.m.Y H:i" }}
                                 {% endif %}
                                 {% if p.cold_marked_by %}
-                                  ({{ p.cold_marked_by }})
+                                  ({{ p.cold_marked_by.first_name }} {{ p.cold_marked_by.last_name|default:"" }})
                                 {% endif %}
                                 {% if not p.is_cold_call and p.cold_marked_at %}
                                   <span class="text-brand-dark/40 ml-1">(откат)</span>
@@ -600,7 +600,7 @@
                                     </svg>
                                   </button>
                                 </form>
-                              {% elif is_admin %}
+                              {% elif is_admin and (p.is_cold_call or p.cold_marked_at) %}
                                 <form method="post" action="/contact-phones/{{ p.id }}/cold-call/reset/" style="display:inline">
                                   {% csrf_token %}
                                   <button

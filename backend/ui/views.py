@@ -2136,7 +2136,14 @@ def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> Ht
     if request.method != "POST":
         return redirect("dashboard")
     user: User = request.user
-    contact_phone = get_object_or_404(ContactPhone.objects.select_related("contact__company", "cold_marked_by"), id=contact_phone_id)
+    import logging
+    logger = logging.getLogger(__name__)
+    try:
+        contact_phone = get_object_or_404(ContactPhone.objects.select_related("contact__company", "cold_marked_by"), id=contact_phone_id)
+    except Exception as e:
+        logger.error(f"Error finding ContactPhone {contact_phone_id}: {e}", exc_info=True)
+        messages.error(request, f"Ошибка: номер телефона не найден.")
+        return redirect("dashboard")
     contact = contact_phone.contact
     company = contact.company if contact else None
     if not company:
