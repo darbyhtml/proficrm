@@ -288,7 +288,34 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
         email_filters = Q(contacts__emails__value__icontains=q)
         
         # Поиск по ФИО в контактах
-        fio_filters = Q(contacts__first_name__icontains=q) | Q(contacts__last_name__icontains=q)
+        # Разбиваем запрос на слова для более гибкого поиска
+        words = [w.strip() for w in q.split() if w.strip()]
+        fio_filters = Q()
+        
+        if len(words) > 1:
+            # Если несколько слов, ищем контакты, где ВСЕ слова найдены (в любых полях одного контакта)
+            # Используем Exists для проверки, что есть контакт компании, где все слова найдены
+            from django.db.models import Exists, OuterRef
+            
+            # Создаем фильтр для контакта, где все слова найдены
+            contact_q = Contact.objects.filter(company=OuterRef('pk'))
+            for word in words:
+                contact_q = contact_q.filter(
+                    Q(first_name__icontains=word) | Q(last_name__icontains=word)
+                )
+            
+            # Ищем компании, у которых есть такие контакты
+            fio_filters = Exists(contact_q)
+            # Также ищем по полному запросу в каждом поле (на случай, если ФИО хранится в одном поле)
+            fio_filters |= Q(contacts__first_name__icontains=q)
+            fio_filters |= Q(contacts__last_name__icontains=q)
+        elif len(words) == 1:
+            # Одно слово - ищем в любом поле
+            word = words[0]
+            fio_filters = Q(contacts__first_name__icontains=word) | Q(contacts__last_name__icontains=word)
+        else:
+            # Пустой запрос (не должно быть, но на всякий случай)
+            fio_filters = Q(contacts__first_name__icontains=q) | Q(contacts__last_name__icontains=q)
         
         # Объединяем все фильтры
         qs = qs.filter(
