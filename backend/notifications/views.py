@@ -4,10 +4,14 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from datetime import timedelta
 
 from notifications.models import Notification
 from notifications.context_processors import notifications_panel
+from tasksapp.models import Task
+from companies.models import Company
 
 
 @login_required
@@ -58,4 +62,97 @@ def poll(request: HttpRequest) -> HttpResponse:
             "reminder_items": ctx.get("reminder_items") or [],
             "notif_items": notif_payload,
         }
+    )
+
+
+@login_required
+def all_notifications(request: HttpRequest) -> HttpResponse:
+    """Страница со всеми уведомлениями (непрочитанными и прочитанными)."""
+    user = request.user
+    
+    # Получаем все уведомления пользователя, отсортированные по дате создания (новые сверху)
+    all_notifications_list = Notification.objects.filter(user=user).order_by("-created_at")
+    
+    # Разделяем на непрочитанные и прочитанные
+    unread_notifications = all_notifications_list.filter(is_read=False)
+    read_notifications = all_notifications_list.filter(is_read=True)
+    
+    return render(
+        request,
+        "notifications/all_notifications.html",
+        {
+            "unread_notifications": unread_notifications,
+            "read_notifications": read_notifications,
+            "total_count": all_notifications_list.count(),
+            "unread_count": unread_notifications.count(),
+            "read_count": read_notifications.count(),
+        },
+    )
+
+
+@login_required
+def all_reminders(request: HttpRequest) -> HttpResponse:
+    """Страница со всеми напоминаниями (задачи и договоры)."""
+    user = request.user
+    now = timezone.now()
+    today_date = timezone.localdate(now)
+    
+    # Все задачи пользователя (не выполненные и не отмененные)
+    reminders = (
+        Task.objects.filter(assigned_to=user)
+        .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+        .select_related("company")
+        .order_by("due_at")
+    )
+    
+    # Просроченные задачи
+    overdue_tasks = reminders.filter(due_at__lt=now)
+    
+    # Задачи на сегодня
+    today_tasks = reminders.filter(due_at__date=today_date)
+    
+    # Задачи на ближайшие дни (до 7 дней)
+    week_tasks = reminders.filter(due_at__gt=now, due_at__lte=now + timedelta(days=7))
+    
+    # Задачи на будущее (более 7 дней)
+    future_tasks = reminders.filter(due_at__gt=now + timedelta(days=7))
+    
+    # Напоминания по договорам
+    contract_reminders = []
+    contract_qs = (
+        Company.objects.filter(responsible=user, contract_until__isnull=False)
+        .only("id", "name", "contract_until")
+        .order_by("contract_until")
+    )
+    
+    # Все договоры в пределах 30 дней
+    soon_until = today_date + timedelta(days=30)
+    contracts = contract_qs.filter(contract_until__lte=soon_until)
+    
+    for c in contracts:
+        days_left = (c.contract_until - today_date).days if c.contract_until else None
+        prefix = "Срочно: " if (days_left is not None and days_left < 14) else ""
+        contract_reminders.append(
+            {
+                "title": f"{prefix}Договор до {c.contract_until.strftime('%d.%m.%Y')}",
+                "subtitle": c.name,
+                "url": f"/companies/{c.id}/",
+                "kind": "contract",
+                "days_left": days_left,
+                "company_id": c.id,
+            }
+        )
+    
+    return render(
+        request,
+        "notifications/all_reminders.html",
+        {
+            "overdue_tasks": overdue_tasks,
+            "today_tasks": today_tasks,
+            "week_tasks": week_tasks,
+            "future_tasks": future_tasks,
+            "contract_reminders": contract_reminders,
+            "total_tasks": reminders.count(),
+            "total_contracts": contracts.count(),
+        },
     )

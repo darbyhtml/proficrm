@@ -125,7 +125,12 @@
 
                 <div class="max-h-[420px] overflow-auto bg-white">
                   {% if reminder_items %}
-                    <div class="px-4 pt-3 pb-2 text-xs muted">Напоминания</div>
+                    <div class="px-4 pt-3 pb-2 flex items-center justify-between">
+                      <span class="text-xs muted">Напоминания</span>
+                      {% if reminder_count > reminder_items|length %}
+                        <a href="/notifications/reminders/all/" class="text-xs link">Показать все ({{ reminder_count }})</a>
+                      {% endif %}
+                    </div>
                     <div class="px-2 pb-2" id="reminderList">
                       {% for r in reminder_items %}
                         <a class="block rounded-xl border border-brand-soft px-3 py-2 mb-2 hover:bg-brand-soft/25" href="{{ r.url }}">
@@ -136,7 +141,12 @@
                     </div>
                   {% endif %}
 
-                  <div class="px-4 pt-3 pb-2 text-xs muted">Новые</div>
+                  <div class="px-4 pt-3 pb-2 flex items-center justify-between">
+                    <span class="text-xs muted">Новые</span>
+                    {% if notif_unread_count > notif_items|length %}
+                      <a href="/notifications/all/" class="text-xs link">Показать все ({{ notif_unread_count }})</a>
+                    {% endif %}
+                  </div>
                   <div class="px-2 pb-3" id="notifList">
                     {% for n in notif_items %}
                       <div class="rounded-xl border border-brand-soft px-3 py-2 mb-2 bg-brand-soft/20" data-notif-id="{{ n.id }}">
@@ -470,7 +480,7 @@
           }
         }
 
-        function renderReminders(items){
+        function renderReminders(items, totalCount){
           if(!reminderList) return;
           const arr = Array.isArray(items) ? items : [];
           if(!arr.length){
@@ -486,9 +496,28 @@
               ${subtitle ? `<div class="text-xs muted mt-0.5">${subtitle}</div>` : ''}
             </a>`;
           }).join('');
+          
+          // Обновляем заголовок с кнопкой "Показать все"
+          const reminderHeader = reminderList.previousElementSibling;
+          if(reminderHeader){
+            const existingLink = reminderHeader.querySelector('a');
+            if(totalCount && totalCount > arr.length){
+              if(!existingLink){
+                const showAllLink = document.createElement('a');
+                showAllLink.href = '/notifications/reminders/all/';
+                showAllLink.className = 'text-xs link';
+                showAllLink.textContent = `Показать все (${totalCount})`;
+                reminderHeader.appendChild(showAllLink);
+              } else {
+                existingLink.textContent = `Показать все (${totalCount})`;
+              }
+            } else if(existingLink){
+              existingLink.remove();
+            }
+          }
         }
 
-        function renderNotifs(items){
+        function renderNotifs(items, totalCount){
           if(!notifList) return;
           const arr = Array.isArray(items) ? items : [];
           if(!arr.length){
@@ -517,6 +546,25 @@
               ${openLink}
             </div>`;
           }).join('');
+          
+          // Обновляем заголовок с кнопкой "Показать все"
+          const notifHeader = notifList.previousElementSibling;
+          if(notifHeader){
+            const existingLink = notifHeader.querySelector('a');
+            if(totalCount && totalCount > arr.length){
+              if(!existingLink){
+                const showAllLink = document.createElement('a');
+                showAllLink.href = '/notifications/all/';
+                showAllLink.className = 'text-xs link';
+                showAllLink.textContent = `Показать все (${totalCount})`;
+                notifHeader.appendChild(showAllLink);
+              } else {
+                existingLink.textContent = `Показать все (${totalCount})`;
+              }
+            } else if(existingLink){
+              existingLink.remove();
+            }
+          }
         }
 
         let pollInFlight = false;
@@ -536,8 +584,8 @@
             const newest = (data.notif_items && data.notif_items.length) ? data.notif_items[0] : null;
             lastIds = newIds;
 
-            renderReminders(data.reminder_items || []);
-            renderNotifs(data.notif_items || []);
+            renderReminders(data.reminder_items || [], data.reminder_count || 0);
+            renderNotifs(data.notif_items || [], data.notif_unread_count || 0);
             bindNotifActions();
 
             // лёгкий лайв-сигнал: кольцо на колокольчике

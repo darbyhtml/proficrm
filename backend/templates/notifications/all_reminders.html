@@ -1,0 +1,113 @@
+{% extends "ui/base.html" %}
+{% block title %}Все напоминания — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div class="flex items-end justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-semibold">Все напоминания</h1>
+        <div class="text-sm text-brand-dark/70">
+          Задач: <b>{{ total_tasks }}</b> · Договоров: <b>{{ total_contracts }}</b>
+        </div>
+      </div>
+    </div>
+
+    {% if overdue_tasks %}
+      <div class="bg-white border border-brand-orange/40 rounded-2xl p-4">
+        <h2 class="text-lg font-semibold mb-3 text-brand-orange">Просроченные задачи ({{ overdue_tasks.count }})</h2>
+        <div class="space-y-2">
+          {% for t in overdue_tasks %}
+            <a href="/tasks/{{ t.id }}/edit/" class="block rounded-xl border border-brand-orange/40 px-4 py-3 bg-brand-orange/10 hover:bg-brand-orange/20">
+              <div class="text-sm font-medium">{{ t.title }}</div>
+              {% if t.company %}
+                <div class="text-xs muted mt-1">{{ t.company.name }}</div>
+              {% endif %}
+              <div class="text-[11px] muted-2 mt-2">
+                Дедлайн: {{ t.due_at|date:"d.m.Y H:i" }}
+                <span class="text-brand-orange">(просрочено)</span>
+              </div>
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if today_tasks %}
+      <div class="bg-white border border-brand-teal/40 rounded-2xl p-4">
+        <h2 class="text-lg font-semibold mb-3 text-brand-teal">Задачи на сегодня ({{ today_tasks.count }})</h2>
+        <div class="space-y-2">
+          {% for t in today_tasks %}
+            <a href="/tasks/{{ t.id }}/edit/" class="block rounded-xl border border-brand-teal/40 px-4 py-3 bg-brand-teal/10 hover:bg-brand-teal/20">
+              <div class="text-sm font-medium">{{ t.title }}</div>
+              {% if t.company %}
+                <div class="text-xs muted mt-1">{{ t.company.name }}</div>
+              {% endif %}
+              <div class="text-[11px] muted-2 mt-2">Дедлайн: {{ t.due_at|date:"d.m.Y H:i" }}</div>
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if week_tasks %}
+      <div class="bg-white border rounded-2xl p-4">
+        <h2 class="text-lg font-semibold mb-3 text-brand-dark">На этой неделе ({{ week_tasks.count }})</h2>
+        <div class="space-y-2">
+          {% for t in week_tasks %}
+            <a href="/tasks/{{ t.id }}/edit/" class="block rounded-xl border border-brand-soft px-4 py-3 bg-brand-soft/20 hover:bg-brand-soft/40">
+              <div class="text-sm font-medium">{{ t.title }}</div>
+              {% if t.company %}
+                <div class="text-xs muted mt-1">{{ t.company.name }}</div>
+              {% endif %}
+              <div class="text-[11px] muted-2 mt-2">Дедлайн: {{ t.due_at|date:"d.m.Y H:i" }}</div>
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if contract_reminders %}
+      <div class="bg-white border rounded-2xl p-4">
+        <h2 class="text-lg font-semibold mb-3 text-brand-dark">Договоры ({{ contract_reminders|length }})</h2>
+        <div class="space-y-2">
+          {% for r in contract_reminders %}
+            <a href="{{ r.url }}" class="block rounded-xl border {% if r.days_left and r.days_left < 14 %}border-brand-orange/40 bg-brand-orange/10{% else %}border-brand-soft bg-brand-soft/20{% endif %} px-4 py-3 hover:bg-brand-soft/40">
+              <div class="text-sm font-medium">{{ r.title }}</div>
+              {% if r.subtitle %}
+                <div class="text-xs muted mt-1">{{ r.subtitle }}</div>
+              {% endif %}
+              {% if r.days_left is not None %}
+                <div class="text-[11px] muted-2 mt-2">
+                  Осталось дней: <b {% if r.days_left < 14 %}class="text-brand-orange"{% endif %}>{{ r.days_left }}</b>
+                </div>
+              {% endif %}
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if future_tasks %}
+      <div class="bg-white border rounded-2xl p-4">
+        <h2 class="text-lg font-semibold mb-3 text-brand-dark/70">Будущие задачи ({{ future_tasks.count }})</h2>
+        <div class="space-y-2">
+          {% for t in future_tasks %}
+            <a href="/tasks/{{ t.id }}/edit/" class="block rounded-xl border border-brand-soft px-4 py-3 bg-white opacity-75 hover:bg-brand-soft/20">
+              <div class="text-sm font-medium text-brand-dark/70">{{ t.title }}</div>
+              {% if t.company %}
+                <div class="text-xs muted mt-1">{{ t.company.name }}</div>
+              {% endif %}
+              <div class="text-[11px] muted-2 mt-2">Дедлайн: {{ t.due_at|date:"d.m.Y H:i" }}</div>
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+    {% endif %}
+
+    {% if not overdue_tasks and not today_tasks and not week_tasks and not contract_reminders and not future_tasks %}
+      <div class="bg-white border rounded-2xl p-8 text-center">
+        <div class="text-brand-dark/50 text-lg">Напоминаний пока нет</div>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
