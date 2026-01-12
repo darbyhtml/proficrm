@@ -19,6 +19,7 @@ urlpatterns = [
     path("companies/<uuid:company_id>/update/", views.company_update, name="company_update"),
     path("companies/<uuid:company_id>/contract/update/", views.company_contract_update, name="company_contract_update"),
     path("companies/<uuid:company_id>/cold-call/toggle/", views.company_cold_call_toggle, name="company_cold_call_toggle"),
+    path("companies/<uuid:company_id>/cold-call/reset/", views.company_cold_call_reset, name="company_cold_call_reset"),
     path("companies/<uuid:company_id>/lead-state/request/", views.company_lead_state_request_create, name="company_lead_state_request_create"),
     path(
         "companies/<uuid:company_id>/lead-state/request/<uuid:req_id>/approve/",
@@ -39,6 +40,7 @@ urlpatterns = [
     path("companies/<uuid:company_id>/contacts/new/", views.contact_create, name="contact_create"),
     path("contacts/<uuid:contact_id>/edit/", views.contact_edit, name="contact_edit"),
     path("contacts/<uuid:contact_id>/cold-call/toggle/", views.contact_cold_call_toggle, name="contact_cold_call_toggle"),
+    path("contacts/<uuid:contact_id>/cold-call/reset/", views.contact_cold_call_reset, name="contact_cold_call_reset"),
     path("companies/<uuid:company_id>/notes/add/", views.company_note_add, name="company_note_add"),
     path("companies/<uuid:company_id>/notes/<int:note_id>/edit/", views.company_note_edit, name="company_note_edit"),
     path("companies/<uuid:company_id>/notes/<int:note_id>/delete/", views.company_note_delete, name="company_note_delete"),

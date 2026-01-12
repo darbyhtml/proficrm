@@ -1388,53 +1388,18 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     contacts = Contact.objects.filter(company=company).select_related("cold_marked_by", "cold_marked_call").prefetch_related("emails", "phones").order_by("last_name", "first_name")[:200]
     is_cold_company = bool(company.lead_state == Company.LeadState.COLD)
 
-    # Окно доступности кнопки "холодный" — 8 часов после звонка, но активируем кнопку только через 10 секунд
-    now_ts = timezone.now()
-    window_start = now_ts - timedelta(hours=8)
-    min_delay = timedelta(seconds=10)
-    # Последний звонок по каждому контакту (только текущий пользователь)
-    last_calls = (
-        CallRequest.objects.filter(created_by=user, company=company, contact__isnull=False, created_at__gte=window_start)
-        .values("contact_id")
-        .annotate(last=Max("created_at"))
-    )
-    last_by_contact = {str(x["contact_id"]): x["last"] for x in last_calls if x.get("contact_id")}
+    # Новая логика: любой звонок может быть холодным, без ограничений по времени
+    # Кнопка доступна только если контакт еще не отмечен как холодный
     for c in contacts:
-        last = last_by_contact.get(str(c.id))
-        if last:
-            deadline = last + timedelta(hours=8)
-            unlock_at = last + min_delay
-            # Для новых контактов (не отмеченных как холодные) разрешаем отметку даже в теплых компаниях
-            # Для уже отмеченных - только в холодных компаниях
-            can_mark = (is_cold_company or not c.is_cold_call) and (now_ts <= deadline and now_ts >= unlock_at and not c.is_cold_call)
-            c.cold_mark_available = bool(can_mark)  # type: ignore[attr-defined]
-            c.cold_mark_unlocks_at = timezone.localtime(unlock_at)  # type: ignore[attr-defined]
-            c.cold_mark_deadline = timezone.localtime(deadline)  # type: ignore[attr-defined]
-        else:
-            c.cold_mark_available = False  # type: ignore[attr-defined]
-            c.cold_mark_unlocks_at = None  # type: ignore[attr-defined]
-            c.cold_mark_deadline = None  # type: ignore[attr-defined]
+        # Кнопка доступна только если контакт еще не отмечен
+        c.cold_mark_available = not c.is_cold_call  # type: ignore[attr-defined]
 
     # Основной контакт (company.phone)
-    primary_cold_available = False
-    primary_cold_deadline = None
-    primary_cold_unlocks_at = None
-    try:
-        phone = (company.phone or "").strip()
-        normalized = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-        last_primary = (
-            CallRequest.objects.filter(created_by=user, company=company, contact__isnull=True, phone_raw=normalized, created_at__gte=window_start)
-            .aggregate(last=Max("created_at"))
-            .get("last")
-        )
-        if last_primary:
-            d = last_primary + timedelta(hours=8)
-            unlock_at = last_primary + min_delay
-            primary_cold_available = bool(now_ts <= d and now_ts >= unlock_at and not company.primary_contact_is_cold_call)
-            primary_cold_deadline = timezone.localtime(d)
-            primary_cold_unlocks_at = timezone.localtime(unlock_at)
-    except Exception:
-        pass
+    # Кнопка доступна только если основной контакт еще не отмечен
+    primary_cold_available = not company.primary_contact_is_cold_call
+    
+    # Проверка прав администратора для отката
+    is_admin = require_admin(user)
     pinned_note = (
         CompanyNote.objects.filter(company=company, is_pinned=True)
         .select_related("author", "pinned_by")
@@ -1485,8 +1450,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "contacts": contacts,
             "is_cold_company": is_cold_company,
             "primary_cold_available": primary_cold_available,
-            "primary_cold_deadline": primary_cold_deadline,
-            "primary_cold_unlocks_at": primary_cold_unlocks_at,
+            "is_admin": is_admin,
             "notes": notes,
             "pinned_note": pinned_note,
             "note_form": note_form,
@@ -1941,19 +1905,27 @@ def company_contract_update(request: HttpRequest, company_id) -> HttpResponse:
 
 @login_required
 def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
+    """
+    Отметить основной контакт компании как холодный звонок.
+    Любой звонок может быть холодным (независимо от lead_state компании).
+    Отметку можно поставить только один раз.
+    """
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch", "primary_cold_marked_by"), id=company_id)
     if not _can_edit_company(user, company):
         messages.error(request, "Нет прав на изменение признака 'Холодный звонок'.")
         return redirect("company_detail", company_id=company.id)
-    if company.lead_state != Company.LeadState.COLD:
-        messages.error(request, "Отметка «холодный звонок» доступна только для холодных карточек.")
+
+    # Проверка подтверждения
+    confirmed = request.POST.get("confirmed") == "1"
+    if not confirmed:
+        messages.error(request, "Требуется подтверждение действия.")
         return redirect("company_detail", company_id=company.id)
 
-    # Новая логика: отметку можно поставить только 1 раз и только в течение 8 часов после звонка по основному номеру
+    # Проверка: уже отмечен?
     if company.primary_contact_is_cold_call:
         messages.info(request, "Основной контакт уже отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
@@ -1963,21 +1935,19 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
         messages.error(request, "У компании не задан основной телефон.")
         return redirect("company_detail", company_id=company.id)
 
+    # Ищем последний звонок по основному номеру (без ограничения по времени)
     normalized = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
     now = timezone.now()
-    window_start = now - timedelta(hours=8)
     last_call = (
-        CallRequest.objects.filter(created_by=user, company=company, contact__isnull=True, phone_raw=normalized, created_at__gte=window_start)
+        CallRequest.objects.filter(created_by=user, company=company, contact__isnull=True, phone_raw=normalized)
         .order_by("-created_at")
         .first()
     )
     if not last_call:
-        messages.error(request, "Отметка доступна только в течение 8 часов после звонка.")
-        return redirect("company_detail", company_id=company.id)
-    if last_call.created_at and last_call.created_at > (now - timedelta(seconds=10)):
-        messages.error(request, "Подождите 10 секунд после звонка и попробуйте снова.")
+        messages.error(request, "Не найден звонок по основному номеру.")
         return redirect("company_detail", company_id=company.id)
 
+    # Отмечаем как холодный
     company.primary_contact_is_cold_call = True
     company.primary_cold_marked_at = now
     company.primary_cold_marked_by = user
@@ -2003,10 +1973,15 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
 
 @login_required
 def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
+    """
+    Отметить контакт как холодный звонок.
+    Любой звонок может быть холодным (независимо от lead_state компании).
+    Отметку можно поставить только один раз.
+    """
     if request.method != "POST":
         return redirect("dashboard")
     user: User = request.user
-    contact = get_object_or_404(Contact.objects.select_related("company"), id=contact_id)
+    contact = get_object_or_404(Contact.objects.select_related("company", "cold_marked_by"), id=contact_id)
     company = contact.company
     if not company:
         messages.error(request, "Контакт не привязан к компании.")
@@ -2014,31 +1989,30 @@ def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
     if not _can_edit_company(user, company):
         messages.error(request, "Нет прав на изменение контактов этой компании.")
         return redirect("company_detail", company_id=company.id)
-    # Разрешаем отмечать новый контакт как холодный, даже если компания теплая
-    # Но только если контакт еще не был отмечен как холодный
-    if company.lead_state != Company.LeadState.COLD and contact.is_cold_call:
-        messages.error(request, "Отметка «холодный звонок» доступна только для холодных карточек или новых контактов.")
+
+    # Проверка подтверждения
+    confirmed = request.POST.get("confirmed") == "1"
+    if not confirmed:
+        messages.error(request, "Требуется подтверждение действия.")
         return redirect("company_detail", company_id=company.id)
 
-    # Новая логика: отметку можно поставить только 1 раз и только в течение 8 часов после звонка по этому контакту
+    # Проверка: уже отмечен?
     if contact.is_cold_call:
         messages.info(request, "Контакт уже отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
+    # Ищем последний звонок по этому контакту (без ограничения по времени)
     now = timezone.now()
-    window_start = now - timedelta(hours=8)
     last_call = (
-        CallRequest.objects.filter(created_by=user, contact=contact, created_at__gte=window_start)
+        CallRequest.objects.filter(created_by=user, contact=contact)
         .order_by("-created_at")
         .first()
     )
     if not last_call:
-        messages.error(request, "Отметка доступна только в течение 8 часов после звонка.")
-        return redirect("company_detail", company_id=company.id)
-    if last_call.created_at and last_call.created_at > (now - timedelta(seconds=10)):
-        messages.error(request, "Подождите 10 секунд после звонка и попробуйте снова.")
+        messages.error(request, "Не найден звонок по этому контакту.")
         return redirect("company_detail", company_id=company.id)
 
+    # Отмечаем как холодный
     contact.is_cold_call = True
     contact.cold_marked_at = now
     contact.cold_marked_by = user
@@ -2060,6 +2034,86 @@ def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
         meta={"contact_id": str(contact.id), "call_id": str(last_call.id)},
     )
     return redirect("company_detail", company_id=company.id)
+
+
+@login_required
+def company_cold_call_reset(request: HttpRequest, company_id) -> HttpResponse:
+    """
+    Откатить отметку холодного звонка для основного контакта компании.
+    Доступно только администраторам.
+    """
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+
+    user: User = request.user
+    if not require_admin(user):
+        messages.error(request, "Только администратор может откатить отметку холодного звонка.")
+        return redirect("company_detail", company_id=company_id)
+
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    
+    if not company.primary_contact_is_cold_call:
+        messages.info(request, "Основной контакт не отмечен как холодный.")
+        return redirect("company_detail", company_id=company.id)
+
+    # Откатываем отметку
+    company.primary_contact_is_cold_call = False
+    company.save(update_fields=["primary_contact_is_cold_call", "updated_at"])
+    # НЕ удаляем поля primary_cold_marked_at, primary_cold_marked_by, primary_cold_marked_call для истории
+
+    messages.success(request, "Отметка холодного звонка отменена (основной контакт).")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="company",
+        entity_id=company.id,
+        company_id=company.id,
+        message="Откат: холодный звонок (осн. контакт)",
+    )
+    return redirect("company_detail", company_id=company.id)
+
+
+@login_required
+def contact_cold_call_reset(request: HttpRequest, contact_id) -> HttpResponse:
+    """
+    Откатить отметку холодного звонка для контакта.
+    Доступно только администраторам.
+    """
+    if request.method != "POST":
+        return redirect("dashboard")
+
+    user: User = request.user
+    if not require_admin(user):
+        messages.error(request, "Только администратор может откатить отметку холодного звонка.")
+        return redirect("dashboard")
+
+    contact = get_object_or_404(Contact.objects.select_related("company"), id=contact_id)
+    company = contact.company
+    if not company:
+        messages.error(request, "Контакт не привязан к компании.")
+        return redirect("dashboard")
+
+    if not contact.is_cold_call:
+        messages.info(request, "Контакт не отмечен как холодный.")
+        return redirect("company_detail", company_id=company.id)
+
+    # Откатываем отметку
+    contact.is_cold_call = False
+    contact.save(update_fields=["is_cold_call", "updated_at"])
+    # НЕ удаляем поля cold_marked_at, cold_marked_by, cold_marked_call для истории
+
+    messages.success(request, "Отметка холодного звонка отменена (контакт).")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="contact",
+        entity_id=str(contact.id),
+        company_id=company.id,
+        message="Откат: холодный звонок (контакт)",
+        meta={"contact_id": str(contact.id)},
+    )
+    return redirect("company_detail", company_id=company.id)
+
 
 @login_required
 def company_note_pin_toggle(request: HttpRequest, company_id, note_id: int) -> HttpResponse:

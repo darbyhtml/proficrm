@@ -292,41 +292,42 @@
               <div class="font-mono text-xs">{{ company.phone|format_phone|default:"—" }}</div>
               {% if company.phone %}
                 <div class="flex items-center gap-2 shrink-0">
-                  {% if can_edit_company and is_cold_company %}
-                    <form method="post" action="/companies/{{ company.id }}/cold-call/toggle/" style="display:inline">
-                      {% csrf_token %}
-                      <button
-                        type="submit"
-                        class="btn btn-outline js-cold-mark transition-opacity duration-300 {% if not primary_cold_available and not company.primary_contact_is_cold_call %}opacity-50 cursor-not-allowed{% endif %}"
-                        data-cold-btn="primary"
-                        data-cold-marked="{% if company.primary_contact_is_cold_call %}1{% else %}0{% endif %}"
-                        style="padding:.25rem .5rem;font-size:.75rem;{% if company.primary_contact_is_cold_call %}background:#003D38;color:#fff;border-color:rgba(0,61,56,.35){% endif %}"
-                        {% if company.primary_contact_is_cold_call %}
-                          disabled
-                          title="Холодный уже отмечен (один раз)"
-                          aria-label="Холодный уже отмечен (один раз)"
-                        {% elif not primary_cold_available %}
-                          data-disabled="1"
-                          title="{% if primary_cold_unlocks_at %}Станет доступно {{ primary_cold_unlocks_at|date:'d.m.Y H:i:s' }}{% elif primary_cold_deadline %}Можно отметить до {{ primary_cold_deadline|date:'d.m.Y H:i' }}{% else %}Можно отметить только в течение 8 часов после звонка{% endif %}"
-                          aria-label="Недоступно"
-                          aria-disabled="true"
-                        {% else %}
-                          title="Отметить холодный (доступно 8 часов после звонка, через 10 сек)"
-                          aria-label="Отметить холодный (доступно 8 часов после звонка, через 10 сек)"
-                        {% endif %}
-                      >
-                        {% if company.primary_contact_is_cold_call %}
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                          </svg>
-                        {% else %}
+                  {% if can_edit_company %}
+                    {% if not company.primary_contact_is_cold_call %}
+                      <form method="post" action="/companies/{{ company.id }}/cold-call/toggle/" style="display:inline" class="js-cold-call-form" data-confirm="Вы действительно хотите отметить звонок как холодный?">
+                        {% csrf_token %}
+                        <input type="hidden" name="confirmed" value="1">
+                        <button
+                          type="submit"
+                          class="btn btn-outline js-cold-mark"
+                          data-cold-btn="primary"
+                          style="padding:.25rem .5rem;font-size:.75rem;"
+                          title="Отметить холодный звонок"
+                          aria-label="Отметить холодный звонок"
+                        >
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             <path d="M12 2v20M4 6l16 12M20 6 4 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                             <path d="M6 4l12 16M18 4 6 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".35"/>
                           </svg>
-                        {% endif %}
-                      </button>
-                    </form>
+                        </button>
+                      </form>
+                    {% elif is_admin %}
+                      <form method="post" action="/companies/{{ company.id }}/cold-call/reset/" style="display:inline">
+                        {% csrf_token %}
+                        <button
+                          type="submit"
+                          class="btn btn-outline"
+                          style="padding:.25rem .5rem;font-size:.75rem;background:#003D38;color:#fff;border-color:rgba(0,61,56,.35);"
+                          title="Откатить отметку холодного звонка (только для администраторов)"
+                          aria-label="Откатить отметку холодного звонка"
+                          onclick="return confirm('Откатить отметку холодного звонка?');"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                          </svg>
+                        </button>
+                      </form>
+                    {% endif %}
                   {% endif %}
                   <button
                     type="button"
@@ -345,9 +346,12 @@
                 </div>
               {% endif %}
             </div>
-            {% if company.primary_cold_marked_at %}
+            {% if company.primary_contact_is_cold_call %}
               <div class="mt-1 text-xs text-brand-dark/60">
-                Холодный звонок: {{ company.primary_cold_marked_at|date:"d.m.Y H:i" }}
+                <span class="font-medium">Холодный звонок:</span>
+                {% if company.primary_cold_marked_at %}
+                  {{ company.primary_cold_marked_at|date:"d.m.Y H:i" }}
+                {% endif %}
                 {% if company.primary_cold_marked_by %}
                   ({{ company.primary_cold_marked_by }})
                 {% endif %}
@@ -527,13 +531,16 @@
                     <div class="text-sm font-medium">{{ c.last_name }} {{ c.first_name }}</div>
                     <div class="text-xs text-brand-dark/70">
                       {{ c.position }}
-                      {% if is_cold_company and c.is_cold_call %}
+                      {% if c.is_cold_call %}
                         <span class="badge badge-warn ml-2" style="padding:.1rem .35rem;font-size:.65rem">Холодный</span>
                       {% endif %}
                     </div>
-                    {% if c.cold_marked_at %}
+                    {% if c.is_cold_call %}
                       <div class="mt-1 text-xs text-brand-dark/60">
-                        Холодный звонок: {{ c.cold_marked_at|date:"d.m.Y H:i" }}
+                        <span class="font-medium">Холодный звонок:</span>
+                        {% if c.cold_marked_at %}
+                          {{ c.cold_marked_at|date:"d.m.Y H:i" }}
+                        {% endif %}
                         {% if c.cold_marked_by %}
                           ({{ c.cold_marked_by }})
                         {% endif %}
@@ -542,39 +549,38 @@
                   </div>
                   {% if can_edit_company %}
                     <div class="flex items-center gap-2">
-                      {% if is_cold_company or not c.is_cold_call %}
-                        <form method="post" action="/contacts/{{ c.id }}/cold-call/toggle/">
+                      {% if not c.is_cold_call %}
+                        <form method="post" action="/contacts/{{ c.id }}/cold-call/toggle/" class="js-cold-call-form" data-confirm="Вы действительно хотите отметить звонок как холодный?">
                           {% csrf_token %}
+                          <input type="hidden" name="confirmed" value="1">
                           <button
-                            class="btn btn-outline js-cold-mark transition-opacity duration-300 {% if not c.cold_mark_available and not c.is_cold_call %}opacity-50 cursor-not-allowed{% endif %}"
-                            style="padding:.25rem .5rem;font-size:.75rem;{% if c.is_cold_call %}background:#003D38;color:#fff;border-color:rgba(0,61,56,.35){% endif %}"
+                            class="btn btn-outline js-cold-mark"
+                            style="padding:.25rem .5rem;font-size:.75rem;"
                             type="submit"
                             data-cold-btn="contact-{{ c.id }}"
-                            data-cold-marked="{% if c.is_cold_call %}1{% else %}0{% endif %}"
-                            {% if c.is_cold_call %}
-                              disabled
-                              title="Холодный уже отмечен (один раз)"
-                              aria-label="Холодный уже отмечен (один раз)"
-                            {% elif not c.cold_mark_available %}
-                              data-disabled="1"
-                              title="{% if c.cold_mark_unlocks_at %}Станет доступно {{ c.cold_mark_unlocks_at|date:'d.m.Y H:i:s' }}{% elif c.cold_mark_deadline %}Можно отметить до {{ c.cold_mark_deadline|date:'d.m.Y H:i' }}{% else %}Можно отметить только в течение 8 часов после звонка{% endif %}"
-                              aria-label="Недоступно"
-                              aria-disabled="true"
-                            {% else %}
-                              title="Отметить холодный (доступно 8 часов после звонка, через 10 сек)"
-                              aria-label="Отметить холодный (доступно 8 часов после звонка, через 10 сек)"
-                            {% endif %}
+                            title="Отметить холодный звонок"
+                            aria-label="Отметить холодный звонок"
                           >
-                            {% if c.is_cold_call %}
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                              </svg>
-                            {% else %}
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                <path d="M12 2v20M4 6l16 12M20 6 4 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                <path d="M6 4l12 16M18 4 6 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".35"/>
-                              </svg>
-                            {% endif %}
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path d="M12 2v20M4 6l16 12M20 6 4 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                              <path d="M6 4l12 16M18 4 6 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".35"/>
+                            </svg>
+                          </button>
+                        </form>
+                      {% elif is_admin %}
+                        <form method="post" action="/contacts/{{ c.id }}/cold-call/reset/">
+                          {% csrf_token %}
+                          <button
+                            class="btn btn-outline"
+                            style="padding:.25rem .5rem;font-size:.75rem;background:#003D38;color:#fff;border-color:rgba(0,61,56,.35);"
+                            type="submit"
+                            title="Откатить отметку холодного звонка (только для администраторов)"
+                            aria-label="Откатить отметку холодного звонка"
+                            onclick="return confirm('Откатить отметку холодного звонка?');"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
                           </button>
                         </form>
                       {% endif %}
@@ -1132,6 +1138,17 @@
           };
           const csrftoken = getCookie('csrftoken');
           
+          // Подтверждение перед отметкой холодного звонка
+          document.querySelectorAll('.js-cold-call-form').forEach(form => {
+            form.addEventListener('submit', function(e) {
+              const confirmMsg = form.getAttribute('data-confirm') || 'Вы действительно хотите отметить звонок как холодный?';
+              if (!confirm(confirmMsg)) {
+                e.preventDefault();
+                return false;
+              }
+            });
+          });
+
           // Если кнопка "холодный" визуально выключена — не отправляем POST, а показываем подсказку.
           document.querySelectorAll('.js-cold-mark').forEach(btn => {
             btn.addEventListener('click', (e) => {
