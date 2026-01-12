@@ -19,7 +19,7 @@ from django.utils import timezone
 from accounts.models import Branch, User
 from audit.models import ActivityEvent
 from audit.service import log_event
-from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactPhone, CompanyDeletionRequest, CompanyLeadStateRequest
+from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactEmail, ContactPhone, CompanyDeletionRequest, CompanyLeadStateRequest
 from companies.permissions import can_edit_company as can_edit_company_perm, editable_company_qs as editable_company_qs_perm
 from tasksapp.models import Task, TaskType
 from notifications.models import Notification
@@ -211,6 +211,39 @@ def _companies_with_overdue_flag(*, now):
     )
 
 
+def _normalize_phone_for_search(phone: str) -> str:
+    """
+    Нормализует номер телефона для поиска.
+    Поддерживает различные форматы: 89123456789, +79123456789, 8(912)3456789 и т.д.
+    """
+    if not phone:
+        return ""
+    phone = str(phone).strip()
+    # Убираем все нецифровые символы, кроме + в начале
+    raw = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    normalized = "".join(ch for i, ch in enumerate(raw) if ch.isdigit() or (ch == "+" and i == 0))
+    
+    # Если номер уже в формате +7XXXXXXXXXX, оставляем как есть
+    if normalized.startswith("+7") and len(normalized) == 12:
+        return normalized
+    else:
+        # Приводим к формату +7XXXXXXXXXX для российских номеров
+        digits = normalized[1:] if normalized.startswith("+") else normalized
+        if digits.startswith("8") and len(digits) == 11:
+            return "+7" + digits[1:]
+        elif digits.startswith("7") and len(digits) == 11:
+            return "+7" + digits
+        elif len(digits) == 10:
+            return "+7" + digits
+        # Fallback для случаев, когда номер пришел без плюса, но с 11 цифрами и российским префиксом
+        elif normalized and not normalized.startswith("+") and len(normalized) >= 11 and normalized[0] in ("7", "8"):
+            return "+7" + normalized[1:]
+        # Если не российский номер или не 10-11 цифр, оставляем как есть (с плюсом, если был)
+        elif not normalized.startswith("+") and normalized:
+            return "+" + normalized
+    return normalized
+
+
 def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | None = None):
     """
     Единые фильтры компаний для:
@@ -223,7 +256,8 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
     """
     q = (params.get("q") or "").strip()
     if q:
-        qs = qs.filter(
+        # Базовые фильтры по полям компании
+        base_filters = (
             Q(name__icontains=q)
             | Q(inn__icontains=q)
             | Q(legal_name__icontains=q)
@@ -234,6 +268,35 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             | Q(contact_position__icontains=q)
             | Q(branch__name__icontains=q)
         )
+        
+        # Поиск по телефонам (с нормализацией)
+        normalized_phone = _normalize_phone_for_search(q)
+        phone_filters = Q()
+        if normalized_phone and normalized_phone != q:
+            # Ищем по нормализованному номеру в основном телефоне компании
+            phone_filters = Q(phone=normalized_phone)
+            # Ищем по нормализованному номеру в телефонах контактов
+            phone_filters |= Q(contacts__phones__value=normalized_phone)
+            # Также ищем по исходному запросу (на случай, если нормализация не сработала)
+            phone_filters |= Q(phone__icontains=q)
+            phone_filters |= Q(contacts__phones__value__icontains=q)
+        else:
+            # Если нормализация не удалась, ищем как есть
+            phone_filters = Q(phone__icontains=q) | Q(contacts__phones__value__icontains=q)
+        
+        # Поиск по email в контактах
+        email_filters = Q(contacts__emails__value__icontains=q)
+        
+        # Поиск по ФИО в контактах
+        fio_filters = Q(contacts__first_name__icontains=q) | Q(contacts__last_name__icontains=q)
+        
+        # Объединяем все фильтры
+        qs = qs.filter(
+            base_filters
+            | phone_filters
+            | email_filters
+            | fio_filters
+        ).distinct()
 
     responsible = (params.get("responsible") or "").strip()
     # Если параметр responsible не указан и есть default_responsible_id, применяем фильтр по умолчанию
