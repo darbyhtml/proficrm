@@ -8,13 +8,13 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
+        # Зависит от последней миграции перед конфликтом
+        # На сервере может быть 0024_alter_company_lead_state_and_more, но мы зависим от 0023
+        # Django автоматически разрешит конфликт при merge
         ('companies', '0023_normalize_existing_phone_numbers'),
         ('phonebridge', '0002_callrequest_is_cold_call'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
-    
-    # Эта миграция может конфликтовать с 0024_alter_company_lead_state_and_more на сервере
-    # Если есть конфликт, нужно выполнить: python manage.py makemigrations --merge
 
     operations = [
         migrations.AddField(
