@@ -579,7 +579,7 @@
                           </div>
                           <div class="flex items-center gap-1 shrink-0">
                             {% if can_edit_company %}
-                              {% if not p.is_cold_call and not p.cold_marked_at %}
+                              {% if not p.is_cold_call %}
                                 <form method="post" action="/contact-phones/{{ p.id }}/cold-call/toggle/" class="js-cold-call-form" data-confirm="Вы действительно хотите отметить звонок как холодный?">
                                   {% csrf_token %}
                                   <input type="hidden" name="confirmed" value="1">
@@ -599,23 +599,21 @@
                                 </form>
                               {% else %}
                                 {% if is_admin %}
-                                  {% if p.is_cold_call %}
-                                    <form method="post" action="/contact-phones/{{ p.id }}/cold-call/reset/" style="display:inline">
-                                      {% csrf_token %}
-                                      <button
-                                        type="submit"
-                                        class="btn btn-outline"
-                                        style="padding:.25rem .5rem;background:#003D38;color:#fff;border-color:rgba(0,61,56,.35);"
-                                        title="Откатить отметку холодного звонка (только для администраторов)"
-                                        aria-label="Откатить отметку холодного звонка"
-                                        onclick="return confirm('Откатить отметку холодного звонка?');"
-                                      >
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                          <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                        </svg>
-                                      </button>
-                                    </form>
-                                  {% endif %}
+                                  <form method="post" action="/contact-phones/{{ p.id }}/cold-call/reset/" style="display:inline">
+                                    {% csrf_token %}
+                                    <button
+                                      type="submit"
+                                      class="btn btn-outline"
+                                      style="padding:.25rem .5rem;background:#003D38;color:#fff;border-color:rgba(0,61,56,.35);"
+                                      title="Откатить отметку холодного звонка (только для администраторов)"
+                                      aria-label="Откатить отметку холодного звонка"
+                                      onclick="return confirm('Откатить отметку холодного звонка?');"
+                                    >
+                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                        <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                      </svg>
+                                    </button>
+                                  </form>
                                 {% endif %}
                               {% endif %}
                             {% endif %}
