@@ -2552,6 +2552,41 @@ def contact_edit(request: HttpRequest, contact_id) -> HttpResponse:
 
 
 @login_required
+def contact_delete(request: HttpRequest, contact_id) -> HttpResponse:
+    """
+    Удалить контакт компании.
+    Доступно только ответственному за карточку.
+    """
+    if request.method != "POST":
+        return redirect("dashboard")
+    
+    user: User = request.user
+    contact = get_object_or_404(Contact.objects.select_related("company", "company__responsible"), id=contact_id)
+    company = contact.company
+    if not company:
+        messages.error(request, "Контакт не привязан к компании.")
+        return redirect("company_list")
+    
+    if not _can_edit_company(user, company):
+        messages.error(request, "Нет прав на удаление контактов этой компании.")
+        return redirect("company_detail", company_id=company.id)
+    
+    contact_name = str(contact)
+    contact.delete()
+    
+    messages.success(request, f"Контакт '{contact_name}' удалён.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.DELETE,
+        entity_type="contact",
+        entity_id=str(contact_id),
+        company_id=company.id,
+        message=f"Удалён контакт: {contact_name}",
+    )
+    return redirect("company_detail", company_id=company.id)
+
+
+@login_required
 def company_note_add(request: HttpRequest, company_id) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
@@ -3120,12 +3155,27 @@ def _can_manage_task_status_ui(user: User, task: Task) -> bool:
 
 
 def _can_edit_task_ui(user: User, task: Task) -> bool:
+    """
+    Право на редактирование задачи:
+    - Создатель всегда может редактировать свою задачу
+    - Администратор / управляющий — любые задачи
+    - Ответственный за карточку компании (company.responsible)
+    - Директор филиала / РОП — задачи своего филиала
+    """
     # Создатель всегда может редактировать свою задачу
     if task.created_by_id and task.created_by_id == user.id:
         return True
     # Админ/управляющий — любые задачи
     if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
         return True
+    # Ответственный за компанию
+    if task.company_id:
+        try:
+            company = getattr(task, "company", None)
+            if company and company.responsible_id == user.id:
+                return True
+        except Exception:
+            pass
     # РОП/директор — задачи своего филиала
     if user.role in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR) and user.branch_id and task.company_id:
         try:

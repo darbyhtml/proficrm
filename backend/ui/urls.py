@@ -39,6 +39,7 @@ urlpatterns = [
     path("companies/<uuid:company_id>/delete/", views.company_delete_direct, name="company_delete_direct"),
     path("companies/<uuid:company_id>/contacts/new/", views.contact_create, name="contact_create"),
     path("contacts/<uuid:contact_id>/edit/", views.contact_edit, name="contact_edit"),
+    path("contacts/<uuid:contact_id>/delete/", views.contact_delete, name="contact_delete"),
     path("contacts/<uuid:contact_id>/cold-call/toggle/", views.contact_cold_call_toggle, name="contact_cold_call_toggle"),
     path("contacts/<uuid:contact_id>/cold-call/reset/", views.contact_cold_call_reset, name="contact_cold_call_reset"),
     path("contact-phones/<int:contact_phone_id>/cold-call/toggle/", views.contact_phone_cold_call_toggle, name="contact_phone_cold_call_toggle"),

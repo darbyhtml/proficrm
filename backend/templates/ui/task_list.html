@@ -109,6 +109,7 @@
               <th class="text-left px-4 py-3">Задача</th>
               <th class="text-left px-4 py-3">Компания</th>
               <th class="text-left px-4 py-3">Кому</th>
+              <th class="text-left px-4 py-3">Кто</th>
               <th class="text-left px-4 py-3">Дедлайн</th>
               <th class="text-left px-4 py-3" style="min-width:140px">Статус</th>
               <th class="text-left px-4 py-3">Действия</th>
@@ -119,7 +120,7 @@
               {% if sort == 'company' %}
                 {% ifchanged t.company_id %}
                   <tr class="bg-brand-soft/20">
-                    <td class="px-4 py-2 text-xs text-brand-dark/70 font-medium" colspan="{% if is_admin %}7{% else %}6{% endif %}">
+                    <td class="px-4 py-2 text-xs text-brand-dark/70 font-medium" colspan="{% if is_admin %}8{% else %}7{% endif %}">
                       {% if t.company %}
                         Компания: <a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>
                       {% else %}
@@ -147,7 +148,8 @@
                 <td>
                   {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>{% else %}—{% endif %}
                 </td>
-                <td>{{ t.assigned_to }}</td>
+                <td>{{ t.assigned_to|default:"—" }}</td>
+                <td>{{ t.created_by|default:"—" }}</td>
                 <td class="muted">
                   <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}">{{ t.due_at|default:"—" }}</span>
                 </td>
