@@ -1385,7 +1385,19 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     )
 
     # Загружаем контакты с связанными объектами для истории холодных звонков
-    contacts = Contact.objects.filter(company=company).select_related("cold_marked_by", "cold_marked_call").prefetch_related("emails", "phones").order_by("last_name", "first_name")[:200]
+    from django.db.models import Prefetch
+    contacts = (
+        Contact.objects.filter(company=company)
+        .select_related("cold_marked_by", "cold_marked_call")
+        .prefetch_related(
+            "emails",
+            Prefetch(
+                "phones",
+                queryset=ContactPhone.objects.select_related("cold_marked_by", "cold_marked_call")
+            )
+        )
+        .order_by("last_name", "first_name")[:200]
+    )
     is_cold_company = bool(company.lead_state == Company.LeadState.COLD)
 
     # Новая логика: любой звонок может быть холодным, без ограничений по времени
