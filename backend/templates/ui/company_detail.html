@@ -1155,16 +1155,7 @@
             });
           });
 
-          // Если кнопка "холодный" визуально выключена — не отправляем POST, а показываем подсказку.
-          document.querySelectorAll('.js-cold-mark').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-              if (btn.getAttribute('data-disabled') === '1') {
-                e.preventDefault();
-                uiToast(btn.title || 'Недоступно', 'info');
-                return false;
-              }
-            });
-          });
+          // Старая логика с data-disabled больше не используется - кнопка показывается только если is_cold_call = False
 
           document.querySelectorAll('.js-call-phone').forEach(btn => {
             btn.addEventListener('click', async () => {
@@ -1203,25 +1194,8 @@
                 const data = await res.json().catch(() => ({}));
                 if (!res.ok || !data.ok) throw new Error(data.detail || 'Ошибка');
                 uiToast('Отправлено на телефон ✓', 'success');
-                // Через 10 секунд делаем активной кнопку "отметить холодный" рядом с тем номером/контактом, по которому звонили.
-                const key = contactId ? (`contact-${contactId}`) : 'primary';
-                const coldBtn = document.querySelector(`[data-cold-btn="${key}"]`);
-                if (coldBtn && coldBtn.getAttribute('data-cold-marked') !== '1') {
-                  uiToast('Можно отметить «холодный» через 10 секунд…', 'info');
-                  setTimeout(() => {
-                    try {
-                      const b = document.querySelector(`[data-cold-btn="${key}"]`);
-                      if (!b) return;
-                      if (b.getAttribute('data-cold-marked') === '1') return;
-                      // Если кнопка была disabled по причине "не звонили" / "10 секунд" — включаем её без перезагрузки.
-                      b.removeAttribute('data-disabled');
-                      b.classList.remove('opacity-50');
-                      b.classList.remove('cursor-not-allowed');
-                      b.title = 'Отметить холодный (доступно 8 часов после звонка, через 10 сек)';
-                      b.setAttribute('aria-label', b.title);
-                    } catch (_e) {}
-                  }, 10000);
-                }
+                // Новая логика: кнопка "отметить холодный" больше не активируется автоматически
+                // Пользователь может отметить холодный звонок в любое время через кнопку
                 btn.dataset.busy = '0';
                 btn.classList.remove('opacity-60');
               } catch (e) {
