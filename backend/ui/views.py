@@ -19,7 +19,7 @@ from django.utils import timezone
 from accounts.models import Branch, User
 from audit.models import ActivityEvent
 from audit.service import log_event
-from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, CompanyDeletionRequest, CompanyLeadStateRequest
+from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactPhone, CompanyDeletionRequest, CompanyLeadStateRequest
 from companies.permissions import can_edit_company as can_edit_company_perm, editable_company_qs as editable_company_qs_perm
 from tasksapp.models import Task, TaskType
 from notifications.models import Notification
@@ -2075,9 +2075,92 @@ def company_cold_call_reset(request: HttpRequest, company_id) -> HttpResponse:
 
 
 @login_required
-def contact_cold_call_reset(request: HttpRequest, contact_id) -> HttpResponse:
+def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> HttpResponse:
     """
-    Откатить отметку холодного звонка для контакта.
+    Отметить конкретный номер телефона контакта как холодный звонок.
+    Любой звонок может быть холодным (независимо от lead_state компании).
+    Отметку можно поставить только один раз.
+    """
+    if request.method != "POST":
+        return redirect("dashboard")
+    user: User = request.user
+    contact_phone = get_object_or_404(ContactPhone.objects.select_related("contact__company", "cold_marked_by"), id=contact_phone_id)
+    contact = contact_phone.contact
+    company = contact.company if contact else None
+    if not company:
+        messages.error(request, "Контакт не привязан к компании.")
+        return redirect("dashboard")
+    if not _can_edit_company(user, company):
+        messages.error(request, "Нет прав на изменение контактов этой компании.")
+        return redirect("company_detail", company_id=company.id)
+
+    # Проверка подтверждения
+    confirmed = request.POST.get("confirmed") == "1"
+    if not confirmed:
+        messages.error(request, "Требуется подтверждение действия.")
+        return redirect("company_detail", company_id=company.id)
+
+    # Проверка: уже отмечен?
+    if contact_phone.is_cold_call:
+        messages.info(request, "Этот номер уже отмечен как холодный.")
+        return redirect("company_detail", company_id=company.id)
+
+    # Ищем последний звонок по этому номеру телефона
+    now = timezone.now()
+    # Нормализуем номер телефона так же, как в phone_call_create
+    raw = contact_phone.value.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    normalized_phone = "".join(ch for i, ch in enumerate(raw) if ch.isdigit() or (ch == "+" and i == 0))
+    digits = normalized_phone[1:] if normalized_phone.startswith("+") else normalized_phone
+    if digits.startswith("8") and len(digits) == 11:
+        normalized_phone = "+7" + digits[1:]
+    elif digits.startswith("7") and len(digits) == 11:
+        normalized_phone = "+7" + digits[1:]
+    elif len(digits) == 10:
+        normalized_phone = "+7" + digits
+    elif normalized_phone.startswith("8") and len(normalized_phone) == 11:
+        normalized_phone = "+7" + normalized_phone[1:]
+    elif normalized_phone.startswith("7") and len(normalized_phone) == 11:
+        normalized_phone = "+7" + normalized_phone[1:]
+    elif normalized_phone and not normalized_phone.startswith("+") and len(normalized_phone) >= 11 and normalized_phone[0] in ("7", "8"):
+        normalized_phone = "+7" + normalized_phone[1:]
+    
+    last_call = (
+        CallRequest.objects.filter(created_by=user, contact=contact, phone_raw=normalized_phone)
+        .order_by("-created_at")
+        .first()
+    )
+    if not last_call:
+        messages.error(request, "Не найден звонок по этому номеру телефона.")
+        return redirect("company_detail", company_id=company.id)
+
+    # Отмечаем как холодный
+    contact_phone.is_cold_call = True
+    contact_phone.cold_marked_at = now
+    contact_phone.cold_marked_by = user
+    contact_phone.cold_marked_call = last_call
+    contact_phone.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
+
+    if not last_call.is_cold_call:
+        last_call.is_cold_call = True
+        last_call.save(update_fields=["is_cold_call"])
+
+    messages.success(request, f"Отмечено: холодный звонок (номер {contact_phone.value}).")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="contact_phone",
+        entity_id=str(contact_phone.id),
+        company_id=company.id,
+        message=f"Отмечено: холодный звонок (номер {contact_phone.value})",
+        meta={"contact_phone_id": str(contact_phone.id), "call_id": str(last_call.id)},
+    )
+    return redirect("company_detail", company_id=company.id)
+
+
+@login_required
+def contact_phone_cold_call_reset(request: HttpRequest, contact_phone_id) -> HttpResponse:
+    """
+    Откатить отметку холодного звонка для конкретного номера телефона контакта.
     Доступно только администраторам.
     """
     if request.method != "POST":
@@ -2088,17 +2171,32 @@ def contact_cold_call_reset(request: HttpRequest, contact_id) -> HttpResponse:
         messages.error(request, "Только администратор может откатить отметку холодного звонка.")
         return redirect("dashboard")
 
-    contact = get_object_or_404(Contact.objects.select_related("company"), id=contact_id)
-    company = contact.company
+    contact_phone = get_object_or_404(ContactPhone.objects.select_related("contact__company"), id=contact_phone_id)
+    contact = contact_phone.contact
+    company = contact.company if contact else None
     if not company:
         messages.error(request, "Контакт не привязан к компании.")
         return redirect("dashboard")
 
-    if not contact.is_cold_call:
-        messages.info(request, "Контакт не отмечен как холодный.")
+    if not contact_phone.is_cold_call:
+        messages.info(request, "Этот номер не отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
     # Откатываем отметку
+    contact_phone.is_cold_call = False
+    contact_phone.save(update_fields=["is_cold_call"])
+    # НЕ удаляем поля cold_marked_at, cold_marked_by, cold_marked_call для истории
+
+    messages.success(request, f"Отметка холодного звонка отменена (номер {contact_phone.value}).")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="contact_phone",
+        entity_id=str(contact_phone.id),
+        company_id=company.id,
+        message=f"Откат: холодный звонок (номер {contact_phone.value})",
+    )
+    return redirect("company_detail", company_id=company.id)
     contact.is_cold_call = False
     contact.save(update_fields=["is_cold_call", "updated_at"])
     # НЕ удаляем поля cold_marked_at, cold_marked_by, cold_marked_call для истории

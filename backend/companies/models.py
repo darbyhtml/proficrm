@@ -299,6 +299,26 @@ class ContactPhone(models.Model):
     contact = models.ForeignKey(Contact, verbose_name="Контакт", on_delete=models.CASCADE, related_name="phones")
     type = models.CharField(max_length=24, choices=PhoneType.choices, default=PhoneType.WORK)
     value = models.CharField("Телефон", max_length=50, db_index=True)
+    
+    # Холодный звонок привязан к конкретному номеру телефона
+    is_cold_call = models.BooleanField("Холодный звонок", default=False, db_index=True)
+    cold_marked_at = models.DateTimeField("Холодный: когда отметили", null=True, blank=True, db_index=True)
+    cold_marked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Холодный: кто отметил",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="contact_phone_cold_marks",
+    )
+    cold_marked_call = models.ForeignKey(
+        "phonebridge.CallRequest",
+        verbose_name="Холодный: звонок",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
 
     class Meta:
         indexes = [models.Index(fields=["value"])]
