@@ -3021,19 +3021,66 @@ def task_list(request: HttpRequest) -> HttpResponse:
     if today == "1":
         qs = qs.filter(due_at__gte=today_start, due_at__lt=tomorrow_start).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
 
-    # Сортировка
-    sort = (request.GET.get("sort") or "").strip()
-    if sort == "due_asc":
-        qs = qs.order_by(F("due_at").asc(nulls_last=True), "-created_at")
-    elif sort == "due_desc":
-        qs = qs.order_by(F("due_at").desc(nulls_last=True), "-created_at")
-    elif sort == "status":
-        qs = qs.order_by("status", "-created_at")
-    elif sort == "company":
-        qs = qs.order_by("company__name", "-created_at")
-    elif sort == "assignee":
-        qs = qs.order_by("assigned_to__last_name", "assigned_to__first_name", "-created_at")
+    # Сортировка: читаем из GET или из cookies
+    sort_field = (request.GET.get("sort") or "").strip()
+    sort_dir = (request.GET.get("dir") or "").strip().lower()
+    
+    # Если параметры не указаны, читаем из cookies
+    if not sort_field:
+        cookie_sort = request.COOKIES.get("task_list_sort", "")
+        if cookie_sort:
+            try:
+                # Формат в cookies: "field:direction" (например, "due_at:asc")
+                parts = cookie_sort.split(":")
+                if len(parts) == 2:
+                    sort_field, sort_dir = parts[0], parts[1]
+            except Exception:
+                pass
+    
+    # Валидация направления сортировки
+    if sort_dir not in ("asc", "desc"):
+        sort_dir = "desc"  # По умолчанию desc
+    
+    # Применяем сортировку
+    if sort_field == "due_at":
+        if sort_dir == "asc":
+            qs = qs.order_by(F("due_at").asc(nulls_last=True), "-created_at")
+        else:
+            qs = qs.order_by(F("due_at").desc(nulls_last=True), "-created_at")
+    elif sort_field == "status":
+        if sort_dir == "asc":
+            qs = qs.order_by("status", "-created_at")
+        else:
+            qs = qs.order_by("-status", "-created_at")
+    elif sort_field == "company":
+        if sort_dir == "asc":
+            qs = qs.order_by("company__name", "-created_at")
+        else:
+            qs = qs.order_by("-company__name", "-created_at")
+    elif sort_field == "assignee":
+        if sort_dir == "asc":
+            qs = qs.order_by("assigned_to__last_name", "assigned_to__first_name", "-created_at")
+        else:
+            qs = qs.order_by("-assigned_to__last_name", "-assigned_to__first_name", "-created_at")
+    elif sort_field == "created_by":
+        if sort_dir == "asc":
+            qs = qs.order_by("created_by__last_name", "created_by__first_name", "-created_at")
+        else:
+            qs = qs.order_by("-created_by__last_name", "-created_by__first_name", "-created_at")
+    elif sort_field == "type":
+        if sort_dir == "asc":
+            qs = qs.order_by("type__name", "-created_at")
+        else:
+            qs = qs.order_by("-type__name", "-created_at")
+    elif sort_field == "title":
+        if sort_dir == "asc":
+            qs = qs.order_by("title", "-created_at")
+        else:
+            qs = qs.order_by("-title", "-created_at")
     else:
+        # По умолчанию: сортировка по дате создания (новые сверху)
+        sort_field = "created_at"
+        sort_dir = "desc"
         qs = qs.order_by("-created_at")
 
     # Пагинация с выбором per_page (как в company_list)
@@ -3052,12 +3099,26 @@ def task_list(request: HttpRequest) -> HttpResponse:
 
     paginator = Paginator(qs, per_page)
     page = paginator.get_page(request.GET.get("page"))
-    qs_no_page = _qs_without_page(request)
+    # Формируем query string без параметров page, sort, dir (sort и dir добавляются в ссылках заголовков)
+    from urllib.parse import urlencode, parse_qs
+    params = dict(request.GET)
+    params.pop("page", None)
+    params.pop("sort", None)
+    params.pop("dir", None)
+    # Преобразуем в список значений для urlencode
+    qs_params = {}
+    for key, value in params.items():
+        if isinstance(value, list):
+            qs_params[key] = value
+        else:
+            qs_params[key] = [value]
+    qs_no_page = urlencode(qs_params, doseq=True) if qs_params else ""
     if per_page != 25:
-        from urllib.parse import urlencode, parse_qs
-        params = parse_qs(qs_no_page) if qs_no_page else {}
-        params["per_page"] = [str(per_page)]
-        qs_no_page = urlencode(params, doseq=True)
+        if qs_no_page:
+            qs_params["per_page"] = [str(per_page)]
+        else:
+            qs_params = {"per_page": [str(per_page)]}
+        qs_no_page = urlencode(qs_params, doseq=True)
 
     # Для шаблона: не делаем сложные выражения в {% if %}, чтобы не ловить TemplateSyntaxError.
     # Проставим флаг прямо в объекты текущей страницы.
@@ -3107,7 +3168,8 @@ def task_list(request: HttpRequest) -> HttpResponse:
         except (ValueError, TypeError):
             pass
 
-    return render(
+    # Сохраняем сортировку в cookie, если она была изменена через GET параметры
+    response = render(
         request,
         "ui/task_list.html",
         {
@@ -3120,7 +3182,8 @@ def task_list(request: HttpRequest) -> HttpResponse:
             "mine": mine,
             "overdue": overdue,
             "today": today,
-            "sort": sort,
+            "sort_field": sort_field,
+            "sort_dir": sort_dir,
             "per_page": per_page,
             "is_admin": is_admin,
             "transfer_targets": transfer_targets,
@@ -3128,6 +3191,13 @@ def task_list(request: HttpRequest) -> HttpResponse:
             "view_task_overdue_days": view_task_overdue_days,
         },
     )
+    
+    # Устанавливаем cookie для сохранения сортировки (срок действия 1 год)
+    if sort_field:
+        cookie_value = f"{sort_field}:{sort_dir}"
+        response.set_cookie("task_list_sort", cookie_value, max_age=31536000)  # 1 год
+    
+    return response
 
 
 @login_required

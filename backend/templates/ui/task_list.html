@@ -52,19 +52,6 @@
         </svg>
         <span>Показать выполненные</span>
       </label>
-      <div class="flex items-center gap-2">
-        <svg class="w-4 h-4 text-brand-dark/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
-        </svg>
-        <select name="sort" class="select" style="min-width:180px">
-          <option value="">Новое сверху</option>
-          <option value="due_asc" {% if sort == 'due_asc' %}selected{% endif %}>Дедлайн ↑</option>
-          <option value="due_desc" {% if sort == 'due_desc' %}selected{% endif %}>Дедлайн ↓</option>
-          <option value="company" {% if sort == 'company' %}selected{% endif %}>По компании</option>
-          <option value="status" {% if sort == 'status' %}selected{% endif %}>По статусу</option>
-          <option value="assignee" {% if sort == 'assignee' %}selected{% endif %}>По ответственным</option>
-        </select>
-      </div>
       <div class="flex gap-2 ml-auto">
         <button class="btn btn-primary" type="submit" style="padding:.5rem 1rem">Применить</button>
         <a class="btn btn-outline" href="/tasks/" style="padding:.5rem 1rem">Сброс</a>
@@ -106,19 +93,152 @@
                   <input type="checkbox" id="bulkSelectAll" title="Выбрать все" />
                 </th>
               {% endif %}
-              <th class="text-left px-4 py-3">Задача</th>
-              <th class="text-left px-4 py-3">Компания</th>
-              <th class="text-left px-4 py-3">Кому</th>
-              <th class="text-left px-4 py-3">Кто</th>
-              <th class="text-left px-4 py-3">Тип</th>
-              <th class="text-left px-4 py-3">Дедлайн</th>
-              <th class="text-left px-4 py-3" style="min-width:140px">Статус</th>
+              <th class="text-left px-4 py-3">
+                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=title&dir={% if sort_field == 'title' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer {% if sort_field == 'title' %}text-brand-primary font-medium{% endif %}">
+                  Задача
+                  {% if sort_field == 'title' %}
+                    {% if sort_dir == 'asc' %}
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                      </svg>
+                    {% else %}
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    {% endif %}
+                  {% else %}
+                    <svg class="w-4 h-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                    </svg>
+                  {% endif %}
+                </a>
+              </th>
+              <th class="text-left px-4 py-3">
+                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=company&dir={% if sort_field == 'company' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer {% if sort_field == 'company' %}text-brand-primary font-medium{% endif %}">
+                  Компания
+                  {% if sort_field == 'company' %}
+                    {% if sort_dir == 'asc' %}
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                      </svg>
+                    {% else %}
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    {% endif %}
+                  {% else %}
+                    <svg class="w-4 h-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                    </svg>
+                  {% endif %}
+                </a>
+              </th>
+              <th class="text-left px-4 py-3">
+                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=assignee&dir={% if sort_field == 'assignee' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer {% if sort_field == 'assignee' %}text-brand-primary font-medium{% endif %}">
+                  Кому
+                  {% if sort_field == 'assignee' %}
+                    {% if sort_dir == 'asc' %}
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                      </svg>
+                    {% else %}
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    {% endif %}
+                  {% else %}
+                    <svg class="w-4 h-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                    </svg>
+                  {% endif %}
+                </a>
+              </th>
+              <th class="text-left px-4 py-3">
+                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=created_by&dir={% if sort_field == 'created_by' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer {% if sort_field == 'created_by' %}text-brand-primary font-medium{% endif %}">
+                  Кто
+                  {% if sort_field == 'created_by' %}
+                    {% if sort_dir == 'asc' %}
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                      </svg>
+                    {% else %}
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    {% endif %}
+                  {% else %}
+                    <svg class="w-4 h-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                    </svg>
+                  {% endif %}
+                </a>
+              </th>
+              <th class="text-left px-4 py-3">
+                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=type&dir={% if sort_field == 'type' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer {% if sort_field == 'type' %}text-brand-primary font-medium{% endif %}">
+                  Тип
+                  {% if sort_field == 'type' %}
+                    {% if sort_dir == 'asc' %}
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                      </svg>
+                    {% else %}
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    {% endif %}
+                  {% else %}
+                    <svg class="w-4 h-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                    </svg>
+                  {% endif %}
+                </a>
+              </th>
+              <th class="text-left px-4 py-3">
+                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=due_at&dir={% if sort_field == 'due_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer {% if sort_field == 'due_at' %}text-brand-primary font-medium{% endif %}">
+                  Дедлайн
+                  {% if sort_field == 'due_at' %}
+                    {% if sort_dir == 'asc' %}
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                      </svg>
+                    {% else %}
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    {% endif %}
+                  {% else %}
+                    <svg class="w-4 h-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                    </svg>
+                  {% endif %}
+                </a>
+              </th>
+              <th class="text-left px-4 py-3" style="min-width:140px">
+                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=status&dir={% if sort_field == 'status' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-primary cursor-pointer {% if sort_field == 'status' %}text-brand-primary font-medium{% endif %}">
+                  Статус
+                  {% if sort_field == 'status' %}
+                    {% if sort_dir == 'asc' %}
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                      </svg>
+                    {% else %}
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    {% endif %}
+                  {% else %}
+                    <svg class="w-4 h-4 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/>
+                    </svg>
+                  {% endif %}
+                </a>
+              </th>
               <th class="text-left px-4 py-3">Действия</th>
             </tr>
           </thead>
           <tbody>
             {% for t in page.object_list %}
-              {% if sort == 'company' %}
+              {% if sort_field == 'company' %}
                 {% ifchanged t.company_id %}
                   <tr class="bg-brand-soft/20">
                     <td class="px-4 py-2 text-xs text-brand-dark/70 font-medium" colspan="{% if is_admin %}9{% else %}8{% endif %}">
