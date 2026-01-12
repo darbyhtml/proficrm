@@ -905,12 +905,38 @@ def company_list(request: HttpRequest) -> HttpResponse:
         .select_related("responsible", "branch", "status")
         .prefetch_related("spheres")
     )
-    # По умолчанию фильтруем по текущему пользователю, если параметр responsible не указан
+    # По умолчанию фильтруем в зависимости от роли пользователя
     default_responsible_id = None
+    default_branch_id = None
+    
+    # Логика фильтрации по умолчанию:
+    # - Администратор и управляющий: без фильтров (все компании)
+    # - Директор филиала: без фильтра по ответственному, но с фильтром по своему филиалу
+    # - РОП и менеджер: фильтр по текущему пользователю (его компании)
     if "responsible" not in request.GET:
-        default_responsible_id = user.id
-    f = _apply_company_filters(qs=qs, params=request.GET, default_responsible_id=default_responsible_id)
+        if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+            # Администратор и управляющий - без фильтра по ответственному
+            default_responsible_id = None
+        elif user.role == User.Role.BRANCH_DIRECTOR:
+            # Директор филиала - без фильтра по ответственному, но с фильтром по филиалу
+            default_responsible_id = None
+            if user.branch_id and "branch" not in request.GET:
+                default_branch_id = user.branch_id
+        else:
+            # РОП и менеджер - фильтр по текущему пользователю
+            default_responsible_id = user.id
+    
+    # Применяем фильтр по филиалу для директора филиала, если не указан явно
+    filter_params = dict(request.GET)
+    if default_branch_id and "branch" not in filter_params:
+        filter_params["branch"] = str(default_branch_id)
+    
+    f = _apply_company_filters(qs=qs, params=filter_params, default_responsible_id=default_responsible_id)
     qs = f["qs"]
+    
+    # Обновляем параметры для отображения в шаблоне
+    if default_branch_id and "branch" not in request.GET:
+        f["branch"] = str(default_branch_id)
 
     # Sorting (asc/desc)
     sort = (request.GET.get("sort") or "").strip() or "updated_at"
@@ -954,7 +980,16 @@ def company_list(request: HttpRequest) -> HttpResponse:
     paginator = Paginator(qs, per_page)
     page = paginator.get_page(request.GET.get("page"))
     # Формируем qs для пагинации, включая per_page если он отличается от значения по умолчанию
-    qs_no_page = _qs_without_page(request)
+    # Используем filter_params вместо request.GET, чтобы включить default_branch_id для директора филиала
+    from urllib.parse import urlencode
+    qs_params = {}
+    for key, value in filter_params.items():
+        if key != "page":
+            if isinstance(value, list):
+                qs_params[key] = value
+            else:
+                qs_params[key] = [value]
+    qs_no_page = urlencode(qs_params, doseq=True) if qs_params else ""
     if per_page != 25:
         # Добавляем per_page в параметры, если он отличается от значения по умолчанию
         from urllib.parse import urlencode, parse_qs
