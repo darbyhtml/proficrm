@@ -12,6 +12,9 @@ class Migration(migrations.Migration):
         ('phonebridge', '0002_callrequest_is_cold_call'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
+    
+    # Эта миграция может конфликтовать с 0024_alter_company_lead_state_and_more на сервере
+    # Если есть конфликт, нужно выполнить: python manage.py makemigrations --merge
 
     operations = [
         migrations.AddField(
