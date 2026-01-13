@@ -19,7 +19,7 @@ from django.utils import timezone
 from accounts.models import Branch, User
 from audit.models import ActivityEvent
 from audit.service import log_event
-from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactEmail, ContactPhone, CompanyDeletionRequest, CompanyLeadStateRequest
+from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactEmail, ContactPhone, CompanyDeletionRequest, CompanyLeadStateRequest, CompanyEmail
 from companies.permissions import can_edit_company as can_edit_company_perm, editable_company_qs as editable_company_qs_perm
 from tasksapp.models import Task, TaskType
 from notifications.models import Notification
@@ -1474,7 +1474,8 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     user: User = request.user
     # Загружаем компанию с связанными объектами, включая поля для истории холодных звонков
     company = get_object_or_404(
-        Company.objects.select_related("responsible", "branch", "status", "head_company", "primary_cold_marked_by", "primary_cold_marked_call"),
+        Company.objects.select_related("responsible", "branch", "status", "head_company", "primary_cold_marked_by", "primary_cold_marked_call")
+        .prefetch_related("emails"),
         id=company_id
     )
     can_edit_company = _can_edit_company(user, company)
@@ -2507,6 +2508,27 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
         form = CompanyEditForm(request.POST, instance=company)
         if form.is_valid():
             form.save()
+            
+            # Сохраняем множественные email адреса
+            # Получаем все email адреса из POST (формат: company_emails_0, company_emails_1, ...)
+            company_emails = []
+            for key, value in request.POST.items():
+                if key.startswith("company_emails_") and value.strip():
+                    try:
+                        index = int(key.replace("company_emails_", ""))
+                        email_value = value.strip()
+                        if email_value:
+                            company_emails.append((index, email_value))
+                    except (ValueError, AttributeError):
+                        pass
+            
+            # Удаляем старые email адреса
+            CompanyEmail.objects.filter(company=company).delete()
+            
+            # Создаем новые email адреса
+            for order, email_value in sorted(company_emails, key=lambda x: x[0]):
+                CompanyEmail.objects.create(company=company, value=email_value, order=order)
+            
             messages.success(request, "Данные компании обновлены.")
             log_event(
                 actor=user,
@@ -2519,8 +2541,10 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
             return redirect("company_detail", company_id=company.id)
     else:
         form = CompanyEditForm(instance=company)
+        # Загружаем существующие email адреса для отображения в форме
+        company_emails = list(company.emails.all())
 
-    return render(request, "ui/company_edit.html", {"company": company, "form": form})
+    return render(request, "ui/company_edit.html", {"company": company, "form": form, "company_emails": company_emails})
 
 
 @login_required

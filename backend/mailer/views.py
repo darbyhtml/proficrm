@@ -540,6 +540,39 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
             )
             if was_created:
                 created += 1
+    
+    # 3) Добавляем дополнительные email адреса компании из CompanyEmail (если включено и лимит не достигнут)
+    if include_company_email and created < limit and company_ids:
+        from companies.models import CompanyEmail
+        company_emails_qs = (
+            CompanyEmail.objects.filter(company_id__in=company_ids)
+            .select_related("company")
+            .order_by("company_id", "order", "value")
+        )
+        
+        for ce in company_emails_qs.iterator():
+            if created >= limit:
+                break
+            email = (ce.value or "").strip().lower()
+            if not email:
+                continue
+            # Пропускаем, если этот email уже добавлен из контактов или основного email компании
+            if CampaignRecipient.objects.filter(campaign=camp, email__iexact=email).exists():
+                continue
+            if Unsubscribe.objects.filter(email__iexact=email).exists():
+                CampaignRecipient.objects.get_or_create(
+                    campaign=camp,
+                    email=email,
+                    defaults={"status": CampaignRecipient.Status.UNSUBSCRIBED, "contact_id": None, "company_id": ce.company_id},
+                )
+                continue
+            _, was_created = CampaignRecipient.objects.get_or_create(
+                campaign=camp,
+                email=email,
+                defaults={"contact_id": None, "company_id": ce.company_id},
+            )
+            if was_created:
+                created += 1
 
     camp.status = Campaign.Status.READY
     camp.filter_meta = {

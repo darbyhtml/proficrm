@@ -270,6 +270,20 @@ class Contact(models.Model):
         return f"{self.last_name} {self.first_name}".strip() or str(self.id)
 
 
+class CompanyEmail(models.Model):
+    """Email адреса компании (дополнительные к основному полю email)"""
+    company = models.ForeignKey(Company, verbose_name="Компания", on_delete=models.CASCADE, related_name="emails")
+    value = models.EmailField("Email", max_length=254, db_index=True)
+    order = models.IntegerField("Порядок", default=0, db_index=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["value"]), models.Index(fields=["company", "order"])]
+        ordering = ["order", "value"]
+
+    def __str__(self) -> str:
+        return self.value
+
+
 class ContactEmail(models.Model):
     class EmailType(models.TextChoices):
         WORK = "work", "Рабочий"

@@ -102,6 +102,33 @@
         </div>
       </div>
 
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Дополнительные Email адреса</label>
+        <div id="company-emails-container" class="space-y-2">
+          {% for email in company_emails %}
+            <div class="flex gap-2 items-center company-email-row">
+              <input type="email" name="company_emails_{{ forloop.counter0 }}" value="{{ email.value }}" 
+                     class="flex-1 rounded-lg border px-3 py-2" placeholder="email@example.com" />
+              <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-email-btn" title="Удалить">
+                ✕
+              </button>
+            </div>
+          {% empty %}
+            <div class="flex gap-2 items-center company-email-row">
+              <input type="email" name="company_emails_0" value="" 
+                     class="flex-1 rounded-lg border px-3 py-2" placeholder="email@example.com" />
+              <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-email-btn" title="Удалить">
+                ✕
+              </button>
+            </div>
+          {% endfor %}
+        </div>
+        <button type="button" id="add-email-btn" class="mt-2 btn btn-outline text-sm">
+          + Добавить Email
+        </button>
+        <div class="text-xs text-brand-dark/60 mt-1">Эти email адреса будут доступны в разделе "Почта" для рассылок.</div>
+      </div>
+
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label class="block text-sm text-brand-dark/80 mb-1">Контакт (ФИО)</label>
@@ -146,6 +173,42 @@
       </div>
     </form>
   </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const container = document.getElementById('company-emails-container');
+      const addBtn = document.getElementById('add-email-btn');
+      let emailIndex = {{ company_emails|length|default:0 }} + 1;
+
+      // Добавление нового email поля
+      addBtn.addEventListener('click', function() {
+        const row = document.createElement('div');
+        row.className = 'flex gap-2 items-center company-email-row';
+        row.innerHTML = `
+          <input type="email" name="company_emails_${emailIndex}" value="" 
+                 class="flex-1 rounded-lg border px-3 py-2" placeholder="email@example.com" />
+          <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-email-btn" title="Удалить">
+            ✕
+          </button>
+        `;
+        container.appendChild(row);
+        emailIndex++;
+      });
+
+      // Удаление email поля
+      container.addEventListener('click', function(e) {
+        if (e.target.classList.contains('remove-email-btn')) {
+          const row = e.target.closest('.company-email-row');
+          if (row && container.children.length > 1) {
+            row.remove();
+          } else if (row) {
+            // Если последнее поле, просто очищаем его
+            row.querySelector('input').value = '';
+          }
+        }
+      });
+    });
+  </script>
 {% endblock %}
 
 

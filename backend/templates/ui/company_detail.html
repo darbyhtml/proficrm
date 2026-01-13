@@ -364,11 +364,20 @@
             {% endif %}
           </div>
           <div>
-            <div class="text-brand-dark/50">Email (основной)</div>
-            <div>
+            <div class="text-brand-dark/50">Email адреса</div>
+            <div class="space-y-1">
               {% if company.email %}
-                <a class="link font-mono text-xs" href="mailto:{{ company.email }}">{{ company.email }}</a>
-              {% else %}
+                <div>
+                  <a class="link font-mono text-xs" href="mailto:{{ company.email }}">{{ company.email }}</a>
+                  <span class="text-xs text-brand-dark/50 ml-1">(основной)</span>
+                </div>
+              {% endif %}
+              {% for email in company.emails.all %}
+                <div>
+                  <a class="link font-mono text-xs" href="mailto:{{ email.value }}">{{ email.value }}</a>
+                </div>
+              {% endfor %}
+              {% if not company.email and not company.emails.all %}
                 —
               {% endif %}
             </div>
