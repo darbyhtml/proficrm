@@ -295,10 +295,10 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
         if len(words) > 1:
             # Если несколько слов, ищем контакты, где ВСЕ слова найдены (в любых полях одного контакта)
             # Используем Exists для проверки, что есть контакт компании, где все слова найдены
-            from django.db.models import Exists, OuterRef
-            
             # Создаем фильтр для контакта, где все слова найдены
-            contact_q = Contact.objects.filter(company=OuterRef('pk'))
+            contact_q = Contact.objects.filter(company_id=OuterRef('pk'))
+            # Для каждого слова создаем условие, что оно найдено в first_name ИЛИ last_name
+            # И все эти условия должны выполняться для одного контакта
             for word in words:
                 contact_q = contact_q.filter(
                     Q(first_name__icontains=word) | Q(last_name__icontains=word)
