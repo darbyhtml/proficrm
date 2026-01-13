@@ -757,7 +757,15 @@
                 <div class="flex items-start justify-between gap-3">
                   <div>
                     <div class="mb-0.5">
-                      {% include "ui/partials/task_type_badge.html" with task_type=t.type only %}
+                      {% if t.type %}
+                        {% include "ui/partials/task_type_badge.html" with task_type=t.type only %}
+                      {% elif t.title %}
+                        <span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-800">
+                          {{ t.title }}
+                        </span>
+                      {% else %}
+                        <span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">Без статуса</span>
+                      {% endif %}
                     </div>
                     <div class="text-xs text-brand-dark/70">
                       {{ t.get_status_display }}
