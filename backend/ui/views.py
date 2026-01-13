@@ -19,7 +19,7 @@ from django.utils import timezone
 from accounts.models import Branch, User
 from audit.models import ActivityEvent
 from audit.service import log_event
-from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactEmail, ContactPhone, CompanyDeletionRequest, CompanyLeadStateRequest, CompanyEmail
+from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactEmail, ContactPhone, CompanyDeletionRequest, CompanyLeadStateRequest, CompanyEmail, CompanyPhone
 from companies.permissions import can_edit_company as can_edit_company_perm, editable_company_qs as editable_company_qs_perm
 from tasksapp.models import Task, TaskType
 from notifications.models import Notification
@@ -282,14 +282,21 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
         if normalized_phone and normalized_phone != q:
             # Ищем по нормализованному номеру в основном телефоне компании
             phone_filters = Q(phone=normalized_phone)
+            # Ищем по нормализованному номеру в дополнительных телефонах компании
+            phone_filters |= Q(phones__value=normalized_phone)
             # Ищем по нормализованному номеру в телефонах контактов
             phone_filters |= Q(contacts__phones__value=normalized_phone)
             # Также ищем по исходному запросу (на случай, если нормализация не сработала)
             phone_filters |= Q(phone__icontains=q)
+            phone_filters |= Q(phones__value__icontains=q)
             phone_filters |= Q(contacts__phones__value__icontains=q)
         else:
             # Если нормализация не удалась, ищем как есть
-            phone_filters = Q(phone__icontains=q) | Q(contacts__phones__value__icontains=q)
+            phone_filters = (
+                Q(phone__icontains=q)
+                | Q(phones__value__icontains=q)
+                | Q(contacts__phones__value__icontains=q)
+            )
         
         # Поиск по email в контактах
         email_filters = Q(contacts__emails__value__icontains=q)
@@ -1474,9 +1481,15 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     user: User = request.user
     # Загружаем компанию с связанными объектами, включая поля для истории холодных звонков
     company = get_object_or_404(
-        Company.objects.select_related("responsible", "branch", "status", "head_company", "primary_cold_marked_by", "primary_cold_marked_call")
-        .prefetch_related("emails"),
-        id=company_id
+        Company.objects.select_related(
+            "responsible",
+            "branch",
+            "status",
+            "head_company",
+            "primary_cold_marked_by",
+            "primary_cold_marked_call",
+        ).prefetch_related("emails", "phones"),
+        id=company_id,
     )
     can_edit_company = _can_edit_company(user, company)
     can_view_activity = bool(user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD))
@@ -2504,31 +2517,52 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
         messages.error(request, "Нет прав на редактирование данных компании.")
         return redirect("company_detail", company_id=company.id)
 
+    company_emails: list[CompanyEmail] = []
+    company_phones: list[CompanyPhone] = []
+
     if request.method == "POST":
         form = CompanyEditForm(request.POST, instance=company)
         if form.is_valid():
             form.save()
-            
+
+            # Вспомогательные структуры: (index, value)
+            new_company_emails: list[tuple[int, str]] = []
+            new_company_phones: list[tuple[int, str]] = []
+
             # Сохраняем множественные email адреса
-            # Получаем все email адреса из POST (формат: company_emails_0, company_emails_1, ...)
-            company_emails = []
             for key, value in request.POST.items():
-                if key.startswith("company_emails_") and value.strip():
+                if key.startswith("company_emails_"):
+                    raw = (value or "").strip()
+                    if not raw:
+                        continue
                     try:
                         index = int(key.replace("company_emails_", ""))
-                        email_value = value.strip()
-                        if email_value:
-                            company_emails.append((index, email_value))
-                    except (ValueError, AttributeError):
-                        pass
-            
-            # Удаляем старые email адреса
+                    except (ValueError, TypeError):
+                        continue
+                    new_company_emails.append((index, raw))
+
+            # Сохраняем множественные телефоны компании
+            for key, value in request.POST.items():
+                if key.startswith("company_phones_"):
+                    raw = (value or "").strip()
+                    if not raw:
+                        continue
+                    try:
+                        index = int(key.replace("company_phones_", ""))
+                    except (ValueError, TypeError):
+                        continue
+                    new_company_phones.append((index, raw))
+
+            # Удаляем старые значения и создаем новые в упорядоченном виде
             CompanyEmail.objects.filter(company=company).delete()
-            
-            # Создаем новые email адреса
-            for order, email_value in sorted(company_emails, key=lambda x: x[0]):
+            CompanyPhone.objects.filter(company=company).delete()
+
+            for order, email_value in sorted(new_company_emails, key=lambda x: x[0]):
                 CompanyEmail.objects.create(company=company, value=email_value, order=order)
-            
+
+            for order, phone_value in sorted(new_company_phones, key=lambda x: x[0]):
+                CompanyPhone.objects.create(company=company, value=phone_value, order=order)
+
             messages.success(request, "Данные компании обновлены.")
             log_event(
                 actor=user,
@@ -2539,12 +2573,29 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
                 message="Обновлены данные компании",
             )
             return redirect("company_detail", company_id=company.id)
+        else:
+            # При ошибках в форме восстанавливаем введённые значения из POST,
+            # чтобы пользователь не потерял данные.
+            for key, value in request.POST.items():
+                if key.startswith("company_emails_"):
+                    company_emails.append(
+                        CompanyEmail(company=company, value=(value or "").strip())
+                    )
+                if key.startswith("company_phones_"):
+                    company_phones.append(
+                        CompanyPhone(company=company, value=(value or "").strip())
+                    )
     else:
         form = CompanyEditForm(instance=company)
-        # Загружаем существующие email адреса для отображения в форме
+        # Загружаем существующие email и телефоны для отображения в форме
         company_emails = list(company.emails.all())
+        company_phones = list(company.phones.all())
 
-    return render(request, "ui/company_edit.html", {"company": company, "form": form, "company_emails": company_emails})
+    return render(
+        request,
+        "ui/company_edit.html",
+        {"company": company, "form": form, "company_emails": company_emails, "company_phones": company_phones},
+    )
 
 
 @login_required

@@ -92,41 +92,70 @@
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <div>
+        <div class="space-y-2">
           <label class="block text-sm text-brand-dark/80 mb-1">Телефон (основной)</label>
           {{ form.phone }}
+          <div>
+            <label class="block text-xs text-brand-dark/60 mb-1">Дополнительные телефоны</label>
+            <div id="company-phones-container" class="space-y-2">
+              {% if company_phones %}
+                {% for phone in company_phones %}
+                  <div class="flex gap-2 items-center company-phone-row">
+                    <input type="text" name="company_phones_{{ forloop.counter0 }}" value="{{ phone.value }}"
+                           class="flex-1 rounded-lg border px-3 py-2" placeholder="+7 ..." />
+                    <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-phone-btn" title="Удалить номер">
+                      ✕
+                    </button>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <div class="flex gap-2 items-center company-phone-row">
+                  <input type="text" name="company_phones_0" value=""
+                         class="flex-1 rounded-lg border px-3 py-2" placeholder="+7 ..." />
+                  <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-phone-btn" title="Удалить номер">
+                    ✕
+                  </button>
+                </div>
+              {% endif %}
+            </div>
+            <button type="button" id="add-phone-btn" class="mt-2 btn btn-outline text-xs">
+              + Добавить телефон
+            </button>
+            <div class="text-xs text-brand-dark/60 mt-1">Эти номера учитываются в поиске и могут использоваться для звонков.</div>
+          </div>
         </div>
-        <div>
+        <div class="space-y-2">
           <label class="block text-sm text-brand-dark/80 mb-1">Email (основной)</label>
           {{ form.email }}
-        </div>
-      </div>
-
-      <div>
-        <label class="block text-sm text-brand-dark/80 mb-1">Дополнительные Email адреса</label>
-        <div id="company-emails-container" class="space-y-2">
-          {% for email in company_emails %}
-            <div class="flex gap-2 items-center company-email-row">
-              <input type="email" name="company_emails_{{ forloop.counter0 }}" value="{{ email.value }}" 
-                     class="flex-1 rounded-lg border px-3 py-2" placeholder="email@example.com" />
-              <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-email-btn" title="Удалить">
-                ✕
-              </button>
+          <div>
+            <label class="block text-xs text-brand-dark/60 mb-1">Дополнительные Email адреса</label>
+            <div id="company-emails-container" class="space-y-2">
+              {% if company_emails %}
+                {% for email in company_emails %}
+                  <div class="flex gap-2 items-center company-email-row">
+                    <input type="email" name="company_emails_{{ forloop.counter0 }}" value="{{ email.value }}"
+                           class="flex-1 rounded-lg border px-3 py-2" placeholder="email@example.com" />
+                    <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-email-btn" title="Удалить email">
+                      ✕
+                    </button>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <div class="flex gap-2 items-center company-email-row">
+                  <input type="email" name="company_emails_0" value=""
+                         class="flex-1 rounded-lg border px-3 py-2" placeholder="email@example.com" />
+                  <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-email-btn" title="Удалить email">
+                    ✕
+                  </button>
+                </div>
+              {% endif %}
             </div>
-          {% empty %}
-            <div class="flex gap-2 items-center company-email-row">
-              <input type="email" name="company_emails_0" value="" 
-                     class="flex-1 rounded-lg border px-3 py-2" placeholder="email@example.com" />
-              <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-email-btn" title="Удалить">
-                ✕
-              </button>
-            </div>
-          {% endfor %}
+            <button type="button" id="add-email-btn" class="mt-2 btn btn-outline text-xs">
+              + Добавить Email
+            </button>
+            <div class="text-xs text-brand-dark/60 mt-1">Эти email адреса будут доступны в разделе "Почта" для рассылок.</div>
+          </div>
         </div>
-        <button type="button" id="add-email-btn" class="mt-2 btn btn-outline text-sm">
-          + Добавить Email
-        </button>
-        <div class="text-xs text-brand-dark/60 mt-1">Эти email адреса будут доступны в разделе "Почта" для рассылок.</div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -176,33 +205,61 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', function() {
-      const container = document.getElementById('company-emails-container');
-      const addBtn = document.getElementById('add-email-btn');
-      let emailIndex = {{ company_emails|length|default:0 }} + 1;
+      // EMAILS
+      const emailsContainer = document.getElementById('company-emails-container');
+      const addEmailBtn = document.getElementById('add-email-btn');
+      let emailIndex = {{ company_emails|length|default:0 }};
 
-      // Добавление нового email поля
-      addBtn.addEventListener('click', function() {
+      addEmailBtn.addEventListener('click', function() {
         const row = document.createElement('div');
         row.className = 'flex gap-2 items-center company-email-row';
         row.innerHTML = `
-          <input type="email" name="company_emails_${emailIndex}" value="" 
+          <input type="email" name="company_emails_${emailIndex}" value=""
                  class="flex-1 rounded-lg border px-3 py-2" placeholder="email@example.com" />
-          <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-email-btn" title="Удалить">
+          <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-email-btn" title="Удалить email">
             ✕
           </button>
         `;
-        container.appendChild(row);
+        emailsContainer.appendChild(row);
         emailIndex++;
       });
 
-      // Удаление email поля
-      container.addEventListener('click', function(e) {
+      emailsContainer.addEventListener('click', function(e) {
         if (e.target.classList.contains('remove-email-btn')) {
           const row = e.target.closest('.company-email-row');
-          if (row && container.children.length > 1) {
+          if (row && emailsContainer.children.length > 1) {
             row.remove();
           } else if (row) {
-            // Если последнее поле, просто очищаем его
+            row.querySelector('input').value = '';
+          }
+        }
+      });
+
+      // PHONES
+      const phonesContainer = document.getElementById('company-phones-container');
+      const addPhoneBtn = document.getElementById('add-phone-btn');
+      let phoneIndex = {{ company_phones|length|default:0 }};
+
+      addPhoneBtn.addEventListener('click', function() {
+        const row = document.createElement('div');
+        row.className = 'flex gap-2 items-center company-phone-row';
+        row.innerHTML = `
+          <input type="text" name="company_phones_${phoneIndex}" value=""
+                 class="flex-1 rounded-lg border px-3 py-2" placeholder="+7 ..." />
+          <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-phone-btn" title="Удалить номер">
+            ✕
+          </button>
+        `;
+        phonesContainer.appendChild(row);
+        phoneIndex++;
+      });
+
+      phonesContainer.addEventListener('click', function(e) {
+        if (e.target.classList.contains('remove-phone-btn')) {
+          const row = e.target.closest('.company-phone-row');
+          if (row && phonesContainer.children.length > 1) {
+            row.remove();
+          } else if (row) {
             row.querySelector('input').value = '';
           }
         }

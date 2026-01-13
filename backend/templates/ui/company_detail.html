@@ -364,6 +364,25 @@
             {% endif %}
           </div>
           <div>
+            <div class="text-brand-dark/50">Телефоны</div>
+            <div class="space-y-1">
+              {% if company.phone %}
+                <div>
+                  <span class="font-mono text-xs">{{ company.phone }}</span>
+                  <span class="text-xs text-brand-dark/50 ml-1">(основной)</span>
+                </div>
+              {% endif %}
+              {% for phone in company.phones.all %}
+                <div>
+                  <span class="font-mono text-xs">{{ phone.value }}</span>
+                </div>
+              {% endfor %}
+              {% if not company.phone and not company.phones.all %}
+                —
+              {% endif %}
+            </div>
+          </div>
+          <div>
             <div class="text-brand-dark/50">Email адреса</div>
             <div class="space-y-1">
               {% if company.email %}

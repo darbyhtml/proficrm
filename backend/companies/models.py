@@ -284,6 +284,21 @@ class CompanyEmail(models.Model):
         return self.value
 
 
+class CompanyPhone(models.Model):
+    """Дополнительные телефоны компании (к основному полю phone)."""
+
+    company = models.ForeignKey(Company, verbose_name="Компания", on_delete=models.CASCADE, related_name="phones")
+    value = models.CharField("Телефон", max_length=50, db_index=True)
+    order = models.IntegerField("Порядок", default=0, db_index=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["value"]), models.Index(fields=["company", "order"])]
+        ordering = ["order", "value"]
+
+    def __str__(self) -> str:
+        return self.value
+
+
 class ContactEmail(models.Model):
     class EmailType(models.TextChoices):
         WORK = "work", "Рабочий"
