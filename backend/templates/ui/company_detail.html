@@ -781,6 +781,9 @@
                       {{ t.get_status_display }}
                       {% if t.assigned_to %} · {{ t.assigned_to }}{% endif %}
                     </div>
+                    {% if t.description %}
+                      <div class="text-xs text-brand-dark/70 mt-1" style="line-height:1.3">{{ t.description|truncatechars:120 }}</div>
+                    {% endif %}
                   </div>
                   <div class="text-right flex-shrink-0">
                     <div class="text-xs {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700 font-medium{% else %}text-brand-dark/70{% endif %}">
