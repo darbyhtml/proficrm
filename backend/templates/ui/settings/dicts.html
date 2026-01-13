@@ -16,7 +16,22 @@
         </div>
         <ul class="space-y-2 text-sm">
           {% for s in company_statuses %}
-            <li class="rounded-lg border px-3 py-2">{{ s.name }}</li>
+            <li class="rounded-lg border px-3 py-2 flex items-center justify-between gap-2" data-dict-item data-dict-type="company-status" data-dict-id="{{ s.id }}" data-dict-name="{{ s.name }}">
+              <span>{{ s.name }}</span>
+              <div class="flex items-center gap-1">
+                <button type="button" class="text-brand-dark/60 hover:text-brand-orange transition-colors" data-edit-dict title="Редактировать" aria-label="Редактировать">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 20h9"/>
+                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+                  </svg>
+                </button>
+                <button type="button" class="text-brand-dark/60 hover:text-red-600 transition-colors" data-delete-dict title="Удалить" aria-label="Удалить">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 7h12M10 11v6M14 11v6M9 7l1-3h4l1 3M19 7l-1 12H6L5 7"/>
+                  </svg>
+                </button>
+              </div>
+            </li>
           {% empty %}
             <li class="text-brand-dark/70">Пусто</li>
           {% endfor %}
@@ -30,7 +45,22 @@
         </div>
         <ul class="space-y-2 text-sm">
           {% for s in company_spheres %}
-            <li class="rounded-lg border px-3 py-2">{{ s.name }}</li>
+            <li class="rounded-lg border px-3 py-2 flex items-center justify-between gap-2" data-dict-item data-dict-type="company-sphere" data-dict-id="{{ s.id }}" data-dict-name="{{ s.name }}">
+              <span>{{ s.name }}</span>
+              <div class="flex items-center gap-1">
+                <button type="button" class="text-brand-dark/60 hover:text-brand-orange transition-colors" data-edit-dict title="Редактировать" aria-label="Редактировать">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 20h9"/>
+                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+                  </svg>
+                </button>
+                <button type="button" class="text-brand-dark/60 hover:text-red-600 transition-colors" data-delete-dict title="Удалить" aria-label="Удалить">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 7h12M10 11v6M14 11v6M9 7l1-3h4l1 3M19 7l-1 12H6L5 7"/>
+                  </svg>
+                </button>
+              </div>
+            </li>
           {% empty %}
             <li class="text-brand-dark/70">Пусто</li>
           {% endfor %}
@@ -44,9 +74,22 @@
         </div>
         <ul class="space-y-2 text-sm">
           {% for t in task_types %}
-            <li class="rounded-lg border px-3 py-2 flex items-center justify-between gap-2">
+            <li class="rounded-lg border px-3 py-2 flex items-center justify-between gap-2" data-dict-item data-dict-type="task-type" data-dict-id="{{ t.id }}" data-dict-name="{{ t.name }}" data-dict-icon="{{ t.icon|default:'' }}" data-dict-color="{{ t.color|default:'' }}">
               <div class="flex items-center gap-2">
                 {% include "ui/partials/task_type_badge.html" with task_type=t only %}
+              </div>
+              <div class="flex items-center gap-1">
+                <button type="button" class="text-brand-dark/60 hover:text-brand-orange transition-colors" data-edit-dict title="Редактировать" aria-label="Редактировать">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 20h9"/>
+                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+                  </svg>
+                </button>
+                <button type="button" class="text-brand-dark/60 hover:text-red-600 transition-colors" data-delete-dict title="Удалить" aria-label="Удалить">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 7h12M10 11v6M14 11v6M9 7l1-3h4l1 3M19 7l-1 12H6L5 7"/>
+                  </svg>
+                </button>
               </div>
             </li>
           {% empty %}
@@ -56,6 +99,115 @@
       </section>
     </div>
   </div>
+
+  <!-- Модальное окно для редактирования справочников -->
+  <div id="dictModal" class="fixed inset-0 z-[200] hidden">
+    <div class="fixed inset-0 bg-black/35" data-close-dict-modal></div>
+    <div class="absolute inset-x-4 top-12 mx-auto max-w-lg max-h-[90vh] overflow-y-auto">
+      <div id="dictModalContent"></div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      const modal = document.getElementById('dictModal');
+      const modalContent = document.getElementById('dictModalContent');
+      if (!modal || !modalContent) return;
+
+      // Закрытие модалки
+      function closeModal() {
+        modal.classList.add('hidden');
+        modalContent.innerHTML = '';
+      }
+      modal.querySelectorAll('[data-close-dict-modal]').forEach(btn => {
+        btn.addEventListener('click', closeModal);
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+      });
+      modal.querySelector('.bg-black\\/35')?.addEventListener('click', closeModal);
+
+      // Редактирование
+      document.querySelectorAll('[data-edit-dict]').forEach(btn => {
+        btn.addEventListener('click', async function() {
+          const item = this.closest('[data-dict-item]');
+          if (!item) return;
+          const dictType = item.dataset.dictType;
+          const dictId = item.dataset.dictId;
+          const url = `/settings/dicts/${dictType}/${dictId}/edit/`;
+          
+          try {
+            const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            if (!res.ok) throw new Error('Ошибка загрузки формы');
+            const html = await res.text();
+            modalContent.innerHTML = html;
+            modal.classList.remove('hidden');
+            
+            // Обработка формы
+            const form = modalContent.querySelector('[data-dict-form]');
+            if (form) {
+              form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const formData = new FormData(form);
+                formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+                
+                try {
+                  const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData
+                  });
+                  const data = await res.json();
+                  if (data.ok) {
+                    closeModal();
+                    location.reload(); // Обновляем страницу для отображения изменений
+                  } else {
+                    alert('Ошибка: ' + (data.error || 'Не удалось сохранить'));
+                  }
+                } catch (err) {
+                  alert('Ошибка при сохранении: ' + err.message);
+                }
+              });
+            }
+          } catch (err) {
+            alert('Ошибка загрузки формы: ' + err.message);
+          }
+        });
+      });
+
+      // Удаление
+      document.querySelectorAll('[data-delete-dict]').forEach(btn => {
+        btn.addEventListener('click', async function() {
+          const item = this.closest('[data-dict-item]');
+          if (!item) return;
+          const dictType = item.dataset.dictType;
+          const dictId = item.dataset.dictId;
+          const dictName = item.dataset.dictName;
+          
+          if (!confirm(`Удалить "${dictName}"?`)) return;
+          
+          const url = `/settings/dicts/${dictType}/${dictId}/delete/`;
+          try {
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+              }
+            });
+            const data = await res.json();
+            if (data.ok) {
+              item.remove();
+            } else {
+              alert('Ошибка: ' + (data.error || 'Не удалось удалить'));
+            }
+          } catch (err) {
+            alert('Ошибка при удалении: ' + err.message);
+          }
+        });
+      });
+    })();
+  </script>
 {% endblock %}
 
 

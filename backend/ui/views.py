@@ -3799,10 +3799,13 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
 
 @login_required
 def task_edit(request: HttpRequest, task_id) -> HttpResponse:
+    """Редактирование задачи (поддержка AJAX для модалок)"""
     user: User = request.user
     task = get_object_or_404(Task.objects.select_related("company", "assigned_to", "created_by", "type"), id=task_id)
 
     if not _can_edit_task_ui(user, task):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"ok": False, "error": "Нет прав на редактирование этой задачи."}, status=403)
         messages.error(request, "Нет прав на редактирование этой задачи.")
         return redirect("task_list")
     can_delete_task = _can_delete_task_ui(user, task)
@@ -3815,7 +3818,6 @@ def task_edit(request: HttpRequest, task_id) -> HttpResponse:
             if updated_task.type:
                 updated_task.title = updated_task.type.name
             updated_task.save()
-            messages.success(request, "Задача обновлена.")
             log_event(
                 actor=user,
                 verb=ActivityEvent.Verb.UPDATE,
@@ -3824,9 +3826,35 @@ def task_edit(request: HttpRequest, task_id) -> HttpResponse:
                 company_id=updated_task.company_id,
                 message=f"Обновлена задача: {updated_task.title}",
             )
+            # Если AJAX запрос - возвращаем JSON
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return JsonResponse({
+                    "ok": True,
+                    "task_id": str(updated_task.id),
+                    "title": updated_task.title or (updated_task.type.name if updated_task.type else ""),
+                    "description": updated_task.description or "",
+                    "type_id": updated_task.type_id,
+                    "type_name": updated_task.type.name if updated_task.type else "",
+                    "type_icon": updated_task.type.icon if updated_task.type else "",
+                    "type_color": updated_task.type.color if updated_task.type else "",
+                    "due_at": updated_task.due_at.isoformat() if updated_task.due_at else None,
+                })
+            messages.success(request, "Задача обновлена.")
+            # Редирект на предыдущую страницу или список задач
+            referer = request.META.get("HTTP_REFERER", "/tasks/")
+            if "/companies/" in referer:
+                # Если редактировали из карточки компании, возвращаемся туда
+                import re
+                match = re.search(r"/companies/([a-f0-9-]+)/", referer)
+                if match:
+                    return redirect("company_detail", company_id=match.group(1))
             return redirect("task_list")
     else:
         form = TaskEditForm(instance=task)
+    
+    # Если запрос на модалку (через AJAX или параметр modal=1)
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.GET.get("modal") == "1":
+        return render(request, "ui/task_edit_modal.html", {"form": form, "task": task, "can_delete_task": can_delete_task})
 
     return render(request, "ui/task_edit.html", {"form": form, "task": task, "can_delete_task": can_delete_task})
 
@@ -3988,6 +4016,108 @@ def settings_task_type_create(request: HttpRequest) -> HttpResponse:
     else:
         form = TaskTypeForm()
     return render(request, "ui/settings/dict_form.html", {"form": form, "title": "Новый тип задачи"})
+
+
+@login_required
+def settings_company_status_edit(request: HttpRequest, status_id: int) -> HttpResponse:
+    """Редактирование статуса компании через модалку (AJAX)"""
+    if not require_admin(request.user):
+        return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
+    status = get_object_or_404(CompanyStatus, id=status_id)
+    if request.method == "POST":
+        form = CompanyStatusForm(request.POST, instance=status)
+        if form.is_valid():
+            form.save()
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return JsonResponse({"ok": True, "id": status.id, "name": status.name})
+            messages.success(request, "Статус обновлён.")
+            return redirect("settings_dicts")
+    else:
+        form = CompanyStatusForm(instance=status)
+    return render(request, "ui/settings/dict_form_modal.html", {"form": form, "title": "Редактировать статус компании", "dict_type": "company-status", "dict_id": status.id})
+
+
+@login_required
+def settings_company_status_delete(request: HttpRequest, status_id: int) -> HttpResponse:
+    """Удаление статуса компании"""
+    if not require_admin(request.user):
+        return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Method not allowed."}, status=405)
+    status = get_object_or_404(CompanyStatus, id=status_id)
+    status.delete()
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse({"ok": True})
+    messages.success(request, "Статус удалён.")
+    return redirect("settings_dicts")
+
+
+@login_required
+def settings_company_sphere_edit(request: HttpRequest, sphere_id: int) -> HttpResponse:
+    """Редактирование сферы компании через модалку (AJAX)"""
+    if not require_admin(request.user):
+        return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
+    sphere = get_object_or_404(CompanySphere, id=sphere_id)
+    if request.method == "POST":
+        form = CompanySphereForm(request.POST, instance=sphere)
+        if form.is_valid():
+            form.save()
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return JsonResponse({"ok": True, "id": sphere.id, "name": sphere.name})
+            messages.success(request, "Сфера обновлена.")
+            return redirect("settings_dicts")
+    else:
+        form = CompanySphereForm(instance=sphere)
+    return render(request, "ui/settings/dict_form_modal.html", {"form": form, "title": "Редактировать сферу компании", "dict_type": "company-sphere", "dict_id": sphere.id})
+
+
+@login_required
+def settings_company_sphere_delete(request: HttpRequest, sphere_id: int) -> HttpResponse:
+    """Удаление сферы компании"""
+    if not require_admin(request.user):
+        return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Method not allowed."}, status=405)
+    sphere = get_object_or_404(CompanySphere, id=sphere_id)
+    sphere.delete()
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse({"ok": True})
+    messages.success(request, "Сфера удалена.")
+    return redirect("settings_dicts")
+
+
+@login_required
+def settings_task_type_edit(request: HttpRequest, task_type_id: int) -> HttpResponse:
+    """Редактирование типа задачи через модалку (AJAX)"""
+    if not require_admin(request.user):
+        return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
+    task_type = get_object_or_404(TaskType, id=task_type_id)
+    if request.method == "POST":
+        form = TaskTypeForm(request.POST, instance=task_type)
+        if form.is_valid():
+            form.save()
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return JsonResponse({"ok": True, "id": task_type.id, "name": task_type.name, "icon": task_type.icon or "", "color": task_type.color or ""})
+            messages.success(request, "Тип задачи обновлён.")
+            return redirect("settings_dicts")
+    else:
+        form = TaskTypeForm(instance=task_type)
+    return render(request, "ui/settings/dict_form_modal.html", {"form": form, "title": "Редактировать статус задачи", "dict_type": "task-type", "dict_id": task_type.id})
+
+
+@login_required
+def settings_task_type_delete(request: HttpRequest, task_type_id: int) -> HttpResponse:
+    """Удаление типа задачи"""
+    if not require_admin(request.user):
+        return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Method not allowed."}, status=405)
+    task_type = get_object_or_404(TaskType, id=task_type_id)
+    task_type.delete()
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse({"ok": True})
+    messages.success(request, "Тип задачи удалён.")
+    return redirect("settings_dicts")
 
 
 @login_required
