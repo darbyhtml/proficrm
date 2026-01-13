@@ -263,6 +263,8 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
             "юр.",
             "юр ",
             "полное наимен",
+            "полное название",
+            "Полное название",
             "наименование юр",
             "название юр",
             "юрлицо",
