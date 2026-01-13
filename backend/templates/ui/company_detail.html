@@ -1867,6 +1867,129 @@
         });
       });
     })();
+
+    // Обработка комментариев к телефонам
+    (function() {
+      const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || document.querySelector('meta[name=csrf-token]')?.content;
+      
+      // Обработчик клика на комментарий для редактирования
+      document.addEventListener('click', function(e) {
+        const editBtn = e.target.closest('[data-edit-comment]');
+        if (!editBtn) return;
+        
+        const wrapper = editBtn.closest('.phone-comment-wrapper');
+        if (!wrapper) return;
+        
+        const display = wrapper.querySelector('.phone-comment-display');
+        const edit = wrapper.querySelector('.phone-comment-edit');
+        const input = wrapper.querySelector('[data-comment-input]');
+        
+        if (display && edit && input) {
+          display.classList.add('hidden');
+          edit.classList.remove('hidden');
+          input.focus();
+          input.select();
+        }
+      });
+
+      // Сохранение комментария
+      document.addEventListener('click', function(e) {
+        const saveBtn = e.target.closest('[data-save-comment]');
+        if (!saveBtn) return;
+        
+        const wrapper = saveBtn.closest('.phone-comment-wrapper');
+        if (!wrapper) return;
+        
+        const phoneType = wrapper.dataset.phoneType;
+        const phoneId = wrapper.dataset.phoneId;
+        const companyId = wrapper.dataset.companyId;
+        const input = wrapper.querySelector('[data-comment-input]');
+        
+        if (!input) return;
+        
+        const comment = input.value.trim();
+        let url = '';
+        
+        if (phoneType === 'main') {
+          url = `/companies/${companyId}/main-phone/comment/`;
+        } else if (phoneType === 'company') {
+          url = `/company-phones/${phoneId}/comment/`;
+        } else if (phoneType === 'contact') {
+          url = `/contact-phones/${phoneId}/comment/`;
+        } else {
+          return;
+        }
+        
+        const formData = new FormData();
+        formData.append('comment', comment);
+        formData.append('csrfmiddlewaretoken', csrftoken);
+        
+        fetch(url, {
+          method: 'POST',
+          body: formData,
+          headers: {'X-Requested-With': 'XMLHttpRequest'}
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            const display = wrapper.querySelector('.phone-comment-display');
+            const edit = wrapper.querySelector('.phone-comment-edit');
+            
+            if (display && edit) {
+              display.textContent = data.comment || 'Комментарий';
+              display.classList.remove('hidden');
+              edit.classList.add('hidden');
+            }
+          } else {
+            alert(data.error || 'Ошибка при сохранении комментария');
+          }
+        })
+        .catch(err => {
+          alert('Ошибка: ' + err.message);
+        });
+      });
+
+      // Отмена редактирования
+      document.addEventListener('click', function(e) {
+        const cancelBtn = e.target.closest('[data-cancel-comment]');
+        if (!cancelBtn) return;
+        
+        const wrapper = cancelBtn.closest('.phone-comment-wrapper');
+        if (!wrapper) return;
+        
+        const display = wrapper.querySelector('.phone-comment-display');
+        const edit = wrapper.querySelector('.phone-comment-edit');
+        const input = wrapper.querySelector('[data-comment-input]');
+        
+        if (display && edit && input) {
+          // Восстанавливаем исходное значение
+          const originalComment = display.textContent.trim();
+          input.value = originalComment === 'Комментарий' ? '' : originalComment;
+          
+          display.classList.remove('hidden');
+          edit.classList.add('hidden');
+        }
+      });
+
+      // Сохранение по Enter, отмена по Escape
+      document.addEventListener('keydown', function(e) {
+        const input = e.target.closest('[data-comment-input]');
+        if (!input) return;
+        
+        const wrapper = input.closest('.phone-comment-wrapper');
+        if (!wrapper) return;
+        
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const saveBtn = wrapper.querySelector('[data-save-comment]');
+          if (saveBtn) saveBtn.click();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          const cancelBtn = wrapper.querySelector('[data-cancel-comment]');
+          if (cancelBtn) cancelBtn.click();
+        }
+      });
+    })();
   </script>
 {% endblock %}
 
