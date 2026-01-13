@@ -11,7 +11,7 @@
       <a href="/tasks/new/" class="btn btn-primary">+ Новая задача</a>
     </div>
 
-    <form class="bg-white border rounded-2xl p-3 flex flex-wrap items-end gap-3" method="get">
+    <form class="bg-white border rounded-2xl p-3 flex flex-wrap items-end gap-3" method="get" id="taskFilterForm">
       <div class="flex items-center gap-2">
         <svg class="w-4 h-4 text-brand-dark/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -52,11 +52,24 @@
         </svg>
         <span>Показать выполненные</span>
       </label>
+      <button type="button" class="btn btn-outline flex items-center gap-2" style="padding:.5rem 1rem" id="dateFilterBtn">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+        </svg>
+        <span>{% if date_from or date_to %}Период{% else %}Период{% endif %}</span>
+        {% if date_from or date_to %}
+          <span class="text-xs bg-brand-orange/20 px-1.5 py-0.5 rounded">✓</span>
+        {% endif %}
+      </button>
       <div class="flex gap-2 ml-auto">
         <button class="btn btn-primary" type="submit" style="padding:.5rem 1rem">Применить</button>
         <a class="btn btn-outline" href="/tasks/" style="padding:.5rem 1rem">Сброс</a>
       </div>
     </form>
+
+    <!-- Скрытые поля для фильтра по датам -->
+    <input type="hidden" name="date_from" id="dateFromInput" value="{{ date_from|default:'' }}" form="taskFilterForm" />
+    <input type="hidden" name="date_to" id="dateToInput" value="{{ date_to|default:'' }}" form="taskFilterForm" />
 
     {% if is_admin %}
       <form method="post" action="/tasks/bulk-reassign/" id="bulkReassignForm" class="bg-white border rounded-2xl p-4 mb-4">
@@ -615,6 +628,133 @@
             alert('Ошибка загрузки формы: ' + err.message);
           }
         });
+      });
+    })();
+  </script>
+
+  <!-- Модальное окно для выбора периода -->
+  <div id="dateFilterModal" class="fixed inset-0 z-[200] hidden">
+    <div class="fixed inset-0 bg-black/35" data-close-date-filter></div>
+    <div class="absolute inset-x-4 top-12 mx-auto max-w-lg">
+      <div class="bg-white border rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold">Выберите период</h2>
+          <button type="button" class="btn btn-outline flex-shrink-0" style="padding:.35rem .5rem;font-size:.875rem" data-close-date-filter aria-label="Закрыть" title="Закрыть">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        
+        <div class="space-y-4">
+          <!-- Быстрые кнопки -->
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" class="btn btn-outline text-sm date-quick-btn" data-period="today">Сегодня</button>
+            <button type="button" class="btn btn-outline text-sm date-quick-btn" data-period="week">Неделя</button>
+            <button type="button" class="btn btn-outline text-sm date-quick-btn" data-period="month">Месяц</button>
+            <button type="button" class="btn btn-outline text-sm date-quick-btn" data-period="year">Год</button>
+          </div>
+          
+          <div class="border-t pt-4">
+            <div class="text-sm text-brand-dark/70 mb-2">Или выберите конкретные даты:</div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-xs text-brand-dark/70 mb-1">С</label>
+                <input type="date" id="dateFromPicker" class="input" value="{{ date_from|default:'' }}" />
+              </div>
+              <div>
+                <label class="block text-xs text-brand-dark/70 mb-1">По</label>
+                <input type="date" id="dateToPicker" class="input" value="{{ date_to|default:'' }}" />
+              </div>
+            </div>
+          </div>
+          
+          <div class="flex gap-2 pt-2 border-t">
+            <button type="button" class="btn btn-primary flex-1" id="applyDateFilter">Применить</button>
+            <button type="button" class="btn btn-outline" id="clearDateFilter">Очистить</button>
+            <button type="button" class="btn btn-outline" data-close-date-filter>Отмена</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      const modal = document.getElementById('dateFilterModal');
+      const btn = document.getElementById('dateFilterBtn');
+      const dateFromInput = document.getElementById('dateFromInput');
+      const dateToInput = document.getElementById('dateToInput');
+      const dateFromPicker = document.getElementById('dateFromPicker');
+      const dateToPicker = document.getElementById('dateToPicker');
+      const applyBtn = document.getElementById('applyDateFilter');
+      const clearBtn = document.getElementById('clearDateFilter');
+      if (!modal || !btn || !dateFromInput || !dateToInput || !dateFromPicker || !dateToPicker) return;
+
+      // Закрытие модалки
+      function closeModal() {
+        modal.classList.add('hidden');
+      }
+      modal.querySelectorAll('[data-close-date-filter]').forEach(b => {
+        b.addEventListener('click', closeModal);
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+      });
+      modal.querySelector('.bg-black\\/35')?.addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+      });
+
+      // Открытие модалки
+      btn.addEventListener('click', () => {
+        modal.classList.remove('hidden');
+      });
+
+      // Быстрые кнопки
+      document.querySelectorAll('.date-quick-btn').forEach(b => {
+        b.addEventListener('click', function() {
+          const period = this.dataset.period;
+          const today = new Date();
+          let fromDate, toDate;
+          
+          if (period === 'today') {
+            fromDate = toDate = new Date(today);
+          } else if (period === 'week') {
+            const dayOfWeek = today.getDay();
+            const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Понедельник
+            fromDate = new Date(today);
+            fromDate.setDate(diff);
+            toDate = new Date(fromDate);
+            toDate.setDate(toDate.getDate() + 6);
+          } else if (period === 'month') {
+            fromDate = new Date(today.getFullYear(), today.getMonth(), 1);
+            toDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+          } else if (period === 'year') {
+            fromDate = new Date(today.getFullYear(), 0, 1);
+            toDate = new Date(today.getFullYear(), 11, 31);
+          }
+          
+          if (fromDate && toDate) {
+            dateFromPicker.value = fromDate.toISOString().split('T')[0];
+            dateToPicker.value = toDate.toISOString().split('T')[0];
+          }
+        });
+      });
+
+      // Применение фильтра
+      applyBtn.addEventListener('click', () => {
+        dateFromInput.value = dateFromPicker.value || '';
+        dateToInput.value = dateToPicker.value || '';
+        document.getElementById('taskFilterForm').submit();
+      });
+
+      // Очистка фильтра
+      clearBtn.addEventListener('click', () => {
+        dateFromPicker.value = '';
+        dateToPicker.value = '';
+        dateFromInput.value = '';
+        dateToInput.value = '';
+        document.getElementById('taskFilterForm').submit();
       });
     })();
   </script>

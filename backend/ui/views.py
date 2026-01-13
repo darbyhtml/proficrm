@@ -3263,6 +3263,24 @@ def task_list(request: HttpRequest) -> HttpResponse:
     if today == "1":
         qs = qs.filter(due_at__gte=today_start, due_at__lt=tomorrow_start).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
 
+    # Фильтр по датам (date_from и date_to)
+    date_from = (request.GET.get("date_from") or "").strip()
+    date_to = (request.GET.get("date_to") or "").strip()
+    if date_from:
+        try:
+            date_from_dt = datetime.strptime(date_from, "%Y-%m-%d")
+            date_from_start = timezone.make_aware(date_from_dt.replace(hour=0, minute=0, second=0, microsecond=0))
+            qs = qs.filter(due_at__gte=date_from_start)
+        except (ValueError, TypeError):
+            pass
+    if date_to:
+        try:
+            date_to_dt = datetime.strptime(date_to, "%Y-%m-%d")
+            date_to_end = timezone.make_aware(date_to_dt.replace(hour=23, minute=59, second=59, microsecond=999999))
+            qs = qs.filter(due_at__lte=date_to_end)
+        except (ValueError, TypeError):
+            pass
+
     # Сортировка: читаем из GET или из cookies
     sort_field = (request.GET.get("sort") or "").strip()
     sort_dir = (request.GET.get("dir") or "").strip().lower()
@@ -3424,6 +3442,8 @@ def task_list(request: HttpRequest) -> HttpResponse:
             "mine": mine,
             "overdue": overdue,
             "today": today,
+            "date_from": date_from,
+            "date_to": date_to,
             "sort_field": sort_field,
             "sort_dir": sort_dir,
             "per_page": per_page,
@@ -3486,6 +3506,11 @@ def task_create(request: HttpRequest) -> HttpResponse:
                     if not _can_edit_company(user, c):
                         skipped += 1
                         continue
+                    # Если менеджер создает задачу для компании, где он ответственный, то статус "В работе"
+                    initial_status = Task.Status.NEW
+                    if user.role == User.Role.MANAGER and c.responsible_id == user.id:
+                        initial_status = Task.Status.IN_PROGRESS
+                    
                     t = Task(
                         created_by=user,
                         assigned_to=task.assigned_to,
@@ -3495,7 +3520,7 @@ def task_create(request: HttpRequest) -> HttpResponse:
                         description=task.description,
                         due_at=task.due_at,
                         recurrence_rrule=task.recurrence_rrule,
-                        status=Task.Status.NEW,
+                        status=initial_status,
                     )
                     t.save()
                     created += 1
@@ -3526,6 +3551,12 @@ def task_create(request: HttpRequest) -> HttpResponse:
             # Заголовок задачи берём из выбранного типа/статуса
             if task.type:
                 task.title = task.type.name
+            
+            # Если менеджер создает задачу для компании, где он ответственный, то статус "В работе"
+            if user.role == User.Role.MANAGER and task.company_id and comp:
+                if comp.responsible_id == user.id:
+                    task.status = Task.Status.IN_PROGRESS
+            
             task.save()
             form.save_m2m()
             # уведомление назначенному (если это не создатель)
