@@ -39,12 +39,16 @@
 
       <section class="bg-white border rounded-2xl p-4">
         <div class="flex items-end justify-between gap-3 mb-3">
-          <div class="font-medium">Типы задач</div>
+          <div class="font-medium">Статусы задач</div>
           <a class="text-sm underline" href="/settings/dicts/task-type/new/">+ Добавить</a>
         </div>
         <ul class="space-y-2 text-sm">
           {% for t in task_types %}
-            <li class="rounded-lg border px-3 py-2">{{ t.name }}</li>
+            <li class="rounded-lg border px-3 py-2 flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2">
+                {% include "ui/partials/task_type_badge.html" with task_type=t only %}
+              </div>
+            </li>
           {% empty %}
             <li class="text-brand-dark/70">Пусто</li>
           {% endfor %}

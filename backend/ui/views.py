@@ -3471,6 +3471,9 @@ def task_create(request: HttpRequest) -> HttpResponse:
                 return redirect("task_list")
 
             # обычное создание
+            # Заголовок задачи берём из выбранного типа/статуса
+            if task.type:
+                task.title = task.type.name
             task.save()
             form.save_m2m()
             # уведомление назначенному (если это не создатель)
@@ -3831,15 +3834,19 @@ def task_edit(request: HttpRequest, task_id) -> HttpResponse:
     if request.method == "POST":
         form = TaskEditForm(request.POST, instance=task)
         if form.is_valid():
-            form.save()
+            updated_task: Task = form.save(commit=False)
+            # Заголовок всегда синхронизируем с выбранным типом/статусом
+            if updated_task.type:
+                updated_task.title = updated_task.type.name
+            updated_task.save()
             messages.success(request, "Задача обновлена.")
             log_event(
                 actor=user,
                 verb=ActivityEvent.Verb.UPDATE,
                 entity_type="task",
-                entity_id=task.id,
-                company_id=task.company_id,
-                message=f"Обновлена задача: {task.title}",
+                entity_id=updated_task.id,
+                company_id=updated_task.company_id,
+                message=f"Обновлена задача: {updated_task.title}",
             )
             return redirect("task_list")
     else:

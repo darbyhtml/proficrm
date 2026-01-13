@@ -12,10 +12,6 @@
       {% csrf_token %}
 
       <div>
-        <label class="block text-sm text-brand-dark/80 mb-1">Название</label>
-        {{ form.title }}
-      </div>
-      <div>
         <label class="block text-sm text-brand-dark/80 mb-1">Описание</label>
         {{ form.description }}
       </div>
@@ -35,7 +31,7 @@
           </div>
         </div>
         <div>
-          <label class="block text-sm text-brand-dark/80 mb-1">Тип</label>
+          <label class="block text-sm text-brand-dark/80 mb-1">Статус задачи</label>
           {{ form.type }}
         </div>
       </div>

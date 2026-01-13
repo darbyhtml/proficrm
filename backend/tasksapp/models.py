@@ -6,6 +6,8 @@ from django.db import models
 
 class TaskType(models.Model):
     name = models.CharField("Название", max_length=120, unique=True)
+    icon = models.CharField("Иконка", max_length=32, blank=True, default="")  # логический код иконки (phone, mail, alert и т.п.)
+    color = models.CharField("Цвет", max_length=32, blank=True, default="")  # CSS-класс/токен цвета бейджа
 
     def __str__(self) -> str:
         return self.name

@@ -223,11 +223,12 @@ class TaskForm(forms.ModelForm):
 
     class Meta:
         model = Task
-        fields = ["title", "description", "company", "type", "assigned_to", "due_at", "recurrence_rrule"]
+        # Заголовок теперь не вводится руками — он берётся из выбранного типа/статуса.
+        fields = ["description", "company", "type", "assigned_to", "due_at", "recurrence_rrule"]
         widgets = {
-            "title": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "description": forms.Textarea(attrs={"rows": 4, "class": "w-full rounded-lg border px-3 py-2"}),
             "company": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            # type фактически используется как «Статус задачи»
             "type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "assigned_to": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "recurrence_rrule": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
@@ -260,9 +261,9 @@ class TaskEditForm(forms.ModelForm):
 
     class Meta:
         model = Task
-        fields = ["title", "description", "type", "due_at"]
+        # Заголовок не редактируется вручную, берётся из выбранного типа/статуса.
+        fields = ["description", "type", "due_at"]
         widgets = {
-            "title": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "description": forms.Textarea(attrs={"rows": 4, "class": "w-full rounded-lg border px-3 py-2"}),
             "type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
@@ -292,10 +293,62 @@ class CompanySphereForm(forms.ModelForm):
 
 
 class TaskTypeForm(forms.ModelForm):
+    ICON_CHOICES = [
+        ("", "— Без иконки —"),
+        ("phone", "Телефон"),
+        ("mail", "Письмо"),
+        ("document", "Документ/прайс"),
+        ("calendar", "Календарь"),
+        ("question", "Вопрос"),
+        ("alert", "Восклицательный знак"),
+        ("education", "Обучение/книга"),
+        ("send", "Отправить/стрелка"),
+        ("check", "Галочка"),
+        ("clock", "Часы"),
+        ("repeat", "Повтор"),
+        ("target", "Цель/мишень"),
+        ("user", "Клиент"),
+        ("team", "Команда"),
+        ("money", "Оплата/деньги"),
+        ("cart", "Заказ/заявка"),
+        ("chat", "Чат/диалог"),
+        ("star", "Важно"),
+    ]
+
+    COLOR_CHOICES = [
+        ("", "— Без цвета —"),
+        ("badge-gray", "Серый"),
+        ("badge-blue", "Синий"),
+        ("badge-green", "Зелёный"),
+        ("badge-red", "Красный"),
+        ("badge-amber", "Жёлто-оранжевый"),
+        ("badge-orange", "Оранжевый"),
+        ("badge-teal", "Бирюзовый"),
+        ("badge-indigo", "Индиго"),
+        ("badge-purple", "Фиолетовый"),
+        ("badge-pink", "Розовый"),
+    ]
+
+    icon = forms.ChoiceField(
+        choices=ICON_CHOICES,
+        required=False,
+        label="Иконка",
+        widget=forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+    )
+
+    color = forms.ChoiceField(
+        choices=COLOR_CHOICES,
+        required=False,
+        label="Цвет",
+        widget=forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+    )
+
     class Meta:
         model = TaskType
-        fields = ["name"]
-        widgets = {"name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"})}
+        fields = ["name", "icon", "color"]
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+        }
 
 
 class UserCreateForm(forms.ModelForm):
