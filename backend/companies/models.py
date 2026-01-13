@@ -107,6 +107,7 @@ class Company(models.Model):
     )
 
     phone = models.CharField("Телефон (основной)", max_length=50, blank=True, default="", db_index=True)
+    phone_comment = models.CharField("Комментарий к основному телефону", max_length=255, blank=True, default="", help_text="Комментарий к основному номеру телефона")
     email = models.EmailField("Email (основной)", max_length=254, blank=True, default="", db_index=True)
     contact_name = models.CharField("Контакт (ФИО)", max_length=255, blank=True, default="")
     contact_position = models.CharField("Контакт (должность)", max_length=255, blank=True, default="")
@@ -290,6 +291,7 @@ class CompanyPhone(models.Model):
     company = models.ForeignKey(Company, verbose_name="Компания", on_delete=models.CASCADE, related_name="phones")
     value = models.CharField("Телефон", max_length=50, db_index=True)
     order = models.IntegerField("Порядок", default=0, db_index=True)
+    comment = models.CharField("Комментарий", max_length=255, blank=True, default="", help_text="Комментарий к номеру телефона")
     
     # Холодный звонок привязан к конкретному номеру телефона
     is_cold_call = models.BooleanField("Холодный звонок", default=False, db_index=True)
@@ -348,6 +350,7 @@ class ContactPhone(models.Model):
     contact = models.ForeignKey(Contact, verbose_name="Контакт", on_delete=models.CASCADE, related_name="phones")
     type = models.CharField(max_length=24, choices=PhoneType.choices, default=PhoneType.WORK)
     value = models.CharField("Телефон", max_length=50, db_index=True)
+    comment = models.CharField("Комментарий", max_length=255, blank=True, default="", help_text="Комментарий к номеру телефона")
     
     # Холодный звонок привязан к конкретному номеру телефона
     is_cold_call = models.BooleanField("Холодный звонок", default=False, db_index=True)

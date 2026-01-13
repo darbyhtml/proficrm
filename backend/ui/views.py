@@ -2520,6 +2520,141 @@ def company_phone_cold_call_reset(request: HttpRequest, company_phone_id) -> Htt
 
 
 @login_required
+def company_main_phone_comment_update(request: HttpRequest, company_id) -> HttpResponse:
+    """Обновление комментария к основному телефону компании (AJAX)"""
+    if request.method != "POST":
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"error": "Метод не разрешен."}, status=405)
+        return redirect("company_detail", company_id=company_id)
+    
+    user: User = request.user
+    try:
+        company = Company.objects.select_related("responsible", "branch").get(id=company_id)
+    except Company.DoesNotExist:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"error": "Компания не найдена."}, status=404)
+        raise Http404("Компания не найдена")
+    
+    if not _can_edit_company(user, company):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"error": "Нет прав на редактирование этой компании."}, status=403)
+        messages.error(request, "Нет прав на редактирование этой компании.")
+        return redirect("company_detail", company_id=company.id)
+    
+    comment = (request.POST.get("comment") or "").strip()[:255]
+    company.phone_comment = comment
+    company.save(update_fields=["phone_comment"])
+    
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="company",
+        entity_id=company.id,
+        company_id=company.id,
+        message=f"Обновлен комментарий к основному телефону: {comment[:50] if comment else '(удален)'}",
+    )
+    
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse({"success": True, "comment": comment})
+    
+    messages.success(request, "Комментарий обновлен.")
+    return redirect("company_detail", company_id=company.id)
+
+
+@login_required
+def company_phone_comment_update(request: HttpRequest, company_phone_id) -> HttpResponse:
+    """Обновление комментария к дополнительному телефону компании (AJAX)"""
+    if request.method != "POST":
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"error": "Метод не разрешен."}, status=405)
+        return redirect("dashboard")
+    
+    user: User = request.user
+    try:
+        company_phone = CompanyPhone.objects.select_related("company").get(id=company_phone_id)
+    except CompanyPhone.DoesNotExist:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"error": "Номер телефона не найден."}, status=404)
+        raise Http404("Номер телефона не найден")
+    
+    company = company_phone.company
+    if not _can_edit_company(user, company):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"error": "Нет прав на редактирование этой компании."}, status=403)
+        messages.error(request, "Нет прав на редактирование этой компании.")
+        return redirect("company_detail", company_id=company.id)
+    
+    comment = (request.POST.get("comment") or "").strip()[:255]
+    company_phone.comment = comment
+    company_phone.save(update_fields=["comment"])
+    
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="company_phone",
+        entity_id=str(company_phone.id),
+        company_id=company.id,
+        message=f"Обновлен комментарий к телефону {company_phone.value}: {comment[:50] if comment else '(удален)'}",
+    )
+    
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse({"success": True, "comment": comment})
+    
+    messages.success(request, "Комментарий обновлен.")
+    return redirect("company_detail", company_id=company.id)
+
+
+@login_required
+def contact_phone_comment_update(request: HttpRequest, contact_phone_id) -> HttpResponse:
+    """Обновление комментария к телефону контакта (AJAX)"""
+    if request.method != "POST":
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"error": "Метод не разрешен."}, status=405)
+        return redirect("dashboard")
+    
+    user: User = request.user
+    try:
+        contact_phone = ContactPhone.objects.select_related("contact__company").get(id=contact_phone_id)
+    except ContactPhone.DoesNotExist:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"error": "Номер телефона не найден."}, status=404)
+        raise Http404("Номер телефона не найден")
+    
+    contact = contact_phone.contact
+    company = contact.company if contact else None
+    if not company:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"error": "Контакт не привязан к компании."}, status=400)
+        messages.error(request, "Контакт не привязан к компании.")
+        return redirect("dashboard")
+    
+    if not _can_edit_company(user, company):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"error": "Нет прав на редактирование этой компании."}, status=403)
+        messages.error(request, "Нет прав на редактирование этой компании.")
+        return redirect("company_detail", company_id=company.id)
+    
+    comment = (request.POST.get("comment") or "").strip()[:255]
+    contact_phone.comment = comment
+    contact_phone.save(update_fields=["comment"])
+    
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="contact_phone",
+        entity_id=str(contact_phone.id),
+        company_id=company.id,
+        message=f"Обновлен комментарий к телефону {contact_phone.value}: {comment[:50] if comment else '(удален)'}",
+    )
+    
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse({"success": True, "comment": comment})
+    
+    messages.success(request, "Комментарий обновлен.")
+    return redirect("company_detail", company_id=company.id)
+
+
+@login_required
 def company_note_pin_toggle(request: HttpRequest, company_id, note_id: int) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
