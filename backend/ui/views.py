@@ -19,7 +19,7 @@ from django.utils import timezone
 from accounts.models import Branch, User
 from audit.models import ActivityEvent
 from audit.service import log_event
-from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactEmail, ContactPhone, CompanyDeletionRequest, CompanyLeadStateRequest, CompanyEmail, CompanyPhone
+from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactEmail, ContactPhone, CompanyDeletionRequest, CompanyLeadStateRequest, CompanyEmail, CompanyPhone, CompanyPhone
 from companies.permissions import can_edit_company as can_edit_company_perm, editable_company_qs as editable_company_qs_perm
 from tasksapp.models import Task, TaskType
 from notifications.models import Notification
@@ -1488,7 +1488,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "head_company",
             "primary_cold_marked_by",
             "primary_cold_marked_call",
-        ).prefetch_related("emails", "phones"),
+        ).prefetch_related("emails", "phones__cold_marked_by"),
         id=company_id,
     )
     can_edit_company = _can_edit_company(user, company)
@@ -2400,21 +2400,6 @@ def contact_phone_cold_call_reset(request: HttpRequest, contact_phone_id) -> Htt
         entity_id=str(contact_phone.id),
         company_id=company.id,
         message=f"Откат: холодный звонок (номер {contact_phone.value})",
-    )
-    return redirect("company_detail", company_id=company.id)
-    contact.is_cold_call = False
-    contact.save(update_fields=["is_cold_call", "updated_at"])
-    # НЕ удаляем поля cold_marked_at, cold_marked_by, cold_marked_call для истории
-
-    messages.success(request, "Отметка холодного звонка отменена (контакт).")
-    log_event(
-        actor=user,
-        verb=ActivityEvent.Verb.UPDATE,
-        entity_type="contact",
-        entity_id=str(contact.id),
-        company_id=company.id,
-        message="Откат: холодный звонок (контакт)",
-        meta={"contact_id": str(contact.id)},
     )
     return redirect("company_detail", company_id=company.id)
 

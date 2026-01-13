@@ -290,6 +290,26 @@ class CompanyPhone(models.Model):
     company = models.ForeignKey(Company, verbose_name="Компания", on_delete=models.CASCADE, related_name="phones")
     value = models.CharField("Телефон", max_length=50, db_index=True)
     order = models.IntegerField("Порядок", default=0, db_index=True)
+    
+    # Холодный звонок привязан к конкретному номеру телефона
+    is_cold_call = models.BooleanField("Холодный звонок", default=False, db_index=True)
+    cold_marked_at = models.DateTimeField("Холодный: когда отметили", null=True, blank=True, db_index=True)
+    cold_marked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Холодный: кто отметил",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="company_phone_cold_marks",
+    )
+    cold_marked_call = models.ForeignKey(
+        "phonebridge.CallRequest",
+        verbose_name="Холодный: звонок",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
 
     class Meta:
         indexes = [models.Index(fields=["value"]), models.Index(fields=["company", "order"])]
