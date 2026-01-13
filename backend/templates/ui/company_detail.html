@@ -922,8 +922,8 @@
                       aria-label="Редактировать"
                       data-note-edit
                       data-note-id="{{ n.id }}"
-                      data-note-text="{{ n.text|default:''|escapejs }}"
-                      data-note-file="{{ n.attachment_name|default:''|escapejs }}"
+                      data-note-text="{{ n.text|default:'' }}"
+                      data-note-file="{{ n.attachment_name|default:'' }}"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                         <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -1428,6 +1428,7 @@
           document.querySelectorAll('[data-note-edit]').forEach(btn => {
             btn.addEventListener('click', () => {
               const id = btn.getAttribute('data-note-id');
+              // Получаем текст напрямую из атрибута (без escapejs, чтобы избежать двойного экранирования)
               const txt = btn.getAttribute('data-note-text') || '';
               const fn = btn.getAttribute('data-note-file') || '';
               if (id) openNoteEdit(id, txt, fn);

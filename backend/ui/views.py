@@ -2607,8 +2607,6 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
     if request.method == "POST":
         form = CompanyEditForm(request.POST, instance=company)
         if form.is_valid():
-            form.save()
-
             # Вспомогательные структуры: (index, value)
             new_company_emails: list[tuple[int, str]] = []
             new_company_phones: list[tuple[int, str]] = []
@@ -2637,6 +2635,68 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
                         continue
                     new_company_phones.append((index, raw))
 
+            # Валидация телефонов: проверка на дубликаты и использование в других контактах
+            from ui.forms import _normalize_phone
+            
+            # Собираем все телефоны (основной + дополнительные)
+            all_phones = []
+            main_phone = (form.cleaned_data.get("phone") or "").strip()
+            if main_phone:
+                normalized_main = _normalize_phone(main_phone)
+                if normalized_main:
+                    all_phones.append(normalized_main)
+            
+            normalized_phones = []
+            for _, phone_value in new_company_phones:
+                normalized = _normalize_phone(phone_value)
+                if normalized:
+                    normalized_phones.append(normalized)
+                    all_phones.append(normalized)
+            
+            # Проверка на дубликаты в самой форме (включая основной телефон)
+            if len(all_phones) != len(set(all_phones)):
+                form.add_error(None, "Есть повторяющиеся телефоны (основной телефон не должен совпадать с дополнительными).")
+                # Восстанавливаем введённые значения для отображения ошибки
+                for key, value in request.POST.items():
+                    if key.startswith("company_emails_"):
+                        company_emails.append(
+                            CompanyEmail(company=company, value=(value or "").strip())
+                        )
+                    if key.startswith("company_phones_"):
+                        company_phones.append(
+                            CompanyPhone(company=company, value=(value or "").strip())
+                        )
+                return render(
+                    request,
+                    "ui/company_edit.html",
+                    {"company": company, "form": form, "company_emails": company_emails, "company_phones": company_phones},
+                )
+            
+            # Проверка на использование в других контактах
+            for normalized_phone in set(all_phones):
+                # Проверяем, используется ли этот телефон в контактах (кроме контактов этой компании)
+                existing_contact_phone = ContactPhone.objects.filter(value=normalized_phone).exclude(contact__company=company).first()
+                if existing_contact_phone:
+                    form.add_error(None, f"Телефон {normalized_phone} уже используется в другом контакте.")
+                    # Восстанавливаем введённые значения для отображения ошибки
+                    for key, value in request.POST.items():
+                        if key.startswith("company_emails_"):
+                            company_emails.append(
+                                CompanyEmail(company=company, value=(value or "").strip())
+                            )
+                        if key.startswith("company_phones_"):
+                            company_phones.append(
+                                CompanyPhone(company=company, value=(value or "").strip())
+                            )
+                    return render(
+                        request,
+                        "ui/company_edit.html",
+                        {"company": company, "form": form, "company_emails": company_emails, "company_phones": company_phones},
+                    )
+            
+            # Сохраняем форму (включая основной телефон)
+            form.save()
+
             # Удаляем старые значения и создаем новые в упорядоченном виде
             CompanyEmail.objects.filter(company=company).delete()
             CompanyPhone.objects.filter(company=company).delete()
@@ -2645,7 +2705,9 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
                 CompanyEmail.objects.create(company=company, value=email_value, order=order)
 
             for order, phone_value in sorted(new_company_phones, key=lambda x: x[0]):
-                CompanyPhone.objects.create(company=company, value=phone_value, order=order)
+                # Нормализуем телефон перед сохранением
+                normalized = _normalize_phone(phone_value)
+                CompanyPhone.objects.create(company=company, value=normalized if normalized else phone_value, order=order)
 
             messages.success(request, "Данные компании обновлены.")
             log_event(
