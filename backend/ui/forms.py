@@ -601,15 +601,6 @@ class _BasePhoneFormSet(BaseInlineFormSet):
         if len(values) != len(set(values)):
             raise ValidationError("Есть повторяющиеся телефоны в форме.")
 
-        contact_id = getattr(self.instance, "id", None)
-        for v in set(values):
-            # Ищем по нормализованному значению
-            qs = ContactPhone.objects.filter(value=v)
-            if contact_id:
-                qs = qs.exclude(contact_id=contact_id)
-            if qs.exists():
-                raise ValidationError(f"Телефон уже используется в другом контакте.")
-
 
 ContactEmailFormSet = inlineformset_factory(
     Contact,

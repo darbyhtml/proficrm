@@ -2823,28 +2823,6 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
                     {"company": company, "form": form, "company_emails": company_emails, "company_phones": company_phones},
                 )
             
-            # Проверка на использование в других контактах
-            for normalized_phone in set(all_phones):
-                # Проверяем, используется ли этот телефон в контактах (кроме контактов этой компании)
-                existing_contact_phone = ContactPhone.objects.filter(value=normalized_phone).exclude(contact__company=company).first()
-                if existing_contact_phone:
-                    form.add_error(None, f"Телефон {normalized_phone} уже используется в другом контакте.")
-                    # Восстанавливаем введённые значения для отображения ошибки
-                    for key, value in request.POST.items():
-                        if key.startswith("company_emails_"):
-                            company_emails.append(
-                                CompanyEmail(company=company, value=(value or "").strip())
-                            )
-                        if key.startswith("company_phones_"):
-                            company_phones.append(
-                                CompanyPhone(company=company, value=(value or "").strip())
-                            )
-                    return render(
-                        request,
-                        "ui/company_edit.html",
-                        {"company": company, "form": form, "company_emails": company_emails, "company_phones": company_phones},
-                    )
-            
             # Сохраняем форму (включая основной телефон)
             form.save()
 
