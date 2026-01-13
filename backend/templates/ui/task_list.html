@@ -544,13 +544,20 @@
         modal.classList.add('hidden');
         modalContent.innerHTML = '';
       }
-      modal.querySelectorAll('[data-close-task-modal]').forEach(btn => {
-        btn.addEventListener('click', closeModal);
+      // Делегирование для динамически добавленных кнопок закрытия
+      document.addEventListener('click', (e) => {
+        const closeBtn = e.target.closest('[data-close-task-modal]');
+        if (closeBtn) {
+          e.preventDefault();
+          closeModal();
+        }
       });
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
       });
-      modal.querySelector('.bg-black\\/35')?.addEventListener('click', closeModal);
+      modal.querySelector('.bg-black\\/35')?.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) closeModal();
+      });
 
       // Редактирование задачи
       document.querySelectorAll('[data-edit-task]').forEach(btn => {
