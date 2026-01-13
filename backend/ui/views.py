@@ -3728,7 +3728,13 @@ def _create_note_from_task(task: Task, user: User) -> CompanyNote:
 @login_required
 def task_delete(request: HttpRequest, task_id) -> HttpResponse:
     user: User = request.user
-    task = get_object_or_404(Task.objects.select_related("company", "assigned_to", "created_by", "type"), id=task_id)
+    try:
+        task = Task.objects.select_related("company", "assigned_to", "created_by", "type").get(id=task_id)
+    except Task.DoesNotExist:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"error": "Задача не найдена."}, status=404)
+        raise Http404("Задача не найдена")
+    
     if not _can_delete_task_ui(user, task):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return JsonResponse({"error": "Нет прав на удаление этой задачи."}, status=403)
@@ -3886,7 +3892,12 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
         return redirect("task_list")
 
     user: User = request.user
-    task = get_object_or_404(Task.objects.select_related("company", "company__responsible", "company__branch", "assigned_to", "type"), id=task_id)
+    try:
+        task = Task.objects.select_related("company", "company__responsible", "company__branch", "assigned_to", "type").get(id=task_id)
+    except Task.DoesNotExist:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"error": "Задача не найдена."}, status=404)
+        raise Http404("Задача не найдена")
 
     if not _can_manage_task_status_ui(user, task):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
