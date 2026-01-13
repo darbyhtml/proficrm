@@ -1543,10 +1543,23 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         .select_related("author", "pinned_by")
         .order_by("-is_pinned", "-pinned_at", "-created_at")[:60]
     )
+    # Сортируем задачи: сначала просроченные (по дедлайну, старые сначала), потом по дедлайну (ближайшие сначала), потом по дате создания (новые сначала)
+    now = timezone.now()
+    local_now = timezone.localtime(now)
     tasks = (
         Task.objects.filter(company=company)
         .select_related("assigned_to", "type", "created_by")
-        .order_by("-created_at")[:25]
+        .annotate(
+            is_overdue=models.Case(
+                models.When(
+                    models.Q(due_at__lt=now) & ~models.Q(status__in=[Task.Status.DONE, Task.Status.CANCELLED]),
+                    then=models.Value(1)
+                ),
+                default=models.Value(0),
+                output_field=models.IntegerField()
+            )
+        )
+        .order_by("-is_overdue", "due_at", "-created_at")[:25]
     )
     for t in tasks:
         t.can_manage_status = _can_manage_task_status_ui(user, t)  # type: ignore[attr-defined]
@@ -1589,6 +1602,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "pinned_note": pinned_note,
             "note_form": note_form,
             "tasks": tasks,
+            "local_now": local_now,  # Для корректного сравнения дат в шаблоне
             "activity": activity,
             "can_view_activity": can_view_activity,
             "can_delete_company": can_delete_company,
