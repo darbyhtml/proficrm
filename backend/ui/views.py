@@ -3730,14 +3730,46 @@ def task_delete(request: HttpRequest, task_id) -> HttpResponse:
     user: User = request.user
     task = get_object_or_404(Task.objects.select_related("company", "assigned_to", "created_by", "type"), id=task_id)
     if not _can_delete_task_ui(user, task):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"error": "Нет прав на удаление этой задачи."}, status=403)
         messages.error(request, "Нет прав на удаление этой задачи.")
         return redirect("task_list")
 
     if request.method == "POST":
+        save_to_notes = request.POST.get("save_to_notes") == "1"
         title = task.title
         company_id = task.company_id
+        
+        # Если нужно сохранить в заметки
+        if save_to_notes and task.company_id:
+            try:
+                note = _create_note_from_task(task, user)
+                log_event(
+                    actor=user,
+                    verb=ActivityEvent.Verb.COMMENT,
+                    entity_type="note",
+                    entity_id=note.id,
+                    company_id=company_id,
+                    message="Добавлена заметка из задачи",
+                )
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    # Не удаляем задачу здесь, удалим ниже
+                    pass
+                else:
+                    messages.success(request, f"Задача «{title}» удалена. Заметка создана.")
+            except Exception as e:
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return JsonResponse({"error": f"Ошибка при создании заметки: {str(e)}"}, status=500)
+                messages.error(request, f"Ошибка при создании заметки: {str(e)}")
+        
         task.delete()
-        messages.success(request, f"Задача «{title}» удалена.")
+        
+        if not save_to_notes:
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                pass  # Вернем JSON ниже
+            else:
+                messages.success(request, f"Задача «{title}» удалена.")
+        
         log_event(
             actor=user,
             verb=ActivityEvent.Verb.DELETE,
@@ -3746,7 +3778,11 @@ def task_delete(request: HttpRequest, task_id) -> HttpResponse:
             company_id=company_id,
             message=f"Удалена задача: {title}",
         )
-        return redirect("task_list")
+        
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"success": True, "note_created": save_to_notes, "message": f"Задача «{title}» удалена." + (" Заметка создана." if save_to_notes else "")})
+        
+        return redirect(request.META.get("HTTP_REFERER") or "task_list")
 
     return redirect("task_list")
 
