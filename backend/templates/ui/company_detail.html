@@ -767,7 +767,7 @@
                       {% endif %}
                       <div class="flex-1">
                         {% if t.type %}
-                          {% include "ui/partials/task_type_badge.html" with task_type=t only %}
+                          {% include "ui/partials/task_type_badge.html" with task_type=t.type only %}
                         {% elif t.title %}
                           <span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-800">
                             {{ t.title }}
