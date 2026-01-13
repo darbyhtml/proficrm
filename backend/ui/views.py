@@ -919,38 +919,13 @@ def company_list(request: HttpRequest) -> HttpResponse:
         .select_related("responsible", "branch", "status")
         .prefetch_related("spheres")
     )
-    # По умолчанию фильтруем в зависимости от роли пользователя
-    default_responsible_id = None
-    default_branch_id = None
-    
-    # Логика фильтрации по умолчанию:
-    # - Администратор и управляющий: без фильтров (все компании)
-    # - Директор филиала: без фильтра по ответственному, но с фильтром по своему филиалу
-    # - РОП и менеджер: фильтр по текущему пользователю (его компании)
-    if "responsible" not in request.GET:
-        if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
-            # Администратор и управляющий - без фильтра по ответственному
-            default_responsible_id = None
-        elif user.role == User.Role.BRANCH_DIRECTOR:
-            # Директор филиала - без фильтра по ответственному, но с фильтром по филиалу
-            default_responsible_id = None
-            if user.branch_id and "branch" not in request.GET:
-                default_branch_id = user.branch_id
-        else:
-            # РОП и менеджер - фильтр по текущему пользователю
-            default_responsible_id = user.id
-    
-    # Применяем фильтр по филиалу для директора филиала, если не указан явно
+    # Ранее здесь были разные фильтры по умолчанию в зависимости от роли (ответственный/филиал).
+    # По запросу заказчика убираем предустановленные фильтры: всем пользователям показываем полный список,
+    # пока они сами явно не выберут фильтры в интерфейсе.
     filter_params = dict(request.GET)
-    if default_branch_id and "branch" not in filter_params:
-        filter_params["branch"] = str(default_branch_id)
-    
-    f = _apply_company_filters(qs=qs, params=filter_params, default_responsible_id=default_responsible_id)
+
+    f = _apply_company_filters(qs=qs, params=filter_params, default_responsible_id=None)
     qs = f["qs"]
-    
-    # Обновляем параметры для отображения в шаблоне
-    if default_branch_id and "branch" not in request.GET:
-        f["branch"] = str(default_branch_id)
 
     # Sorting (asc/desc)
     sort = (request.GET.get("sort") or "").strip() or "updated_at"
@@ -1570,10 +1545,11 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     )
     tasks = (
         Task.objects.filter(company=company)
-        .select_related("assigned_to", "type")
+        .select_related("assigned_to", "type", "created_by")
         .order_by("-created_at")[:25]
     )
     for t in tasks:
+        t.can_manage_status = _can_manage_task_status_ui(user, t)  # type: ignore[attr-defined]
         t.can_edit_task = _can_edit_task_ui(user, t)  # type: ignore[attr-defined]
         t.can_delete_task = _can_delete_task_ui(user, t)  # type: ignore[attr-defined]
 
