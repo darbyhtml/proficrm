@@ -828,35 +828,33 @@
                       {% endif %}
 
                       {% if t.can_manage_status and t.status != 'done' %}
-                        <form method="post" action="/tasks/{{ t.id }}/status/" class="inline">
-                          {% csrf_token %}
-                          <button
-                            name="status"
-                            value="done"
-                            class="flex items-center justify-center w-6 h-6 rounded bg-brand-teal hover:bg-brand-dark text-white transition-colors"
-                            title="Выполнено"
-                            aria-label="Выполнено"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                              <polyline points="20 6 9 17 4 12"/>
-                            </svg>
-                          </button>
-                        </form>
+                        <button
+                          type="button"
+                          class="flex items-center justify-center w-6 h-6 rounded bg-brand-teal hover:bg-brand-dark text-white transition-colors"
+                          title="Выполнено"
+                          aria-label="Выполнено"
+                          data-task-complete
+                          data-task-id="{{ t.id }}"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="20 6 9 17 4 12"/>
+                          </svg>
+                        </button>
                       {% endif %}
 
                       {% if t.can_delete_task %}
-                        <form method="post" action="/tasks/{{ t.id }}/delete/" onsubmit="return confirm('Удалить задачу?');" class="inline">
-                          {% csrf_token %}
-                          <button
-                            class="flex items-center justify-center w-6 h-6 rounded bg-white border border-red-200 hover:bg-red-50 transition-colors"
-                            title="Удалить"
-                            aria-label="Удалить"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b91c1c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M6 7h12M10 11v6M14 11v6M9 7l1-3h4l1 3M19 7l-1 12H6L5 7"/>
-                            </svg>
-                          </button>
-                        </form>
+                        <button
+                          type="button"
+                          class="flex items-center justify-center w-6 h-6 rounded bg-white border border-red-200 hover:bg-red-50 transition-colors"
+                          title="Удалить"
+                          aria-label="Удалить"
+                          data-task-delete
+                          data-task-id="{{ t.id }}"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b91c1c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M6 7h12M10 11v6M14 11v6M9 7l1-3h4l1 3M19 7l-1 12H6L5 7"/>
+                          </svg>
+                        </button>
                       {% endif %}
                     </div>
                   </div>
@@ -1593,6 +1591,213 @@
           } catch (err) {
             alert('Ошибка загрузки формы: ' + err.message);
           }
+        });
+      });
+    })();
+  </script>
+
+  <!-- Модальное окно для подтверждения удаления задачи с переносом в заметки -->
+  <div id="taskDeleteModal" class="fixed inset-0 z-[200] hidden">
+    <div class="fixed inset-0 bg-black/35" data-close-task-delete-modal></div>
+    <div class="absolute inset-x-4 top-12 mx-auto max-w-md">
+      <div class="bg-white border rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold">Удалить задачу?</h2>
+          <button type="button" class="btn btn-outline flex-shrink-0" style="padding:.35rem .5rem;font-size:.875rem" data-close-task-delete-modal aria-label="Закрыть" title="Закрыть">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="space-y-4">
+          <p class="text-sm text-brand-dark/70">Нужно ли перенести данные задачи в заметки?</p>
+          <div class="flex gap-2 pt-2 border-t">
+            <button type="button" class="btn btn-primary flex-1" id="taskDeleteWithNote">Да, перенести</button>
+            <button type="button" class="btn btn-outline flex-1" id="taskDeleteWithoutNote">Нет, удалить</button>
+            <button type="button" class="btn btn-outline" data-close-task-delete-modal>Отмена</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно для подтверждения выполнения задачи с переносом в заметки -->
+  <div id="taskCompleteModal" class="fixed inset-0 z-[200] hidden">
+    <div class="fixed inset-0 bg-black/35" data-close-task-complete-modal></div>
+    <div class="absolute inset-x-4 top-12 mx-auto max-w-md">
+      <div class="bg-white border rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold">Отметить задачу как выполненную?</h2>
+          <button type="button" class="btn btn-outline flex-shrink-0" style="padding:.35rem .5rem;font-size:.875rem" data-close-task-complete-modal aria-label="Закрыть" title="Закрыть">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="space-y-4">
+          <p class="text-sm text-brand-dark/70">Нужно ли перенести данные задачи в заметки?</p>
+          <div class="flex gap-2 pt-2 border-t">
+            <button type="button" class="btn btn-primary flex-1" id="taskCompleteWithNote">Да, перенести</button>
+            <button type="button" class="btn btn-outline flex-1" id="taskCompleteWithoutNote">Нет, только выполнить</button>
+            <button type="button" class="btn btn-outline" data-close-task-complete-modal>Отмена</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      let currentTaskId = null;
+      const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || document.querySelector('meta[name=csrf-token]')?.content;
+
+      // Модальное окно удаления задачи
+      const deleteModal = document.getElementById('taskDeleteModal');
+      const deleteBtns = document.querySelectorAll('[data-task-delete]');
+      
+      deleteBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+          currentTaskId = this.dataset.taskId;
+          deleteModal.classList.remove('hidden');
+        });
+      });
+
+      function closeDeleteModal() {
+        deleteModal.classList.add('hidden');
+        currentTaskId = null;
+      }
+
+      deleteModal.querySelectorAll('[data-close-task-delete-modal]').forEach(b => {
+        b.addEventListener('click', closeDeleteModal);
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !deleteModal.classList.contains('hidden')) closeDeleteModal();
+      });
+      deleteModal.querySelector('.bg-black\\/35')?.addEventListener('click', function(e) {
+        if (e.target === this) closeDeleteModal();
+      });
+
+      document.getElementById('taskDeleteWithNote')?.addEventListener('click', function() {
+        if (!currentTaskId) return;
+        const formData = new FormData();
+        formData.append('save_to_notes', '1');
+        formData.append('csrfmiddlewaretoken', csrftoken);
+        
+        fetch(`/tasks/${currentTaskId}/delete/`, {
+          method: 'POST',
+          body: formData,
+          headers: {'X-Requested-With': 'XMLHttpRequest'}
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            window.location.reload();
+          } else {
+            alert(data.error || 'Ошибка при удалении задачи');
+          }
+        })
+        .catch(err => {
+          alert('Ошибка: ' + err.message);
+        });
+      });
+
+      document.getElementById('taskDeleteWithoutNote')?.addEventListener('click', function() {
+        if (!currentTaskId) return;
+        const formData = new FormData();
+        formData.append('save_to_notes', '0');
+        formData.append('csrfmiddlewaretoken', csrftoken);
+        
+        fetch(`/tasks/${currentTaskId}/delete/`, {
+          method: 'POST',
+          body: formData,
+          headers: {'X-Requested-With': 'XMLHttpRequest'}
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            window.location.reload();
+          } else {
+            alert(data.error || 'Ошибка при удалении задачи');
+          }
+        })
+        .catch(err => {
+          alert('Ошибка: ' + err.message);
+        });
+      });
+
+      // Модальное окно выполнения задачи
+      const completeModal = document.getElementById('taskCompleteModal');
+      const completeBtns = document.querySelectorAll('[data-task-complete]');
+      
+      completeBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+          currentTaskId = this.dataset.taskId;
+          completeModal.classList.remove('hidden');
+        });
+      });
+
+      function closeCompleteModal() {
+        completeModal.classList.add('hidden');
+        currentTaskId = null;
+      }
+
+      completeModal.querySelectorAll('[data-close-task-complete-modal]').forEach(b => {
+        b.addEventListener('click', closeCompleteModal);
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !completeModal.classList.contains('hidden')) closeCompleteModal();
+      });
+      completeModal.querySelector('.bg-black\\/35')?.addEventListener('click', function(e) {
+        if (e.target === this) closeCompleteModal();
+      });
+
+      document.getElementById('taskCompleteWithNote')?.addEventListener('click', function() {
+        if (!currentTaskId) return;
+        const formData = new FormData();
+        formData.append('status', 'done');
+        formData.append('save_to_notes', '1');
+        formData.append('csrfmiddlewaretoken', csrftoken);
+        
+        fetch(`/tasks/${currentTaskId}/status/`, {
+          method: 'POST',
+          body: formData,
+          headers: {'X-Requested-With': 'XMLHttpRequest'}
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            window.location.reload();
+          } else {
+            alert(data.error || 'Ошибка при изменении статуса задачи');
+          }
+        })
+        .catch(err => {
+          alert('Ошибка: ' + err.message);
+        });
+      });
+
+      document.getElementById('taskCompleteWithoutNote')?.addEventListener('click', function() {
+        if (!currentTaskId) return;
+        const formData = new FormData();
+        formData.append('status', 'done');
+        formData.append('save_to_notes', '0');
+        formData.append('csrfmiddlewaretoken', csrftoken);
+        
+        fetch(`/tasks/${currentTaskId}/status/`, {
+          method: 'POST',
+          body: formData,
+          headers: {'X-Requested-With': 'XMLHttpRequest'}
+        })
+        .then(r => r.json())
+        .then(data => {
+          if (data.success) {
+            window.location.reload();
+          } else {
+            alert(data.error || 'Ошибка при изменении статуса задачи');
+          }
+        })
+        .catch(err => {
+          alert('Ошибка: ' + err.message);
         });
       });
     })();

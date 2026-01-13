@@ -1544,10 +1544,12 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         .order_by("-is_pinned", "-pinned_at", "-created_at")[:60]
     )
     # Сортируем задачи: сначала просроченные (по дедлайну, старые сначала), потом по дедлайну (ближайшие сначала), потом по дате создания (новые сначала)
+    # Исключаем выполненные задачи из списка "Последние задачи"
     now = timezone.now()
     local_now = timezone.localtime(now)
     tasks = (
         Task.objects.filter(company=company)
+        .exclude(status=Task.Status.DONE)  # Исключаем выполненные задачи
         .select_related("assigned_to", "type", "created_by")
         .annotate(
             is_overdue=models.Case(
@@ -3687,6 +3689,42 @@ def _can_delete_task_ui(user: User, task: Task) -> bool:
     return False
 
 
+def _create_note_from_task(task: Task, user: User) -> CompanyNote:
+    """Создает заметку из задачи с информацией о статусе и описании."""
+    from companies.models import CompanyNote
+    
+    # Формируем текст заметки
+    note_parts = []
+    
+    # Статус задачи
+    if task.type:
+        status_text = f"Статус задачи: {task.type.name}"
+    elif task.title:
+        status_text = f"Статус задачи: {task.title}"
+    else:
+        status_text = "Статус задачи: Без статуса"
+    note_parts.append(status_text)
+    
+    # Описание задачи
+    if task.description:
+        note_parts.append(f"\n{task.description}")
+    
+    # Дедлайн, если был
+    if task.due_at:
+        note_parts.append(f"\nДедлайн: {task.due_at.strftime('%d.%m.%Y %H:%M')}")
+    
+    note_text = "\n".join(note_parts)
+    
+    # Создаем заметку
+    note = CompanyNote.objects.create(
+        company=task.company,
+        author=user,
+        text=note_text,
+    )
+    
+    return note
+
+
 @login_required
 def task_delete(request: HttpRequest, task_id) -> HttpResponse:
     user: User = request.user
@@ -3812,28 +3850,57 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
         return redirect("task_list")
 
     user: User = request.user
-    task = get_object_or_404(Task.objects.select_related("company", "company__responsible", "company__branch", "assigned_to"), id=task_id)
+    task = get_object_or_404(Task.objects.select_related("company", "company__responsible", "company__branch", "assigned_to", "type"), id=task_id)
 
     if not _can_manage_task_status_ui(user, task):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"error": "Нет прав на изменение статуса этой задачи."}, status=403)
         messages.error(request, "Нет прав на изменение статуса этой задачи.")
         return redirect("task_list")
 
     new_status = (request.POST.get("status") or "").strip()
     if new_status not in {s for s, _ in Task.Status.choices}:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"error": "Некорректный статус."}, status=400)
         messages.error(request, "Некорректный статус.")
         return redirect("task_list")
 
     # Менеджер может менять статус только своих задач (явно, на случай будущих изменений правил)
     if user.role == User.Role.MANAGER and task.assigned_to_id != user.id:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"error": "Менеджер может менять статус только своих задач."}, status=403)
         messages.error(request, "Менеджер может менять статус только своих задач.")
         return redirect("task_list")
+
+    # Если статус меняется на "Выполнено", проверяем, нужно ли перенести в заметки
+    save_to_notes = False
+    if new_status == Task.Status.DONE:
+        save_to_notes = request.POST.get("save_to_notes") == "1"
+        if save_to_notes and task.company_id:
+            try:
+                note = _create_note_from_task(task, user)
+                log_event(
+                    actor=user,
+                    verb=ActivityEvent.Verb.COMMENT,
+                    entity_type="note",
+                    entity_id=note.id,
+                    company_id=task.company_id,
+                    message="Добавлена заметка из выполненной задачи",
+                )
+            except Exception as e:
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return JsonResponse({"error": f"Ошибка при создании заметки: {str(e)}"}, status=500)
+                messages.error(request, f"Ошибка при создании заметки: {str(e)}")
 
     task.status = new_status
     if new_status == Task.Status.DONE:
         task.completed_at = timezone.now()
     task.save(update_fields=["status", "completed_at", "updated_at"])
 
-    messages.success(request, "Статус задачи обновлён.")
+    if not save_to_notes:
+        messages.success(request, "Статус задачи обновлён.")
+    else:
+        messages.success(request, "Задача выполнена. Заметка создана.")
 
     # Для всех статусов ссылка ведёт на список задач с модальным окном просмотра конкретной задачи.
     task_url = f"/tasks/?view_task={task.id}"
@@ -3901,6 +3968,15 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
             message=f"Статус задачи: {task.get_status_display()}",
             meta={"status": new_status},
         )
+    
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse({
+            "success": True,
+            "note_created": save_to_notes,
+            "message": "Задача выполнена." + (" Заметка создана." if save_to_notes else ""),
+            "redirect": request.META.get("HTTP_REFERER") or "/tasks/"
+        })
+    
     return redirect(request.META.get("HTTP_REFERER") or "/tasks/")
 
 
