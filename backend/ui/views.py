@@ -254,7 +254,14 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
     Если default_responsible_id указан и параметр responsible отсутствует в params,
     применяется фильтр по default_responsible_id.
     """
-    q = (params.get("q") or "").strip()
+    # Безопасное извлечение строкового значения из параметров (может быть список)
+    def _get_str_param(key: str, default: str = "") -> str:
+        value = params.get(key, default)
+        if isinstance(value, list):
+            return (value[0] if value else default).strip()
+        return (value or default).strip()
+    
+    q = _get_str_param("q")
     if q:
         # Базовые фильтры по полям компании
         base_filters = (
@@ -325,7 +332,7 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             | fio_filters
         ).distinct()
 
-    responsible = (params.get("responsible") or "").strip()
+    responsible = _get_str_param("responsible")
     # Если параметр responsible не указан и есть default_responsible_id, применяем фильтр по умолчанию
     if not responsible and default_responsible_id is not None:
         qs = qs.filter(responsible_id=default_responsible_id)
@@ -341,7 +348,7 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
                 # Некорректный ID - пропускаем фильтр
                 pass
 
-    status = (params.get("status") or "").strip()
+    status = _get_str_param("status")
     if status:
         try:
             status_id = int(status)
@@ -350,7 +357,7 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             # Некорректный ID - пропускаем фильтр
             pass
 
-    branch = (params.get("branch") or "").strip()
+    branch = _get_str_param("branch")
     if branch:
         try:
             branch_id = int(branch)
@@ -359,7 +366,7 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             # Некорректный ID - пропускаем фильтр
             pass
 
-    sphere = (params.get("sphere") or "").strip()
+    sphere = _get_str_param("sphere")
     if sphere:
         try:
             sphere_id = int(sphere)
@@ -368,18 +375,18 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             # Некорректный ID - пропускаем фильтр
             pass
 
-    contract_type = (params.get("contract_type") or "").strip()
+    contract_type = _get_str_param("contract_type")
     if contract_type:
         qs = qs.filter(contract_type=contract_type)
 
     # Состояние карточки: холодная/тёплая
-    cold_call = (params.get("cold_call") or "").strip()
+    cold_call = _get_str_param("cold_call")
     if cold_call == "1":
         qs = qs.filter(lead_state=Company.LeadState.COLD)
     elif cold_call == "0":
         qs = qs.filter(lead_state=Company.LeadState.WARM)
 
-    overdue = (params.get("overdue") or "").strip()
+    overdue = _get_str_param("overdue")
     if overdue == "1":
         qs = qs.filter(has_overdue=True)
 
