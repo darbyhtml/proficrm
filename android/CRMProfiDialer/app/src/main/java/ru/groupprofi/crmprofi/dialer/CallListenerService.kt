@@ -13,6 +13,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.provider.CallLog
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import androidx.core.app.NotificationCompat
@@ -131,10 +132,12 @@ class CallListenerService : Service() {
                         }
                         
                         // Сетевые ошибки (код 0) - просто логируем, продолжаем работу
+                        val working = isWorkingHours()
+                        val prefix = if (working) "" else "Вне рабочего времени · "
                         if (code == 0) {
-                            updateListeningNotification("Нет подключения · $nowStr")
+                            updateListeningNotification("${prefix}Нет подключения · $nowStr")
                         } else {
-                            updateListeningNotification("Опрос: $code · $nowStr")
+                            updateListeningNotification("${prefix}Опрос: $code · $nowStr")
                         }
                         
                         if (!phone.isNullOrBlank()) {
@@ -193,7 +196,9 @@ class CallListenerService : Service() {
                     } catch (_: Exception) {
                         // silent for MVP
                     }
-                    delay(1500)
+                    // В рабочие часы реагируем максимально быстро, вне их — чуть реже
+                    val delayMs = if (isWorkingHours()) 1500L else 5000L
+                    delay(delayMs)
                 }
             }
         }
@@ -621,6 +626,16 @@ class CallListenerService : Service() {
         } catch (e: Exception) {
             android.util.Log.w("CallListenerService", "Telemetry latency error: ${e.message}")
         }
+    }
+
+    /**
+     * Рабочие часы, в которые приложение должно работать максимально отзывчиво.
+     * Используем локальное время устройства.
+     */
+    private fun isWorkingHours(): Boolean {
+        val cal = Calendar.getInstance()
+        val hour = cal.get(Calendar.HOUR_OF_DAY) // 0..23
+        return hour in 7..19
     }
 
     companion object {
