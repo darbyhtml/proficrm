@@ -126,10 +126,12 @@ class CallListenerService : Service() {
                             }
                         }
                         
-                        // Обработка ошибок авторизации - останавливаем сервис
+                        // Обработка ошибок авторизации - refresh token истек, требуется повторный вход
                         if (code == 401) {
-                            updateListeningNotification("Ошибка: требуется повторный вход")
-                            delay(5000) // Даем время увидеть сообщение
+                            android.util.Log.w("CallListenerService", "Authentication failed (401), stopping service")
+                            updateListeningNotification("Требуется повторный вход в приложении")
+                            // Даем время увидеть сообщение, затем останавливаем сервис
+                            delay(10000) // 10 секунд на то, чтобы пользователь увидел уведомление
                             stopSelf()
                             return@launch
                         }
@@ -270,31 +272,41 @@ class CallListenerService : Service() {
         if (code1 == 401) {
             android.util.Log.w("CallListenerService", "PullCall: Unauthorized (401), refreshing token")
             // 2) refresh + retry once
-            val newAccess = refreshAccess(baseUrl, refresh)
-            if (newAccess == null) {
-                // Refresh token истек - нужно перелогиниться
-                // Очищаем токены, чтобы пользователь перелогинился
-                securePrefs().edit()
-                    .remove(KEY_TOKEN)
-                    .remove(KEY_REFRESH)
-                    .apply()
-                return Pair(401, null)
-            }
-            securePrefs().edit().putString(KEY_TOKEN, newAccess).apply()
-            val (code2, body2) = doPull(newAccess)
-            if (code2 == 0) return Pair(0, null) // Сетевая ошибка
-            if (code2 == 204) return Pair(204, null)
-            if (code2 != 200) return Pair(code2, null)
-            val body2Str = body2 ?: return Pair(code2, null)
             try {
-                val obj2 = JSONObject(body2Str)
-                val phone2 = obj2.optString("phone", "")
-                val callRequestId2 = obj2.optString("id", "")
-                android.util.Log.i("CallListenerService", "PullCall: Received call command (after refresh), phone=$phone2, id=$callRequestId2")
-                return Pair(200, if (phone2.isNotBlank()) Pair(phone2, callRequestId2) else null)
-            } catch (e: Exception) {
-                android.util.Log.e("CallListenerService", "PullCall: JSON parse error (after refresh): ${e.message}, body: $body2Str")
-                return Pair(code2, null)
+                val newAccess = refreshAccess(baseUrl, refresh)
+                if (newAccess == null) {
+                    // Refresh token истек - нужно перелогиниться
+                    // Очищаем токены, чтобы пользователь перелогинился
+                    android.util.Log.w("CallListenerService", "Refresh token expired, clearing tokens")
+                    securePrefs().edit()
+                        .remove(KEY_TOKEN)
+                        .remove(KEY_REFRESH)
+                        .apply()
+                    return Pair(401, null)
+                }
+                // Сохраняем новый access token
+                securePrefs().edit().putString(KEY_TOKEN, newAccess).apply()
+                android.util.Log.i("CallListenerService", "Access token refreshed successfully")
+                val (code2, body2) = doPull(newAccess)
+                if (code2 == 0) return Pair(0, null) // Сетевая ошибка
+                if (code2 == 204) return Pair(204, null)
+                if (code2 != 200) return Pair(code2, null)
+                val body2Str = body2 ?: return Pair(code2, null)
+                try {
+                    val obj2 = JSONObject(body2Str)
+                    val phone2 = obj2.optString("phone", "")
+                    val callRequestId2 = obj2.optString("id", "")
+                    android.util.Log.i("CallListenerService", "PullCall: Received call command (after refresh), phone=$phone2, id=$callRequestId2")
+                    return Pair(200, if (phone2.isNotBlank()) Pair(phone2, callRequestId2) else null)
+                } catch (e: Exception) {
+                    android.util.Log.e("CallListenerService", "PullCall: JSON parse error (after refresh): ${e.message}, body: $body2Str")
+                    return Pair(code2, null)
+                }
+            } catch (e: RuntimeException) {
+                // Сетевая ошибка при refresh - не критично, не очищаем токены
+                // Просто возвращаем сетевую ошибку, сервис продолжит работу
+                android.util.Log.w("CallListenerService", "Refresh token network error: ${e.message}, will retry later")
+                return Pair(0, null) // Сетевая ошибка, не 401
             }
         }
         if (code1 != 200) {
@@ -309,7 +321,7 @@ class CallListenerService : Service() {
             android.util.Log.i("CallListenerService", "PullCall: Received call command, phone=$phone, id=$callRequestId")
             // Сохраняем call_request_id для последующей отправки данных о звонке
             if (callRequestId.isNotBlank()) {
-                getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                securePrefs().edit()
                     .putString("pending_call_${phone}", callRequestId)
                     .putLong("pending_call_time_${phone}", System.currentTimeMillis())
                     .apply()
@@ -321,6 +333,13 @@ class CallListenerService : Service() {
         }
     }
 
+    /**
+     * Обновление access token через refresh token.
+     * Возвращает:
+     * - новый access token (String) при успехе
+     * - null при истечении refresh token (401/403) - требуется повторный вход
+     * - выбрасывает RuntimeException при сетевых ошибках (не критично, можно повторить позже)
+     */
     private fun refreshAccess(baseUrl: String, refresh: String): String? {
         val url = "$baseUrl/api/token/refresh/"
         val bodyJson = JSONObject().put("refresh", refresh).toString()
@@ -328,10 +347,38 @@ class CallListenerService : Service() {
             .url(url)
             .post(bodyJson.toRequestBody(jsonMedia))
             .build()
-        http.newCall(req).execute().use { res ->
-            val raw = res.body?.string() ?: ""
-            if (!res.isSuccessful) return null
-            return JSONObject(raw).optString("access", "").ifBlank { null }
+        try {
+            http.newCall(req).execute().use { res ->
+                val raw = res.body?.string() ?: ""
+                if (!res.isSuccessful) {
+                    // 401/403 = refresh token истек, требуется повторный вход
+                    if (res.code == 401 || res.code == 403) {
+                        android.util.Log.w("CallListenerService", "Refresh token expired: HTTP ${res.code}")
+                        return null
+                    }
+                    // Другие ошибки сервера (500, 502 и т.д.) - временная проблема, не очищаем токены
+                    android.util.Log.w("CallListenerService", "Refresh token server error: HTTP ${res.code}")
+                    throw RuntimeException("Server error: HTTP ${res.code}")
+                }
+                val access = JSONObject(raw).optString("access", "").ifBlank { null }
+                if (access == null) {
+                    android.util.Log.w("CallListenerService", "Refresh token response missing access token")
+                    return null
+                }
+                return access
+            }
+        } catch (e: java.net.UnknownHostException) {
+            android.util.Log.w("CallListenerService", "Refresh token network error: no internet")
+            throw RuntimeException("No internet connection")
+        } catch (e: java.net.SocketTimeoutException) {
+            android.util.Log.w("CallListenerService", "Refresh token network error: timeout")
+            throw RuntimeException("Request timeout")
+        } catch (e: RuntimeException) {
+            // Пробрасываем дальше
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("CallListenerService", "Refresh token error: ${e.message}")
+            throw RuntimeException("Network error: ${e.message}")
         }
     }
 
@@ -442,7 +489,7 @@ class CallListenerService : Service() {
         scope.launch {
             delay(5000)
             try {
-                val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+                val prefs = securePrefs()
                 val callRequestId = prefs.getString("pending_call_$phone", null)
                 if (callRequestId.isNullOrBlank()) {
                     android.util.Log.d("CallListenerService", "No pending call request ID for $phone")

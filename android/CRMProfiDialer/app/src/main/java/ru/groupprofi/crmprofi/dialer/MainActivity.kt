@@ -161,12 +161,53 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         AppState.isForeground = true
 
-        // Лаконичный индикатор "доходит ли телефон до сервера"
         val prefs = securePrefs()
-        val at = prefs.getString(CallListenerService.KEY_LAST_POLL_AT, null)
-        val code = prefs.getInt(CallListenerService.KEY_LAST_POLL_CODE, -1)
-        if (!at.isNullOrBlank() && code != -1) {
-            statusEl.text = "Статус: опрос $code · $at"
+        val token = prefs.getString(KEY_ACCESS, null)
+        val refresh = prefs.getString(KEY_REFRESH, null)
+        
+        // Если пользователь вошел, проверяем статус сервиса
+        if (!token.isNullOrBlank() && !refresh.isNullOrBlank()) {
+            val at = prefs.getString(CallListenerService.KEY_LAST_POLL_AT, null)
+            val code = prefs.getInt(CallListenerService.KEY_LAST_POLL_CODE, -1)
+            
+            // Проверяем, работает ли сервис (есть ли недавний опрос)
+            if (!at.isNullOrBlank() && code != -1) {
+                // Сервис работает, показываем последний статус
+                val statusText = when {
+                    code == 401 -> "Требуется повторный вход"
+                    code == 0 -> "Нет подключения к интернету"
+                    code == 204 -> "Ожидание команд · $at"
+                    code == 200 -> "Работает · $at"
+                    else -> "Опрос $code · $at"
+                }
+                statusEl.text = "Статус: $statusText"
+                
+                // Если 401 - предлагаем перезапустить сервис
+                if (code == 401) {
+                    // Токены могли быть очищены сервисом, проверяем
+                    val currentToken = prefs.getString(KEY_ACCESS, null)
+                    val currentRefresh = prefs.getString(KEY_REFRESH, null)
+                    if (currentToken.isNullOrBlank() || currentRefresh.isNullOrBlank()) {
+                        accountStatusEl.text = "Аккаунт: требуется повторный вход"
+                        statusEl.text = "Статус: сессия истекла, войдите снова"
+                        // Показываем форму входа
+                        usernameEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.VISIBLE }
+                        passwordEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.VISIBLE }
+                        usernameEl.visibility = android.view.View.VISIBLE
+                        passwordEl.visibility = android.view.View.VISIBLE
+                        loginBtn.visibility = android.view.View.VISIBLE
+                        logoutBtn.visibility = android.view.View.GONE
+                    }
+                }
+            } else {
+                // Нет данных об опросе - сервис не запущен или только что запустился
+                statusEl.text = "Статус: запускаю сервис..."
+                // Автоматически запускаем сервис если его нет
+                startListeningServiceAuto()
+            }
+        } else {
+            // Пользователь не вошел
+            statusEl.text = "Статус: не подключено"
         }
     }
 
