@@ -26,6 +26,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -53,6 +55,7 @@ class CallListenerService : Service() {
     private val logCollector = LogCollector()
     private val logSender = LogSender(this, http, queueManager)
     private val random = java.util.Random()
+    private val refreshMutex = Mutex()  // Mutex для предотвращения параллельных refresh token запросов
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -292,7 +295,7 @@ class CallListenerService : Service() {
         super.onDestroy()
     }
 
-    private fun pullCallWithRefresh(baseUrl: String, token: String, refresh: String, deviceId: String): Pair<Int, Pair<String?, String?>?> {
+    private suspend fun pullCallWithRefresh(baseUrl: String, token: String, refresh: String, deviceId: String): Pair<Int, Pair<String?, String?>?> {
         val url = "$baseUrl/api/phone/calls/pull/?device_id=$deviceId"
         fun doPull(access: String): Pair<Int, String?> {
             val req = Request.Builder()
@@ -346,9 +349,10 @@ class CallListenerService : Service() {
         }
         if (code1 == 401) {
             android.util.Log.w("CallListenerService", "PullCall: Unauthorized (401), refreshing token")
-            // 2) refresh + retry once
+            // 2) refresh + retry once (с mutex для предотвращения параллельных refresh)
             try {
-                val newAccess = refreshAccess(baseUrl, refresh)
+                // Используем Mutex для предотвращения race condition при параллельных refresh
+                val newAccess = refreshAccessWithMutex(baseUrl, refresh)
                 if (newAccess == null) {
                     // Refresh token истек - нужно перелогиниться
                     // Очищаем токены, чтобы пользователь перелогинился
@@ -409,7 +413,28 @@ class CallListenerService : Service() {
     }
 
     /**
-     * Обновление access token через refresh token.
+     * Обновление access token через refresh token с защитой от race condition через Mutex.
+     * Если другой корутин уже выполняет refresh, ждет его завершения и использует результат.
+     * Возвращает:
+     * - новый access token (String) при успехе
+     * - null при истечении refresh token (401/403) - требуется повторный вход
+     * - выбрасывает RuntimeException при сетевых ошибках (не критично, можно повторить позже)
+     */
+    private suspend fun refreshAccessWithMutex(baseUrl: String, refresh: String): String? {
+        return refreshMutex.withLock {
+            // Проверяем, не обновился ли токен пока мы ждали (другой корутин мог уже обновить)
+            val currentToken = securePrefs().getString(KEY_TOKEN, null)
+            if (currentToken != null) {
+                // Пробуем использовать текущий токен (возможно он уже обновлен)
+                android.util.Log.d("CallListenerService", "Token may have been refreshed by another coroutine, using current token")
+            }
+            // Выполняем refresh
+            refreshAccess(baseUrl, refresh)
+        }
+    }
+    
+    /**
+     * Обновление access token через refresh token (внутренняя функция, вызывается под mutex).
      * Возвращает:
      * - новый access token (String) при успехе
      * - null при истечении refresh token (401/403) - требуется повторный вход

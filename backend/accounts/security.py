@@ -27,13 +27,30 @@ RATE_LIMIT_API_PER_MINUTE = 60  # Максимум API запросов в ми�
 
 
 def get_client_ip(request) -> str:
-    """Получить IP адрес клиента с учетом прокси."""
-    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-    if x_forwarded_for:
-        ip = x_forwarded_for.split(",")[0].strip()
-    else:
-        ip = request.META.get("REMOTE_ADDR", "unknown")
-    return ip
+    """
+    Получить IP адрес клиента с учетом прокси.
+    Безопасно: доверяет X-Forwarded-For только если REMOTE_ADDR принадлежит нашим прокси (allowlist).
+    Иначе использует REMOTE_ADDR для защиты от IP spoofing.
+    """
+    remote_addr = request.META.get("REMOTE_ADDR", "")
+    
+    # Получаем список доверенных IP прокси из settings
+    # В production: установить через DJANGO_PROXY_IPS (через запятую)
+    proxy_ips = getattr(settings, "PROXY_IPS", [])
+    if isinstance(proxy_ips, str):
+        proxy_ips = [ip.strip() for ip in proxy_ips.split(",") if ip.strip()]
+    
+    # Если REMOTE_ADDR принадлежит нашим прокси - доверяем X-Forwarded-For
+    if remote_addr in proxy_ips:
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+        if x_forwarded_for:
+            # Берем первый IP из цепочки (клиент)
+            ip = x_forwarded_for.split(",")[0].strip()
+            if ip:
+                return ip
+    
+    # Иначе используем REMOTE_ADDR (защита от spoofing)
+    return remote_addr or "unknown"
 
 
 def is_ip_rate_limited(ip: str, key_prefix: str, max_requests: int, window_seconds: int = 60) -> bool:

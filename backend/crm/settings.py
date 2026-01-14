@@ -69,8 +69,10 @@ CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv("DJANGO_CSRF_TRUSTED_ORIGIN
 
 # Trust proxy headers (X-Forwarded-For, X-Forwarded-Host) only from our own proxy
 # В production: установить IP прокси через DJANGO_PROXY_IPS (через запятую)
+# Например: DJANGO_PROXY_IPS="127.0.0.1,10.0.0.1" для Nginx/балансера
 USE_X_FORWARDED_HOST = True
 USE_X_FORWARDED_FOR = True
+PROXY_IPS = [ip.strip() for ip in os.getenv("DJANGO_PROXY_IPS", "").split(",") if ip.strip()]
 
 # Production hardening (when DEBUG=0)
 if not DEBUG:

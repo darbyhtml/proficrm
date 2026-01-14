@@ -60,6 +60,8 @@ class QueueManager(private val context: Context) {
         var sentCount = 0
         var failedCount = 0
         
+        val stuckItems = mutableListOf<QueueItem>()
+        
         for (item in pending) {
             try {
                 val success = sendItem(baseUrl, accessToken, item, httpClient)
@@ -70,11 +72,32 @@ class QueueManager(private val context: Context) {
                 } else {
                     dao.incrementRetry(item.id)
                     failedCount++
+                    // Проверяем, достиг ли элемент max retries (3) после incrementRetry
+                    val updatedItem = dao.getById(item.id)
+                    if (updatedItem != null && updatedItem.retryCount >= 3) {
+                        stuckItems.add(updatedItem)
+                        Log.w("QueueManager", "Item reached max retries: type=${item.type}, id=${item.id}, retryCount=${updatedItem.retryCount}")
+                    }
                 }
             } catch (e: Exception) {
                 Log.w("QueueManager", "Error sending queued item ${item.id}: ${e.message}")
                 dao.incrementRetry(item.id)
                 failedCount++
+                // Проверяем, достиг ли элемент max retries
+                val updatedItem = dao.getById(item.id)
+                if (updatedItem != null && updatedItem.retryCount >= 3) {
+                    stuckItems.add(updatedItem)
+                    Log.w("QueueManager", "Item reached max retries after exception: type=${item.type}, id=${item.id}, retryCount=${updatedItem.retryCount}")
+                }
+            }
+        }
+        
+        // Отправляем алерт в CRM для элементов, достигших max retries
+        if (stuckItems.isNotEmpty()) {
+            try {
+                sendQueueStuckAlert(baseUrl, accessToken, stuckItems, httpClient)
+            } catch (e: Exception) {
+                Log.e("QueueManager", "Failed to send queue stuck alert: ${e.message}")
             }
         }
         
@@ -151,4 +174,51 @@ class QueueManager(private val context: Context) {
         val telemetry: Int,
         val logBundle: Int
     )
+    
+    /**
+     * Отправить алерт в CRM о застрявших элементах очереди (достигших max retries).
+     */
+    private suspend fun sendQueueStuckAlert(
+        baseUrl: String,
+        accessToken: String,
+        stuckItems: List<QueueItem>,
+        httpClient: OkHttpClient
+    ) {
+        try {
+            val url = "$baseUrl/api/phone/devices/heartbeat/"
+            val jsonMedia = "application/json; charset=utf-8".toMediaType()
+            
+            // Формируем список застрявших элементов для алерта
+            val stuckInfo = stuckItems.map { item ->
+                JSONObject().apply {
+                    put("type", item.type)
+                    put("endpoint", item.endpoint)
+                    put("retryCount", item.retryCount)
+                    put("createdAt", item.createdAt)
+                }
+            }
+            
+            val bodyJson = JSONObject().apply {
+                put("queue_stuck", true)
+                put("stuck_items", org.json.JSONArray(stuckInfo))
+                put("stuck_count", stuckItems.size)
+            }.toString()
+            
+            val req = Request.Builder()
+                .url(url)
+                .post(bodyJson.toRequestBody(jsonMedia))
+                .addHeader("Authorization", "Bearer $accessToken")
+                .build()
+            
+            val response = httpClient.newCall(req).execute()
+            if (response.isSuccessful) {
+                Log.i("QueueManager", "Queue stuck alert sent: ${stuckItems.size} items")
+            } else {
+                Log.w("QueueManager", "Queue stuck alert failed: HTTP ${response.code}")
+            }
+            response.close()
+        } catch (e: Exception) {
+            Log.e("QueueManager", "Error sending queue stuck alert: ${e.message}")
+        }
+    }
 }

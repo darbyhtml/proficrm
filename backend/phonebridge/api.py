@@ -70,6 +70,9 @@ class DeviceHeartbeatView(APIView):
         last_poll_code = s.validated_data.get("last_poll_code")
         last_poll_at = s.validated_data.get("last_poll_at")
         encryption_enabled = s.validated_data.get("encryption_enabled", True)
+        queue_stuck = s.validated_data.get("queue_stuck", False)
+        stuck_items = s.validated_data.get("stuck_items")
+        stuck_count = s.validated_data.get("stuck_count", 0)
 
         if not device_id:
             return Response({"detail": "device_id is required"}, status=400)
@@ -78,6 +81,13 @@ class DeviceHeartbeatView(APIView):
         from accounts.security import get_client_ip
         ip = get_client_ip(request)
 
+        # Формируем сообщение об ошибке для queue_stuck
+        error_message = ""
+        if queue_stuck and stuck_count:
+            error_message = f"Queue stuck: {stuck_count} items reached max retries"
+            if stuck_items:
+                error_message += f" (types: {', '.join(set(item.get('type', 'unknown') for item in stuck_items))})"
+        
         obj, created = PhoneDevice.objects.update_or_create(
             user=request.user,
             device_id=device_id,
@@ -90,12 +100,16 @@ class DeviceHeartbeatView(APIView):
                 "last_poll_at": last_poll_at or timezone.now(),
                 "last_ip": ip,
                 "encryption_enabled": encryption_enabled,
+                "last_error_code": "queue_stuck" if queue_stuck else obj.last_error_code if not created else "",
+                "last_error_message": error_message if queue_stuck else obj.last_error_message if not created else "",
             },
         )
         
-        # Логируем предупреждение, если шифрование отключено
+        # Логируем предупреждения
         if not encryption_enabled:
             logger.warning(f"DeviceHeartbeat: user={request.user.id}, device={device_id} - encryption DISABLED (security risk)")
+        if queue_stuck:
+            logger.warning(f"DeviceHeartbeat: user={request.user.id}, device={device_id} - QUEUE STUCK: {stuck_count} items failed after max retries")
 
         logger.debug(f"DeviceHeartbeat: user={request.user.id}, device={device_id}, created={created}")
 
@@ -236,7 +250,13 @@ class TelemetryItemSerializer(serializers.Serializer):
 
 class TelemetryBatchSerializer(serializers.Serializer):
     device_id = serializers.CharField(max_length=64, required=False, allow_blank=True)
-    items = TelemetryItemSerializer(many=True, max_length=100)  # Максимум 100 items за раз для защиты от DoS
+    items = TelemetryItemSerializer(many=True)
+    
+    def validate_items(self, value):
+        """Валидация размера батча: максимум 100 items для защиты от DoS."""
+        if len(value) > 100:
+            raise serializers.ValidationError("Максимум 100 items за раз. Получено: %d" % len(value))
+        return value
 
 
 class PhoneTelemetryView(APIView):

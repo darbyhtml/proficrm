@@ -55,4 +55,10 @@ interface QueueDao {
      */
     @Query("SELECT COUNT(*) FROM queue_items WHERE type = :type")
     suspend fun countByType(type: String): Int
+    
+    /**
+     * Получить элемент по ID (для проверки retryCount после incrementRetry).
+     */
+    @Query("SELECT * FROM queue_items WHERE id = :id")
+    suspend fun getById(id: Long): QueueItem?
 }

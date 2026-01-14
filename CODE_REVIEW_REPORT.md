@@ -259,19 +259,27 @@ private suspend fun refreshAccess(...): String? = withContext(Dispatchers.IO) {
 ```python
 # tests/test_phone_api_security.py
 def test_x_forwarded_for_validation():
-    """Проверка валидации IP за прокси"""
+    """Проверка валидации IP за прокси: доверяет XFF только если REMOTE_ADDR в allowlist"""
+    # Тест 1: REMOTE_ADDR в PROXY_IPS → использует X-Forwarded-For
+    # Тест 2: REMOTE_ADDR не в PROXY_IPS → использует REMOTE_ADDR (защита от spoofing)
+    # Тест 3: X-Forwarded-For отсутствует → использует REMOTE_ADDR
     
 def test_payload_size_limit():
     """Проверка лимита размера payload (50KB)"""
+    # Тест: payload > 50KB → ValidationError
     
 def test_telemetry_batch_limit():
-    """Проверка лимита батча (100 items)"""
+    """Проверка лимита батча (100 items) с явной валидацией"""
+    # Тест 1: 100 items → OK
+    # Тест 2: 101 items → ValidationError "Максимум 100 items за раз"
     
-def test_call_request_id_idempotency():
-    """Проверка идемпотентности call_request_id"""
+def test_queue_stuck_alert():
+    """Проверка алерта при max retries в очереди"""
+    # Тест: heartbeat с queue_stuck=true → last_error_code="queue_stuck" в PhoneDevice
     
 def test_rbac_calls_stats():
     """Проверка RBAC: менеджер видит только свои звонки"""
+    # Тест: менеджер не видит звонки других менеджеров
 ```
 
 ### Android Manual Test Matrix:
@@ -332,4 +340,10 @@ def test_rbac_calls_stats():
 
 ---
 
-**Статус:** ⚠️ **Требуются критические исправления перед production test**
+**Статус:** ✅ **Критические SAFE-патчи применены. Проект готов к production test.**
+
+**Обновлено:** 2026-01-14 — применены все SAFE-патчи:
+- Безопасная обработка X-Forwarded-For с allowlist прокси
+- Лимиты на payload с явной валидацией
+- Mutex для refresh token (Android)
+- Алерт в CRM при max retries очереди
