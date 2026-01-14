@@ -69,6 +69,7 @@ class MainActivity : AppCompatActivity() {
             loginBtn.visibility = android.view.View.GONE
             logoutBtn.visibility = android.view.View.VISIBLE
             // Автоматически запускаем сервис после входа
+            ensureCallLogPermissions()
             startListeningServiceAuto()
         } else {
             accountStatusEl.text = "Аккаунт: не выполнен вход"
@@ -130,7 +131,8 @@ class MainActivity : AppCompatActivity() {
                         logoutBtn.visibility = android.view.View.VISIBLE
                     }
                     setStatus("Статус: подключено. device_id=$deviceId")
-                    // Автоматически запускаем сервис после входа
+                    // После успешного входа: запрашиваем права на статистику звонков и запускаем сервис
+                    ensureCallLogPermissions()
                     startListeningServiceAuto()
                 } catch (e: Exception) {
                     accessToken = null
@@ -168,6 +170,27 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         AppState.isForeground = false
         super.onPause()
+    }
+
+    /**
+     * Права для корректной аналитики по фактическим звонкам:
+     * READ_CALL_LOG и READ_PHONE_STATE. Запрашиваем мягко, без блокировки работы.
+     */
+    private fun ensureCallLogPermissions() {
+        val needed = mutableListOf<String>()
+        val callPerm = android.Manifest.permission.READ_CALL_LOG
+        val phoneStatePerm = android.Manifest.permission.READ_PHONE_STATE
+
+        if (ContextCompat.checkSelfPermission(this, callPerm) != PackageManager.PERMISSION_GRANTED) {
+            needed += callPerm
+        }
+        if (ContextCompat.checkSelfPermission(this, phoneStatePerm) != PackageManager.PERMISSION_GRANTED) {
+            needed += phoneStatePerm
+        }
+
+        if (needed.isEmpty()) return
+
+        ActivityCompat.requestPermissions(this, needed.toTypedArray(), REQ_CALL_PERMS)
     }
 
     private fun startListeningServiceAuto() {
@@ -213,15 +236,31 @@ class MainActivity : AppCompatActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 100) {
-            val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
-            if (granted && pendingStartListening) {
+        when (requestCode) {
+            100 -> {
+                val granted = grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED
+                if (granted && pendingStartListening) {
+                    pendingStartListening = false
+                    startListeningServiceAuto()
+                    return
+                }
                 pendingStartListening = false
-                startListeningServiceAuto()
-                return
+                setStatus("Статус: без уведомлений фон не работает (разрешение отклонено)")
             }
-            pendingStartListening = false
-            setStatus("Статус: без уведомлений фон не работает (разрешение отклонено)")
+            REQ_CALL_PERMS -> {
+                // Если пользователь отказал — просто пишем статус, приложение продолжит работать,
+                // но отчёт по фактическим звонкам может быть неполным.
+                var anyDenied = false
+                for (res in grantResults) {
+                    if (res != PackageManager.PERMISSION_GRANTED) {
+                        anyDenied = true
+                        break
+                    }
+                }
+                if (anyDenied) {
+                    setStatus("Статус: без доступа к журналу звонков аналитика будет неполной")
+                }
+            }
         }
     }
 
@@ -318,6 +357,8 @@ class MainActivity : AppCompatActivity() {
         private const val KEY_ACCESS = "access"
         private const val KEY_REFRESH = "refresh"
         private const val KEY_DEVICE_ID = "device_id"
+
+        private const val REQ_CALL_PERMS = 200
     }
 }
 
