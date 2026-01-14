@@ -33,6 +33,8 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import ru.groupprofi.crmprofi.dialer.BuildConfig
+import ru.groupprofi.crmprofi.dialer.queue.QueueManager
 
 class CallListenerService : Service() {
     private val http = OkHttpClient()
@@ -40,7 +42,9 @@ class CallListenerService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var loopJob: Job? = null
     private var heartbeatCounter: Int = 0
+    private var queueFlushCounter: Int = 0
     private val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+    private val queueManager = QueueManager(this)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -123,6 +127,20 @@ class CallListenerService : Service() {
                                 )
                             } catch (_: Exception) {
                                 // ignore
+                            }
+                        }
+                        
+                        // Периодически пытаемся отправить накопленные элементы из оффлайн-очереди.
+                        queueFlushCounter = (queueFlushCounter + 1) % 20 // Каждые 20 циклов (примерно раз в минуту)
+                        if (queueFlushCounter == 0 && code != 0 && code != 401) {
+                            // Пытаемся отправить очередь только если есть интернет и не требуется авторизация
+                            try {
+                                val sentCount = queueManager.flushQueue(BASE_URL, latestToken, http)
+                                if (sentCount > 0) {
+                                    android.util.Log.i("CallListenerService", "Flushed $sentCount items from queue")
+                                }
+                            } catch (e: Exception) {
+                                android.util.Log.w("CallListenerService", "Queue flush error: ${e.message}")
                             }
                         }
                         
@@ -583,22 +601,41 @@ class CallListenerService : Service() {
                 .addHeader("Authorization", "Bearer $token")
                 .build()
             
-            http.newCall(req).execute().use { res ->
-                val raw = res.body?.string() ?: ""
-                if (res.isSuccessful) {
-                    android.util.Log.i("CallListenerService", "Call info sent successfully to CRM")
-                } else {
-                    android.util.Log.w("CallListenerService", "Failed to send call info: HTTP ${res.code}, $raw")
+            try {
+                http.newCall(req).execute().use { res ->
+                    val raw = res.body?.string() ?: ""
+                    if (res.isSuccessful) {
+                        android.util.Log.i("CallListenerService", "Call info sent successfully to CRM")
+                    } else {
+                        android.util.Log.w("CallListenerService", "Failed to send call info: HTTP ${res.code}, $raw")
+                        // При ошибке сервера (не сети) - добавляем в очередь для повторной отправки
+                        if (res.code in 500..599) {
+                            queueManager.enqueue("call_update", "/api/phone/calls/update/", bodyJson)
+                            android.util.Log.i("CallListenerService", "Call info queued for retry (server error)")
+                        }
+                    }
                 }
+            } catch (e: java.net.UnknownHostException) {
+                // Нет интернета - добавляем в очередь
+                android.util.Log.w("CallListenerService", "No internet, queuing call info")
+                queueManager.enqueue("call_update", "/api/phone/calls/update/", bodyJson)
+            } catch (e: java.net.SocketTimeoutException) {
+                // Таймаут - добавляем в очередь
+                android.util.Log.w("CallListenerService", "Timeout, queuing call info")
+                queueManager.enqueue("call_update", "/api/phone/calls/update/", bodyJson)
+            } catch (e: java.io.IOException) {
+                // Другие сетевые ошибки - добавляем в очередь
+                android.util.Log.w("CallListenerService", "Network error, queuing call info: ${e.message}")
+                queueManager.enqueue("call_update", "/api/phone/calls/update/", bodyJson)
             }
         } catch (e: Exception) {
-            android.util.Log.e("CallListenerService", "Error sending call info: ${e.message}")
+            android.util.Log.e("CallListenerService", "Error preparing call info: ${e.message}")
         }
     }
 
     /**
      * Лёгкий heartbeat: раз в несколько циклов отправляем код последнего опроса и время.
-     * Не влияет на основную логику, ошибки игнорируются.
+     * Не влияет на основную логику, ошибки игнорируются, но при сетевых ошибках добавляем в очередь.
      */
     private fun sendHeartbeat(
         baseUrl: String,
@@ -627,10 +664,25 @@ class CallListenerService : Service() {
                 .addHeader("Authorization", "Bearer $token")
                 .build()
 
-            http.newCall(req).execute().use { res ->
-                if (!res.isSuccessful) {
-                    android.util.Log.w("CallListenerService", "Heartbeat failed: HTTP ${res.code}")
+            try {
+                http.newCall(req).execute().use { res ->
+                    if (!res.isSuccessful) {
+                        android.util.Log.w("CallListenerService", "Heartbeat failed: HTTP ${res.code}")
+                        // При ошибке сервера - добавляем в очередь
+                        if (res.code in 500..599) {
+                            queueManager.enqueue("heartbeat", "/api/phone/devices/heartbeat/", bodyJson)
+                        }
+                    }
                 }
+            } catch (e: java.net.UnknownHostException) {
+                // Нет интернета - добавляем в очередь
+                queueManager.enqueue("heartbeat", "/api/phone/devices/heartbeat/", bodyJson)
+            } catch (e: java.net.SocketTimeoutException) {
+                // Таймаут - добавляем в очередь
+                queueManager.enqueue("heartbeat", "/api/phone/devices/heartbeat/", bodyJson)
+            } catch (e: java.io.IOException) {
+                // Другие сетевые ошибки - добавляем в очередь
+                queueManager.enqueue("heartbeat", "/api/phone/devices/heartbeat/", bodyJson)
             }
         } catch (e: Exception) {
             android.util.Log.w("CallListenerService", "Heartbeat error: ${e.message}")
@@ -640,6 +692,7 @@ class CallListenerService : Service() {
     /**
      * Отправка простой телеметрии по latency/кодам ответа для /api/phone/calls/pull/.
      * Используем batch-формат с одним элементом.
+     * При сетевых ошибках добавляем в очередь.
      */
     private fun sendTelemetryLatency(
         baseUrl: String,
@@ -668,10 +721,25 @@ class CallListenerService : Service() {
                 .addHeader("Authorization", "Bearer $access")
                 .build()
 
-            http.newCall(req).execute().use { res ->
-                if (!res.isSuccessful) {
-                    android.util.Log.w("CallListenerService", "Telemetry latency failed: HTTP ${res.code}")
+            try {
+                http.newCall(req).execute().use { res ->
+                    if (!res.isSuccessful) {
+                        android.util.Log.w("CallListenerService", "Telemetry latency failed: HTTP ${res.code}")
+                        // При ошибке сервера - добавляем в очередь
+                        if (res.code in 500..599) {
+                            queueManager.enqueue("telemetry", "/api/phone/telemetry/", bodyJson)
+                        }
+                    }
                 }
+            } catch (e: java.net.UnknownHostException) {
+                // Нет интернета - добавляем в очередь
+                queueManager.enqueue("telemetry", "/api/phone/telemetry/", bodyJson)
+            } catch (e: java.net.SocketTimeoutException) {
+                // Таймаут - добавляем в очередь
+                queueManager.enqueue("telemetry", "/api/phone/telemetry/", bodyJson)
+            } catch (e: java.io.IOException) {
+                // Другие сетевые ошибки - добавляем в очередь
+                queueManager.enqueue("telemetry", "/api/phone/telemetry/", bodyJson)
             }
         } catch (e: Exception) {
             android.util.Log.w("CallListenerService", "Telemetry latency error: ${e.message}")
