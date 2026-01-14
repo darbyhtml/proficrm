@@ -5000,4 +5000,60 @@ def settings_security(request: HttpRequest) -> HttpResponse:
         },
     )
 
-# (no-op)
+
+@login_required
+def settings_mobile_devices(request: HttpRequest) -> HttpResponse:
+    """
+    Админский список устройств мобильного приложения.
+    Только чтение, без действий. Используется для раздела
+    «Настройки → Мобильное приложение».
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    from phonebridge.models import PhoneDevice
+
+    now = timezone.now()
+    active_threshold = now - timedelta(minutes=15)
+
+    qs = (
+        PhoneDevice.objects.select_related("user")
+        .order_by("-last_seen_at", "-created_at")
+    )
+
+    # Фильтры по пользователю и статусу (живое/неживое)
+    user_id = (request.GET.get("user") or "").strip()
+    status = (request.GET.get("status") or "").strip()  # active|stale|all
+    if user_id:
+        try:
+            qs = qs.filter(user_id=int(user_id))
+        except (ValueError, TypeError):
+            user_id = ""
+    if status == "active":
+        qs = qs.filter(last_seen_at__gte=active_threshold)
+    elif status == "stale":
+        qs = qs.filter(models.Q(last_seen_at__lt=active_threshold) | models.Q(last_seen_at__isnull=True))
+
+    total = qs.count()
+    active_count = qs.filter(last_seen_at__gte=active_threshold).count()
+
+    per_page = 50
+    paginator = Paginator(qs, per_page)
+    page = paginator.get_page(request.GET.get("page"))
+
+    users = User.objects.filter(is_active=True).order_by("last_name", "first_name")
+
+    return render(
+        request,
+        "ui/settings/mobile_devices.html",
+        {
+            "page": page,
+            "total": total,
+            "active_count": active_count,
+            "active_threshold": active_threshold,
+            "users": users,
+            "filter_user": user_id,
+            "filter_status": status or "all",
+        },
+    )

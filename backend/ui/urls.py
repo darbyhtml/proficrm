@@ -91,6 +91,7 @@ urlpatterns = [
     path("settings/amocrm/migrate/", views.settings_amocrm_migrate, name="settings_amocrm_migrate"),
     path("settings/company-columns/", views.settings_company_columns, name="settings_company_columns"),
     path("settings/security/", views.settings_security, name="settings_security"),
+    path("settings/mobile/devices/", views.settings_mobile_devices, name="settings_mobile_devices"),
 ]
 
 

@@ -1,0 +1,106 @@
+{% extends "ui/base.html" %}
+{% block title %}Мобильное приложение — устройства{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div>
+      <div class="text-sm muted">
+        <a class="link" href="/settings/">Настройки</a> /
+      </div>
+      <h1 class="text-2xl font-semibold">Мобильное приложение — устройства</h1>
+      <div class="text-sm text-brand-dark/70">
+        Всего устройств: <b>{{ total }}</b>
+        · Активные (за 15 минут): <b>{{ active_count }}</b>
+      </div>
+    </div>
+
+    <form method="get" class="card card-pad flex flex-wrap items-end gap-3">
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Пользователь</label>
+        <select name="user" class="select w-full">
+          <option value="">Любой</option>
+          {% for u in users %}
+            <option value="{{ u.id }}" {% if filter_user == u.id|stringformat:"s" %}selected{% endif %}>
+              {{ u }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Статус</label>
+        <select name="status" class="select w-full">
+          <option value="all" {% if filter_status == 'all' %}selected{% endif %}>Любой</option>
+          <option value="active" {% if filter_status == 'active' %}selected{% endif %}>Активные</option>
+          <option value="stale" {% if filter_status == 'stale' %}selected{% endif %}>Неактивные</option>
+        </select>
+      </div>
+      <div class="ml-auto flex gap-2">
+        <button class="btn btn-primary" type="submit">Фильтр</button>
+        <a href="/settings/mobile/devices/" class="btn btn-outline">Сброс</a>
+      </div>
+    </form>
+
+    <section class="card card-pad">
+      <div class="overflow-x-auto">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Пользователь</th>
+              <th>Устройство</th>
+              <th>Версия</th>
+              <th>Последняя активность</th>
+              <th>Последний poll</th>
+              <th>IP</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for d in page.object_list %}
+              <tr>
+                <td class="text-sm">
+                  {{ d.user }}
+                </td>
+                <td class="text-sm">
+                  <div class="font-medium">{{ d.device_name|default:"—" }}</div>
+                  <div class="text-xs font-mono text-brand-dark/70">{{ d.device_id }}</div>
+                </td>
+                <td class="text-sm">
+                  {{ d.app_version|default:"—" }}
+                </td>
+                <td class="text-sm">
+                  {% if d.last_seen_at %}
+                    <span class="{% if d.last_seen_at >= active_threshold %}text-green-700{% else %}text-brand-dark/70{% endif %}">
+                      {{ d.last_seen_at }}
+                    </span>
+                  {% else %}
+                    <span class="muted-2">—</span>
+                  {% endif %}
+                </td>
+                <td class="text-xs">
+                  {% if d.last_poll_at %}
+                    {{ d.last_poll_at }}{% if d.last_poll_code is not None %} · код {{ d.last_poll_code }}{% endif %}
+                  {% else %}
+                    <span class="muted-2">—</span>
+                  {% endif %}
+                </td>
+                <td class="text-xs font-mono text-brand-dark/70">
+                  {{ d.last_ip|default:"—" }}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td class="muted" colspan="6" style="padding:1.25rem 1rem">
+                  Устройств пока нет.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="border-t px-4 py-3 flex items-center justify-between gap-4 flex-wrap mt-3">
+        {% include "ui/_pagination.html" with page=page qs=request.GET.urlencode %}
+      </div>
+    </section>
+  </div>
+{% endblock %}
+
+
