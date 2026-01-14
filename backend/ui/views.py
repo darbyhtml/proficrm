@@ -535,19 +535,21 @@ def analytics(request: HttpRequest) -> HttpResponse:
 
     # Звонки за период (лимит на страницу, чтобы не убить UI)
     # Для консистентности с аналитикой сотрудника считаем только клики "Позвонить с телефона" (note="UI click").
-    calls_qs = (
+    calls_qs_base = (
         CallRequest.objects.filter(created_by_id__in=user_ids, created_at__gte=start, created_at__lt=end, note="UI click")
         .exclude(status=CallRequest.Status.CANCELLED)
         .select_related("company", "contact", "created_by")
-        .order_by("-created_at")[:5000]
     )
+
+    # Полный QS для вычисления холодных звонков (без среза)
+    cold_call_ids = set(
+        calls_qs_base.filter(is_cold_call=True).filter(_cold_call_confirm_q()).values_list("id", flat=True)
+    )
+
+    # Ограничиваем только отображаемый список
+    calls_qs = calls_qs_base.order_by("-created_at")[:5000]
 
     stats = {uid: {"calls_total": 0, "cold_calls": 0} for uid in user_ids}
-
-    # Выделяем id подтверждённых холодных звонков (включая отметки на телефонах)
-    cold_call_ids = set(
-        calls_qs.filter(is_cold_call=True).filter(_cold_call_confirm_q()).values_list("id", flat=True)
-    )
 
     for call in calls_qs:
         uid = call.created_by_id
