@@ -365,12 +365,12 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
     """
     user: User = request.user
 
-    # Берём ближайшую "активную" кампанию пользователя: только SENDING (чтобы виджет не всплывал от простого добавления email).
+    # Берём ближайшую "активную" кампанию пользователя:
+    # - SENDING — во время отправки
+    # - SENT    — сразу после завершения (чтобы менеджер увидел результат, даже если писем было мало)
     qs = Campaign.objects.filter(created_by=user).order_by("-updated_at")
     active = (
-        qs.filter(status=Campaign.Status.SENDING, recipients__status=CampaignRecipient.Status.PENDING)
-        .distinct()
-        .first()
+        qs.filter(status__in=[Campaign.Status.SENDING, Campaign.Status.SENT]).first()
     )
     if not active:
         return JsonResponse({"ok": True, "active": None})
