@@ -213,14 +213,14 @@
           </div>
           <div>
             <div class="text-brand-dark/50">Сайт</div>
-            <div>
+            <div class="max-w-full">
               {% if company.website %}
                 {% if "://" in company.website %}
-                  <a class="link" href="{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
+                  <a class="link break-all" href="{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
                 {% elif company.website|slice:":2" == "//" %}
-                  <a class="link" href="https:{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
+                  <a class="link break-all" href="https:{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
                 {% else %}
-                  <a class="link" href="https://{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
+                  <a class="link break-all" href="https://{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
                 {% endif %}
               {% else %}
                 —
