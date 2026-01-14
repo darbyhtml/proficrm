@@ -18,14 +18,6 @@
               <span>ХЗ день</span>
             </span>
           </button>
-          <button type="button" class="btn btn-outline" id="openColdWeek" title="Отчёт по холодным звонкам за 7 дней" aria-label="Отчёт по холодным звонкам за 7 дней">
-            <span class="inline-flex items-center gap-2">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M3 5h18M3 12h18M3 19h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-              </svg>
-              <span>ХЗ 7 дней</span>
-            </span>
-          </button>
           <button type="button" class="btn btn-outline" id="openColdMonth" title="Отчёт по холодным звонкам за месяц" aria-label="Отчёт по холодным звонкам за месяц">
             <span class="inline-flex items-center gap-2">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -197,6 +189,7 @@
             <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" data-close-coldcalls aria-label="Закрыть" title="Закрыть">✕</button>
           </div>
           <div class="mt-3 flex flex-wrap items-center gap-2">
+            <select id="coldCallsDaySelect" class="w-full md:w-auto rounded-lg border px-3 py-2 text-sm hidden"></select>
             <select id="coldCallsMonthSelect" class="w-full md:w-auto rounded-lg border px-3 py-2 text-sm hidden"></select>
             <button type="button" class="btn btn-outline" id="coldCallsRefresh">Обновить</button>
             <button type="button" class="btn btn-primary" id="coldCallsCopy">Скопировать отчёт</button>
@@ -216,14 +209,14 @@
       const subEl = document.getElementById('coldCallsSub');
       const txtEl = document.getElementById('coldCallsText');
       const monthSel = document.getElementById('coldCallsMonthSelect');
+      const daySel = document.getElementById('coldCallsDaySelect');
       const btnDay = document.getElementById('openColdDay');
       const btnMonth = document.getElementById('openColdMonth');
-      const btnWeek = document.getElementById('openColdWeek');
       const btnCopy = document.getElementById('coldCallsCopy');
       const btnRefresh = document.getElementById('coldCallsRefresh');
       if(!modal || !titleEl || !subEl || !txtEl || !btnCopy) return;
 
-      let mode = 'day'; // day|week|month
+      let mode = 'day'; // day|month
       let monthKey = '';
       let selectedDate = '';
 
@@ -235,9 +228,33 @@
       async function loadDay(){
         mode = 'day';
         if(monthSel) monthSel.classList.add('hidden');
+        if(daySel) daySel.classList.remove('hidden');
         titleEl.textContent = 'Отчёт по холодным звонкам (день)';
         subEl.textContent = 'Загружаю…';
         txtEl.value = '';
+
+        // Подгружаем список последних 7 дней (для выбора даты)
+        try{
+          const resDays = await fetch('/reports/cold-calls/last-7-days/', {credentials:'same-origin'});
+          const daysData = await resDays.json().catch(() => null);
+          if(daysData && daysData.ok && daySel){
+            daySel.innerHTML = '';
+            (daysData.days || []).forEach(d => {
+              const opt = document.createElement('option');
+              opt.value = d.date;
+              opt.textContent = `${d.label} (${d.count})`;
+              daySel.appendChild(opt);
+            });
+            if(selectedDate){
+              daySel.value = selectedDate;
+            }else{
+              // по умолчанию сегодня (первый/последний — зависит от порядка; у нас от старого к новому)
+              if(daySel.options.length) daySel.value = daySel.options[daySel.options.length - 1].value;
+              selectedDate = daySel.value;
+            }
+          }
+        }catch(_e){}
+
         const q = selectedDate ? `?date=${encodeURIComponent(selectedDate)}` : '';
         const res = await fetch('/reports/cold-calls/day/' + q, {credentials:'same-origin'});
         const data = await res.json().catch(() => null);
@@ -259,20 +276,12 @@
       }
 
       async function loadWeek(){
-        mode = 'week';
-        if(monthSel) monthSel.classList.add('hidden');
-        titleEl.textContent = 'Отчёт по холодным звонкам (7 дней)';
-        subEl.textContent = 'Загружаю…';
-        txtEl.value = '';
-        const res = await fetch('/reports/cold-calls/last-7-days/', {credentials:'same-origin'});
-        const data = await res.json().catch(() => null);
-        if(!data || !data.ok) { subEl.textContent = 'Не удалось загрузить отчёт.'; return; }
-        subEl.textContent = `Период: ${data.period} · Всего: ${data.count}`;
-        txtEl.value = data.text || '';
+        // удалено: отдельный "отчёт за 7 дней" не нужен, оставляем выбор дня из последних 7 дней
       }
 
       async function loadMonth(){
         mode = 'month';
+        if(daySel) daySel.classList.add('hidden');
         titleEl.textContent = 'Отчёт по холодным звонкам (месяц)';
         subEl.textContent = 'Загружаю…';
         txtEl.value = '';
@@ -295,18 +304,20 @@
           loadMonth();
         });
       }
+      if(daySel){
+        daySel.addEventListener('change', () => {
+          selectedDate = daySel.value || '';
+          loadDay();
+        });
+      }
       if(btnRefresh){
         btnRefresh.addEventListener('click', () => {
           if(mode === 'month') loadMonth();
-          else if(mode === 'week') loadWeek();
           else loadDay();
         });
       }
       if(btnDay){
         btnDay.addEventListener('click', () => { selectedDate = ''; open(); loadDay(); });
-      }
-      if(btnWeek){
-        btnWeek.addEventListener('click', () => { open(); loadWeek(); });
       }
       if(btnMonth){
         btnMonth.addEventListener('click', () => { open(); loadMonth(); });

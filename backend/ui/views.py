@@ -939,7 +939,8 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
 @login_required
 def cold_calls_report_last_7_days(request: HttpRequest) -> JsonResponse:
     """
-    Отчёт по холодным звонкам за последние 7 дней (включая сегодня) для текущего пользователя.
+    Сводка по холодным звонкам за последние 7 дней (включая сегодня) для текущего пользователя:
+    список дней с количеством, чтобы UI мог дать выбор даты.
     """
     user: User = request.user
     if not _can_view_cold_call_reports(user):
@@ -947,59 +948,33 @@ def cold_calls_report_last_7_days(request: HttpRequest) -> JsonResponse:
 
     today = timezone.localdate(timezone.now())
     start_date = today - timedelta(days=6)
-    start_dt = timezone.make_aware(datetime.combine(start_date, datetime.min.time()))
-    end_dt = start_dt + timedelta(days=7)
+    days = []
+    total = 0
+    for i in range(7):
+        d = start_date + timedelta(days=i)
+        day_start = timezone.make_aware(datetime.combine(d, datetime.min.time()))
+        day_end = day_start + timedelta(days=1)
+        qs_base = (
+            CallRequest.objects.filter(created_by=user, created_at__gte=day_start, created_at__lt=day_end, note="UI click")
+            .exclude(status=CallRequest.Status.CANCELLED)
+        )
+        cnt = (
+            qs_base.filter(is_cold_call=True)
+            .filter(_cold_call_confirm_q())
+            .distinct()
+            .count()
+        )
+        total += cnt
+        days.append(
+            {
+                "date": d.strftime("%Y-%m-%d"),
+                "label": d.strftime("%d.%m.%Y"),
+                "count": cnt,
+            }
+        )
 
-    qs_base = (
-        CallRequest.objects.filter(created_by=user, created_at__gte=start_dt, created_at__lt=end_dt, note="UI click")
-        .exclude(status=CallRequest.Status.CANCELLED)
-        .select_related("company", "contact")
-    )
-    qs = (
-        qs_base.filter(is_cold_call=True)
-        .filter(_cold_call_confirm_q())
-        .order_by("created_at")
-        .distinct()
-    )
-
-    items = []
     period_label = f"{start_date.strftime('%d.%m.%Y')} — {today.strftime('%d.%m.%Y')}"
-    lines = [f"Отчёт: холодные звонки за период {period_label}", f"Всего: {qs.count()}", ""]
-    i = 0
-    dedupe_window_s = 60
-    last_seen: dict[tuple[str, str, str], timezone.datetime] = {}
-
-    for call in qs:
-        key = (call.phone_raw or "", str(call.company_id or ""), str(call.contact_id or ""))
-        prev = last_seen.get(key)
-        if prev and (call.created_at - prev).total_seconds() < dedupe_window_s:
-            continue
-        last_seen[key] = call.created_at
-
-        i += 1
-        dt = timezone.localtime(call.created_at)
-        t = dt.strftime("%d.%m.%Y %H:%M")
-        company_name = getattr(call.company, "name", "") if call.company_id else ""
-        if call.contact_id and call.contact:
-            contact_name = str(call.contact) or ""
-        else:
-            contact_name = (getattr(call.company, "contact_name", "") or "").strip() if call.company_id else ""
-        who = contact_name or "Контакт не указан"
-        who2 = f"{who} ({company_name})" if company_name else who
-        phone = call.phone_raw or ""
-        items.append({"time": t, "phone": phone, "contact": who, "company": company_name})
-        lines.append(f"{i}) {t} — {who2} — {phone}")
-
-    return JsonResponse(
-        {
-            "ok": True,
-            "range": "last_7_days",
-            "period": period_label,
-            "count": len(items),
-            "items": items,
-            "text": "\n".join(lines),
-        }
-    )
+    return JsonResponse({"ok": True, "range": "last_7_days", "period": period_label, "total": total, "days": days})
 
 
 @login_required
