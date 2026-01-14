@@ -74,13 +74,9 @@ class DeviceHeartbeatView(APIView):
         if not device_id:
             return Response({"detail": "device_id is required"}, status=400)
 
-        # Определяем IP для диагностики (поддержка X-Forwarded-For и X-Real-IP для работы за прокси)
-        # ВАЖНО: в production нужно настроить ALLOWED_HOSTS и доверие к прокси в Django settings
-        ip = (
-            request.META.get("HTTP_X_REAL_IP", "").strip() or
-            (request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip() if request.META.get("HTTP_X_FORWARDED_FOR") else "") or
-            request.META.get("REMOTE_ADDR", "")
-        )
+        # Определяем IP для диагностики (используем единую логику из accounts.security)
+        from accounts.security import get_client_ip
+        ip = get_client_ip(request)
 
         obj, created = PhoneDevice.objects.update_or_create(
             user=request.user,
@@ -240,7 +236,7 @@ class TelemetryItemSerializer(serializers.Serializer):
 
 class TelemetryBatchSerializer(serializers.Serializer):
     device_id = serializers.CharField(max_length=64, required=False, allow_blank=True)
-    items = TelemetryItemSerializer(many=True)
+    items = TelemetryItemSerializer(many=True, max_length=100)  # Максимум 100 items за раз для защиты от DoS
 
 
 class PhoneTelemetryView(APIView):
@@ -306,7 +302,7 @@ class PhoneLogBundleSerializer(serializers.Serializer):
     ts = serializers.DateTimeField(required=False)
     level_summary = serializers.CharField(max_length=64, required=False, allow_blank=True)
     source = serializers.CharField(max_length=64, required=False, allow_blank=True)
-    payload = serializers.CharField()
+    payload = serializers.CharField(max_length=50000)  # Лимит ~50KB для защиты от DoS
 
 
 class PhoneLogUploadView(APIView):

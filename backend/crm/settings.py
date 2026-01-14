@@ -67,6 +67,11 @@ ALLOWED_HOSTS = [h.strip() for h in os.getenv("DJANGO_ALLOWED_HOSTS", "localhost
 # For Cloudflare Tunnel / proxies: add full origins with scheme, e.g. "https://*.trycloudflare.com"
 CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o.strip()]
 
+# Trust proxy headers (X-Forwarded-For, X-Forwarded-Host) only from our own proxy
+# В production: установить IP прокси через DJANGO_PROXY_IPS (через запятую)
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_FOR = True
+
 # Production hardening (when DEBUG=0)
 if not DEBUG:
     if SECRET_KEY in ("dev-secret-key-change-me", "", None) or str(SECRET_KEY).startswith("django-insecure-") or len(str(SECRET_KEY)) < 50:

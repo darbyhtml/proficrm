@@ -142,7 +142,7 @@
                   </td>
                   <td class="text-xs px-3 py-1 font-mono">{{ l.source|default:"—" }}</td>
                   <td class="text-xs px-3 py-1">
-                    <pre class="text-[11px] leading-tight whitespace-pre-wrap break-all max-h-32 overflow-auto bg-slate-50 border border-slate-100 rounded-lg px-2 py-1">{{ l.payload }}</pre>
+                    <pre class="text-[11px] leading-tight whitespace-pre-wrap break-all max-h-32 overflow-auto bg-slate-50 border border-slate-100 rounded-lg px-2 py-1">{{ l.payload|escape }}</pre>
                   </td>
                 </tr>
               {% empty %}
