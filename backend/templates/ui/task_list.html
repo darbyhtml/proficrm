@@ -17,56 +17,61 @@
     </div>
 
     <form class="bg-white border rounded-2xl p-3 flex flex-wrap items-end gap-3" method="get" id="taskFilterForm">
-      <div class="flex items-center gap-2">
-        <svg class="w-4 h-4 text-brand-dark/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-        <select name="status" class="select" style="min-width:140px">
-          <option value="">Любой статус</option>
-          <option value="new" {% if status == 'new' %}selected{% endif %}>Новая</option>
-          <option value="in_progress" {% if status == 'in_progress' %}selected{% endif %}>В работе</option>
-          <option value="done" {% if status == 'done' %}selected{% endif %}>Выполнена</option>
-          <option value="cancelled" {% if status == 'cancelled' %}selected{% endif %}>Отменена</option>
-        </select>
+      <div class="flex flex-wrap items-end gap-3 flex-1">
+        <div class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-brand-dark/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <select name="status" class="select" style="min-width:140px">
+            <option value="">Любой статус</option>
+            <option value="new" {% if status == 'new' %}selected{% endif %}>Новая</option>
+            <option value="in_progress" {% if status == 'in_progress' %}selected{% endif %}>В работе</option>
+            <option value="done" {% if status == 'done' %}selected{% endif %}>Выполнена</option>
+            <option value="cancelled" {% if status == 'cancelled' %}selected{% endif %}>Отменена</option>
+          </select>
+        </div>
+        <div class="flex items-center gap-2">
+          <svg class="w-4 h-4 text-brand-dark/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+          </svg>
+          <select name="assigned_to" class="select" style="min-width:180px">
+            <option value="">Любой исполнитель</option>
+            {% for u in filter_assignees %}
+              <option value="{{ u.id }}" {% if assigned_to|default:'' == u.id|stringformat:'s' %}selected{% endif %}>{{ u }}</option>
+            {% endfor %}
+          </select>
+        </div>
       </div>
-      <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer">
-        <input type="checkbox" name="mine" value="1" {% if mine == '1' %}checked{% endif %} class="rounded" />
-        <svg class="w-4 h-4 text-brand-dark/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-        </svg>
-        <span>Только мои</span>
-      </label>
-      <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer">
-        <input type="checkbox" name="today" value="1" {% if today == '1' %}checked{% endif %} class="rounded" />
-        <svg class="w-4 h-4 text-brand-dark/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-        </svg>
-        <span>На сегодня</span>
-      </label>
-      <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer">
-        <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %} class="rounded" />
-        <svg class="w-4 h-4 text-brand-dark/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-        <span>Просрочено</span>
-      </label>
-      <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer">
-        <input type="checkbox" name="show_done" value="1" {% if show_done == '1' %}checked{% endif %} class="rounded" />
-        <svg class="w-4 h-4 text-brand-dark/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-        </svg>
-        <span>Показать выполненные</span>
-      </label>
-      <button type="button" class="btn btn-outline flex items-center gap-2" style="padding:.5rem 1rem" id="dateFilterBtn">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-        </svg>
-        <span>{% if date_from or date_to %}Период{% else %}Период{% endif %}</span>
-        {% if date_from or date_to %}
-          <span class="text-xs bg-brand-orange/20 px-1.5 py-0.5 rounded">✓</span>
-        {% endif %}
-      </button>
+
+      <div class="flex flex-wrap items-center gap-3">
+        <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer">
+          <input type="checkbox" name="mine" value="1" {% if mine == '1' %}checked{% endif %} class="rounded" />
+          <span>Только мои</span>
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer">
+          <input type="checkbox" name="today" value="1" {% if today == '1' %}checked{% endif %} class="rounded" />
+          <span>На сегодня</span>
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer">
+          <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %} class="rounded" />
+          <span>Просрочено</span>
+        </label>
+        <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer">
+          <input type="checkbox" name="show_done" value="1" {% if show_done == '1' %}checked{% endif %} class="rounded" />
+          <span>Показать выполненные</span>
+        </label>
+      </div>
+
       <div class="flex gap-2 ml-auto">
+        <button type="button" class="btn btn-outline flex items-center gap-2" style="padding:.5rem 1rem" id="dateFilterBtn">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+          <span>Период</span>
+          {% if date_from or date_to %}
+            <span class="text-xs bg-brand-orange/20 px-1.5 py-0.5 rounded">✓</span>
+          {% endif %}
+        </button>
         <button class="btn btn-primary" type="submit" style="padding:.5rem 1rem">Применить</button>
         <a class="btn btn-outline" href="/tasks/" style="padding:.5rem 1rem">Сброс</a>
       </div>

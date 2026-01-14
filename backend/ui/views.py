@@ -3413,6 +3413,17 @@ def task_list(request: HttpRequest) -> HttpResponse:
 
     qs = qs.distinct()
 
+    # Справочник "Кому поставлена задача" (assigned_to) для фильтра:
+    # - админ / управляющий: все сотрудники
+    # - остальные: только сотрудники своего филиала (если филиал задан)
+    if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+        assignees_qs = User.objects.filter(is_active=True).order_by("last_name", "first_name")
+    elif user.branch_id:
+        assignees_qs = User.objects.filter(is_active=True, branch_id=user.branch_id).order_by("last_name", "first_name")
+    else:
+        assignees_qs = User.objects.filter(is_active=True).order_by("last_name", "first_name")
+    assignees = list(assignees_qs)
+
     status = (request.GET.get("status") or "").strip()
     show_done = (request.GET.get("show_done") or "").strip()
     if status:
@@ -3441,6 +3452,15 @@ def task_list(request: HttpRequest) -> HttpResponse:
             pass  # без фильтра, но уже ограничено филиалом выше
         else:
             qs = qs.filter(assigned_to=user)
+
+    # Фильтр: кому поставлена задача (assigned_to)
+    assigned_to_param = (request.GET.get("assigned_to") or "").strip()
+    if assigned_to_param:
+        try:
+            assigned_to_id = int(assigned_to_param)
+            qs = qs.filter(assigned_to_id=assigned_to_id)
+        except (ValueError, TypeError):
+            assigned_to_param = ""
 
     overdue = (request.GET.get("overdue") or "").strip()
     if overdue == "1":
@@ -3634,6 +3654,8 @@ def task_list(request: HttpRequest) -> HttpResponse:
             "today": today,
             "date_from": date_from,
             "date_to": date_to,
+            "assigned_to": assigned_to_param,
+            "filter_assignees": assignees,
             "sort_field": sort_field,
             "sort_dir": sort_dir,
             "per_page": per_page,
