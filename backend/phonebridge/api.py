@@ -8,7 +8,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .models import CallRequest, PhoneDevice
+from .models import CallRequest, PhoneDevice, PhoneTelemetry, PhoneLogBundle
 
 
 class RegisterDeviceSerializer(serializers.Serializer):
@@ -38,6 +38,67 @@ class RegisterDeviceView(APIView):
             },
         )
         return Response({"ok": True, "device_id": obj.device_id})
+
+
+class DeviceHeartbeatSerializer(serializers.Serializer):
+    device_id = serializers.CharField(max_length=64)
+    device_name = serializers.CharField(max_length=120, required=False, allow_blank=True)
+    app_version = serializers.CharField(max_length=32, required=False, allow_blank=True)
+    last_poll_code = serializers.IntegerField(required=False, allow_null=True)
+    last_poll_at = serializers.DateTimeField(required=False, allow_null=True)
+
+
+class DeviceHeartbeatView(APIView):
+    """
+    Лёгкий heartbeat от Android-приложения.
+    Не ломает существующий /devices/register/ и /calls/pull/.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        s = DeviceHeartbeatSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        device_id = s.validated_data["device_id"].strip()
+        device_name = (s.validated_data.get("device_name") or "").strip()
+        app_version = (s.validated_data.get("app_version") or "").strip()
+        last_poll_code = s.validated_data.get("last_poll_code")
+        last_poll_at = s.validated_data.get("last_poll_at")
+
+        if not device_id:
+            return Response({"detail": "device_id is required"}, status=400)
+
+        # Определяем IP для диагностики (может быть за proxy, не критично)
+        ip = request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip() or request.META.get("REMOTE_ADDR")
+
+        obj, created = PhoneDevice.objects.update_or_create(
+            user=request.user,
+            device_id=device_id,
+            defaults={
+                "device_name": device_name or None or "",
+                "platform": "android",
+                "last_seen_at": timezone.now(),
+                "app_version": app_version,
+                "last_poll_code": last_poll_code,
+                "last_poll_at": last_poll_at or timezone.now(),
+                "last_ip": ip,
+            },
+        )
+
+        logger.debug(f"DeviceHeartbeat: user={request.user.id}, device={device_id}, created={created}")
+
+        return Response(
+            {
+                "ok": True,
+                "device_id": obj.device_id,
+                "app_version": obj.app_version,
+                "last_seen_at": obj.last_seen_at,
+            }
+        )
 
 
 class PullCallView(APIView):
@@ -155,4 +216,133 @@ class UpdateCallInfoView(APIView):
 
         return Response({"ok": True, "call_request_id": str(call_request.id)})
 
+
+class TelemetryItemSerializer(serializers.Serializer):
+    ts = serializers.DateTimeField(required=False)
+    type = serializers.ChoiceField(choices=PhoneTelemetry.Type.choices, required=False)
+    endpoint = serializers.CharField(required=False, allow_blank=True)
+    http_code = serializers.IntegerField(required=False, allow_null=True)
+    value_ms = serializers.IntegerField(required=False, allow_null=True)
+    extra = serializers.JSONField(required=False)
+
+
+class TelemetryBatchSerializer(serializers.Serializer):
+    device_id = serializers.CharField(max_length=64, required=False, allow_blank=True)
+    items = TelemetryItemSerializer(many=True)
+
+
+class PhoneTelemetryView(APIView):
+    """
+    Принимает батч телеметрии от Android-приложения.
+    Минимальный, неблокирующий endpoint: лишние поля тихо игнорируются.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        s = TelemetryBatchSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        device_id = (s.validated_data.get("device_id") or "").strip()
+        items = s.validated_data["items"]
+
+        device = None
+        if device_id:
+            device = (
+                PhoneDevice.objects.filter(user=request.user, device_id=device_id)
+                .order_by("-created_at")
+                .first()
+            )
+
+        to_create: list[PhoneTelemetry] = []
+        now = timezone.now()
+        for item in items:
+            ts = item.get("ts") or now
+            type_val = item.get("type") or PhoneTelemetry.Type.OTHER
+            endpoint = (item.get("endpoint") or "").strip()
+            http_code = item.get("http_code")
+            value_ms = item.get("value_ms")
+            extra = item.get("extra") or {}
+
+            to_create.append(
+                PhoneTelemetry(
+                    device=device,
+                    user=request.user,
+                    ts=ts,
+                    type=type_val,
+                    endpoint=endpoint,
+                    http_code=http_code,
+                    value_ms=value_ms,
+                    extra=extra,
+                )
+            )
+
+        if to_create:
+            PhoneTelemetry.objects.bulk_create(to_create, ignore_conflicts=True)
+            logger.debug(f"PhoneTelemetry: user={request.user.id}, device={device_id}, count={len(to_create)}")
+
+        return Response({"ok": True, "saved": len(to_create)})
+
+
+class PhoneLogBundleSerializer(serializers.Serializer):
+    device_id = serializers.CharField(max_length=64, required=False, allow_blank=True)
+    ts = serializers.DateTimeField(required=False)
+    level_summary = serializers.CharField(max_length=64, required=False, allow_blank=True)
+    source = serializers.CharField(max_length=64, required=False, allow_blank=True)
+    payload = serializers.CharField()
+
+
+class PhoneLogUploadView(APIView):
+    """
+    Принимает небольшие "бандлы" логов для диагностики.
+    Использовать редко, только при ошибках — не для всего logcat.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        many = isinstance(request.data, list)
+        if many:
+            data = request.data
+        else:
+            data = [request.data]
+
+        saved = 0
+        now = timezone.now()
+        for item in data:
+            s = PhoneLogBundleSerializer(data=item)
+            s.is_valid(raise_exception=True)
+            device_id = (s.validated_data.get("device_id") or "").strip()
+            ts = s.validated_data.get("ts") or now
+            level = (s.validated_data.get("level_summary") or "").strip()
+            source = (s.validated_data.get("source") or "").strip()
+            payload = s.validated_data["payload"]
+
+            device = None
+            if device_id:
+                device = (
+                    PhoneDevice.objects.filter(user=request.user, device_id=device_id)
+                    .order_by("-created_at")
+                    .first()
+                )
+
+            PhoneLogBundle.objects.create(
+                device=device,
+                user=request.user,
+                ts=ts,
+                level_summary=level,
+                source=source,
+                payload=payload,
+            )
+            saved += 1
+
+        logger.debug(f"PhoneLogUpload: user={request.user.id}, saved={saved}")
+        return Response({"ok": True, "saved": saved})
 
