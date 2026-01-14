@@ -35,6 +35,7 @@ class CallListenerService : Service() {
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var loopJob: Job? = null
+    private var heartbeatCounter: Int = 0
     private val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -97,11 +98,29 @@ class CallListenerService : Service() {
                         val (code, result) = pullCallWithRefresh(baseUrl, latestToken, latestRefresh, deviceId)
                         val phone = result?.first
                         val callRequestId = result?.second
-                        val nowStr = timeFmt.format(Date())
+                        val nowDate = Date()
+                        val nowStr = timeFmt.format(nowDate)
                         prefs.edit()
                             .putString(KEY_LAST_POLL_AT, nowStr)
                             .putInt(KEY_LAST_POLL_CODE, code)
                             .apply()
+
+                        // Периодически отправляем heartbeat в CRM, чтобы админ видел "живость" устройства.
+                        heartbeatCounter = (heartbeatCounter + 1) % 10
+                        if (heartbeatCounter == 0 && code != 0) {
+                            // heartbeat не критичен: любые ошибки просто логируем.
+                            try {
+                                sendHeartbeat(
+                                    baseUrl = BASE_URL,
+                                    token = latestToken,
+                                    deviceId = deviceId,
+                                    lastPollCode = code,
+                                    lastPollAt = nowDate.time
+                                )
+                            } catch (_: Exception) {
+                                // ignore
+                            }
+                        }
                         
                         // Обработка ошибок авторизации - останавливаем сервис
                         if (code == 401) {
@@ -499,6 +518,47 @@ class CallListenerService : Service() {
             }
         } catch (e: Exception) {
             android.util.Log.e("CallListenerService", "Error sending call info: ${e.message}")
+        }
+    }
+
+    /**
+     * Лёгкий heartbeat: раз в несколько циклов отправляем код последнего опроса и время.
+     * Не влияет на основную логику, ошибки игнорируются.
+     */
+    private fun sendHeartbeat(
+        baseUrl: String,
+        token: String,
+        deviceId: String,
+        lastPollCode: Int,
+        lastPollAt: Long
+    ) {
+        try {
+            val url = "$baseUrl/api/phone/devices/heartbeat/"
+            val iso = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply {
+                timeZone = java.util.TimeZone.getTimeZone("UTC")
+            }.format(java.util.Date(lastPollAt))
+
+            val bodyJson = JSONObject().apply {
+                put("device_id", deviceId)
+                put("device_name", android.os.Build.MODEL ?: "Android")
+                put("app_version", BuildConfig.VERSION_NAME)
+                put("last_poll_code", lastPollCode)
+                put("last_poll_at", iso)
+            }.toString()
+
+            val req = Request.Builder()
+                .url(url)
+                .post(bodyJson.toRequestBody(jsonMedia))
+                .addHeader("Authorization", "Bearer $token")
+                .build()
+
+            http.newCall(req).execute().use { res ->
+                if (!res.isSuccessful) {
+                    android.util.Log.w("CallListenerService", "Heartbeat failed: HTTP ${res.code}")
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("CallListenerService", "Heartbeat error: ${e.message}")
         }
     }
 
