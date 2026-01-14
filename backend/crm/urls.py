@@ -28,14 +28,7 @@ from accounts.views import SecureLoginView
 from accounts.jwt_views import SecureTokenObtainPairView
 from companies.api import CompanyNoteViewSet, CompanyViewSet, ContactViewSet
 from tasksapp.api import TaskTypeViewSet, TaskViewSet
-from phonebridge.api import (
-    PullCallView,
-    RegisterDeviceView,
-    UpdateCallInfoView,
-    DeviceHeartbeatView,
-    PhoneTelemetryView,
-    PhoneLogUploadView,
-)
+from phonebridge.api import PullCallView, RegisterDeviceView, UpdateCallInfoView
 from crm.views import robots_txt, security_txt, health_check
 
 handler404 = "crm.views.handler404"
@@ -78,10 +71,7 @@ urlpatterns = [
     path("api/token/", SecureTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/phone/devices/register/", RegisterDeviceView.as_view(), name="phone_register_device"),
-    path("api/phone/devices/heartbeat/", DeviceHeartbeatView.as_view(), name="phone_device_heartbeat"),
     path("api/phone/calls/pull/", PullCallView.as_view(), name="phone_pull_call"),
     path("api/phone/calls/update/", UpdateCallInfoView.as_view(), name="phone_update_call_info"),
-    path("api/phone/telemetry/", PhoneTelemetryView.as_view(), name="phone_telemetry"),
-    path("api/phone/logs/", PhoneLogUploadView.as_view(), name="phone_logs"),
     path("api/", include(router.urls)),
 ]
