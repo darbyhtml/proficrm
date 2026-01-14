@@ -1,0 +1,119 @@
+{% extends "ui/base.html" %}
+{% block title %}Мобильное приложение — обзор{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div>
+      <div class="text-sm muted">
+        <a class="link" href="/settings/">Настройки</a> /
+        <a class="link" href="/settings/mobile/devices/">Мобильное приложение</a> /
+      </div>
+      <h1 class="text-2xl font-semibold">Мобильное приложение — обзор</h1>
+      <div class="text-sm text-brand-dark/70">
+        Dashboard с метриками и алертами за последние 24 часа
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="card card-pad">
+        <div class="text-sm text-brand-dark/70 mb-1">Всего устройств</div>
+        <div class="text-3xl font-bold text-brand-dark">{{ total_devices }}</div>
+      </div>
+      <div class="card card-pad">
+        <div class="text-sm text-brand-dark/70 mb-1">Активные</div>
+        <div class="text-3xl font-bold text-green-600">{{ active_devices }}</div>
+        <div class="text-xs text-brand-dark/50 mt-1">за последние 15 минут</div>
+      </div>
+      <div class="card card-pad">
+        <div class="text-sm text-brand-dark/70 mb-1">Неактивные</div>
+        <div class="text-3xl font-bold text-orange-600">{{ stale_devices }}</div>
+      </div>
+      <div class="card card-pad">
+        <div class="text-sm text-brand-dark/70 mb-1">С ошибками</div>
+        <div class="text-3xl font-bold {% if devices_with_errors > 0 %}text-red-600{% else %}text-brand-dark{% endif %}">
+          {{ devices_with_errors }}
+        </div>
+        <div class="text-xs text-brand-dark/50 mt-1">за последние 24 часа</div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="card card-pad">
+        <div class="text-sm text-brand-dark/70 mb-1">401 ошибки</div>
+        <div class="text-2xl font-bold {% if devices_401_storm > 0 %}text-red-600{% else %}text-brand-dark{% endif %}">
+          {{ devices_401_storm }}
+        </div>
+        <div class="text-xs text-brand-dark/50 mt-1">за последний час</div>
+      </div>
+      <div class="card card-pad">
+        <div class="text-sm text-brand-dark/70 mb-1">Нет сети</div>
+        <div class="text-2xl font-bold {% if devices_no_network > 0 %}text-orange-600{% else %}text-brand-dark{% endif %}">
+          {{ devices_no_network }}
+        </div>
+        <div class="text-xs text-brand-dark/50 mt-1">более 2 часов</div>
+      </div>
+      <div class="card card-pad">
+        <div class="text-sm text-brand-dark/70 mb-1">Ошибки refresh</div>
+        <div class="text-2xl font-bold {% if devices_refresh_fail > 0 %}text-red-600{% else %}text-brand-dark{% endif %}">
+          {{ devices_refresh_fail }}
+        </div>
+        <div class="text-xs text-brand-dark/50 mt-1">за последние 24 часа</div>
+      </div>
+      <div class="card card-pad">
+        <div class="text-sm text-brand-dark/70 mb-1">Средняя latency</div>
+        <div class="text-2xl font-bold text-brand-dark">
+          {% if telemetry_stats.avg_latency %}
+            {{ telemetry_stats.avg_latency|floatformat:0 }} мс
+          {% else %}
+            —
+          {% endif %}
+        </div>
+        <div class="text-xs text-brand-dark/50 mt-1">за последние 24 часа</div>
+      </div>
+    </div>
+
+    {% if alerts %}
+      <div class="card card-pad">
+        <h2 class="text-lg font-semibold mb-4">Последние алерты</h2>
+        <div class="space-y-2">
+          {% for alert in alerts %}
+            <div class="flex items-start gap-3 p-3 rounded-lg {% if alert.type == 'auth' %}bg-red-50 border border-red-200{% elif alert.type == 'network' %}bg-orange-50 border border-orange-200{% elif alert.type == 'refresh' %}bg-yellow-50 border border-yellow-200{% else %}bg-gray-50 border border-gray-200{% endif %}">
+              <div class="flex-1">
+                <div class="font-medium">
+                  <a href="/settings/mobile/devices/{{ alert.device.id }}/" class="link">
+                    {{ alert.device.user.get_full_name|default:alert.device.user.username }}
+                  </a>
+                  <span class="text-sm text-brand-dark/70">· {{ alert.device.device_name|default:alert.device.device_id }}</span>
+                </div>
+                <div class="text-sm text-brand-dark/70 mt-1">{{ alert.message }}</div>
+                <div class="text-xs text-brand-dark/50 mt-1">
+                  {{ alert.timestamp|date:"d.m.Y H:i" }}
+                </div>
+              </div>
+              <div class="text-xs">
+                {% if alert.type == 'auth' %}
+                  <span class="px-2 py-1 rounded bg-red-100 text-red-700">Авторизация</span>
+                {% elif alert.type == 'network' %}
+                  <span class="px-2 py-1 rounded bg-orange-100 text-orange-700">Сеть</span>
+                {% elif alert.type == 'refresh' %}
+                  <span class="px-2 py-1 rounded bg-yellow-100 text-yellow-700">Refresh</span>
+                {% else %}
+                  <span class="px-2 py-1 rounded bg-gray-100 text-gray-700">Другое</span>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    {% else %}
+      <div class="card card-pad text-center text-brand-dark/70">
+        Алертов за последние 24 часа нет. Все устройства работают нормально.
+      </div>
+    {% endif %}
+
+    <div class="flex gap-2">
+      <a href="/settings/mobile/devices/" class="btn btn-primary">Список устройств</a>
+      <a href="/settings/" class="btn btn-outline">Назад в настройки</a>
+    </div>
+  </div>
+{% endblock %}

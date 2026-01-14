@@ -18,15 +18,41 @@
       </div>
     </div>
 
-    <div class="card card-pad flex items-center gap-4">
+    <form method="get" class="card card-pad flex flex-wrap items-end gap-4">
       <div>
         <label class="block text-sm text-brand-dark/80 mb-1">Период</label>
-        <select id="periodSelect" class="select">
+        <select name="period" id="periodSelect" class="select">
           <option value="day" {% if period == "day" %}selected{% endif %}>День</option>
           <option value="month" {% if period == "month" %}selected{% endif %}>Месяц</option>
         </select>
       </div>
-    </div>
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Менеджер</label>
+        <select name="manager" class="select">
+          <option value="">Все менеджеры</option>
+          {% for m in managers %}
+            <option value="{{ m.id }}" {% if filter_manager == m.id|stringformat:"s" %}selected{% endif %}>
+              {{ m.get_full_name|default:m.username }}
+            </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Исход звонка</label>
+        <select name="status" class="select">
+          <option value="">Все исходы</option>
+          <option value="connected" {% if filter_status == "connected" %}selected{% endif %}>Дозвонился</option>
+          <option value="no_answer" {% if filter_status == "no_answer" %}selected{% endif %}>Не дозвонился</option>
+          <option value="busy" {% if filter_status == "busy" %}selected{% endif %}>Занято</option>
+          <option value="rejected" {% if filter_status == "rejected" %}selected{% endif %}>Отклонен</option>
+          <option value="missed" {% if filter_status == "missed" %}selected{% endif %}>Пропущен</option>
+        </select>
+      </div>
+      <div class="ml-auto flex gap-2">
+        <button class="btn btn-primary" type="submit">Применить</button>
+        <a href="/settings/calls/stats/" class="btn btn-outline">Сброс</a>
+      </div>
+    </form>
 
     {% if stats_list %}
       <div class="card card-pad overflow-x-auto">
@@ -48,7 +74,11 @@
             {% for stat in stats_list %}
               <tr>
                 <td>
-                  <div class="font-medium">{{ stat.user.get_full_name|default:stat.user.username }}</div>
+                  <div class="font-medium">
+                    <a href="/settings/calls/stats/{{ stat.user.id }}/?period={{ period }}" class="link">
+                      {{ stat.user.get_full_name|default:stat.user.username }}
+                    </a>
+                  </div>
                 </td>
                 <td>
                   <div class="text-sm text-brand-dark/70">
@@ -112,12 +142,4 @@
     {% endif %}
   </div>
 
-  <script>
-    document.getElementById('periodSelect').addEventListener('change', function() {
-      const period = this.value;
-      const url = new URL(window.location.href);
-      url.searchParams.set('period', period);
-      window.location.href = url.toString();
-    });
-  </script>
 {% endblock %}

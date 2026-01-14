@@ -7,7 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Exists, OuterRef, Q, F
-from django.db.models import Count, Max, Prefetch
+from django.db.models import Count, Max, Prefetch, Avg
 from django.http import HttpRequest, HttpResponse
 from django.http import StreamingHttpResponse
 from django.http import JsonResponse
@@ -5022,6 +5022,147 @@ def settings_mobile_devices(request: HttpRequest) -> HttpResponse:
         .order_by("-last_seen_at", "-created_at")
     )
 
+    # Фильтры по пользователю и статусу (живое/неживое)
+    user_id = (request.GET.get("user") or "").strip()
+    status = (request.GET.get("status") or "").strip()  # active|stale|all
+    if user_id:
+        try:
+            qs = qs.filter(user_id=int(user_id))
+        except (ValueError, TypeError):
+            user_id = ""
+    if status == "active":
+        qs = qs.filter(last_seen_at__gte=active_threshold)
+    elif status == "stale":
+        qs = qs.filter(models.Q(last_seen_at__lt=active_threshold) | models.Q(last_seen_at__isnull=True))
+
+    total = qs.count()
+    active_count = qs.filter(last_seen_at__gte=active_threshold).count()
+
+    per_page = 50
+    paginator = Paginator(qs, per_page)
+    page = paginator.get_page(request.GET.get("page"))
+
+    users = User.objects.filter(is_active=True).order_by("last_name", "first_name")
+
+    return render(
+        request,
+        "ui/settings/mobile_devices.html",
+        {
+            "page": page,
+            "total": total,
+            "active_count": active_count,
+            "active_threshold": active_threshold,
+            "users": users,
+            "filter_user": user_id,
+            "filter_status": status or "all",
+        },
+    )
+
+
+@login_required
+def settings_mobile_overview(request: HttpRequest) -> HttpResponse:
+    """
+    Overview dashboard для мобильных устройств: карточки с метриками,
+    проблемы за сутки, алерты.
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    from phonebridge.models import PhoneDevice, PhoneTelemetry, PhoneLogBundle
+    from django.db.models import Count, Q
+
+    now = timezone.now()
+    active_threshold = now - timedelta(minutes=15)
+    day_ago = now - timedelta(days=1)
+
+    # Общая статистика
+    total_devices = PhoneDevice.objects.count()
+    active_devices = PhoneDevice.objects.filter(last_seen_at__gte=active_threshold).count()
+    stale_devices = total_devices - active_devices
+
+    # Проблемы за сутки
+    devices_with_errors = PhoneDevice.objects.filter(
+        Q(last_error_code__isnull=False) & ~Q(last_error_code=""),
+        last_seen_at__gte=day_ago
+    ).count()
+
+    # Устройства с частыми 401 (более 3 за последний час)
+    hour_ago = now - timedelta(hours=1)
+    devices_401_storm = PhoneDevice.objects.filter(
+        last_poll_code=401,
+        last_poll_at__gte=hour_ago
+    ).count()
+
+    # Устройства без сети долго (не видели более 2 часов)
+    two_hours_ago = now - timedelta(hours=2)
+    devices_no_network = PhoneDevice.objects.filter(
+        Q(last_seen_at__lt=two_hours_ago) | Q(last_seen_at__isnull=True),
+        last_seen_at__lt=active_threshold
+    ).count()
+
+    # Устройства с ошибками refresh (last_error_code содержит "refresh" или "401")
+    devices_refresh_fail = PhoneDevice.objects.filter(
+        Q(last_error_code__icontains="refresh") | Q(last_error_code__icontains="401"),
+        last_seen_at__gte=day_ago
+    ).count()
+
+    # Последние алерты (устройства с проблемами)
+    alerts = []
+    problem_devices = PhoneDevice.objects.filter(
+        Q(last_error_code__isnull=False) & ~Q(last_error_code=""),
+        last_seen_at__gte=day_ago
+    ).select_related("user").order_by("-last_seen_at")[:10]
+
+    for device in problem_devices:
+        alert_type = "unknown"
+        alert_message = device.last_error_message or device.last_error_code or "Ошибка"
+        
+        if "401" in (device.last_error_code or ""):
+            alert_type = "auth"
+            alert_message = "Проблемы с авторизацией (401)"
+        elif "refresh" in (device.last_error_code or "").lower():
+            alert_type = "refresh"
+            alert_message = "Ошибка обновления токена"
+        elif device.last_seen_at and device.last_seen_at < two_hours_ago:
+            alert_type = "network"
+            alert_message = "Нет подключения более 2 часов"
+        elif device.last_poll_code == 401:
+            alert_type = "auth"
+            alert_message = "Требуется повторный вход"
+        
+        alerts.append({
+            "device": device,
+            "type": alert_type,
+            "message": alert_message,
+            "timestamp": device.last_seen_at or device.created_at,
+        })
+
+    # Статистика по телеметрии за сутки
+    telemetry_stats = PhoneTelemetry.objects.filter(
+        ts__gte=day_ago
+    ).aggregate(
+        total=Count("id"),
+        errors=Count("id", filter=Q(http_code__gte=400)),
+        avg_latency=Avg("value_ms", filter=Q(type="latency")),
+    )
+
+    return render(
+        request,
+        "ui/settings/mobile_overview.html",
+        {
+            "total_devices": total_devices,
+            "active_devices": active_devices,
+            "stale_devices": stale_devices,
+            "devices_with_errors": devices_with_errors,
+            "devices_401_storm": devices_401_storm,
+            "devices_no_network": devices_no_network,
+            "devices_refresh_fail": devices_refresh_fail,
+            "alerts": alerts,
+            "telemetry_stats": telemetry_stats,
+        },
+    )
+
 
 @login_required
 def settings_mobile_device_detail(request: HttpRequest, pk: int) -> HttpResponse:
@@ -5061,42 +5202,6 @@ def settings_mobile_device_detail(request: HttpRequest, pk: int) -> HttpResponse
         },
     )
 
-    # Фильтры по пользователю и статусу (живое/неживое)
-    user_id = (request.GET.get("user") or "").strip()
-    status = (request.GET.get("status") or "").strip()  # active|stale|all
-    if user_id:
-        try:
-            qs = qs.filter(user_id=int(user_id))
-        except (ValueError, TypeError):
-            user_id = ""
-    if status == "active":
-        qs = qs.filter(last_seen_at__gte=active_threshold)
-    elif status == "stale":
-        qs = qs.filter(models.Q(last_seen_at__lt=active_threshold) | models.Q(last_seen_at__isnull=True))
-
-    total = qs.count()
-    active_count = qs.filter(last_seen_at__gte=active_threshold).count()
-
-    per_page = 50
-    paginator = Paginator(qs, per_page)
-    page = paginator.get_page(request.GET.get("page"))
-
-    users = User.objects.filter(is_active=True).order_by("last_name", "first_name")
-
-    return render(
-        request,
-        "ui/settings/mobile_devices.html",
-        {
-            "page": page,
-            "total": total,
-            "active_count": active_count,
-            "active_threshold": active_threshold,
-            "users": users,
-            "filter_user": user_id,
-            "filter_status": status or "all",
-        },
-    )
-
 
 @login_required
 def settings_calls_stats(request: HttpRequest) -> HttpResponse:
@@ -5119,6 +5224,10 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
     period = (request.GET.get("period") or "day").strip()
     if period not in ("day", "month"):
         period = "day"
+    
+    # Фильтры
+    filter_manager_id = request.GET.get("manager", "").strip()
+    filter_status = request.GET.get("status", "").strip()  # connected, no_answer, busy, rejected, missed
     
     if period == "month":
         start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -5144,6 +5253,14 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
             role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]
         ).select_related("branch").order_by("last_name", "first_name")
     
+    # Фильтр по менеджеру
+    if filter_manager_id:
+        try:
+            filter_manager_id_int = int(filter_manager_id)
+            managers_qs = managers_qs.filter(id=filter_manager_id_int)
+        except (ValueError, TypeError):
+            filter_manager_id = ""
+    
     manager_ids = list(managers_qs.values_list("id", flat=True))
     
     # Собираем статистику по звонкам
@@ -5152,7 +5269,19 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
         call_started_at__gte=start,
         call_started_at__lt=end,
         call_status__isnull=False  # Только звонки с результатом
-    ).select_related("user", "user__branch")
+    ).select_related("user", "user__branch", "company", "contact")
+    
+    # Фильтр по исходу звонка
+    if filter_status:
+        status_map = {
+            "connected": CallRequest.CallStatus.CONNECTED,
+            "no_answer": CallRequest.CallStatus.NO_ANSWER,
+            "busy": CallRequest.CallStatus.BUSY,
+            "rejected": CallRequest.CallStatus.REJECTED,
+            "missed": CallRequest.CallStatus.MISSED,
+        }
+        if filter_status in status_map:
+            calls_qs = calls_qs.filter(call_status=status_map[filter_status])
     
     # Группируем по менеджеру и статусу
     stats_by_manager = {}
@@ -5236,5 +5365,93 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
             "total_missed": total_missed,
             "total_duration": total_duration,
             "avg_duration_all": avg_duration_all,
+            "managers": managers_qs,
+            "filter_manager": filter_manager_id,
+            "filter_status": filter_status,
+        },
+    )
+
+
+@login_required
+def settings_calls_manager_detail(request: HttpRequest, user_id: int) -> HttpResponse:
+    """
+    Детальный список звонков конкретного менеджера за период (drill-down из статистики).
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    from phonebridge.models import CallRequest
+
+    manager = get_object_or_404(User.objects.select_related("branch"), id=user_id, is_active=True)
+    
+    # Проверка доступа (админ видит всех, остальные - только свой филиал)
+    if not (request.user.is_superuser or request.user.role == User.Role.ADMIN):
+        if not request.user.branch_id or request.user.branch_id != manager.branch_id:
+            messages.error(request, "Нет доступа к звонкам менеджера из другого филиала.")
+            return redirect("settings_calls_stats")
+    
+    now = timezone.now()
+    local_now = timezone.localtime(now)
+    
+    # Период: день или месяц
+    period = (request.GET.get("period") or "day").strip()
+    if period not in ("day", "month"):
+        period = "day"
+    
+    if period == "month":
+        start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end = (start + timedelta(days=32)).replace(day=1)
+        period_label = _month_label(timezone.localdate(now))
+    else:
+        start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=1)
+        period_label = timezone.localdate(now).strftime("%d.%m.%Y")
+    
+    # Получаем звонки менеджера
+    calls_qs = CallRequest.objects.filter(
+        user=manager,
+        call_started_at__gte=start,
+        call_started_at__lt=end,
+        call_status__isnull=False
+    ).select_related("company", "contact").order_by("-call_started_at")
+    
+    # Фильтр по исходу звонка
+    filter_status = request.GET.get("status", "").strip()
+    if filter_status:
+        status_map = {
+            "connected": CallRequest.CallStatus.CONNECTED,
+            "no_answer": CallRequest.CallStatus.NO_ANSWER,
+            "busy": CallRequest.CallStatus.BUSY,
+            "rejected": CallRequest.CallStatus.REJECTED,
+            "missed": CallRequest.CallStatus.MISSED,
+        }
+        if filter_status in status_map:
+            calls_qs = calls_qs.filter(call_status=status_map[filter_status])
+    
+    per_page = 50
+    paginator = Paginator(calls_qs, per_page)
+    page = paginator.get_page(request.GET.get("page"))
+    
+    # Статистика для этого менеджера
+    stats = {
+        "total": calls_qs.count(),
+        "connected": calls_qs.filter(call_status=CallRequest.CallStatus.CONNECTED).count(),
+        "no_answer": calls_qs.filter(call_status=CallRequest.CallStatus.NO_ANSWER).count(),
+        "busy": calls_qs.filter(call_status=CallRequest.CallStatus.BUSY).count(),
+        "rejected": calls_qs.filter(call_status=CallRequest.CallStatus.REJECTED).count(),
+        "missed": calls_qs.filter(call_status=CallRequest.CallStatus.MISSED).count(),
+    }
+    
+    return render(
+        request,
+        "ui/settings/calls_manager_detail.html",
+        {
+            "manager": manager,
+            "period": period,
+            "period_label": period_label,
+            "page": page,
+            "stats": stats,
+            "filter_status": filter_status,
         },
     )

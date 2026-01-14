@@ -1,0 +1,129 @@
+{% extends "ui/base.html" %}
+{% block title %}Звонки менеджера — {{ manager.get_full_name|default:manager.username }}{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div>
+      <div class="text-sm muted">
+        <a class="link" href="/settings/">Настройки</a> /
+        <a class="link" href="/settings/calls/stats/">Статистика звонков</a> /
+      </div>
+      <h1 class="text-2xl font-semibold">Звонки: {{ manager.get_full_name|default:manager.username }}</h1>
+      <div class="text-sm text-brand-dark/70">
+        Период: <b>{{ period_label }}</b>
+        · Всего: <b>{{ stats.total }}</b>
+        · Дозвонились: <b>{{ stats.connected }}</b>
+        · Не дозвонились: <b>{{ stats.no_answer }}</b>
+      </div>
+    </div>
+
+    <form method="get" class="card card-pad flex flex-wrap items-end gap-4">
+      <input type="hidden" name="period" value="{{ period }}">
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Период</label>
+        <select name="period" id="periodSelect" class="select">
+          <option value="day" {% if period == "day" %}selected{% endif %}>День</option>
+          <option value="month" {% if period == "month" %}selected{% endif %}>Месяц</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Исход звонка</label>
+        <select name="status" class="select">
+          <option value="">Все исходы</option>
+          <option value="connected" {% if filter_status == "connected" %}selected{% endif %}>Дозвонился</option>
+          <option value="no_answer" {% if filter_status == "no_answer" %}selected{% endif %}>Не дозвонился</option>
+          <option value="busy" {% if filter_status == "busy" %}selected{% endif %}>Занято</option>
+          <option value="rejected" {% if filter_status == "rejected" %}selected{% endif %}>Отклонен</option>
+          <option value="missed" {% if filter_status == "missed" %}selected{% endif %}>Пропущен</option>
+        </select>
+      </div>
+      <div class="ml-auto flex gap-2">
+        <button class="btn btn-primary" type="submit">Применить</button>
+        <a href="/settings/calls/stats/{{ manager.id }}/?period={{ period }}" class="btn btn-outline">Сброс</a>
+      </div>
+    </form>
+
+    {% if page.object_list %}
+      <div class="card card-pad overflow-x-auto">
+        <table class="table w-full">
+          <thead>
+            <tr>
+              <th>Дата/время</th>
+              <th>Номер</th>
+              <th>Компания/контакт</th>
+              <th class="text-right">Исход</th>
+              <th class="text-right">Длительность</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for call in page.object_list %}
+              <tr>
+                <td>
+                  <div class="text-sm">
+                    {{ call.call_started_at|date:"d.m.Y H:i"|default:"—" }}
+                  </div>
+                </td>
+                <td>
+                  <div class="font-medium">{{ call.phone_raw }}</div>
+                </td>
+                <td>
+                  {% if call.company %}
+                    <a href="/companies/{{ call.company.id }}/" class="link">{{ call.company.name }}</a>
+                  {% elif call.contact %}
+                    <a href="/companies/{{ call.contact.company.id }}/" class="link">{{ call.contact.name }}</a>
+                  {% else %}
+                    <span class="text-brand-dark/50">—</span>
+                  {% endif %}
+                </td>
+                <td class="text-right">
+                  {% if call.call_status == "connected" %}
+                    <span class="text-green-600">Дозвонился</span>
+                  {% elif call.call_status == "no_answer" %}
+                    <span class="text-orange-600">Не дозвонился</span>
+                  {% elif call.call_status == "busy" %}
+                    <span class="text-yellow-600">Занято</span>
+                  {% elif call.call_status == "rejected" %}
+                    <span class="text-red-600">Отклонен</span>
+                  {% elif call.call_status == "missed" %}
+                    <span class="text-gray-600">Пропущен</span>
+                  {% else %}
+                    <span class="text-brand-dark/50">—</span>
+                  {% endif %}
+                </td>
+                <td class="text-right">
+                  {% if call.call_duration_seconds %}
+                    <span class="text-sm">{{ call.call_duration_seconds }} сек</span>
+                  {% else %}
+                    <span class="text-sm text-brand-dark/50">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      {% if page.has_other_pages %}
+        <div class="flex justify-center gap-2">
+          {% if page.has_previous %}
+            <a href="?page={{ page.previous_page_number }}&period={{ period }}{% if filter_status %}&status={{ filter_status }}{% endif %}" class="btn btn-outline">Назад</a>
+          {% endif %}
+          <span class="px-4 py-2 text-sm text-brand-dark/70">
+            Страница {{ page.number }} из {{ page.paginator.num_pages }}
+          </span>
+          {% if page.has_next %}
+            <a href="?page={{ page.next_page_number }}&period={{ period }}{% if filter_status %}&status={{ filter_status }}{% endif %}" class="btn btn-outline">Вперед</a>
+          {% endif %}
+        </div>
+      {% endif %}
+    {% else %}
+      <div class="card card-pad text-center text-brand-dark/70">
+        За выбранный период звонков не найдено.
+      </div>
+    {% endif %}
+
+    <div class="flex gap-2">
+      <a href="/settings/calls/stats/?period={{ period }}" class="btn btn-outline">Назад к статистике</a>
+    </div>
+  </div>
+{% endblock %}
