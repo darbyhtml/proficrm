@@ -1061,7 +1061,13 @@
         const closeBtn = document.getElementById('mailProgressClose');
         if (!widget || !circle || !pct || !text || !counts || !closeBtn) return;
 
+        const STORAGE_KEY = 'mail_progress_dismissed_campaign';
         let dismissedForCampaignId = null;
+        try {
+          dismissedForCampaignId = window.localStorage.getItem(STORAGE_KEY) || null;
+        } catch (_e) {
+          dismissedForCampaignId = null;
+        }
 
         async function poll() {
           try {
@@ -1078,6 +1084,7 @@
             // Если новая кампания или идёт отправка — отменяем предыдущий dismiss
             if (dismissedForCampaignId && dismissedForCampaignId !== a.id && status === 'sending') {
               dismissedForCampaignId = null;
+              try { window.localStorage.removeItem(STORAGE_KEY); } catch (_e) {}
             }
 
             // Если пользователь закрыл виджет для этой завершённой кампании — не показываем
@@ -1114,6 +1121,9 @@
           const match = href.match(/\/mail\/campaigns\/([^/]+)\//);
           if (match && match[1]) {
             dismissedForCampaignId = match[1];
+            try {
+              window.localStorage.setItem(STORAGE_KEY, dismissedForCampaignId);
+            } catch (_e) {}
           }
         });
 
