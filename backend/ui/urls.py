@@ -93,6 +93,7 @@ urlpatterns = [
     path("settings/security/", views.settings_security, name="settings_security"),
     path("settings/mobile/devices/", views.settings_mobile_devices, name="settings_mobile_devices"),
     path("settings/mobile/devices/<int:pk>/", views.settings_mobile_device_detail, name="settings_mobile_device_detail"),
+    path("settings/calls/stats/", views.settings_calls_stats, name="settings_calls_stats"),
 ]
 
 

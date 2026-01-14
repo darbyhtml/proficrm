@@ -5096,3 +5096,145 @@ def settings_mobile_device_detail(request: HttpRequest, pk: int) -> HttpResponse
             "filter_status": status or "all",
         },
     )
+
+
+@login_required
+def settings_calls_stats(request: HttpRequest) -> HttpResponse:
+    """
+    Статистика звонков по менеджерам за день/месяц.
+    Показывает количество звонков, статусы (connected, no_answer и т.д.), длительность.
+    Доступ: админ видит всех, остальные - по своему филиалу.
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    from phonebridge.models import CallRequest
+    from django.db.models import Count, Avg, Sum, Q
+
+    now = timezone.now()
+    local_now = timezone.localtime(now)
+    
+    # Период: день или месяц
+    period = (request.GET.get("period") or "day").strip()
+    if period not in ("day", "month"):
+        period = "day"
+    
+    if period == "month":
+        start = local_now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        end = (start + timedelta(days=32)).replace(day=1)
+        period_label = _month_label(timezone.localdate(now))
+    else:
+        start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        end = start + timedelta(days=1)
+        period_label = timezone.localdate(now).strftime("%d.%m.%Y")
+    
+    # Определяем, каких менеджеров показывать
+    if request.user.is_superuser or request.user.role == User.Role.ADMIN:
+        # Админ видит всех менеджеров
+        managers_qs = User.objects.filter(
+            is_active=True,
+            role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]
+        ).select_related("branch").order_by("branch__name", "last_name", "first_name")
+    else:
+        # Остальные - только свой филиал
+        managers_qs = User.objects.filter(
+            is_active=True,
+            branch_id=request.user.branch_id,
+            role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]
+        ).select_related("branch").order_by("last_name", "first_name")
+    
+    manager_ids = list(managers_qs.values_list("id", flat=True))
+    
+    # Собираем статистику по звонкам
+    calls_qs = CallRequest.objects.filter(
+        user_id__in=manager_ids,
+        call_started_at__gte=start,
+        call_started_at__lt=end,
+        call_status__isnull=False  # Только звонки с результатом
+    ).select_related("user", "user__branch")
+    
+    # Группируем по менеджеру и статусу
+    stats_by_manager = {}
+    for call in calls_qs:
+        manager_id = call.user_id
+        if manager_id not in stats_by_manager:
+            stats_by_manager[manager_id] = {
+                "user": call.user,
+                "total": 0,
+                "connected": 0,
+                "no_answer": 0,
+                "busy": 0,
+                "rejected": 0,
+                "missed": 0,
+                "total_duration": 0,
+                "avg_duration": 0,
+            }
+        
+        stats = stats_by_manager[manager_id]
+        stats["total"] += 1
+        
+        if call.call_status == CallRequest.CallStatus.CONNECTED:
+            stats["connected"] += 1
+        elif call.call_status == CallRequest.CallStatus.NO_ANSWER:
+            stats["no_answer"] += 1
+        elif call.call_status == CallRequest.CallStatus.BUSY:
+            stats["busy"] += 1
+        elif call.call_status == CallRequest.CallStatus.REJECTED:
+            stats["rejected"] += 1
+        elif call.call_status == CallRequest.CallStatus.MISSED:
+            stats["missed"] += 1
+        
+        if call.call_duration_seconds:
+            stats["total_duration"] += call.call_duration_seconds
+    
+    # Вычисляем среднюю длительность
+    for stats in stats_by_manager.values():
+        if stats["total"] > 0:
+            stats["avg_duration"] = stats["total_duration"] // stats["total"]
+    
+    # Формируем список для шаблона
+    stats_list = []
+    for manager in managers_qs:
+        stats = stats_by_manager.get(manager.id, {
+            "user": manager,
+            "total": 0,
+            "connected": 0,
+            "no_answer": 0,
+            "busy": 0,
+            "rejected": 0,
+            "missed": 0,
+            "total_duration": 0,
+            "avg_duration": 0,
+        })
+        stats_list.append(stats)
+    
+    # Общая статистика
+    total_calls = sum(s["total"] for s in stats_list)
+    total_connected = sum(s["connected"] for s in stats_list)
+    total_no_answer = sum(s["no_answer"] for s in stats_list)
+    total_busy = sum(s["busy"] for s in stats_list)
+    total_rejected = sum(s["rejected"] for s in stats_list)
+    total_missed = sum(s["missed"] for s in stats_list)
+    total_duration = sum(s["total_duration"] for s in stats_list)
+    avg_duration_all = total_duration // total_calls if total_calls > 0 else 0
+    
+    return render(
+        request,
+        "ui/settings/calls_stats.html",
+        {
+            "period": period,
+            "period_label": period_label,
+            "start": start,
+            "end": end,
+            "stats_list": stats_list,
+            "total_calls": total_calls,
+            "total_connected": total_connected,
+            "total_no_answer": total_no_answer,
+            "total_busy": total_busy,
+            "total_rejected": total_rejected,
+            "total_missed": total_missed,
+            "total_duration": total_duration,
+            "avg_duration_all": avg_duration_all,
+        },
+    )

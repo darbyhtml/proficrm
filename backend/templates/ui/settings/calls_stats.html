@@ -1,0 +1,123 @@
+{% extends "ui/base.html" %}
+{% block title %}Статистика звонков{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div>
+      <div class="text-sm muted">
+        <a class="link" href="/settings/">Настройки</a> /
+      </div>
+      <h1 class="text-2xl font-semibold">Статистика звонков</h1>
+      <div class="text-sm text-brand-dark/70">
+        Период: <b>{{ period_label }}</b>
+        {% if total_calls > 0 %}
+          · Всего звонков: <b>{{ total_calls }}</b>
+          · Дозвонились: <b>{{ total_connected }}</b>
+          · Средняя длительность: <b>{{ avg_duration_all|floatformat:0 }} сек</b>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card card-pad flex items-center gap-4">
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Период</label>
+        <select id="periodSelect" class="select">
+          <option value="day" {% if period == "day" %}selected{% endif %}>День</option>
+          <option value="month" {% if period == "month" %}selected{% endif %}>Месяц</option>
+        </select>
+      </div>
+    </div>
+
+    {% if stats_list %}
+      <div class="card card-pad overflow-x-auto">
+        <table class="table w-full">
+          <thead>
+            <tr>
+              <th>Менеджер</th>
+              <th>Филиал</th>
+              <th class="text-right">Всего</th>
+              <th class="text-right">Дозвонился</th>
+              <th class="text-right">Не дозвонился</th>
+              <th class="text-right">Занято</th>
+              <th class="text-right">Отклонен</th>
+              <th class="text-right">Пропущен</th>
+              <th class="text-right">Средняя длительность</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for stat in stats_list %}
+              <tr>
+                <td>
+                  <div class="font-medium">{{ stat.user.get_full_name|default:stat.user.username }}</div>
+                </td>
+                <td>
+                  <div class="text-sm text-brand-dark/70">
+                    {{ stat.user.branch.name|default:"—" }}
+                  </div>
+                </td>
+                <td class="text-right">
+                  <span class="font-medium">{{ stat.total }}</span>
+                </td>
+                <td class="text-right">
+                  <span class="text-green-600">{{ stat.connected }}</span>
+                </td>
+                <td class="text-right">
+                  <span class="text-orange-600">{{ stat.no_answer }}</span>
+                </td>
+                <td class="text-right">
+                  <span class="text-yellow-600">{{ stat.busy }}</span>
+                </td>
+                <td class="text-right">
+                  <span class="text-red-600">{{ stat.rejected }}</span>
+                </td>
+                <td class="text-right">
+                  <span class="text-gray-600">{{ stat.missed }}</span>
+                </td>
+                <td class="text-right">
+                  {% if stat.avg_duration > 0 %}
+                    <span class="text-sm">{{ stat.avg_duration|floatformat:0 }} сек</span>
+                  {% else %}
+                    <span class="text-sm text-brand-dark/50">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+          {% if total_calls > 0 %}
+            <tfoot>
+              <tr class="border-t-2 border-brand-dark/20">
+                <td colspan="2" class="font-medium">Итого</td>
+                <td class="text-right font-medium">{{ total_calls }}</td>
+                <td class="text-right font-medium text-green-600">{{ total_connected }}</td>
+                <td class="text-right font-medium text-orange-600">{{ total_no_answer }}</td>
+                <td class="text-right font-medium text-yellow-600">{{ total_busy }}</td>
+                <td class="text-right font-medium text-red-600">{{ total_rejected }}</td>
+                <td class="text-right font-medium text-gray-600">{{ total_missed }}</td>
+                <td class="text-right font-medium">
+                  {% if avg_duration_all > 0 %}
+                    {{ avg_duration_all|floatformat:0 }} сек
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+              </tr>
+            </tfoot>
+          {% endif %}
+        </table>
+      </div>
+    {% else %}
+      <div class="card card-pad text-center text-brand-dark/70">
+        За выбранный период звонков не найдено.
+      </div>
+    {% endif %}
+  </div>
+
+  <script>
+    document.getElementById('periodSelect').addEventListener('change', function() {
+      const period = this.value;
+      const url = new URL(window.location.href);
+      url.searchParams.set('period', period);
+      window.location.href = url.toString();
+    });
+  </script>
+{% endblock %}
