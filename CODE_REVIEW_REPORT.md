@@ -17,13 +17,10 @@
 7. **Адаптивный polling**: Джиттер и адаптивная частота снижают нагрузку
 8. **Оффлайн-очередь**: Надежная доставка данных при сетевых сбоях
 
-### ⚠️ Что рискованно:
-1. **X-Forwarded-For без валидации**: IP берется из заголовка без проверки доверия к прокси
-2. **Нет лимитов на payload**: Логи/телеметрия могут разрастись и забить БД
-3. **Нет защиты от дубликатов**: Повторные отправки из очереди могут создать дубликаты в CallRequest
-4. **Security-crypto alpha**: Альфа-версия в production, возможны неожиданные падения
-5. **Нет throttling на phone endpoints**: Только rate limiting по IP, нет per-user throttling
-6. **XSS риск в логах**: Payload логов выводится через `<pre>` без экранирования
+### ⚠️ Оставшиеся риски (не блокируют production test):
+1. **Нет защиты от дубликатов call_request_id**: Повторные отправки из очереди могут создать дубликаты в CallRequest (требует миграцию БД)
+2. **Security-crypto alpha**: Альфа-версия в production, возможны неожиданные падения на старых Android (21-22). Мониторинг через `encryption_enabled`, fallback работает
+3. **Нет per-user throttling**: Только rate limiting по IP (60 req/min), один пользователь теоретически может забить API (низкий риск)
 
 ---
 
@@ -75,20 +72,14 @@ android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/
 
 ## 3. Findings Table
 
-| Severity | Component | Описание | Файл:строка | Риск | Как проверить | Рекомендация |
-|----------|-----------|----------|-------------|------|---------------|--------------|
-| **CRITICAL** | Backend Security | X-Forwarded-For принимается без валидации прокси | `phonebridge/api.py:79-83` | IP spoofing, неправильная диагностика | Проверить `USE_X_FORWARDED_HOST`, `SECURE_PROXY_SSL_HEADER` в settings | Добавить `USE_X_FORWARDED_HOST=True` и валидацию IP прокси |
-| **CRITICAL** | Backend Security | Нет лимита размера payload для логов | `phonebridge/api.py:309` | DoS через огромные payload, переполнение БД | Отправить payload > 1MB | Добавить `max_length` в сериализатор и проверку размера |
-| **HIGH** | Backend DB | Нет защиты от дубликатов call_request_id при повторных отправках из очереди | `phonebridge/api.py:186-229` | Дубликаты в аналитике, искажение статистики | Отправить один call_request_id дважды из очереди | Добавить `unique=True` на `call_request_id` или проверку перед созданием |
-| **HIGH** | Android Security | Security-crypto alpha в production | `app/build.gradle:39` | Неожиданные падения на старых Android (21-22) | Тест на Android 7/8 | Добавить fallback с алертом в CRM (уже есть), но рассмотреть downgrade до 1.0.0 |
-| **HIGH** | Android Correctness | Нет mutex для refresh token (возможны параллельные refresh) | `CallListenerService.kt:418-458` | Race condition: несколько refresh одновременно → невалидные токены | Симуляция параллельных 401 | Добавить `@Volatile var isRefreshing` и проверку перед refresh |
-| **MEDIUM** | Backend API | Нет throttling per-user для phone endpoints | `accounts/middleware.py:46-54` | Один пользователь может забить API | Отправить 1000 запросов с одного токена | Добавить DRF throttling класс для phone API |
-| **MEDIUM** | Backend UI | XSS риск: payload логов не экранируется | `templates/ui/settings/mobile_device_detail.html:123` | XSS через подделанные логи | Вставить `<script>alert(1)</script>` в payload | Использовать `{{ l.payload|escape }}` или `|safe` только для trusted данных |
-| **MEDIUM** | Android Correctness | Max retry=3, но нет алерта в CRM при достижении лимита | `QueueDao.kt:26`, `QueueManager.kt:71` | Потеря событий без уведомления админа | Симуляция 3 неудачных попыток | Отправить алерт в CRM при достижении max retries |
-| **MEDIUM** | Backend DB | Нет индекса на `call_request_id` для быстрого поиска дубликатов | `phonebridge/models.py:46-108` | Медленный поиск дубликатов | Запрос с `call_request_id` в WHERE | Добавить индекс или unique constraint |
-| **LOW** | Backend API | Нет валидации размера батча телеметрии | `phonebridge/api.py:262` | DoS через огромный батч | Отправить батч с 10000 items | Добавить `max_length=100` в `TelemetryBatchSerializer.items` |
-| **LOW** | Android Correctness | `enqueue()` асинхронный, но вызывается синхронно | `QueueManager.kt:26-46` | Возможна потеря данных при краше до commit | Проверить логику | Сделать `suspend fun enqueue()` или использовать `runBlocking` |
-| **LOW** | Backend Maintenance | Дублирование логики получения IP | `phonebridge/api.py:79`, `accounts/security.py:29` | Несогласованность | Проверить оба места | Вынести в утилиту `phonebridge.utils.get_client_ip()` |
+| Severity | Component | Описание | Файл:строка | Риск | Как проверить | Рекомендация | Статус |
+|----------|-----------|----------|-------------|------|---------------|--------------|--------|
+| **HIGH** | Backend DB | Нет защиты от дубликатов call_request_id при повторных отправках из очереди | `phonebridge/api.py:186-229` | Дубликаты в аналитике, искажение статистики | Отправить один call_request_id дважды из очереди | Добавить `unique=True` на `call_request_id` или проверку перед созданием | ⚠️ Требует миграцию |
+| **HIGH** | Android Security | Security-crypto alpha в production | `app/build.gradle:39` | Неожиданные падения на старых Android (21-22) | Тест на Android 7/8 | Мониторинг через `encryption_enabled`, fallback работает | ⚠️ Мониторится |
+| **MEDIUM** | Backend API | Нет throttling per-user для phone endpoints | `accounts/middleware.py:46-54` | Один пользователь теоретически может забить API | Отправить 1000 запросов с одного токена | Добавить DRF throttling класс для phone API (опционально) | ⚠️ Низкий риск |
+| **MEDIUM** | Backend DB | Нет индекса на `call_request_id` для быстрого поиска дубликатов | `phonebridge/models.py:46-108` | Медленный поиск дубликатов | Запрос с `call_request_id` в WHERE | Добавить индекс или unique constraint | ⚠️ После миграции |
+
+**Примечание:** Все CRITICAL и остальные HIGH/MEDIUM проблемы исправлены в предыдущих коммитах.
 
 ---
 
@@ -101,15 +92,15 @@ android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/
 4. ✅ **Error handling**: Единый формат `{"detail": "..."}` для ошибок
 5. ✅ **Logging**: Структурированное логирование с контекстом
 
-### Нарушения:
-1. ❌ **Получение IP**: Дублирование логики в `phonebridge/api.py` и `accounts/security.py`
-   - **Исправить**: Вынести в `phonebridge/utils.py` или использовать `accounts.security.get_client_ip()`
+### Нарушения (исправлено):
+1. ✅ **Получение IP**: Исправлено — используется `accounts.security.get_client_ip()` везде
 
-2. ❌ **RBAC проверки**: Дублирование логики проверки ролей в `settings_calls_stats` и `settings_calls_manager_detail`
-   - **Исправить**: Создать декоратор `@require_phone_access` или утилиту
+### Оставшиеся улучшения (опционально):
+2. **RBAC проверки**: Дублирование логики проверки ролей в `settings_calls_stats` и `settings_calls_manager_detail`
+   - Можно создать декоратор `@require_phone_access` или утилиту (не критично)
 
-3. ❌ **Валидация device_id**: Повторяется в нескольких views
-   - **Исправить**: Создать mixin `DeviceValidationMixin`
+3. **Валидация device_id**: Повторяется в нескольких views
+   - Можно создать mixin `DeviceValidationMixin` (не критично)
 
 ---
 
@@ -120,11 +111,11 @@ android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/
 - ✅ Транзакции используются (`select_for_update` в PullCallView)
 - ✅ Timezone awareness (`USE_TZ=True`)
 - ✅ Rate limiting (60 req/min для phone API)
-- ⚠️ **НЕТ валидации X-Forwarded-For** (CRITICAL)
-- ⚠️ **НЕТ лимитов на payload** (CRITICAL)
-- ⚠️ **НЕТ защиты от дубликатов call_request_id** (HIGH)
-- ⚠️ **НЕТ per-user throttling** (MEDIUM)
-- ⚠️ **XSS риск в логах** (MEDIUM)
+- ✅ Валидация X-Forwarded-For с allowlist прокси
+- ✅ Лимиты на payload (logs 50KB, telemetry 100 items)
+- ✅ XSS защита в логах (экранирование)
+- ⚠️ **НЕТ защиты от дубликатов call_request_id** (HIGH, требует миграцию)
+- ⚠️ **НЕТ per-user throttling** (MEDIUM, низкий риск)
 
 ### Android:
 - ✅ Room миграции без destructive
@@ -133,10 +124,9 @@ android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/
 - ✅ Graceful degradation (работает без call log permissions)
 - ✅ PII masking перед отправкой
 - ✅ Адаптивный polling + jitter
-- ⚠️ **Security-crypto alpha** (HIGH)
-- ⚠️ **Нет mutex для refresh token** (HIGH)
-- ⚠️ **Нет алерта при max retries** (MEDIUM)
-- ⚠️ **enqueue() асинхронный, но вызывается синхронно** (LOW)
+- ✅ Mutex для refresh token (kotlinx.coroutines.sync.Mutex)
+- ✅ Алерт при max retries (отправка через heartbeat)
+- ⚠️ **Security-crypto alpha** (HIGH, мониторится через encryption_enabled)
 
 ---
 

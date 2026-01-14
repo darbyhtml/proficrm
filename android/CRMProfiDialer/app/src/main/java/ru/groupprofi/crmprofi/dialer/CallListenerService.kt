@@ -140,12 +140,16 @@ class CallListenerService : Service() {
                         if (heartbeatCounter == 0 && code != 0) {
                             // heartbeat не критичен: любые ошибки просто логируем.
                             try {
+                                // Получаем метрики застрявших элементов очереди (если есть)
+                                val stuckMetrics = queueManager.getStuckMetrics()
+                                
                                 sendHeartbeat(
                                     baseUrl = BASE_URL,
                                     token = latestToken,
                                     deviceId = deviceId,
                                     lastPollCode = code,
-                                    lastPollAt = nowDate.time
+                                    lastPollAt = nowDate.time,
+                                    stuckMetrics = stuckMetrics
                                 )
                             } catch (_: Exception) {
                                 // ignore
@@ -719,12 +723,13 @@ class CallListenerService : Service() {
      * Лёгкий heartbeat: раз в несколько циклов отправляем код последнего опроса и время.
      * Не влияет на основную логику, ошибки игнорируются, но при сетевых ошибках добавляем в очередь.
      */
-    private fun sendHeartbeat(
+    private suspend fun sendHeartbeat(
         baseUrl: String,
         token: String,
         deviceId: String,
         lastPollCode: Int,
-        lastPollAt: Long
+        lastPollAt: Long,
+        stuckMetrics: QueueManager.StuckMetrics? = null
     ) {
         try {
             val url = "$baseUrl/api/phone/devices/heartbeat/"

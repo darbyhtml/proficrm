@@ -73,6 +73,8 @@ class DeviceHeartbeatView(APIView):
         queue_stuck = s.validated_data.get("queue_stuck", False)
         stuck_items = s.validated_data.get("stuck_items")
         stuck_count = s.validated_data.get("stuck_count", 0)
+        oldest_stuck_age_sec = s.validated_data.get("oldest_stuck_age_sec")
+        stuck_by_type = s.validated_data.get("stuck_by_type")
 
         if not device_id:
             return Response({"detail": "device_id is required"}, status=400)
@@ -85,8 +87,11 @@ class DeviceHeartbeatView(APIView):
         error_message = ""
         if queue_stuck and stuck_count:
             error_message = f"Queue stuck: {stuck_count} items reached max retries"
-            if stuck_items:
-                error_message += f" (types: {', '.join(set(item.get('type', 'unknown') for item in stuck_items))})"
+            if oldest_stuck_age_sec:
+                error_message += f", oldest: {oldest_stuck_age_sec}s"
+            if stuck_by_type:
+                type_list = [f"{k}:{v}" for k, v in stuck_by_type.items()]
+                error_message += f" (by type: {', '.join(type_list)})"
         
         obj, created = PhoneDevice.objects.update_or_create(
             user=request.user,

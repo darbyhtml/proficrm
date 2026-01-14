@@ -20,6 +20,11 @@ class QueueManager(private val context: Context) {
     private val dao = db.queueDao()
     private val scope = CoroutineScope(Dispatchers.IO)
     
+    // Защита от спама алертов: отправляем не чаще чем раз в 5 минут
+    private val prefs = context.getSharedPreferences("queue_manager", Context.MODE_PRIVATE)
+    private val KEY_LAST_STUCK_ALERT_TIME = "last_stuck_alert_time"
+    private val STUCK_ALERT_INTERVAL_MS = 5 * 60 * 1000L  // 5 минут
+    
     /**
      * Добавить элемент в очередь (синхронно, для использования из сервиса).
      */
@@ -166,6 +171,36 @@ class QueueManager(private val context: Context) {
             logBundle = logBundle
         )
     }
+    
+    /**
+     * Получить метрики застрявших элементов (достигших max retries).
+     * Возвращает null если нет застрявших элементов.
+     */
+    suspend fun getStuckMetrics(): StuckMetrics? {
+        val now = System.currentTimeMillis()
+        // Получаем все элементы с retryCount >= 3
+        val allItems = dao.getAll()
+        val stuckItems = allItems.filter { it.retryCount >= 3 }
+        
+        if (stuckItems.isEmpty()) {
+            return null
+        }
+        
+        val oldestStuckAgeSec = ((now - stuckItems.minOfOrNull { it.createdAt } ?: now) / 1000).toInt()
+        val stuckByType = stuckItems.groupBy { it.type }.mapValues { it.value.size }
+        
+        return StuckMetrics(
+            stuckCount = stuckItems.size,
+            oldestStuckAgeSec = oldestStuckAgeSec,
+            stuckByType = stuckByType
+        )
+    }
+    
+    data class StuckMetrics(
+        val stuckCount: Int,
+        val oldestStuckAgeSec: Int,
+        val stuckByType: Map<String, Int>
+    )
     
     data class QueueStats(
         val total: Int,

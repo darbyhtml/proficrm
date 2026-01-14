@@ -26,13 +26,31 @@ RATE_LIMIT_LOGIN_PER_MINUTE = 5  # Максимум попыток входа в
 RATE_LIMIT_API_PER_MINUTE = 60  # Максимум API запросов в минуту с одного IP
 
 
+def _is_valid_ip(ip: str) -> bool:
+    """
+    Проверка валидности IPv4 или IPv6 адреса.
+    """
+    import ipaddress
+    try:
+        ipaddress.ip_address(ip.strip())
+        return True
+    except (ValueError, AttributeError):
+        return False
+
+
 def get_client_ip(request) -> str:
     """
     Получить IP адрес клиента с учетом прокси.
     Безопасно: доверяет X-Forwarded-For только если REMOTE_ADDR принадлежит нашим прокси (allowlist).
-    Иначе использует REMOTE_ADDR для защиты от IP spoofing.
+    Валидирует IPv4/IPv6, иначе fallback на REMOTE_ADDR.
+    
+    Args:
+        request: Django HttpRequest объект
+        
+    Returns:
+        IP адрес клиента (валидный IPv4/IPv6) или "unknown"
     """
-    remote_addr = request.META.get("REMOTE_ADDR", "")
+    remote_addr = request.META.get("REMOTE_ADDR", "").strip()
     
     # Получаем список доверенных IP прокси из settings
     # В production: установить через DJANGO_PROXY_IPS (через запятую)
@@ -42,15 +60,25 @@ def get_client_ip(request) -> str:
     
     # Если REMOTE_ADDR принадлежит нашим прокси - доверяем X-Forwarded-For
     if remote_addr in proxy_ips:
-        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR", "").strip()
         if x_forwarded_for:
             # Берем первый IP из цепочки (клиент)
-            ip = x_forwarded_for.split(",")[0].strip()
-            if ip:
-                return ip
+            # Формат: "1.2.3.4, 10.0.0.1" или "1.2.3.4,10.0.0.1"
+            first_ip = x_forwarded_for.split(",")[0].strip()
+            if first_ip and _is_valid_ip(first_ip):
+                return first_ip
+            # Если первый IP невалидный - пробуем следующие
+            for ip_candidate in x_forwarded_for.split(",")[1:]:
+                ip_candidate = ip_candidate.strip()
+                if ip_candidate and _is_valid_ip(ip_candidate):
+                    return ip_candidate
     
     # Иначе используем REMOTE_ADDR (защита от spoofing)
-    return remote_addr or "unknown"
+    # Валидируем REMOTE_ADDR перед возвратом
+    if remote_addr and _is_valid_ip(remote_addr):
+        return remote_addr
+    
+    return "unknown"
 
 
 def is_ip_rate_limited(ip: str, key_prefix: str, max_requests: int, window_seconds: int = 60) -> bool:
