@@ -305,45 +305,76 @@ def test_rbac_calls_stats():
 
 ## 8. Final Verdict
 
-### ❌ Блокирует production test:
-1. **X-Forwarded-For без валидации** (CRITICAL) — может привести к неправильной диагностике и IP spoofing
-2. **Нет лимитов на payload** (CRITICAL) — DoS вектор через огромные логи/телеметрию
+### ✅ Исправлено (SAFE патчи применены):
+1. ✅ **X-Forwarded-For с валидацией прокси** (CRITICAL) — исправлено: доверяет XFF только если REMOTE_ADDR в allowlist прокси (`PROXY_IPS`)
+2. ✅ **Лимиты на payload** (CRITICAL) — исправлено: logs 50KB, telemetry batch 100 items с явной валидацией `validate_items()`
+3. ✅ **XSS защита в логах** (MEDIUM) — исправлено: экранирование через `|escape` в шаблоне
+4. ✅ **Унификация получения IP** (LOW) — исправлено: используется `accounts.security.get_client_ip()` везде
+5. ✅ **Mutex для refresh token** (HIGH) — исправлено: `kotlinx.coroutines.sync.Mutex` предотвращает race condition
+6. ✅ **Алерт при max retries** (MEDIUM) — исправлено: отправка алерта в CRM через heartbeat при достижении max retries (3)
 
-### ⚠️ Желательно исправить перед production:
-3. **Нет защиты от дубликатов call_request_id** (HIGH) — искажение аналитики
-4. **Security-crypto alpha** (HIGH) — возможны неожиданные падения
-5. **Нет mutex для refresh token** (HIGH) — race condition
+### ⚠️ Осталось (не блокирует production test):
+1. **Нет защиты от дубликатов call_request_id** (HIGH) — требует миграцию БД, можно после теста
+2. **Security-crypto alpha** (HIGH) — мониторинг через `encryption_enabled`, fallback работает корректно
 
 ### ✅ Можно оставить на после теста:
-6. Per-user throttling (MEDIUM)
-7. XSS в логах (MEDIUM) — низкий риск, админские страницы
-8. Алерт при max retries (MEDIUM)
-9. Унификация получения IP (LOW)
+3. Per-user throttling (MEDIUM) — rate limiting по IP работает (60 req/min для phone API)
 
 ---
 
 ## Рекомендации по приоритетам:
 
-1. **Срочно (до production test):**
-   - Patch 1: Валидация X-Forwarded-For
-   - Patch 2: Лимиты на payload
-   - Patch 3: XSS защита
+1. ✅ **Срочно (до production test):** — **ВЫПОЛНЕНО**
+   - ✅ Patch 1: Валидация X-Forwarded-For
+   - ✅ Patch 2: Лимиты на payload
+   - ✅ Patch 3: XSS защита
+   - ✅ Patch 6: Mutex для refresh token
+   - ✅ Алерт при max retries
 
-2. **Важно (в ближайшее время):**
-   - Patch 5: Защита от дубликатов call_request_id
-   - Patch 6: Mutex для refresh token
+2. **Важно (после production test):**
+   - Patch 5: Защита от дубликатов call_request_id (требует миграцию)
 
-3. **Улучшения (после production test):**
-   - Per-user throttling
-   - Алерты при max retries
-   - Унификация кода
+3. **Улучшения (опционально):**
+   - Per-user throttling (rate limiting по IP работает)
 
 ---
 
 **Статус:** ✅ **Критические SAFE-патчи применены. Проект готов к production test.**
 
 **Обновлено:** 2026-01-14 — применены все SAFE-патчи:
-- Безопасная обработка X-Forwarded-For с allowlist прокси
-- Лимиты на payload с явной валидацией
-- Mutex для refresh token (Android)
-- Алерт в CRM при max retries очереди
+- Безопасная обработка X-Forwarded-For с allowlist прокси (`PROXY_IPS` env)
+- Лимиты на payload с явной валидацией (DRF `max_length` не работает для `many=True`)
+- Mutex для refresh token (Android) через `kotlinx.coroutines.sync.Mutex`
+- Алерт в CRM при max retries очереди (отправка через heartbeat)
+
+---
+
+## Примененные патчи (конкретные изменения):
+
+### 1. Безопасная обработка X-Forwarded-For
+**Файл:** `backend/accounts/security.py`
+- Добавлена проверка `REMOTE_ADDR in PROXY_IPS` перед использованием X-Forwarded-For
+- Если прокси не в allowlist → используется `REMOTE_ADDR` (защита от spoofing)
+
+**Файл:** `backend/crm/settings.py`
+- Добавлен `PROXY_IPS` из env переменной `DJANGO_PROXY_IPS`
+
+### 2. Валидация telemetry batch
+**Файл:** `backend/phonebridge/api.py`
+- Добавлен метод `validate_items()` в `TelemetryBatchSerializer` (явная проверка длины списка)
+- Лимит: максимум 100 items за раз
+
+### 3. Mutex для refresh token
+**Файл:** `android/.../CallListenerService.kt`
+- Добавлен `refreshMutex = Mutex()`
+- `refreshAccessWithMutex()` использует `mutex.withLock` для предотвращения параллельных refresh
+- `pullCallWithRefresh()` теперь `suspend fun` для корректной работы с mutex
+
+### 4. Алерт при max retries
+**Файл:** `android/.../QueueManager.kt`
+- При достижении `retryCount >= 3` отправляется алерт через `sendQueueStuckAlert()`
+- Алерт отправляется в `/api/phone/devices/heartbeat/` с `queue_stuck=true`
+
+**Файл:** `backend/phonebridge/api.py`
+- `DeviceHeartbeatSerializer` расширен полями `queue_stuck`, `stuck_items`, `stuck_count`
+- При `queue_stuck=true` сохраняется в `PhoneDevice.last_error_code="queue_stuck"` и `last_error_message`
