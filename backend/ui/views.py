@@ -3543,6 +3543,9 @@ def task_list(request: HttpRequest) -> HttpResponse:
         except (ValueError, TypeError):
             pass
 
+    # Подсчитываем общее количество задач после всех фильтров (до пагинации)
+    tasks_count = qs.count()
+    
     # Сохраняем сортировку в cookie, если она была изменена через GET параметры
     response = render(
         request,
@@ -3566,6 +3569,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
             "transfer_targets": transfer_targets,
             "view_task": view_task,
             "view_task_overdue_days": view_task_overdue_days,
+            "tasks_count": tasks_count,
         },
     )
     

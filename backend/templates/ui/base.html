@@ -962,20 +962,44 @@
         });
         
         // Для форм контактов (динамические поля) - используем делегирование событий
+        // ВАЖНО: не трогаем email поля (type="email" или родительский контейнер с email)
         document.addEventListener('input', function(e) {
-          if (e.target && e.target.tagName === 'INPUT' && 
-              (e.target.name && e.target.name.includes('phone') || 
-               e.target.id && e.target.id.includes('phone') ||
-               e.target.name && e.target.name.includes('value'))) {
-            formatPhoneInput(e.target);
+          if (e.target && e.target.tagName === 'INPUT') {
+            // Пропускаем email поля
+            if (e.target.type === 'email') return;
+            // Пропускаем поля, которые находятся в секции Email
+            const parentSection = e.target.closest('section');
+            if (parentSection) {
+              const sectionLabel = parentSection.querySelector('.font-medium');
+              if (sectionLabel && sectionLabel.textContent.trim().toLowerCase().includes('email')) {
+                return;
+              }
+            }
+            // Применяем форматирование только к телефонным полям
+            if (e.target.name && e.target.name.includes('phone') || 
+                e.target.id && e.target.id.includes('phone') ||
+                (e.target.name && e.target.name.includes('value') && e.target.type !== 'email')) {
+              formatPhoneInput(e.target);
+            }
           }
         });
         
         // Очищаем форматирование перед отправкой формы (сохраняем только цифры)
         document.querySelectorAll('form').forEach(form => {
           form.addEventListener('submit', function(e) {
-            // Находим все поля телефонов в форме
+            // Находим все поля телефонов в форме (исключаем email поля)
             form.querySelectorAll('input[name="phone"], input[name*="phone"], input[name*="value"]').forEach(input => {
+              // Пропускаем email поля
+              if (input.type === 'email') return;
+              // Пропускаем поля в секции Email
+              const parentSection = input.closest('section');
+              if (parentSection) {
+                const sectionLabel = parentSection.querySelector('.font-medium');
+                if (sectionLabel && sectionLabel.textContent.trim().toLowerCase().includes('email')) {
+                  return;
+                }
+              }
+              
               if (input.value) {
                 // Убираем все нецифровые символы
                 let value = input.value.replace(/\D/g, '');

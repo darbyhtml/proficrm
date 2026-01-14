@@ -6,7 +6,12 @@
     <div class="flex items-end justify-between gap-4">
       <div>
         <h1 class="text-2xl font-semibold">Задачи</h1>
-        <div class="text-sm text-brand-dark/70">Фильтры: мои / просрочено / статус</div>
+        <div class="text-sm text-brand-dark/70">
+          Фильтры: мои / просрочено / статус
+          {% if tasks_count is not None %}
+            <span class="ml-2 font-medium text-brand-dark">· Найдено: {{ tasks_count }}</span>
+          {% endif %}
+        </div>
       </div>
       <a href="/tasks/new/" class="btn btn-primary">+ Новая задача</a>
     </div>
