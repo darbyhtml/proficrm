@@ -541,21 +541,20 @@ def analytics(request: HttpRequest) -> HttpResponse:
         .select_related("company", "contact", "created_by")
         .order_by("-created_at")[:5000]
     )
+
     stats = {uid: {"calls_total": 0, "cold_calls": 0} for uid in user_ids}
+
+    # Выделяем id подтверждённых холодных звонков (включая отметки на телефонах)
+    cold_call_ids = set(
+        calls_qs.filter(is_cold_call=True).filter(_cold_call_confirm_q()).values_list("id", flat=True)
+    )
+
     for call in calls_qs:
         uid = call.created_by_id
         if uid not in stats:
             continue
         stats[uid]["calls_total"] += 1
-        # "Холодный" считаем строго: is_cold_call=True + подтверждение marked_call
-        is_strict_cold = bool(
-            getattr(call, "is_cold_call", False)
-            and (
-                (getattr(call, "company", None) and getattr(call.company, "primary_cold_marked_call_id", None) == call.id)
-                or (getattr(call, "contact", None) and getattr(call.contact, "cold_marked_call_id", None) == call.id)
-            )
-        )
-        if is_strict_cold:
+        if call.id in cold_call_ids:
             stats[uid]["cold_calls"] += 1
 
     # Группировка по филиалу (для управляющего) + карточки для шаблона
@@ -635,14 +634,15 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
         .order_by("-created_at")
     )
 
-    # Холодные звонки (строгая логика):
+    # Холодные звонки (строгая логика, включая отметки на телефонах):
     # - звонок инициирован через кнопку (note="UI click")
     # - у звонка is_cold_call=True
-    # - и именно этот звонок был подтверждён отметкой (FK marked_call) в пределах 8 часов (это проверяется в момент отметки)
+    # - и именно этот звонок был подтверждён отметкой (FK marked_call) на компании, контакте или их телефонах
     cold_calls_qs = (
         calls_qs.filter(is_cold_call=True)
-        .filter(Q(company__primary_cold_marked_call_id=F("id")) | Q(contact__cold_marked_call_id=F("id")))
+        .filter(_cold_call_confirm_q())
         .order_by("-created_at")
+        .distinct()
     )
 
     # Пагинация с выбором per_page (как в company_list)
@@ -743,6 +743,21 @@ def _can_view_cold_call_reports(user: User) -> bool:
     return bool(user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD, User.Role.MANAGER))
 
 
+def _cold_call_confirm_q() -> Q:
+    """
+    Условие "подтвержденный холодный звонок":
+    - is_cold_call=True на CallRequest
+    - и этот звонок записан как marked_call либо на компании, либо на контакте,
+      либо на их телефонах (CompanyPhone/ContactPhone).
+    """
+    return Q(
+        Q(company__primary_cold_marked_call_id=F("id"))
+        | Q(contact__cold_marked_call_id=F("id"))
+        | Q(company__phones__cold_marked_call_id=F("id"))
+        | Q(contact__phones__cold_marked_call_id=F("id"))
+    )
+
+
 def _month_start(d: _date) -> _date:
     return d.replace(day=1)
 
@@ -774,11 +789,19 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
     if not _can_view_cold_call_reports(user):
         return JsonResponse({"ok": False, "detail": "forbidden"}, status=403)
 
-    now = timezone.now()
-    local_now = timezone.localtime(now)
-    day_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    # Поддерживаем выбор дня через параметр ?date=YYYY-MM-DD, по умолчанию сегодня.
+    date_str = (request.GET.get("date") or "").strip()
+    try:
+        if date_str:
+            target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+        else:
+            target_date = timezone.localdate(timezone.now())
+    except (ValueError, TypeError):
+        target_date = timezone.localdate(timezone.now())
+
+    day_start = timezone.make_aware(datetime.combine(target_date, datetime.min.time()))
     day_end = day_start + timedelta(days=1)
-    day_label = timezone.localdate(now).strftime("%d.%m.%Y")
+    day_label = target_date.strftime("%d.%m.%Y")
 
     # Строгая логика холодных звонков:
     # - инициированы через кнопку "Позвонить с телефона" (note="UI click")
@@ -789,9 +812,12 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
         .exclude(status=CallRequest.Status.CANCELLED)
         .select_related("company", "contact")
     )
-    qs = qs_base.filter(is_cold_call=True).filter(
-        Q(company__primary_cold_marked_call_id=F("id")) | Q(contact__cold_marked_call_id=F("id"))
-    ).order_by("created_at")
+    qs = (
+        qs_base.filter(is_cold_call=True)
+        .filter(_cold_call_confirm_q())
+        .order_by("created_at")
+        .distinct()
+    )
     items = []
     lines = [f"Отчёт: холодные звонки за {day_label}", f"Всего: {qs.count()}", ""]
     i = 0
@@ -839,7 +865,7 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
             CallRequest.objects.filter(created_by=user, created_at__date__gte=ms, created_at__date__lt=me, note="UI click")
             .exclude(status=CallRequest.Status.CANCELLED)
             .filter(is_cold_call=True)
-            .filter(Q(company__primary_cold_marked_call_id=F("id")) | Q(contact__cold_marked_call_id=F("id")))
+            .filter(_cold_call_confirm_q())
             .exists()
         )
         if exists:
@@ -862,9 +888,12 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
         .exclude(status=CallRequest.Status.CANCELLED)
         .select_related("company", "contact")
     )
-    qs = qs_base.filter(is_cold_call=True).filter(
-        Q(company__primary_cold_marked_call_id=F("id")) | Q(contact__cold_marked_call_id=F("id"))
-    ).order_by("created_at")
+    qs = (
+        qs_base.filter(is_cold_call=True)
+        .filter(_cold_call_confirm_q())
+        .order_by("created_at")
+        .distinct()
+    )
 
     items = []
     lines = [f"Отчёт: холодные звонки за {_month_label(selected)}", f"Всего: {qs.count()}", ""]
@@ -900,6 +929,72 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
             "month": selected.strftime("%Y-%m"),
             "month_label": _month_label(selected),
             "available_months": month_options,
+            "count": len(items),
+            "items": items,
+            "text": "\n".join(lines),
+        }
+    )
+
+
+@login_required
+def cold_calls_report_last_7_days(request: HttpRequest) -> JsonResponse:
+    """
+    Отчёт по холодным звонкам за последние 7 дней (включая сегодня) для текущего пользователя.
+    """
+    user: User = request.user
+    if not _can_view_cold_call_reports(user):
+        return JsonResponse({"ok": False, "detail": "forbidden"}, status=403)
+
+    today = timezone.localdate(timezone.now())
+    start_date = today - timedelta(days=6)
+    start_dt = timezone.make_aware(datetime.combine(start_date, datetime.min.time()))
+    end_dt = start_dt + timedelta(days=7)
+
+    qs_base = (
+        CallRequest.objects.filter(created_by=user, created_at__gte=start_dt, created_at__lt=end_dt, note="UI click")
+        .exclude(status=CallRequest.Status.CANCELLED)
+        .select_related("company", "contact")
+    )
+    qs = (
+        qs_base.filter(is_cold_call=True)
+        .filter(_cold_call_confirm_q())
+        .order_by("created_at")
+        .distinct()
+    )
+
+    items = []
+    period_label = f"{start_date.strftime('%d.%m.%Y')} — {today.strftime('%d.%m.%Y')}"
+    lines = [f"Отчёт: холодные звонки за период {period_label}", f"Всего: {qs.count()}", ""]
+    i = 0
+    dedupe_window_s = 60
+    last_seen: dict[tuple[str, str, str], timezone.datetime] = {}
+
+    for call in qs:
+        key = (call.phone_raw or "", str(call.company_id or ""), str(call.contact_id or ""))
+        prev = last_seen.get(key)
+        if prev and (call.created_at - prev).total_seconds() < dedupe_window_s:
+            continue
+        last_seen[key] = call.created_at
+
+        i += 1
+        dt = timezone.localtime(call.created_at)
+        t = dt.strftime("%d.%m.%Y %H:%M")
+        company_name = getattr(call.company, "name", "") if call.company_id else ""
+        if call.contact_id and call.contact:
+            contact_name = str(call.contact) or ""
+        else:
+            contact_name = (getattr(call.company, "contact_name", "") or "").strip() if call.company_id else ""
+        who = contact_name or "Контакт не указан"
+        who2 = f"{who} ({company_name})" if company_name else who
+        phone = call.phone_raw or ""
+        items.append({"time": t, "phone": phone, "contact": who, "company": company_name})
+        lines.append(f"{i}) {t} — {who2} — {phone}")
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "range": "last_7_days",
+            "period": period_label,
             "count": len(items),
             "items": items,
             "text": "\n".join(lines),
