@@ -215,20 +215,40 @@ class CallListenerService : Service() {
                 .get()
                 .addHeader("Authorization", "Bearer $access")
                 .build()
+            val start = System.currentTimeMillis()
+            var code = 0
+            var body: String? = null
             try {
                 http.newCall(req).execute().use { res ->
-                    return Pair(res.code, res.body?.string() ?: "")
+                    code = res.code
+                    body = res.body?.string()
                 }
             } catch (e: java.net.UnknownHostException) {
                 // Нет интернета - возвращаем специальный код
-                return Pair(0, null)
+                code = 0
             } catch (e: java.net.SocketTimeoutException) {
                 // Таймаут - возвращаем специальный код
-                return Pair(0, null)
-            } catch (e: Exception) {
+                code = 0
+            } catch (_: Exception) {
                 // Другие сетевые ошибки
-                return Pair(0, null)
+                code = 0
+            } finally {
+                val duration = System.currentTimeMillis() - start
+                // Лёгкая телеметрия по latency/ошибкам, не влияет на основную логику
+                try {
+                    sendTelemetryLatency(
+                        baseUrl = baseUrl,
+                        access = access,
+                        deviceId = deviceId,
+                        endpointPath = "/api/phone/calls/pull/",
+                        httpCode = if (code == 0) null else code,
+                        valueMs = duration
+                    )
+                } catch (_: Exception) {
+                    // ignore
+                }
             }
+            return Pair(code, body)
         }
 
         // 1) try with current access
@@ -559,6 +579,47 @@ class CallListenerService : Service() {
             }
         } catch (e: Exception) {
             android.util.Log.w("CallListenerService", "Heartbeat error: ${e.message}")
+        }
+    }
+
+    /**
+     * Отправка простой телеметрии по latency/кодам ответа для /api/phone/calls/pull/.
+     * Используем batch-формат с одним элементом.
+     */
+    private fun sendTelemetryLatency(
+        baseUrl: String,
+        access: String,
+        deviceId: String,
+        endpointPath: String,
+        httpCode: Int?,
+        valueMs: Long
+    ) {
+        try {
+            val url = "$baseUrl/api/phone/telemetry/"
+            val item = JSONObject().apply {
+                put("type", "latency")
+                put("endpoint", endpointPath)
+                if (httpCode != null) put("http_code", httpCode)
+                put("value_ms", valueMs.toInt())
+            }
+            val bodyJson = JSONObject().apply {
+                put("device_id", deviceId)
+                put("items", org.json.JSONArray().put(item))
+            }.toString()
+
+            val req = Request.Builder()
+                .url(url)
+                .post(bodyJson.toRequestBody(jsonMedia))
+                .addHeader("Authorization", "Bearer $access")
+                .build()
+
+            http.newCall(req).execute().use { res ->
+                if (!res.isSuccessful) {
+                    android.util.Log.w("CallListenerService", "Telemetry latency failed: HTTP ${res.code}")
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("CallListenerService", "Telemetry latency error: ${e.message}")
         }
     }
 
