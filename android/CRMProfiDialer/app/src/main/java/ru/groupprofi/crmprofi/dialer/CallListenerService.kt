@@ -35,6 +35,9 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import ru.groupprofi.crmprofi.dialer.BuildConfig
 import ru.groupprofi.crmprofi.dialer.queue.QueueManager
+import ru.groupprofi.crmprofi.dialer.logs.LogCollector
+import ru.groupprofi.crmprofi.dialer.logs.LogSender
+import ru.groupprofi.crmprofi.dialer.logs.LogInterceptor
 
 class CallListenerService : Service() {
     private val http = OkHttpClient()
@@ -43,8 +46,11 @@ class CallListenerService : Service() {
     private var loopJob: Job? = null
     private var heartbeatCounter: Int = 0
     private var queueFlushCounter: Int = 0
+    private var logSendCounter: Int = 0
     private val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     private val queueManager = QueueManager(this)
+    private val logCollector = LogCollector()
+    private val logSender = LogSender(this, http, queueManager)
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -97,6 +103,9 @@ class CallListenerService : Service() {
             return START_NOT_STICKY
         }
 
+        // Инициализируем перехватчик логов
+        LogInterceptor.setCollector(logCollector)
+
         if (loopJob == null) {
             loopJob = scope.launch {
                 while (true) {
@@ -139,8 +148,25 @@ class CallListenerService : Service() {
                                 if (sentCount > 0) {
                                     android.util.Log.i("CallListenerService", "Flushed $sentCount items from queue")
                                 }
+                        } catch (e: Exception) {
+                            android.util.Log.w("CallListenerService", "Queue flush error: ${e.message}")
+                            LogInterceptor.addLog(android.util.Log.WARN, "CallListenerService", "Queue flush error: ${e.message}")
+                        }
+                        }
+                        
+                        // Периодически отправляем накопленные логи (раз в час или при накоплении > 200 логов)
+                        logSendCounter = (logSendCounter + 1) % 120 // Каждые 120 циклов (примерно раз в час при рабочем времени)
+                        val shouldSendLogs = logSendCounter == 0 || logCollector.getBufferSize() > 200
+                        if (shouldSendLogs && code != 0 && code != 401) {
+                            try {
+                                val bundle = logCollector.takeLogs(maxEntries = 500)
+                                if (bundle != null) {
+                                    logSender.sendLogBundle(BASE_URL, latestToken, deviceId, bundle)
+                                    android.util.Log.i("CallListenerService", "Sent log bundle: ${bundle.entryCount} entries")
+                                }
                             } catch (e: Exception) {
-                                android.util.Log.w("CallListenerService", "Queue flush error: ${e.message}")
+                                android.util.Log.w("CallListenerService", "Log send error: ${e.message}")
+                                LogInterceptor.addLog(android.util.Log.WARN, "CallListenerService", "Log send error: ${e.message}")
                             }
                         }
                         
