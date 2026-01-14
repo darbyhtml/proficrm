@@ -729,7 +729,14 @@
                   <div>
                     <div class="text-brand-dark/50 text-xs">Email</div>
                     {% for e in c.emails.all %}
-                      <div>{{ e.value }}</div>
+                      <div class="flex items-center gap-2">
+                        <a class="link font-mono text-xs" href="mailto:{{ e.value }}">{{ e.value }}</a>
+                        <button type="button" class="btn btn-outline js-add-email-to-campaign" data-email="{{ e.value }}" data-company-id="{{ company.id }}" title="Добавить в рассылочную кампанию" style="padding:.15rem .4rem;font-size:.7rem">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 12h-4l-3 9-6-18-3 9H2"></path>
+                          </svg>
+                        </button>
+                      </div>
                     {% empty %}
                       <div class="text-brand-dark/70">—</div>
                     {% endfor %}
