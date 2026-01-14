@@ -1081,8 +1081,9 @@
             const a = data.active;
             const status = (a.status || '').toLowerCase();
 
-            // Если новая кампания или идёт отправка — отменяем предыдущий dismiss
-            if (dismissedForCampaignId && dismissedForCampaignId !== a.id && status === 'sending') {
+            // Как только начинается отправка любой кампании — сбрасываем прежний dismiss,
+            // чтобы прогресс новой отправки всегда был виден.
+            if (status === 'sending') {
               dismissedForCampaignId = null;
               try { window.localStorage.removeItem(STORAGE_KEY); } catch (_e) {}
             }
