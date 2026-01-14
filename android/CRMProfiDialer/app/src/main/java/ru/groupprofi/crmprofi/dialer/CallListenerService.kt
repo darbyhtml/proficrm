@@ -6,6 +6,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.net.Uri
 import android.os.Build
 import android.os.Handler
@@ -30,6 +31,8 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 
 class CallListenerService : Service() {
     private val http = OkHttpClient()
@@ -49,7 +52,7 @@ class CallListenerService : Service() {
             }
         }
 
-        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        val prefs = securePrefs()
         val baseUrl = BASE_URL
         val token = intent?.getStringExtra(EXTRA_TOKEN) ?: prefs.getString(KEY_TOKEN, null)
         val refresh = intent?.getStringExtra(EXTRA_REFRESH) ?: prefs.getString(KEY_REFRESH, null)
@@ -163,12 +166,12 @@ class CallListenerService : Service() {
                                             android.util.Log.i("CallListenerService", "Dialer opened successfully")
                                             // Сохраняем call_request_id для последующей проверки CallLog
                                             if (!callRequestId.isNullOrBlank()) {
-                                                getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                                                securePrefs().edit()
                                                     .putString("pending_call_$phone", callRequestId)
                                                     .putLong("pending_call_time_$phone", System.currentTimeMillis())
                                                     .apply()
                                                 // Проверяем CallLog через 5 секунд
-                                                val currentToken = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_TOKEN, null) ?: token
+                                                val currentToken = securePrefs().getString(KEY_TOKEN, null) ?: token
                                                 checkCallLogAndSend(BASE_URL, currentToken, phone)
                                             }
                                         } catch (e: Throwable) {
@@ -182,11 +185,11 @@ class CallListenerService : Service() {
                                 android.util.Log.d("CallListenerService", "App in background, notification only")
                                 // Даже в фоне сохраняем call_request_id и проверяем CallLog
                                 if (!callRequestId.isNullOrBlank()) {
-                                    getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                                    securePrefs().edit()
                                         .putString("pending_call_$phone", callRequestId)
                                         .putLong("pending_call_time_$phone", System.currentTimeMillis())
                                         .apply()
-                                    val currentToken = getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_TOKEN, null) ?: token
+                                    val currentToken = securePrefs().getString(KEY_TOKEN, null) ?: token
                                     checkCallLogAndSend(BASE_URL, currentToken, phone)
                                 }
                             }
@@ -271,13 +274,13 @@ class CallListenerService : Service() {
             if (newAccess == null) {
                 // Refresh token истек - нужно перелогиниться
                 // Очищаем токены, чтобы пользователь перелогинился
-                getSharedPreferences(PREFS, MODE_PRIVATE).edit()
+                securePrefs().edit()
                     .remove(KEY_TOKEN)
                     .remove(KEY_REFRESH)
                     .apply()
                 return Pair(401, null)
             }
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_TOKEN, newAccess).apply()
+            securePrefs().edit().putString(KEY_TOKEN, newAccess).apply()
             val (code2, body2) = doPull(newAccess)
             if (code2 == 0) return Pair(0, null) // Сетевая ошибка
             if (code2 == 204) return Pair(204, null)
@@ -636,6 +639,27 @@ class CallListenerService : Service() {
         val cal = Calendar.getInstance()
         val hour = cal.get(Calendar.HOUR_OF_DAY) // 0..23
         return hour in 7..19
+    }
+
+    /**
+     * Безопасное хранилище настроек для сервиса (токены, device_id, pending_call_*).
+     * Стараемся использовать EncryptedSharedPreferences, при ошибке — обычные SharedPreferences.
+     */
+    private fun securePrefs(): SharedPreferences {
+        return try {
+            val masterKey = MasterKey.Builder(this)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            EncryptedSharedPreferences.create(
+                this,
+                PREFS,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (_: Exception) {
+            getSharedPreferences(PREFS, MODE_PRIVATE)
+        }
     }
 
     companion object {

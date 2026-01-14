@@ -1,6 +1,7 @@
 package ru.groupprofi.crmprofi.dialer
 
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -12,6 +13,8 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -54,7 +57,7 @@ class MainActivity : AppCompatActivity() {
         logoutBtn = findViewById(R.id.logoutBtn)
         statusEl = findViewById(R.id.status)
 
-        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        val prefs = securePrefs()
         accessToken = prefs.getString(KEY_ACCESS, null)
         refreshToken = prefs.getString(KEY_REFRESH, null)
         val savedUsername = prefs.getString(KEY_USERNAME, null)
@@ -80,7 +83,7 @@ class MainActivity : AppCompatActivity() {
         notifBtn.setOnClickListener { openNotificationSettings() }
         
         logoutBtn.setOnClickListener {
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit().clear().apply()
+            securePrefs().edit().clear().apply()
             accessToken = null
             refreshToken = null
             stopService(Intent(this, CallListenerService::class.java))
@@ -159,7 +162,7 @@ class MainActivity : AppCompatActivity() {
         AppState.isForeground = true
 
         // Лаконичный индикатор "доходит ли телефон до сервера"
-        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        val prefs = securePrefs()
         val at = prefs.getString(CallListenerService.KEY_LAST_POLL_AT, null)
         val code = prefs.getInt(CallListenerService.KEY_LAST_POLL_CODE, -1)
         if (!at.isNullOrBlank() && code != -1) {
@@ -193,8 +196,29 @@ class MainActivity : AppCompatActivity() {
         ActivityCompat.requestPermissions(this, needed.toTypedArray(), REQ_CALL_PERMS)
     }
 
+    /**
+     * Хранилище для токенов и настроек.
+     * Пытаемся использовать EncryptedSharedPreferences, при ошибке — обычные SharedPreferences.
+     */
+    private fun securePrefs(): SharedPreferences {
+        return try {
+            val masterKey = MasterKey.Builder(this)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            EncryptedSharedPreferences.create(
+                this,
+                PREFS,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        } catch (_: Exception) {
+            getSharedPreferences(PREFS, MODE_PRIVATE)
+        }
+    }
+
     private fun startListeningServiceAuto() {
-        val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
+        val prefs = securePrefs()
         val token = accessToken ?: prefs.getString(KEY_ACCESS, null)
         val refresh = refreshToken ?: prefs.getString(KEY_REFRESH, null)
         if (token.isNullOrBlank() || refresh.isNullOrBlank()) {
