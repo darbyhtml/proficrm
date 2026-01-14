@@ -315,7 +315,15 @@
         <span id="mailProgressPct">0%</span>
       </div>
       <div class="leading-tight">
-        <div class="text-xs muted">Рассылка</div>
+        <div class="text-xs muted flex items-center gap-2">
+          <span>Рассылка</span>
+          <button id="mailProgressClose" type="button" class="hidden text-brand-dark/50 hover:text-red-500 transition-colors" title="Закрыть">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 6L6 18"/>
+              <path d="M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
         <div id="mailProgressText" class="text-sm font-medium">—</div>
         <div id="mailProgressCounts" class="text-[11px] muted-2">—</div>
       </div>
@@ -1052,7 +1060,10 @@
         const pct = document.getElementById('mailProgressPct');
         const text = document.getElementById('mailProgressText');
         const counts = document.getElementById('mailProgressCounts');
-        if (!widget || !circle || !pct || !text || !counts) return;
+        const closeBtn = document.getElementById('mailProgressClose');
+        if (!widget || !circle || !pct || !text || !counts || !closeBtn) return;
+
+        let dismissedForCampaignId = null;
 
         async function poll() {
           try {
@@ -1060,9 +1071,23 @@
             const data = await res.json();
             if (!data || !data.ok || !data.active) {
               widget.classList.add('hidden');
+              dismissedForCampaignId = null;
               return;
             }
             const a = data.active;
+            const status = (a.status || '').toLowerCase();
+
+            // Если новая кампания или идёт отправка — отменяем предыдущий dismiss
+            if (dismissedForCampaignId && dismissedForCampaignId !== a.id && status === 'sending') {
+              dismissedForCampaignId = null;
+            }
+
+            // Если пользователь закрыл виджет для этой завершённой кампании — не показываем
+            if (status === 'sent' && dismissedForCampaignId === a.id) {
+              widget.classList.add('hidden');
+              return;
+            }
+
             const p = Number(a.percent || 0);
             const deg = Math.max(0, Math.min(100, p)) * 3.6;
             widget.href = a.url || ('/mail/campaigns/' + a.id + '/');
@@ -1071,10 +1096,28 @@
             text.textContent = a.name || 'Кампания';
             counts.textContent = `Отпр.: ${a.sent} · Ошибки: ${a.failed} · В очереди: ${a.pending}`;
             circle.style.background = `conic-gradient(var(--brand-teal) ${deg}deg, rgba(194,226,222,.6) ${deg}deg)`;
+
+            // Крестик показываем только после завершения (SENT)
+            if (status === 'sent') {
+              closeBtn.classList.remove('hidden');
+            } else {
+              closeBtn.classList.add('hidden');
+            }
           } catch (e) {
             // тихо: не мешаем работе
           }
         }
+
+        closeBtn.addEventListener('click', function(e) {
+          e.preventDefault();
+          widget.classList.add('hidden');
+          // Запоминаем кампанию, для которой пользователь закрыл виджет
+          const href = widget.getAttribute('href') || '';
+          const match = href.match(/\/mail\/campaigns\/([^/]+)\//);
+          if (match && match[1]) {
+            dismissedForCampaignId = match[1];
+          }
+        });
 
         // Первичный запуск + периодический polling
         poll();
