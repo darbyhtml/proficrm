@@ -5208,9 +5208,14 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
     """
     Статистика звонков по менеджерам за день/месяц.
     Показывает количество звонков, статусы (connected, no_answer и т.д.), длительность.
-    Доступ: админ видит всех, остальные - по своему филиалу.
+    Доступ:
+    - Админ/суперпользователь: видит всех менеджеров
+    - Руководитель отдела (SALES_HEAD): видит менеджеров своего филиала
+    - Директор филиала (BRANCH_DIRECTOR): видит менеджеров своего филиала
+    - Менеджер (MANAGER): видит только свои звонки
     """
-    if not require_admin(request.user):
+    # Разрешаем доступ менеджерам, руководителям и админам
+    if request.user.role not in [User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR, User.Role.ADMIN] and not request.user.is_superuser:
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 
@@ -5245,13 +5250,19 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
             is_active=True,
             role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]
         ).select_related("branch").order_by("branch__name", "last_name", "first_name")
-    else:
-        # Остальные - только свой филиал
+    elif request.user.role in [User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]:
+        # Руководители видят менеджеров своего филиала
         managers_qs = User.objects.filter(
             is_active=True,
             branch_id=request.user.branch_id,
             role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]
         ).select_related("branch").order_by("last_name", "first_name")
+    else:
+        # Менеджер видит только себя
+        managers_qs = User.objects.filter(
+            is_active=True,
+            id=request.user.id
+        ).select_related("branch")
     
     # Фильтр по менеджеру
     if filter_manager_id:
@@ -5377,7 +5388,8 @@ def settings_calls_manager_detail(request: HttpRequest, user_id: int) -> HttpRes
     """
     Детальный список звонков конкретного менеджера за период (drill-down из статистики).
     """
-    if not require_admin(request.user):
+    # Разрешаем доступ менеджерам, руководителям и админам
+    if request.user.role not in [User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR, User.Role.ADMIN] and not request.user.is_superuser:
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 
@@ -5385,8 +5397,17 @@ def settings_calls_manager_detail(request: HttpRequest, user_id: int) -> HttpRes
 
     manager = get_object_or_404(User.objects.select_related("branch"), id=user_id, is_active=True)
     
-    # Проверка доступа (админ видит всех, остальные - только свой филиал)
-    if not (request.user.is_superuser or request.user.role == User.Role.ADMIN):
+    # Проверка доступа:
+    # - Админ/суперпользователь: видит всех
+    # - Руководители: видят менеджеров своего филиала
+    # - Менеджер: видит только свои звонки
+    if request.user.is_superuser or request.user.role == User.Role.ADMIN:
+        pass  # Админ видит всех
+    elif request.user.role == User.Role.MANAGER:
+        if request.user.id != manager.id:
+            messages.error(request, "Вы можете просматривать только свои звонки.")
+            return redirect("settings_calls_stats")
+    else:  # SALES_HEAD или BRANCH_DIRECTOR
         if not request.user.branch_id or request.user.branch_id != manager.branch_id:
             messages.error(request, "Нет доступа к звонкам менеджера из другого филиала.")
             return redirect("settings_calls_stats")

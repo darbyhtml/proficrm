@@ -30,6 +30,7 @@ class PhoneDevice(models.Model):
     last_ip = models.GenericIPAddressField(null=True, blank=True)
     last_error_code = models.CharField(max_length=64, blank=True, default="")
     last_error_message = models.CharField(max_length=255, blank=True, default="")
+    encryption_enabled = models.BooleanField("Шифрование включено", default=True, help_text="Использует ли устройство EncryptedSharedPreferences")
 
     class Meta:
         unique_together = (("user", "device_id"),)

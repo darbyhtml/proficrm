@@ -30,8 +30,38 @@ class LogSender(
     }
     
     /**
+     * Маскирует чувствительные данные в логах (токены, пароли, полные URL с query, номера телефонов).
+     */
+    private fun maskSensitiveData(text: String): String {
+        var masked = text
+        // Маскируем токены (Bearer token, access token, refresh token)
+        masked = masked.replace(Regex("""Bearer\s+[A-Za-z0-9\-_\.]+"""), "Bearer ***")
+        masked = masked.replace(Regex("""(access|refresh|token)["\s:=]+([A-Za-z0-9\-_\.]{20,})"""), "$1=\"***\"")
+        // Маскируем пароли
+        masked = masked.replace(Regex("""(password|passwd|pwd)["\s:=]+([^\s"']+)""", RegexOption.IGNORE_CASE), "$1=\"***\"")
+        // Маскируем полные URL с query параметрами (оставляем только путь)
+        masked = masked.replace(Regex("""https?://[^\s"']+(\?[^\s"']+)"""), "***")
+        // Маскируем номера телефонов (оставляем последние 4 цифры)
+        masked = masked.replace(Regex("""(\+?[0-9]{1,3}[\s\-]?)?([0-9]{3,4}[\s\-]?[0-9]{2,3}[\s\-]?)([0-9]{4})""")) {
+            val last4 = it.groupValues[3]
+            "***$last4"
+        }
+        // Маскируем device_id в логах (оставляем первые 4 и последние 4 символа)
+        masked = masked.replace(Regex("""device[_\s]?id["\s:=]+([A-Za-z0-9]{8,})""", RegexOption.IGNORE_CASE)) {
+            val id = it.groupValues[1]
+            if (id.length > 8) {
+                "device_id=\"${id.take(4)}***${id.takeLast(4)}\""
+            } else {
+                "device_id=\"***\""
+            }
+        }
+        return masked
+    }
+    
+    /**
      * Отправить лог-бандл в CRM.
      * При сетевых ошибках добавляет в оффлайн-очередь.
+     * ВАЖНО: маскирует чувствительные данные перед отправкой.
      */
     fun sendLogBundle(
         baseUrl: String,
@@ -45,12 +75,15 @@ class LogSender(
                 val now = Date()
                 val isoTime = dateFormat.format(now)
                 
+                // Маскируем чувствительные данные в payload перед отправкой
+                val maskedPayload = maskSensitiveData(bundle.payload)
+                
                 val bodyJson = JSONObject().apply {
                     put("device_id", deviceId)
                     put("ts", isoTime)
                     put("level_summary", bundle.levelSummary)
                     put("source", bundle.source)
-                    put("payload", bundle.payload)
+                    put("payload", maskedPayload)
                 }.toString()
                 
                 val req = Request.Builder()

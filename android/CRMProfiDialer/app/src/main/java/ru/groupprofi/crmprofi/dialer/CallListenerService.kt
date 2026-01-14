@@ -47,10 +47,12 @@ class CallListenerService : Service() {
     private var heartbeatCounter: Int = 0
     private var queueFlushCounter: Int = 0
     private var logSendCounter: Int = 0
+    private var consecutiveEmptyPolls: Int = 0 // Счетчик пустых опросов для адаптивной частоты
     private val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     private val queueManager = QueueManager(this)
     private val logCollector = LogCollector()
     private val logSender = LogSender(this, http, queueManager)
+    private val random = java.util.Random()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -121,6 +123,14 @@ class CallListenerService : Service() {
                             .putString(KEY_LAST_POLL_AT, nowStr)
                             .putInt(KEY_LAST_POLL_CODE, code)
                             .apply()
+                        
+                        // Адаптивная частота: при пустых командах (204) увеличиваем задержку
+                        // При получении команды (200) - сбрасываем счетчик и возвращаемся к быстрой частоте
+                        if (code == 204) {
+                            consecutiveEmptyPolls++
+                        } else if (code == 200 && phone != null) {
+                            consecutiveEmptyPolls = 0 // Сброс при получении команды
+                        }
 
                         // Периодически отправляем heartbeat в CRM, чтобы админ видел "живость" устройства.
                         heartbeatCounter = (heartbeatCounter + 1) % 10
@@ -245,8 +255,29 @@ class CallListenerService : Service() {
                     } catch (_: Exception) {
                         // silent for MVP
                     }
-                    // В рабочие часы реагируем максимально быстро, вне их — чуть реже
-                    val delayMs = if (isWorkingHours()) 1500L else 5000L
+                    
+                    // Адаптивная частота опроса с джиттером для предотвращения синхронизации устройств
+                    val baseDelay = when {
+                        // При получении команды - быстрый возврат к активному опросу
+                        code == 200 && phone != null -> 1500L
+                        // При пустых командах (204) - увеличиваем задержку постепенно
+                        code == 204 -> {
+                            when {
+                                consecutiveEmptyPolls < 5 -> 1500L // Первые 5 пустых - быстро
+                                consecutiveEmptyPolls < 15 -> 3000L // Следующие 10 - средняя частота
+                                else -> 5000L // Дальше - медленная частота
+                            }
+                        }
+                        // Вне рабочего времени - медленная частота
+                        !isWorkingHours() -> 5000L
+                        // В рабочее время - базовая частота
+                        else -> 1500L
+                    }
+                    
+                    // Джиттер: добавляем случайную задержку ±200мс для предотвращения синхронизации устройств
+                    val jitter = random.nextInt(401) - 200 // -200..+200 мс
+                    val delayMs = (baseDelay + jitter).coerceAtLeast(1000L) // Минимум 1 секунда
+                    
                     delay(delayMs)
                 }
             }
@@ -676,12 +707,16 @@ class CallListenerService : Service() {
                 timeZone = java.util.TimeZone.getTimeZone("UTC")
             }.format(java.util.Date(lastPollAt))
 
+            // Проверяем, используется ли шифрование
+            val encryptionEnabled = MainActivity.isEncryptionEnabled(this)
+            
             val bodyJson = JSONObject().apply {
                 put("device_id", deviceId)
                 put("device_name", android.os.Build.MODEL ?: "Android")
                 put("app_version", BuildConfig.VERSION_NAME)
                 put("last_poll_code", lastPollCode)
                 put("last_poll_at", iso)
+                put("encryption_enabled", encryptionEnabled) // Отправляем статус шифрования в CRM
             }.toString()
 
             val req = Request.Builder()

@@ -32,9 +32,31 @@
         {% else %}
           <span class="muted-2">—</span>
         {% endif %}<br>
-        IP: <span class="font-mono text-xs">{{ device.last_ip|default:"—" }}</span>
+        IP: <span class="font-mono text-xs">{{ device.last_ip|default:"—" }}</span><br>
+        Шифрование:
+        {% if device.encryption_enabled %}
+          <span class="text-emerald-700 font-medium">✓ Включено</span>
+        {% else %}
+          <span class="text-red-700 font-medium">✗ ОТКЛЮЧЕНО (риск безопасности!)</span>
+        {% endif %}
       </div>
     </div>
+    
+    {% if not device.encryption_enabled %}
+      <div class="card card-pad bg-red-50 border-red-200">
+        <div class="flex items-start gap-2">
+          <span class="text-red-600 text-xl">⚠</span>
+          <div>
+            <div class="font-medium text-red-800">Шифрование отключено</div>
+            <div class="text-sm text-red-700 mt-1">
+              Это устройство использует обычные SharedPreferences вместо EncryptedSharedPreferences.
+              Токены и другие чувствительные данные хранятся в незашифрованном виде.
+              Рекомендуется проверить устройство и обновить приложение.
+            </div>
+          </div>
+        </div>
+      </div>
+    {% endif %}
 
     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
       <section class="card card-pad">

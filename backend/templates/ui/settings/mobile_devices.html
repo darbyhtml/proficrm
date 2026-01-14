@@ -54,6 +54,7 @@
               <th>Последняя активность</th>
               <th>Последний poll</th>
               <th>IP</th>
+              <th>Шифрование</th>
             </tr>
           </thead>
           <tbody>
@@ -90,10 +91,17 @@
                 <td class="text-xs font-mono text-brand-dark/70">
                   {{ d.last_ip|default:"—" }}
                 </td>
+                <td class="text-sm">
+                  {% if d.encryption_enabled %}
+                    <span class="text-emerald-700">✓</span>
+                  {% else %}
+                    <span class="text-red-700 font-medium" title="Шифрование отключено - риск безопасности">✗</span>
+                  {% endif %}
+                </td>
               </tr>
             {% empty %}
               <tr>
-                <td class="muted" colspan="6" style="padding:1.25rem 1rem">
+                <td class="muted" colspan="7" style="padding:1.25rem 1rem">
                   Устройств пока нет.
                 </td>
               </tr>

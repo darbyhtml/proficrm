@@ -46,6 +46,7 @@ class DeviceHeartbeatSerializer(serializers.Serializer):
     app_version = serializers.CharField(max_length=32, required=False, allow_blank=True)
     last_poll_code = serializers.IntegerField(required=False, allow_null=True)
     last_poll_at = serializers.DateTimeField(required=False, allow_null=True)
+    encryption_enabled = serializers.BooleanField(required=False, default=True)
 
 
 class DeviceHeartbeatView(APIView):
@@ -68,12 +69,18 @@ class DeviceHeartbeatView(APIView):
         app_version = (s.validated_data.get("app_version") or "").strip()
         last_poll_code = s.validated_data.get("last_poll_code")
         last_poll_at = s.validated_data.get("last_poll_at")
+        encryption_enabled = s.validated_data.get("encryption_enabled", True)
 
         if not device_id:
             return Response({"detail": "device_id is required"}, status=400)
 
-        # Определяем IP для диагностики (может быть за proxy, не критично)
-        ip = request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip() or request.META.get("REMOTE_ADDR")
+        # Определяем IP для диагностики (поддержка X-Forwarded-For и X-Real-IP для работы за прокси)
+        # ВАЖНО: в production нужно настроить ALLOWED_HOSTS и доверие к прокси в Django settings
+        ip = (
+            request.META.get("HTTP_X_REAL_IP", "").strip() or
+            (request.META.get("HTTP_X_FORWARDED_FOR", "").split(",")[0].strip() if request.META.get("HTTP_X_FORWARDED_FOR") else "") or
+            request.META.get("REMOTE_ADDR", "")
+        )
 
         obj, created = PhoneDevice.objects.update_or_create(
             user=request.user,
@@ -86,8 +93,13 @@ class DeviceHeartbeatView(APIView):
                 "last_poll_code": last_poll_code,
                 "last_poll_at": last_poll_at or timezone.now(),
                 "last_ip": ip,
+                "encryption_enabled": encryption_enabled,
             },
         )
+        
+        # Логируем предупреждение, если шифрование отключено
+        if not encryption_enabled:
+            logger.warning(f"DeviceHeartbeat: user={request.user.id}, device={device_id} - encryption DISABLED (security risk)")
 
         logger.debug(f"DeviceHeartbeat: user={request.user.id}, device={device_id}, created={created}")
 
@@ -281,7 +293,9 @@ class PhoneTelemetryView(APIView):
             )
 
         if to_create:
-            PhoneTelemetry.objects.bulk_create(to_create, ignore_conflicts=True)
+            # Убрали ignore_conflicts - дедупликация телеметрии не требуется,
+            # все записи уникальны по времени и контексту
+            PhoneTelemetry.objects.bulk_create(to_create)
             logger.debug(f"PhoneTelemetry: user={request.user.id}, device={device_id}, count={len(to_create)}")
 
         return Response({"ok": True, "saved": len(to_create)})

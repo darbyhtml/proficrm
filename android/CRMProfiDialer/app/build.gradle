@@ -36,6 +36,8 @@ dependencies {
     implementation "androidx.core:core-ktx:1.13.1"
     implementation "androidx.appcompat:appcompat:1.7.0"
     implementation "com.google.android.material:material:1.12.0"
+    // Используем последнюю стабильную версию (1.1.0-alpha06 - последняя доступная, но можно попробовать 1.0.0)
+    // Если нужна полная стабильность - можно использовать 1.0.0, но она может не поддерживать все фичи
     implementation "androidx.security:security-crypto:1.1.0-alpha06"
 
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1"

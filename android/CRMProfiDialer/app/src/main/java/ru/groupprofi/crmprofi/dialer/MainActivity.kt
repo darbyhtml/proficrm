@@ -284,6 +284,8 @@ class MainActivity : AppCompatActivity() {
     companion object {
         /**
          * Статический метод для получения securePrefs из других активностей.
+         * Возвращает EncryptedSharedPreferences если возможно, иначе fallback на обычные SharedPreferences.
+         * ВАЖНО: при fallback на обычные prefs нужно отправить алерт в CRM.
          */
         fun securePrefs(context: Context): SharedPreferences {
             return try {
@@ -296,10 +298,26 @@ class MainActivity : AppCompatActivity() {
                     masterKey,
                     EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
                     EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-                )
-            } catch (_: Exception) {
-                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                ).also {
+                    // Сохраняем флаг, что шифрование работает
+                    it.edit().putBoolean("_encryption_enabled", true).apply()
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("MainActivity", "EncryptedSharedPreferences failed, using fallback: ${e.message}")
+                // Fallback на обычные prefs - это небезопасно, но лучше чем краш
+                val fallback = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                // Сохраняем флаг, что шифрование НЕ работает
+                fallback.edit().putBoolean("_encryption_enabled", false).apply()
+                fallback
             }
+        }
+        
+        /**
+         * Проверяет, используется ли шифрование на устройстве.
+         */
+        fun isEncryptionEnabled(context: Context): Boolean {
+            val prefs = securePrefs(context)
+            return prefs.getBoolean("_encryption_enabled", true) // По умолчанию считаем что включено
         }
     }
 
