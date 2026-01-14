@@ -1,0 +1,138 @@
+{% extends "ui/base.html" %}
+{% block title %}Мобильное приложение — устройство {{ device.device_name|default:device.device_id }}{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div>
+      <div class="text-sm muted">
+        <a class="link" href="/settings/">Настройки</a> /
+        <a class="link" href="/settings/mobile/devices/">Мобильное приложение — устройства</a> /
+      </div>
+      <h1 class="text-2xl font-semibold">Устройство мобильного приложения</h1>
+      <div class="text-sm text-brand-dark/70 mt-1">
+        Пользователь: <b>{{ device.user }}</b><br>
+        Устройство: <b>{{ device.device_name|default:"—" }}</b>
+        <span class="text-xs font-mono text-brand-dark/60 ml-1">{{ device.device_id }}</span><br>
+        Версия приложения: <b>{{ device.app_version|default:"—" }}</b><br>
+        Последняя активность:
+        {% if device.last_seen_at %}
+          <b>{{ device.last_seen_at }}</b>
+        {% else %}
+          <span class="muted-2">—</span>
+        {% endif %}<br>
+        Последний poll:
+        {% if device.last_poll_at %}
+          <b>{{ device.last_poll_at }}</b>
+          {% if device.last_poll_code is not None %}
+            <span class="ml-1 text-xs rounded-full px-2 py-0.5 border
+              {% if device.last_poll_code == 200 %}border-emerald-400 text-emerald-700{% else %}border-red-300 text-red-700{% endif %}">
+              {{ device.last_poll_code }}
+            </span>
+          {% endif %}
+        {% else %}
+          <span class="muted-2">—</span>
+        {% endif %}<br>
+        IP: <span class="font-mono text-xs">{{ device.last_ip|default:"—" }}</span>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+      <section class="card card-pad">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <div>
+            <div class="font-medium">Последняя телеметрия</div>
+            <div class="text-xs muted-2">до 200 последних событий latency/ошибок</div>
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="table">
+            <thead>
+              <tr>
+                <th class="text-left px-3 py-2 text-xs">Время</th>
+                <th class="text-left px-3 py-2 text-xs">Тип</th>
+                <th class="text-left px-3 py-2 text-xs">Endpoint</th>
+                <th class="text-left px-3 py-2 text-xs">HTTP</th>
+                <th class="text-left px-3 py-2 text-xs">мс</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for t in telemetry %}
+                <tr>
+                  <td class="text-xs px-3 py-1 whitespace-nowrap">{{ t.ts }}</td>
+                  <td class="text-xs px-3 py-1">
+                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] border
+                      {% if t.type == 'latency' %}border-emerald-300 text-emerald-700
+                      {% elif t.type == 'error' %}border-red-300 text-red-700
+                      {% else %}border-slate-300 text-slate-700{% endif %}">
+                      {{ t.get_type_display }}
+                    </span>
+                  </td>
+                  <td class="text-xs px-3 py-1 font-mono break-all">{{ t.endpoint|default:"—" }}</td>
+                  <td class="text-xs px-3 py-1">
+                    {% if t.http_code %}
+                      <span class="font-mono">{{ t.http_code }}</span>
+                    {% else %}
+                      <span class="muted-2">—</span>
+                    {% endif %}
+                  </td>
+                  <td class="text-xs px-3 py-1 text-right">
+                    {% if t.value_ms %}{{ t.value_ms }}{% else %}<span class="muted-2">—</span>{% endif %}
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="5" class="text-sm muted px-3 py-3">Телеметрия для этого устройства ещё не поступала.</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card card-pad">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <div>
+            <div class="font-medium">Логи устройства</div>
+            <div class="text-xs muted-2">до 100 последних бандлов логов</div>
+          </div>
+        </div>
+        <div class="overflow-x-auto max-h-[480px]">
+          <table class="table">
+            <thead>
+              <tr>
+                <th class="text-left px-3 py-2 text-xs">Время</th>
+                <th class="text-left px-3 py-2 text-xs">Уровень</th>
+                <th class="text-left px-3 py-2 text-xs">Источник</th>
+                <th class="text-left px-3 py-2 text-xs">Сообщение</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for l in logs %}
+                <tr>
+                  <td class="text-xs px-3 py-1 whitespace-nowrap">{{ l.ts }}</td>
+                  <td class="text-xs px-3 py-1">
+                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] border
+                      {% if l.level_summary|lower|startswith:"error" %}border-red-300 text-red-700
+                      {% elif l.level_summary|lower|startswith:"warn" %}border-amber-300 text-amber-700
+                      {% else %}border-slate-300 text-slate-700{% endif %}">
+                      {{ l.level_summary|default:"—" }}
+                    </span>
+                  </td>
+                  <td class="text-xs px-3 py-1 font-mono">{{ l.source|default:"—" }}</td>
+                  <td class="text-xs px-3 py-1">
+                    <pre class="text-[11px] leading-tight whitespace-pre-wrap break-all max-h-32 overflow-auto bg-slate-50 border border-slate-100 rounded-lg px-2 py-1">{{ l.payload }}</pre>
+                  </td>
+                </tr>
+              {% empty %}
+                <tr>
+                  <td colspan="4" class="text-sm muted px-3 py-3">Логи для этого устройства ещё не загружались.</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </div>
+{% endblock %}
+

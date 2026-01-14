@@ -60,7 +60,9 @@
                   {{ d.user }}
                 </td>
                 <td class="text-sm">
-                  <div class="font-medium">{{ d.device_name|default:"—" }}</div>
+                  <a href="{% url 'settings_mobile_device_detail' pk=d.pk %}" class="link font-medium">
+                    {{ d.device_name|default:"—" }}
+                  </a>
                   <div class="text-xs font-mono text-brand-dark/70">{{ d.device_id }}</div>
                 </td>
                 <td class="text-sm">

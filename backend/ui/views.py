@@ -5022,6 +5022,45 @@ def settings_mobile_devices(request: HttpRequest) -> HttpResponse:
         .order_by("-last_seen_at", "-created_at")
     )
 
+
+@login_required
+def settings_mobile_device_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    """
+    Детали конкретного устройства мобильного приложения:
+    последние heartbeat/telemetry и бандлы логов.
+    Только для админов.
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    from phonebridge.models import PhoneDevice, PhoneTelemetry, PhoneLogBundle
+
+    device = get_object_or_404(
+        PhoneDevice.objects.select_related("user"),
+        pk=pk,
+    )
+
+    # Ограничиваемся последними записями, чтобы не грузить страницу
+    telemetry_qs = (
+        PhoneTelemetry.objects.filter(device=device)
+        .order_by("-ts")[:200]
+    )
+    logs_qs = (
+        PhoneLogBundle.objects.filter(device=device)
+        .order_by("-ts")[:100]
+    )
+
+    return render(
+        request,
+        "ui/settings/mobile_device_detail.html",
+        {
+            "device": device,
+            "telemetry": telemetry_qs,
+            "logs": logs_qs,
+        },
+    )
+
     # Фильтры по пользователю и статусу (живое/неживое)
     user_id = (request.GET.get("user") or "").strip()
     status = (request.GET.get("status") or "").strip()  # active|stale|all
