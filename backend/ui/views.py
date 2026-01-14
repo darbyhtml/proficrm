@@ -999,7 +999,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
     f = _apply_company_filters(qs=qs, params=filter_params, default_responsible_id=None)
     qs = f["qs"]
 
-    # Sorting (asc/desc)
+    # Sorting (asc/desc) — как в задачах
     sort = (request.GET.get("sort") or "").strip() or "updated_at"
     direction = (request.GET.get("dir") or "").strip().lower() or "desc"
     direction = "asc" if direction == "asc" else "desc"
@@ -1082,6 +1082,8 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "filter_active": filter_active,
             "sort": sort,
             "dir": direction,
+            "sort_field": sort,
+            "sort_dir": direction,
             "responsibles": User.objects.order_by("last_name", "first_name"),
             "statuses": CompanyStatus.objects.order_by("name"),
             "spheres": CompanySphere.objects.order_by("name"),

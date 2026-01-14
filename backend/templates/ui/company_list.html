@@ -87,29 +87,11 @@
           <option value="0" {% if cold_call == "0" %}selected{% endif %}>Теплый контакт</option>
         </select>
       </div>
-      <div class="col-span-full flex flex-col md:flex-row md:items-end md:flex-wrap gap-2">
+      <div class="col-span-full flex flex-col md:flex-row md:items-end md:flex-wrap gap-2 justify-between">
         <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 md:mr-2">
           <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %} />
           Только с просрочками
         </label>
-        <div class="w-full md:w-auto">
-          <label class="block text-xs text-brand-dark/70 mb-1">Сортировка</label>
-          <select name="sort" class="select w-full md:w-auto">
-            <option value="updated_at" {% if sort == 'updated_at' %}selected{% endif %}>По обновлению</option>
-            <option value="name" {% if sort == 'name' %}selected{% endif %}>По названию</option>
-            <option value="inn" {% if sort == 'inn' %}selected{% endif %}>По ИНН</option>
-            <option value="status" {% if sort == 'status' %}selected{% endif %}>По статусу</option>
-            <option value="responsible" {% if sort == 'responsible' %}selected{% endif %}>По ответственному</option>
-            <option value="branch" {% if sort == 'branch' %}selected{% endif %}>По филиалу</option>
-          </select>
-        </div>
-        <div class="w-full md:w-auto">
-          <label class="block text-xs text-brand-dark/70 mb-1">Направление</label>
-          <select name="dir" class="select w-full md:w-auto">
-            <option value="asc" {% if dir == 'asc' %}selected{% endif %}>А → Я</option>
-            <option value="desc" {% if dir == 'desc' %}selected{% endif %}>Я → А</option>
-          </select>
-        </div>
         <div class="flex flex-wrap gap-2">
           <button class="btn btn-primary" type="submit">Поиск</button>
           <a class="btn btn-outline" href="/companies/">Сброс</a>
@@ -159,14 +141,104 @@
               <th class="text-left px-4 py-3" style="width:44px">
                 <input type="checkbox" id="bulkSelectAll" />
               </th>
-              {% if "name" in company_list_columns %}<th class="text-left px-4 py-3">Компания</th>{% endif %}
-              {% if "overdue" in company_list_columns %}<th class="text-left px-4 py-3">Просрочки</th>{% endif %}
-              {% if "inn" in company_list_columns %}<th class="text-left px-4 py-3">ИНН</th>{% endif %}
-              {% if "status" in company_list_columns %}<th class="text-left px-4 py-3">Статус</th>{% endif %}
-              {% if "spheres" in company_list_columns %}<th class="text-left px-4 py-3">Сферы</th>{% endif %}
-              {% if "responsible" in company_list_columns %}<th class="text-left px-4 py-3">Ответственный</th>{% endif %}
-              {% if "branch" in company_list_columns %}<th class="text-left px-4 py-3">Филиал</th>{% endif %}
-              {% if "updated_at" in company_list_columns %}<th class="text-left px-4 py-3">Обновлено</th>{% endif %}
+              {% if "name" in company_list_columns %}
+                <th class="text-left px-4 py-3">
+                  <a href="?{% if qs %}{{ qs }}&{% endif %}sort=name&dir={% if sort_field == 'name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'name' %}text-brand-orange font-bold{% endif %}">
+                    Компания
+                    <div class="flex flex-col gap-0.5">
+                      <svg class="w-3 h-3 {% if sort_field == 'name' and sort_dir == 'asc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                      </svg>
+                      <svg class="w-3 h-3 {% if sort_field == 'name' and sort_dir == 'desc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    </div>
+                  </a>
+                </th>
+              {% endif %}
+              {% if "overdue" in company_list_columns %}
+                <th class="text-left px-4 py-3">
+                  Просрочки
+                </th>
+              {% endif %}
+              {% if "inn" in company_list_columns %}
+                <th class="text-left px-4 py-3">
+                  <a href="?{% if qs %}{{ qs }}&{% endif %}sort=inn&dir={% if sort_field == 'inn' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'inn' %}text-brand-orange font-bold{% endif %}">
+                    ИНН
+                    <div class="flex flex-col gap-0.5">
+                      <svg class="w-3 h-3 {% if sort_field == 'inn' and sort_dir == 'asc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                      </svg>
+                      <svg class="w-3 h-3 {% if sort_field == 'inn' and sort_dir == 'desc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    </div>
+                  </a>
+                </th>
+              {% endif %}
+              {% if "status" in company_list_columns %}
+                <th class="text-left px-4 py-3">
+                  <a href="?{% if qs %}{{ qs }}&{% endif %}sort=status&dir={% if sort_field == 'status' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'status' %}text-brand-orange font-bold{% endif %}">
+                    Статус
+                    <div class="flex flex-col gap-0.5">
+                      <svg class="w-3 h-3 {% if sort_field == 'status' and sort_dir == 'asc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                      </svg>
+                      <svg class="w-3 h-3 {% if sort_field == 'status' and sort_dir == 'desc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    </div>
+                  </a>
+                </th>
+              {% endif %}
+              {% if "spheres" in company_list_columns %}
+                <th class="text-left px-4 py-3">Сферы</th>
+              {% endif %}
+              {% if "responsible" in company_list_columns %}
+                <th class="text-left px-4 py-3">
+                  <a href="?{% if qs %}{{ qs }}&{% endif %}sort=responsible&dir={% if sort_field == 'responsible' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'responsible' %}text-brand-orange font-bold{% endif %}">
+                    Ответственный
+                    <div class="flex flex-col gap-0.5">
+                      <svg class="w-3 h-3 {% if sort_field == 'responsible' and sort_dir == 'asc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                      </svg>
+                      <svg class="w-3 h-3 {% if sort_field == 'responsible' and sort_dir == 'desc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    </div>
+                  </a>
+                </th>
+              {% endif %}
+              {% if "branch" in company_list_columns %}
+                <th class="text-left px-4 py-3">
+                  <a href="?{% if qs %}{{ qs }}&{% endif %}sort=branch&dir={% if sort_field == 'branch' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'branch' %}text-brand-orange font-bold{% endif %}">
+                    Филиал
+                    <div class="flex flex-col gap-0.5">
+                      <svg class="w-3 h-3 {% if sort_field == 'branch' and sort_dir == 'asc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                      </svg>
+                      <svg class="w-3 h-3 {% if sort_field == 'branch' and sort_dir == 'desc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    </div>
+                  </a>
+                </th>
+              {% endif %}
+              {% if "updated_at" in company_list_columns %}
+                <th class="text-left px-4 py-3">
+                  <a href="?{% if qs %}{{ qs }}&{% endif %}sort=updated_at&dir={% if sort_field == 'updated_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'updated_at' %}text-brand-orange font-bold{% endif %}">
+                    Обновлено
+                    <div class="flex flex-col gap-0.5">
+                      <svg class="w-3 h-3 {% if sort_field == 'updated_at' and sort_dir == 'asc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                      </svg>
+                      <svg class="w-3 h-3 {% if sort_field == 'updated_at' and sort_dir == 'desc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    </div>
+                  </a>
+                </th>
+              {% endif %}
             </tr>
           </thead>
           <tbody>
