@@ -18,6 +18,7 @@ import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import ru.groupprofi.crmprofi.dialer.queue.QueueManager
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -35,6 +36,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var notifBtn: Button
     private lateinit var logoutBtn: Button
     private lateinit var statusEl: TextView
+    private lateinit var queueStatusEl: TextView
 
     private var accessToken: String? = null
     private var refreshToken: String? = null
@@ -56,6 +58,7 @@ class MainActivity : AppCompatActivity() {
         notifBtn = findViewById(R.id.notifBtn)
         logoutBtn = findViewById(R.id.logoutBtn)
         statusEl = findViewById(R.id.status)
+        queueStatusEl = findViewById(R.id.queueStatus)
 
         val prefs = securePrefs()
         accessToken = prefs.getString(KEY_ACCESS, null)
@@ -205,9 +208,42 @@ class MainActivity : AppCompatActivity() {
                 // Автоматически запускаем сервис если его нет
                 startListeningServiceAuto()
             }
+            
+            // Показываем информацию об очереди (если пользователь вошел)
+            updateQueueStatus()
         } else {
             // Пользователь не вошел
             statusEl.text = "Статус: не подключено"
+            queueStatusEl.visibility = android.view.View.GONE
+        }
+    }
+    
+    /**
+     * Обновить информацию об оффлайн-очереди.
+     */
+    private fun updateQueueStatus() {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val queueManager = QueueManager(this@MainActivity)
+                val stats = queueManager.getStats()
+                
+                runOnUiThread {
+                    if (stats.total > 0) {
+                        val queueText = buildString {
+                            append("Очередь: ${stats.total} элементов")
+                            if (stats.callUpdate > 0) append(" (звонки: ${stats.callUpdate})")
+                            if (stats.heartbeat > 0) append(" (heartbeat: ${stats.heartbeat})")
+                            if (stats.telemetry > 0) append(" (телеметрия: ${stats.telemetry})")
+                        }
+                        queueStatusEl.text = queueText
+                        queueStatusEl.visibility = android.view.View.VISIBLE
+                    } else {
+                        queueStatusEl.visibility = android.view.View.GONE
+                    }
+                }
+            } catch (e: Exception) {
+                // Игнорируем ошибки при получении статистики очереди
+            }
         }
     }
 
@@ -242,19 +278,28 @@ class MainActivity : AppCompatActivity() {
      * Пытаемся использовать EncryptedSharedPreferences, при ошибке — обычные SharedPreferences.
      */
     private fun securePrefs(): SharedPreferences {
-        return try {
-            val masterKey = MasterKey.Builder(this)
-                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                .build()
-            EncryptedSharedPreferences.create(
-                this,
-                PREFS,
-                masterKey,
-                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-            )
-        } catch (_: Exception) {
-            getSharedPreferences(PREFS, MODE_PRIVATE)
+        return securePrefs(this)
+    }
+    
+    companion object {
+        /**
+         * Статический метод для получения securePrefs из других активностей.
+         */
+        fun securePrefs(context: Context): SharedPreferences {
+            return try {
+                val masterKey = MasterKey.Builder(context)
+                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                    .build()
+                EncryptedSharedPreferences.create(
+                    context,
+                    PREFS,
+                    masterKey,
+                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+                )
+            } catch (_: Exception) {
+                context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            }
         }
     }
 
