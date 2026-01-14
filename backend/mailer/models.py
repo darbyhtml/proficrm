@@ -177,4 +177,20 @@ class SendLog(models.Model):
     def __str__(self) -> str:
         return f"{self.campaign} {self.status}"
 
+# cooldown на повторное использование email после "очистки" кампании
+class EmailCooldown(models.Model):
+    email = models.EmailField("Email", db_index=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL, related_name="email_cooldowns")
+    until_at = models.DateTimeField("Нельзя использовать до", db_index=True)
+    created_at = models.DateTimeField("Создано", auto_now_add=True)
+
+    class Meta:
+        unique_together = ("email", "created_by")
+        indexes = [
+            models.Index(fields=["created_by", "until_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.email} until {self.until_at}"
+
 # Create your models here.

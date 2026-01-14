@@ -71,7 +71,14 @@
             <div class="font-medium mb-3 flex items-center justify-between">
               <div class="flex items-center gap-2">
                 <input type="checkbox" id="selectAllRecipientsGrouped" title="Выделить все получатели на странице" />
-                <span>Получатели по компаниям ({{ counts.total }} всего)</span>
+                <span>Получатели ({{ counts.total }} всего)</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <a class="btn btn-outline {% if view == 'pending' %}bg-brand-soft/50 font-medium{% endif %}" style="padding:.25rem .6rem;font-size:.75rem" href="?view=pending{% if qs %}&{{ qs }}{% endif %}">В очереди ({{ counts.pending }})</a>
+                <a class="btn btn-outline {% if view == 'sent' %}bg-brand-soft/50 font-medium{% endif %}" style="padding:.25rem .6rem;font-size:.75rem" href="?view=sent{% if qs %}&{{ qs }}{% endif %}">Отправлено ({{ counts.sent }})</a>
+                <a class="btn btn-outline {% if view == 'failed' %}bg-brand-soft/50 font-medium{% endif %}" style="padding:.25rem .6rem;font-size:.75rem" href="?view=failed{% if qs %}&{{ qs }}{% endif %}">Ошибки ({{ counts.failed }})</a>
+                <a class="btn btn-outline {% if view == 'unsub' %}bg-brand-soft/50 font-medium{% endif %}" style="padding:.25rem .6rem;font-size:.75rem" href="?view=unsub{% if qs %}&{{ qs }}{% endif %}">Отписки ({{ counts.unsub }})</a>
+                <a class="btn btn-outline {% if view == 'all' %}bg-brand-soft/50 font-medium{% endif %}" style="padding:.25rem .6rem;font-size:.75rem" href="?view=all{% if qs %}&{{ qs }}{% endif %}">Все</a>
               </div>
               {% if page %}
                 <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/bulk-delete/" id="bulkDeleteForm" onsubmit="return confirm('Удалить выбранных получателей?');" style="display:none;">
@@ -285,8 +292,36 @@
             </form>
             <form method="post" action="/mail/campaigns/{{ campaign.id }}/send-step/">
               {% csrf_token %}
+              <input type="hidden" name="confirm_send" value="1" />
               <button class="btn btn-primary" type="submit">Отправить (до 50)</button>
             </form>
+            {% if counts.pending == 0 and counts.total > 0 %}
+              <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/reset/" onsubmit="return confirm('Вернуть отправленные/ошибочные email в очередь для повторной рассылки?');">
+                {% csrf_token %}
+                <button class="btn btn-outline" type="submit">Вернуть в очередь</button>
+              </form>
+              <form method="post" action="/mail/campaigns/{{ campaign.id }}/clear/" onsubmit="return confirm('Очистить кампанию и удалить всех получателей? Будет пауза на повторное использование email.');">
+                {% csrf_token %}
+                <button class="btn btn-outline" type="submit">Очистить кампанию</button>
+              </form>
+            {% endif %}
+            {% if can_delete_campaign %}
+              <form method="post" action="/mail/campaigns/{{ campaign.id }}/delete/" onsubmit="return confirm('Удалить кампанию «{{ campaign.name }}»? Это действие необратимо.');">
+                {% csrf_token %}
+                <button class="btn" type="submit" title="Удалить кампанию" style="background:#dc2626;color:#fff">
+                  <span class="inline-flex items-center gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M3 6h18"></path>
+                      <path d="M8 6V4h8v2"></path>
+                      <path d="M6 6l1 16h10l1-16"></path>
+                      <path d="M10 11v6"></path>
+                      <path d="M14 11v6"></path>
+                    </svg>
+                    Удалить
+                  </span>
+                </button>
+              </form>
+            {% endif %}
           </div>
           <div class="text-xs muted-2 mt-2">Отправка идёт батчами и учитывает лимиты SMTP.</div>
         </div>

@@ -14,6 +14,8 @@ from mailer.utils import html_to_text
 
 logger = logging.getLogger(__name__)
 
+PER_USER_DAILY_LIMIT = 100
+
 
 @shared_task(name="mailer.tasks.send_pending_emails", bind=True, max_retries=3)
 def send_pending_emails(self, batch_size: int = 50):
@@ -50,6 +52,16 @@ def send_pending_emails(self, batch_size: int = 50):
                 status="sent",
                 created_at__date=now.date()
             ).count()
+
+            # Лимит 100 писем/день на пользователя (создателя кампании)
+            sent_today_user = SendLog.objects.filter(
+                provider="smtp_global",
+                status="sent",
+                campaign__created_by=user,
+                created_at__date=now.date(),
+            ).count()
+            if sent_today_user >= PER_USER_DAILY_LIMIT:
+                continue
             
             if sent_today >= smtp_cfg.rate_per_day or sent_last_min >= smtp_cfg.rate_per_minute:
                 continue
@@ -57,12 +69,18 @@ def send_pending_emails(self, batch_size: int = 50):
             allowed = max(1, min(
                 batch_size,
                 smtp_cfg.rate_per_minute - sent_last_min,
-                smtp_cfg.rate_per_day - sent_today
+                smtp_cfg.rate_per_day - sent_today,
+                PER_USER_DAILY_LIMIT - sent_today_user,
             ))
             
             batch = list(camp.recipients.filter(status=CampaignRecipient.Status.PENDING)[:allowed])
             if not batch:
                 continue
+
+            # Помечаем кампанию как отправляемую
+            if camp.status == Campaign.Status.READY:
+                camp.status = Campaign.Status.SENDING
+                camp.save(update_fields=["status", "updated_at"])
 
             did_work = True
             for r in batch:
@@ -116,6 +134,12 @@ def send_pending_emails(self, batch_size: int = 50):
                         status="failed",
                         error=str(ex)
                     )
+
+            # Если очередь пустая — помечаем как SENT (если уже было SENDING)
+            if not camp.recipients.filter(status=CampaignRecipient.Status.PENDING).exists():
+                if camp.status == Campaign.Status.SENDING:
+                    camp.status = Campaign.Status.SENT
+                    camp.save(update_fields=["status", "updated_at"])
 
         if did_work:
             logger.debug(f"Processed emails batch (campaigns: {len(camps)})")

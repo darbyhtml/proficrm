@@ -495,14 +495,24 @@
             <div class="text-brand-dark/50">Email адреса</div>
             <div class="space-y-1">
               {% if company.email %}
-                <div>
+                <div class="flex items-center gap-2">
                   <a class="link font-mono text-xs" href="mailto:{{ company.email }}">{{ company.email }}</a>
+                  <button type="button" class="btn btn-outline js-add-email-to-campaign" data-email="{{ company.email }}" data-company-id="{{ company.id }}" title="Добавить в рассылочную кампанию" style="padding:.15rem .4rem;font-size:.7rem">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M22 12h-4l-3 9-6-18-3 9H2"></path>
+                    </svg>
+                  </button>
                   <span class="text-xs text-brand-dark/50 ml-1">(основной)</span>
                 </div>
               {% endif %}
               {% for email in company.emails.all %}
-                <div>
+                <div class="flex items-center gap-2">
                   <a class="link font-mono text-xs" href="mailto:{{ email.value }}">{{ email.value }}</a>
+                  <button type="button" class="btn btn-outline js-add-email-to-campaign" data-email="{{ email.value }}" data-company-id="{{ company.id }}" title="Добавить в рассылочную кампанию" style="padding:.15rem .4rem;font-size:.7rem">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M22 12h-4l-3 9-6-18-3 9H2"></path>
+                    </svg>
+                  </button>
                 </div>
               {% endfor %}
               {% if not company.email and not company.emails.all %}
@@ -525,6 +535,27 @@
         </div>
 
       </section>
+
+      {# Модалка: добавить email в кампанию #}
+      <div id="addEmailToCampaignModal" class="fixed inset-0 bg-black/35 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl p-5 w-full max-w-md space-y-3">
+          <div class="flex items-center justify-between">
+            <div class="font-semibold">Добавить email в кампанию</div>
+            <button type="button" class="text-brand-dark/60 hover:text-red-600 transition-colors js-close-add-email-modal" title="Закрыть">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <div class="text-xs muted-2">Email: <span id="addEmailValue" class="font-mono"></span></div>
+          <div>
+            <label class="block text-xs muted mb-1">Кампания</label>
+            <select id="addEmailCampaignSelect" class="select"></select>
+          </div>
+          <div class="flex gap-2 justify-end pt-1">
+            <button type="button" class="btn btn-outline js-close-add-email-modal">Отмена</button>
+            <button type="button" class="btn btn-primary" id="addEmailConfirmBtn">Добавить</button>
+          </div>
+        </div>
+      </div>
 
       <section class="card card-pad">
         <div class="font-medium mb-3">Быстро</div>
@@ -1989,6 +2020,94 @@
           if (cancelBtn) cancelBtn.click();
         }
       });
+
+      // Добавление email в рассылочную кампанию (модалка)
+      (function() {
+        const modal = document.getElementById('addEmailToCampaignModal');
+        const emailSpan = document.getElementById('addEmailValue');
+        const select = document.getElementById('addEmailCampaignSelect');
+        const confirmBtn = document.getElementById('addEmailConfirmBtn');
+        if (!modal || !emailSpan || !select || !confirmBtn) return;
+
+        let currentEmail = '';
+        let currentCompanyId = '';
+
+        function openModal(email, companyId) {
+          currentEmail = email;
+          currentCompanyId = companyId;
+          emailSpan.textContent = email;
+          modal.classList.remove('hidden');
+          modal.classList.add('flex');
+        }
+
+        function closeModal() {
+          modal.classList.add('hidden');
+          modal.classList.remove('flex');
+          currentEmail = '';
+          currentCompanyId = '';
+        }
+
+        async function loadCampaigns() {
+          select.innerHTML = '<option value="">Загрузка...</option>';
+          const res = await fetch('/mail/campaigns/pick/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+          const data = await res.json();
+          if (!data.ok) throw new Error(data.error || 'Не удалось загрузить кампании');
+          const items = data.campaigns || [];
+          if (!items.length) {
+            select.innerHTML = '<option value="">Нет доступных кампаний</option>';
+            return;
+          }
+          select.innerHTML = items.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+        }
+
+        document.addEventListener('click', async (e) => {
+          const btn = e.target.closest('.js-add-email-to-campaign');
+          if (btn) {
+            e.preventDefault();
+            const email = btn.dataset.email || '';
+            const companyId = btn.dataset.companyId || '';
+            if (!email) return;
+            openModal(email, companyId);
+            try {
+              await loadCampaigns();
+            } catch (err) {
+              alert('Ошибка: ' + err.message);
+              closeModal();
+            }
+            return;
+          }
+          if (e.target === modal || e.target.closest('.js-close-add-email-modal')) {
+            closeModal();
+          }
+        });
+
+        confirmBtn.addEventListener('click', async () => {
+          const campaignId = select.value;
+          if (!campaignId) {
+            alert('Выберите кампанию');
+            return;
+          }
+          const csrf = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+          const fd = new FormData();
+          fd.append('campaign_id', campaignId);
+          fd.append('email', currentEmail);
+          fd.append('company_id', currentCompanyId);
+          if (csrf) fd.append('csrfmiddlewaretoken', csrf);
+
+          try {
+            const res = await fetch('/mail/campaigns/add-email/', { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            const data = await res.json();
+            if (!data.ok) {
+              alert(data.error || 'Не удалось добавить email');
+              return;
+            }
+            alert(data.message || 'Email добавлен');
+            closeModal();
+          } catch (err) {
+            alert('Ошибка: ' + err.message);
+          }
+        });
+      })();
     })();
   </script>
 {% endblock %}

@@ -27,6 +27,7 @@
               <th>Статус</th>
               <th>Создатель</th>
               <th>Создано</th>
+              <th style="width:60px"></th>
             </tr>
           </thead>
           <tbody>
@@ -37,9 +38,25 @@
                 <td><span class="badge">{{ c.get_status_display }}</span></td>
                 <td class="muted">{{ c.created_by|default:"—" }}</td>
                 <td class="muted">{{ c.created_at }}</td>
+                <td onclick="event.stopPropagation()">
+                  {% if is_admin or c.created_by_id == request.user.id %}
+                    <form method="post" action="/mail/campaigns/{{ c.id }}/delete/" onsubmit="return confirm('Удалить кампанию «{{ c.name }}»?');">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-outline" title="Удалить" style="padding:.25rem .5rem;border-color:#fecaca;color:#dc2626">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M3 6h18"></path>
+                          <path d="M8 6V4h8v2"></path>
+                          <path d="M6 6l1 16h10l1-16"></path>
+                          <path d="M10 11v6"></path>
+                          <path d="M14 11v6"></path>
+                        </svg>
+                      </button>
+                    </form>
+                  {% endif %}
+                </td>
               </tr>
             {% empty %}
-              <tr><td class="muted" colspan="5" style="padding:1.25rem 1rem">Кампаний нет.</td></tr>
+              <tr><td class="muted" colspan="6" style="padding:1.25rem 1rem">Кампаний нет.</td></tr>
             {% endfor %}
           </tbody>
         </table>
