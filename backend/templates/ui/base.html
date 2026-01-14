@@ -310,22 +310,20 @@
     </div>
 
     {# Глобальный прогресс рассылки (показывается только если есть активная отправка) #}
-    <a id="mailProgressWidget" href="#" class="hidden fixed bottom-5 left-5 z-50 bg-white border border-brand-soft rounded-2xl shadow-lg px-3 py-2 flex items-center gap-3 hover:bg-brand-soft/20" style="min-width:210px">
+    <a id="mailProgressWidget" href="#" class="hidden fixed bottom-5 left-5 z-50 bg-white border border-brand-soft rounded-2xl shadow-lg px-3 py-2 flex items-center gap-3 hover:bg-brand-soft/20" style="min-width:210px; position:fixed;">
       <div id="mailProgressCircle" class="w-10 h-10 rounded-full flex items-center justify-center text-xs font-semibold" style="background:conic-gradient(var(--brand-teal) 0deg, rgba(194,226,222,.6) 0deg); color:var(--brand-dark); border:1px solid rgba(194,226,222,.9)">
         <span id="mailProgressPct">0%</span>
       </div>
-      <div class="leading-tight">
-        <div class="text-xs muted flex items-center gap-2">
-          <span>Рассылка</span>
-          <button id="mailProgressClose" type="button" class="hidden text-brand-dark/50 hover:text-red-500 transition-colors" title="Закрыть">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M18 6L6 18"/>
-              <path d="M6 6l12 12"/>
-            </svg>
-          </button>
-        </div>
+      <div class="leading-tight relative pr-5">
+        <div class="text-xs muted">Рассылка</div>
         <div id="mailProgressText" class="text-sm font-medium">—</div>
         <div id="mailProgressCounts" class="text-[11px] muted-2">—</div>
+        <button id="mailProgressClose" type="button" class="hidden absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center rounded-full border border-brand-soft bg-white text-brand-dark/60 hover:text-red-500 hover:border-red-400 transition-colors" title="Закрыть">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6L6 18"/>
+            <path d="M6 6l12 12"/>
+          </svg>
+        </button>
       </div>
     </a>
 
