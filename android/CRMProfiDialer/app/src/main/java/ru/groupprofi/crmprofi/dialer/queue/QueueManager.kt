@@ -212,6 +212,7 @@ class QueueManager(private val context: Context) {
     
     /**
      * Отправить алерт в CRM о застрявших элементах очереди (достигших max retries).
+     * Защита от спама: отправляет не чаще чем раз в 5 минут.
      */
     private suspend fun sendQueueStuckAlert(
         baseUrl: String,
@@ -219,9 +220,29 @@ class QueueManager(private val context: Context) {
         stuckItems: List<QueueItem>,
         httpClient: OkHttpClient
     ) {
+        val now = System.currentTimeMillis()
+        val lastAlertTime = prefs.getLong(KEY_LAST_STUCK_ALERT_TIME, 0)
+        
+        // Проверяем, не слишком ли рано отправлять алерт (защита от спама)
+        if (now - lastAlertTime < STUCK_ALERT_INTERVAL_MS && lastAlertTime > 0) {
+            Log.d("QueueManager", "Queue stuck alert skipped (too soon): ${(now - lastAlertTime) / 1000} sec ago")
+            return
+        }
+        
         try {
             val url = "$baseUrl/api/phone/devices/heartbeat/"
             val jsonMedia = "application/json; charset=utf-8".toMediaType()
+            
+            // Вычисляем метрики
+            val oldestStuckAgeSec = if (stuckItems.isNotEmpty()) {
+                val oldest = stuckItems.minByOrNull { it.createdAt }?.createdAt ?: now
+                ((now - oldest) / 1000).toInt()
+            } else {
+                0
+            }
+            
+            // Разбивка по типам
+            val typeBreakdown = stuckItems.groupBy { it.type }.mapValues { it.value.size }
             
             // Формируем список застрявших элементов для алерта
             val stuckInfo = stuckItems.map { item ->
@@ -237,6 +258,13 @@ class QueueManager(private val context: Context) {
                 put("queue_stuck", true)
                 put("stuck_items", org.json.JSONArray(stuckInfo))
                 put("stuck_count", stuckItems.size)
+                put("oldest_stuck_age_sec", oldestStuckAgeSec)
+                // Разбивка по типам
+                val typeBreakdownJson = JSONObject()
+                typeBreakdown.forEach { (type, count) ->
+                    typeBreakdownJson.put(type, count)
+                }
+                put("stuck_by_type", typeBreakdownJson)
             }.toString()
             
             val req = Request.Builder()
@@ -247,7 +275,9 @@ class QueueManager(private val context: Context) {
             
             val response = httpClient.newCall(req).execute()
             if (response.isSuccessful) {
-                Log.i("QueueManager", "Queue stuck alert sent: ${stuckItems.size} items")
+                // Сохраняем время последнего успешного алерта
+                prefs.edit().putLong(KEY_LAST_STUCK_ALERT_TIME, now).apply()
+                Log.i("QueueManager", "Queue stuck alert sent: ${stuckItems.size} items, oldest=${oldestStuckAgeSec}s")
             } else {
                 Log.w("QueueManager", "Queue stuck alert failed: HTTP ${response.code}")
             }
