@@ -55,12 +55,33 @@ def ui_globals(request):
     if view_as_role and view_as_role in role_map:
         view_as_role_label = role_map[view_as_role]
 
+    # Визуальные права (для отображения блоков в меню/доске)
+    # Основаны на view_as_role, но для не-админов совпадают с реальной ролью.
+    view_is_admin = bool(view_as_role == User.Role.ADMIN or getattr(user, "is_superuser", False)) if is_auth else False
+    view_is_group_manager = bool(
+        is_auth and view_as_role in (User.Role.ADMIN, User.Role.GROUP_MANAGER)
+    )
+    view_is_branch_lead = bool(
+        is_auth and view_as_role in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR)
+    )
+    view_can_view_activity = bool(view_is_admin or view_is_group_manager or view_is_branch_lead)
+    view_can_view_cold_call_reports = bool(
+        view_can_view_activity or (is_auth and view_as_role == User.Role.MANAGER)
+    )
+
     return {
+        # Реальные права пользователя (для бэкенда/безопасности)
         "is_admin": is_admin,
         "is_group_manager": is_group_manager,
         "is_branch_lead": is_branch_lead,
         "can_view_activity": can_view_activity,
         "can_view_cold_call_reports": can_view_cold_call_reports,
+        # Визуальные права с учётом режима "просмотр как"
+        "view_is_admin": view_is_admin,
+        "view_is_group_manager": view_is_group_manager,
+        "view_is_branch_lead": view_is_branch_lead,
+        "view_can_view_activity": view_can_view_activity,
+        "view_can_view_cold_call_reports": view_can_view_cold_call_reports,
         # Режим "просмотр как"
         "view_as_role": view_as_role,
         "view_as_branch": view_as_branch,
