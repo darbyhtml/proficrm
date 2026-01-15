@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import uuid
+import hashlib
+import secrets
+from datetime import timedelta
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
+from django.core.files.storage import default_storage
 
 
 class PhoneDevice(models.Model):
@@ -154,4 +159,123 @@ class PhoneLogBundle(models.Model):
     def __str__(self) -> str:
         return f"LogBundle({self.user_id}, {self.level_summary}, {self.source})"
 
+
+class MobileAppBuild(models.Model):
+    """
+    Версия мобильного приложения (APK) для скачивания.
+    Только production версии, staging не показываем.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    env = models.CharField(max_length=16, default="production", db_index=True, help_text="Только production")
+    version_name = models.CharField(max_length=32, verbose_name="Версия (name)")
+    version_code = models.IntegerField(verbose_name="Версия (code)")
+    file = models.FileField(upload_to="mobile_apps/", verbose_name="APK файл")
+    sha256 = models.CharField(max_length=64, blank=True, verbose_name="SHA256 хеш")
+    uploaded_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата загрузки")
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="uploaded_app_builds",
+        verbose_name="Загрузил",
+    )
+    is_active = models.BooleanField(default=True, db_index=True, verbose_name="Активна", help_text="Показывать в списке")
+
+    class Meta:
+        ordering = ["-uploaded_at"]
+        indexes = [
+            models.Index(fields=["env", "is_active", "-uploaded_at"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        # Вычисляем SHA256 при сохранении
+        if self.file and not self.sha256:
+            self.sha256 = self._calculate_sha256()
+        super().save(*args, **kwargs)
+
+    def _calculate_sha256(self) -> str:
+        """Вычислить SHA256 хеш файла."""
+        if not self.file:
+            return ""
+        try:
+            hash_sha256 = hashlib.sha256()
+            self.file.seek(0)
+            for chunk in self.file.chunks():
+                hash_sha256.update(chunk)
+            self.file.seek(0)
+            return hash_sha256.hexdigest()
+        except Exception:
+            return ""
+
+    def get_file_size(self) -> int:
+        """Получить размер файла в байтах."""
+        if self.file and hasattr(self.file, "size"):
+            return self.file.size
+        return 0
+
+    def get_file_size_display(self) -> str:
+        """Получить размер файла в читаемом формате."""
+        size = self.get_file_size()
+        for unit in ["Б", "КБ", "МБ", "ГБ"]:
+            if size < 1024.0:
+                return f"{size:.1f} {unit}"
+            size /= 1024.0
+        return f"{size:.1f} ТБ"
+
+    def __str__(self) -> str:
+        return f"{self.version_name} ({self.version_code}) - {self.uploaded_at.strftime('%Y-%m-%d')}"
+
+
+class MobileAppQrToken(models.Model):
+    """
+    Одноразовый токен для QR-логина в мобильное приложение.
+    TTL: 5 минут, одноразовый.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="qr_tokens")
+    token = models.CharField(max_length=128, unique=True, db_index=True, verbose_name="Токен")
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создан")
+    expires_at = models.DateTimeField(verbose_name="Истекает")
+    used_at = models.DateTimeField(null=True, blank=True, verbose_name="Использован")
+    ip_address = models.GenericIPAddressField(null=True, blank=True, verbose_name="IP адрес")
+    user_agent = models.CharField(max_length=255, blank=True, default="", verbose_name="User-Agent")
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["token"]),
+            models.Index(fields=["user", "-created_at"]),
+            models.Index(fields=["expires_at"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        # Автоматически устанавливаем expires_at при создании
+        if not self.expires_at:
+            self.expires_at = timezone.now() + timedelta(minutes=5)
+        super().save(*args, **kwargs)
+
+    def is_valid(self) -> bool:
+        """Проверить, валиден ли токен."""
+        if self.used_at is not None:
+            return False
+        if timezone.now() > self.expires_at:
+            return False
+        return True
+
+    def mark_as_used(self) -> None:
+        """Пометить токен как использованный."""
+        if self.used_at is None:
+            self.used_at = timezone.now()
+            self.save(update_fields=["used_at"])
+
+    @classmethod
+    def generate_token(cls) -> str:
+        """Сгенерировать случайный токен (base64url-safe, 64 байта)."""
+        return secrets.token_urlsafe(64)
+
+    def __str__(self) -> str:
+        return f"QRToken({self.user.username}, {self.token[:16]}..., expires={self.expires_at})"
 

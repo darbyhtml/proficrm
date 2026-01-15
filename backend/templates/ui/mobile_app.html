@@ -1,0 +1,212 @@
+{% extends "ui/base.html" %}
+{% block title %}Мобильное приложение — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <div class="space-y-6">
+    <div class="flex items-end justify-between">
+      <div>
+        <h1 class="text-2xl font-semibold">Мобильное приложение</h1>
+        <div class="text-sm text-brand-dark/70">Установка и вход в мобильное приложение CRM</div>
+      </div>
+    </div>
+
+    <!-- Верхний блок: кнопки скачивания и QR-входа -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {% if latest_build %}
+        <div class="card card-pad">
+          <div class="flex items-center gap-3 mb-3">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            <div>
+              <div class="font-semibold">Скачать приложение</div>
+              <div class="text-sm text-brand-dark/70">Версия {{ latest_build.version_name }} ({{ latest_build.version_code }})</div>
+            </div>
+          </div>
+          <a href="{% url 'mobile_app_download' latest_build.id %}" class="btn btn-primary w-full">
+            Скачать APK
+          </a>
+        </div>
+      {% else %}
+        <div class="card card-pad">
+          <div class="text-sm text-brand-dark/70">Версии приложения пока не загружены</div>
+        </div>
+      {% endif %}
+
+      <div class="card card-pad">
+        <div class="flex items-center gap-3 mb-3">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <path d="M3 9h18M9 3v18"/>
+          </svg>
+          <div>
+            <div class="font-semibold">QR-вход</div>
+            <div class="text-sm text-brand-dark/70">Быстрый вход без логина и пароля</div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-outline w-full" id="openQrModal">
+          Открыть QR-код
+        </button>
+      </div>
+    </div>
+
+    <!-- Таблица версий -->
+    {% if builds %}
+      <div class="card card-pad">
+        <div class="font-semibold mb-4">История версий</div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-brand-soft">
+                <th class="text-left py-2 px-3 font-medium text-brand-dark/70">Версия</th>
+                <th class="text-left py-2 px-3 font-medium text-brand-dark/70">Дата</th>
+                <th class="text-left py-2 px-3 font-medium text-brand-dark/70">Размер</th>
+                <th class="text-right py-2 px-3 font-medium text-brand-dark/70">Действия</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for build in builds %}
+                <tr class="border-b border-brand-soft/50 hover:bg-brand-soft/20">
+                  <td class="py-2 px-3">
+                    <div class="font-medium">{{ build.version_name }}</div>
+                    <div class="text-xs text-brand-dark/60">Code: {{ build.version_code }}</div>
+                  </td>
+                  <td class="py-2 px-3 text-brand-dark/80">{{ build.uploaded_at|date:"d.m.Y H:i" }}</td>
+                  <td class="py-2 px-3 text-brand-dark/80">{{ build.get_file_size_display }}</td>
+                  <td class="py-2 px-3 text-right">
+                    <a href="{% url 'mobile_app_download' build.id %}" class="btn btn-sm btn-outline">
+                      Скачать
+                    </a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    {% endif %}
+
+    <!-- Инструкция -->
+    <div class="card card-pad">
+      <div class="font-semibold mb-3">Инструкция по установке</div>
+      <div class="prose prose-sm max-w-none text-brand-dark/80">
+        <ol class="list-decimal list-inside space-y-2">
+          <li>Скачайте APK файл на ваше Android-устройство</li>
+          <li>Разрешите установку из неизвестных источников в настройках Android</li>
+          <li>Установите приложение, следуя инструкциям на экране</li>
+          <li>Откройте приложение и войдите через QR-код или используйте логин и пароль</li>
+        </ol>
+        <p class="mt-4 text-sm text-brand-dark/70">
+          <strong>Примечание:</strong> Приложение предназначено для внутреннего использования сотрудниками компании.
+          При возникновении проблем обратитесь к администратору.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модалка QR-кода -->
+  <div id="qrModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl p-6 max-w-md w-full relative">
+      <button type="button" id="closeQrModal" class="absolute top-4 right-4 text-brand-dark/60 hover:text-brand-dark">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 6L6 18M6 6l12 12"/>
+        </svg>
+      </button>
+      
+      <div class="text-center">
+        <h2 class="text-xl font-semibold mb-4">QR-код для входа</h2>
+        <div class="flex justify-center mb-4">
+          <div id="qrCodeContainer" class="p-4 bg-white border-2 border-brand-soft rounded-xl">
+            <img id="qrCodeImage" src="" alt="QR Code" class="w-64 h-64">
+          </div>
+        </div>
+        <div class="text-sm text-brand-dark/70 mb-2">
+          Действует <span id="qrTimer">5:00</span>
+        </div>
+        <div class="text-xs text-brand-dark/60">
+          Отсканируйте QR-код в мобильном приложении для быстрого входа
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let qrToken = null;
+    let qrExpiresAt = null;
+    let qrTimerInterval = null;
+
+    document.getElementById('openQrModal').addEventListener('click', async function() {
+      // Создаем QR-токен
+      try {
+        const response = await fetch('/api/phone/qr/create/', {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json',
+          },
+          credentials: 'same-origin',
+        });
+        
+        if (!response.ok) {
+          alert('Ошибка создания QR-кода. Попробуйте позже.');
+          return;
+        }
+        
+        const data = await response.json();
+        qrToken = data.token;
+        qrExpiresAt = new Date(data.expires_at);
+        
+        // Показываем QR-код
+        document.getElementById('qrCodeImage').src = `/mobile-app/qr.png?token=${qrToken}`;
+        document.getElementById('qrModal').classList.remove('hidden');
+        
+        // Запускаем таймер
+        startQrTimer();
+      } catch (error) {
+        console.error('Error creating QR token:', error);
+        alert('Ошибка создания QR-кода. Попробуйте позже.');
+      }
+    });
+
+    document.getElementById('closeQrModal').addEventListener('click', function() {
+      document.getElementById('qrModal').classList.add('hidden');
+      if (qrTimerInterval) {
+        clearInterval(qrTimerInterval);
+        qrTimerInterval = null;
+      }
+    });
+
+    function startQrTimer() {
+      if (qrTimerInterval) {
+        clearInterval(qrTimerInterval);
+      }
+      
+      function updateTimer() {
+        if (!qrExpiresAt) return;
+        
+        const now = new Date();
+        const diff = Math.max(0, Math.floor((qrExpiresAt - now) / 1000));
+        
+        if (diff === 0) {
+          document.getElementById('qrTimer').textContent = 'Истек';
+          if (qrTimerInterval) {
+            clearInterval(qrTimerInterval);
+          }
+          setTimeout(() => {
+            document.getElementById('qrModal').classList.add('hidden');
+          }, 2000);
+          return;
+        }
+        
+        const minutes = Math.floor(diff / 60);
+        const seconds = diff % 60;
+        document.getElementById('qrTimer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+      }
+      
+      updateTimer();
+      qrTimerInterval = setInterval(updateTimer, 1000);
+    }
+  </script>
+{% endblock %}

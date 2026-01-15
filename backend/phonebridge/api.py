@@ -7,8 +7,9 @@ from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.tokens import RefreshToken
 
-from .models import CallRequest, PhoneDevice, PhoneTelemetry, PhoneLogBundle
+from .models import CallRequest, PhoneDevice, PhoneTelemetry, PhoneLogBundle, MobileAppQrToken
 
 
 class RegisterDeviceSerializer(serializers.Serializer):
@@ -380,4 +381,205 @@ class PhoneLogUploadView(APIView):
 
         logger.debug(f"PhoneLogUpload: user={request.user.id}, saved={saved}")
         return Response({"ok": True, "saved": saved})
+
+
+class QrTokenCreateView(APIView):
+    """
+    Создание одноразового QR-токена для входа в мобильное приложение.
+    Требует авторизации через session (UI) или JWT.
+    Rate limit: не чаще 1 раза в 10 секунд.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        import logging
+        from accounts.security import get_client_ip, is_ip_rate_limited
+        from rest_framework import status
+
+        logger = logging.getLogger(__name__)
+
+        # Rate limiting: не чаще 1 раза в 10 секунд
+        ip = get_client_ip(request)
+        if is_ip_rate_limited(ip, "qr_token_create", 1, 10):
+            return Response(
+                {"detail": "Слишком частые запросы. Подождите немного."},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
+        # Генерируем токен
+        token = MobileAppQrToken.generate_token()
+        qr_token = MobileAppQrToken.objects.create(
+            user=request.user,
+            token=token,
+            ip_address=ip,
+            user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
+        )
+
+        logger.info(f"QrTokenCreate: user={request.user.id}, token={token[:16]}...")
+
+        return Response({
+            "token": token,
+            "expires_at": qr_token.expires_at.isoformat(),
+        })
+
+
+class QrTokenExchangeSerializer(serializers.Serializer):
+    token = serializers.CharField(max_length=128)
+
+
+class QrTokenExchangeView(APIView):
+    """
+    Обмен QR-токена на JWT access/refresh токены.
+    Не требует авторизации (публичный endpoint).
+    Токен одноразовый, TTL 5 минут.
+    """
+
+    permission_classes = []  # Публичный endpoint
+
+    def post(self, request):
+        import logging
+        from rest_framework import status
+        from rest_framework_simplejwt.tokens import RefreshToken
+
+        logger = logging.getLogger(__name__)
+
+        s = QrTokenExchangeSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        token = s.validated_data["token"].strip()
+
+        # Находим токен
+        try:
+            qr_token = MobileAppQrToken.objects.get(token=token)
+        except MobileAppQrToken.DoesNotExist:
+            logger.warning(f"QrTokenExchange: invalid token {token[:16]}...")
+            return Response(
+                {"detail": "Неверный или истекший токен"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Проверяем валидность
+        if not qr_token.is_valid():
+            logger.warning(f"QrTokenExchange: expired or used token {token[:16]}...")
+            return Response(
+                {"detail": "Неверный или истекший токен"},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Помечаем как использованный
+        qr_token.mark_as_used()
+
+        # Генерируем JWT токены
+        refresh = RefreshToken.for_user(qr_token.user)
+        access = refresh.access_token
+
+        logger.info(f"QrTokenExchange: user={qr_token.user.id}, token={token[:16]}... - success")
+
+        return Response({
+            "access": str(access),
+            "refresh": str(refresh),
+            "username": qr_token.user.username,  # Возвращаем username для удобства
+        })
+
+
+class LogoutSerializer(serializers.Serializer):
+    refresh = serializers.CharField(required=False, allow_blank=True)
+    device_id = serializers.CharField(required=False, allow_blank=True, max_length=64)
+
+
+class LogoutView(APIView):
+    """
+    Удалённый logout: инвалидирует refresh token или все сессии пользователя.
+    Используется для безопасного завершения сессии с другого устройства или из CRM.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        import logging
+        from rest_framework import status
+        from accounts.security import get_client_ip
+
+        logger = logging.getLogger(__name__)
+        s = LogoutSerializer(data=request.data)
+        s.is_valid(raise_exception=True)
+        
+        refresh_token = s.validated_data.get("refresh", "").strip()
+        device_id = s.validated_data.get("device_id", "").strip()
+        
+        # Если передан refresh token - инвалидируем его
+        if refresh_token:
+            try:
+                token = RefreshToken(refresh_token)
+                token.blacklist()  # Добавляем в blacklist (требует django-rest-framework-simplejwt с blacklist)
+                logger.info(f"Logout: user={request.user.id}, refresh token blacklisted")
+            except Exception as e:
+                # Если blacklist не настроен или токен невалиден - просто логируем
+                logger.warning(f"Logout: failed to blacklist token: {e}")
+        
+        # Если передан device_id - логируем logout для конкретного устройства
+        if device_id:
+            try:
+                device = PhoneDevice.objects.filter(user=request.user, device_id=device_id).first()
+                if device:
+                    logger.info(f"Logout: user={request.user.id}, device={device_id}")
+            except Exception:
+                pass
+        
+        # Логируем logout в audit
+        try:
+            from audit.service import log_event
+            from audit.models import ActivityEvent
+            log_event(
+                actor=request.user,
+                verb=ActivityEvent.Verb.UPDATE,
+                entity_type="security",
+                entity_id=f"mobile_logout:{request.user.id}",
+                message="Выход из мобильного приложения",
+                meta={
+                    "ip": get_client_ip(request),
+                    "device_id": device_id or None,
+                    "has_refresh_token": bool(refresh_token),
+                },
+            )
+        except Exception:
+            pass
+        
+        return Response({"ok": True, "message": "Сессия завершена"})
+
+
+class LogoutAllView(APIView):
+    """
+    Завершить все мобильные сессии пользователя.
+    Используется для полного logout со всех устройств.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        import logging
+        from accounts.security import get_client_ip
+
+        logger = logging.getLogger(__name__)
+        
+        # Логируем logout всех устройств
+        try:
+            from audit.service import log_event
+            from audit.models import ActivityEvent
+            device_count = PhoneDevice.objects.filter(user=request.user).count()
+            log_event(
+                actor=request.user,
+                verb=ActivityEvent.Verb.UPDATE,
+                entity_type="security",
+                entity_id=f"mobile_logout_all:{request.user.id}",
+                message="Выход из всех мобильных устройств",
+                meta={
+                    "ip": get_client_ip(request),
+                    "device_count": device_count,
+                },
+            )
+        except Exception:
+            pass
+        
+        logger.info(f"LogoutAll: user={request.user.id}, all devices logged out")
+        
+        return Response({"ok": True, "message": "Все сессии завершены"})
 

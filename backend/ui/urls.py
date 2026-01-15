@@ -99,6 +99,11 @@ urlpatterns = [
     path("settings/mobile/devices/<int:pk>/", views.settings_mobile_device_detail, name="settings_mobile_device_detail"),
     path("settings/calls/stats/", views.settings_calls_stats, name="settings_calls_stats"),
     path("settings/calls/stats/<int:user_id>/", views.settings_calls_manager_detail, name="settings_calls_manager_detail"),
+    
+    # Мобильное приложение
+    path("mobile-app/", views.mobile_app_page, name="mobile_app_page"),
+    path("mobile-app/download/<uuid:build_id>/", views.mobile_app_download, name="mobile_app_download"),
+    path("mobile-app/qr.png", views.mobile_app_qr_image, name="mobile_app_qr_image"),
 ]
 
 

@@ -24,7 +24,7 @@ from companies.permissions import can_edit_company as can_edit_company_perm, edi
 from tasksapp.models import Task, TaskType
 from notifications.models import Notification
 from notifications.service import notify
-from phonebridge.models import CallRequest, PhoneDevice
+from phonebridge.models import CallRequest, PhoneDevice, MobileAppBuild, MobileAppQrToken
 import mimetypes
 import os
 from datetime import date as _date
@@ -5544,3 +5544,102 @@ def settings_calls_manager_detail(request: HttpRequest, user_id: int) -> HttpRes
             "filter_status": filter_status,
         },
     )
+
+
+@login_required
+def mobile_app_page(request: HttpRequest) -> HttpResponse:
+    """
+    Страница мобильного приложения: скачивание APK и QR-вход.
+    Доступна всем авторизованным пользователям.
+    """
+    from accounts.security import get_client_ip
+    
+    # Получаем последнюю production версию
+    latest_build = MobileAppBuild.objects.filter(env="production", is_active=True).order_by("-uploaded_at").first()
+    
+    # Получаем список всех версий (последние 10)
+    builds = MobileAppBuild.objects.filter(env="production", is_active=True).order_by("-uploaded_at")[:10]
+    
+    return render(
+        request,
+        "ui/mobile_app.html",
+        {
+            "latest_build": latest_build,
+            "builds": builds,
+        },
+    )
+
+
+@login_required
+def mobile_app_download(request: HttpRequest, build_id) -> HttpResponse:
+    """
+    Скачивание APK файла. Только для авторизованных пользователей.
+    """
+    from accounts.security import get_client_ip
+    
+    build = get_object_or_404(MobileAppBuild, id=build_id, env="production", is_active=True)
+    
+    if not build.file:
+        raise Http404("Файл не найден")
+    
+    # Логируем скачивание
+    try:
+        log_event(
+            actor=request.user,
+            verb=ActivityEvent.Verb.VIEW,
+            entity_type="mobile_app",
+            entity_id=str(build.id),
+            message=f"Скачана версия {build.version_name} ({build.version_code})",
+            meta={
+                "version_name": build.version_name,
+                "version_code": build.version_code,
+                "ip": get_client_ip(request),
+            },
+        )
+    except Exception:
+        pass  # Не критично, если логирование не удалось
+    
+    # Отдаем файл с правильным Content-Disposition
+    response = FileResponse(build.file.open("rb"), content_type="application/vnd.android.package-archive")
+    response["Content-Disposition"] = f'attachment; filename="crmprofi-{build.version_name}-{build.version_code}.apk"'
+    return response
+
+
+@login_required
+def mobile_app_qr_image(request: HttpRequest) -> HttpResponse:
+    """
+    Генерация QR-кода для входа в мобильное приложение.
+    Токен передается через query параметр ?token=...
+    """
+    import qrcode
+    import io
+    
+    token = request.GET.get("token", "").strip()
+    if not token:
+        raise Http404("Токен не указан")
+    
+    # Проверяем, что токен существует и принадлежит текущему пользователю
+    qr_token = get_object_or_404(
+        MobileAppQrToken.objects.filter(user=request.user, token=token),
+        token=token
+    )
+    
+    # Формируем URL для обмена токена (используем текущий домен)
+    exchange_url = f"{request.scheme}://{request.get_host()}/api/phone/qr/exchange/"
+    qr_data = f"{exchange_url}?token={token}"
+    
+    # Генерируем QR-код
+    qr = qrcode.QRCode(version=1, box_size=10, border=4)
+    qr.add_data(qr_data)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color="black", back_color="white")
+    
+    # Сохраняем в BytesIO
+    buffer = io.BytesIO()
+    img.save(buffer, format="PNG")
+    buffer.seek(0)
+    
+    response = HttpResponse(buffer.read(), content_type="image/png")
+    response["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return response

@@ -337,6 +337,23 @@
                 </a>
               {% endif %}
             </nav>
+            
+            <!-- Плитка "Мобильное приложение" под меню -->
+            <div class="mt-4 pt-4 border-t border-brand-soft">
+              <a href="{% url 'mobile_app_page' %}" class="block rounded-xl border border-brand-soft bg-gradient-to-br from-brand-soft/30 to-white p-3 hover:bg-brand-soft/50 transition-colors">
+                <div class="flex items-start gap-3">
+                  <div class="flex-shrink-0 mt-0.5">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z"/>
+                    </svg>
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <div class="font-semibold text-sm text-brand-dark">Мобильное приложение</div>
+                    <div class="text-xs text-brand-dark/70 mt-0.5">Быстрая установка и вход по QR</div>
+                  </div>
+                </div>
+              </a>
+            </div>
           </div>
         </aside>
 
