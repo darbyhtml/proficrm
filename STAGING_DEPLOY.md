@@ -141,7 +141,7 @@ git clone git@github.com:darbyhtml/proficrm.git .
 cd /opt/crm-staging
 
 # Копируем шаблон
-cp .env.staging.example .env.staging
+cp env.staging.template .env.staging
 
 # Генерируем SECRET_KEY
 python3 -c "import secrets; print(secrets.token_urlsafe(50))" > /tmp/secret_key.txt
