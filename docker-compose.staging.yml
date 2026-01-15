@@ -1,0 +1,159 @@
+services:
+  db:
+    image: postgres:16
+    container_name: crm_staging_db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-crm_staging}
+      POSTGRES_USER: ${POSTGRES_USER:-crm_staging}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata_staging:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crm_staging}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - crm_staging_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: crm_staging_redis
+    volumes:
+      - redisdata_staging:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - crm_staging_network
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.staging
+    container_name: crm_staging_web
+    working_dir: /app/backend
+    volumes:
+      - ./backend:/app/backend
+      - media_staging:/app/backend/media
+      - static_staging:/app/backend/staticfiles
+    env_file:
+      - .env.staging
+    environment:
+      DB_ENGINE: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-crm_staging}
+      POSTGRES_USER: ${POSTGRES_USER:-crm_staging}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             gunicorn crm.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 120 --access-logfile - --error-logfile -"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - crm_staging_network
+
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile.staging
+    container_name: crm_staging_celery
+    working_dir: /app/backend
+    volumes:
+      - ./backend:/app/backend
+    env_file:
+      - .env.staging
+    environment:
+      DB_ENGINE: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-crm_staging}
+      POSTGRES_USER: ${POSTGRES_USER:-crm_staging}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A crm worker --loglevel=info --concurrency=2
+    restart: unless-stopped
+    networks:
+      - crm_staging_network
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.staging
+    container_name: crm_staging_celery_beat
+    working_dir: /app/backend
+    volumes:
+      - ./backend:/app/backend
+    env_file:
+      - .env.staging
+    environment:
+      DB_ENGINE: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-crm_staging}
+      POSTGRES_USER: ${POSTGRES_USER:-crm_staging}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A crm beat --loglevel=info
+    restart: unless-stopped
+    networks:
+      - crm_staging_network
+
+  nginx:
+    image: nginx:alpine
+    container_name: crm_staging_nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/staging.conf:/etc/nginx/conf.d/default.conf:ro
+      - static_staging:/usr/share/nginx/html/static:ro
+      - media_staging:/usr/share/nginx/html/media:ro
+    depends_on:
+      - web
+    restart: unless-stopped
+    networks:
+      - crm_staging_network
+
+volumes:
+  pgdata_staging:
+  redisdata_staging:
+  media_staging:
+  static_staging:
+
+networks:
+  crm_staging_network:
+    driver: bridge

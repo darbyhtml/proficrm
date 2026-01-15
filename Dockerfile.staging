@@ -1,0 +1,32 @@
+FROM python:3.13-slim
+
+# Установка системных зависимостей
+RUN apt-get update && apt-get install -y \
+    gcc \
+    postgresql-client \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Рабочая директория
+WORKDIR /app
+
+# Копирование requirements и установка зависимостей
+COPY backend/requirements.txt /app/backend/requirements.txt
+RUN pip install --no-cache-dir -r /app/backend/requirements.txt && \
+    pip install --no-cache-dir gunicorn
+
+# Копирование кода приложения
+COPY backend /app/backend
+
+WORKDIR /app/backend
+
+# Создание пользователя для безопасности (опционально, но рекомендуется)
+RUN useradd -m -u 1000 crmuser && \
+    chown -R crmuser:crmuser /app
+USER crmuser
+
+# Expose порт
+EXPOSE 8000
+
+# Команда по умолчанию (переопределяется в docker-compose)
+CMD ["gunicorn", "crm.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2"]

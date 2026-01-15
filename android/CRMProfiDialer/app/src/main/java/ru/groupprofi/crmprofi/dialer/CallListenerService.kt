@@ -747,6 +747,19 @@ class CallListenerService : Service() {
                 put("last_poll_code", lastPollCode)
                 put("last_poll_at", iso)
                 put("encryption_enabled", encryptionEnabled) // Отправляем статус шифрования в CRM
+                
+                // Добавляем метрики застрявших элементов очереди (если есть)
+                if (stuckMetrics != null) {
+                    put("queue_stuck", true)
+                    put("stuck_count", stuckMetrics.stuckCount)
+                    put("oldest_stuck_age_sec", stuckMetrics.oldestStuckAgeSec)
+                    // Разбивка по типам
+                    val stuckByTypeJson = org.json.JSONObject()
+                    stuckMetrics.stuckByType.forEach { (type, count) ->
+                        stuckByTypeJson.put(type, count)
+                    }
+                    put("stuck_by_type", stuckByTypeJson)
+                }
             }.toString()
 
             val req = Request.Builder()
