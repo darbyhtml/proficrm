@@ -169,6 +169,63 @@ def _detach_client_branches(*, head_company: Company) -> list[Company]:
     return children
 
 
+@login_required
+def view_as_update(request: HttpRequest) -> HttpResponse:
+    """
+    Установить режим "просмотр как роль/филиал" для администратора.
+    Не меняет реальные права пользователя, используется только для фильтрации/отображения.
+    """
+    user: User = request.user  # type: ignore[assignment]
+    if not (user.is_superuser or user.role == User.Role.ADMIN):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    if request.method != "POST":
+        return redirect(request.META.get("HTTP_REFERER") or "/")
+
+    view_role = (request.POST.get("view_role") or "").strip()
+    view_branch_id = (request.POST.get("view_branch_id") or "").strip()
+
+    # Валидация и сохранение роли
+    valid_roles = {choice[0] for choice in User.Role.choices}
+    if view_role and view_role in valid_roles:
+        request.session["view_as_role"] = view_role
+    else:
+        request.session.pop("view_as_role", None)
+
+    # Валидация и сохранение филиала
+    if view_branch_id:
+        try:
+            bid = int(view_branch_id)
+            if Branch.objects.filter(id=bid).exists():
+                request.session["view_as_branch_id"] = bid
+            else:
+                request.session.pop("view_as_branch_id", None)
+        except (TypeError, ValueError):
+            request.session.pop("view_as_branch_id", None)
+    else:
+        request.session.pop("view_as_branch_id", None)
+
+    next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or "/"
+    return redirect(next_url)
+
+
+@login_required
+def view_as_reset(request: HttpRequest) -> HttpResponse:
+    """
+    Сбросить режим "просмотр как" для администратора.
+    """
+    user: User = request.user  # type: ignore[assignment]
+    if not (user.is_superuser or user.role == User.Role.ADMIN):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    request.session.pop("view_as_role", None)
+    request.session.pop("view_as_branch_id", None)
+
+    return redirect(request.META.get("HTTP_REFERER") or "/")
+
+
 def _notify_head_deleted_with_branches(*, actor: User, head_company: Company, detached: list[Company]):
     """
     Уведомление о том, что удалили головную компанию клиента, и её филиалы стали самостоятельными.
@@ -5244,12 +5301,23 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
         period_label = timezone.localdate(now).strftime("%d.%m.%Y")
     
     # Определяем, каких менеджеров показывать
+    session = getattr(request, "session", {})
+    view_as_branch_id = None
+    if (request.user.is_superuser or request.user.role == User.Role.ADMIN) and session.get("view_as_branch_id"):
+        try:
+            view_as_branch_id = int(session.get("view_as_branch_id"))
+        except (TypeError, ValueError):
+            view_as_branch_id = None
+
     if request.user.is_superuser or request.user.role == User.Role.ADMIN:
-        # Админ видит всех менеджеров
-        managers_qs = User.objects.filter(
+        base_qs = User.objects.filter(
             is_active=True,
-            role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]
-        ).select_related("branch").order_by("branch__name", "last_name", "first_name")
+            role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR],
+        )
+        # Если админ выбрал конкретный филиал в режиме "просмотр как" – ограничиваем менеджеров этим филиалом.
+        if view_as_branch_id:
+            base_qs = base_qs.filter(branch_id=view_as_branch_id)
+        managers_qs = base_qs.select_related("branch").order_by("branch__name", "last_name", "first_name")
     elif request.user.role in [User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]:
         # Руководители видят менеджеров своего филиала
         managers_qs = User.objects.filter(

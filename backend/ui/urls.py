@@ -66,6 +66,9 @@ urlpatterns = [
 
     # Settings (admin only)
     path("settings/", views.settings_dashboard, name="settings_dashboard"),
+    # Режим "просмотр как" (админ может визуально переключаться под роль/филиал)
+    path("settings/view-as/", views.view_as_update, name="view_as_update"),
+    path("settings/view-as/reset/", views.view_as_reset, name="view_as_reset"),
     path("settings/branches/", views.settings_branches, name="settings_branches"),
     path("settings/branches/new/", views.settings_branch_create, name="settings_branch_create"),
     path("settings/branches/<int:branch_id>/edit/", views.settings_branch_edit, name="settings_branch_edit"),

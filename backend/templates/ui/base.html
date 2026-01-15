@@ -95,6 +95,35 @@
             <span class="text-xs text-brand-dark/70">простая, как amo, но без лишнего</span>
           </div>
           <div class="flex items-center gap-3 text-sm">
+            {% if is_admin %}
+              <form method="post" action="{% url 'view_as_update' %}" class="hidden md:flex items-center gap-2 text-xs mr-2">
+                {% csrf_token %}
+                <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                <div class="flex items-center gap-1">
+                  <span class="text-brand-dark/60">Роль:</span>
+                  <select name="view_role" class="select w-auto py-1 px-2 text-xs">
+                    <option value="">Администратор</option>
+                    {% for value,label in view_as_roles %}
+                      <option value="{{ value }}" {% if view_as_role == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="flex items-center gap-1">
+                  <span class="text-brand-dark/60">Филиал:</span>
+                  <select name="view_as_branch_id" class="select w-auto py-1 px-2 text-xs">
+                    <option value="">Все</option>
+                    {% for b in view_as_branches %}
+                      <option value="{{ b.id }}" {% if view_as_branch and view_as_branch.id == b.id %}selected{% endif %}>{{ b.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <button type="submit" class="btn btn-outline py-1 px-2 text-xs">Применить</button>
+                {% if view_as_role or view_as_branch %}
+                  <a href="{% url 'view_as_reset' %}" class="text-xs text-brand-dark/60 underline">Сброс</a>
+                {% endif %}
+              </form>
+            {% endif %}
+
             <div class="relative">
               <button id="notifBtn" type="button" class="relative rounded-xl border border-brand-soft bg-white px-2.5 py-2 hover:bg-brand-soft/40 active:scale-[0.99]" aria-label="Уведомления">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -185,6 +214,35 @@
             </form>
           </div>
         </div>
+        {% if is_admin and (view_as_role or view_as_branch) %}
+          <div class="border-t border-brand-soft bg-amber-50/90">
+            <div class="mx-auto max-w-screen-2xl px-4 py-1.5 text-[11px] md:text-xs text-amber-900 flex flex-col md:flex-row items-start md:items-center justify-between gap-1.5">
+              <div>
+                <span class="font-semibold">Режим просмотра администратора:</span>
+                <span>
+                  роль —
+                  {% if view_as_role_label %}
+                    {{ view_as_role_label }}
+                  {% else %}
+                    Администратор
+                  {% endif %}
+                </span>
+                <span>
+                  · филиал —
+                  {% if view_as_branch %}
+                    {{ view_as_branch.name }}
+                  {% else %}
+                    все
+                  {% endif %}
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-amber-900/85">Права и ограничения не меняются, меняется только отображение и фильтры.</span>
+                <a href="{% url 'view_as_reset' %}" class="text-amber-900 underline">Сбросить</a>
+              </div>
+            </div>
+          </div>
+        {% endif %}
       </header>
 
       <div class="mx-auto max-w-screen-2xl px-4 py-6 flex flex-col md:flex-row gap-5">
