@@ -34,6 +34,10 @@ staticfiles/
 .idea/
 Thumbs.db
 Desktop.ini
+.DS_Store
+*.swp
+*.swo
+*~
 
 # Git
 .git/
@@ -75,3 +79,8 @@ Dockerfile*
 
 # Nginx config (mounted separately)
 nginx/
+
+# Frontend dependencies (if any)
+node_modules/
+package-lock.json
+yarn.lock
