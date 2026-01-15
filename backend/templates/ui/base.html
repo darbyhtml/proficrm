@@ -214,34 +214,36 @@
             </form>
           </div>
         </div>
-        {% if is_admin and (view_as_role or view_as_branch) %}
-          <div class="border-t border-brand-soft bg-amber-50/90">
-            <div class="mx-auto max-w-screen-2xl px-4 py-1.5 text-[11px] md:text-xs text-amber-900 flex flex-col md:flex-row items-start md:items-center justify-between gap-1.5">
-              <div>
-                <span class="font-semibold">Режим просмотра администратора:</span>
-                <span>
-                  роль —
-                  {% if view_as_role_label %}
-                    {{ view_as_role_label }}
-                  {% else %}
-                    Администратор
-                  {% endif %}
-                </span>
-                <span>
-                  · филиал —
-                  {% if view_as_branch %}
-                    {{ view_as_branch.name }}
-                  {% else %}
-                    все
-                  {% endif %}
-                </span>
-              </div>
-              <div class="flex items-center gap-2">
-                <span class="text-amber-900/85">Права и ограничения не меняются, меняется только отображение и фильтры.</span>
-                <a href="{% url 'view_as_reset' %}" class="text-amber-900 underline">Сбросить</a>
+        {% if is_admin %}
+          {% if view_as_role or view_as_branch %}
+            <div class="border-t border-brand-soft bg-amber-50/90">
+              <div class="mx-auto max-w-screen-2xl px-4 py-1.5 text-[11px] md:text-xs text-amber-900 flex flex-col md:flex-row items-start md:items-center justify-between gap-1.5">
+                <div>
+                  <span class="font-semibold">Режим просмотра администратора:</span>
+                  <span>
+                    роль —
+                    {% if view_as_role_label %}
+                      {{ view_as_role_label }}
+                    {% else %}
+                      Администратор
+                    {% endif %}
+                  </span>
+                  <span>
+                    · филиал —
+                    {% if view_as_branch %}
+                      {{ view_as_branch.name }}
+                    {% else %}
+                      все
+                    {% endif %}
+                  </span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-amber-900/85">Права и ограничения не меняются, меняется только отображение и фильтры.</span>
+                  <a href="{% url 'view_as_reset' %}" class="text-amber-900 underline">Сбросить</a>
+                </div>
               </div>
             </div>
-          </div>
+          {% endif %}
         {% endif %}
       </header>
 
