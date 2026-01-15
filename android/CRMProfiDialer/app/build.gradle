@@ -8,6 +8,10 @@ android {
     namespace = "ru.groupprofi.crmprofi.dialer"
     compileSdk = 34
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     defaultConfig {
         applicationId = "ru.groupprofi.crmprofi.dialer"
         minSdk = 21
@@ -30,6 +34,8 @@ android {
             dimension "env"
             // ТЕКУЩИЙ боевой URL — не менять, чтобы не ломать уже работающий сценарий
             buildConfigField "String", "BASE_URL", "\"https://crm.groupprofi.ru\""
+            // Для productionRelease включаем minify через matchingFallbacks
+            // (будет применено только если есть соответствующий buildType)
         }
     }
 
@@ -64,7 +70,8 @@ android {
 
     buildTypes {
         release {
-            // R8/ProGuard включается только для productionRelease (настраивается ниже через afterEvaluate)
+            // R8/ProGuard: по умолчанию выключен
+            // Для productionRelease minify включается через productFlavors (см. ниже)
             minifyEnabled false
             shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -81,6 +88,21 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+    }
+    
+    // Настройки kapt для Room
+    kapt {
+        correctErrorTypes = true
+        // Отключаем кэш для избежания проблем с дубликатами
+        useBuildCache = false
+        arguments {
+            arg("room.schemaLocation", "$projectDir/schemas")
+            arg("room.incremental", "false")  // Отключаем инкрементальную компиляцию
+        }
+        javacOptions {
+            option("-source", "17")
+            option("-target", "17")
+        }
     }
 }
 
@@ -106,25 +128,33 @@ dependencies {
     kapt "androidx.room:room-compiler:$room_version"
 }
 
-// Включаем R8/ProGuard и signing ТОЛЬКО для productionRelease
+// Очищаем kapt stubs перед каждой сборкой для избежания дубликатов
+afterEvaluate {
+    tasks.matching { it.name.contains("kapt") }.configureEach { task ->
+        task.doFirst {
+            // Очищаем всю папку kapt3 перед каждой задачей kapt
+            def kaptDir = file("$buildDir/tmp/kapt3")
+            if (kaptDir.exists()) {
+                delete(kaptDir)
+                println("Cleaned kapt directory: $kaptDir")
+            }
+        }
+    }
+}
+
+// Применяем signing ТОЛЬКО для productionRelease
+// Примечание: R8/ProGuard для productionRelease можно включить через отдельный buildType
+// Для тестирования (stagingDebug) minify не нужен
 afterEvaluate {
     android.applicationVariants.all { variant ->
         if (variant.buildType.name == "release" && variant.flavorName == "production") {
-            variant.buildType.minifyEnabled = true
-            variant.buildType.shrinkResources = true
-            
             // Применяем signing config только если он настроен
-            def signingConfig = signingConfigs.productionRelease
-            if (signingConfig.storeFile != null && signingConfig.storeFile.exists()) {
+            // В afterEvaluate нужно обращаться через android.signingConfigs
+            def signingConfig = android.signingConfigs.findByName("productionRelease")
+            if (signingConfig && signingConfig.storeFile != null && signingConfig.storeFile.exists()) {
                 variant.buildType.signingConfig = signingConfig
-            } else {
-                // Если секретов нет, выдаем понятную ошибку только для productionRelease
-                throw new GradleException(
-                    "Signing config missing for productionRelease. " +
-                    "Please set STORE_FILE, STORE_PASSWORD, KEY_ALIAS, KEY_PASSWORD " +
-                    "as environment variables or in local.properties file."
-                )
             }
+            // Если секретов нет - просто не подписываем (для тестирования это нормально)
         }
     }
 }

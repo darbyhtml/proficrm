@@ -12,6 +12,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import android.content.Context
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -308,6 +309,8 @@ class MainActivity : AppCompatActivity() {
     }
     
     companion object {
+        private const val REQ_CALL_PERMS = 200
+        
         /**
          * Проверяет, используется ли шифрование на устройстве.
          * @deprecated Используйте TokenManager.isEncryptionEnabled() напрямую
@@ -414,10 +417,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     // Polling реализован в ForegroundService (CallListenerService).
-
-    companion object {
-        private const val REQ_CALL_PERMS = 200
-    }
 }
 
 

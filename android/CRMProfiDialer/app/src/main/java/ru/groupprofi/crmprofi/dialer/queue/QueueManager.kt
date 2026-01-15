@@ -186,7 +186,7 @@ class QueueManager(private val context: Context) {
             return null
         }
         
-        val oldestStuckAgeSec = ((now - stuckItems.minOfOrNull { it.createdAt } ?: now) / 1000).toInt()
+        val oldestStuckAgeSec = ((now - (stuckItems.minOfOrNull { it.createdAt } ?: now)) / 1000).toInt()
         val stuckByType = stuckItems.groupBy { it.type }.mapValues { it.value.size }
         
         return StuckMetrics(

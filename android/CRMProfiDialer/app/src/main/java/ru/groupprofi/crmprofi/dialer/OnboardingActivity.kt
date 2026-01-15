@@ -1,6 +1,7 @@
 package ru.groupprofi.crmprofi.dialer
 
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.widget.Button
 import androidx.appcompat.app.AppCompatActivity
@@ -17,7 +18,7 @@ class OnboardingActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         
         // Проверяем, был ли уже показан онбординг
-        val prefs = MainActivity.securePrefs(this)
+        val prefs: SharedPreferences = getSharedPreferences("onboarding", MODE_PRIVATE)
         val onboardingShown = prefs.getBoolean("onboarding_shown", false)
         
         if (onboardingShown) {

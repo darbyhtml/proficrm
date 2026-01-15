@@ -12,9 +12,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import ru.groupprofi.crmprofi.dialer.auth.TokenManager
 import ru.groupprofi.crmprofi.dialer.network.ApiClient
-import com.journeyapps.barcodescanner.ScanContract
-import com.journeyapps.barcodescanner.ScanIntentIntegrator
-import com.journeyapps.barcodescanner.ScanOptions
 
 /**
  * Activity для входа по QR-коду.

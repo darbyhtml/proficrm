@@ -101,6 +101,8 @@ class LogSender(
                             // При ошибке сервера - добавляем в очередь
                             if (res.code in 500..599) {
                                 queueManager.enqueue("log_bundle", "/api/phone/logs/", bodyJson)
+                            } else {
+                                // Для других ошибок не добавляем в очередь
                             }
                         }
                     }

@@ -141,6 +141,7 @@ class CallListenerService : Service() {
                         
                         // Адаптивная частота: при пустых командах (204) увеличиваем задержку
                         // При получении команды (200) - сбрасываем счетчик и возвращаемся к быстрой частоте
+                        val phoneNotNull = !phone.isNullOrBlank()
                         if (code == 204) {
                             consecutiveEmptyPolls++
                         } else if (code == 200 && phone != null) {
@@ -292,7 +293,7 @@ class CallListenerService : Service() {
                     // Адаптивная частота опроса с джиттером для предотвращения синхронизации устройств
                     val baseDelay = when {
                         // При получении команды - быстрый возврат к активному опросу
-                        code == 200 && phone != null -> 1500L
+                        code == 200 && phoneNotNull -> 1500L
                         // При пустых командах (204) - увеличиваем задержку постепенно
                         code == 204 -> {
                             when {
