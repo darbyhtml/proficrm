@@ -51,6 +51,8 @@ backend/_compile_templates.py
 # Android (local)
 **/.gradle/
 **/local.properties
+*.jks
+*.keystore
 
 # Local notes (personal)
 Новинки.txt
