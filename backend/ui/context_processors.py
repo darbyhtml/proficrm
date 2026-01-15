@@ -57,7 +57,9 @@ def ui_globals(request):
 
     # Визуальные права (для отображения блоков в меню/доске)
     # Основаны на view_as_role, но для не-админов совпадают с реальной ролью.
-    view_is_admin = bool(view_as_role == User.Role.ADMIN or getattr(user, "is_superuser", False)) if is_auth else False
+    # Для визуальных прав не учитываем суперюзера: если админ выбрал роль "Менеджер",
+    # хотим видеть интерфейс именно менеджера, а не всегда администратора.
+    view_is_admin = bool(is_auth and view_as_role == User.Role.ADMIN)
     view_is_group_manager = bool(
         is_auth and view_as_role in (User.Role.ADMIN, User.Role.GROUP_MANAGER)
     )
