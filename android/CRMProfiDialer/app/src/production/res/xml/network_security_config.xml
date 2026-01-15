@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- PRODUCTION: Полностью запрещаем cleartext traffic -->
+    <!-- Все запросы должны идти только по HTTPS -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    
+    <!-- Никаких domain-config для cleartext - только HTTPS -->
+</network-security-config>

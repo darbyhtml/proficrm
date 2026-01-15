@@ -1,7 +1,6 @@
 package ru.groupprofi.crmprofi.dialer
 
 import android.content.Intent
-import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -13,33 +12,27 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import androidx.security.crypto.EncryptedSharedPreferences
-import androidx.security.crypto.MasterKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import ru.groupprofi.crmprofi.dialer.queue.QueueManager
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONObject
+import ru.groupprofi.crmprofi.dialer.auth.TokenManager
+import ru.groupprofi.crmprofi.dialer.network.ApiClient
 
 class MainActivity : AppCompatActivity() {
-    private val http = OkHttpClient()
-    private val jsonMedia = "application/json; charset=utf-8".toMediaType()
+    private lateinit var tokenManager: TokenManager
+    private lateinit var apiClient: ApiClient
 
     private lateinit var accountStatusEl: TextView
     private lateinit var usernameEl: EditText
     private lateinit var passwordEl: EditText
     private lateinit var loginBtn: Button
+    private lateinit var qrLoginBtn: Button
     private lateinit var notifBtn: Button
     private lateinit var logoutBtn: Button
     private lateinit var statusEl: TextView
     private lateinit var queueStatusEl: TextView
 
-    private var accessToken: String? = null
-    private var refreshToken: String? = null
     private var pendingStartListening: Boolean = false
 
     private val deviceId: String by lazy {
@@ -51,20 +44,28 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // Инициализируем TokenManager и ApiClient
+        tokenManager = TokenManager.getInstance(this)
+        apiClient = ApiClient.getInstance(this)
+        
+        // Сохраняем device_id в TokenManager (если еще не сохранен)
+        val currentDeviceId = tokenManager.getDeviceId()
+        if (currentDeviceId.isNullOrBlank()) {
+            tokenManager.saveDeviceId(deviceId)
+        }
+
         accountStatusEl = findViewById(R.id.accountStatus)
         usernameEl = findViewById(R.id.username)
         passwordEl = findViewById(R.id.password)
         loginBtn = findViewById(R.id.loginBtn)
+        qrLoginBtn = findViewById(R.id.qrLoginBtn)
         notifBtn = findViewById(R.id.notifBtn)
         logoutBtn = findViewById(R.id.logoutBtn)
         statusEl = findViewById(R.id.status)
         queueStatusEl = findViewById(R.id.queueStatus)
 
-        val prefs = securePrefs()
-        accessToken = prefs.getString(KEY_ACCESS, null)
-        refreshToken = prefs.getString(KEY_REFRESH, null)
-        val savedUsername = prefs.getString(KEY_USERNAME, null)
-        if (!savedUsername.isNullOrBlank() && !refreshToken.isNullOrBlank()) {
+        val savedUsername = tokenManager.getUsername()
+        if (!savedUsername.isNullOrBlank() && tokenManager.hasTokens()) {
             accountStatusEl.text = "Аккаунт: $savedUsername (вход выполнен)"
             statusEl.text = "Статус: готово. device_id=$deviceId"
             // Скрываем поля логина/пароля если уже вошли
@@ -73,6 +74,7 @@ class MainActivity : AppCompatActivity() {
             usernameEl.visibility = android.view.View.GONE
             passwordEl.visibility = android.view.View.GONE
             loginBtn.visibility = android.view.View.GONE
+            qrLoginBtn.visibility = android.view.View.GONE
             logoutBtn.visibility = android.view.View.VISIBLE
             // Автоматически запускаем сервис после входа
             ensureCallLogPermissions()
@@ -81,14 +83,19 @@ class MainActivity : AppCompatActivity() {
             accountStatusEl.text = "Аккаунт: не выполнен вход"
             statusEl.text = "Статус: не подключено"
             logoutBtn.visibility = android.view.View.GONE
+            qrLoginBtn.visibility = android.view.View.VISIBLE
         }
 
         notifBtn.setOnClickListener { openNotificationSettings() }
         
+        qrLoginBtn.setOnClickListener {
+            // Открываем QRLoginActivity для сканирования QR-кода
+            val intent = Intent(this, QRLoginActivity::class.java)
+            startActivity(intent)
+        }
+        
         logoutBtn.setOnClickListener {
-            securePrefs().edit().clear().apply()
-            accessToken = null
-            refreshToken = null
+            tokenManager.clearAll()
             stopService(Intent(this, CallListenerService::class.java))
             accountStatusEl.text = "Аккаунт: не выполнен вход"
             statusEl.text = "Статус: не подключено"
@@ -97,6 +104,7 @@ class MainActivity : AppCompatActivity() {
             usernameEl.visibility = android.view.View.VISIBLE
             passwordEl.visibility = android.view.View.VISIBLE
             loginBtn.visibility = android.view.View.VISIBLE
+            qrLoginBtn.visibility = android.view.View.VISIBLE
             logoutBtn.visibility = android.view.View.GONE
             usernameEl.text.clear()
             passwordEl.text.clear()
@@ -113,18 +121,16 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     setStatus("Статус: логинюсь…")
-                    val tokens = apiLogin(BASE_URL, username, password)
-                    accessToken = tokens.first
-                    refreshToken = tokens.second
-
-                    prefs.edit()
-                        .putString(KEY_USERNAME, username)
-                        .putString(KEY_ACCESS, accessToken)
-                        .putString(KEY_REFRESH, refreshToken)
-                        .putString(KEY_DEVICE_ID, deviceId)
-                        .apply()
-
-                    apiRegisterDevice(BASE_URL, accessToken!!, deviceId, android.os.Build.MODEL ?: "Android")
+                    val loginResult = apiClient.login(username, password)
+                    
+                    when (loginResult) {
+                        is ApiClient.Result.Success -> {
+                            val (access, refresh) = loginResult.data
+                            tokenManager.saveTokens(access, refresh, username)
+                            tokenManager.saveDeviceId(deviceId)
+                            
+                            // Регистрация устройства (не критична)
+                            apiClient.registerDevice(deviceId, android.os.Build.MODEL ?: "Android")
 
                     runOnUiThread {
                         accountStatusEl.text = "Аккаунт: $username (вход выполнен)"
@@ -134,19 +140,34 @@ class MainActivity : AppCompatActivity() {
                         usernameEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.GONE }
                         passwordEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.GONE }
                         loginBtn.visibility = android.view.View.GONE
+                        qrLoginBtn.visibility = android.view.View.GONE
                         logoutBtn.visibility = android.view.View.VISIBLE
                     }
                     setStatus("Статус: подключено. device_id=$deviceId")
                     // После успешного входа: запрашиваем права на статистику звонков и запускаем сервис
                     ensureCallLogPermissions()
                     startListeningServiceAuto()
+                        }
+                        is ApiClient.Result.Error -> {
+                            tokenManager.clearAll()
+                            runOnUiThread {
+                                accountStatusEl.text = "Аккаунт: не выполнен вход"
+                                // Показываем поля логина/пароля при ошибке
+                                usernameEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.VISIBLE }
+                                passwordEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.VISIBLE }
+                                usernameEl.visibility = android.view.View.VISIBLE
+                                passwordEl.visibility = android.view.View.VISIBLE
+                                loginBtn.visibility = android.view.View.VISIBLE
+                                qrLoginBtn.visibility = android.view.View.VISIBLE
+                                logoutBtn.visibility = android.view.View.GONE
+                            }
+                            setStatus("Ошибка: ${loginResult.message}")
+                        }
+                    }
                 } catch (e: Exception) {
-                    accessToken = null
-                    refreshToken = null
-                    prefs.edit().remove(KEY_ACCESS).remove(KEY_REFRESH).apply()
+                    tokenManager.clearAll()
                     runOnUiThread {
                         accountStatusEl.text = "Аккаунт: не выполнен вход"
-                        // Показываем поля логина/пароля при ошибке
                         usernameEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.VISIBLE }
                         passwordEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.VISIBLE }
                         usernameEl.visibility = android.view.View.VISIBLE
@@ -164,14 +185,28 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         AppState.isForeground = true
 
-        val prefs = securePrefs()
-        val token = prefs.getString(KEY_ACCESS, null)
-        val refresh = prefs.getString(KEY_REFRESH, null)
+        // Проверяем, не вошел ли пользователь через QR (после возврата из QRLoginActivity)
+        val savedUsername = tokenManager.getUsername()
+        if (!savedUsername.isNullOrBlank() && tokenManager.hasTokens()) {
+            // Обновляем UI если пользователь вошел
+            accountStatusEl.text = "Аккаунт: $savedUsername (вход выполнен)"
+            statusEl.text = "Статус: готово. device_id=$deviceId"
+            usernameEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.GONE }
+            passwordEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.GONE }
+            usernameEl.visibility = android.view.View.GONE
+            passwordEl.visibility = android.view.View.GONE
+            loginBtn.visibility = android.view.View.GONE
+            qrLoginBtn.visibility = android.view.View.GONE
+            logoutBtn.visibility = android.view.View.VISIBLE
+            // Запускаем сервис если еще не запущен
+            ensureCallLogPermissions()
+            startListeningServiceAuto()
+        }
         
         // Если пользователь вошел, проверяем статус сервиса
-        if (!token.isNullOrBlank() && !refresh.isNullOrBlank()) {
-            val at = prefs.getString(CallListenerService.KEY_LAST_POLL_AT, null)
-            val code = prefs.getInt(CallListenerService.KEY_LAST_POLL_CODE, -1)
+        if (tokenManager.hasTokens()) {
+            val at = tokenManager.getLastPollAt()
+            val code = tokenManager.getLastPollCode()
             
             // Проверяем, работает ли сервис (есть ли недавний опрос)
             if (!at.isNullOrBlank() && code != -1) {
@@ -188,9 +223,7 @@ class MainActivity : AppCompatActivity() {
                 // Если 401 - предлагаем перезапустить сервис
                 if (code == 401) {
                     // Токены могли быть очищены сервисом, проверяем
-                    val currentToken = prefs.getString(KEY_ACCESS, null)
-                    val currentRefresh = prefs.getString(KEY_REFRESH, null)
-                    if (currentToken.isNullOrBlank() || currentRefresh.isNullOrBlank()) {
+                    if (!tokenManager.hasTokens()) {
                         accountStatusEl.text = "Аккаунт: требуется повторный вход"
                         statusEl.text = "Статус: сессия истекла, войдите снова"
                         // Показываем форму входа
@@ -199,6 +232,7 @@ class MainActivity : AppCompatActivity() {
                         usernameEl.visibility = android.view.View.VISIBLE
                         passwordEl.visibility = android.view.View.VISIBLE
                         loginBtn.visibility = android.view.View.VISIBLE
+                        qrLoginBtn.visibility = android.view.View.VISIBLE
                         logoutBtn.visibility = android.view.View.GONE
                     }
                 }
@@ -272,59 +306,26 @@ class MainActivity : AppCompatActivity() {
 
         ActivityCompat.requestPermissions(this, needed.toTypedArray(), REQ_CALL_PERMS)
     }
-
-    /**
-     * Хранилище для токенов и настроек.
-     * Пытаемся использовать EncryptedSharedPreferences, при ошибке — обычные SharedPreferences.
-     */
-    private fun securePrefs(): SharedPreferences {
-        return securePrefs(this)
-    }
     
     companion object {
         /**
-         * Статический метод для получения securePrefs из других активностей.
-         * Возвращает EncryptedSharedPreferences если возможно, иначе fallback на обычные SharedPreferences.
-         * ВАЖНО: при fallback на обычные prefs нужно отправить алерт в CRM.
-         */
-        fun securePrefs(context: Context): SharedPreferences {
-            return try {
-                val masterKey = MasterKey.Builder(context)
-                    .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-                    .build()
-                EncryptedSharedPreferences.create(
-                    context,
-                    PREFS,
-                    masterKey,
-                    EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-                    EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-                ).also {
-                    // Сохраняем флаг, что шифрование работает
-                    it.edit().putBoolean("_encryption_enabled", true).apply()
-                }
-            } catch (e: Exception) {
-                android.util.Log.w("MainActivity", "EncryptedSharedPreferences failed, using fallback: ${e.message}")
-                // Fallback на обычные prefs - это небезопасно, но лучше чем краш
-                val fallback = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                // Сохраняем флаг, что шифрование НЕ работает
-                fallback.edit().putBoolean("_encryption_enabled", false).apply()
-                fallback
-            }
-        }
-        
-        /**
          * Проверяет, используется ли шифрование на устройстве.
+         * @deprecated Используйте TokenManager.isEncryptionEnabled() напрямую
          */
+        @Deprecated("Use TokenManager.isEncryptionEnabled() instead")
         fun isEncryptionEnabled(context: Context): Boolean {
-            val prefs = securePrefs(context)
-            return prefs.getBoolean("_encryption_enabled", true) // По умолчанию считаем что включено
+            return TokenManager.getInstance(context).isEncryptionEnabled()
         }
     }
 
     private fun startListeningServiceAuto() {
-        val prefs = securePrefs()
-        val token = accessToken ?: prefs.getString(KEY_ACCESS, null)
-        val refresh = refreshToken ?: prefs.getString(KEY_REFRESH, null)
+        if (!tokenManager.hasTokens()) {
+            setStatus("Статус: сначала войдите")
+            return
+        }
+        
+        val token = tokenManager.getAccessToken()
+        val refresh = tokenManager.getRefreshToken()
         if (token.isNullOrBlank() || refresh.isNullOrBlank()) {
             setStatus("Статус: сначала войдите")
             return
@@ -398,70 +399,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun apiLogin(baseUrl: String, username: String, password: String): Pair<String, String> {
-        val url = "$baseUrl/api/token/"
-        val bodyJson = JSONObject()
-            .put("username", username)
-            .put("password", password)
-            .toString()
-        val req = Request.Builder()
-            .url(url)
-            .post(bodyJson.toRequestBody(jsonMedia))
-            .build()
-        try {
-            http.newCall(req).execute().use { res ->
-                val raw = res.body?.string() ?: ""
-                if (!res.isSuccessful) {
-                    val errorMsg = try {
-                        val errorObj = JSONObject(raw)
-                        errorObj.optString("detail", "Ошибка входа")
-                    } catch (_: Exception) {
-                        "Ошибка входа: HTTP ${res.code}"
-                    }
-                    throw RuntimeException(errorMsg)
-                }
-                val obj = JSONObject(raw)
-                val access = obj.optString("access", "")
-                val refresh = obj.optString("refresh", "")
-                if (access.isBlank() || refresh.isBlank()) {
-                    throw RuntimeException("Неверный формат ответа сервера")
-                }
-                return Pair(access, refresh)
-            }
-        } catch (e: java.net.UnknownHostException) {
-            throw RuntimeException("Нет подключения к интернету")
-        } catch (e: java.net.SocketTimeoutException) {
-            throw RuntimeException("Превышено время ожидания ответа")
-        } catch (e: Exception) {
-            if (e is RuntimeException) throw e
-            throw RuntimeException("Ошибка сети: ${e.message}")
-        }
-    }
-
-    private fun apiRegisterDevice(baseUrl: String, token: String, deviceId: String, deviceName: String) {
-        val url = "$baseUrl/api/phone/devices/register/"
-        val bodyJson = JSONObject()
-            .put("device_id", deviceId)
-            .put("device_name", deviceName)
-            .toString()
-        val req = Request.Builder()
-            .url(url)
-            .post(bodyJson.toRequestBody(jsonMedia))
-            .addHeader("Authorization", "Bearer $token")
-            .build()
-        try {
-            http.newCall(req).execute().use { res ->
-                val raw = res.body?.string() ?: ""
-                if (!res.isSuccessful) {
-                    // Регистрация устройства не критична, логируем но не падаем
-                    android.util.Log.w("MainActivity", "Register device failed: HTTP ${res.code} $raw")
-                }
-            }
-        } catch (e: Exception) {
-            // Регистрация устройства не критична, логируем но не падаем
-            android.util.Log.w("MainActivity", "Register device error: ${e.message}")
-        }
-    }
 
     private fun openNotificationSettings() {
         try {
@@ -479,13 +416,6 @@ class MainActivity : AppCompatActivity() {
     // Polling реализован в ForegroundService (CallListenerService).
 
     companion object {
-        private const val BASE_URL = "https://crm.groupprofi.ru"
-        private const val PREFS = "crmprofi_dialer"
-        private const val KEY_USERNAME = "username"
-        private const val KEY_ACCESS = "access"
-        private const val KEY_REFRESH = "refresh"
-        private const val KEY_DEVICE_ID = "device_id"
-
         private const val REQ_CALL_PERMS = 200
     }
 }

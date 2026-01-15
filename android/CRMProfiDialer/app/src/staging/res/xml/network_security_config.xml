@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- STAGING: По умолчанию запрещаем cleartext traffic для безопасности -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    
+    <!-- Разрешаем cleartext ТОЛЬКО для staging сервера 95.142.47.245 -->
+    <!-- Это необходимо, так как staging использует HTTP (не HTTPS) -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">95.142.47.245</domain>
+    </domain-config>
+</network-security-config>
