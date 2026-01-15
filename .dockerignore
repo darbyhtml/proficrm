@@ -1,0 +1,77 @@
+# Android project (not needed in Docker images)
+android/
+**/*.jks
+**/*.keystore
+**/.gradle/
+**/build/
+**/local.properties
+
+# Python / Django
+__pycache__/
+*.py[cod]
+*.pyd
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+
+# Django runtime (will be created in container)
+backend/.env
+.env
+*.env
+*.log
+backend/db.sqlite3
+db.sqlite3
+backend/media/
+backend/staticfiles/
+staticfiles/
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation (not needed in runtime)
+*.md
+!backend/README.md
+
+# Local scripts / helpers
+count_types.py
+debug_types*.py
+inspect_*.py
+scan_rows.py
+cloudflared.exe
+
+# Temporary / review files
+CODE_REVIEW*.md
+DEPLOY_*.md
+FIX_*.md
+TROUBLESHOOT_*.md
+REPOSITORY_*.md
+PROJECT_EVALUATION.md
+SECURITY_ENHANCEMENTS.md
+DELETE_*.md
+
+# Data exports
+*.csv
+*.xlsx
+*.xls
+export_columns.txt
+export_schema.json
+
+# Docker files (not needed inside image)
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Nginx config (mounted separately)
+nginx/
