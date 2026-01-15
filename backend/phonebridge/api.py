@@ -396,32 +396,46 @@ class QrTokenCreateView(APIView):
         import logging
         from accounts.security import get_client_ip, is_ip_rate_limited
         from rest_framework import status
+        from django.db import DatabaseError
 
         logger = logging.getLogger(__name__)
 
-        # Rate limiting: не чаще 1 раза в 10 секунд
-        ip = get_client_ip(request)
-        if is_ip_rate_limited(ip, "qr_token_create", 1, 10):
-            return Response(
-                {"detail": "Слишком частые запросы. Подождите немного."},
-                status=status.HTTP_429_TOO_MANY_REQUESTS
+        try:
+            # Rate limiting: не чаще 1 раза в 10 секунд
+            ip = get_client_ip(request)
+            if is_ip_rate_limited(ip, "qr_token_create", 1, 10):
+                return Response(
+                    {"detail": "Слишком частые запросы. Подождите немного."},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS
+                )
+
+            # Генерируем токен
+            token = MobileAppQrToken.generate_token()
+            qr_token = MobileAppQrToken.objects.create(
+                user=request.user,
+                token=token,
+                ip_address=ip,
+                user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
             )
 
-        # Генерируем токен
-        token = MobileAppQrToken.generate_token()
-        qr_token = MobileAppQrToken.objects.create(
-            user=request.user,
-            token=token,
-            ip_address=ip,
-            user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
-        )
+            logger.info(f"QrTokenCreate: user={request.user.id}, token={token[:16]}...")
 
-        logger.info(f"QrTokenCreate: user={request.user.id}, token={token[:16]}...")
-
-        return Response({
-            "token": token,
-            "expires_at": qr_token.expires_at.isoformat(),
-        })
+            return Response({
+                "token": token,
+                "expires_at": qr_token.expires_at.isoformat(),
+            })
+        except DatabaseError as e:
+            logger.error(f"QrTokenCreate database error: {e}")
+            return Response(
+                {"detail": "Ошибка базы данных. Убедитесь, что миграции применены."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        except Exception as e:
+            logger.error(f"QrTokenCreate error: {e}", exc_info=True)
+            return Response(
+                {"detail": f"Ошибка создания QR-токена: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class QrTokenExchangeSerializer(serializers.Serializer):

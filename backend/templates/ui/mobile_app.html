@@ -137,24 +137,49 @@
     let qrExpiresAt = null;
     let qrTimerInterval = null;
 
+    // Получаем CSRF токен из cookie
+    function getCookie(name) {
+      let cookieValue = null;
+      if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+          const cookie = cookies[i].trim();
+          if (cookie.substring(0, name.length + 1) === (name + '=')) {
+            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+            break;
+          }
+        }
+      }
+      return cookieValue;
+    }
+
     document.getElementById('openQrModal').addEventListener('click', async function() {
       // Создаем QR-токен
       try {
+        const csrftoken = getCookie('csrftoken') || '{{ csrf_token }}';
         const response = await fetch('/api/phone/qr/create/', {
           method: 'POST',
           headers: {
-            'X-CSRFToken': '{{ csrf_token }}',
+            'X-CSRFToken': csrftoken,
             'Content-Type': 'application/json',
           },
           credentials: 'same-origin',
         });
         
         if (!response.ok) {
-          alert('Ошибка создания QR-кода. Попробуйте позже.');
+          const errorData = await response.json().catch(() => ({ detail: `HTTP ${response.status}` }));
+          console.error('QR token creation failed:', response.status, errorData);
+          alert(`Ошибка создания QR-кода: ${errorData.detail || 'Попробуйте позже'}`);
           return;
         }
         
         const data = await response.json();
+        if (!data.token) {
+          console.error('Invalid response:', data);
+          alert('Ошибка: неверный ответ сервера');
+          return;
+        }
+        
         qrToken = data.token;
         qrExpiresAt = new Date(data.expires_at);
         
@@ -166,7 +191,7 @@
         startQrTimer();
       } catch (error) {
         console.error('Error creating QR token:', error);
-        alert('Ошибка создания QR-кода. Попробуйте позже.');
+        alert(`Ошибка создания QR-кода: ${error.message || 'Попробуйте позже'}`);
       }
     });
 

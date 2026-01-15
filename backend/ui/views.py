@@ -5610,6 +5610,7 @@ def mobile_app_qr_image(request: HttpRequest) -> HttpResponse:
     """
     Генерация QR-кода для входа в мобильное приложение.
     Токен передается через query параметр ?token=...
+    Android приложение сканирует просто токен (строку), а не URL.
     """
     import qrcode
     import io
@@ -5619,14 +5620,14 @@ def mobile_app_qr_image(request: HttpRequest) -> HttpResponse:
         raise Http404("Токен не указан")
     
     # Проверяем, что токен существует и принадлежит текущему пользователю
-    qr_token = get_object_or_404(
-        MobileAppQrToken.objects.filter(user=request.user, token=token),
-        token=token
-    )
+    try:
+        qr_token = MobileAppQrToken.objects.get(user=request.user, token=token)
+    except MobileAppQrToken.DoesNotExist:
+        raise Http404("Токен не найден")
     
-    # Формируем URL для обмена токена (используем текущий домен)
-    exchange_url = f"{request.scheme}://{request.get_host()}/api/phone/qr/exchange/"
-    qr_data = f"{exchange_url}?token={token}"
+    # Android приложение ожидает просто токен (строку), а не URL
+    # QR-код содержит только токен, который приложение отправит на /api/phone/qr/exchange/
+    qr_data = token
     
     # Генерируем QR-код
     qr = qrcode.QRCode(version=1, box_size=10, border=4)
