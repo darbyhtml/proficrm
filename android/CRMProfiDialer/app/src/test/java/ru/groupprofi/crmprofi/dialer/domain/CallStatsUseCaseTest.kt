@@ -24,12 +24,7 @@ class CallStatsUseCaseTest {
             phone = "+79991112233",
             phoneDisplayName = null,
             status = status,
-            statusText = when (status) {
-                CallHistoryItem.CallStatus.CONNECTED -> "Разговор состоялся"
-                CallHistoryItem.CallStatus.NO_ANSWER -> "Не ответили"
-                CallHistoryItem.CallStatus.REJECTED -> "Сброс"
-                CallHistoryItem.CallStatus.UNKNOWN -> "Не удалось определить"
-            },
+            // statusText теперь вычисляется через getStatusText()
             durationSeconds = if (status == CallHistoryItem.CallStatus.CONNECTED) 60 else null,
             startedAt = startedAt,
             sentToCrm = sentToCrm,
