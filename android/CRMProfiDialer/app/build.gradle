@@ -144,13 +144,23 @@ dependencies {
 
 // Очищаем kapt stubs перед каждой сборкой для избежания дубликатов
 afterEvaluate {
-    tasks.matching { it.name.contains("kapt") }.configureEach { task ->
+    tasks.matching { it.name.contains("kapt") && !it.name.contains("UnitTest") && !it.name.contains("AndroidTest") }.configureEach { task ->
         task.doFirst {
-            // Очищаем всю папку kapt3 перед каждой задачей kapt
-            def kaptDir = file("$buildDir/tmp/kapt3")
-            if (kaptDir.exists()) {
-                delete(kaptDir)
-                println("Cleaned kapt directory: $kaptDir")
+            // Очищаем только основную папку kapt3 (не тестовую), чтобы избежать блокировок на Windows
+            try {
+                def kaptDir = file("$buildDir/tmp/kapt3")
+                if (kaptDir.exists()) {
+                    // Пытаемся удалить только файлы, не директории с кэшем
+                    kaptDir.listFiles()?.each { file ->
+                        if (file.isFile()) {
+                            file.delete()
+                        }
+                    }
+                    println("Cleaned kapt directory: $kaptDir")
+                }
+            } catch (e: Exception) {
+                // Игнорируем ошибки очистки (файлы могут быть заблокированы)
+                println("Warning: Could not clean kapt directory: ${e.message}")
             }
         }
     }
