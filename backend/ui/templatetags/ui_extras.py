@@ -66,3 +66,56 @@ def format_phone(value: str) -> str:
     return s
 
 
+@register.filter(name="format_call_direction")
+def format_call_direction(value):
+    """
+    Форматирует направление звонка в человеческий текст.
+    ЭТАП 4: Безопасное отображение direction.
+    """
+    if not value:
+        return "—"
+    
+    direction_map = {
+        "outgoing": "Исходящий",
+        "incoming": "Входящий",
+        "missed": "Пропущенный",
+        "unknown": "—",
+    }
+    
+    return direction_map.get(value, "—")
+
+
+@register.filter(name="format_action_source")
+def format_action_source(value):
+    """
+    Форматирует источник действия в человеческий текст.
+    ЭТАП 4: Безопасное отображение action_source.
+    """
+    if not value:
+        return "—"
+    
+    source_map = {
+        "crm_ui": "CRM",
+        "notification": "Уведомление",
+        "history": "История",
+        "unknown": "—",
+    }
+    
+    return source_map.get(value, "—")
+
+
+@register.filter(name="format_resolve_method")
+def format_resolve_method(value):
+    """
+    Форматирует метод определения результата в человеческий текст.
+    ЭТАП 4: Безопасное отображение resolve_method (скрыто от менеджеров).
+    """
+    if not value:
+        return "—"
+    
+    # Для менеджеров показываем общий текст, технические детали скрыты
+    if value in ("observer", "retry"):
+        return "Определено автоматически"
+    
+    return "—"
+

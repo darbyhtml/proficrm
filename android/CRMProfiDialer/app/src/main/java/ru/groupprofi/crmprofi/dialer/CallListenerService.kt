@@ -35,6 +35,17 @@ import ru.groupprofi.crmprofi.dialer.logs.LogSender
 import ru.groupprofi.crmprofi.dialer.logs.LogInterceptor
 import ru.groupprofi.crmprofi.dialer.auth.TokenManager
 import ru.groupprofi.crmprofi.dialer.network.ApiClient
+import ru.groupprofi.crmprofi.dialer.core.AppContainer
+import ru.groupprofi.crmprofi.dialer.data.PendingCallManager
+import ru.groupprofi.crmprofi.dialer.data.CallLogObserverManager
+import ru.groupprofi.crmprofi.dialer.data.CallHistoryRepository
+import ru.groupprofi.crmprofi.dialer.domain.PendingCall
+import ru.groupprofi.crmprofi.dialer.domain.CallHistoryItem
+import ru.groupprofi.crmprofi.dialer.domain.CallDirection
+import ru.groupprofi.crmprofi.dialer.domain.ResolveMethod
+import ru.groupprofi.crmprofi.dialer.domain.ActionSource
+import ru.groupprofi.crmprofi.dialer.domain.CallStatusApi
+import ru.groupprofi.crmprofi.dialer.notifications.AppNotificationManager
 
 class CallListenerService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -48,6 +59,10 @@ class CallListenerService : Service() {
     private lateinit var apiClient: ApiClient
     // Ленивая инициализация QueueManager - создается только при первом использовании
     private val queueManager: QueueManager by lazy { QueueManager(this) }
+    // Координатор потока обработки команды на звонок
+    private val callFlowCoordinator: CallFlowCoordinator by lazy { CallFlowCoordinator.getInstance(this) }
+    private var callLogObserverManager: CallLogObserverManager? = null
+    private val appNotificationManager: AppNotificationManager by lazy { AppNotificationManager.getInstance(this) }
     // Используем глобальный LogCollector из Application
     private val logCollector: LogCollector by lazy {
         try {
@@ -74,6 +89,15 @@ class CallListenerService : Service() {
         tokenManager = TokenManager.getInstance(this)
         apiClient = ApiClient.getInstance(this)
         logSender = LogSender(this, apiClient.getHttpClient(), queueManager)
+        
+        // Инициализируем CallLogObserverManager для отслеживания изменений CallLog
+        callLogObserverManager = CallLogObserverManager(
+            contentResolver = contentResolver,
+            pendingCallStore = AppContainer.pendingCallStore,
+            callHistoryStore = AppContainer.callHistoryStore,
+            scope = scope
+        )
+        callLogObserverManager?.register()
         
         val deviceId = (intent?.getStringExtra(EXTRA_DEVICE_ID) ?: tokenManager.getDeviceId() ?: "").trim()
 
@@ -104,9 +128,9 @@ class CallListenerService : Service() {
             tokenManager.saveDeviceId(deviceId)
         }
 
-        ensureChannel()
+        ensureForegroundChannel()
         try {
-            startForeground(NOTIF_ID, buildListeningNotification())
+            startForeground(NOTIF_ID_FOREGROUND, buildForegroundNotification())
         } catch (_: Throwable) {
             stopSelf()
             return START_NOT_STICKY
@@ -244,72 +268,19 @@ class CallListenerService : Service() {
                             if (!tokenManager.hasTokens()) {
                                 tokenManager.clearAll()
                             }
-                            updateListeningNotification("Требуется повторный вход в приложении")
-                            // Даем время увидеть сообщение, затем останавливаем сервис
-                            delay(10000) // 10 секунд на то, чтобы пользователь увидел уведомление
+                            // Останавливаем сервис при ошибке авторизации
                             stopSelf()
                             return@launch
                         }
                         
                         // Сетевые ошибки (код 0) - просто логируем, продолжаем работу
-                        val working = isWorkingHours()
-                        val prefix = if (working) "" else "Вне рабочего времени · "
-                        if (code == 0) {
-                            updateListeningNotification("${prefix}Нет подключения · $nowStr")
-                        } else {
-                            updateListeningNotification("${prefix}Опрос: $code · $nowStr")
-                        }
+                        // Убрано обновление foreground notification - оно тихое и не должно мешать
                         
-                        if (!phone.isNullOrBlank()) {
-                            android.util.Log.i("CallListenerService", "Processing call command: phone=$phone, id=$callRequestId")
-                            
-                            // 1) Всегда показываем уведомление с действием (работает и в фоне).
-                            try {
-                                showCallNotification(phone)
-                                android.util.Log.i("CallListenerService", "Call notification shown for $phone")
-                            } catch (e: Throwable) {
-                                android.util.Log.e("CallListenerService", "Error showing notification: ${e.message}")
-                            }
-                            // 2) Если приложение на экране — открываем звонилку сразу.
-                            if (AppState.isForeground) {
-                                try {
-                                    val uri = Uri.parse("tel:$phone")
-                                    val dial = Intent(Intent.ACTION_DIAL, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    android.util.Log.i("CallListenerService", "Opening dialer for $phone (foreground)")
-                                    // запуск activity делаем на main thread, чтобы не словить странные краши на прошивках
-                                    Handler(Looper.getMainLooper()).post {
-                                        try {
-                                            startActivity(dial)
-                                            android.util.Log.i("CallListenerService", "Dialer opened successfully")
-                                            // Сохраняем call_request_id для последующей проверки CallLog
-                                            if (!callRequestId.isNullOrBlank()) {
-                                                securePrefs().edit()
-                                                    .putString("pending_call_$phone", callRequestId)
-                                                    .putLong("pending_call_time_$phone", System.currentTimeMillis())
-                                                    .apply()
-                                                // Проверяем CallLog через 5 секунд
-                                                checkCallLogAndSend(phone)
-                                            }
-                                        } catch (e: Throwable) {
-                                            android.util.Log.e("CallListenerService", "Error opening dialer: ${e.message}")
-                                        }
-                                    }
-                                } catch (e: Throwable) {
-                                    android.util.Log.e("CallListenerService", "Error creating dial intent: ${e.message}")
-                                }
-                            } else {
-                                android.util.Log.d("CallListenerService", "App in background, notification only")
-                                // Даже в фоне сохраняем call_request_id и проверяем CallLog
-                                if (!callRequestId.isNullOrBlank()) {
-                                    securePrefs().edit()
-                                        .putString("pending_call_$phone", callRequestId)
-                                        .putLong("pending_call_time_$phone", System.currentTimeMillis())
-                                        .apply()
-                                    checkCallLogAndSend(phone)
-                                }
-                            }
+                        if (!phone.isNullOrBlank() && !callRequestId.isNullOrBlank()) {
+                            // Используем CallFlowCoordinator для обработки команды на звонок
+                            callFlowCoordinator.handleCallCommand(phone, callRequestId)
                         } else {
-                            android.util.Log.d("CallListenerService", "Phone is blank, skipping")
+                            ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallListenerService", "Номер или ID пустой, пропускаем")
                         }
                         
                         // Адаптивная частота опроса с джиттером для предотвращения синхронизации устройств
@@ -359,104 +330,62 @@ class CallListenerService : Service() {
     override fun onDestroy() {
         loopJob?.cancel()
         loopJob = null
+        callLogObserverManager?.unregister()
+        callLogObserverManager = null
         super.onDestroy()
     }
 
     // УДАЛЕНО: pullCallWithRefresh, refreshAccessWithMutex, refreshAccess
     // Теперь используется ApiClient.pullCall(), который внутри использует TokenManager для refresh
 
-    private fun ensureChannel() {
+    /**
+     * Создать канал для foreground service (тихое уведомление).
+     */
+    private fun ensureForegroundChannel() {
         if (Build.VERSION.SDK_INT < 26) return
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val ch = NotificationChannel(
-            CHANNEL_ID,
-            "CRM ПРОФИ — звонки",
-            NotificationManager.IMPORTANCE_HIGH
-        )
-        ch.description = "Команды на звонок из CRM"
+            CHANNEL_FOREGROUND,
+            "Работа приложения",
+            NotificationManager.IMPORTANCE_LOW // Тихий канал
+        ).apply {
+            description = "Служебное уведомление для работы в фоне"
+            enableVibration(false)
+            enableLights(false)
+            setShowBadge(false)
+        }
         nm.createNotificationChannel(ch)
     }
 
-    private fun buildListeningNotification() = NotificationCompat.Builder(this, CHANNEL_ID)
+    /**
+     * Построить тихое уведомление для foreground service.
+     */
+    private fun buildForegroundNotification() = NotificationCompat.Builder(this, CHANNEL_FOREGROUND)
         .setSmallIcon(android.R.drawable.sym_action_call)
         .setContentTitle("CRM ПРОФИ")
-        .setContentText("Слушаю команды на звонок…")
+        .setContentText("Приложение готово к звонкам")
         .setOngoing(true)
         .setOnlyAlertOnce(true)
-        .addAction(
-            android.R.drawable.ic_menu_close_clear_cancel,
-            "Остановить",
-            PendingIntent.getService(
-                this,
-                1,
-                Intent(this, CallListenerService::class.java).setAction(ACTION_STOP),
-                PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
-            )
-        )
+        .setPriority(NotificationCompat.PRIORITY_LOW)
+        .setCategory(NotificationCompat.CATEGORY_SERVICE)
         .build()
 
-    private fun updateListeningNotification(text: String) {
-        try {
-            val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.notify(
-                NOTIF_ID,
-                NotificationCompat.Builder(this, CHANNEL_ID)
-                    .setSmallIcon(android.R.drawable.sym_action_call)
-                    .setContentTitle("CRM ПРОФИ")
-                    .setContentText(text)
-                    .setOngoing(true)
-                    .setOnlyAlertOnce(true)
-                    .addAction(
-                        android.R.drawable.ic_menu_close_clear_cancel,
-                        "Остановить",
-                        PendingIntent.getService(
-                            this,
-                            1,
-                            Intent(this, CallListenerService::class.java).setAction(ACTION_STOP),
-                            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
-                        )
-                    )
-                    .build()
-            )
-        } catch (_: Throwable) {
-            // ignore
-        }
-    }
-
+    /**
+     * Показать уведомление "Пора позвонить" через AppNotificationManager.
+     */
     private fun showCallNotification(phone: String) {
-        val uri = Uri.parse("tel:$phone")
-        val dialIntent = Intent(Intent.ACTION_DIAL, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        val pi = PendingIntent.getActivity(
-            this,
-            2,
-            dialIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
-        )
-        
-        // Красивое уведомление с номером и иконкой телефона
-        val n = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.sym_action_call)
-            .setContentTitle("CRM ПРОФИ — Звонок")
-            .setContentText("Номер: $phone")
-            .setStyle(NotificationCompat.BigTextStyle()
-                .bigText("Нажмите, чтобы открыть набор номера\n$phone"))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setAutoCancel(true)
-            .setContentIntent(pi)
-            .addAction(android.R.drawable.sym_action_call, "Позвонить", pi)
-            .setShowWhen(true)
-            .setWhen(System.currentTimeMillis())
-            .build()
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.notify(NOTIF_CALL_ID, n)
+        appNotificationManager.showCallTaskNotification(phone)
         
         // Также открываем набор номера сразу, если приложение в фоне
         if (!AppState.isForeground) {
             try {
+                val uri = Uri.parse("tel:$phone")
+                val dialIntent = Intent(Intent.ACTION_DIAL, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 Handler(Looper.getMainLooper()).postDelayed({
                     try {
                         startActivity(dialIntent)
+                        // Скрываем уведомление после открытия звонилки
+                        appNotificationManager.dismissCallTaskNotification()
                     } catch (_: Throwable) {
                         // ignore
                     }
@@ -466,100 +395,332 @@ class CallListenerService : Service() {
             }
         }
     }
+    
+    /**
+     * Маскировать номер телефона для логов.
+     */
+    private fun maskPhone(phone: String): String {
+        if (phone.length <= 4) return "***"
+        return "${phone.take(3)}***${phone.takeLast(4)}"
+    }
 
-    private fun checkCallLogAndSend(phone: String) {
-        // Проверяем CallLog через 5 секунд после открытия звонилки (даем время на звонок)
+    /**
+     * Начать процесс определения результата звонка.
+     * Создаёт PendingCall и запускает повторные проверки через 5/10/15 секунд.
+     */
+    private fun startCallResolution(phone: String, callRequestId: String) {
         scope.launch {
-            delay(5000)
             try {
-                val prefs = securePrefs()
-                val callRequestId = prefs.getString("pending_call_$phone", null)
-                if (callRequestId.isNullOrBlank()) {
-                    android.util.Log.d("CallListenerService", "No pending call request ID for $phone")
-                    return@launch
-                }
-
-                // Читаем CallLog для этого номера
-                val callInfo = readCallLogForPhone(phone)
-                if (callInfo != null) {
-                    android.util.Log.i("CallListenerService", "Found call in CallLog: status=${callInfo.first}, duration=${callInfo.second}, started=${callInfo.third}")
-                    // Используем ApiClient для отправки результата звонка
-                    val status = callInfo.first
-                    val duration = callInfo.second?.toInt()
-                    val startedAt = callInfo.third
-                    
-                    val result = apiClient.sendCallUpdate(
-                        callRequestId = callRequestId,
-                        callStatus = status,
-                        callStartedAt = startedAt,
-                        callDurationSeconds = duration
-                    )
-                    
-                    if (result is ApiClient.Result.Success) {
-                        android.util.Log.i("CallListenerService", "Call info sent successfully to CRM")
-                    } else {
-                        android.util.Log.w("CallListenerService", "Failed to send call info: ${(result as? ApiClient.Result.Error)?.message}")
-                    }
-                    
-                    // Очищаем сохраненный ID
-                    prefs.edit().remove("pending_call_$phone").remove("pending_call_time_$phone").apply()
-                } else {
-                    android.util.Log.d("CallListenerService", "No call found in CallLog for $phone")
-                }
+                val normalizedPhone = PendingCall.normalizePhone(phone)
+                val startedAt = System.currentTimeMillis()
+                
+                // Создаём ожидаемый звонок
+            val pendingCall = PendingCall(
+                callRequestId = callRequestId,
+                phoneNumber = normalizedPhone,
+                startedAtMillis = startedAt,
+                state = PendingCall.PendingState.PENDING,
+                attempts = 0
+            )
+            
+            AppContainer.pendingCallStore.addPendingCall(pendingCall)
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("CallListenerService", "Начато определение результата звонка: ${maskPhone(phone)}")
+                
+                // Запускаем повторные проверки: 5, 10, 15 секунд
+                scheduleCallLogChecks(pendingCall)
+                
             } catch (e: Exception) {
-                android.util.Log.e("CallListenerService", "Error checking CallLog: ${e.message}")
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("CallListenerService", "Ошибка при создании ожидаемого звонка: ${e.message}", e)
             }
         }
     }
-
-    private fun readCallLogForPhone(phone: String): Triple<String?, Long?, Long?>? {
-        // Нормализуем номер (убираем пробелы, скобки, дефисы)
-        val normalized = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    
+    /**
+     * Запланировать повторные проверки CallLog через 5, 10, 15 секунд.
+     */
+    private fun scheduleCallLogChecks(pendingCall: PendingCall) {
+        val delays = listOf(5000L, 10000L, 15000L) // 5, 10, 15 секунд
+        
+        delays.forEachIndexed { index, delay ->
+            scope.launch {
+                delay(delay)
+                
+                // Проверяем, что звонок ещё активен
+                val currentCall = AppContainer.pendingCallStore.getPendingCall(pendingCall.callRequestId)
+                if (currentCall == null || 
+                    currentCall.state == PendingCall.PendingState.RESOLVED ||
+                    currentCall.state == PendingCall.PendingState.FAILED) {
+                    // Уже обработан или удалён
+                    return@launch
+                }
+                
+                // Обновляем состояние на RESOLVING
+                AppContainer.pendingCallStore.updateCallState(
+                    pendingCall.callRequestId,
+                    PendingCall.PendingState.RESOLVING,
+                    incrementAttempts = true
+                )
+                
+                // Пытаемся найти звонок в CallLog
+                try {
+                    val callInfo = readCallLogForPhone(pendingCall.phoneNumber, pendingCall.startedAtMillis)
+                    if (callInfo != null) {
+                        // Найдено совпадение - обрабатываем результат
+                        handleCallResult(pendingCall, callInfo)
+                        return@launch
+                    } else {
+                        // Не найдено - если это последняя попытка, помечаем как FAILED
+                        if (index == delays.size - 1) {
+                            handleCallResultFailed(pendingCall)
+                        }
+                    }
+                } catch (e: SecurityException) {
+                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "Нет разрешения на чтение CallLog: ${e.message}")
+                    // Если нет разрешения - помечаем как FAILED
+                    if (index == delays.size - 1) {
+                        handleCallResultFailed(pendingCall)
+                    }
+                } catch (e: Exception) {
+                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("CallListenerService", "Ошибка чтения CallLog: ${e.message}", e)
+                    if (index == delays.size - 1) {
+                        handleCallResultFailed(pendingCall)
+                    }
+                }
+            }
+        }
+    }
+    
+    /**
+     * Прочитать CallLog для конкретного номера в временном окне.
+     */
+    private suspend fun readCallLogForPhone(
+        phoneNumber: String,
+        startedAtMillis: Long
+    ): CallInfo? {
+        val normalized = PendingCall.normalizePhone(phoneNumber)
+        
+        // Временное окно: ±5 минут от времени начала ожидания
+        val windowStart = startedAtMillis - (5 * 60 * 1000)
+        val windowEnd = startedAtMillis + (5 * 60 * 1000)
         
         try {
             val cursor = contentResolver.query(
                 CallLog.Calls.CONTENT_URI,
                 arrayOf(
+                    CallLog.Calls.NUMBER,
                     CallLog.Calls.TYPE,
                     CallLog.Calls.DURATION,
                     CallLog.Calls.DATE
                 ),
-                "${CallLog.Calls.NUMBER} LIKE ?",
-                arrayOf("%$normalized%"),
-                "${CallLog.Calls.DATE} DESC LIMIT 1"
+                "${CallLog.Calls.DATE} >= ? AND ${CallLog.Calls.DATE} <= ?",
+                arrayOf(windowStart.toString(), windowEnd.toString()),
+                "${CallLog.Calls.DATE} DESC LIMIT 10"
             )
             
             cursor?.use {
-                if (it.moveToFirst()) {
-                    val type = it.getInt(it.getColumnIndexOrThrow(CallLog.Calls.TYPE))
-                    val duration = it.getLong(it.getColumnIndexOrThrow(CallLog.Calls.DURATION))
-                    val date = it.getLong(it.getColumnIndexOrThrow(CallLog.Calls.DATE))
+                while (it.moveToNext()) {
+                    val number = it.getString(it.getColumnIndexOrThrow(CallLog.Calls.NUMBER)) ?: ""
+                    val normalizedNumber = PendingCall.normalizePhone(number)
                     
-                    // TYPE: 1=входящий, 2=исходящий, 3=пропущенный, 4=голосовая почта, 5=отклоненный (API 29+)
-                    val status = when (type) {
-                        CallLog.Calls.OUTGOING_TYPE -> "connected" // Исходящий - считаем дозвонился
-                        CallLog.Calls.MISSED_TYPE -> "no_answer" // Пропущенный
-                        CallLog.Calls.INCOMING_TYPE -> {
-                            // Для входящих: если длительность 0 - не дозвонился, иначе - дозвонился
-                            if (duration > 0) "connected" else "no_answer"
-                        }
-                        5 -> "rejected" // REJECTED_TYPE (доступен с API 29+)
-                        else -> {
-                            // Для других случаев (VOICEMAIL_TYPE=4 и т.д.)
-                            if (duration == 0L) "no_answer" else "connected"
-                        }
+                    // Проверяем совпадение номера (последние 7-10 цифр)
+                    if (normalizedNumber.endsWith(normalized.takeLast(7)) || 
+                        normalized.endsWith(normalizedNumber.takeLast(7))) {
+                        val type = it.getInt(it.getColumnIndexOrThrow(CallLog.Calls.TYPE))
+                        val duration = it.getLong(it.getColumnIndexOrThrow(CallLog.Calls.DURATION))
+                        val date = it.getLong(it.getColumnIndexOrThrow(CallLog.Calls.DATE))
+                        
+                        return CallInfo(type, duration, date)
                     }
-                    
-                    return Triple(status, duration, date)
                 }
             }
         } catch (e: SecurityException) {
-            android.util.Log.w("CallListenerService", "No permission to read CallLog: ${e.message}")
+            throw e
         } catch (e: Exception) {
-            android.util.Log.e("CallListenerService", "Error reading CallLog: ${e.message}")
+            ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("CallListenerService", "Ошибка чтения CallLog: ${e.message}", e)
         }
+        
         return null
     }
+    
+    /**
+     * Обработать найденный результат звонка.
+     * ЭТАП 2: Добавлена сборка расширенных данных и отправка extended payload.
+     */
+    private suspend fun handleCallResult(
+        pendingCall: PendingCall,
+        callInfo: CallInfo
+    ) {
+        // Определяем человеческий статус для истории
+        val (humanStatus, humanStatusText) = determineHumanStatus(callInfo.type, callInfo.duration)
+        
+        // ЭТАП 2: Маппим в API статус (используем CallStatusApi для единообразия)
+        val crmStatus = CallStatusApi.fromCallHistoryStatus(humanStatus).apiValue
+        
+        // ЭТАП 2: Извлекаем дополнительные данные
+        val direction = CallDirection.fromCallLogType(callInfo.type)
+        val resolveMethod = ResolveMethod.RETRY // Результат найден через повторные проверки (scheduleCallLogChecks)
+        val endedAt = if (callInfo.duration > 0) {
+            callInfo.date + (callInfo.duration * 1000) // endedAt = startedAt + duration (в миллисекундах)
+        } else {
+            null
+        }
+        
+        // ЭТАП 2: Отправляем в CRM с расширенными данными
+        val result = apiClient.sendCallUpdate(
+            callRequestId = pendingCall.callRequestId,
+            callStatus = crmStatus,
+            callStartedAt = callInfo.date,
+            callDurationSeconds = callInfo.duration.toInt().takeIf { it > 0 },
+            // Новые поля (ЭТАП 2)
+            direction = direction,
+            resolveMethod = resolveMethod,
+            attemptsCount = pendingCall.attempts,
+            actionSource = pendingCall.actionSource ?: ActionSource.UNKNOWN,
+            endedAt = endedAt
+        )
+        
+        // Сохраняем в историю с расширенными данными
+        val historyItem = CallHistoryItem(
+            id = pendingCall.callRequestId,
+            phone = pendingCall.phoneNumber,
+            phoneDisplayName = null,
+            status = humanStatus,
+            statusText = humanStatusText,
+            durationSeconds = callInfo.duration.toInt().takeIf { it > 0 },
+            startedAt = callInfo.date,
+            sentToCrm = result is ApiClient.Result.Success,
+            sentToCrmAt = if (result is ApiClient.Result.Success) System.currentTimeMillis() else null,
+            // Новые поля (ЭТАП 2)
+            direction = direction,
+            resolveMethod = resolveMethod,
+            attemptsCount = pendingCall.attempts,
+            actionSource = pendingCall.actionSource ?: ActionSource.UNKNOWN,
+            endedAt = endedAt
+        )
+        
+        AppContainer.callHistoryStore.addOrUpdate(historyItem)
+        
+        // Если отправка не удалась, обновляем флаг после успешной отправки из очереди
+        if (result !is ApiClient.Result.Success) {
+            // История уже сохранена с sentToCrm = false
+            // Когда очередь отправит - нужно будет обновить флаг
+        }
+        
+        // Удаляем из ожидаемых
+        AppContainer.pendingCallStore.removePendingCall(pendingCall.callRequestId)
+        
+        ru.groupprofi.crmprofi.dialer.logs.AppLogger.i(
+            "CallListenerService", 
+            "Результат звонка определён и отправлен: ${maskPhone(pendingCall.phoneNumber)} -> $humanStatusText (direction=$direction, resolveMethod=$resolveMethod)"
+        )
+    }
+    
+    /**
+     * Обработать случай, когда результат не удалось определить.
+     * ЭТАП 2: Отправляем статус "unknown" в CRM.
+     */
+    private suspend fun handleCallResultFailed(pendingCall: PendingCall) {
+        // Помечаем как FAILED
+        AppContainer.pendingCallStore.updateCallState(
+            pendingCall.callRequestId,
+            PendingCall.PendingState.FAILED
+        )
+        
+        // ЭТАП 2: Отправляем статус "unknown" в CRM
+        val result = apiClient.sendCallUpdate(
+            callRequestId = pendingCall.callRequestId,
+            callStatus = CallStatusApi.UNKNOWN.apiValue,
+            callStartedAt = pendingCall.startedAtMillis,
+            callDurationSeconds = null,
+            // Новые поля (ЭТАП 2)
+            direction = null, // Неизвестно, так как звонок не найден в CallLog
+            resolveMethod = ResolveMethod.UNKNOWN,
+            attemptsCount = pendingCall.attempts,
+            actionSource = pendingCall.actionSource ?: ActionSource.UNKNOWN,
+            endedAt = null
+        )
+        
+        // Сохраняем в историю с статусом "Не удалось определить"
+        val historyItem = CallHistoryItem(
+            id = pendingCall.callRequestId,
+            phone = pendingCall.phoneNumber,
+            phoneDisplayName = null,
+            status = CallHistoryItem.CallStatus.UNKNOWN,
+            statusText = "Не удалось определить результат",
+            durationSeconds = null,
+            startedAt = pendingCall.startedAtMillis,
+            sentToCrm = result is ApiClient.Result.Success,
+            sentToCrmAt = if (result is ApiClient.Result.Success) System.currentTimeMillis() else null,
+            // Новые поля (ЭТАП 2)
+            direction = null,
+            resolveMethod = ResolveMethod.UNKNOWN,
+            attemptsCount = pendingCall.attempts,
+            actionSource = pendingCall.actionSource ?: ActionSource.UNKNOWN,
+            endedAt = null
+        )
+        
+        AppContainer.callHistoryStore.addOrUpdate(historyItem)
+        
+        // Удаляем из ожидаемых
+        AppContainer.pendingCallStore.removePendingCall(pendingCall.callRequestId)
+        
+        ru.groupprofi.crmprofi.dialer.logs.AppLogger.w(
+            "CallListenerService", 
+            "Не удалось определить результат звонка: ${maskPhone(pendingCall.phoneNumber)} (attempts=${pendingCall.attempts})"
+        )
+    }
+    
+    /**
+     * Определить человеческий статус звонка.
+     */
+    private fun determineHumanStatus(type: Int, duration: Long): Pair<CallHistoryItem.CallStatus, String> {
+        return when (type) {
+            CallLog.Calls.OUTGOING_TYPE -> {
+                if (duration > 0) {
+                    Pair(CallHistoryItem.CallStatus.CONNECTED, "Разговор состоялся")
+                } else {
+                    Pair(CallHistoryItem.CallStatus.NO_ANSWER, "Не ответили")
+                }
+            }
+            CallLog.Calls.MISSED_TYPE -> {
+                Pair(CallHistoryItem.CallStatus.NO_ANSWER, "Не ответили")
+            }
+            CallLog.Calls.INCOMING_TYPE -> {
+                if (duration > 0) {
+                    Pair(CallHistoryItem.CallStatus.CONNECTED, "Разговор состоялся")
+                } else {
+                    Pair(CallHistoryItem.CallStatus.NO_ANSWER, "Не ответили")
+                }
+            }
+            5 -> { // REJECTED_TYPE (API 29+)
+                Pair(CallHistoryItem.CallStatus.REJECTED, "Сброс")
+            }
+            else -> {
+                if (duration > 0) {
+                    Pair(CallHistoryItem.CallStatus.CONNECTED, "Разговор состоялся")
+                } else {
+                    Pair(CallHistoryItem.CallStatus.NO_ANSWER, "Не ответили")
+                }
+            }
+        }
+    }
+    
+    /**
+     * Маскировать номер телефона для логов.
+     */
+    private fun maskPhone(phone: String): String {
+        if (phone.length <= 4) return "***"
+        return "${phone.take(3)}***${phone.takeLast(4)}"
+    }
+    
+    /**
+     * Информация о звонке из CallLog.
+     */
+    private data class CallInfo(
+        val type: Int,      // Тип звонка (OUTGOING, MISSED, INCOMING, etc.)
+        val duration: Long, // Длительность в секундах
+        val date: Long      // Timestamp звонка
+    )
 
     // УДАЛЕНО: sendCallInfoToCRM, sendHeartbeat, sendTelemetryLatency
     // Теперь используются методы ApiClient: sendCallUpdate(), sendHeartbeat(), sendTelemetryBatch()
@@ -597,9 +758,8 @@ class CallListenerService : Service() {
     }
 
     companion object {
-        private const val CHANNEL_ID = "crmprofi_calls"
-        private const val NOTIF_ID = 1001
-        private const val NOTIF_CALL_ID = 1002
+        private const val CHANNEL_FOREGROUND = "crmprofi_foreground"
+        private const val NOTIF_ID_FOREGROUND = 1000
 
         private const val PREFS = "crmprofi_dialer"
         
@@ -624,6 +784,7 @@ class CallListenerService : Service() {
         const val EXTRA_REFRESH = "refresh"
         const val EXTRA_DEVICE_ID = "device_id"
 
+        const val ACTION_START = "ru.groupprofi.crmprofi.dialer.START"
         const val ACTION_STOP = "ru.groupprofi.crmprofi.dialer.STOP"
     }
 }

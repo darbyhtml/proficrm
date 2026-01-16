@@ -5375,8 +5375,15 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
                 "busy": 0,
                 "rejected": 0,
                 "missed": 0,
-                "total_duration": 0,
+                "unknown": 0,
+                "total_duration": 0,  # Старая логика для обратной совместимости
+                "total_duration_connected": 0,  # Новая логика: только для CONNECTED
                 "avg_duration": 0,
+                "connect_rate_percent": 0.0,
+                # Группировки по новым полям (ЭТАП 3: считаем, UI добавим в ЭТАП 4)
+                "by_direction": {"outgoing": 0, "incoming": 0, "missed": 0, "unknown": 0},
+                "by_resolve_method": {"observer": 0, "retry": 0, "unknown": 0},
+                "by_action_source": {"crm_ui": 0, "notification": 0, "history": 0, "unknown": 0},
             }
         
         stats = stats_by_manager[manager_id]
@@ -5384,6 +5391,9 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
         
         if call.call_status == CallRequest.CallStatus.CONNECTED:
             stats["connected"] += 1
+            # Длительность считаем только для CONNECTED (для правильного avg_duration)
+            if call.call_duration_seconds:
+                stats["total_duration_connected"] += call.call_duration_seconds
         elif call.call_status == CallRequest.CallStatus.NO_ANSWER:
             stats["no_answer"] += 1
         elif call.call_status == CallRequest.CallStatus.BUSY:
@@ -5392,14 +5402,52 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
             stats["rejected"] += 1
         elif call.call_status == CallRequest.CallStatus.MISSED:
             stats["missed"] += 1
+        elif call.call_status == CallRequest.CallStatus.UNKNOWN:
+            stats["unknown"] += 1
         
+        # Старая логика для обратной совместимости (если UI ожидает total_duration)
         if call.call_duration_seconds:
             stats["total_duration"] += call.call_duration_seconds
+        
+        # Группировки по новым полям (ЭТАП 3)
+        if call.direction:
+            direction_key = call.direction
+            if direction_key in stats["by_direction"]:
+                stats["by_direction"][direction_key] += 1
+            else:
+                stats["by_direction"]["unknown"] += 1
+        
+        if call.resolve_method:
+            resolve_key = call.resolve_method
+            if resolve_key in stats["by_resolve_method"]:
+                stats["by_resolve_method"][resolve_key] += 1
+            else:
+                stats["by_resolve_method"]["unknown"] += 1
+        
+        if call.action_source:
+            action_key = call.action_source
+            if action_key in stats["by_action_source"]:
+                stats["by_action_source"][action_key] += 1
+            else:
+                stats["by_action_source"]["unknown"] += 1
     
-    # Вычисляем среднюю длительность
+    # Вычисляем среднюю длительность и дозвоняемость
     for stats in stats_by_manager.values():
-        if stats["total"] > 0:
+        # Новая логика: avg_duration только по CONNECTED
+        if stats["connected"] > 0 and stats.get("total_duration_connected", 0) > 0:
+            stats["avg_duration"] = stats["total_duration_connected"] // stats["connected"]
+        # Старая логика для обратной совместимости
+        elif stats["total"] > 0:
             stats["avg_duration"] = stats["total_duration"] // stats["total"]
+        else:
+            stats["avg_duration"] = 0
+        
+        # Дозвоняемость % = connected / total (где total = все с call_status != null)
+        if stats["total"] > 0:
+            connect_rate = (stats["connected"] / stats["total"]) * 100
+            stats["connect_rate_percent"] = round(connect_rate, 1)
+        else:
+            stats["connect_rate_percent"] = 0.0
     
     # Формируем список для шаблона
     stats_list = []
@@ -5412,8 +5460,14 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
             "busy": 0,
             "rejected": 0,
             "missed": 0,
+            "unknown": 0,
             "total_duration": 0,
+            "total_duration_connected": 0,
             "avg_duration": 0,
+            "connect_rate_percent": 0.0,
+            "by_direction": {"outgoing": 0, "incoming": 0, "missed": 0, "unknown": 0},
+            "by_resolve_method": {"observer": 0, "retry": 0, "unknown": 0},
+            "by_action_source": {"crm_ui": 0, "notification": 0, "history": 0, "unknown": 0},
         })
         stats_list.append(stats)
     
@@ -5424,8 +5478,34 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
     total_busy = sum(s["busy"] for s in stats_list)
     total_rejected = sum(s["rejected"] for s in stats_list)
     total_missed = sum(s["missed"] for s in stats_list)
+    total_unknown = sum(s.get("unknown", 0) for s in stats_list)
     total_duration = sum(s["total_duration"] for s in stats_list)
-    avg_duration_all = total_duration // total_calls if total_calls > 0 else 0
+    total_duration_connected = sum(s.get("total_duration_connected", 0) for s in stats_list)
+    # Новая логика: avg_duration только по CONNECTED
+    avg_duration_all = total_duration_connected // total_connected if total_connected > 0 else (total_duration // total_calls if total_calls > 0 else 0)
+    # Дозвоняемость %
+    connect_rate_all = round((total_connected / total_calls * 100), 1) if total_calls > 0 else 0.0
+    
+    # ЭТАП 4: Вычисляем общие суммы для распределений (для шаблона)
+    total_by_direction = {"outgoing": 0, "incoming": 0, "missed": 0, "unknown": 0}
+    total_by_action_source = {"crm_ui": 0, "notification": 0, "history": 0, "unknown": 0}
+    total_by_resolve_method = {"observer": 0, "retry": 0, "unknown": 0}
+    
+    for stat in stats_list:
+        if "by_direction" in stat:
+            total_by_direction["outgoing"] += stat["by_direction"].get("outgoing", 0)
+            total_by_direction["incoming"] += stat["by_direction"].get("incoming", 0)
+            total_by_direction["missed"] += stat["by_direction"].get("missed", 0)
+            total_by_direction["unknown"] += stat["by_direction"].get("unknown", 0)
+        if "by_action_source" in stat:
+            total_by_action_source["crm_ui"] += stat["by_action_source"].get("crm_ui", 0)
+            total_by_action_source["notification"] += stat["by_action_source"].get("notification", 0)
+            total_by_action_source["history"] += stat["by_action_source"].get("history", 0)
+            total_by_action_source["unknown"] += stat["by_action_source"].get("unknown", 0)
+        if "by_resolve_method" in stat:
+            total_by_resolve_method["observer"] += stat["by_resolve_method"].get("observer", 0)
+            total_by_resolve_method["retry"] += stat["by_resolve_method"].get("retry", 0)
+            total_by_resolve_method["unknown"] += stat["by_resolve_method"].get("unknown", 0)
     
     return render(
         request,
@@ -5442,8 +5522,13 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
             "total_busy": total_busy,
             "total_rejected": total_rejected,
             "total_missed": total_missed,
+            "total_unknown": total_unknown,
             "total_duration": total_duration,
+            "connect_rate_all": connect_rate_all,
             "avg_duration_all": avg_duration_all,
+            "total_by_direction": total_by_direction,
+            "total_by_action_source": total_by_action_source,
+            "total_by_resolve_method": total_by_resolve_method,
             "managers": managers_qs,
             "filter_manager": filter_manager_id,
             "filter_status": filter_status,
@@ -5514,6 +5599,7 @@ def settings_calls_manager_detail(request: HttpRequest, user_id: int) -> HttpRes
             "busy": CallRequest.CallStatus.BUSY,
             "rejected": CallRequest.CallStatus.REJECTED,
             "missed": CallRequest.CallStatus.MISSED,
+            "unknown": CallRequest.CallStatus.UNKNOWN,
         }
         if filter_status in status_map:
             calls_qs = calls_qs.filter(call_status=status_map[filter_status])

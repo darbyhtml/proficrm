@@ -27,6 +27,10 @@
 -keep class ru.groupprofi.crmprofi.dialer.queue.QueueDao { *; }
 -keep class ru.groupprofi.crmprofi.dialer.queue.AppDatabase { *; }
 
+# Room: keep генерируемые классы
+-keep class * extends androidx.room.RoomDatabase_Impl { *; }
+-keep class * extends androidx.room.RoomDatabase_Impl$* { *; }
+
 # ============================================
 # Security Crypto (EncryptedSharedPreferences / Tink)
 # ============================================
@@ -45,6 +49,9 @@
 -dontwarn javax.annotation.**
 -dontwarn org.conscrypt.**
 
+# OkHttp Interceptors
+-keep class ru.groupprofi.crmprofi.dialer.network.** { *; }
+
 # ============================================
 # Kotlin
 # ============================================
@@ -59,10 +66,21 @@
     *** component*();
 }
 
+# Kotlin Coroutines (дополнительно)
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler
+-keepclassmembernames class kotlinx.** {
+    volatile <fields>;
+}
+-keepclassmembernames class kotlinx.coroutines.** {
+    volatile <fields>;
+}
+
 # ============================================
 # JSON (org.json)
 # ============================================
 # org.json обычно не требует keep, но если будут warnings - закрыть точечно
+-keep class org.json.** { *; }
 -dontwarn org.json.**
 
 # ============================================
@@ -81,13 +99,34 @@
     *;
 }
 
-# Исключения: можно обфусцировать внутренние детали, но сохранить публичные API
--keepclassmembers class ru.groupprofi.crmprofi.dialer.MainActivity { *; }
--keepclassmembers class ru.groupprofi.crmprofi.dialer.CallListenerService { *; }
--keepclassmembers class ru.groupprofi.crmprofi.dialer.OnboardingActivity { *; }
--keepclassmembers class ru.groupprofi.crmprofi.dialer.auth.TokenManager { *; }
--keepclassmembers class ru.groupprofi.crmprofi.dialer.network.ApiClient { *; }
--keepclassmembers class ru.groupprofi.crmprofi.dialer.queue.QueueManager { *; }
+# Keep Application класс
+-keep class ru.groupprofi.crmprofi.dialer.CRMApplication { *; }
+
+# Keep все Activity, Service, Receiver
+-keep public class * extends android.app.Activity
+-keep public class * extends android.app.Service
+-keep public class * extends android.content.BroadcastReceiver
+-keep public class * extends android.content.ContentProvider
+
+# Keep Intent actions (ACTION_START, ACTION_STOP и т.д.)
+-keepclassmembers class ru.groupprofi.crmprofi.dialer.CallListenerService {
+    public static final java.lang.String ACTION_START;
+    public static final java.lang.String ACTION_STOP;
+}
+
+# Keep ContentObserver (для CallLogObserverManager)
+-keep class ru.groupprofi.crmprofi.dialer.data.CallLogObserverManager { *; }
+-keep class ru.groupprofi.crmprofi.dialer.data.CallLogObserverManager$* { *; }
+
+# Keep NotificationManager
+-keep class ru.groupprofi.crmprofi.dialer.notifications.** { *; }
+
+# Keep domain models
+-keep class ru.groupprofi.crmprofi.dialer.domain.** { *; }
+-keepclassmembers class ru.groupprofi.crmprofi.dialer.domain.** {
+    <fields>;
+    <methods>;
+}
 
 # ============================================
 # BuildConfig
@@ -117,6 +156,47 @@
 -keepclasseswithmembernames class * {
     native <methods>;
 }
+
+# Keep Parcelable
+-keep class * implements android.os.Parcelable {
+    public static final android.os.Parcelable$Creator *;
+}
+
+# Keep Serializable
+-keepclassmembers class * implements java.io.Serializable {
+    static final long serialVersionUID;
+    private static final java.io.ObjectStreamField[] serialPersistentFields;
+    private void writeObject(java.io.ObjectOutputStream);
+    private void readObject(java.io.ObjectInputStream);
+    java.lang.Object writeReplace();
+    java.lang.Object readResolve();
+}
+
+# Keep все классы с аннотациями Android
+-keep @androidx.annotation.Keep class *
+-keepclassmembers class * {
+    @androidx.annotation.Keep *;
+}
+
+# ============================================
+# zxing (QR scanner)
+# ============================================
+-keep class com.journeyapps.barcodescanner.** { *; }
+-dontwarn com.journeyapps.barcodescanner.**
+
+# ============================================
+# Remove logging в release (опционально)
+# ============================================
+# Удаляем системные логи, но оставляем AppLogger (он маскирует данные)
+-assumenosideeffects class android.util.Log {
+    public static *** d(...);
+    public static *** v(...);
+    public static *** i(...);
+}
+
+# Но оставляем AppLogger (он маскирует данные)
+-keep class ru.groupprofi.crmprofi.dialer.logs.AppLogger { *; }
+-keepclassmembers class ru.groupprofi.crmprofi.dialer.logs.AppLogger { *; }
 
 # ============================================
 # Warnings (игнорируем известные безопасные предупреждения)

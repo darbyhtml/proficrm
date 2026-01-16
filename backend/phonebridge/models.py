@@ -92,6 +92,7 @@ class CallRequest(models.Model):
         BUSY = "busy", "Занято"
         REJECTED = "rejected", "Отклонен"
         MISSED = "missed", "Пропущен"
+        UNKNOWN = "unknown", "Не удалось определить"  # Новое: для случаев, когда результат не определён
 
     call_status = models.CharField(
         max_length=16,
@@ -103,6 +104,60 @@ class CallRequest(models.Model):
     )
     call_started_at = models.DateTimeField(null=True, blank=True, verbose_name="Время начала звонка")
     call_duration_seconds = models.IntegerField(null=True, blank=True, verbose_name="Длительность звонка (секунды)")
+    
+    # Enum классы для валидации
+    class CallDirection(models.TextChoices):
+        OUTGOING = "outgoing", "Исходящий"
+        INCOMING = "incoming", "Входящий"
+        MISSED = "missed", "Пропущенный"
+        UNKNOWN = "unknown", "Неизвестно"
+    
+    class ResolveMethod(models.TextChoices):
+        OBSERVER = "observer", "Определено через ContentObserver"
+        RETRY = "retry", "Определено через повторные проверки"
+        UNKNOWN = "unknown", "Неизвестно"
+    
+    class ActionSource(models.TextChoices):
+        CRM_UI = "crm_ui", "Команда из CRM"
+        NOTIFICATION = "notification", "Нажатие на уведомление"
+        HISTORY = "history", "Нажатие из истории звонков"
+        UNKNOWN = "unknown", "Неизвестно"
+    
+    # Новые поля для расширенной аналитики (ЭТАП 3: добавлены в БД)
+    call_ended_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Время окончания звонка"
+    )
+    direction = models.CharField(
+        max_length=16,
+        choices=CallDirection.choices,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Направление звонка"
+    )
+    resolve_method = models.CharField(
+        max_length=16,
+        choices=ResolveMethod.choices,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Метод определения результата"
+    )
+    attempts_count = models.IntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Количество попыток определения"
+    )
+    action_source = models.CharField(
+        max_length=16,
+        choices=ActionSource.choices,
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name="Источник действия пользователя"
+    )
 
     class Meta:
         indexes = [

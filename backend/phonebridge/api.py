@@ -193,10 +193,84 @@ class PullCallView(APIView):
 
 
 class UpdateCallInfoSerializer(serializers.Serializer):
+    """
+    Serializer для обновления данных о звонке.
+    Поддерживает legacy формат (4 поля) и extended формат (со всеми optional полями).
+    Все новые поля optional для обратной совместимости.
+    """
+    # Legacy поля (обязательное только call_request_id)
     call_request_id = serializers.UUIDField()
     call_status = serializers.ChoiceField(choices=CallRequest.CallStatus.choices, required=False, allow_null=True)
     call_started_at = serializers.DateTimeField(required=False, allow_null=True)
     call_duration_seconds = serializers.IntegerField(required=False, allow_null=True, min_value=0)
+    
+    # Новые поля (ЭТАП 1: контракт, приём и валидация, но пока не сохраняем в БД - ЭТАП 3)
+    call_ended_at = serializers.DateTimeField(required=False, allow_null=True)
+    direction = serializers.ChoiceField(choices=CallRequest.CallDirection.choices, required=False, allow_null=True)
+    resolve_method = serializers.ChoiceField(choices=CallRequest.ResolveMethod.choices, required=False, allow_null=True)
+    attempts_count = serializers.IntegerField(required=False, allow_null=True, min_value=0)
+    action_source = serializers.ChoiceField(choices=CallRequest.ActionSource.choices, required=False, allow_null=True)
+    
+    def validate_call_status(self, value):
+        """
+        Валидация call_status с graceful обработкой неизвестных значений.
+        Если передан неизвестный статус - логируем и возвращаем UNKNOWN (не падаем).
+        """
+        if value is None:
+            return value
+        
+        # Проверяем, что значение в choices
+        valid_choices = [choice[0] for choice in CallRequest.CallStatus.choices]
+        if value not in valid_choices:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"UpdateCallInfoSerializer: неизвестный call_status '{value}', маппим в UNKNOWN")
+            # Маппим в UNKNOWN вместо ошибки валидации
+            return CallRequest.CallStatus.UNKNOWN
+        
+        return value
+    
+    def validate_direction(self, value):
+        """Валидация direction с graceful обработкой неизвестных значений."""
+        if value is None:
+            return value
+        
+        valid_choices = [choice[0] for choice in CallRequest.CallDirection.choices]
+        if value not in valid_choices:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"UpdateCallInfoSerializer: неизвестный direction '{value}', игнорируем")
+            return None  # Игнорируем неизвестное значение
+        
+        return value
+    
+    def validate_resolve_method(self, value):
+        """Валидация resolve_method с graceful обработкой неизвестных значений."""
+        if value is None:
+            return value
+        
+        valid_choices = [choice[0] for choice in CallRequest.ResolveMethod.choices]
+        if value not in valid_choices:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"UpdateCallInfoSerializer: неизвестный resolve_method '{value}', игнорируем")
+            return None
+        
+        return value
+    
+    def validate_action_source(self, value):
+        """Валидация action_source с graceful обработкой неизвестных значений."""
+        if value is None:
+            return value
+        
+        valid_choices = [choice[0] for choice in CallRequest.ActionSource.choices]
+        if value not in valid_choices:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"UpdateCallInfoSerializer: неизвестный action_source '{value}', игнорируем")
+            return None
+        
+        return value
 
 
 class UpdateCallInfoView(APIView):
@@ -226,7 +300,7 @@ class UpdateCallInfoView(APIView):
             logger.warning(f"UpdateCallInfo: CallRequest {call_request_id} not found for user {request.user.id}")
             return Response({"detail": "CallRequest not found or access denied"}, status=404)
 
-        # Обновляем данные о звонке
+        # Обновляем данные о звонке (legacy поля)
         update_fields = []
         if call_status is not None:
             call_request.call_status = call_status
@@ -237,6 +311,58 @@ class UpdateCallInfoView(APIView):
         if call_duration_seconds is not None:
             call_request.call_duration_seconds = call_duration_seconds
             update_fields.append("call_duration_seconds")
+        
+        # Новые поля (ЭТАП 3: сохраняем в БД)
+        # Вычисляем call_ended_at, если не передан, но есть started_at и duration
+        call_ended_at = s.validated_data.get("call_ended_at")
+        if call_ended_at is None and call_started_at is not None and call_duration_seconds is not None and call_duration_seconds > 0:
+            from datetime import timedelta
+            try:
+                call_ended_at = call_started_at + timedelta(seconds=call_duration_seconds)
+                logger.debug(f"UpdateCallInfo: вычислен call_ended_at = {call_ended_at}")
+            except Exception as e:
+                logger.warning(f"UpdateCallInfo: ошибка вычисления call_ended_at: {e}")
+        
+        # Сохраняем новые поля в БД
+        direction = s.validated_data.get("direction")
+        if direction is not None:
+            call_request.direction = direction
+            update_fields.append("direction")
+        
+        resolve_method = s.validated_data.get("resolve_method")
+        if resolve_method is not None:
+            call_request.resolve_method = resolve_method
+            update_fields.append("resolve_method")
+        
+        attempts_count = s.validated_data.get("attempts_count")
+        if attempts_count is not None:
+            call_request.attempts_count = attempts_count
+            update_fields.append("attempts_count")
+        
+        action_source = s.validated_data.get("action_source")
+        if action_source is not None:
+            call_request.action_source = action_source
+            update_fields.append("action_source")
+        
+        if call_ended_at is not None:
+            call_request.call_ended_at = call_ended_at
+            update_fields.append("call_ended_at")
+        
+        # Логируем новые поля для отладки
+        new_fields_received = {}
+        if call_ended_at is not None:
+            new_fields_received["call_ended_at"] = call_ended_at.isoformat()
+        if direction is not None:
+            new_fields_received["direction"] = direction
+        if resolve_method is not None:
+            new_fields_received["resolve_method"] = resolve_method
+        if attempts_count is not None:
+            new_fields_received["attempts_count"] = attempts_count
+        if action_source is not None:
+            new_fields_received["action_source"] = action_source
+        
+        if new_fields_received:
+            logger.info(f"UpdateCallInfo: сохранены новые поля в БД: {new_fields_received}")
 
         if update_fields:
             call_request.save(update_fields=update_fields)

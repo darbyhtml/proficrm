@@ -1,4 +1,5 @@
 {% extends "ui/base.html" %}
+{% load ui_extras %}
 {% block title %}Статистика звонков{% endblock %}
 
 {% block content %}
@@ -13,7 +14,13 @@
         {% if total_calls > 0 %}
           · Всего звонков: <b>{{ total_calls }}</b>
           · Дозвонились: <b>{{ total_connected }}</b>
-          · Средняя длительность: <b>{{ avg_duration_all|floatformat:0 }} сек</b>
+          {% if connect_rate_all %}
+            · Дозвоняемость: <b>{{ connect_rate_all }}%</b>
+          {% endif %}
+          {% if total_unknown %}
+            · Не определено: <b>{{ total_unknown }}</b>
+          {% endif %}
+          · Средняя длительность разговора: <b>{{ avg_duration_all|floatformat:0 }} сек</b>
         {% endif %}
       </div>
     </div>
@@ -46,6 +53,7 @@
           <option value="busy" {% if filter_status == "busy" %}selected{% endif %}>Занято</option>
           <option value="rejected" {% if filter_status == "rejected" %}selected{% endif %}>Отклонен</option>
           <option value="missed" {% if filter_status == "missed" %}selected{% endif %}>Пропущен</option>
+          <option value="unknown" {% if filter_status == "unknown" %}selected{% endif %}>Не удалось определить</option>
         </select>
       </div>
       <div class="ml-auto flex gap-2">
@@ -104,8 +112,22 @@
                   <span class="text-gray-600">{{ stat.missed }}</span>
                 </td>
                 <td class="text-right">
+                  {% if stat.unknown %}
+                    <span class="text-purple-600">{{ stat.unknown }}</span>
+                  {% else %}
+                    <span class="text-brand-dark/50">—</span>
+                  {% endif %}
+                </td>
+                <td class="text-right">
                   {% if stat.avg_duration > 0 %}
                     <span class="text-sm">{{ stat.avg_duration|floatformat:0 }} сек</span>
+                  {% else %}
+                    <span class="text-sm text-brand-dark/50">—</span>
+                  {% endif %}
+                </td>
+                <td class="text-right">
+                  {% if stat.connect_rate_percent %}
+                    <span class="text-sm font-medium">{{ stat.connect_rate_percent }}%</span>
                   {% else %}
                     <span class="text-sm text-brand-dark/50">—</span>
                   {% endif %}
@@ -123,9 +145,17 @@
                 <td class="text-right font-medium text-yellow-600">{{ total_busy }}</td>
                 <td class="text-right font-medium text-red-600">{{ total_rejected }}</td>
                 <td class="text-right font-medium text-gray-600">{{ total_missed }}</td>
+                <td class="text-right font-medium text-purple-600">{{ total_unknown|default:0 }}</td>
                 <td class="text-right font-medium">
                   {% if avg_duration_all > 0 %}
                     {{ avg_duration_all|floatformat:0 }} сек
+                  {% else %}
+                    —
+                  {% endif %}
+                </td>
+                <td class="text-right font-medium">
+                  {% if connect_rate_all %}
+                    {{ connect_rate_all }}%
                   {% else %}
                     —
                   {% endif %}
@@ -135,6 +165,62 @@
           {% endif %}
         </table>
       </div>
+      
+      {# ЭТАП 4: Блоки распределений (только если есть данные) #}
+      {% if total_calls > 0 and total_by_direction %}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          {# Распределение по направлению #}
+          {% if total_by_direction.outgoing or total_by_direction.incoming or total_by_direction.missed %}
+            <div class="card card-pad">
+              <div class="text-xs muted-2 mb-2">По направлению</div>
+              <div class="space-y-1 text-sm">
+                {% if total_by_direction.outgoing %}
+                  <div>Исходящие: <span class="font-medium">{{ total_by_direction.outgoing }}</span></div>
+                {% endif %}
+                {% if total_by_direction.incoming %}
+                  <div>Входящие: <span class="font-medium">{{ total_by_direction.incoming }}</span></div>
+                {% endif %}
+                {% if total_by_direction.missed %}
+                  <div>Пропущенные: <span class="font-medium">{{ total_by_direction.missed }}</span></div>
+                {% endif %}
+              </div>
+            </div>
+          {% endif %}
+          
+          {# Распределение по источнику #}
+          {% if total_by_action_source.crm_ui or total_by_action_source.notification or total_by_action_source.history %}
+            <div class="card card-pad">
+              <div class="text-xs muted-2 mb-2">По источнику</div>
+              <div class="space-y-1 text-sm">
+                {% if total_by_action_source.crm_ui %}
+                  <div>Из CRM: <span class="font-medium">{{ total_by_action_source.crm_ui }}</span></div>
+                {% endif %}
+                {% if total_by_action_source.notification %}
+                  <div>Из уведомления: <span class="font-medium">{{ total_by_action_source.notification }}</span></div>
+                {% endif %}
+                {% if total_by_action_source.history %}
+                  <div>Из истории: <span class="font-medium">{{ total_by_action_source.history }}</span></div>
+                {% endif %}
+              </div>
+            </div>
+          {% endif %}
+          
+          {# Распределение по способу определения #}
+          {% if total_by_resolve_method.observer or total_by_resolve_method.retry %}
+            <div class="card card-pad">
+              <div class="text-xs muted-2 mb-2">По способу определения</div>
+              <div class="space-y-1 text-sm">
+                {% if total_by_resolve_method.observer %}
+                  <div>Определено сразу: <span class="font-medium">{{ total_by_resolve_method.observer }}</span></div>
+                {% endif %}
+                {% if total_by_resolve_method.retry %}
+                  <div>Определено проверками: <span class="font-medium">{{ total_by_resolve_method.retry }}</span></div>
+                {% endif %}
+              </div>
+            </div>
+          {% endif %}
+        </div>
+      {% endif %}
     {% else %}
       <div class="card card-pad text-center text-brand-dark/70">
         За выбранный период звонков не найдено.

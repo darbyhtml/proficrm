@@ -1,13 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Minimal theme required for AppCompatActivity -->
-    <style name="Theme.CRMProfiDialer" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+    <!-- Material 3 тема для современного UI -->
+    <style name="Theme.CRMProfiDialer" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/brand_teal</item>
-        <item name="colorPrimaryVariant">@color/brand_dark</item>
         <item name="colorOnPrimary">#FFFFFF</item>
         <item name="colorSecondary">@color/brand_orange</item>
-        <item name="colorSecondaryVariant">@color/brand_orange</item>
         <item name="colorOnSecondary">@color/brand_dark</item>
+        <item name="colorSurface">#F3FAF9</item>
+        <item name="colorOnSurface">#244B47</item>
+        <item name="colorSurfaceVariant">#C2E2DE</item>
+        <item name="colorOnSurfaceVariant">#5A6B69</item>
+        <!-- Для совместимости с Material Components -->
+        <item name="colorPrimaryVariant">@color/brand_dark</item>
+        <item name="colorSecondaryVariant">@color/brand_orange</item>
     </style>
 </resources>
 

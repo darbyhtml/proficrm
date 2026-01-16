@@ -10,6 +10,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import ru.groupprofi.crmprofi.dialer.core.AppContainer
 import java.io.IOException
 
 /**
@@ -27,6 +28,9 @@ class QueueManager(private val context: Context) {
     }
     private val dao: QueueDao by lazy { db.queueDao() }
     private val scope = CoroutineScope(Dispatchers.IO)
+    // Используем интерфейс через AppContainer
+    private val callHistoryStore: ru.groupprofi.crmprofi.dialer.domain.CallHistoryStore
+        get() = AppContainer.callHistoryStore
     
     // Защита от спама алертов: отправляем не чаще чем раз в 5 минут
     private val prefs = context.getSharedPreferences("queue_manager", Context.MODE_PRIVATE)
@@ -145,7 +149,22 @@ class QueueManager(private val context: Context) {
             val response = httpClient.newCall(request).execute()
             val success = response.isSuccessful
             
-            if (!success) {
+            if (success) {
+                // Если успешно отправлен call_update - обновляем статус в истории
+                if (item.type == "call_update" && item.endpoint == "/api/phone/calls/update/") {
+                    try {
+                        val payloadJson = JSONObject(item.payload)
+                        val callRequestId = payloadJson.optString("call_request_id", "")
+                        if (callRequestId.isNotEmpty()) {
+                            scope.launch {
+                                callHistoryStore.markSent(callRequestId, System.currentTimeMillis())
+                            }
+                        }
+                    } catch (e: Exception) {
+                        // Игнорируем ошибки парсинга (не критично)
+                    }
+                }
+            } else {
                 Log.w("QueueManager", "Queue item failed: HTTP ${response.code}, endpoint=${item.endpoint}")
             }
             

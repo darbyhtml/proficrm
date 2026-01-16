@@ -1,6 +1,86 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">CRM ПРОФИ</string>
+    
+    <!-- Главный экран -->
+    <string name="status_ready">Готово к звонкам</string>
+    <string name="status_not_ready">Не работает</string>
+    <string name="status_resolving">Определяем результат звонка…</string>
+    <string name="status_explanation_ready">Приложение работает в фоне и готово принимать команды из CRM</string>
+    <string name="status_explanation_resolving">Проверяем журнал звонков. Это займёт несколько секунд.</string>
+    <string name="button_fix">Исправить</string>
+    <string name="security_notice">Приложение не записывает разговоры и не хранит аудио.</string>
+    
+    <!-- Статистика "Сегодня" -->
+    <string name="stats_today_title">Сегодня</string>
+    <string name="stats_total">Всего</string>
+    <string name="stats_success">Дозвон</string>
+    <string name="stats_no_answer">Не ответили</string>
+    <string name="stats_dropped">Сброс</string>
+    <string name="stats_pending_crm">Ждут отправки в CRM: %1$d</string>
+    
+    <!-- История звонков -->
+    <string name="history_title">История звонков</string>
+    <string name="history_empty">История звонков пуста</string>
+    <string name="filter_today">Сегодня</string>
+    <string name="filter_7_days">7 дней</string>
+    <string name="filter_all">Всё</string>
+    <string name="search_hint">Поиск по номеру</string>
+    <string name="action_call_back">Перезвонить</string>
+    <string name="action_copy">Скопировать</string>
+    <string name="copied">Скопировано</string>
+    
+    <!-- Onboarding -->
+    <string name="onboarding_intro_title">Добро пожаловать!</string>
+    <string name="onboarding_intro_message">Это приложение помогает менеджерам быстро звонить клиентам из CRM.\n\nПриложение автоматически получает команды на звонок и открывает звонилку. После звонка результат автоматически отправляется в CRM.\n\nВажно: приложение не записывает разговоры и не хранит аудио. Это важно для вашей приватности.</string>
+    <string name="onboarding_permissions_title">Нужны разрешения</string>
+    <string name="onboarding_permissions_message">Нужны разрешения для работы приложения:\n\n• Журнал звонков — чтобы определить результат звонка\n• Состояние телефона — чтобы знать, когда можно звонить\n\nНажмите «Разрешить» — мы поможем настроить.</string>
+    <string name="onboarding_permissions_denied">Нужно включить разрешения в настройках приложения. Нажмите «Исправить» — мы поможем настроить.</string>
+    <string name="onboarding_notifications_title">Включите уведомления</string>
+    <string name="onboarding_notifications_message">Нужно включить уведомления, чтобы приложение могло:\n\n• Показывать команды на звонок\n• Работать в фоновом режиме\n\nНажмите «Включить уведомления» — мы поможем настроить.</string>
+    <string name="onboarding_notifications_button">Включить уведомления</string>
+    <string name="onboarding_final_ready_title">✅ Всё готово!</string>
+    <string name="onboarding_final_ready_message">Приложение настроено и готово к работе.\n\nТеперь вы будете получать команды на звонок из CRM и сможете быстро звонить клиентам.\n\nНапоминание: приложение не записывает разговоры и не хранит аудио.</string>
+    <string name="onboarding_final_not_ready_title">⚠️ Есть проблемы</string>
+    <string name="onboarding_final_not_ready_message">Есть проблемы, которые нужно исправить. Нажмите «Исправить» — мы поможем настроить.</string>
+    <string name="onboarding_button_understand">Понятно</string>
+    <string name="onboarding_button_allow">Разрешить</string>
+    <string name="onboarding_button_open_settings">Открыть настройки</string>
+    <string name="onboarding_button_later">Позже</string>
+    <string name="onboarding_button_start">Начать работу</string>
+    
+    <!-- Уведомления -->
+    <string name="notification_call_task_title">🔔 Пора позвонить</string>
+    <string name="notification_call_task_text">Нажмите, чтобы позвонить клиенту: %1$s</string>
+    <string name="notification_call_task_text_with_name">Нажмите, чтобы позвонить клиенту: %1$s (%2$s)</string>
+    <string name="notification_app_state_title">⚠️ Приложение не работает</string>
+    <string name="notification_action_call">Позвонить</string>
+    <string name="notification_action_fix">Исправить</string>
+    
+    <!-- Диагностика -->
+    <string name="diagnostics_title">Диагностика</string>
+    <string name="diagnostics_status_ready">Готово к работе</string>
+    <string name="diagnostics_status_not_ready">Требует настройки</string>
+    <string name="diagnostics_check_permissions">Разрешения</string>
+    <string name="diagnostics_check_notifications">Уведомления</string>
+    <string name="diagnostics_check_network">Сеть</string>
+    <string name="diagnostics_check_auth">Авторизация</string>
+    <string name="diagnostics_check_queue">Очередь</string>
+    <string name="diagnostics_check_pending_calls">Ожидаемые звонки</string>
+    <string name="diagnostics_check_history">История звонков</string>
+    <string name="diagnostics_check_version">Версия приложения</string>
+    <string name="diagnostics_check_android">Android</string>
+    <string name="diagnostics_status_ok">OK</string>
+    <string name="diagnostics_share">Поделиться диагностикой</string>
+    <string name="diagnostics_share_subject">Диагностика CRM Profi Dialer</string>
+    <string name="diagnostics_restart_work">Перезапустить работу</string>
+    <string name="diagnostics_restart_confirm_title">Перезапустить работу?</string>
+    <string name="diagnostics_restart_confirm_message">Это безопасно. История звонков сохранится. Очередь отправки не очищается.</string>
+    <string name="diagnostics_restart_confirm_button">Перезапустить</string>
+    <string name="diagnostics_restart_progress">Выполняем…</string>
+    <string name="diagnostics_restart_done">Готово. Проверяем состояние…</string>
+    
+    <!-- Общие -->
+    <string name="error_unknown">Неизвестно</string>
+    <string name="error_failed_to_check">Не удалось проверить</string>
 </resources>
-
-

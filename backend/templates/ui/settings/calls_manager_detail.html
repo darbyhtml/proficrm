@@ -1,4 +1,5 @@
 {% extends "ui/base.html" %}
+{% load ui_extras %}
 {% block title %}Звонки менеджера — {{ manager.get_full_name|default:manager.username }}{% endblock %}
 
 {% block content %}
@@ -35,6 +36,7 @@
           <option value="busy" {% if filter_status == "busy" %}selected{% endif %}>Занято</option>
           <option value="rejected" {% if filter_status == "rejected" %}selected{% endif %}>Отклонен</option>
           <option value="missed" {% if filter_status == "missed" %}selected{% endif %}>Пропущен</option>
+          <option value="unknown" {% if filter_status == "unknown" %}selected{% endif %}>Не удалось определить</option>
         </select>
       </div>
       <div class="ml-auto flex gap-2">
@@ -86,6 +88,8 @@
                     <span class="text-red-600">Отклонен</span>
                   {% elif call.call_status == "missed" %}
                     <span class="text-gray-600">Пропущен</span>
+                  {% elif call.call_status == "unknown" %}
+                    <span class="text-purple-600">Не удалось определить</span>
                   {% else %}
                     <span class="text-brand-dark/50">—</span>
                   {% endif %}
@@ -95,6 +99,17 @@
                     <span class="text-sm">{{ call.call_duration_seconds }} сек</span>
                   {% else %}
                     <span class="text-sm text-brand-dark/50">—</span>
+                  {% endif %}
+                  {# ЭТАП 4: Новые поля (компактно под длительностью) #}
+                  {% if call.direction or call.call_ended_at %}
+                    <div class="text-xs text-brand-dark/50 mt-1">
+                      {% if call.direction %}
+                        <span>{{ call.direction|format_call_direction }}</span>
+                      {% endif %}
+                      {% if call.call_ended_at %}
+                        <span>· до {{ call.call_ended_at|date:"H:i" }}</span>
+                      {% endif %}
+                    </div>
                   {% endif %}
                 </td>
               </tr>

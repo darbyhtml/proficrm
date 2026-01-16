@@ -13,6 +13,11 @@ import org.json.JSONObject
 import ru.groupprofi.crmprofi.dialer.BuildConfig
 import ru.groupprofi.crmprofi.dialer.auth.TokenManager
 import ru.groupprofi.crmprofi.dialer.queue.QueueManager
+import ru.groupprofi.crmprofi.dialer.core.AppContainer
+import ru.groupprofi.crmprofi.dialer.domain.CallEventPayload
+import ru.groupprofi.crmprofi.dialer.domain.CallDirection
+import ru.groupprofi.crmprofi.dialer.domain.ResolveMethod
+import ru.groupprofi.crmprofi.dialer.domain.ActionSource
 import java.io.IOException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
@@ -30,9 +35,13 @@ class ApiClient private constructor(context: Context) {
     private val appContext = context.applicationContext
     // Ленивая инициализация QueueManager - создается только при первом использовании
     private val queueManager: QueueManager by lazy { QueueManager(appContext) }
+    // Используем интерфейс через AppContainer
+    private val callHistoryStore: ru.groupprofi.crmprofi.dialer.domain.CallHistoryStore
+        get() = AppContainer.callHistoryStore
     private val httpClient: OkHttpClient
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
     private val baseUrl = BuildConfig.BASE_URL
+    private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
     
     init {
         // TelemetryInterceptor также получает queueManager лениво
@@ -376,17 +385,28 @@ class ApiClient private constructor(context: Context) {
         
         try {
             val url = "$baseUrl/api/phone/calls/update/"
-            val bodyJson = JSONObject().apply {
-                put("call_request_id", callRequestId)
-                if (callStatus != null) put("call_status", callStatus)
-                if (callStartedAt != null) {
-                    val date = Date(callStartedAt)
-                    val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
-                    sdf.timeZone = TimeZone.getTimeZone("UTC")
-                    put("call_started_at", sdf.format(date))
-                }
-                if (callDurationSeconds != null) put("call_duration_seconds", callDurationSeconds)
-            }.toString()
+            
+            // ЭТАП 2: Создаём CallEventPayload и выбираем legacy или extended формат
+            val payload = CallEventPayload(
+                callRequestId = callRequestId,
+                callStatus = callStatus,
+                callStartedAt = callStartedAt,
+                callDurationSeconds = callDurationSeconds,
+                callEndedAt = endedAt,
+                direction = direction?.apiValue,
+                resolveMethod = resolveMethod?.apiValue,
+                attemptsCount = attemptsCount,
+                actionSource = actionSource?.apiValue
+            )
+            
+            // Логика: если есть хотя бы одно новое поле - отправляем extended, иначе legacy
+            val hasNewFields = direction != null || resolveMethod != null || attemptsCount != null || 
+                              actionSource != null || endedAt != null
+            val bodyJson = if (hasNewFields) {
+                payload.toExtendedJson()
+            } else {
+                payload.toLegacyJson()
+            }
             
             val req = Request.Builder()
                 .url(url)
@@ -396,6 +416,14 @@ class ApiClient private constructor(context: Context) {
             
             httpClient.newCall(req).execute().use { res ->
                 if (res.isSuccessful) {
+                    // Обновляем статус отправки в истории
+                    scope.launch {
+                        try {
+                            callHistoryStore.markSent(callRequestId, System.currentTimeMillis())
+                        } catch (e: Exception) {
+                            // Игнорируем ошибки обновления истории (не критично)
+                        }
+                    }
                     Result.Success(Unit)
                 } else {
                     // При ошибке сервера (5xx) - добавляем в очередь для повторной отправки
@@ -407,45 +435,66 @@ class ApiClient private constructor(context: Context) {
             }
         } catch (e: UnknownHostException) {
             // Нет интернета - добавляем в очередь
-            val bodyJson = JSONObject().apply {
-                put("call_request_id", callRequestId)
-                if (callStatus != null) put("call_status", callStatus)
-                if (callStartedAt != null) {
-                    val date = Date(callStartedAt)
-                    val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
-                    sdf.timeZone = TimeZone.getTimeZone("UTC")
-                    put("call_started_at", sdf.format(date))
-                }
-                if (callDurationSeconds != null) put("call_duration_seconds", callDurationSeconds)
-            }.toString()
+            val payload = CallEventPayload(
+                callRequestId = callRequestId,
+                callStatus = callStatus,
+                callStartedAt = callStartedAt,
+                callDurationSeconds = callDurationSeconds,
+                callEndedAt = endedAt,
+                direction = direction?.apiValue,
+                resolveMethod = resolveMethod?.apiValue,
+                attemptsCount = attemptsCount,
+                actionSource = actionSource?.apiValue
+            )
+            val hasNewFields = direction != null || resolveMethod != null || attemptsCount != null || 
+                              actionSource != null || endedAt != null
+            val bodyJson = if (hasNewFields) {
+                payload.toExtendedJson()
+            } else {
+                payload.toLegacyJson()
+            }
             queueManager.enqueue("call_update", "/api/phone/calls/update/", bodyJson)
             Result.Error("Нет подключения к интернету", 0)
         } catch (e: SocketTimeoutException) {
-            val bodyJson = JSONObject().apply {
-                put("call_request_id", callRequestId)
-                if (callStatus != null) put("call_status", callStatus)
-                if (callStartedAt != null) {
-                    val date = Date(callStartedAt)
-                    val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
-                    sdf.timeZone = TimeZone.getTimeZone("UTC")
-                    put("call_started_at", sdf.format(date))
-                }
-                if (callDurationSeconds != null) put("call_duration_seconds", callDurationSeconds)
-            }.toString()
+            val payload = CallEventPayload(
+                callRequestId = callRequestId,
+                callStatus = callStatus,
+                callStartedAt = callStartedAt,
+                callDurationSeconds = callDurationSeconds,
+                callEndedAt = endedAt,
+                direction = direction?.apiValue,
+                resolveMethod = resolveMethod?.apiValue,
+                attemptsCount = attemptsCount,
+                actionSource = actionSource?.apiValue
+            )
+            val hasNewFields = direction != null || resolveMethod != null || attemptsCount != null || 
+                              actionSource != null || endedAt != null
+            val bodyJson = if (hasNewFields) {
+                payload.toExtendedJson()
+            } else {
+                payload.toLegacyJson()
+            }
             queueManager.enqueue("call_update", "/api/phone/calls/update/", bodyJson)
             Result.Error("Превышено время ожидания ответа", 0)
         } catch (e: IOException) {
-            val bodyJson = JSONObject().apply {
-                put("call_request_id", callRequestId)
-                if (callStatus != null) put("call_status", callStatus)
-                if (callStartedAt != null) {
-                    val date = Date(callStartedAt)
-                    val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US)
-                    sdf.timeZone = TimeZone.getTimeZone("UTC")
-                    put("call_started_at", sdf.format(date))
-                }
-                if (callDurationSeconds != null) put("call_duration_seconds", callDurationSeconds)
-            }.toString()
+            val payload = CallEventPayload(
+                callRequestId = callRequestId,
+                callStatus = callStatus,
+                callStartedAt = callStartedAt,
+                callDurationSeconds = callDurationSeconds,
+                callEndedAt = endedAt,
+                direction = direction?.apiValue,
+                resolveMethod = resolveMethod?.apiValue,
+                attemptsCount = attemptsCount,
+                actionSource = actionSource?.apiValue
+            )
+            val hasNewFields = direction != null || resolveMethod != null || attemptsCount != null || 
+                              actionSource != null || endedAt != null
+            val bodyJson = if (hasNewFields) {
+                payload.toExtendedJson()
+            } else {
+                payload.toLegacyJson()
+            }
             queueManager.enqueue("call_update", "/api/phone/calls/update/", bodyJson)
             Result.Error("Ошибка сети: ${e.message}", 0)
         } catch (e: Exception) {

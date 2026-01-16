@@ -75,7 +75,7 @@
                 {% if call.call_status %}
                   <div class="flex items-center gap-2">
                     <span class="text-xs muted-2">Статус:</span>
-                    <span class="font-medium {% if call.call_status == 'connected' %}text-green-600{% elif call.call_status == 'no_answer' %}text-orange-600{% elif call.call_status == 'busy' %}text-yellow-600{% elif call.call_status == 'rejected' %}text-red-600{% else %}text-brand-dark{% endif %}">
+                    <span class="font-medium {% if call.call_status == 'connected' %}text-green-600{% elif call.call_status == 'no_answer' %}text-orange-600{% elif call.call_status == 'busy' %}text-yellow-600{% elif call.call_status == 'rejected' %}text-red-600{% elif call.call_status == 'missed' %}text-gray-600{% elif call.call_status == 'unknown' %}text-purple-600{% else %}text-brand-dark{% endif %}">
                       {{ call.get_call_status_display }}
                     </span>
                   </div>
@@ -93,6 +93,20 @@
                   </div>
                 {% endif %}
               </div>
+              {# ЭТАП 4: Новые поля (компактно, только если есть) #}
+              {% if call.direction or call.call_ended_at or call.action_source %}
+                <div class="flex flex-wrap items-center gap-3 mt-2 pt-2 border-t border-brand-soft/30 text-xs text-brand-dark/60">
+                  {% if call.direction %}
+                    <span>Направление: <span class="font-medium">{{ call.direction|format_call_direction }}</span></span>
+                  {% endif %}
+                  {% if call.call_ended_at %}
+                    <span>До: <span class="font-mono">{{ call.call_ended_at|date:"H:i" }}</span></span>
+                  {% endif %}
+                  {% if call.action_source and is_admin %}
+                    <span>Источник: <span class="font-medium">{{ call.action_source|format_action_source }}</span></span>
+                  {% endif %}
+                </div>
+              {% endif %}
             {% endif %}
           </div>
         {% empty %}
@@ -149,7 +163,7 @@
                 {% if call.call_status %}
                   <div class="flex items-center gap-2">
                     <span class="text-xs muted-2">Статус:</span>
-                    <span class="font-medium {% if call.call_status == 'connected' %}text-green-600{% elif call.call_status == 'no_answer' %}text-orange-600{% elif call.call_status == 'busy' %}text-yellow-600{% elif call.call_status == 'rejected' %}text-red-600{% else %}text-brand-dark{% endif %}">
+                    <span class="font-medium {% if call.call_status == 'connected' %}text-green-600{% elif call.call_status == 'no_answer' %}text-orange-600{% elif call.call_status == 'busy' %}text-yellow-600{% elif call.call_status == 'rejected' %}text-red-600{% elif call.call_status == 'missed' %}text-gray-600{% elif call.call_status == 'unknown' %}text-purple-600{% else %}text-brand-dark{% endif %}">
                       {{ call.get_call_status_display }}
                     </span>
                   </div>
@@ -167,6 +181,20 @@
                   </div>
                 {% endif %}
               </div>
+              {# ЭТАП 4: Новые поля (компактно, только если есть) #}
+              {% if call.direction or call.call_ended_at or call.action_source %}
+                <div class="flex flex-wrap items-center gap-3 mt-2 pt-2 border-t border-brand-soft/30 text-xs text-brand-dark/60">
+                  {% if call.direction %}
+                    <span>Направление: <span class="font-medium">{{ call.direction|format_call_direction }}</span></span>
+                  {% endif %}
+                  {% if call.call_ended_at %}
+                    <span>До: <span class="font-mono">{{ call.call_ended_at|date:"H:i" }}</span></span>
+                  {% endif %}
+                  {% if call.action_source and is_admin %}
+                    <span>Источник: <span class="font-medium">{{ call.action_source|format_action_source }}</span></span>
+                  {% endif %}
+                </div>
+              {% endif %}
             {% else %}
               <div class="text-xs muted-2 mt-2 italic">Данные о звонке не получены</div>
             {% endif %}
