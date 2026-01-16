@@ -75,13 +75,13 @@ android {
             shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
-        stagingRelease {
-            // Staging build с минификацией для тестирования R8/ProGuard
+        minified {
+            // Build с минификацией для тестирования R8/ProGuard
             debuggable = false
             minifyEnabled = true
             shrinkResources = true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            // Используем debug signing для staging
+            // Используем debug signing для тестирования
             signingConfig = signingConfigs.debug
         }
         debug {

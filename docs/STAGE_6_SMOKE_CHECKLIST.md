@@ -89,7 +89,7 @@ cd android/CRMProfiDialer
 
 **Ожидаемый результат:** APK собран успешно (`app/build/outputs/apk/staging/debug/app-staging-debug.apk`)
 
-**Примечание:** Для сборки с минификацией используйте `assembleStagingStagingRelease` (staging flavor + stagingRelease buildType)
+**Примечание:** Для сборки с минификацией используйте `assembleStagingMinified` (staging flavor + minified buildType)
 
 ---
 
