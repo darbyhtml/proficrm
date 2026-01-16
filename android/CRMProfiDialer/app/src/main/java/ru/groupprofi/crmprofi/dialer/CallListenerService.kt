@@ -279,7 +279,7 @@ class CallListenerService : Service() {
                         
                         if (!phone.isNullOrBlank() && !callRequestId.isNullOrBlank()) {
                             // Используем CallFlowCoordinator для обработки команды на звонок
-                            callFlowCoordinator.handleCallCommand(phone, callRequestId)
+                            getCallFlowCoordinator().handleCallCommand(phone, callRequestId)
                         } else {
                             ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallListenerService", "Номер или ID пустой, пропускаем")
                         }

@@ -121,7 +121,7 @@ object SafeModeManager {
             try {
                 val readinessProvider = AppContainer.readinessProvider
                 val state = readinessProvider.getState()
-                val notificationManager = AppContainer.appNotificationManager
+                val notificationManager = ru.groupprofi.crmprofi.dialer.core.AppContainer.notificationManager
                 
                 // Скрыть уведомление "приложение не работает", если READY
                 if (state == AppReadinessChecker.ReadyState.READY) {

@@ -11,6 +11,7 @@ import ru.groupprofi.crmprofi.dialer.network.ApiClient
 import ru.groupprofi.crmprofi.dialer.notifications.AppNotificationManager
 import ru.groupprofi.crmprofi.dialer.recovery.AutoRecoveryManager
 import ru.groupprofi.crmprofi.dialer.auth.TokenManager
+import ru.groupprofi.crmprofi.dialer.core.CallFlowCoordinator
 
 /**
  * Контейнер зависимостей приложения (простой Service Locator без DI-фреймворка).
@@ -38,6 +39,7 @@ object AppContainer {
     lateinit var tokenManager: TokenManager
     lateinit var notificationManager: AppNotificationManager
     lateinit var autoRecoveryManager: AutoRecoveryManager
+    lateinit var callFlowCoordinator: CallFlowCoordinator
     
     /**
      * Инициализировать контейнер (вызывается из Application).
@@ -66,6 +68,7 @@ object AppContainer {
         
         // Инициализируем координаторы и менеджеры
         autoRecoveryManager = AutoRecoveryManager.getInstance(appContext)
+        callFlowCoordinator = CallFlowCoordinator.getInstance(appContext)
         
         initialized = true
     }

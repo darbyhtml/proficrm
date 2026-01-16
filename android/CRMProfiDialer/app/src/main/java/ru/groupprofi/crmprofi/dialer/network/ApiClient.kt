@@ -3,6 +3,7 @@ package ru.groupprofi.crmprofi.dialer.network
 import android.content.Context
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.*
@@ -423,7 +424,7 @@ class ApiClient private constructor(context: Context) {
             
             httpClient.newCall(req).execute().use { res ->
                 if (res.isSuccessful) {
-                    // Обновляем статус отправки в истории
+                    // Обновляем статус отправки в истории (асинхронно, не блокируем ответ)
                     scope.launch {
                         try {
                             callHistoryStore.markSent(callRequestId, System.currentTimeMillis())
