@@ -95,7 +95,7 @@ class PendingCallManager private constructor(context: Context) : PendingCallStor
     override suspend fun updateCallState(
         callRequestId: String,
         newState: PendingCall.PendingState,
-        incrementAttempts: Boolean = false
+        incrementAttempts: Boolean
     ) = withContext(Dispatchers.IO) {
         mutex.withLock {
             val existing = cache[callRequestId] ?: return@withContext

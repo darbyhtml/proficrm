@@ -230,7 +230,8 @@ class SupportHealthActivity : AppCompatActivity() {
     private fun checkQueueStatus(): String {
         return try {
             val queueManager = ru.groupprofi.crmprofi.dialer.queue.QueueManager(this)
-            val stats = queueManager.getStats()
+            // getStats() - suspend функция, используем runBlocking для синхронного вызова
+            val stats = kotlinx.coroutines.runBlocking { queueManager.getStats() }
             "${stats.pendingCount} элементов (ожидают отправки)"
         } catch (e: Exception) {
             getString(R.string.error_failed_to_check)

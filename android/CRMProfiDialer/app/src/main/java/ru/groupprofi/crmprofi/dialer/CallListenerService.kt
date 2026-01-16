@@ -59,8 +59,9 @@ class CallListenerService : Service() {
     private lateinit var apiClient: ApiClient
     // Ленивая инициализация QueueManager - создается только при первом использовании
     private val queueManager: QueueManager by lazy { QueueManager(this) }
-    // Координатор потока обработки команды на звонок
-    private val callFlowCoordinator: CallFlowCoordinator by lazy { CallFlowCoordinator.getInstance(this) }
+    // Координатор потока обработки команды на звонок (через AppContainer)
+    private val callFlowCoordinator: ru.groupprofi.crmprofi.dialer.core.CallFlowCoordinator
+        get() = ru.groupprofi.crmprofi.dialer.core.AppContainer.callFlowCoordinator
     private var callLogObserverManager: CallLogObserverManager? = null
     private val appNotificationManager: AppNotificationManager by lazy { AppNotificationManager.getInstance(this) }
     // Используем глобальный LogCollector из Application
@@ -396,13 +397,6 @@ class CallListenerService : Service() {
         }
     }
     
-    /**
-     * Маскировать номер телефона для логов.
-     */
-    private fun maskPhone(phone: String): String {
-        if (phone.length <= 4) return "***"
-        return "${phone.take(3)}***${phone.takeLast(4)}"
-    }
 
     /**
      * Начать процесс определения результата звонка.
@@ -424,7 +418,8 @@ class CallListenerService : Service() {
             )
             
             AppContainer.pendingCallStore.addPendingCall(pendingCall)
-                ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("CallListenerService", "Начато определение результата звонка: ${maskPhone(phone)}")
+                val masked = ru.groupprofi.crmprofi.dialer.domain.PhoneNumberNormalizer.normalize(phone)
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("CallListenerService", "Начато определение результата звонка: ${masked.take(3)}***")
                 
                 // Запускаем повторные проверки: 5, 10, 15 секунд
                 scheduleCallLogChecks(pendingCall)
@@ -611,7 +606,7 @@ class CallListenerService : Service() {
         
         ru.groupprofi.crmprofi.dialer.logs.AppLogger.i(
             "CallListenerService", 
-            "Результат звонка определён и отправлен: ${maskPhone(pendingCall.phoneNumber)} -> $humanStatusText (direction=$direction, resolveMethod=$resolveMethod)"
+            "Результат звонка определён и отправлен: ${ru.groupprofi.crmprofi.dialer.domain.PhoneNumberNormalizer.normalize(pendingCall.phoneNumber).take(3)}*** -> $humanStatusText (direction=$direction, resolveMethod=$resolveMethod)"
         )
     }
     
@@ -664,9 +659,10 @@ class CallListenerService : Service() {
         // Удаляем из ожидаемых
         AppContainer.pendingCallStore.removePendingCall(pendingCall.callRequestId)
         
+        val masked = ru.groupprofi.crmprofi.dialer.domain.PhoneNumberNormalizer.normalize(pendingCall.phoneNumber)
         ru.groupprofi.crmprofi.dialer.logs.AppLogger.w(
             "CallListenerService", 
-            "Не удалось определить результат звонка: ${maskPhone(pendingCall.phoneNumber)} (attempts=${pendingCall.attempts})"
+            "Не удалось определить результат звонка: ${masked.take(3)}*** (attempts=${pendingCall.attempts})"
         )
     }
     
@@ -705,13 +701,6 @@ class CallListenerService : Service() {
         }
     }
     
-    /**
-     * Маскировать номер телефона для логов.
-     */
-    private fun maskPhone(phone: String): String {
-        if (phone.length <= 4) return "***"
-        return "${phone.take(3)}***${phone.takeLast(4)}"
-    }
     
     /**
      * Информация о звонке из CallLog.

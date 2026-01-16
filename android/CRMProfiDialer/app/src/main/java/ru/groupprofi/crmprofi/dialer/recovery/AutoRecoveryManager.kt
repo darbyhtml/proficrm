@@ -164,14 +164,19 @@ class AutoRecoveryManager private constructor(context: Context) {
             
             // Используем ApiClient для обновления токена
             val apiClient = ru.groupprofi.crmprofi.dialer.network.ApiClient.getInstance(appContext)
-            val result = apiClient.refreshAccessToken()
+            val result = apiClient.refreshToken()
             
             when (result) {
                 is ru.groupprofi.crmprofi.dialer.network.ApiClient.Result.Success -> {
-                    val (access, refresh) = result.data
-                    tokenManager.saveTokens(access, refresh, tokenManager.getUsername() ?: "")
-                    AppLogger.i("AutoRecoveryManager", "Токен успешно обновлён")
-                    recoveryAttempts.set(0)
+                    val access = result.data
+                    if (access != null) {
+                        tokenManager.updateAccessToken(access)
+                        AppLogger.i("AutoRecoveryManager", "Токен успешно обновлён")
+                        recoveryAttempts.set(0)
+                    } else {
+                        AppLogger.w("AutoRecoveryManager", "Refresh token вернул null")
+                        recoveryAttempts.incrementAndGet()
+                    }
                 }
                 else -> {
                     AppLogger.w("AutoRecoveryManager", "Не удалось обновить токен: ${(result as? ru.groupprofi.crmprofi.dialer.network.ApiClient.Result.Error)?.message}")

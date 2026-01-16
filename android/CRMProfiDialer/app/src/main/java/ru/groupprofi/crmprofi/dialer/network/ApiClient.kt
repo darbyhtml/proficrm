@@ -371,12 +371,19 @@ class ApiClient private constructor(context: Context) {
     
     /**
      * Отправить данные о звонке.
+     * ЭТАП 2: Расширенная версия с новыми полями (опциональными для обратной совместимости).
      */
     suspend fun sendCallUpdate(
         callRequestId: String,
         callStatus: String?,
         callStartedAt: Long?,
-        callDurationSeconds: Int?
+        callDurationSeconds: Int?,
+        // Новые поля (ЭТАП 2, опциональные)
+        direction: ru.groupprofi.crmprofi.dialer.domain.CallDirection? = null,
+        resolveMethod: ru.groupprofi.crmprofi.dialer.domain.ResolveMethod? = null,
+        attemptsCount: Int? = null,
+        actionSource: ru.groupprofi.crmprofi.dialer.domain.ActionSource? = null,
+        endedAt: Long? = null
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val token = tokenManager.getAccessToken()
         if (token.isNullOrBlank()) {
@@ -417,7 +424,7 @@ class ApiClient private constructor(context: Context) {
             httpClient.newCall(req).execute().use { res ->
                 if (res.isSuccessful) {
                     // Обновляем статус отправки в истории
-                    scope.launch {
+                    kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
                         try {
                             callHistoryStore.markSent(callRequestId, System.currentTimeMillis())
                         } catch (e: Exception) {

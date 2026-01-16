@@ -60,7 +60,7 @@ object SafeModeManager {
             } catch (e: Exception) {
                 val error = "Не удалось остановить AutoRecoveryManager: ${e.message}"
                 errors.add(error)
-                AppLogger.w("SafeModeManager", error, e)
+                AppLogger.e("SafeModeManager", "$error: ${e.message}", e)
             }
             
             // 2. Остановить CallListenerService
@@ -74,7 +74,7 @@ object SafeModeManager {
             } catch (e: Exception) {
                 val error = "Не удалось остановить CallListenerService: ${e.message}"
                 errors.add(error)
-                AppLogger.w("SafeModeManager", error, e)
+                AppLogger.e("SafeModeManager", "$error: ${e.message}", e)
             }
             
             // 3. Очистить зависшие ожидаемые звонки
@@ -85,7 +85,7 @@ object SafeModeManager {
             } catch (e: Exception) {
                 val error = "Не удалось очистить ожидаемые звонки: ${e.message}"
                 errors.add(error)
-                AppLogger.w("SafeModeManager", error, e)
+                AppLogger.e("SafeModeManager", "$error: ${e.message}", e)
             }
             
             // 4. Перезапустить CallListenerService
@@ -103,7 +103,7 @@ object SafeModeManager {
             } catch (e: Exception) {
                 val error = "Не удалось перезапустить CallListenerService: ${e.message}"
                 errors.add(error)
-                AppLogger.w("SafeModeManager", error, e)
+                AppLogger.e("SafeModeManager", "$error: ${e.message}", e)
             }
             
             // 5. Перезапустить AutoRecoveryManager
@@ -114,7 +114,7 @@ object SafeModeManager {
             } catch (e: Exception) {
                 val error = "Не удалось перезапустить AutoRecoveryManager: ${e.message}"
                 errors.add(error)
-                AppLogger.w("SafeModeManager", error, e)
+                AppLogger.e("SafeModeManager", "$error: ${e.message}", e)
             }
             
             // 6. Инициировать проверку готовности и обновление уведомлений
@@ -134,7 +134,7 @@ object SafeModeManager {
             } catch (e: Exception) {
                 val error = "Не удалось обновить уведомления: ${e.message}"
                 errors.add(error)
-                AppLogger.w("SafeModeManager", error, e)
+                AppLogger.e("SafeModeManager", "$error: ${e.message}", e)
             }
             
             // 7. Сохранить timestamp последнего перезапуска

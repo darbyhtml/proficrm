@@ -50,7 +50,9 @@ class MainActivity : AppCompatActivity() {
     // Инфраструктура (для совместимости со старым кодом)
     private lateinit var tokenManager: TokenManager
     private lateinit var apiClient: ApiClient
-    private lateinit var autoRecoveryManager: AutoRecoveryManager
+    // AutoRecoveryManager через AppContainer
+    private val autoRecoveryManager: ru.groupprofi.crmprofi.dialer.recovery.AutoRecoveryManager
+        get() = ru.groupprofi.crmprofi.dialer.core.AppContainer.autoRecoveryManager
     
     // UI элементы статистики
     private lateinit var todayTotal: TextView
