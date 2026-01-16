@@ -236,7 +236,7 @@ object SupportReportBuilder {
             val queueManager = ru.groupprofi.crmprofi.dialer.queue.QueueManager(context)
             // getStats() - suspend функция, используем runBlocking для синхронного вызова
             val stats = kotlinx.coroutines.runBlocking { queueManager.getStats() }
-            "${stats.pendingCount} элементов (ожидают отправки)"
+            "${stats.total} элементов (ожидают отправки)"
         } catch (e: Exception) {
             "не удалось проверить"
         }

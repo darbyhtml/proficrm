@@ -15,8 +15,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import ru.groupprofi.crmprofi.dialer.R
 import ru.groupprofi.crmprofi.dialer.core.AppContainer
 import ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker
@@ -232,7 +232,7 @@ class SupportHealthActivity : AppCompatActivity() {
             val queueManager = ru.groupprofi.crmprofi.dialer.queue.QueueManager(this)
             // getStats() - suspend функция, используем runBlocking для синхронного вызова
             val stats = kotlinx.coroutines.runBlocking { queueManager.getStats() }
-            "${stats.pendingCount} элементов (ожидают отправки)"
+            "${stats.total} элементов (ожидают отправки)"
         } catch (e: Exception) {
             getString(R.string.error_failed_to_check)
         }

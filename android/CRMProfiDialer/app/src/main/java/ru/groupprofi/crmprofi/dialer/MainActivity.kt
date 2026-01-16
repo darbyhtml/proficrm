@@ -22,8 +22,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import ru.groupprofi.crmprofi.dialer.auth.TokenManager
 import ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker
 import ru.groupprofi.crmprofi.dialer.domain.PendingCall
@@ -114,7 +114,7 @@ class MainActivity : AppCompatActivity() {
             // Инфраструктура (для совместимости)
             tokenManager = AppContainer.tokenManager
             apiClient = AppContainer.apiClient
-            autoRecoveryManager = AppContainer.autoRecoveryManager
+            // autoRecoveryManager теперь через getter, не нужно присваивать
             
             // Сохраняем device_id если еще не сохранен
             if (tokenManager.getDeviceId().isNullOrBlank()) {

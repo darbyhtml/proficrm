@@ -25,8 +25,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.repeatOnLifecycle
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import ru.groupprofi.crmprofi.dialer.R
 import ru.groupprofi.crmprofi.dialer.core.AppContainer
 import ru.groupprofi.crmprofi.dialer.core.CallFlowCoordinator

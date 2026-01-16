@@ -424,7 +424,7 @@ class ApiClient private constructor(context: Context) {
             httpClient.newCall(req).execute().use { res ->
                 if (res.isSuccessful) {
                     // Обновляем статус отправки в истории
-                    kotlinx.coroutines.CoroutineScope(Dispatchers.IO).launch {
+                    scope.launch {
                         try {
                             callHistoryStore.markSent(callRequestId, System.currentTimeMillis())
                         } catch (e: Exception) {
