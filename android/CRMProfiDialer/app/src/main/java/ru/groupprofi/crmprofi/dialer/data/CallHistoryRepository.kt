@@ -57,10 +57,6 @@ class CallHistoryRepository private constructor(context: Context) : CallHistoryS
      */
     @Deprecated("Используйте addOrUpdate", ReplaceWith("addOrUpdate(call)"))
     suspend fun saveCall(call: CallHistoryItem) = addOrUpdate(call)
-        cache[call.id] = call
-        saveToPrefs()
-        updateFlows()
-    }
     
     /**
      * Отметить звонок как отправленный в CRM.
@@ -78,12 +74,6 @@ class CallHistoryRepository private constructor(context: Context) : CallHistoryS
      */
     @Deprecated("Используйте markSent", ReplaceWith("markSent(callId, sentAt)"))
     suspend fun markAsSentToCrm(callId: String, sentAt: Long) = markSent(callId, sentAt)
-        val call = cache[callId] ?: return@withContext
-        val updated = call.copy(sentToCrm = true, sentToCrmAt = sentAt)
-        cache[callId] = updated
-        saveToPrefs()
-        updateFlows()
-    }
     
     /**
      * Получить все звонки.
