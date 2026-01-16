@@ -127,11 +127,8 @@ class QRLoginActivity : AppCompatActivity() {
                         runOnUiThread {
                             Toast.makeText(this@QRLoginActivity, "Вход выполнен успешно", Toast.LENGTH_SHORT).show()
                             
-                            // Возвращаемся в MainActivity с результатом успеха
-                            // Используем FLAG_ACTIVITY_CLEAR_TOP чтобы пересоздать MainActivity и вызвать onResume
-                            val intent = Intent(this@QRLoginActivity, MainActivity::class.java)
-                            intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
-                            startActivity(intent)
+                            // Возвращаемся в LoginActivity с результатом успеха
+                            setResult(RESULT_OK)
                             finish()
                         }
                     }

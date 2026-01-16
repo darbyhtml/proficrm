@@ -49,6 +49,11 @@
     <string name="onboarding_button_later">Позже</string>
     <string name="onboarding_button_start">Начать работу</string>
     
+    <!-- Экран входа -->
+    <string name="login_title">Вход в систему</string>
+    <string name="login_message">Отсканируйте QR-код для входа в приложение</string>
+    <string name="login_qr_button">Войти по QR-коду</string>
+    
     <!-- Уведомления -->
     <string name="notification_call_task_title">🔔 Пора позвонить</string>
     <string name="notification_call_task_text">Нажмите, чтобы позвонить клиенту: %1$s</string>

@@ -14,6 +14,7 @@ import ru.groupprofi.crmprofi.dialer.domain.CallHistoryItem
 import ru.groupprofi.crmprofi.dialer.domain.CallHistoryStore
 import ru.groupprofi.crmprofi.dialer.domain.PendingCall
 import ru.groupprofi.crmprofi.dialer.domain.PendingCallStore
+import ru.groupprofi.crmprofi.dialer.domain.PhoneNumberNormalizer
 import ru.groupprofi.crmprofi.dialer.domain.CallDirection
 import ru.groupprofi.crmprofi.dialer.domain.ResolveMethod
 import ru.groupprofi.crmprofi.dialer.domain.ActionSource
@@ -108,11 +109,12 @@ class CallLogObserverManager(
         phoneNumber: String,
         startedAtMillis: Long
     ): CallInfo? {
-        val normalized = PendingCall.normalizePhone(phoneNumber)
+        val normalized = PhoneNumberNormalizer.normalize(phoneNumber)
         
-        // Временное окно: ±5 минут от времени начала ожидания
-        val windowStart = startedAtMillis - (5 * 60 * 1000)
-        val windowEnd = startedAtMillis + (5 * 60 * 1000)
+        // Временное окно: от 2 минут до начала ожидания до 15 минут после
+        // Расширено для более надежного поиска звонков, которые могли быть совершены с задержкой
+        val windowStart = startedAtMillis - (2 * 60 * 1000) // 2 минуты до открытия звонилки
+        val windowEnd = startedAtMillis + (15 * 60 * 1000) // 15 минут после открытия звонилки
         
         try {
             val cursor = contentResolver.query(
@@ -125,17 +127,43 @@ class CallLogObserverManager(
                 ),
                 "${CallLog.Calls.DATE} >= ? AND ${CallLog.Calls.DATE} <= ?",
                 arrayOf(windowStart.toString(), windowEnd.toString()),
-                "${CallLog.Calls.DATE} DESC LIMIT 10"
+                "${CallLog.Calls.DATE} DESC LIMIT 50"
             )
             
             cursor?.use {
+                var checkedCount = 0
                 while (it.moveToNext()) {
                     val number = it.getString(it.getColumnIndexOrThrow(CallLog.Calls.NUMBER)) ?: ""
-                    val normalizedNumber = PendingCall.normalizePhone(number)
+                    val normalizedNumber = PhoneNumberNormalizer.normalize(number)
+                    checkedCount++
                     
-                    // Проверяем совпадение номера (последние 7-10 цифр)
-                    if (normalizedNumber.endsWith(normalized.takeLast(7)) || 
-                        normalized.endsWith(normalizedNumber.takeLast(7))) {
+                    // Логируем первые несколько номеров для отладки
+                    if (checkedCount <= 3) {
+                        ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallLogObserverManager", "Проверка #$checkedCount: CallLog номер='$number' → нормализован='$normalizedNumber', ищем='$normalized'")
+                    }
+                    
+                    // Проверяем совпадение номера (более гибкая проверка)
+                    // Сравниваем полные нормализованные номера или последние 7+ цифр
+                    val match = when {
+                        normalizedNumber == normalized -> {
+                            ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallLogObserverManager", "Полное совпадение: '$normalizedNumber' == '$normalized'")
+                            true // Полное совпадение
+                        }
+                        normalizedNumber.length >= 7 && normalized.length >= 7 -> {
+                            // Сравниваем последние 7+ цифр
+                            val last7Match = normalizedNumber.takeLast(7) == normalized.takeLast(7)
+                            val endsWithMatch = normalizedNumber.endsWith(normalized.takeLast(minOf(7, normalized.length))) ||
+                                              normalized.endsWith(normalizedNumber.takeLast(minOf(7, normalizedNumber.length)))
+                            val result = last7Match || endsWithMatch
+                            if (result) {
+                                ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallLogObserverManager", "Частичное совпадение (последние 7): '$normalizedNumber' vs '$normalized'")
+                            }
+                            result
+                        }
+                        else -> false
+                    }
+                    
+                    if (match) {
                         val type = it.getInt(it.getColumnIndexOrThrow(CallLog.Calls.TYPE))
                         val duration = it.getLong(it.getColumnIndexOrThrow(CallLog.Calls.DURATION))
                         val date = it.getLong(it.getColumnIndexOrThrow(CallLog.Calls.DATE))

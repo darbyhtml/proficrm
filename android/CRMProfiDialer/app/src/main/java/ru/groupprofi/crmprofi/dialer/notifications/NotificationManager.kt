@@ -139,7 +139,7 @@ class AppNotificationManager private constructor(context: Context) {
      */
     fun showAppStateNotification(state: AppReadinessChecker.ReadyState) {
         try {
-            val (title, message, fixAction) = getAppStateNotificationContent(state)
+            val (_, message, fixAction) = getAppStateNotificationContent(state)
             
             val fixIntent = when (fixAction) {
                 AppReadinessChecker.FixActionType.REQUEST_PERMISSIONS -> {

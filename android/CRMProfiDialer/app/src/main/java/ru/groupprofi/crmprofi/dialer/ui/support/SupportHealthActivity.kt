@@ -120,7 +120,7 @@ class SupportHealthActivity : AppCompatActivity() {
      */
     private fun updateHealthStatus() {
         val state = readinessProvider.getState()
-        val uiModel = readinessProvider.getUiModel()
+        readinessProvider.getUiModel() // Получаем для проверки, но не используем
         
         // Обновляем главный статус
         if (state == AppReadinessChecker.ReadyState.READY) {
@@ -352,7 +352,6 @@ class SupportHealthActivity : AppCompatActivity() {
      * Обработать действие "Исправить".
      */
     private fun handleFixAction() {
-        val state = readinessProvider.getState()
         val uiModel = readinessProvider.getUiModel()
         
         when (uiModel.fixActionType) {
@@ -372,9 +371,31 @@ class SupportHealthActivity : AppCompatActivity() {
                 // Возвращаемся на главный экран, где есть форма входа
                 finish()
             }
+            AppReadinessChecker.FixActionType.RESTART_SERVICE -> {
+                // Перезапускаем сервис
+                val intent = Intent(this, ru.groupprofi.crmprofi.dialer.CallListenerService::class.java)
+                if (android.os.Build.VERSION.SDK_INT >= 26) {
+                    startForegroundService(intent)
+                } else {
+                    startService(intent)
+                }
+                android.widget.Toast.makeText(this, "Сервис перезапущен", android.widget.Toast.LENGTH_SHORT).show()
+                // Обновляем статус через 2 секунды
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    updateHealthStatus()
+                }, 2000)
+            }
+            AppReadinessChecker.FixActionType.OPEN_NETWORK_SETTINGS -> {
+                try {
+                    val intent = Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS)
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(this, "Откройте настройки сети вручную", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
             else -> {
                 // По умолчанию открываем onboarding
-                val intent = Intent(this, OnboardingActivity::class.java)
+                val intent = Intent(this, ru.groupprofi.crmprofi.dialer.ui.onboarding.OnboardingActivity::class.java)
                 startActivity(intent)
             }
         }

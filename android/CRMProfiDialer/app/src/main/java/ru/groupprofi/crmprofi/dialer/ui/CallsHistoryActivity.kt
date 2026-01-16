@@ -90,7 +90,7 @@ class CallsHistoryActivity : AppCompatActivity() {
      * Настроить фильтры периодов.
      */
     private fun setupPeriodFilters() {
-        periodChipGroup.setOnCheckedStateChangeListener { group, checkedIds ->
+        periodChipGroup.setOnCheckedStateChangeListener { _, checkedIds ->
             val checkedId = checkedIds.firstOrNull() ?: return@setOnCheckedStateChangeListener
             
             currentPeriod = when (checkedId) {
@@ -130,7 +130,7 @@ class CallsHistoryActivity : AppCompatActivity() {
     private fun setupReactiveSubscription() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                callHistoryStore.callsFlow.collectLatest { calls ->
+                callHistoryStore.callsFlow.collectLatest { _ ->
                     updateFilteredCalls()
                 }
             }
@@ -167,7 +167,7 @@ class CallsHistoryActivity : AppCompatActivity() {
     /**
      * Обработать действие для звонка (перезвонить или скопировать).
      */
-    private fun handleCallAction(call: CallHistoryItem) {
+    private fun handleCallAction(_call: CallHistoryItem) {
         // Действия обрабатываются в адаптере через callback
     }
     

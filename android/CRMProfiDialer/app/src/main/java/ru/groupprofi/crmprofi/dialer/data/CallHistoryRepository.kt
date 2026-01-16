@@ -137,8 +137,8 @@ class CallHistoryRepository private constructor(context: Context) : CallHistoryS
                 val status = CallHistoryItem.CallStatus.valueOf(json.getString("status"))
                 
                 // Безопасная загрузка новых полей (если отсутствуют - null)
-                val directionStr = json.optString("direction", null)
-                val direction = directionStr?.let { 
+                val directionStr = json.optString("direction")
+                val direction = if (directionStr.isNullOrEmpty()) null else {
                     try {
                         CallDirection.values().find { it.apiValue == directionStr }
                     } catch (e: Exception) {
@@ -146,8 +146,8 @@ class CallHistoryRepository private constructor(context: Context) : CallHistoryS
                     }
                 }
                 
-                val resolveMethodStr = json.optString("resolveMethod", null)
-                val resolveMethod = resolveMethodStr?.let {
+                val resolveMethodStr = json.optString("resolveMethod")
+                val resolveMethod = if (resolveMethodStr.isNullOrEmpty()) null else {
                     try {
                         ResolveMethod.values().find { it.apiValue == resolveMethodStr }
                     } catch (e: Exception) {
@@ -155,8 +155,8 @@ class CallHistoryRepository private constructor(context: Context) : CallHistoryS
                     }
                 }
                 
-                val actionSourceStr = json.optString("actionSource", null)
-                val actionSource = actionSourceStr?.let {
+                val actionSourceStr = json.optString("actionSource")
+                val actionSource = if (actionSourceStr.isNullOrEmpty()) null else {
                     try {
                         ActionSource.values().find { it.apiValue == actionSourceStr }
                     } catch (e: Exception) {

@@ -69,6 +69,16 @@ class OnboardingActivity : AppCompatActivity() {
         
         initViews()
         updateStep(currentStep)
+        
+        // Если это шаг PERMISSIONS - сразу запрашиваем все разрешения
+        if (currentStep == OnboardingStep.PERMISSIONS && !needsPermissions()) {
+            // Разрешения уже есть - переходим дальше
+            val nextStep = if (needsNotifications()) OnboardingStep.NOTIFICATIONS else OnboardingStep.FINAL
+            updateStep(nextStep)
+        } else if (currentStep == OnboardingStep.PERMISSIONS) {
+            // Автоматически запрашиваем разрешения при открытии шага
+            requestAllPermissions()
+        }
     }
     
     private fun initViews() {
@@ -306,9 +316,16 @@ class OnboardingActivity : AppCompatActivity() {
     }
     
     /**
-     * Запросить разрешения.
+     * Запросить разрешения (старый метод, оставлен для совместимости).
      */
     private fun requestPermissions() {
+        requestAllPermissions()
+    }
+    
+    /**
+     * Запросить все необходимые разрешения сразу через всплывающие окна.
+     */
+    private fun requestAllPermissions() {
         val needed = mutableListOf<String>()
         
         if (!hasPermission(android.Manifest.permission.READ_CALL_LOG)) {
@@ -325,6 +342,7 @@ class OnboardingActivity : AppCompatActivity() {
         }
         
         if (needed.isNotEmpty()) {
+            // Запрашиваем все разрешения сразу через системное всплывающее окно
             ActivityCompat.requestPermissions(
                 this,
                 needed.toTypedArray(),

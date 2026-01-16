@@ -140,6 +140,38 @@ class PendingCallManager private constructor(context: Context) : PendingCallStor
     }
     
     /**
+     * Очистить устаревшие активные звонки (если прошло больше 10 минут и звонок не состоялся).
+     * Помечает их как FAILED и возвращает список ID для удаления из истории (если нужно).
+     * Увеличено до 10 минут для более надежного определения результата звонка.
+     */
+    suspend fun cleanupExpiredPendingCalls(): List<String> = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            val now = System.currentTimeMillis()
+            val expiredTimeout = 10 * 60 * 1000L // 10 минут (увеличено для надежности)
+            
+            val expired = cache.values.filter { call ->
+                (call.state == PendingCall.PendingState.PENDING || 
+                 call.state == PendingCall.PendingState.RESOLVING) &&
+                (now - call.startedAtMillis) > expiredTimeout
+            }
+            
+            // Помечаем устаревшие звонки как FAILED
+            expired.forEach { call ->
+                val updated = call.copy(state = PendingCall.PendingState.FAILED)
+                cache[call.callRequestId] = updated
+            }
+            
+            if (expired.isNotEmpty()) {
+                saveToPrefs()
+                updateActiveCallsFlow()
+            }
+            
+            // Возвращаем список ID устаревших звонков для обработки
+            expired.map { it.callRequestId }
+        }
+    }
+    
+    /**
      * Очистить все ожидаемые звонки (для Safe Mode).
      */
     override suspend fun clearAll() = withContext(Dispatchers.IO) {
@@ -186,8 +218,8 @@ class PendingCallManager private constructor(context: Context) : PendingCallStor
                 val state = PendingCall.PendingState.valueOf(json.getString("state"))
                 
                 // Безопасная загрузка actionSource (если отсутствует - null)
-                val actionSourceStr = json.optString("actionSource", null)
-                val actionSource = actionSourceStr?.let {
+                val actionSourceStr = json.optString("actionSource")
+                val actionSource = if (actionSourceStr.isNullOrEmpty()) null else {
                     try {
                         ActionSource.values().find { it.apiValue == actionSourceStr }
                     } catch (e: Exception) {

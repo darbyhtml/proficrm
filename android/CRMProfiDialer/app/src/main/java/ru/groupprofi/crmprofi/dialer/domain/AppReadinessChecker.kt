@@ -107,26 +107,51 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
         val lastPollCode = tokenManager.getLastPollCode()
         val lastPollAt = tokenManager.getLastPollAt()
         
-        // Если последний опрос был больше 2 минут назад и код не 0 (не сеть) - сервис мог остановиться
+        // Если код 401 - нужна авторизация (приоритет)
+        if (lastPollCode == 401) {
+            return ReadyState.NEEDS_AUTH
+        }
+        
+        // Проверяем, запущен ли сервис (если есть данные о последнем опросе)
         if (lastPollAt != null && lastPollCode != -1 && lastPollCode != 0) {
             val lastPollTime = try {
-                val sdf = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
-                sdf.parse(lastPollAt)?.time ?: 0L
+                // Парсим время в формате timestamp (миллисекунды) или HH:mm:ss
+                val timestamp = lastPollAt.toLongOrNull()
+                if (timestamp != null) {
+                    timestamp
+                } else {
+                    // Пробуем парсить как время HH:mm:ss (относительно текущего дня)
+                    val sdf = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+                    val today = java.util.Calendar.getInstance()
+                    val parsedTime = sdf.parse(lastPollAt)
+                    if (parsedTime != null) {
+                        val cal = java.util.Calendar.getInstance()
+                        cal.time = parsedTime
+                        today.set(java.util.Calendar.HOUR_OF_DAY, cal.get(java.util.Calendar.HOUR_OF_DAY))
+                        today.set(java.util.Calendar.MINUTE, cal.get(java.util.Calendar.MINUTE))
+                        today.set(java.util.Calendar.SECOND, cal.get(java.util.Calendar.SECOND))
+                        today.set(java.util.Calendar.MILLISECOND, 0)
+                        today.timeInMillis
+                    } else {
+                        0L
+                    }
+                }
             } catch (e: Exception) {
                 0L
             }
             
-            val now = System.currentTimeMillis()
-            val diff = now - lastPollTime
-            // Если прошло больше 2 минут - сервис мог остановиться
-            if (diff > 120000) {
-                return ReadyState.SERVICE_STOPPED
+            if (lastPollTime > 0) {
+                val now = System.currentTimeMillis()
+                val diff = now - lastPollTime
+                // Если прошло больше 3 минут - сервис мог остановиться (увеличено с 2 до 3 минут для надежности)
+                if (diff > 180000) {
+                    return ReadyState.SERVICE_STOPPED
+                }
             }
-        }
-        
-        // Если код 401 - нужна авторизация
-        if (lastPollCode == 401) {
-            return ReadyState.NEEDS_AUTH
+        } else {
+            // Если нет данных о последнем опросе - проверяем, запущен ли сервис через проверку процесса
+            // Если сервис только что запустился, даем ему время на первый опрос (не считаем остановленным)
+            // В этом случае считаем, что сервис работает (READY)
         }
         
         // Всё готово
@@ -205,20 +230,45 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
     
     /**
      * Проверить доступность сети.
+     * Безопасная проверка с обработкой ошибок (избегаем SecurityException).
+     * Использует более мягкую проверку: достаточно наличия интернета, валидация не обязательна.
      */
     private fun isNetworkAvailable(): Boolean {
-        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-            ?: return false
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val network = connectivityManager.activeNetwork ?: return false
-            val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
-            return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-                   capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-        } else {
-            @Suppress("DEPRECATION")
-            val networkInfo = connectivityManager.activeNetworkInfo
-            return networkInfo?.isConnected == true
+        return try {
+            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                ?: return false
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val network = connectivityManager.activeNetwork ?: return false
+                val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+                
+                // Проверяем наличие интернета (основное требование)
+                val hasInternet = capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                
+                // Проверяем наличие транспорта (WiFi, мобильная сеть и т.д.)
+                val hasTransport = capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
+                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ||
+                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                
+                // Сеть доступна, если есть интернет И есть транспорт
+                // Валидация (NET_CAPABILITY_VALIDATED) не обязательна, т.к. может быть false даже при работающем интернете
+                hasInternet && hasTransport
+            } else {
+                @Suppress("DEPRECATION")
+                val networkInfo = connectivityManager.activeNetworkInfo
+                networkInfo?.isConnected == true
+            }
+        } catch (e: SecurityException) {
+            // На некоторых устройствах может быть SecurityException при проверке сети
+            // В этом случае считаем, что сеть может быть доступна (не блокируем работу)
+            // Логируем для отладки
+            android.util.Log.w("AppReadinessChecker", "SecurityException при проверке сети: ${e.message}")
+            true // Более мягкий подход: если не можем проверить - считаем что сеть есть
+        } catch (e: Exception) {
+            // Любая другая ошибка - логируем, но не блокируем работу
+            android.util.Log.w("AppReadinessChecker", "Ошибка при проверке сети: ${e.message}")
+            true // Более мягкий подход: если не можем проверить - считаем что сеть есть
         }
     }
 }

@@ -69,11 +69,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var fixButton: Button
     private lateinit var callsHistoryCard: MaterialCardView
     private lateinit var callsCount: TextView
-    private lateinit var loginCard: MaterialCardView
-    private lateinit var usernameEl: EditText
-    private lateinit var passwordEl: EditText
-    private lateinit var loginBtn: Button
-    private lateinit var qrLoginBtn: Button
     private lateinit var logoutBtn: Button
     
     // Скрытый режим поддержки
@@ -97,6 +92,22 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        // Инициализация через AppContainer (используем интерфейсы)
+        callHistoryStore = AppContainer.callHistoryStore
+        pendingCallStore = AppContainer.pendingCallStore
+        readinessProvider = AppContainer.readinessProvider
+        
+        // Инфраструктура (для совместимости)
+        tokenManager = AppContainer.tokenManager
+        apiClient = AppContainer.apiClient
+        // autoRecoveryManager теперь через getter, не нужно присваивать
+        
+        // Сначала проверяем авторизацию
+        if (!tokenManager.hasTokens()) {
+            startLoginActivity()
+            return
+        }
+        
         // Проверяем, нужно ли показывать onboarding
         if (shouldShowOnboarding()) {
             startOnboarding()
@@ -105,16 +116,6 @@ class MainActivity : AppCompatActivity() {
         
         try {
             setContentView(R.layout.activity_main)
-            
-            // Инициализация через AppContainer (используем интерфейсы)
-            callHistoryStore = AppContainer.callHistoryStore
-            pendingCallStore = AppContainer.pendingCallStore
-            readinessProvider = AppContainer.readinessProvider
-            
-            // Инфраструктура (для совместимости)
-            tokenManager = AppContainer.tokenManager
-            apiClient = AppContainer.apiClient
-            // autoRecoveryManager теперь через getter, не нужно присваивать
             
             // Сохраняем device_id если еще не сохранен
             if (tokenManager.getDeviceId().isNullOrBlank()) {
@@ -151,11 +152,6 @@ class MainActivity : AppCompatActivity() {
         fixButton = findViewById(R.id.fixButton)
         callsHistoryCard = findViewById(R.id.callsHistoryCard)
         callsCount = findViewById(R.id.callsCount)
-        loginCard = findViewById(R.id.loginCard)
-        usernameEl = findViewById(R.id.username)
-        passwordEl = findViewById(R.id.password)
-        loginBtn = findViewById(R.id.loginBtn)
-        qrLoginBtn = findViewById(R.id.qrLoginBtn)
         logoutBtn = findViewById(R.id.logoutBtn)
         
         // Элементы статистики "Сегодня"
@@ -176,17 +172,6 @@ class MainActivity : AppCompatActivity() {
         callsHistoryCard.setOnClickListener {
             val intent = Intent(this, CallsHistoryActivity::class.java)
             startActivity(intent)
-        }
-        
-        // Вход по логину/паролю
-        loginBtn.setOnClickListener {
-            handleLogin()
-        }
-        
-        // Вход по QR
-        qrLoginBtn.setOnClickListener {
-            val intent = Intent(this, QRLoginActivity::class.java)
-            startActivityForResult(intent, 100)
         }
         
         // Выход
@@ -222,6 +207,15 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("Отмена", null)
             .show()
+    }
+    
+    /**
+     * Запустить экран входа.
+     */
+    private fun startLoginActivity() {
+        val intent = Intent(this, ru.groupprofi.crmprofi.dialer.ui.login.LoginActivity::class.java)
+        startActivity(intent)
+        finish()
     }
     
     /**
@@ -354,12 +348,12 @@ class MainActivity : AppCompatActivity() {
             currentFixAction = uiModel.fixActionType
         }
         
-        // Показываем/скрываем форму входа в зависимости от состояния
+        // Показываем/скрываем кнопку выхода в зависимости от состояния
         if (state == ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker.ReadyState.NEEDS_AUTH) {
-            loginCard.visibility = View.VISIBLE
-            logoutBtn.visibility = View.GONE
+            // Если нет авторизации - перенаправляем на экран входа
+            startLoginActivity()
+            return
         } else {
-            loginCard.visibility = View.GONE
             if (tokenManager.hasTokens()) {
                 logoutBtn.visibility = View.VISIBLE
             } else {
@@ -515,7 +509,8 @@ class MainActivity : AppCompatActivity() {
             }
             
             ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker.FixActionType.SHOW_LOGIN -> {
-                loginCard.visibility = View.VISIBLE
+                // Перенаправляем на экран входа
+                startLoginActivity()
             }
             
             ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker.FixActionType.OPEN_NETWORK_SETTINGS -> {
@@ -600,74 +595,14 @@ class MainActivity : AppCompatActivity() {
     }
     
     /**
-     * Обработать вход по логину/паролю.
-     */
-    private fun handleLogin() {
-        val username = usernameEl.text.toString().trim()
-        val password = passwordEl.text.toString()
-        
-        if (username.isEmpty() || password.isEmpty()) {
-            android.widget.Toast.makeText(this, "Заполните логин и пароль", android.widget.Toast.LENGTH_SHORT).show()
-            return
-        }
-        
-        statusExplanation.text = "Вход в систему..."
-        
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("MainActivity", "Попытка входа: username=$username")
-                val loginResult = apiClient.login(username, password)
-                
-                when (loginResult) {
-                    is ApiClient.Result.Success -> {
-                        val (access, refresh, isAdmin) = loginResult.data
-                        ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("MainActivity", "Вход успешен: username=$username, isAdmin=$isAdmin")
-                        
-                        tokenManager.saveTokens(access, refresh, username)
-                        tokenManager.saveDeviceId(deviceId)
-                        tokenManager.saveIsAdmin(isAdmin)
-                        
-                        // Регистрация устройства
-                        apiClient.registerDevice(deviceId, android.os.Build.MODEL ?: "Android")
-                        
-                        runOnUiThread {
-                            loginCard.visibility = View.GONE
-                            logoutBtn.visibility = View.VISIBLE
-                            usernameEl.text.clear()
-                            passwordEl.text.clear()
-                            updateReadinessStatus()
-                        }
-                    }
-                    
-                    is ApiClient.Result.Error -> {
-                        ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("MainActivity", "Ошибка входа: ${loginResult.message}")
-                        runOnUiThread {
-                            android.widget.Toast.makeText(this@MainActivity, "Ошибка: ${loginResult.message}", android.widget.Toast.LENGTH_LONG).show()
-                            updateReadinessStatus()
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("MainActivity", "Исключение при входе: ${e.message}", e)
-                runOnUiThread {
-                    android.widget.Toast.makeText(this@MainActivity, "Ошибка: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
-                    updateReadinessStatus()
-                }
-            }
-        }
-    }
-    
-    /**
      * Обработать выход.
      */
     private fun handleLogout() {
         tokenManager.clearAll()
         stopService(Intent(this, CallListenerService::class.java))
-        loginCard.visibility = View.VISIBLE
-        logoutBtn.visibility = View.GONE
-        usernameEl.text.clear()
-        passwordEl.text.clear()
-        updateReadinessStatus()
+        
+        // Переходим на экран входа
+        startLoginActivity()
     }
     
     /**
