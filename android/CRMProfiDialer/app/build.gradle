@@ -158,7 +158,7 @@ afterEvaluate {
                     }
                     println("Cleaned kapt directory: $kaptDir")
                 }
-            } catch (e: Exception) {
+            } catch (Exception e) {
                 // Игнорируем ошибки очистки (файлы могут быть заблокированы)
                 println("Warning: Could not clean kapt directory: ${e.message}")
             }
