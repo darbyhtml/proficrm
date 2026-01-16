@@ -29,6 +29,7 @@ class TokenManager private constructor(context: Context) {
         private const val KEY_REFRESH = "refresh"
         private const val KEY_USERNAME = "username"
         private const val KEY_DEVICE_ID = "device_id"
+        private const val KEY_IS_ADMIN = "is_admin"
         private const val KEY_ENCRYPTION_ENABLED = "_encryption_enabled"
         private const val KEY_MIGRATED = "_migrated_to_token_manager"
         
@@ -223,5 +224,21 @@ class TokenManager private constructor(context: Context) {
      */
     fun getLastPollAt(): String? {
         return prefs.getString("last_poll_at", null)
+    }
+    
+    /**
+     * Сохранить флаг is_admin.
+     */
+    fun saveIsAdmin(isAdmin: Boolean) {
+        prefs.edit()
+            .putBoolean(KEY_IS_ADMIN, isAdmin)
+            .apply()
+    }
+    
+    /**
+     * Проверить, является ли пользователь администратором.
+     */
+    fun isAdmin(): Boolean {
+        return prefs.getBoolean(KEY_IS_ADMIN, false)
     }
 }

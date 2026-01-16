@@ -489,10 +489,19 @@ class QrTokenExchangeView(APIView):
 
         logger.info(f"QrTokenExchange: user={qr_token.user.id}, token={token[:16]}... - success")
 
+        # Определяем, является ли пользователь администратором
+        from accounts.models import User
+        user = qr_token.user
+        is_admin = bool(
+            user.is_superuser or 
+            (hasattr(user, "role") and user.role == User.Role.ADMIN)
+        )
+
         return Response({
             "access": str(access),
             "refresh": str(refresh),
             "username": qr_token.user.username,  # Возвращаем username для удобства
+            "is_admin": is_admin,  # Возвращаем роль администратора
         })
 
 
@@ -596,4 +605,27 @@ class LogoutAllView(APIView):
         logger.info(f"LogoutAll: user={request.user.id}, all devices logged out")
         
         return Response({"ok": True, "message": "Все сессии завершены"})
+
+
+class UserInfoView(APIView):
+    """
+    Получить информацию о текущем пользователе (включая роль).
+    Используется для проверки прав доступа в мобильном приложении.
+    """
+    
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        from accounts.models import User
+        
+        user = request.user
+        is_admin = bool(
+            user.is_superuser or 
+            (hasattr(user, "role") and user.role == User.Role.ADMIN)
+        )
+        
+        return Response({
+            "username": user.username,
+            "is_admin": is_admin,
+        })
 

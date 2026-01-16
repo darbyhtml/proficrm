@@ -16,7 +16,7 @@ import java.io.IOException
  */
 class TelemetryInterceptor(
     private val tokenManager: TokenManager,
-    private val queueManager: QueueManager,
+    private val queueManager: kotlin.Lazy<QueueManager>,
     private val context: android.content.Context
 ) : Interceptor {
     
@@ -24,7 +24,6 @@ class TelemetryInterceptor(
     
     override fun intercept(chain: Interceptor.Chain): Response {
         val request = chain.request()
-        val url = request.url.toString()
         val endpoint = request.url.encodedPath
         
         // Собираем телеметрию только для /api/phone/* endpoints
@@ -34,12 +33,11 @@ class TelemetryInterceptor(
         }
         
         val startTime = System.currentTimeMillis()
-        var response: Response? = null
         var httpCode: Int? = null
         var error: IOException? = null
         
         try {
-            response = chain.proceed(request)
+            val response = chain.proceed(request)
             httpCode = response.code
             return response
         } catch (e: IOException) {
@@ -60,7 +58,7 @@ class TelemetryInterceptor(
                         put("value_ms", duration.toInt())
                         if (error != null) {
                             put("extra", org.json.JSONObject().apply {
-                                put("error", error?.message ?: "unknown")
+                                put("error", error.message ?: "unknown")
                             })
                         }
                     }
@@ -69,8 +67,8 @@ class TelemetryInterceptor(
                         put("items", org.json.JSONArray().put(telemetryJson))
                     }
                     
-                    // Добавляем в очередь для последующей отправки
-                    queueManager.enqueue("telemetry", "/api/phone/telemetry/", batchJson.toString())
+                    // Добавляем в очередь для последующей отправки (ленивая инициализация)
+                    queueManager.value.enqueue("telemetry", "/api/phone/telemetry/", batchJson.toString())
                 } catch (e: Exception) {
                     // Игнорируем ошибки телеметрии (не критично)
                     Log.d("TelemetryInterceptor", "Telemetry collection error: ${e.message}")

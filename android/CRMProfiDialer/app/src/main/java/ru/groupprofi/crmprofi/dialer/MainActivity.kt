@@ -30,6 +30,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var loginBtn: Button
     private lateinit var qrLoginBtn: Button
     private lateinit var notifBtn: Button
+    private lateinit var logsBtn: Button
     private lateinit var logoutBtn: Button
     private lateinit var statusEl: TextView
     private lateinit var queueStatusEl: TextView
@@ -43,75 +44,117 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-
-        // Инициализируем TokenManager и ApiClient
-        tokenManager = TokenManager.getInstance(this)
-        apiClient = ApiClient.getInstance(this)
         
-        // Сохраняем device_id в TokenManager (если еще не сохранен)
-        val currentDeviceId = tokenManager.getDeviceId()
-        if (currentDeviceId.isNullOrBlank()) {
-            tokenManager.saveDeviceId(deviceId)
-        }
+        try {
+            android.util.Log.d("MainActivity", "onCreate: starting")
+            setContentView(R.layout.activity_main)
+            android.util.Log.d("MainActivity", "onCreate: layout set")
 
-        accountStatusEl = findViewById(R.id.accountStatus)
-        usernameEl = findViewById(R.id.username)
-        passwordEl = findViewById(R.id.password)
-        loginBtn = findViewById(R.id.loginBtn)
-        qrLoginBtn = findViewById(R.id.qrLoginBtn)
-        notifBtn = findViewById(R.id.notifBtn)
-        logoutBtn = findViewById(R.id.logoutBtn)
-        statusEl = findViewById(R.id.status)
-        queueStatusEl = findViewById(R.id.queueStatus)
+            // Инициализируем TokenManager и ApiClient
+            android.util.Log.d("MainActivity", "onCreate: initializing TokenManager")
+            tokenManager = TokenManager.getInstance(this)
+            android.util.Log.d("MainActivity", "onCreate: initializing ApiClient")
+            apiClient = ApiClient.getInstance(this)
+            android.util.Log.d("MainActivity", "onCreate: TokenManager and ApiClient initialized")
+            
+            // Сохраняем device_id в TokenManager (если еще не сохранен)
+            val currentDeviceId = tokenManager.getDeviceId()
+            if (currentDeviceId.isNullOrBlank()) {
+                tokenManager.saveDeviceId(deviceId)
+            }
 
-        val savedUsername = tokenManager.getUsername()
-        if (!savedUsername.isNullOrBlank() && tokenManager.hasTokens()) {
-            accountStatusEl.text = "Аккаунт: $savedUsername (вход выполнен)"
-            statusEl.text = "Статус: готово. device_id=$deviceId"
-            // Скрываем поля логина/пароля если уже вошли
-            usernameEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.GONE }
-            passwordEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.GONE }
-            usernameEl.visibility = android.view.View.GONE
-            passwordEl.visibility = android.view.View.GONE
-            loginBtn.visibility = android.view.View.GONE
-            qrLoginBtn.visibility = android.view.View.GONE
-            logoutBtn.visibility = android.view.View.VISIBLE
-            // Автоматически запускаем сервис после входа
-            ensureCallLogPermissions()
-            startListeningServiceAuto()
-        } else {
-            accountStatusEl.text = "Аккаунт: не выполнен вход"
-            statusEl.text = "Статус: не подключено"
-            logoutBtn.visibility = android.view.View.GONE
-            qrLoginBtn.visibility = android.view.View.VISIBLE
-        }
+            accountStatusEl = findViewById(R.id.accountStatus)
+            usernameEl = findViewById(R.id.username)
+            passwordEl = findViewById(R.id.password)
+            loginBtn = findViewById(R.id.loginBtn)
+            qrLoginBtn = findViewById(R.id.qrLoginBtn)
+            notifBtn = findViewById(R.id.notifBtn)
+            logsBtn = findViewById(R.id.logsBtn)
+            logoutBtn = findViewById(R.id.logoutBtn)
+            statusEl = findViewById(R.id.status)
+            queueStatusEl = findViewById(R.id.queueStatus)
+            val savedUsername = tokenManager.getUsername()
+            if (!savedUsername.isNullOrBlank() && tokenManager.hasTokens()) {
+                accountStatusEl.text = "Аккаунт: $savedUsername (вход выполнен)"
+                statusEl.text = "Статус: готово. device_id=$deviceId"
+                // Скрываем поля логина/пароля если уже вошли
+                usernameEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.GONE }
+                passwordEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.GONE }
+                usernameEl.visibility = android.view.View.GONE
+                passwordEl.visibility = android.view.View.GONE
+                loginBtn.visibility = android.view.View.GONE
+                qrLoginBtn.visibility = android.view.View.GONE
+                logoutBtn.visibility = android.view.View.VISIBLE
+                // Обновляем видимость кнопки логов
+                updateLogsButtonVisibility()
+                // Если роль еще не получена, получаем её асинхронно
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val userInfoResult = apiClient.getUserInfo()
+                        if (userInfoResult is ApiClient.Result.Success) {
+                            tokenManager.saveIsAdmin(userInfoResult.data.isAdmin)
+                            runOnUiThread {
+                                updateLogsButtonVisibility()
+                                android.util.Log.d("MainActivity", "User role updated in onCreate: isAdmin=${userInfoResult.data.isAdmin}")
+                            }
+                        } else if (userInfoResult is ApiClient.Result.Error) {
+                            android.util.Log.w("MainActivity", "Failed to get user info in onCreate: ${userInfoResult.message}")
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("MainActivity", "Error getting user info in onCreate: ${e.message}", e)
+                    }
+                }
+                // Автоматически запускаем сервис после входа
+                try {
+                    ensureCallLogPermissions()
+                    startListeningServiceAuto()
+                } catch (e: Exception) {
+                    android.util.Log.e("MainActivity", "Error starting service: ${e.message}", e)
+                    statusEl.text = "Статус: ошибка запуска сервиса"
+                }
+            } else {
+                accountStatusEl.text = "Аккаунт: не выполнен вход"
+                statusEl.text = "Статус: не подключено"
+                logoutBtn.visibility = android.view.View.GONE
+                qrLoginBtn.visibility = android.view.View.VISIBLE
+                logsBtn.visibility = android.view.View.GONE
+            }
 
-        notifBtn.setOnClickListener { openNotificationSettings() }
-        
-        qrLoginBtn.setOnClickListener {
-            // Открываем QRLoginActivity для сканирования QR-кода
-            val intent = Intent(this, QRLoginActivity::class.java)
-            startActivity(intent)
-        }
-        
-        logoutBtn.setOnClickListener {
-            tokenManager.clearAll()
-            stopService(Intent(this, CallListenerService::class.java))
-            accountStatusEl.text = "Аккаунт: не выполнен вход"
-            statusEl.text = "Статус: не подключено"
-            usernameEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.VISIBLE }
-            passwordEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.VISIBLE }
-            usernameEl.visibility = android.view.View.VISIBLE
-            passwordEl.visibility = android.view.View.VISIBLE
-            loginBtn.visibility = android.view.View.VISIBLE
-            qrLoginBtn.visibility = android.view.View.VISIBLE
-            logoutBtn.visibility = android.view.View.GONE
-            usernameEl.text.clear()
-            passwordEl.text.clear()
-        }
+            notifBtn.setOnClickListener { openNotificationSettings() }
+            
+            logsBtn.setOnClickListener {
+                // ВРЕМЕННО: доступ для всех залогиненных пользователей (для дебага)
+                // TODO: В будущем вернуть проверку роли, когда определимся с данными для ролей
+                // Открываем экран логов
+                val intent = Intent(this, LogsActivity::class.java)
+                startActivity(intent)
+            }
+            
+            qrLoginBtn.setOnClickListener {
+                // Открываем QRLoginActivity для сканирования QR-кода
+                val intent = Intent(this, QRLoginActivity::class.java)
+                startActivity(intent)
+            }
+            
+            logoutBtn.setOnClickListener {
+                tokenManager.clearAll()
+                stopService(Intent(this, CallListenerService::class.java))
+                accountStatusEl.text = "Аккаунт: не выполнен вход"
+                statusEl.text = "Статус: не подключено"
+                usernameEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.VISIBLE }
+                passwordEl.parent?.let { (it as? android.view.ViewGroup)?.visibility = android.view.View.VISIBLE }
+                usernameEl.visibility = android.view.View.VISIBLE
+                passwordEl.visibility = android.view.View.VISIBLE
+                loginBtn.visibility = android.view.View.VISIBLE
+                qrLoginBtn.visibility = android.view.View.VISIBLE
+                logoutBtn.visibility = android.view.View.GONE
+                usernameEl.text.clear()
+                passwordEl.text.clear()
+                // Обновляем видимость кнопки логов
+                updateLogsButtonVisibility()
+            }
 
-        loginBtn.setOnClickListener {
+            loginBtn.setOnClickListener {
             CoroutineScope(Dispatchers.IO).launch {
                 try {
                     val username = usernameEl.text.toString().trim()
@@ -122,13 +165,19 @@ class MainActivity : AppCompatActivity() {
                     }
 
                     setStatus("Статус: логинюсь…")
+                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("MainActivity", "Login attempt: username=$username")
                     val loginResult = apiClient.login(username, password)
                     
                     when (loginResult) {
                         is ApiClient.Result.Success -> {
-                            val (access, refresh) = loginResult.data
+                            val (access, refresh, isAdmin) = loginResult.data
+                            ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("MainActivity", "Login success: username=$username, isAdmin=$isAdmin")
+                            
                             tokenManager.saveTokens(access, refresh, username)
                             tokenManager.saveDeviceId(deviceId)
+                            tokenManager.saveIsAdmin(isAdmin)
+                            
+                            val savedIsAdmin = tokenManager.isAdmin()
                             
                             // Регистрация устройства (не критична)
                             apiClient.registerDevice(deviceId, android.os.Build.MODEL ?: "Android")
@@ -143,13 +192,18 @@ class MainActivity : AppCompatActivity() {
                         loginBtn.visibility = android.view.View.GONE
                         qrLoginBtn.visibility = android.view.View.GONE
                         logoutBtn.visibility = android.view.View.VISIBLE
+                        // Обновляем видимость кнопки логов ПОСЛЕ получения роли
+                        updateLogsButtonVisibility()
+                        android.util.Log.d("MainActivity", "UI updated, savedIsAdmin=$savedIsAdmin, logsBtn visible=${logsBtn.visibility == android.view.View.VISIBLE}")
                     }
                     setStatus("Статус: подключено. device_id=$deviceId")
                     // После успешного входа: запрашиваем права на статистику звонков и запускаем сервис
                     ensureCallLogPermissions()
+                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("MainActivity", "Starting CallListenerService after login")
                     startListeningServiceAuto()
                         }
                         is ApiClient.Result.Error -> {
+                            ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("MainActivity", "Login failed: ${loginResult.message}")
                             tokenManager.clearAll()
                             runOnUiThread {
                                 accountStatusEl.text = "Аккаунт: не выполнен вход"
@@ -180,12 +234,20 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        } catch (e: Exception) {
+            android.util.Log.e("MainActivity", "Error in onCreate: ${e.message}", e)
+            // Показываем ошибку пользователю и закрываем приложение
+            android.widget.Toast.makeText(this, "Ошибка инициализации: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+            finish()
+        }
     }
 
     override fun onResume() {
         super.onResume()
         AppState.isForeground = true
-
+        
+        android.util.Log.d("MainActivity", "onResume: hasTokens=${tokenManager.hasTokens()}, isAdmin=${tokenManager.isAdmin()}")
+        
         // Проверяем, не вошел ли пользователь через QR (после возврата из QRLoginActivity)
         val savedUsername = tokenManager.getUsername()
         if (!savedUsername.isNullOrBlank() && tokenManager.hasTokens()) {
@@ -199,9 +261,37 @@ class MainActivity : AppCompatActivity() {
             loginBtn.visibility = android.view.View.GONE
             qrLoginBtn.visibility = android.view.View.GONE
             logoutBtn.visibility = android.view.View.VISIBLE
+            
+            // Если роль еще не получена, получаем её асинхронно
+            if (!tokenManager.isAdmin()) {
+                android.util.Log.d("MainActivity", "Role not set, fetching user info...")
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        val userInfoResult = apiClient.getUserInfo()
+                        if (userInfoResult is ApiClient.Result.Success) {
+                            tokenManager.saveIsAdmin(userInfoResult.data.isAdmin)
+                            runOnUiThread {
+                                updateLogsButtonVisibility()
+                                android.util.Log.d("MainActivity", "User role updated in onResume: isAdmin=${userInfoResult.data.isAdmin}")
+                            }
+                        } else if (userInfoResult is ApiClient.Result.Error) {
+                            android.util.Log.w("MainActivity", "Failed to get user info in onResume: ${userInfoResult.message}")
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("MainActivity", "Error getting user info in onResume: ${e.message}", e)
+                    }
+                }
+            }
+            
+            // Обновляем видимость кнопки логов (после проверки/получения роли)
+            updateLogsButtonVisibility()
+            
             // Запускаем сервис если еще не запущен
             ensureCallLogPermissions()
             startListeningServiceAuto()
+        } else {
+            // Пользователь не вошел - скрываем кнопку логов
+            updateLogsButtonVisibility()
         }
         
         // Если пользователь вошел, проверяем статус сервиса
@@ -358,6 +448,7 @@ class MainActivity : AppCompatActivity() {
             .putExtra(CallListenerService.EXTRA_REFRESH, refresh)
             .putExtra(CallListenerService.EXTRA_DEVICE_ID, deviceId)
 
+        ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("MainActivity", "Starting CallListenerService: deviceId=$deviceId")
         if (Build.VERSION.SDK_INT >= 26) {
             startForegroundService(i)
         } else {
@@ -401,7 +492,30 @@ class MainActivity : AppCompatActivity() {
             statusEl.text = text
         }
     }
+    
+    private fun updateLogsButtonVisibility() {
+        // ВРЕМЕННО: показываем кнопку логов всем пользователям (для дебага)
+        // TODO: В будущем заменить на проверку через AppLogger.canViewLogs()
+        val canViewLogs = ru.groupprofi.crmprofi.dialer.logs.AppLogger.canViewLogs()
+        val hasTokens = tokenManager.hasTokens()
+        
+        android.util.Log.d("MainActivity", "updateLogsButtonVisibility: canViewLogs=$canViewLogs, hasTokens=$hasTokens")
+        android.util.Log.d("MainActivity", "logsBtn initialized: ${::logsBtn.isInitialized}")
+        
+        if (!::logsBtn.isInitialized) {
+            android.util.Log.w("MainActivity", "logsBtn not initialized yet!")
+            return
+        }
 
+        // Показываем кнопку логов, если пользователь залогинен и может просматривать логи
+        if (hasTokens && canViewLogs) {
+            logsBtn.visibility = android.view.View.VISIBLE
+            android.util.Log.d("MainActivity", "Logs button set to VISIBLE")
+        } else {
+            logsBtn.visibility = android.view.View.GONE
+            android.util.Log.d("MainActivity", "Logs button set to GONE (hasTokens=$hasTokens, canViewLogs=$canViewLogs)")
+        }
+    }
 
     private fun openNotificationSettings() {
         try {

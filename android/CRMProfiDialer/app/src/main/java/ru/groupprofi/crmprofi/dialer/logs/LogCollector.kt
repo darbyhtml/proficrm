@@ -111,6 +111,35 @@ class LogCollector {
      */
     fun getBufferSize(): Int = logBuffer.size
     
+    /**
+     * Получить последние логи БЕЗ очистки буфера (для просмотра).
+     * Возвращает список последних N записей.
+     */
+    suspend fun getRecentLogs(maxEntries: Int = 1000): List<LogEntry> {
+        return mutex.withLock {
+            val entries = mutableListOf<LogEntry>()
+            var count = 0
+            // Берем последние записи (они в порядке добавления)
+            val iterator = logBuffer.iterator()
+            
+            while (iterator.hasNext() && count < maxEntries) {
+                entries.add(iterator.next())
+                count++
+            }
+            
+            entries
+        }
+    }
+    
+    /**
+     * Получить все логи БЕЗ очистки буфера (для экспорта).
+     */
+    suspend fun getAllLogs(): List<LogEntry> {
+        return mutex.withLock {
+            logBuffer.toList()
+        }
+    }
+    
     data class LogBundle(
         val levelSummary: String,
         val source: String,

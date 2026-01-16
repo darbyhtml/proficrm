@@ -39,6 +39,7 @@ from phonebridge.api import (
     QrTokenExchangeView,
     LogoutView,
     LogoutAllView,
+    UserInfoView,
 )
 from crm.views import robots_txt, security_txt, health_check
 
@@ -88,6 +89,7 @@ urlpatterns = [
     path("api/phone/telemetry/", PhoneTelemetryView.as_view(), name="phone_telemetry"),
     path("api/phone/logs/", PhoneLogUploadView.as_view(), name="phone_logs"),
     path("api/phone/qr/create/", QrTokenCreateView.as_view(), name="phone_qr_create"),
+    path("api/phone/user/info/", UserInfoView.as_view(), name="phone_user_info"),
     path("api/phone/qr/exchange/", QrTokenExchangeView.as_view(), name="phone_qr_exchange"),
     path("api/phone/logout/", LogoutView.as_view(), name="phone_logout"),
     path("api/phone/logout/all/", LogoutAllView.as_view(), name="phone_logout_all"),

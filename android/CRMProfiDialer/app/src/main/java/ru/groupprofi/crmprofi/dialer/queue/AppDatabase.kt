@@ -28,9 +28,9 @@ abstract class AppDatabase : RoomDatabase() {
          * Для будущих версий здесь будут добавляться новые миграции.
          */
         private val MIGRATION_0_1 = object : Migration(0, 1) {
-            override fun migrate(database: SupportSQLiteDatabase) {
+            override fun migrate(db: SupportSQLiteDatabase) {
                 // Создание таблицы queue_items
-                database.execSQL("""
+                db.execSQL("""
                     CREATE TABLE IF NOT EXISTS queue_items (
                         id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                         type TEXT NOT NULL,

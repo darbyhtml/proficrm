@@ -46,8 +46,17 @@ class CallListenerService : Service() {
     private val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     private lateinit var tokenManager: TokenManager
     private lateinit var apiClient: ApiClient
-    private val queueManager = QueueManager(this)
-    private val logCollector = LogCollector()
+    // Ленивая инициализация QueueManager - создается только при первом использовании
+    private val queueManager: QueueManager by lazy { QueueManager(this) }
+    // Используем глобальный LogCollector из Application
+    private val logCollector: LogCollector by lazy {
+        try {
+            (applicationContext as? CRMApplication)?.logCollector ?: LogCollector()
+        } catch (e: Exception) {
+            android.util.Log.w("CallListenerService", "Cannot get LogCollector from Application: ${e.message}")
+            LogCollector()
+        }
+    }
     private lateinit var logSender: LogSender
     private val random = java.util.Random()
 
@@ -103,8 +112,18 @@ class CallListenerService : Service() {
             return START_NOT_STICKY
         }
 
-        // Инициализируем перехватчик логов
-        LogInterceptor.setCollector(logCollector)
+        // Инициализируем перехватчик логов (используем глобальный из Application)
+        try {
+            val appCollector = (applicationContext as? CRMApplication)?.logCollector
+            if (appCollector != null) {
+                LogInterceptor.setCollector(appCollector)
+            } else {
+                LogInterceptor.setCollector(logCollector)
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("CallListenerService", "Cannot get LogCollector from Application: ${e.message}")
+            LogInterceptor.setCollector(logCollector)
+        }
 
         if (loopJob == null) {
             loopJob = scope.launch {
@@ -133,6 +152,16 @@ class CallListenerService : Service() {
                             }
                         }
                         
+                        // Логируем результат polling
+                        when (code) {
+                            200 -> ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallListenerService", "PullCall: 200 (command received)")
+                            204 -> ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallListenerService", "PullCall: 204 (no commands)")
+                            401 -> ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "PullCall: 401 (auth failed)")
+                            429 -> ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("CallListenerService", "PullCall: 429 (rate limited, will retry with delay)")
+                            0 -> ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "PullCall: 0 (network error)")
+                            else -> ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "PullCall: $code (error)")
+                        }
+                        
                         // Сохраняем last_poll_code/last_poll_at через TokenManager
                         tokenManager.saveLastPoll(code, nowStr)
                         
@@ -141,11 +170,13 @@ class CallListenerService : Service() {
                         
                         // Адаптивная частота: при пустых командах (204) увеличиваем задержку
                         // При получении команды (200) - сбрасываем счетчик и возвращаемся к быстрой частоте
-                        val phoneNotNull = !phone.isNullOrBlank()
+                        // При rate limiting (429) - увеличиваем счетчик быстрее для увеличения задержки
                         if (code == 204) {
                             consecutiveEmptyPolls++
                         } else if (code == 200 && phone != null) {
                             consecutiveEmptyPolls = 0 // Сброс при получении команды
+                        } else if (code == 429) {
+                            consecutiveEmptyPolls += 3 // При rate limiting увеличиваем счетчик быстрее
                         }
 
                         // Периодически отправляем heartbeat в CRM, чтобы админ видел "живость" устройства.
@@ -180,11 +211,10 @@ class CallListenerService : Service() {
                                 // Но для совместимости оставляем текущий вызов, QueueManager сам использует httpClient
                                 val sentCount = queueManager.flushQueue(BuildConfig.BASE_URL, tokenManager.getAccessToken() ?: "", apiClient.getHttpClient())
                                 if (sentCount > 0) {
-                                    android.util.Log.i("CallListenerService", "Flushed $sentCount items from queue")
+                                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("CallListenerService", "Queue flushed: $sentCount items sent")
                                 }
                         } catch (e: Exception) {
-                            android.util.Log.w("CallListenerService", "Queue flush error: ${e.message}")
-                            LogInterceptor.addLog(android.util.Log.WARN, "CallListenerService", "Queue flush error: ${e.message}")
+                            ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "Queue flush error: ${e.message}")
                         }
                         }
                         
@@ -196,11 +226,6 @@ class CallListenerService : Service() {
                                 val bundle = logCollector.takeLogs(maxEntries = 500)
                                 if (bundle != null) {
                                     // Используем ApiClient для отправки логов (он сам добавит в очередь при ошибках)
-                                    val now = Date()
-                                    val isoTime = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", java.util.Locale.US).apply {
-                                        timeZone = java.util.TimeZone.getTimeZone("UTC")
-                                    }.format(now)
-                                    
                                     // Маскирование уже сделано в LogSender, но используем ApiClient для единообразия
                                     // Пока оставляем logSender для совместимости, но можно перейти на apiClient.sendLogBundle
                                     logSender.sendLogBundle(BuildConfig.BASE_URL, tokenManager.getAccessToken() ?: "", deviceId, bundle)
@@ -214,7 +239,7 @@ class CallListenerService : Service() {
                         
                         // Обработка ошибок авторизации - refresh token истек, требуется повторный вход
                         if (code == 401) {
-                            android.util.Log.w("CallListenerService", "Authentication failed (401), stopping service")
+                            ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "Authentication failed (401), stopping service")
                             // Очищаем токены через TokenManager (ApiClient уже мог очистить их при refresh failure)
                             if (!tokenManager.hasTokens()) {
                                 tokenManager.clearAll()
@@ -286,14 +311,20 @@ class CallListenerService : Service() {
                         } else {
                             android.util.Log.d("CallListenerService", "Phone is blank, skipping")
                         }
-                    } catch (_: Exception) {
-                        // silent for MVP
-                    }
-                    
-                    // Адаптивная частота опроса с джиттером для предотвращения синхронизации устройств
-                    val baseDelay = when {
-                        // При получении команды - быстрый возврат к активному опросу
-                        code == 200 && phoneNotNull -> 1500L
+                        
+                        // Адаптивная частота опроса с джиттером для предотвращения синхронизации устройств
+                        val phoneNotNull = !phone.isNullOrBlank()
+                        val baseDelay = when {
+                            // При получении команды - быстрый возврат к активному опросу
+                            code == 200 && phoneNotNull -> 1500L
+                        // При rate limiting (429) - увеличиваем задержку значительно
+                        code == 429 -> {
+                            when {
+                                consecutiveEmptyPolls < 10 -> 5000L // Первые 10 - 5 секунд
+                                consecutiveEmptyPolls < 20 -> 10000L // Следующие 10 - 10 секунд
+                                else -> 30000L // Дальше - 30 секунд (чтобы не перегружать сервер)
+                            }
+                        }
                         // При пустых командах (204) - увеличиваем задержку постепенно
                         code == 204 -> {
                             when {
@@ -306,13 +337,18 @@ class CallListenerService : Service() {
                         !isWorkingHours() -> 5000L
                         // В рабочее время - базовая частота
                         else -> 1500L
+                        }
+                        
+                        // Джиттер: добавляем случайную задержку ±200мс для предотвращения синхронизации устройств
+                        val jitter = random.nextInt(401) - 200 // -200..+200 мс
+                        val delayMs = (baseDelay + jitter).coerceAtLeast(1000L) // Минимум 1 секунда
+                        
+                        delay(delayMs)
+                    } catch (_: Exception) {
+                        // silent for MVP
+                        // При ошибке делаем минимальную задержку перед повтором
+                        delay(2000)
                     }
-                    
-                    // Джиттер: добавляем случайную задержку ±200мс для предотвращения синхронизации устройств
-                    val jitter = random.nextInt(401) - 200 // -200..+200 мс
-                    val delayMs = (baseDelay + jitter).coerceAtLeast(1000L) // Минимум 1 секунда
-                    
-                    delay(delayMs)
                 }
             }
         }

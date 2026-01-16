@@ -16,8 +16,16 @@ import java.io.IOException
  * Менеджер оффлайн-очереди: добавление элементов и периодическая отправка.
  */
 class QueueManager(private val context: Context) {
-    private val db = AppDatabase.getDatabase(context)
-    private val dao = db.queueDao()
+    // Ленивая инициализация базы данных - создается только при первом использовании
+    private val db: AppDatabase by lazy {
+        try {
+            AppDatabase.getDatabase(context)
+        } catch (e: Exception) {
+            Log.e("QueueManager", "Failed to initialize database: ${e.message}", e)
+            throw e
+        }
+    }
+    private val dao: QueueDao by lazy { db.queueDao() }
     private val scope = CoroutineScope(Dispatchers.IO)
     
     // Защита от спама алертов: отправляем не чаще чем раз в 5 минут
@@ -155,21 +163,35 @@ class QueueManager(private val context: Context) {
     
     /**
      * Получить статистику очереди (для отладки/мониторинга).
+     * Возвращает пустую статистику, если база данных не инициализирована.
      */
     suspend fun getStats(): QueueStats {
-        val total = dao.count()
-        val callUpdate = dao.countByType("call_update")
-        val heartbeat = dao.countByType("heartbeat")
-        val telemetry = dao.countByType("telemetry")
-        val logBundle = dao.countByType("log_bundle")
-        
-        return QueueStats(
-            total = total,
-            callUpdate = callUpdate,
-            heartbeat = heartbeat,
-            telemetry = telemetry,
-            logBundle = logBundle
-        )
+        return try {
+            val total = dao.count()
+            val callUpdate = dao.countByType("call_update")
+            val heartbeat = dao.countByType("heartbeat")
+            val telemetry = dao.countByType("telemetry")
+            val logBundle = dao.countByType("log_bundle")
+            
+            QueueStats(
+                total = total,
+                callUpdate = callUpdate,
+                heartbeat = heartbeat,
+                telemetry = telemetry,
+                logBundle = logBundle
+            )
+        } catch (e: Exception) {
+            // Если база данных не инициализирована (Room не сгенерировал классы),
+            // возвращаем пустую статистику
+            Log.e("QueueManager", "Failed to get stats: ${e.message}", e)
+            QueueStats(
+                total = 0,
+                callUpdate = 0,
+                heartbeat = 0,
+                telemetry = 0,
+                logBundle = 0
+            )
+        }
     }
     
     /**

@@ -44,14 +44,14 @@ class AuthInterceptor(
         
         // Обрабатываем 401/403 для graceful logout
         if ((response.code == 401 || response.code == 403) && context != null) {
-            Log.w("AuthInterceptor", "Received ${response.code}, clearing tokens and stopping service")
+            ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("AuthInterceptor", "Received ${response.code}, clearing tokens and stopping service")
             // Очищаем токены и останавливаем сервис в фоне
             CoroutineScope(Dispatchers.IO).launch {
                 tokenManager.clearAll()
                 try {
                     context.stopService(Intent(context, CallListenerService::class.java))
                 } catch (e: Exception) {
-                    Log.e("AuthInterceptor", "Failed to stop service: ${e.message}")
+                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("AuthInterceptor", "Failed to stop service: ${e.message}")
                 }
             }
         }

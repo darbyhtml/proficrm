@@ -96,8 +96,8 @@ android {
         // Отключаем кэш для избежания проблем с дубликатами
         useBuildCache = false
         arguments {
+            // Room schema location (опционально, для экспорта схемы)
             arg("room.schemaLocation", "$projectDir/schemas")
-            arg("room.incremental", "false")  // Отключаем инкрементальную компиляцию
         }
         javacOptions {
             option("-source", "17")

@@ -24,6 +24,7 @@ class SecureTokenObtainPairView(TokenObtainPairView):
     """JWT Token view с защитой от брутфорса."""
     
     def post(self, request, *args, **kwargs):
+        from accounts.models import User
         ip = get_client_ip(request)
         username = request.data.get("username", "").strip()
         
@@ -49,13 +50,12 @@ class SecureTokenObtainPairView(TokenObtainPairView):
         try:
             response = super().post(request, *args, **kwargs)
             
-            # Если успешно - очищаем счетчики
+            # Если успешно - очищаем счетчики и добавляем is_admin в ответ
             if response.status_code == 200 and username:
                 clear_login_attempts(username)
                 
-                # Логируем успешный вход
+                # Логируем успешный вход и добавляем is_admin в ответ
                 try:
-                    from accounts.models import User
                     user = User.objects.filter(username__iexact=username).first()
                     if user:
                         log_event(
@@ -66,6 +66,13 @@ class SecureTokenObtainPairView(TokenObtainPairView):
                             message="Успешный вход через JWT API",
                             meta={"ip": ip, "username": username},
                         )
+                        
+                        # Добавляем is_admin в ответ
+                        is_admin = bool(
+                            user.is_superuser or 
+                            (hasattr(user, "role") and user.role == User.Role.ADMIN)
+                        )
+                        response.data["is_admin"] = is_admin
                 except Exception:
                     pass
             

@@ -27,18 +27,22 @@ import java.util.concurrent.TimeUnit
  */
 class ApiClient private constructor(context: Context) {
     private val tokenManager = TokenManager.getInstance(context)
-    private val queueManager = QueueManager(context)
+    private val appContext = context.applicationContext
+    // Ленивая инициализация QueueManager - создается только при первом использовании
+    private val queueManager: QueueManager by lazy { QueueManager(appContext) }
     private val httpClient: OkHttpClient
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
     private val baseUrl = BuildConfig.BASE_URL
     
     init {
+        // TelemetryInterceptor также получает queueManager лениво
+        val telemetryInterceptor = TelemetryInterceptor(tokenManager, lazy { queueManager }, context)
         httpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
             .addInterceptor(AuthInterceptor(tokenManager, context))
-            .addInterceptor(TelemetryInterceptor(tokenManager, queueManager, context))
+            .addInterceptor(telemetryInterceptor)
             .apply {
                 // HTTP logging только в debug
                 if (BuildConfig.DEBUG) {
@@ -69,8 +73,9 @@ class ApiClient private constructor(context: Context) {
     
     /**
      * Логин: получить access и refresh токены.
+     * Возвращает Triple(access, refresh, isAdmin).
      */
-    suspend fun login(username: String, password: String): Result<Pair<String, String>> = withContext(Dispatchers.IO) {
+    suspend fun login(username: String, password: String): Result<Triple<String, String, Boolean>> = withContext(Dispatchers.IO) {
         try {
             val url = "$baseUrl/api/token/"
             val bodyJson = JSONObject()
@@ -98,11 +103,16 @@ class ApiClient private constructor(context: Context) {
                 val obj = JSONObject(raw)
                 val access = obj.optString("access", "")
                 val refresh = obj.optString("refresh", "")
+                val isAdmin = obj.optBoolean("is_admin", false)
+                
+                android.util.Log.d("ApiClient", "Login response: access=${access.take(20)}..., refresh=${refresh.take(20)}..., is_admin=$isAdmin")
+                android.util.Log.d("ApiClient", "Full login response JSON: $raw")
+                
                 if (access.isBlank() || refresh.isBlank()) {
                     return@withContext Result.Error("Неверный формат ответа сервера")
                 }
                 
-                Result.Success(Pair(access, refresh))
+                Result.Success(Triple(access, refresh, isAdmin))
             }
         } catch (e: UnknownHostException) {
             Result.Error("Нет подключения к интернету")
@@ -116,9 +126,9 @@ class ApiClient private constructor(context: Context) {
     /**
      * Обмен QR-токена на JWT access/refresh токены.
      * Используется для быстрого входа по QR-коду.
-     * Возвращает Triple(access, refresh, username).
+     * Возвращает данные в формате (access, refresh, username, isAdmin).
      */
-    suspend fun exchangeQrToken(qrToken: String): Result<Triple<String, String, String>> = withContext(Dispatchers.IO) {
+    suspend fun exchangeQrToken(qrToken: String): Result<QrTokenResult> = withContext(Dispatchers.IO) {
         try {
             val url = "$baseUrl/api/phone/qr/exchange/"
             val bodyJson = JSONObject()
@@ -150,11 +160,12 @@ class ApiClient private constructor(context: Context) {
                 val access = obj.optString("access", "")
                 val refresh = obj.optString("refresh", "")
                 val username = obj.optString("username", "").ifBlank { "user" }
+                val isAdmin = obj.optBoolean("is_admin", false)
                 if (access.isBlank() || refresh.isBlank()) {
                     return@withContext Result.Error("Неверный формат ответа сервера")
                 }
                 
-                Result.Success(Triple(access, refresh, username))
+                Result.Success(QrTokenResult(access, refresh, username, isAdmin))
             }
         } catch (e: UnknownHostException) {
             Result.Error("Нет подключения к интернету")
@@ -177,6 +188,7 @@ class ApiClient private constructor(context: Context) {
         
         return@withContext tokenManager.getRefreshMutex().withLock {
             try {
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("ApiClient", "Refreshing access token")
                 val url = "$baseUrl/api/token/refresh/"
                 val bodyJson = JSONObject().put("refresh", refresh).toString()
                 
@@ -190,26 +202,33 @@ class ApiClient private constructor(context: Context) {
                     if (!res.isSuccessful) {
                         if (res.code == 401 || res.code == 403) {
                             // Refresh token истек - требуется повторный вход
+                            ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("ApiClient", "Refresh token expired (${res.code}), clearing tokens")
                             tokenManager.clearAll()
                             return@withLock Result.Error("Сессия истекла, требуется повторный вход", res.code)
                         }
+                        ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("ApiClient", "Refresh token failed: HTTP ${res.code}")
                         return@withLock Result.Error("Ошибка сервера: HTTP ${res.code}", res.code)
                     }
                     
                     val access = JSONObject(raw).optString("access", "").ifBlank { null }
                     if (access == null) {
+                        ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("ApiClient", "Refresh token: invalid response format")
                         return@withLock Result.Error("Неверный формат ответа сервера")
                     }
                     
                     // Сохраняем новый access token
                     tokenManager.updateAccessToken(access)
+                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("ApiClient", "Access token refreshed successfully")
                     Result.Success(access)
                 }
             } catch (e: UnknownHostException) {
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("ApiClient", "Refresh token: network error (no internet)")
                 Result.Error("Нет подключения к интернету")
             } catch (e: SocketTimeoutException) {
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("ApiClient", "Refresh token: timeout")
                 Result.Error("Превышено время ожидания ответа")
             } catch (e: Exception) {
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("ApiClient", "Refresh token error: ${e.message}", e)
                 Result.Error("Ошибка сети: ${e.message}")
             }
         }
@@ -268,9 +287,7 @@ class ApiClient private constructor(context: Context) {
                 .addHeader("Authorization", "Bearer $token")
                 .build()
             
-            val start = System.currentTimeMillis()
             httpClient.newCall(req).execute().use { res ->
-                val duration = System.currentTimeMillis() - start
                 val code = res.code
                 val body = res.body?.string()
                 
@@ -618,6 +635,69 @@ class ApiClient private constructor(context: Context) {
             Result.Success(Unit) // Logs не критичны
         }
     }
+    
+    /**
+     * Получить информацию о текущем пользователе (включая роль).
+     * Используется для проверки прав доступа (например, для логов администратора).
+     */
+    suspend fun getUserInfo(): Result<UserInfo> = withContext(Dispatchers.IO) {
+        val token = tokenManager.getAccessToken()
+        if (token.isNullOrBlank()) {
+            return@withContext Result.Error("Токен отсутствует", 401)
+        }
+        
+        try {
+            val url = "$baseUrl/api/phone/user/info/"
+            val req = Request.Builder()
+                .url(url)
+                .get()
+                .addHeader("Authorization", "Bearer $token")
+                .build()
+            
+            httpClient.newCall(req).execute().use { res ->
+                val raw = res.body?.string() ?: ""
+                if (!res.isSuccessful) {
+                    val errorMsg = try {
+                        val errorObj = JSONObject(raw)
+                        errorObj.optString("detail", "Ошибка получения информации о пользователе")
+                    } catch (_: Exception) {
+                        "Ошибка: HTTP ${res.code}"
+                    }
+                    return@withContext Result.Error(errorMsg, res.code)
+                }
+                
+                val obj = JSONObject(raw)
+                val username = obj.optString("username", "")
+                val isAdmin = obj.optBoolean("is_admin", false)
+                
+                Result.Success(UserInfo(username = username, isAdmin = isAdmin))
+            }
+        } catch (e: UnknownHostException) {
+            Result.Error("Нет подключения к интернету")
+        } catch (e: SocketTimeoutException) {
+            Result.Error("Превышено время ожидания ответа")
+        } catch (e: Exception) {
+            Result.Error("Ошибка сети: ${e.message}")
+        }
+    }
+    
+    /**
+     * Информация о пользователе.
+     */
+    data class UserInfo(
+        val username: String,
+        val isAdmin: Boolean
+    )
+    
+    /**
+     * Результат обмена QR-токена.
+     */
+    data class QrTokenResult(
+        val access: String,
+        val refresh: String,
+        val username: String,
+        val isAdmin: Boolean
+    )
     
     /**
      * Получить OkHttpClient (для использования в других местах, если нужно).
