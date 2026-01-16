@@ -279,7 +279,7 @@ class CallListenerService : Service() {
                         
                         if (!phone.isNullOrBlank() && !callRequestId.isNullOrBlank()) {
                             // Используем CallFlowCoordinator для обработки команды на звонок
-                            getCallFlowCoordinator().handleCallCommand(phone, callRequestId)
+                            callFlowCoordinator.handleCallCommand(phone, callRequestId)
                         } else {
                             ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallListenerService", "Номер или ID пустой, пропускаем")
                         }
@@ -580,7 +580,6 @@ class CallListenerService : Service() {
             phone = pendingCall.phoneNumber,
             phoneDisplayName = null,
             status = humanStatus,
-            statusText = humanStatusText,
             durationSeconds = callInfo.duration.toInt().takeIf { it > 0 },
             startedAt = callInfo.date,
             sentToCrm = result is ApiClient.Result.Success,
@@ -641,7 +640,6 @@ class CallListenerService : Service() {
             phone = pendingCall.phoneNumber,
             phoneDisplayName = null,
             status = CallHistoryItem.CallStatus.UNKNOWN,
-            statusText = "Не удалось определить результат",
             durationSeconds = null,
             startedAt = pendingCall.startedAtMillis,
             sentToCrm = result is ApiClient.Result.Success,

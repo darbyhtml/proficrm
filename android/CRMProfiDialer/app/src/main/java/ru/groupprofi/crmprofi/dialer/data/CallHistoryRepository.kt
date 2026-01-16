@@ -107,7 +107,7 @@ class CallHistoryRepository private constructor(context: Context) : CallHistoryS
                 put("phone", call.phone)
                 put("phoneDisplayName", call.phoneDisplayName ?: "")
                 put("status", call.status.name)
-                put("statusText", call.statusText)
+                put("statusText", call.getStatusText())
                 put("durationSeconds", call.durationSeconds ?: 0)
                 put("startedAt", call.startedAt)
                 put("sentToCrm", call.sentToCrm)
@@ -169,7 +169,8 @@ class CallHistoryRepository private constructor(context: Context) : CallHistoryS
                     phone = json.getString("phone"),
                     phoneDisplayName = json.optString("phoneDisplayName").takeIf { it.isNotEmpty() },
                     status = status,
-                    statusText = json.getString("statusText"),
+                    // statusText теперь вычисляется через getStatusText(), но сохраняем для обратной совместимости
+                    // (не используется в конструкторе)
                     durationSeconds = json.optInt("durationSeconds").takeIf { it > 0 },
                     startedAt = json.getLong("startedAt"),
                     sentToCrm = json.getBoolean("sentToCrm"),

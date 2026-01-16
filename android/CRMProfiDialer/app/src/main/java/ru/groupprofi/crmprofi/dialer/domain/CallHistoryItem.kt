@@ -12,7 +12,6 @@ data class CallHistoryItem(
     val phone: String,
     val phoneDisplayName: String? = null, // Имя из контактов (если есть)
     val status: CallStatus,
-    val statusText: String, // Человеческий текст статуса
     val durationSeconds: Int? = null,
     val startedAt: Long, // Timestamp
     val sentToCrm: Boolean = false, // Отправлено ли в CRM

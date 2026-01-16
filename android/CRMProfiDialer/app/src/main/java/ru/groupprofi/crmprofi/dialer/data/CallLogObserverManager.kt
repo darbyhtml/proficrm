@@ -182,7 +182,7 @@ class CallLogObserverManager(
             phone = pendingCall.phoneNumber,
             phoneDisplayName = null, // Можно добавить получение имени из контактов позже
             status = status,
-            statusText = statusText,
+            // statusText теперь вычисляется через getStatusText()
             durationSeconds = callInfo.duration.toInt().takeIf { it > 0 },
             startedAt = callInfo.date,
             sentToCrm = false, // Будет обновлено после успешной отправки
