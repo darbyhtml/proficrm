@@ -98,7 +98,7 @@
                 <div class="text-xs muted mt-1">{{ t.company.name }}</div>
               {% endif %}
               <div class="text-[11px] muted-2 mt-2">Дедлайн: {{ t.due_at|date:"d.m.Y H:i" }}</div>
-            </a>
+            </button>
           {% endfor %}
         </div>
       </div>
@@ -110,4 +110,85 @@
       </div>
     {% endif %}
   </div>
+
+  <!-- Модальное окно для редактирования задач -->
+  <div id="taskEditModal" class="fixed inset-0 z-[200] hidden">
+    <div class="fixed inset-0 bg-black/35" data-close-task-modal></div>
+    <div class="absolute inset-x-4 top-12 mx-auto max-w-lg max-h-[90vh] overflow-y-auto">
+      <div id="taskEditModalContent"></div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      const modal = document.getElementById('taskEditModal');
+      const modalContent = document.getElementById('taskEditModalContent');
+      if (!modal || !modalContent) return;
+
+      function closeModal() {
+        modal.classList.add('hidden');
+        modalContent.innerHTML = '';
+      }
+
+      document.addEventListener('click', (e) => {
+        const closeBtn = e.target.closest('[data-close-task-modal]');
+        if (closeBtn) {
+          e.preventDefault();
+          closeModal();
+        }
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+      });
+      modal.querySelector('.bg-black\\/35')?.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) closeModal();
+      });
+
+      // Редактирование задачи
+      document.querySelectorAll('[data-edit-task]').forEach(btn => {
+        btn.addEventListener('click', async function() {
+          const taskId = this.dataset.taskId;
+          const url = `/tasks/${taskId}/edit/?modal=1`;
+          
+          try {
+            const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            if (!res.ok) throw new Error('Ошибка загрузки формы');
+            const html = await res.text();
+            modalContent.innerHTML = html;
+            modal.classList.remove('hidden');
+            
+            if (window.initTaskTypeSelects) {
+              window.initTaskTypeSelects();
+            }
+            
+            const form = modalContent.querySelector('[data-task-edit-form]');
+            if (form) {
+              form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const formData = new FormData(form);
+                try {
+                  const res = await fetch(form.action, {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData
+                  });
+                  const data = await res.json();
+                  if (data.ok) {
+                    closeModal();
+                    location.reload();
+                  } else {
+                    alert('Ошибка: ' + (data.error || 'Не удалось сохранить'));
+                  }
+                } catch (err) {
+                  alert('Ошибка при сохранении: ' + err.message);
+                }
+              }, { once: true });
+            }
+          } catch (err) {
+            alert('Ошибка загрузки формы: ' + err.message);
+          }
+        });
+      });
+    })();
+  </script>
 {% endblock %}

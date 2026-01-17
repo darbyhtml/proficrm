@@ -1666,13 +1666,17 @@
             modalContent.innerHTML = html;
             modal.classList.remove('hidden');
             
+            // Инициализация select для типа задачи
+            if (window.initTaskTypeSelects) {
+              window.initTaskTypeSelects();
+            }
+            
             // Обработка формы
             const form = modalContent.querySelector('[data-task-edit-form]');
             if (form) {
               form.addEventListener('submit', async function(e) {
                 e.preventDefault();
                 const formData = new FormData(form);
-                formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
                 
                 try {
                   const res = await fetch(form.action, {
@@ -1683,27 +1687,14 @@
                   const data = await res.json();
                   if (data.ok) {
                     closeModal();
-                    // Обновляем блок задачи в карточке компании без перезагрузки страницы
-                    const taskItem = document.querySelector(`[data-task-id="${taskId}"]`)?.closest('.rounded-lg.border');
-                    if (taskItem) {
-                      // Обновляем бейдж статуса
-                      const badgeDiv = taskItem.querySelector('[data-task-badge]');
-                      if (badgeDiv && data.type_name) {
-                        // Здесь можно обновить бейдж через AJAX или просто перезагрузить страницу
-                        location.reload();
-                      } else {
-                        location.reload();
-                      }
-                    } else {
-                      location.reload();
-                    }
+                    location.reload();
                   } else {
                     alert('Ошибка: ' + (data.error || 'Не удалось сохранить'));
                   }
                 } catch (err) {
                   alert('Ошибка при сохранении: ' + err.message);
                 }
-              });
+              }, { once: true });
             }
           } catch (err) {
             alert('Ошибка загрузки формы: ' + err.message);
