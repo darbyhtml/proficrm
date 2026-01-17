@@ -1,11 +1,13 @@
 """
 Тесты для dashboard view (Рабочий стол).
 Проверка корректности отображения задач, договоров и прав доступа.
+Включает тесты для оптимизированной версии с кэшированием и объединёнными запросами.
 """
 
 from django.test import TestCase, Client, override_settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from django.core.cache import cache
 from datetime import timedelta, date
 from tasksapp.models import Task, TaskType
 from companies.models import Company
@@ -19,6 +21,9 @@ class DashboardViewTestCase(TestCase):
 
     def setUp(self):
         """Настройка тестовых данных."""
+        # Очищаем кэш перед каждым тестом
+        cache.clear()
+        
         self.client = Client()
         self.user = User.objects.create_user(
             username="testuser",

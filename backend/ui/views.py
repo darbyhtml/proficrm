@@ -489,6 +489,11 @@ def _qs_without_page(request: HttpRequest, *, page_key: str = "page") -> str:
 
 @login_required
 def dashboard(request: HttpRequest) -> HttpResponse:
+    """
+    Dashboard (Рабочий стол) с оптимизированными запросами и кэшированием.
+    """
+    from django.core.cache import cache
+    
     user: User = request.user
     now = timezone.now()
     # Важно: при USE_TZ=True timezone.now() в UTC. Для фильтров "сегодня/неделя" считаем границы по локальной TZ.
@@ -496,43 +501,78 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     today_date = timezone.localdate(now)
     today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow_start = today_start + timedelta(days=1)
-
-    tasks_today = (
-        Task.objects.filter(assigned_to=user)
-        .filter(due_at__gte=today_start, due_at__lt=tomorrow_start)
-        .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
-        .select_related("company")
-        .order_by("due_at")
-    )
-
-    overdue = (
-        Task.objects.filter(assigned_to=user, due_at__lt=now)
-        .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
-        .select_related("company")
-        .order_by("due_at")[:20]
-    )
-
-    # На неделю вперёд, но без "на сегодня"
     week_start = tomorrow_start
     week_end = today_start + timedelta(days=8)  # exclusive: [завтра; завтра+7дней)
-    tasks_week = (
+    contract_until_30 = today_date + timedelta(days=30)
+
+    # Кэш-ключ: включает user_id и дату (инвалидируется при изменении дня)
+    cache_key = f"dashboard_{user.id}_{today_date.isoformat()}"
+    cached_data = cache.get(cache_key)
+    
+    if cached_data:
+        # Восстанавливаем datetime объекты из строк (кэш сериализует их)
+        cached_data["now"] = now
+        cached_data["local_now"] = local_now
+        return render(request, "ui/dashboard.html", cached_data)
+
+    # ОПТИМИЗАЦИЯ: Объединяем запросы задач в один с фильтрацией в Python
+    # Получаем все активные задачи пользователя одним запросом
+    all_tasks = (
         Task.objects.filter(assigned_to=user)
-        .filter(due_at__gte=week_start, due_at__lt=week_end)
         .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
-        .select_related("company")
-        .order_by("due_at")[:50]
+        .select_related("company", "created_by")
+        .order_by("due_at", "-created_at")
     )
 
-    # Новые задачи (назначено сотруднику): показываем последние, чтобы при входе было сразу видно.
-    # Примечание: фильтр по status=NEW уже исключает DONE и CANCELLED, поэтому дополнительный exclude не нужен
-    tasks_new = (
-        Task.objects.filter(assigned_to=user, status=Task.Status.NEW)
-        .select_related("company", "created_by")
-        .order_by("-created_at")[:20]
-    )
+    # Разделяем задачи по категориям в Python (быстрее, чем 4 отдельных запроса)
+    tasks_today_list = []
+    overdue_list = []
+    tasks_week_list = []
+    tasks_new_list = []
+
+    for task in all_tasks:
+        # Новые задачи (статус NEW)
+        if task.status == Task.Status.NEW:
+            tasks_new_list.append(task)
+            if len(tasks_new_list) >= 20:
+                break  # Лимит для новых задач
+
+    # Сортируем новые задачи по created_at (desc)
+    tasks_new_list.sort(key=lambda t: t.created_at, reverse=True)
+    tasks_new_list = tasks_new_list[:20]
+
+    # Остальные задачи (с due_at)
+    for task in all_tasks:
+        if task.status == Task.Status.NEW:
+            continue  # Уже обработали
+        
+        if task.due_at is None:
+            continue
+        
+        task_due_local = timezone.localtime(task.due_at)
+        
+        # Просроченные
+        if task_due_local < now:
+            overdue_list.append(task)
+            if len(overdue_list) >= 20:
+                continue  # Лимит достигнут, но продолжаем для других категорий
+        
+        # На сегодня
+        elif today_start <= task_due_local < tomorrow_start:
+            tasks_today_list.append(task)
+        
+        # На неделю (завтра + 7 дней)
+        elif week_start <= task_due_local < week_end:
+            tasks_week_list.append(task)
+            if len(tasks_week_list) >= 50:
+                continue
+
+    # Сортируем по due_at
+    tasks_today_list.sort(key=lambda t: t.due_at or timezone.now())
+    overdue_list.sort(key=lambda t: t.due_at or timezone.now())
+    tasks_week_list.sort(key=lambda t: t.due_at or timezone.now())
 
     # Договоры, которые подходят по сроку (<= 30 дней) — только для ответственного
-    contract_until_30 = today_date + timedelta(days=30)
     contracts_soon_qs = (
         Company.objects.filter(responsible=user, contract_until__isnull=False)
         .filter(contract_until__gte=today_date, contract_until__lte=contract_until_30)
@@ -545,20 +585,210 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         level = "danger" if (days_left is not None and days_left < 14) else "warn"
         contracts_soon.append({"company": c, "days_left": days_left, "level": level})
 
-    return render(
-        request,
-        "ui/dashboard.html",
-        {
-            "now": now,
-            "local_now": local_now,  # Для корректного сравнения дат в шаблоне
-            "tasks_new": tasks_new,
-            "tasks_today": tasks_today,
-            "overdue": overdue,
-            "tasks_week": tasks_week,
-            "contracts_soon": contracts_soon,
-            "can_view_cold_call_reports": _can_view_cold_call_reports(user),
-        },
+    context = {
+        "now": now,
+        "local_now": local_now,
+        "tasks_new": tasks_new_list,
+        "tasks_today": tasks_today_list,
+        "overdue": overdue_list,
+        "tasks_week": tasks_week_list,
+        "contracts_soon": contracts_soon,
+        "can_view_cold_call_reports": _can_view_cold_call_reports(user),
+    }
+
+    # Кэшируем на 2 минуты
+    cache.set(cache_key, context, timeout=120)
+    
+    return render(request, "ui/dashboard.html", context)
+
+
+@login_required
+def dashboard_poll(request: HttpRequest) -> JsonResponse:
+    """
+    AJAX polling endpoint для обновления dashboard.
+    Возвращает JSON с обновлёнными данными, если были изменения после since.
+    """
+    user: User = request.user
+    since = request.GET.get('since')
+    
+    if since:
+        try:
+            since_dt = datetime.fromtimestamp(int(since) / 1000, tz=timezone.utc)
+            # Проверяем, были ли изменения после since_dt
+            has_changes = (
+                Task.objects.filter(
+                    assigned_to=user,
+                    updated_at__gt=since_dt
+                ).exists() or
+                Company.objects.filter(
+                    responsible=user,
+                    updated_at__gt=since_dt
+                ).exists()
+            )
+            if not has_changes:
+                return JsonResponse({"updated": False})
+        except (ValueError, TypeError):
+            pass  # Если since некорректный, возвращаем полные данные
+    
+    # Возвращаем обновлённые данные (используем ту же логику, что и в dashboard)
+    now = timezone.now()
+    local_now = timezone.localtime(now)
+    today_date = timezone.localdate(now)
+    today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow_start = today_start + timedelta(days=1)
+    week_start = tomorrow_start
+    week_end = today_start + timedelta(days=8)
+    contract_until_30 = today_date + timedelta(days=30)
+
+    # Получаем все активные задачи одним запросом
+    all_tasks = (
+        Task.objects.filter(assigned_to=user)
+        .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+        .select_related("company", "created_by")
+        .order_by("due_at", "-created_at")
     )
+
+    tasks_today_list = []
+    overdue_list = []
+    tasks_week_list = []
+    tasks_new_list = []
+
+    for task in all_tasks:
+        if task.status == Task.Status.NEW:
+            tasks_new_list.append(task)
+            if len(tasks_new_list) >= 20:
+                break
+
+    tasks_new_list.sort(key=lambda t: t.created_at, reverse=True)
+    tasks_new_list = tasks_new_list[:20]
+
+    for task in all_tasks:
+        if task.status == Task.Status.NEW:
+            continue
+        
+        if task.due_at is None:
+            continue
+        
+        task_due_local = timezone.localtime(task.due_at)
+        
+        if task_due_local < now:
+            overdue_list.append(task)
+            if len(overdue_list) >= 20:
+                continue
+        elif today_start <= task_due_local < tomorrow_start:
+            tasks_today_list.append(task)
+        elif week_start <= task_due_local < week_end:
+            tasks_week_list.append(task)
+            if len(tasks_week_list) >= 50:
+                continue
+
+    tasks_today_list.sort(key=lambda t: t.due_at or timezone.now())
+    overdue_list.sort(key=lambda t: t.due_at or timezone.now())
+    tasks_week_list.sort(key=lambda t: t.due_at or timezone.now())
+
+    # Договоры
+    contracts_soon_qs = (
+        Company.objects.filter(responsible=user, contract_until__isnull=False)
+        .filter(contract_until__gte=today_date, contract_until__lte=contract_until_30)
+        .only("id", "name", "contract_type", "contract_until")
+        .order_by("contract_until", "name")[:50]
+    )
+    contracts_soon = []
+    for c in contracts_soon_qs:
+        days_left = (c.contract_until - today_date).days if c.contract_until else None
+        level = "danger" if (days_left is not None and days_left < 14) else "warn"
+        contracts_soon.append({
+            "company_id": str(c.id),
+            "company_name": c.name,
+            "contract_type": c.contract_type,
+            "contract_until": c.contract_until.isoformat() if c.contract_until else None,
+            "days_left": days_left,
+            "level": level,
+        })
+
+    # Сериализуем задачи для JSON
+    def serialize_task(task):
+        return {
+            "id": str(task.id),
+            "title": task.title,
+            "status": task.status,
+            "due_at": task.due_at.isoformat() if task.due_at else None,
+            "company_id": str(task.company.id) if task.company else None,
+            "company_name": task.company.name if task.company else None,
+            "created_at": task.created_at.isoformat(),
+            "created_by": str(task.created_by) if task.created_by else None,
+        }
+
+    return JsonResponse({
+        "updated": True,
+        "timestamp": int(now.timestamp() * 1000),
+        "tasks_today": [serialize_task(t) for t in tasks_today_list],
+        "overdue": [serialize_task(t) for t in overdue_list],
+        "tasks_week": [serialize_task(t) for t in tasks_week_list],
+        "tasks_new": [serialize_task(t) for t in tasks_new_list],
+        "contracts_soon": contracts_soon,
+    })
+
+
+@login_required
+def dashboard_sse(request: HttpRequest) -> StreamingHttpResponse:
+    """
+    Server-Sent Events endpoint для live updates dashboard.
+    Отправляет события при изменении задач или договоров.
+    """
+    import json
+    import time
+    
+    user: User = request.user
+    
+    def event_stream():
+        last_check = timezone.now()
+        sent_initial = False
+        
+        while True:
+            try:
+                # Проверяем изменения каждые 5 секунд
+                time.sleep(5)
+                
+                now = timezone.now()
+                
+                # Проверяем, были ли изменения
+                has_changes = (
+                    Task.objects.filter(
+                        assigned_to=user,
+                        updated_at__gt=last_check
+                    ).exists() or
+                    Company.objects.filter(
+                        responsible=user,
+                        updated_at__gt=last_check
+                    ).exists()
+                )
+                
+                if has_changes or not sent_initial:
+                    # Отправляем событие обновления
+                    data = {
+                        "type": "update",
+                        "timestamp": int(now.timestamp() * 1000),
+                    }
+                    yield f"data: {json.dumps(data)}\n\n"
+                    last_check = now
+                    sent_initial = True
+                else:
+                    # Отправляем heartbeat
+                    yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
+                    
+            except GeneratorExit:
+                break
+            except Exception as e:
+                # Отправляем ошибку и закрываем соединение
+                error_data = {"type": "error", "message": str(e)}
+                yield f"data: {json.dumps(error_data)}\n\n"
+                break
+    
+    response = StreamingHttpResponse(event_stream(), content_type='text/event-stream')
+    response['Cache-Control'] = 'no-cache'
+    response['X-Accel-Buffering'] = 'no'  # Отключаем буферизацию в nginx
+    return response
 
 
 @login_required
