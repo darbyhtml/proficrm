@@ -137,8 +137,9 @@ class MagicLinkLoginTestCase(TestCase):
         )
         token_id = magic_link.id  # Сохраняем ID для последующей проверки
         
-        # Используем Client, но проверяем токен до follow редиректа
+        # Используем Client для полного тестирования
         from django.test import Client
+        from django.db import transaction
         client = Client()
         
         # Делаем запрос без follow, чтобы view выполнился полностью
@@ -148,24 +149,36 @@ class MagicLinkLoginTestCase(TestCase):
         self.assertIn(response.status_code, [301, 302], 
                      f"Ожидался редирект, получен статус {response.status_code}")
         
-        # Проверяем, что токен помечен как использованный
-        # Важно: получаем объект заново из БД, чтобы избежать проблем с кэшированием
-        # Django тесты выполняются в транзакции, поэтому изменения должны быть видны сразу
-        magic_link_after = MagicLinkToken.objects.get(id=token_id)
+        # Важно: в тестах Django использует транзакции, но изменения должны быть видны
+        # Проверяем токен сразу после запроса
+        # Используем select_for_update() чтобы получить актуальные данные
+        with transaction.atomic():
+            # Принудительно коммитим транзакцию, если нужно
+            transaction.commit()
+            magic_link_after = MagicLinkToken.objects.select_for_update().get(id=token_id)
+        
+        # Если used_at всё ещё None, возможно проблема в том, что view не выполнился
+        # Проверяем альтернативный способ - через refresh_from_db на исходном объекте
+        if magic_link_after.used_at is None:
+            # Пробуем получить объект заново без select_for_update
+            magic_link_after = MagicLinkToken.objects.get(id=token_id)
+        
         self.assertIsNotNone(magic_link_after.used_at, 
                             f"Токен должен быть помечен как использованный после входа. "
                             f"Текущее значение used_at: {magic_link_after.used_at}, "
                             f"ip_address: {magic_link_after.ip_address}, "
-                            f"user_agent: {magic_link_after.user_agent}")
+                            f"user_agent: {magic_link_after.user_agent}. "
+                            f"Возможно, view не выполнился полностью из-за редиректа.")
         
         # Дополнительно проверяем, что пользователь залогинен после редиректа
         # Используем follow=True для проверки, что сессия создана
         response_follow = client.get("/", follow=True)
         # После входа должен быть доступ к главной странице (не редирект на /login/)
         # Если пользователь не залогинен, будет редирект на /login/
-        final_url = response_follow.redirect_chain[-1][0] if response_follow.redirect_chain else ""
-        self.assertNotIn("/login/", final_url, 
-                        "Пользователь должен быть залогинен после успешного входа")
+        if response_follow.redirect_chain:
+            final_url = response_follow.redirect_chain[-1][0]
+            self.assertNotIn("/login/", final_url, 
+                            "Пользователь должен быть залогинен после успешного входа")
 
     def test_magic_link_login_invalid_token(self):
         """Невалидный токен не работает."""
