@@ -1296,9 +1296,15 @@
                 return;
               }
               
-              const icon = selectedOption.dataset.icon || '';
-              const color = selectedOption.dataset.color || '';
+              // Читаем data-атрибуты (проверяем и dataset, и getAttribute для совместимости)
+              const icon = selectedOption.dataset.icon || selectedOption.getAttribute('data-icon') || '';
+              const color = selectedOption.dataset.color || selectedOption.getAttribute('data-color') || '';
               const text = selectedOption.textContent || '';
+              
+              // Отладка (можно убрать позже)
+              if (!icon && !color && text && text !== '----------') {
+                console.log('TaskType select: нет иконки/цвета для', text, 'value:', selectedOption.value, 'dataset:', selectedOption.dataset);
+              }
               
               const colorClasses = getColorClasses(color);
               const iconHtml = icon ? getIconHtml(icon) : '';
@@ -1320,8 +1326,9 @@
                 item.type = 'button';
                 item.className = 'w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2';
                 
-                const icon = option.dataset.icon || '';
-                const color = option.dataset.color || '';
+                // Читаем data-атрибуты (проверяем и dataset, и getAttribute для совместимости)
+                const icon = option.dataset.icon || option.getAttribute('data-icon') || '';
+                const color = option.dataset.color || option.getAttribute('data-color') || '';
                 const text = option.textContent || '';
                 
                 if (option.value === '') {
