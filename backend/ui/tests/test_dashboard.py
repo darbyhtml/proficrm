@@ -521,12 +521,17 @@ class DashboardViewTestCase(TestCase):
         """Тест: кнопки 'Посмотреть все' имеют правильные фильтры."""
         # Создаём больше 5 задач в каждой категории
         for i in range(7):
-            # Задачи на сегодня
+            # Задачи на сегодня - создаём с due_at в будущем относительно local_now,
+            # но в пределах сегодняшнего дня, чтобы они не попадали в просроченные
+            due_at_today = self.local_now + timedelta(hours=i+1)
+            # Убеждаемся что не выходим за пределы сегодняшнего дня
+            if due_at_today >= self.tomorrow_start:
+                due_at_today = self.tomorrow_start - timedelta(minutes=1)
             Task.objects.create(
                 title=f"Задача на сегодня {i}",
                 assigned_to=self.user,
                 company=self.company,
-                due_at=self.today_start + timedelta(hours=i),
+                due_at=due_at_today,
                 status=Task.Status.IN_PROGRESS
             )
             # Новые задачи
