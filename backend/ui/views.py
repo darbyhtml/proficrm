@@ -687,8 +687,14 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
     today_date = timezone.localdate(now)
     today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow_start = today_start + timedelta(days=1)
-    week_start = tomorrow_start
-    week_end = today_start + timedelta(days=8)
+    
+    # Неделя: с понедельника по воскресенье
+    days_since_monday = today_date.weekday()  # 0 = понедельник, 6 = воскресенье
+    week_monday = today_date - timedelta(days=days_since_monday)
+    week_sunday = week_monday + timedelta(days=6)
+    week_start = timezone.make_aware(datetime.combine(week_monday, datetime.min.time()))
+    week_end = timezone.make_aware(datetime.combine(week_sunday, datetime.max.time())) + timedelta(seconds=1)
+    
     contract_until_30 = today_date + timedelta(days=30)
 
     # Получаем все активные задачи одним запросом
