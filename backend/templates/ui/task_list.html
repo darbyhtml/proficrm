@@ -381,24 +381,26 @@
         <div class="card card-pad">
           <div class="flex items-start justify-between gap-3 mb-4">
             <div class="flex-1">
-              <div class="flex items-center gap-2 mb-2">
-                {# Бейдж статуса задачи (для любого статуса) - используем TaskType если есть #}
-                {% if view_task.type %}
-                  {% include "ui/partials/task_type_badge.html" with task_type=view_task.type only %}
-                {% else %}
-                  <span class="badge {% if view_task.status == 'new' %}badge-new{% elif view_task.status == 'in_progress' %}badge-progress{% elif view_task.status == 'done' %}badge-done{% elif view_task.status == 'cancelled' %}badge-cancel{% endif %}">
-                    {{ view_task.get_status_display }}
-                  </span>
-                {% endif %}
-                {% if view_task.can_edit_task %}
-                  <a href="/tasks/{{ view_task.id }}/edit/" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                    Редактировать
-                  </a>
-                {% endif %}
+              <div class="flex items-center justify-between gap-2 mb-2">
+                <div class="flex items-center gap-2">
+                  {# Задача (тип задачи) - используем TaskType если есть #}
+                  {% if view_task.type %}
+                    {% include "ui/partials/task_type_badge.html" with task_type=view_task.type only %}
+                  {% endif %}
+                  {% if view_task.can_edit_task %}
+                    <a href="/tasks/{{ view_task.id }}/edit/" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                      Редактировать
+                    </a>
+                  {% endif %}
+                </div>
+                {# Системный статус справа #}
+                <span class="badge {% if view_task.status == 'new' %}badge-new{% elif view_task.status == 'in_progress' %}badge-progress{% elif view_task.status == 'done' %}badge-done{% elif view_task.status == 'cancelled' %}badge-cancel{% endif %}">
+                  {{ view_task.get_status_display }}
+                </span>
               </div>
               <h2 class="text-xl font-semibold text-brand-dark">{{ view_task.title }}</h2>
               {% if view_task.description %}

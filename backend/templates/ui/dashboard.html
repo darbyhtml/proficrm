@@ -122,10 +122,11 @@
                         <div class="text-sm font-medium">{{ t.title }}</div>
                         {% if t.type %}
                           {% include "ui/partials/task_type_badge.html" with task_type=t.type only %}
-                        {% else %}
-                          <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %} text-xs">{{ t.get_status_display }}</span>
                         {% endif %}
                       </div>
+                      {% if t.description %}
+                        <div class="text-xs text-brand-dark/70 mt-1 mb-1" style="line-height:1.4">{{ t.description|truncatechars:100 }}</div>
+                      {% endif %}
                       <div class="text-xs text-brand-dark/70 flex items-center gap-1 flex-wrap">
                         {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
                       </div>
@@ -139,9 +140,7 @@
                       {% endif %}
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
-                      {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}
-                        <span class="badge badge-danger text-xs">Срочно</span>
-                      {% endif %}
+                      <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %} text-xs">{{ t.get_status_display }}</span>
                     </div>
                   </div>
                 </button>
@@ -187,10 +186,11 @@
                         <div class="text-sm font-medium">{{ t.title }}</div>
                         {% if t.type %}
                           {% include "ui/partials/task_type_badge.html" with task_type=t.type only %}
-                        {% else %}
-                          <span class="badge badge-new text-xs">{{ t.get_status_display }}</span>
                         {% endif %}
                       </div>
+                      {% if t.description %}
+                        <div class="text-xs text-brand-dark/70 mt-1 mb-1" style="line-height:1.4">{{ t.description|truncatechars:100 }}</div>
+                      {% endif %}
                       <div class="text-xs text-brand-dark/70 flex items-center gap-1 flex-wrap">
                         {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
                         {% if t.created_by %} · назначил: {{ t.created_by }}{% endif %}
@@ -204,6 +204,9 @@
                           <span>{{ t.due_at|date:"d.m.Y H:i" }}</span>
                         </div>
                       {% endif %}
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                      <span class="badge badge-new text-xs">{{ t.get_status_display }}</span>
                     </div>
                   </div>
                 </button>
@@ -247,8 +250,13 @@
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 mb-1">
                         <div class="text-sm font-medium">{{ t.title }}</div>
-                        <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %} text-xs">{{ t.get_status_display }}</span>
+                        {% if t.type %}
+                          {% include "ui/partials/task_type_badge.html" with task_type=t.type only %}
+                        {% endif %}
                       </div>
+                      {% if t.description %}
+                        <div class="text-xs text-brand-dark/70 mt-1 mb-1" style="line-height:1.4">{{ t.description|truncatechars:100 }}</div>
+                      {% endif %}
                       <div class="text-xs text-brand-dark/70 flex items-center gap-1 flex-wrap">
                         {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
                       </div>
@@ -262,7 +270,7 @@
                       {% endif %}
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
-                      <span class="badge badge-danger text-xs">Просрочено</span>
+                      <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %} text-xs">{{ t.get_status_display }}</span>
                     </div>
                   </div>
                 </button>
@@ -355,8 +363,13 @@
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 mb-1">
                         <div class="text-sm font-medium">{{ t.title }}</div>
-                        <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %} text-xs">{{ t.get_status_display }}</span>
+                        {% if t.type %}
+                          {% include "ui/partials/task_type_badge.html" with task_type=t.type only %}
+                        {% endif %}
                       </div>
+                      {% if t.description %}
+                        <div class="text-xs text-brand-dark/70 mt-1 mb-1" style="line-height:1.4">{{ t.description|truncatechars:100 }}</div>
+                      {% endif %}
                       <div class="text-xs text-brand-dark/70 flex items-center gap-1 flex-wrap">
                         {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
                       </div>
@@ -370,9 +383,7 @@
                       {% endif %}
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
-                      {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}
-                        <span class="badge badge-danger text-xs">Просрочено</span>
-                      {% endif %}
+                      <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %} text-xs">{{ t.get_status_display }}</span>
                     </div>
                   </div>
                 </button>

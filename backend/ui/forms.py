@@ -228,7 +228,7 @@ class TaskForm(forms.ModelForm):
         widgets = {
             "description": forms.Textarea(attrs={"rows": 4, "class": "w-full rounded-lg border px-3 py-2"}),
             "company": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            # type фактически используется как «Статус задачи»
+            # type фактически используется как «Задача» (тип задачи из справочника)
             "type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "assigned_to": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "recurrence_rrule": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),

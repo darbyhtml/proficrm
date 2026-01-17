@@ -523,7 +523,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
         .select_related("company", "created_by", "type")
         .only(
-            "id", "title", "status", "due_at", "created_at", "type_id",
+            "id", "title", "status", "due_at", "created_at", "description", "type_id",
             "company__id", "company__name",
             "created_by__id", "created_by__first_name", "created_by__last_name",
             "type__id", "type__name", "type__color", "type__icon"
@@ -4253,13 +4253,13 @@ def _create_note_from_task(task: Task, user: User) -> CompanyNote:
     # Формируем текст заметки
     note_parts = []
     
-    # Статус задачи
+    # Задача (тип задачи)
     if task.type:
-        status_text = f"Статус задачи: {task.type.name}"
+        status_text = f"Задача: {task.type.name}"
     elif task.title:
-        status_text = f"Статус задачи: {task.title}"
+        status_text = f"Задача: {task.title}"
     else:
-        status_text = "Статус задачи: Без статуса"
+        status_text = "Задача: Без типа"
     note_parts.append(status_text)
     
     # Описание задачи
@@ -4502,7 +4502,7 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
     task.save(update_fields=["status", "completed_at", "updated_at"])
 
     if not save_to_notes:
-        messages.success(request, "Статус задачи обновлён.")
+        messages.success(request, "Статус обновлён.")
     else:
         messages.success(request, "Задача выполнена. Заметка создана.")
 
@@ -4558,7 +4558,7 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
             notify(
                 user=task.created_by,
                 kind=Notification.Kind.TASK,
-                title="Статус задачи изменён",
+                title="Статус изменён",
                 body=f"{task.title}: {task.get_status_display()}",
                 url=task_url,
             )
@@ -4569,7 +4569,7 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
             entity_type="task",
             entity_id=task.id,
             company_id=task.company_id,
-            message=f"Статус задачи: {task.get_status_display()}",
+            message=f"Статус: {task.get_status_display()}",
             meta={"status": new_status},
         )
     
@@ -5036,11 +5036,11 @@ def settings_task_type_create(request: HttpRequest) -> HttpResponse:
         form = TaskTypeForm(request.POST)
         if form.is_valid():
             form.save()
-            messages.success(request, "Тип задачи добавлен.")
+            messages.success(request, "Задача добавлена.")
             return redirect("settings_dicts")
     else:
         form = TaskTypeForm()
-    return render(request, "ui/settings/dict_form.html", {"form": form, "title": "Новый тип задачи"})
+    return render(request, "ui/settings/dict_form.html", {"form": form, "title": "Новая задача"})
 
 
 @login_required
@@ -5123,11 +5123,11 @@ def settings_task_type_edit(request: HttpRequest, task_type_id: int) -> HttpResp
             form.save()
             if request.headers.get("X-Requested-With") == "XMLHttpRequest":
                 return JsonResponse({"ok": True, "id": task_type.id, "name": task_type.name, "icon": task_type.icon or "", "color": task_type.color or ""})
-            messages.success(request, "Тип задачи обновлён.")
+            messages.success(request, "Задача обновлена.")
             return redirect("settings_dicts")
     else:
         form = TaskTypeForm(instance=task_type)
-    return render(request, "ui/settings/dict_form_modal.html", {"form": form, "title": "Редактировать статус задачи", "dict_type": "task-type", "dict_id": task_type.id})
+    return render(request, "ui/settings/dict_form_modal.html", {"form": form, "title": "Редактировать задачу", "dict_type": "task-type", "dict_id": task_type.id})
 
 
 @login_required
@@ -5141,7 +5141,7 @@ def settings_task_type_delete(request: HttpRequest, task_type_id: int) -> HttpRe
     task_type.delete()
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return JsonResponse({"ok": True})
-    messages.success(request, "Тип задачи удалён.")
+    messages.success(request, "Задача удалена.")
     return redirect("settings_dicts")
 
 
