@@ -187,8 +187,10 @@ class CompanyTransferPermissionsTestCase(TestCase):
         self.assertEqual(len(result["allowed"]), 1)
         self.assertEqual(len(result["forbidden"]), 2)
         self.assertIn(self.company1.id, result["allowed"])
-        self.assertIn(self.company2.id, [f["id"] for f in result["forbidden"]])
-        self.assertIn(self.company3.id, [f["id"] for f in result["forbidden"]])
+        # forbidden содержит id как строки
+        forbidden_ids = [f["id"] for f in result["forbidden"]]
+        self.assertIn(str(self.company2.id), forbidden_ids)
+        self.assertIn(str(self.company3.id), forbidden_ids)
 
     def test_can_transfer_companies_bulk_rop_all_in_branch(self):
         """Массовая передача РОП: все компании своего филиала разрешены."""
@@ -210,7 +212,9 @@ class CompanyTransferPermissionsTestCase(TestCase):
         self.assertEqual(len(result["forbidden"]), 1)
         self.assertIn(self.company1.id, result["allowed"])
         self.assertIn(self.company2.id, result["allowed"])
-        self.assertIn(self.company3.id, [f["id"] for f in result["forbidden"]])
+        # forbidden содержит id как строки
+        forbidden_ids = [f["id"] for f in result["forbidden"]]
+        self.assertIn(str(self.company3.id), forbidden_ids)
 
     def test_can_transfer_companies_bulk_admin_all_allowed(self):
         """Массовая передача админа: все компании разрешены."""
