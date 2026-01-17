@@ -28,7 +28,7 @@ python manage.py test phonebridge.tests_stats.CallStatsViewTest.test_distributio
 
 ### 3. Template safety
 ```bash
-python manage.py test ui.tests.test_calls_stats_view.CallsStatsViewTemplateSafetyTest.test_view_context_keys_present
+python manage.py test ui.tests.test_calls_stats_view.CallsStatsViewTemplateSafetyTest.test_view_context_keys_presentct
 python manage.py test ui.tests.test_calls_stats_view.CallsStatsViewTemplateSafetyTest.test_view_with_calls_without_new_fields
 ```
 

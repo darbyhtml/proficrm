@@ -52,7 +52,7 @@
       </div>
       <div class="flex items-center gap-2 flex-wrap">
         {% if can_view_cold_call_reports %}
-          <button type="button" class="btn btn-outline" id="openColdDay" title="Отчёт по холодным звонкам за день" aria-label="Отчёт по холодным звонкам за день">
+          <button type="button" class="btn btn-outline" id="openColdDay" title="Отчёт по холодным звонкам за день" aria-label="Отчёт по холодным звонкам за день" style="min-height:38px">
             <span class="inline-flex items-center gap-2">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -60,7 +60,7 @@
               <span>ХЗ день</span>
             </span>
           </button>
-          <button type="button" class="btn btn-outline" id="openColdMonth" title="Отчёт по холодным звонкам за месяц" aria-label="Отчёт по холодным звонкам за месяц">
+          <button type="button" class="btn btn-outline" id="openColdMonth" title="Отчёт по холодным звонкам за месяц" aria-label="Отчёт по холодным звонкам за месяц" style="min-height:38px">
             <span class="inline-flex items-center gap-2">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M8 2v3M16 2v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -72,15 +72,15 @@
             </span>
           </button>
         {% endif %}
-        <a href="/companies/new/" class="btn btn-secondary text-sm">
+        <a href="/companies/new/" class="btn btn-secondary" style="min-height:38px">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
             <circle cx="9" cy="7" r="4"/>
             <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
           </svg>
-          + Компания
+          + Новая компания
         </a>
-        <a href="/tasks/new/" class="btn btn-primary">+ Новая задача</a>
+        <a href="/tasks/new/" class="btn btn-primary" style="min-height:38px">+ Новая задача</a>
       </div>
     </div>
 
@@ -118,24 +118,26 @@
                 <button type="button" class="w-full text-left rounded-lg border p-3 transition-all hover:border-brand-teal/50 hover:bg-brand-soft/20 {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}border-red-300 bg-red-50/50{% else %}border-brand-soft{% endif %}" data-view-task data-task-id="{{ t.id }}">
                   <div class="flex items-start justify-between gap-3">
                     <div class="flex-1 min-w-0">
-                      <div class="text-sm font-medium">{{ t.title }}</div>
-                      <div class="text-xs text-brand-dark/70 mt-1 flex items-center gap-1 flex-wrap">
-                        {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
-                        {% if t.due_at %}
-                          <span class="inline-flex items-center gap-1">
-                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                              <path d="M8 2v3M16 2v3M3 6h18M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6"/>
-                            </svg>
-                            <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700 font-medium{% else %}text-brand-dark/70{% endif %}">{{ t.due_at|date:"d.m.Y H:i" }}</span>
-                          </span>
-                        {% endif %}
+                      <div class="flex items-center gap-2 mb-1">
+                        <div class="text-sm font-medium">{{ t.title }}</div>
+                        <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %} text-xs">{{ t.get_status_display }}</span>
                       </div>
+                      <div class="text-xs text-brand-dark/70 flex items-center gap-1 flex-wrap">
+                        {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
+                      </div>
+                      {% if t.due_at %}
+                        <div class="mt-1.5 flex items-center gap-1.5 {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700 font-semibold{% else %}text-brand-dark/80 font-medium{% endif %}">
+                          <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M8 2v3M16 2v3M3 6h18M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6"/>
+                          </svg>
+                          <span>{{ t.due_at|date:"d.m.Y H:i" }}</span>
+                        </div>
+                      {% endif %}
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
                       {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}
                         <span class="badge badge-danger text-xs">Срочно</span>
                       {% endif %}
-                      <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
                     </div>
                   </div>
                 </button>
@@ -177,23 +179,24 @@
                 <button type="button" class="w-full text-left rounded-lg border border-brand-soft p-3 transition-all hover:border-brand-teal/50 hover:bg-brand-soft/20" data-view-task data-task-id="{{ t.id }}">
                   <div class="flex items-start justify-between gap-3">
                     <div class="flex-1 min-w-0">
-                      <div class="text-sm font-medium">{{ t.title }}</div>
-                      <div class="text-xs text-brand-dark/70 mt-1 flex items-center gap-1 flex-wrap">
+                      <div class="flex items-center gap-2 mb-1">
+                        <div class="text-sm font-medium">{{ t.title }}</div>
+                        <span class="badge badge-new text-xs">{{ t.get_status_display }}</span>
+                      </div>
+                      <div class="text-xs text-brand-dark/70 flex items-center gap-1 flex-wrap">
                         {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
                         {% if t.created_by %} · назначил: {{ t.created_by }}{% endif %}
-                        {% if t.due_at %}
-                          <span class="inline-flex items-center gap-1">
-                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                              <path d="M8 2v3M16 2v3M3 6h18M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6"/>
-                            </svg>
-                            <span class="{% if t.due_at and t.due_at < local_now %}text-red-700 font-medium{% else %}text-brand-dark/70{% endif %}">{{ t.due_at|date:"d.m.Y H:i" }}</span>
-                          </span>
-                        {% else %}
-                          · {{ t.created_at|date:"d.m.Y H:i" }}
-                        {% endif %}
+                        {% if not t.due_at %} · {{ t.created_at|date:"d.m.Y H:i" }}{% endif %}
                       </div>
+                      {% if t.due_at %}
+                        <div class="mt-1.5 flex items-center gap-1.5 {% if t.due_at and t.due_at < local_now %}text-red-700 font-semibold{% else %}text-brand-dark/80 font-medium{% endif %}">
+                          <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M8 2v3M16 2v3M3 6h18M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6"/>
+                          </svg>
+                          <span>{{ t.due_at|date:"d.m.Y H:i" }}</span>
+                        </div>
+                      {% endif %}
                     </div>
-                    <span class="badge badge-new flex-shrink-0">Новая</span>
                   </div>
                 </button>
               </li>
@@ -234,22 +237,24 @@
                 <button type="button" class="w-full text-left rounded-lg border border-red-300 bg-red-50/50 p-3 transition-all hover:border-red-400 hover:bg-red-50" data-view-task data-task-id="{{ t.id }}">
                   <div class="flex items-start justify-between gap-3">
                     <div class="flex-1 min-w-0">
-                      <div class="text-sm font-medium">{{ t.title }}</div>
-                      <div class="text-xs text-brand-dark/70 mt-1 flex items-center gap-1 flex-wrap">
-                        {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
-                        {% if t.due_at %}
-                          <span class="inline-flex items-center gap-1">
-                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                              <path d="M8 2v3M16 2v3M3 6h18M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6"/>
-                            </svg>
-                            <span class="text-red-700 font-medium">{{ t.due_at|date:"d.m.Y H:i" }}</span>
-                          </span>
-                        {% endif %}
+                      <div class="flex items-center gap-2 mb-1">
+                        <div class="text-sm font-medium">{{ t.title }}</div>
+                        <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %} text-xs">{{ t.get_status_display }}</span>
                       </div>
+                      <div class="text-xs text-brand-dark/70 flex items-center gap-1 flex-wrap">
+                        {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
+                      </div>
+                      {% if t.due_at %}
+                        <div class="mt-1.5 flex items-center gap-1.5 text-red-700 font-semibold">
+                          <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M8 2v3M16 2v3M3 6h18M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6"/>
+                          </svg>
+                          <span>{{ t.due_at|date:"d.m.Y H:i" }}</span>
+                        </div>
+                      {% endif %}
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
                       <span class="badge badge-danger text-xs">Просрочено</span>
-                      <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
                     </div>
                   </div>
                 </button>
@@ -340,24 +345,26 @@
                 <button type="button" class="w-full text-left rounded-lg border border-brand-soft p-3 transition-all hover:border-brand-teal/50 hover:bg-brand-soft/20 {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}border-red-300 bg-red-50/50{% endif %}" data-view-task data-task-id="{{ t.id }}">
                   <div class="flex items-start justify-between gap-3">
                     <div class="flex-1 min-w-0">
-                      <div class="text-sm font-medium">{{ t.title }}</div>
-                      <div class="text-xs text-brand-dark/70 mt-1 flex items-center gap-1 flex-wrap">
-                        {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
-                        {% if t.due_at %}
-                          <span class="inline-flex items-center gap-1">
-                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                              <path d="M8 2v3M16 2v3M3 6h18M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6"/>
-                            </svg>
-                            <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700 font-medium{% else %}text-brand-dark/70{% endif %}">{{ t.due_at|date:"d.m.Y H:i" }}</span>
-                          </span>
-                        {% endif %}
+                      <div class="flex items-center gap-2 mb-1">
+                        <div class="text-sm font-medium">{{ t.title }}</div>
+                        <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %} text-xs">{{ t.get_status_display }}</span>
                       </div>
+                      <div class="text-xs text-brand-dark/70 flex items-center gap-1 flex-wrap">
+                        {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
+                      </div>
+                      {% if t.due_at %}
+                        <div class="mt-1.5 flex items-center gap-1.5 {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700 font-semibold{% else %}text-brand-dark/80 font-medium{% endif %}">
+                          <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M8 2v3M16 2v3M3 6h18M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6"/>
+                          </svg>
+                          <span>{{ t.due_at|date:"d.m.Y H:i" }}</span>
+                        </div>
+                      {% endif %}
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
                       {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}
                         <span class="badge badge-danger text-xs">Просрочено</span>
                       {% endif %}
-                      <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
                     </div>
                   </div>
                 </button>
