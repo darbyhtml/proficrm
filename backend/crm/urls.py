@@ -24,7 +24,7 @@ from rest_framework import routers
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from accounts.models import User
-from accounts.views import SecureLoginView
+from accounts.views import SecureLoginView, magic_link_login
 from accounts.jwt_views import SecureTokenObtainPairView
 from companies.api import CompanyNoteViewSet, CompanyViewSet, ContactViewSet
 from tasksapp.api import TaskTypeViewSet, TaskViewSet
@@ -80,6 +80,8 @@ urlpatterns = [
     # Session auth for UI (without weird /login/login/ prefixes) - с защитой от брутфорса
     path("login/", SecureLoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    # Magic link authentication
+    path("auth/magic/<str:token>/", magic_link_login, name="magic_link_login"),
     path("api/token/", SecureTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("api/phone/devices/register/", RegisterDeviceView.as_view(), name="phone_register_device"),

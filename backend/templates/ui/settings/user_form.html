@@ -117,7 +117,80 @@
         <a class="btn btn-outline" href="/settings/users/">Отмена</a>
       </div>
     </form>
+
+    {% if mode == 'edit' and u.is_active %}
+      <div class="bg-white border rounded-2xl p-4 space-y-3 mt-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-lg font-semibold">Одноразовая ссылка входа</div>
+            <div class="text-sm text-brand-dark/70">Сгенерируйте ссылку для входа пользователя без пароля</div>
+          </div>
+          <form method="post" action="/settings/users/{{ u.id }}/magic-link/generate/" id="magicLinkGenerateForm">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-outline" id="generateMagicLinkBtn">🔗 Сгенерировать ссылку</button>
+          </form>
+        </div>
+
+        {% if magic_link_generated %}
+          <div class="rounded-lg border border-brand-teal/60 bg-brand-teal/10 p-4 space-y-2">
+            <div class="text-sm font-semibold text-brand-dark">Ссылка создана:</div>
+            <div class="flex items-center gap-2">
+              <input type="text" id="magicLinkInput" value="{{ magic_link_generated.link }}" readonly class="input flex-1 font-mono text-xs" />
+              <button type="button" class="btn btn-outline text-sm" onclick="copyMagicLink()">📋 Копировать</button>
+            </div>
+            <div class="text-xs text-brand-dark/70">
+              Истекает: {{ magic_link_generated.expires_at|date:"d.m.Y H:i" }} (через 30 минут)
+            </div>
+            <div class="text-xs text-brand-dark/60">
+              ⚠️ Ссылка показывается только один раз. Сохраните её или скопируйте.
+            </div>
+          </div>
+        {% elif last_magic_link_token %}
+          <div class="rounded-lg border border-brand-soft p-3 space-y-1">
+            <div class="text-sm font-semibold">Последняя ссылка:</div>
+            <div class="text-xs text-brand-dark/70">
+              Создана: {{ last_magic_link_token.created_at|date:"d.m.Y H:i" }}
+              {% if last_magic_link_token.created_by %}
+                администратором {{ last_magic_link_token.created_by }}
+              {% endif %}
+            </div>
+            <div class="text-xs">
+              Статус:
+              {% if last_magic_link_token.used_at %}
+                <span class="text-brand-orange">Использована {{ last_magic_link_token.used_at|date:"d.m.Y H:i" }}</span>
+              {% elif last_magic_link_token.expires_at < now %}
+                <span class="text-brand-orange">Истекла</span>
+              {% else %}
+                <span class="text-brand-teal">Активна до {{ last_magic_link_token.expires_at|date:"d.m.Y H:i" }}</span>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
   </div>
+
+  <script>
+    function copyMagicLink() {
+      const input = document.getElementById('magicLinkInput');
+      if (input) {
+        input.select();
+        input.setSelectionRange(0, 99999); // Для мобильных
+        document.execCommand('copy');
+        alert('Ссылка скопирована в буфер обмена');
+      }
+    }
+
+    // Обработка генерации через AJAX (если нужно)
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.getElementById('magicLinkGenerateForm');
+      if (form) {
+        form.addEventListener('submit', (e) => {
+          // Обычная отправка формы (не AJAX) - сервер вернёт редирект с данными в сессии
+        });
+      }
+    });
+  </script>
 
   <script>
     // Генератор пароля

@@ -12,6 +12,16 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from .models import CallRequest, PhoneDevice, PhoneTelemetry, PhoneLogBundle, MobileAppQrToken
 
 
+def mask_phone(phone: str | None) -> str:
+    """
+    Маскирует номер телефона для логов (оставляет последние 4 цифры).
+    Защита от утечки персональных данных в логах.
+    """
+    if not phone or len(phone) <= 4:
+        return "***"
+    return f"***{phone[-4:]}"
+
+
 class RegisterDeviceSerializer(serializers.Serializer):
     device_id = serializers.CharField(max_length=64)
     device_name = serializers.CharField(max_length=120, required=False, allow_blank=True)
@@ -178,7 +188,7 @@ class PullCallView(APIView):
             call.consumed_at = now
             call.save(update_fields=["status", "delivered_at", "consumed_at"])
 
-        logger.info(f"PullCallView: delivered call {call.id} to user {request.user.id}, phone {call.phone_raw}")
+        logger.info(f"PullCallView: delivered call {call.id} to user {request.user.id}, phone {mask_phone(call.phone_raw)}")
 
         return Response(
             {

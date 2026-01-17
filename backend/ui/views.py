@@ -16,11 +16,17 @@ from django.db import models, transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
-from accounts.models import Branch, User
+from accounts.models import Branch, User, MagicLinkToken
 from audit.models import ActivityEvent
 from audit.service import log_event
 from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactEmail, ContactPhone, CompanyDeletionRequest, CompanyLeadStateRequest, CompanyEmail, CompanyPhone, CompanyPhone
-from companies.permissions import can_edit_company as can_edit_company_perm, editable_company_qs as editable_company_qs_perm
+from companies.permissions import (
+    can_edit_company as can_edit_company_perm,
+    editable_company_qs as editable_company_qs_perm,
+    can_transfer_company,
+    get_transfer_targets,
+    can_transfer_companies,
+)
 from tasksapp.models import Task, TaskType
 from notifications.models import Notification
 from notifications.service import notify
@@ -1097,6 +1103,11 @@ def company_list(request: HttpRequest) -> HttpResponse:
 
     paginator = Paginator(qs, per_page)
     page = paginator.get_page(request.GET.get("page"))
+    
+    # Добавляем флаг can_transfer для каждой компании (для UI проверки)
+    for company in page.object_list:
+        company.can_transfer = can_transfer_company(user, company)  # type: ignore[attr-defined]
+    
     # Формируем qs для пагинации, включая per_page если он отличается от значения по умолчанию
     # Используем filter_params вместо request.GET, чтобы включить default_branch_id для директора филиала
     from urllib.parse import urlencode
@@ -1147,7 +1158,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "branches": Branch.objects.order_by("name"),
             "contract_types": Company.ContractType.choices,
             "company_list_columns": columns,
-            "transfer_targets": User.objects.filter(is_active=True, role__in=[User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD]).order_by("last_name", "first_name"),
+            "transfer_targets": get_transfer_targets(user),
             "per_page": per_page,
             "is_admin": require_admin(user),
             "has_companies_without_responsible": has_companies_without_responsible,
@@ -1174,6 +1185,12 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
         return redirect("company_list")
 
     new_resp = get_object_or_404(User, id=new_resp_id, is_active=True)
+    
+    # Проверка, что новый ответственный разрешён (не GROUP_MANAGER, не ADMIN)
+    if new_resp.role in (User.Role.GROUP_MANAGER, User.Role.ADMIN):
+        messages.error(request, "Нельзя передать компании управляющему или администратору.")
+        return redirect("company_list")
+    
     if new_resp.role not in (User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD):
         messages.error(request, "Нового ответственного можно выбрать только из: менеджер / директор филиала / РОП.")
         return redirect("company_list")
@@ -1212,11 +1229,25 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
             messages.error(request, "Нет выбранных компаний, доступных для переназначения.")
             return redirect("company_list")
 
-    # Ограничения директора филиала: переназначать можно только внутри филиала
-    if user.role == User.Role.BRANCH_DIRECTOR and user.branch_id:
-        if new_resp.branch_id != user.branch_id:
-            messages.error(request, "Директор филиала может переназначать компании только внутри своего филиала.")
-            return redirect("company_list")
+    # Проверка прав на передачу каждой компании (используем новую функцию)
+    transfer_check = can_transfer_companies(user, ids)
+    if transfer_check["forbidden"]:
+        # Есть запрещённые компании - показываем детали
+        forbidden_names = [f["name"] for f in transfer_check["forbidden"][:5]]
+        if len(transfer_check["forbidden"]) > 5:
+            forbidden_names.append(f"... и ещё {len(transfer_check['forbidden']) - 5}")
+        messages.error(
+            request,
+            f"Некоторые компании нельзя передать ({len(transfer_check['forbidden'])} из {len(ids)}): "
+            f"{', '.join(forbidden_names)}"
+        )
+        return redirect("company_list")
+    
+    # Используем только разрешённые компании
+    ids = transfer_check["allowed"]
+    if not ids:
+        messages.error(request, "Нет компаний, доступных для переназначения.")
+        return redirect("company_list")
 
     now_ts = timezone.now()
     # Транзакция обеспечивается декоратором @transaction.atomic на функции
@@ -1706,7 +1737,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     quick_form = CompanyQuickEditForm(instance=company)
     contract_form = CompanyContractForm(instance=company)
 
-    transfer_targets = User.objects.filter(is_active=True, role__in=[User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD]).order_by("last_name", "first_name")
+    transfer_targets = get_transfer_targets(user)
 
     # Подсветка договора: оранжевый <= 30 дней, красный < 14 дней (ежедневно)
     contract_alert = ""
@@ -3011,7 +3042,9 @@ def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
 
     user: User = request.user
     company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
-    if not _can_edit_company(user, company):
+    
+    # Проверка прав на передачу (используем новую функцию)
+    if not can_transfer_company(user, company):
         messages.error(request, "Нет прав на передачу компании.")
         return redirect("company_detail", company_id=company.id)
 
@@ -3436,7 +3469,10 @@ def phone_call_create(request: HttpRequest) -> HttpResponse:
     # Логируем для отладки
     import logging
     logger = logging.getLogger(__name__)
-    logger.info(f"phone_call_create: created CallRequest {call.id} for user {user.id}, phone {normalized}, device check: {PhoneDevice.objects.filter(user=user).exists()}")
+    # Маскируем номер телефона для логов (защита от утечки персональных данных)
+    from phonebridge.api import mask_phone
+    masked_phone = mask_phone(normalized) if normalized else "N/A"
+    logger.info(f"phone_call_create: created CallRequest {call.id} for user {user.id}, phone {masked_phone}, device check: {PhoneDevice.objects.filter(user=user).exists()}")
     
     log_event(
         actor=user,
@@ -3654,11 +3690,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
         t.can_delete_task = _can_delete_task_ui(user, t)  # type: ignore[attr-defined]
 
     is_admin = require_admin(user)
-    transfer_targets = []
-    if is_admin:
-        transfer_targets = User.objects.filter(
-            is_active=True, role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]
-        ).order_by("last_name", "first_name")
+    transfer_targets = get_transfer_targets(user) if is_admin else []
 
     # Обработка параметра view_task для модального окна просмотра выполненной задачи
     view_task_id = (request.GET.get("view_task") or "").strip()
@@ -4443,6 +4475,24 @@ def settings_user_edit(request: HttpRequest, user_id: int) -> HttpResponse:
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
     u = get_object_or_404(User, id=user_id)
+    
+    # Получаем последний активный токен для отображения статуса
+    last_token = None
+    if u.is_active:
+        last_token = (
+            MagicLinkToken.objects.filter(user=u)
+            .order_by("-created_at")
+            .select_related("created_by")
+            .first()
+        )
+    
+    # Проверяем, была ли только что сгенерирована ссылка (из сессии)
+    magic_link_generated = None
+    if "magic_link_generated" in request.session:
+        session_data = request.session.pop("magic_link_generated")
+        if session_data.get("user_id") == user_id:
+            magic_link_generated = session_data
+    
     if request.method == "POST":
         form = UserEditForm(request.POST, instance=u)
         if form.is_valid():
@@ -4451,7 +4501,99 @@ def settings_user_edit(request: HttpRequest, user_id: int) -> HttpResponse:
             return redirect("settings_users")
     else:
         form = UserEditForm(instance=u)
-    return render(request, "ui/settings/user_form.html", {"form": form, "mode": "edit", "u": u})
+    
+    return render(
+        request,
+        "ui/settings/user_form.html",
+        {
+            "form": form,
+            "mode": "edit",
+            "u": u,
+            "last_magic_link_token": last_token,
+            "magic_link_generated": magic_link_generated,
+            "now": timezone.now(),
+        },
+    )
+
+
+@login_required
+def settings_user_magic_link_generate(request: HttpRequest, user_id: int) -> HttpResponse:
+    """
+    Генерация одноразовой ссылки входа для пользователя (только для админа).
+    URL: /settings/users/<user_id>/magic-link/generate/
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+    
+    user = get_object_or_404(User, id=user_id, is_active=True)
+    admin_user: User = request.user
+    
+    # Rate limiting: не чаще 1 раза в 10 секунд на пользователя
+    from accounts.security import is_ip_rate_limited, get_client_ip
+    ip = get_client_ip(request)
+    cache_key = f"magic_link_generate_rate:{user_id}"
+    from django.core.cache import cache
+    if cache.get(cache_key):
+        messages.error(request, "Подождите 10 секунд перед генерацией новой ссылки.")
+        return redirect("settings_user_edit", user_id=user_id)
+    cache.set(cache_key, True, 10)
+    
+    # Генерируем токен
+    from accounts.models import MagicLinkToken
+    from django.conf import settings as django_settings
+    
+    magic_link, plain_token = MagicLinkToken.create_for_user(
+        user=user,
+        created_by=admin_user,
+        ttl_minutes=30,
+    )
+    
+    # Формируем полную ссылку
+    from django.contrib.sites.models import Site
+    try:
+        site = Site.objects.get_current()
+        base_url = f"http://{site.domain}"
+    except Exception:
+        base_url = request.build_absolute_uri("/")[:-1]
+    
+    # Используем PUBLIC_BASE_URL если есть
+    public_base_url = getattr(django_settings, "PUBLIC_BASE_URL", None)
+    if public_base_url:
+        base_url = public_base_url.rstrip("/")
+    
+    magic_link_url = f"{base_url}/auth/magic/{plain_token}/"
+    
+    # Логируем генерацию
+    try:
+        log_event(
+            actor=admin_user,
+            verb=ActivityEvent.Verb.CREATE,
+            entity_type="magic_link",
+            entity_id=str(magic_link.id),
+            message=f"Создана ссылка входа для {user}",
+            meta={"user_id": user.id, "expires_at": str(magic_link.expires_at)},
+        )
+    except Exception:
+        pass
+    
+    # Возвращаем JSON с ссылкой (для AJAX) или редиректим с сообщением
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse({
+            "success": True,
+            "token": plain_token,
+            "link": magic_link_url,
+            "expires_at": magic_link.expires_at.isoformat(),
+        })
+    
+    # Для обычного запроса сохраняем в сессии и редиректим
+    request.session["magic_link_generated"] = {
+        "link": magic_link_url,
+        "expires_at": magic_link.expires_at.isoformat(),
+        "user_id": user_id,
+    }
+    messages.success(request, f"Ссылка входа создана для {user}. Она будет показана на странице редактирования.")
+    return redirect("settings_user_edit", user_id=user_id)
 
 
 @login_required

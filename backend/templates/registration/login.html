@@ -26,7 +26,12 @@
     <div class="w-full max-w-md bg-white border border-brand-soft rounded-2xl p-6 shadow-sm">
       <div class="mb-4">
         <div class="text-xl font-semibold">Вход</div>
-        <div class="text-sm text-brand-dark/70">Используй логин/пароль сотрудника</div>
+        {% if magic_link_only %}
+          <div class="text-sm text-brand-dark/70">Вход только по одноразовой ссылке</div>
+          <div class="text-xs text-brand-orange mt-2">Обратитесь к администратору для получения ссылки входа</div>
+        {% else %}
+          <div class="text-sm text-brand-dark/70">Используй логин/пароль сотрудника</div>
+        {% endif %}
       </div>
 
       {% if form.errors or error_message %}
@@ -39,21 +44,31 @@
         </div>
       {% endif %}
 
-      <form method="post" class="space-y-3">
-        {% csrf_token %}
-        {% if next %}<input type="hidden" name="next" value="{{ next }}" />{% endif %}
-        <div>
-          <label class="block text-sm text-brand-dark/80 mb-1">Логин</label>
-          <input name="username" autofocus required class="w-full rounded-lg border border-brand-soft px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-teal/30" />
+      {% if magic_link_only %}
+        <div class="rounded-lg border border-brand-orange/60 bg-brand-orange/20 p-4 text-sm text-brand-dark">
+          Вход в систему возможен только по одноразовой ссылке, которую может создать администратор.
+          <br><br>
+          Если у вас есть ссылка, перейдите по ней напрямую.
+          <br><br>
+          Если ссылки нет, обратитесь к администратору системы.
         </div>
-        <div>
-          <label class="block text-sm text-brand-dark/80 mb-1">Пароль</label>
-          <input name="password" type="password" required class="w-full rounded-lg border border-brand-soft px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-teal/30" />
-        </div>
-        <button class="w-full rounded-lg bg-brand-teal text-white py-2 hover:bg-brand-dark active:scale-[0.99]">
-          Войти
-        </button>
-      </form>
+      {% else %}
+        <form method="post" class="space-y-3">
+          {% csrf_token %}
+          {% if next %}<input type="hidden" name="next" value="{{ next }}" />{% endif %}
+          <div>
+            <label class="block text-sm text-brand-dark/80 mb-1">Логин</label>
+            <input name="username" autofocus required class="w-full rounded-lg border border-brand-soft px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-teal/30" />
+          </div>
+          <div>
+            <label class="block text-sm text-brand-dark/80 mb-1">Пароль</label>
+            <input name="password" type="password" required class="w-full rounded-lg border border-brand-soft px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brand-teal/30" />
+          </div>
+          <button class="w-full rounded-lg bg-brand-teal text-white py-2 hover:bg-brand-dark active:scale-[0.99]">
+            Войти
+          </button>
+        </form>
+      {% endif %}
     </div>
   </body>
 </html>

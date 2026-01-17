@@ -119,11 +119,16 @@
         <div class="flex flex-wrap items-center gap-2">
           <select name="responsible_id" class="select" style="min-width:260px">
             <option value="">Новый ответственный…</option>
-            {% for u in transfer_targets %}
-              <option value="{{ u.id }}">{{ u }} ({{ u.get_role_display }})</option>
+            {% regroup transfer_targets by branch as branches_list %}
+            {% for branch_group in branches_list %}
+              <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
+                {% for u in branch_group.list %}
+                  <option value="{{ u.id }}">{{ u }} ({{ u.get_role_display }})</option>
+                {% endfor %}
+              </optgroup>
             {% endfor %}
           </select>
-          <button class="btn btn-primary" type="submit" onclick="return confirm('Переназначить выбранные компании?');">Переназначить</button>
+          <button class="btn btn-primary" type="submit" id="bulkTransferBtn" onclick="return confirm('Переназначить выбранные компании?');" title="">Переназначить</button>
           <button class="btn btn-outline" type="button" id="bulkSelectFiltered">Выбрать все по фильтру</button>
           <button class="btn btn-outline" type="button" id="bulkClear">Снять выделение</button>
         </div>
@@ -245,7 +250,7 @@
             {% for c in page.object_list %}
               <tr onclick="window.location='/companies/{{ c.id }}/'" style="cursor:pointer">
                 <td onclick="event.stopPropagation()">
-                  <input class="bulk-company" type="checkbox" name="company_ids" value="{{ c.id }}" form="bulkTransferForm" />
+                  <input class="bulk-company" type="checkbox" name="company_ids" value="{{ c.id }}" form="bulkTransferForm" data-can-transfer="{% if c.can_transfer %}1{% else %}0{% endif %}" />
                 </td>
                 {% if "name" in company_list_columns %}
                   <td>
@@ -370,6 +375,40 @@
         });
       }
 
+      // Проверка прав на передачу выбранных компаний
+      function checkTransferRights() {
+        const checked = items.filter(i => i.checked);
+        const transferBtn = document.getElementById('bulkTransferBtn');
+        if (!transferBtn) return;
+        
+        if (checked.length === 0) {
+          transferBtn.disabled = false;
+          transferBtn.title = '';
+          transferBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+          return;
+        }
+        
+        // Проверяем, все ли выбранные компании можно передать
+        const forbidden = checked.filter(i => i.dataset.canTransfer === '0');
+        
+        if (forbidden.length > 0) {
+          transferBtn.disabled = true;
+          transferBtn.title = 'Одна или несколько выбранных компаний не принадлежат вам (вы не ответственный). Уберите их из выбора или откройте только свои компании.';
+          transferBtn.classList.add('opacity-50', 'cursor-not-allowed');
+        } else {
+          transferBtn.disabled = false;
+          transferBtn.title = '';
+          transferBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+      }
+      
+      // Обновляем функцию update для проверки прав
+      const originalUpdate = update;
+      update = function() {
+        originalUpdate();
+        checkTransferRights();
+      };
+      
       update();
     })();
   </script>

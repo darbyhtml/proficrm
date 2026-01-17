@@ -604,8 +604,13 @@
               {% csrf_token %}
               <select name="responsible_id" class="select">
                 <option value="">Выберите ответственного…</option>
-                {% for u in transfer_targets %}
-                  <option value="{{ u.id }}">{{ u }}</option>
+                {% regroup transfer_targets by branch as branches_list %}
+                {% for branch_group in branches_list %}
+                  <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
+                    {% for u in branch_group.list %}
+                      <option value="{{ u.id }}">{{ u }} ({{ u.get_role_display }})</option>
+                    {% endfor %}
+                  </optgroup>
                 {% endfor %}
               </select>
               <button class="btn btn-outline" type="submit">Передать</button>
