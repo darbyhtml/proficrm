@@ -21,13 +21,24 @@ class TaskTypeSelectWidget(forms.Select):
         if self._task_types_cache is None:
             from tasksapp.models import TaskType
             # Используем кэш Django для оптимизации (TTL 5 минут)
-            cache_key = 'task_types_all'
-            self._task_types_cache = cache.get(cache_key)
-            if self._task_types_cache is None:
-                self._task_types_cache = {
-                    str(tt.id): tt for tt in TaskType.objects.only('id', 'name', 'icon', 'color').all()
+            # Кэшируем словарь с данными, а не объекты модели (объекты не pickle-able)
+            cache_key = 'task_types_all_dict'
+            cached_data = cache.get(cache_key)
+            if cached_data is None:
+                # Загружаем все TaskType одним запросом
+                task_types = TaskType.objects.only('id', 'name', 'icon', 'color').all()
+                # Сохраняем как словарь словарей (можно кэшировать)
+                cached_data = {
+                    str(tt.id): {
+                        'id': tt.id,
+                        'name': tt.name,
+                        'icon': tt.icon or '',
+                        'color': tt.color or ''
+                    }
+                    for tt in task_types
                 }
-                cache.set(cache_key, self._task_types_cache, 300)  # 5 минут
+                cache.set(cache_key, cached_data, 300)  # 5 минут
+            self._task_types_cache = cached_data
         return self._task_types_cache
     
     def render_option(self, selected_choices, option_value, option_label):
@@ -37,21 +48,21 @@ class TaskTypeSelectWidget(forms.Select):
         option_value = str(option_value)
         
         # Получаем TaskType из кэша (без запросов к БД)
-        task_type = None
+        task_type_data = None
         if option_value:
             task_types = self._get_task_types()
-            task_type = task_types.get(option_value)
+            task_type_data = task_types.get(option_value)
         
         # Если нашли TaskType, добавляем data-атрибуты
-        if task_type:
+        if task_type_data:
             selected = 'selected' if option_value in selected_choices else ''
             return format_html(
                 '<option value="{}" {} data-icon="{}" data-color="{}">{}</option>',
                 option_value,
                 selected,
-                task_type.icon or '',
-                task_type.color or '',
-                task_type.name
+                task_type_data.get('icon', ''),
+                task_type_data.get('color', ''),
+                task_type_data.get('name', '')
             )
         
         # Обычный рендеринг для пустых опций
