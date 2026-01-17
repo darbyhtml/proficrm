@@ -174,6 +174,233 @@
       input[type="datetime-local"]:not(:placeholder-shown) ~ .datetime-time-labels {
         display: flex;
       }
+      
+      /* Стилизация всплывающего календарика браузера через CSS переменные */
+      input[type="datetime-local"],
+      input[type="date"] {
+        --calendar-bg: #fff;
+        --calendar-border: rgba(194,226,222,.95);
+        --calendar-text: var(--brand-dark);
+        --calendar-selected-bg: var(--brand-teal);
+        --calendar-selected-text: #fff;
+        --calendar-hover-bg: rgba(194,226,222,.25);
+        --calendar-today-border: var(--brand-teal);
+        --calendar-time-selected-bg: var(--brand-teal);
+        --calendar-time-selected-text: #fff;
+      }
+      
+      /* Кастомный календарик */
+      .custom-datetime-picker {
+        position: relative;
+      }
+      
+      .custom-datetime-picker input {
+        width: 100%;
+      }
+      
+      .custom-datetime-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 10000;
+        pointer-events: none;
+      }
+      
+      .custom-datetime-overlay.active {
+        pointer-events: auto;
+      }
+      
+      .custom-datetime-popup {
+        position: absolute;
+        background: #fff;
+        border: 1px solid rgba(194,226,222,.95);
+        border-radius: 16px;
+        box-shadow: 0 12px 30px rgba(0,61,56,.15);
+        padding: 16px;
+        z-index: 10001;
+        min-width: 320px;
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      
+      .custom-datetime-popup .calendar-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 12px;
+        padding-bottom: 8px;
+        border-bottom: 1px solid rgba(194,226,222,.7);
+      }
+      
+      .custom-datetime-popup .calendar-header .month-year {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--brand-dark);
+      }
+      
+      .custom-datetime-popup .calendar-header .nav-buttons {
+        display: flex;
+        gap: 4px;
+      }
+      
+      .custom-datetime-popup .calendar-header button {
+        width: 28px;
+        height: 28px;
+        border: 1px solid rgba(194,226,222,.7);
+        background: #fff;
+        border-radius: 8px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--brand-dark);
+        transition: all 0.2s ease;
+      }
+      
+      .custom-datetime-popup .calendar-header button:hover {
+        background: rgba(194,226,222,.25);
+        border-color: var(--brand-teal);
+      }
+      
+      .custom-datetime-popup .calendar-weekdays {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+        margin-bottom: 8px;
+      }
+      
+      .custom-datetime-popup .calendar-weekdays span {
+        text-align: center;
+        font-size: 12px;
+        font-weight: 600;
+        color: rgba(0,61,56,.6);
+        padding: 4px;
+      }
+      
+      .custom-datetime-popup .calendar-days {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+        margin-bottom: 16px;
+      }
+      
+      .custom-datetime-popup .calendar-day {
+        aspect-ratio: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        color: var(--brand-dark);
+        transition: all 0.2s ease;
+      }
+      
+      .custom-datetime-popup .calendar-day:hover {
+        background: rgba(194,226,222,.25);
+      }
+      
+      .custom-datetime-popup .calendar-day.other-month {
+        color: rgba(0,61,56,.3);
+      }
+      
+      .custom-datetime-popup .calendar-day.today {
+        border-color: var(--brand-teal);
+        font-weight: 600;
+      }
+      
+      .custom-datetime-popup .calendar-day.selected {
+        background: var(--brand-teal);
+        color: #fff;
+        border-color: var(--brand-teal);
+        font-weight: 600;
+      }
+      
+      .custom-datetime-popup .time-picker {
+        display: flex;
+        gap: 16px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(194,226,222,.7);
+      }
+      
+      .custom-datetime-popup .time-column {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      
+      .custom-datetime-popup .time-column-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: rgba(0,61,56,.7);
+        margin-bottom: 8px;
+      }
+      
+      .custom-datetime-popup .time-scroll {
+        width: 100%;
+        max-height: 200px;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        padding: 8px 0;
+      }
+      
+      .custom-datetime-popup .time-item {
+        padding: 8px 12px;
+        text-align: center;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        color: var(--brand-dark);
+        transition: all 0.2s ease;
+      }
+      
+      .custom-datetime-popup .time-item:hover {
+        background: rgba(194,226,222,.25);
+      }
+      
+      .custom-datetime-popup .time-item.selected {
+        background: var(--brand-teal);
+        color: #fff;
+        font-weight: 600;
+      }
+      
+      .custom-datetime-popup .calendar-actions {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 16px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(194,226,222,.7);
+      }
+      
+      .custom-datetime-popup .calendar-actions button {
+        padding: 8px 16px;
+        border: 1px solid rgba(194,226,222,.7);
+        background: #fff;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 14px;
+        color: var(--brand-dark);
+        transition: all 0.2s ease;
+      }
+      
+      .custom-datetime-popup .calendar-actions button:hover {
+        background: rgba(194,226,222,.25);
+      }
+      
+      .custom-datetime-popup .calendar-actions button.btn-primary {
+        background: var(--brand-teal);
+        color: #fff;
+        border-color: var(--brand-teal);
+      }
+      
+      .custom-datetime-popup .calendar-actions button.btn-primary:hover {
+        background: var(--brand-dark);
+      }
     </style>
   </head>
   <body class="bg-brand-soft/40 text-brand-dark">
@@ -1589,6 +1816,7 @@
         observer.observe(document.body, { childList: true, subtree: true });
       })();
     </script>
+    <script src="{% static 'ui/custom-datetime-picker.js' %}"></script>
   </body>
 </html>
 
