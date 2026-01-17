@@ -216,10 +216,11 @@ class UpdateCallInfoSerializer(serializers.Serializer):
     
     # Новые поля (ЭТАП 1: контракт, приём и валидация, но пока не сохраняем в БД - ЭТАП 3)
     call_ended_at = serializers.DateTimeField(required=False, allow_null=True)
-    direction = serializers.ChoiceField(choices=CallRequest.CallDirection.choices, required=False, allow_null=True)
-    resolve_method = serializers.ChoiceField(choices=CallRequest.ResolveMethod.choices, required=False, allow_null=True)
+    # Используем CharField вместо ChoiceField для graceful handling неизвестных значений
+    direction = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    resolve_method = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     attempts_count = serializers.IntegerField(required=False, allow_null=True, min_value=0)
-    action_source = serializers.ChoiceField(choices=CallRequest.ActionSource.choices, required=False, allow_null=True)
+    action_source = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     
     def validate_call_status(self, value):
         """
@@ -242,8 +243,8 @@ class UpdateCallInfoSerializer(serializers.Serializer):
     
     def validate_direction(self, value):
         """Валидация direction с graceful обработкой неизвестных значений."""
-        if value is None:
-            return value
+        if value is None or value == "":
+            return None
         
         valid_choices = [choice[0] for choice in CallRequest.CallDirection.choices]
         if value not in valid_choices:
@@ -256,8 +257,8 @@ class UpdateCallInfoSerializer(serializers.Serializer):
     
     def validate_resolve_method(self, value):
         """Валидация resolve_method с graceful обработкой неизвестных значений."""
-        if value is None:
-            return value
+        if value is None or value == "":
+            return None
         
         valid_choices = [choice[0] for choice in CallRequest.ResolveMethod.choices]
         if value not in valid_choices:
@@ -270,8 +271,8 @@ class UpdateCallInfoSerializer(serializers.Serializer):
     
     def validate_action_source(self, value):
         """Валидация action_source с graceful обработкой неизвестных значений."""
-        if value is None:
-            return value
+        if value is None or value == "":
+            return None
         
         valid_choices = [choice[0] for choice in CallRequest.ActionSource.choices]
         if value not in valid_choices:
