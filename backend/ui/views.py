@@ -4250,10 +4250,9 @@ def task_create(request: HttpRequest) -> HttpResponse:
         form = TaskForm(initial=initial)
 
     # Выбор компании: только те, которые пользователь может редактировать
-    # Оптимизация: используем only() для загрузки только необходимых полей
-    company_qs = _editable_company_qs(user).only("id", "name").order_by("name")
-    # Для модального окна не ограничиваем через срез (это может вызвать проблемы с queryset),
-    # но используем only() для оптимизации
+    # Не используем only() здесь, т.к. _editable_company_qs использует select_related
+    # и это создает конфликт (Field cannot be both deferred and traversed using select_related)
+    company_qs = _editable_company_qs(user).order_by("name")
     form.fields["company"].queryset = company_qs
 
     # Ограничить назначаемых (оптимизация: используем only() для загрузки только необходимых полей)
@@ -4267,7 +4266,7 @@ def task_create(request: HttpRequest) -> HttpResponse:
         form.fields["assigned_to"].queryset = User.objects.only("id", "first_name", "last_name").order_by("last_name", "first_name")
 
     # Оптимизация queryset для типа задачи (используем only() для загрузки только необходимых полей)
-    form.fields["type"].queryset = TaskType.objects.only("id", "name", "icon", "color").order_by("name")
+    form.fields["type"].queryset = TaskType.objects.only("id", "name").order_by("name")
 
     # Если запрос на модалку (через AJAX или параметр modal=1)
     if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.GET.get("modal") == "1":
