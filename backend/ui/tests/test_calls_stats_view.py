@@ -3,7 +3,7 @@
 ЭТАП 6: проверка, что шаблоны не падают на nullable полях.
 """
 
-from django.test import TestCase, RequestFactory
+from django.test import TestCase, RequestFactory, override_settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import timedelta
@@ -12,6 +12,7 @@ from phonebridge.models import CallRequest
 User = get_user_model()
 
 
+@override_settings(SECURE_SSL_REDIRECT=False)
 class CallsStatsViewTemplateSafetyTest(TestCase):
     """Тесты для проверки безопасности шаблонов (nullable поля, контекстные ключи)."""
     

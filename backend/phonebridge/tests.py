@@ -2,7 +2,7 @@
 Тесты для phonebridge API (минимальные тесты совместимости для ЭТАП 1).
 """
 
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 User = get_user_model()
 
 
+@override_settings(SECURE_SSL_REDIRECT=False)
 class UpdateCallInfoViewTest(TestCase):
     """Тесты для UpdateCallInfoView (проверка совместимости legacy и extended форматов)."""
     
