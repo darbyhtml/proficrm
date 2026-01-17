@@ -215,7 +215,8 @@
           </div>
         </div>
         {% if is_admin %}
-          {% if view_as_enabled and (view_as_role or view_as_branch) %}
+          {% if view_as_enabled %}
+            {% if view_as_role or view_as_branch %}
             <div class="border-t border-brand-soft bg-amber-50/90">
               <div class="mx-auto max-w-screen-2xl px-4 py-1.5 text-[11px] md:text-xs text-amber-900 flex flex-col md:flex-row items-start md:items-center justify-between gap-1.5">
                 <div>
@@ -243,6 +244,7 @@
                 </div>
               </div>
             </div>
+            {% endif %}
           {% endif %}
         {% endif %}
       </header>
