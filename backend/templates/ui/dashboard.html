@@ -780,7 +780,7 @@
                 }
                 
                 // Извлекаем данные задачи для определения прав
-                // Ищем кнопку редактирования (может быть ссылка или кнопка с data-edit-task)
+                // Ищем кнопку редактирования в ВСЕМ модальном окне (может быть ссылка или кнопка с data-edit-task)
                 const editLink = taskModal.querySelector('a[href*="/tasks/"][href*="/edit/"]');
                 const editButton = taskModal.querySelector('button[data-edit-task]');
                 const canEdit = editLink || editButton;
