@@ -78,6 +78,12 @@ def ui_globals(request):
         view_can_view_activity or (is_auth and view_as_role == User.Role.MANAGER)
     )
 
+    # Проверяем, включён ли режим просмотра администратора (для всех, не только админов)
+    view_as_enabled = False
+    if is_auth and is_admin:
+        session = getattr(request, "session", {})
+        view_as_enabled = session.get("view_as_enabled", False)
+
     return {
         # Реальные права пользователя (для бэкенда/безопасности)
         "is_admin": is_admin,
@@ -92,6 +98,7 @@ def ui_globals(request):
         "view_can_view_activity": view_can_view_activity,
         "view_can_view_cold_call_reports": view_can_view_cold_call_reports,
         # Режим "просмотр как"
+        "view_as_enabled": view_as_enabled,
         "view_as_role": view_as_role,
         "view_as_branch": view_as_branch,
         "view_as_branches": view_as_branches,

@@ -95,7 +95,7 @@
             <span class="text-xs text-brand-dark/70">простая, как amo, но без лишнего</span>
           </div>
           <div class="flex items-center gap-3 text-sm">
-            {% if is_admin %}
+            {% if is_admin and view_as_enabled %}
               <form method="post" action="{% url 'view_as_update' %}" class="hidden md:flex items-center gap-2 text-xs mr-2">
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
@@ -215,7 +215,7 @@
           </div>
         </div>
         {% if is_admin %}
-          {% if view_as_role or view_as_branch %}
+          {% if view_as_enabled and (view_as_role or view_as_branch) %}
             <div class="border-t border-brand-soft bg-amber-50/90">
               <div class="mx-auto max-w-screen-2xl px-4 py-1.5 text-[11px] md:text-xs text-amber-900 flex flex-col md:flex-row items-start md:items-center justify-between gap-1.5">
                 <div>
