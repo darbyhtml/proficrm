@@ -597,9 +597,6 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         contracts_soon.append({"company": c, "days_left": days_left, "level": level})
 
     # Добавляем права доступа к задачам для модального окна
-    from tasksapp.models import Task as TaskModel
-    from companies.permissions import _can_manage_task_status_ui, _can_edit_task_ui, _can_delete_task_ui
-    
     # Подготавливаем задачи с правами доступа
     for task_list in [tasks_new_list, tasks_today_list, overdue_list, tasks_week_list]:
         for task in task_list:
