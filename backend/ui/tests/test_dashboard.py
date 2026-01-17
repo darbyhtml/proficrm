@@ -445,13 +445,16 @@ class DashboardViewTestCase(TestCase):
     def test_contracts_soon_limit_50_companies(self):
         """Тест: договоры ограничены 50 компаниями."""
         # Создаём 55 компаний с договорами (в пределах 30 дней, чтобы все попали в фильтр)
+        # Распределяем равномерно: первые 30 компаний получают даты 1-30 дней,
+        # следующие 25 компаний получают даты 1-25 дней (чтобы было больше разнообразия)
         for i in range(55):
-            # Создаём договоры от 1 до 30 дней (все попадут в фильтр)
-            # Используем остаток от деления, чтобы циклически распределить по 30 дням
-            days_offset = (i % 30) + 1  # От 1 до 30 дней
+            if i < 30:
+                days_offset = i + 1  # От 1 до 30 дней
+            else:
+                days_offset = (i - 30) + 1  # От 1 до 25 дней (для следующих 25 компаний)
             contract_until = self.today_date + timedelta(days=days_offset)
             Company.objects.create(
-                name=f"Компания {i}",
+                name=f"Компания {i:03d}",  # Форматируем с ведущими нулями для правильной сортировки
                 responsible=self.user,
                 contract_until=contract_until
             )
@@ -459,6 +462,10 @@ class DashboardViewTestCase(TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         context = response.context
+        # Проверяем, что лимит работает (должно быть 50, а не 55)
+        self.assertLessEqual(len(context["contracts_soon"]), 50)
+        # И что все 55 компаний попали в запрос (но лимит ограничил до 50)
+        # Проверяем, что получили именно 50
         self.assertEqual(len(context["contracts_soon"]), 50)
 
     def test_contracts_soon_excludes_null_contract_until(self):
