@@ -5233,6 +5233,9 @@ def settings_task_type_create(request: HttpRequest) -> HttpResponse:
         form = TaskTypeForm(request.POST)
         if form.is_valid():
             form.save()
+            # Инвалидируем кэш типов задач
+            from django.core.cache import cache
+            cache.delete('task_types_all_dict')
             messages.success(request, "Задача добавлена.")
             return redirect("settings_dicts")
     else:
@@ -5318,6 +5321,9 @@ def settings_task_type_edit(request: HttpRequest, task_type_id: int) -> HttpResp
         form = TaskTypeForm(request.POST, instance=task_type)
         if form.is_valid():
             form.save()
+            # Инвалидируем кэш типов задач
+            from django.core.cache import cache
+            cache.delete('task_types_all_dict')
             if request.headers.get("X-Requested-With") == "XMLHttpRequest":
                 return JsonResponse({"ok": True, "id": task_type.id, "name": task_type.name, "icon": task_type.icon or "", "color": task_type.color or ""})
             messages.success(request, "Задача обновлена.")
@@ -5336,6 +5342,9 @@ def settings_task_type_delete(request: HttpRequest, task_type_id: int) -> HttpRe
         return JsonResponse({"ok": False, "error": "Method not allowed."}, status=405)
     task_type = get_object_or_404(TaskType, id=task_type_id)
     task_type.delete()
+    # Инвалидируем кэш типов задач
+    from django.core.cache import cache
+    cache.delete('task_types_all_dict')
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return JsonResponse({"ok": True})
     messages.success(request, "Задача удалена.")

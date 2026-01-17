@@ -63,27 +63,37 @@ class TaskTypeSelectWidget(forms.Select):
         
         # Получаем TaskType из кэша (без запросов к БД)
         task_type_data = None
-        if option_value:
+        if option_value and option_value != '':
             try:
                 task_types = self._get_task_types()
-                task_type_data = task_types.get(option_value) if task_types else None
-            except Exception:
+                if task_types:
+                    task_type_data = task_types.get(option_value)
+            except Exception as e:
                 # Если что-то пошло не так, используем обычный рендеринг
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Ошибка при получении TaskType для option_value={option_value}: {e}")
                 task_type_data = None
         
         # Если нашли TaskType, добавляем data-атрибуты
         if task_type_data:
             selected = 'selected' if option_value in selected_choices else ''
             try:
+                icon = task_type_data.get('icon', '') or ''
+                color = task_type_data.get('color', '') or ''
+                name = task_type_data.get('name', option_label) or option_label
                 return format_html(
                     '<option value="{}" {} data-icon="{}" data-color="{}">{}</option>',
                     option_value,
                     selected,
-                    task_type_data.get('icon', ''),
-                    task_type_data.get('color', ''),
-                    task_type_data.get('name', option_label)  # Используем name из кэша, или option_label как fallback
+                    icon,
+                    color,
+                    name
                 )
-            except Exception:
+            except Exception as e:
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.error(f"Ошибка при форматировании HTML для option_value={option_value}: {e}")
                 # Если format_html не работает, используем обычный рендеринг
                 pass
         
