@@ -4684,6 +4684,70 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
 
 
 @login_required
+def task_view(request: HttpRequest, task_id) -> HttpResponse:
+    """
+    Просмотр задачи (оптимизированный endpoint для модальных окон).
+    Возвращает только HTML модального окна без всей страницы task_list.
+    """
+    user: User = request.user
+    task = get_object_or_404(
+        Task.objects.select_related("company", "assigned_to", "created_by", "type").only(
+            "id", "title", "description", "status", "due_at", "created_at", "completed_at",
+            "company_id", "assigned_to_id", "created_by_id", "type_id",
+            "company__id", "company__name",
+            "assigned_to__id", "assigned_to__first_name", "assigned_to__last_name",
+            "created_by__id", "created_by__first_name", "created_by__last_name",
+            "type__id", "type__name", "type__color", "type__icon"
+        ),
+        id=task_id
+    )
+    
+    # Проверяем права на просмотр
+    can_view = False
+    if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+        can_view = True
+    elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+        if task.company_id and getattr(task.company, "branch_id", None) == user.branch_id:
+            can_view = True
+        elif task.assigned_to_id and getattr(task.assigned_to, "branch_id", None) == user.branch_id:
+            can_view = True
+    elif task.assigned_to_id == user.id or task.created_by_id == user.id:
+        can_view = True
+    
+    if not can_view:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"ok": False, "error": "Нет прав на просмотр этой задачи."}, status=403)
+        messages.error(request, "Нет прав на просмотр этой задачи.")
+        return redirect("task_list")
+    
+    # Вычисляем просрочку в днях (только если известны дедлайн и время завершения)
+    view_task_overdue_days = None
+    if task.due_at and task.completed_at and task.completed_at > task.due_at:
+        delta = task.completed_at - task.due_at
+        view_task_overdue_days = delta.days
+    
+    # Добавляем флаг для прав на редактирование
+    task.can_edit_task = _can_edit_task_ui(user, task)  # type: ignore[attr-defined]
+    
+    # Сопоставляем задачу с TaskType если нужно
+    if not task.type and task.title:
+        from tasksapp.models import TaskType
+        task_type = TaskType.objects.filter(name=task.title).first()
+        if task_type:
+            task.type = task_type  # type: ignore[assignment]
+            task.type_id = task_type.id  # type: ignore[attr-defined]
+    
+    now = timezone.now()
+    local_now = timezone.localtime(now)
+    
+    return render(request, "ui/task_view_modal.html", {
+        "view_task": task,
+        "view_task_overdue_days": view_task_overdue_days,
+        "local_now": local_now,
+    })
+
+
+@login_required
 def task_edit(request: HttpRequest, task_id) -> HttpResponse:
     """Редактирование задачи (поддержка AJAX для модалок)"""
     user: User = request.user

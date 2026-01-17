@@ -62,6 +62,7 @@ urlpatterns = [
     path("tasks/", views.task_list, name="task_list"),
     path("tasks/bulk-reassign/", views.task_bulk_reassign, name="task_bulk_reassign"),
     path("tasks/new/", views.task_create, name="task_create"),
+    path("tasks/<uuid:task_id>/", views.task_view, name="task_view"),
     path("tasks/<uuid:task_id>/edit/", views.task_edit, name="task_edit"),
     path("tasks/<uuid:task_id>/status/", views.task_set_status, name="task_set_status"),
     path("tasks/<uuid:task_id>/delete/", views.task_delete, name="task_delete"),

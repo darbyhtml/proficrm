@@ -742,8 +742,8 @@
           openModal();
           
           try {
-            // Используем task_list с параметром view_task для просмотра
-            const res = await fetch(`/tasks/?view_task=${taskId}`, {
+            // Используем оптимизированный endpoint для просмотра задачи
+            const res = await fetch(`/tasks/${taskId}/`, {
               headers: { 'X-Requested-With': 'XMLHttpRequest' }
             });
             if(!res.ok) throw new Error('Ошибка загрузки задачи');
