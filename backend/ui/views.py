@@ -537,9 +537,10 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     tasks_week_list = []
     tasks_new_list = []
 
-    # Собираем задачи (статусы NEW и IN_PROGRESS) - теперь это просто "Задачи"
+    # Собираем задачи (статусы NEW и IN_PROGRESS) БЕЗ due_at - это блок "Задачи"
+    # Задачи с due_at будут обработаны в следующем цикле и попадут в категории по датам
     for task in all_tasks:
-        if task.status in [Task.Status.NEW, Task.Status.IN_PROGRESS]:
+        if task.status in [Task.Status.NEW, Task.Status.IN_PROGRESS] and task.due_at is None:
             tasks_new_list.append(task)
 
     # Сортируем задачи по created_at (desc)
@@ -547,11 +548,8 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     tasks_new_count = len(tasks_new_list)
     tasks_new_list = tasks_new_list[:5]  # Показываем только 5 на dashboard
 
-    # Остальные задачи (с due_at) - обрабатываем в одном проходе
+    # Обрабатываем ВСЕ задачи с due_at (включая NEW и IN_PROGRESS) - категоризируем по датам
     for task in all_tasks:
-        if task.status in [Task.Status.NEW, Task.Status.IN_PROGRESS]:
-            continue  # Уже обработали
-        
         if task.due_at is None:
             continue
         
@@ -692,8 +690,9 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
     tasks_week_list = []
     tasks_new_list = []
 
+    # Собираем задачи (статусы NEW и IN_PROGRESS) БЕЗ due_at - это блок "Задачи"
     for task in all_tasks:
-        if task.status in [Task.Status.NEW, Task.Status.IN_PROGRESS]:
+        if task.status in [Task.Status.NEW, Task.Status.IN_PROGRESS] and task.due_at is None:
             tasks_new_list.append(task)
             if len(tasks_new_list) >= 20:
                 break
@@ -701,10 +700,8 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
     tasks_new_list.sort(key=lambda t: t.created_at, reverse=True)
     tasks_new_list = tasks_new_list[:20]
 
+    # Обрабатываем ВСЕ задачи с due_at (включая NEW и IN_PROGRESS) - категоризируем по датам
     for task in all_tasks:
-        if task.status in [Task.Status.NEW, Task.Status.IN_PROGRESS]:
-            continue
-        
         if task.due_at is None:
             continue
         
