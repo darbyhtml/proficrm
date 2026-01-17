@@ -4250,9 +4250,13 @@ def task_create(request: HttpRequest) -> HttpResponse:
         form = TaskForm(initial=initial)
 
     # Выбор компании: только те, которые пользователь может редактировать
-    # Не используем only() здесь, т.к. _editable_company_qs использует select_related
-    # и это создает конфликт (Field cannot be both deferred and traversed using select_related)
+    # Для модального окна ограничиваем количество (для быстрой загрузки)
+    # Полный список можно будет искать через автокомплит (TODO)
+    is_modal = request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.GET.get("modal") == "1"
     company_qs = _editable_company_qs(user).order_by("name")
+    if is_modal:
+        # В модальном окне показываем только первые 200 компаний для быстрой загрузки
+        company_qs = company_qs[:200]
     form.fields["company"].queryset = company_qs
 
     # Ограничить назначаемых (оптимизация: используем only() для загрузки только необходимых полей)
