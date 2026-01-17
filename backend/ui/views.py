@@ -530,18 +530,16 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     tasks_week_list = []
     tasks_new_list = []
 
+    # Сначала собираем новые задачи (статус NEW)
     for task in all_tasks:
-        # Новые задачи (статус NEW)
         if task.status == Task.Status.NEW:
             tasks_new_list.append(task)
-            if len(tasks_new_list) >= 20:
-                break  # Лимит для новых задач
 
-    # Сортируем новые задачи по created_at (desc)
+    # Сортируем новые задачи по created_at (desc) и применяем лимит
     tasks_new_list.sort(key=lambda t: t.created_at, reverse=True)
     tasks_new_list = tasks_new_list[:20]
 
-    # Остальные задачи (с due_at)
+    # Остальные задачи (с due_at) - обрабатываем в одном проходе
     for task in all_tasks:
         if task.status == Task.Status.NEW:
             continue  # Уже обработали
@@ -551,21 +549,19 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         
         task_due_local = timezone.localtime(task.due_at)
         
-        # Просроченные
-        if task_due_local < now:
-            overdue_list.append(task)
-            if len(overdue_list) >= 20:
-                continue  # Лимит достигнут, но продолжаем для других категорий
+        # Просроченные (due_at в прошлом относительно текущего момента)
+        if task_due_local < local_now:
+            if len(overdue_list) < 20:  # Лимит 20
+                overdue_list.append(task)
         
-        # На сегодня
-        elif today_start <= task_due_local < tomorrow_start:
+        # На сегодня (может быть одновременно просроченной и на сегодня)
+        if today_start <= task_due_local < tomorrow_start:
             tasks_today_list.append(task)
         
-        # На неделю (завтра + 7 дней)
+        # На неделю (завтра + 7 дней) - исключаем задачи на сегодня
         elif week_start <= task_due_local < week_end:
-            tasks_week_list.append(task)
-            if len(tasks_week_list) >= 50:
-                continue
+            if len(tasks_week_list) < 50:  # Лимит 50
+                tasks_week_list.append(task)
 
     # Сортируем по due_at
     tasks_today_list.sort(key=lambda t: t.due_at or timezone.now())

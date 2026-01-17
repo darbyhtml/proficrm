@@ -337,20 +337,20 @@ class DashboardViewTestCase(TestCase):
 
     def test_tasks_ordered_by_due_at(self):
         """Тест: задачи на сегодня упорядочены по due_at."""
-        # Создаём задачи с разными due_at
+        # Создаём задачи с разными due_at (не NEW, чтобы они попали в tasks_today)
         task1 = Task.objects.create(
             title="Задача 1 (позже)",
             assigned_to=self.user,
             company=self.company,
             due_at=self.today_start + timedelta(hours=15),
-            status=Task.Status.NEW
+            status=Task.Status.IN_PROGRESS
         )
         task2 = Task.objects.create(
             title="Задача 2 (раньше)",
             assigned_to=self.user,
             company=self.company,
             due_at=self.today_start + timedelta(hours=10),
-            status=Task.Status.NEW
+            status=Task.Status.IN_PROGRESS
         )
 
         response = self.client.get("/")
@@ -392,15 +392,15 @@ class DashboardViewTestCase(TestCase):
 
     def test_overdue_limit_20_tasks(self):
         """Тест: просроченные задачи ограничены 20 элементами."""
-        # Создаём 25 просроченных задач
-        overdue_time = self.now - timedelta(days=1)
+        # Создаём 25 просроченных задач (не NEW, чтобы они попали в overdue)
+        overdue_time = self.local_now - timedelta(days=1)
         for i in range(25):
             Task.objects.create(
                 title=f"Просроченная задача {i}",
                 assigned_to=self.user,
                 company=self.company,
                 due_at=overdue_time - timedelta(hours=i),
-                status=Task.Status.NEW
+                status=Task.Status.IN_PROGRESS
             )
 
         response = self.client.get("/")
@@ -410,7 +410,7 @@ class DashboardViewTestCase(TestCase):
 
     def test_tasks_week_limit_50_tasks(self):
         """Тест: задачи на неделю ограничены 50 элементами."""
-        # Создаём 55 задач на неделю
+        # Создаём 55 задач на неделю (не NEW, чтобы они попали в tasks_week)
         week_task_time = self.tomorrow_start + timedelta(days=3)
         for i in range(55):
             Task.objects.create(
@@ -418,7 +418,7 @@ class DashboardViewTestCase(TestCase):
                 assigned_to=self.user,
                 company=self.company,
                 due_at=week_task_time + timedelta(hours=i),
-                status=Task.Status.NEW
+                status=Task.Status.IN_PROGRESS
             )
 
         response = self.client.get("/")
@@ -444,9 +444,9 @@ class DashboardViewTestCase(TestCase):
 
     def test_contracts_soon_limit_50_companies(self):
         """Тест: договоры ограничены 50 компаниями."""
-        # Создаём 55 компаний с договорами
+        # Создаём 55 компаний с договорами (в пределах 30 дней)
         for i in range(55):
-            contract_until = self.today_date + timedelta(days=15 + i)
+            contract_until = self.today_date + timedelta(days=1 + i)  # От 1 до 55 дней
             Company.objects.create(
                 name=f"Компания {i}",
                 responsible=self.user,
