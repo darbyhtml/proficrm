@@ -517,10 +517,16 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 
     # ОПТИМИЗАЦИЯ: Объединяем запросы задач в один с фильтрацией в Python
     # Получаем все активные задачи пользователя одним запросом
+    # Используем only() для загрузки только необходимых полей
     all_tasks = (
         Task.objects.filter(assigned_to=user)
         .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
         .select_related("company", "created_by")
+        .only(
+            "id", "title", "status", "due_at", "created_at",
+            "company__id", "company__name",
+            "created_by__id", "created_by__first_name", "created_by__last_name"
+        )
         .order_by("due_at", "-created_at")
     )
 
