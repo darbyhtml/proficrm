@@ -780,7 +780,11 @@
                 }
                 
                 // Извлекаем данные задачи для определения прав
+                // Ищем кнопку редактирования (может быть ссылка или кнопка с data-edit-task)
                 const editLink = taskModal.querySelector('a[href*="/tasks/"][href*="/edit/"]');
+                const editButton = taskModal.querySelector('button[data-edit-task]');
+                const canEdit = editLink || editButton;
+                
                 // Определяем статус по классам badge или по тексту
                 const statusBadge = taskModal.querySelector('.badge');
                 let status = 'new';
@@ -804,10 +808,10 @@
                 if(modalActions) {
                   modalActions.style.display = 'flex';
                   
-                  // Редактировать - показываем если есть ссылка на редактирование
+                  // Редактировать - показываем если есть кнопка или ссылка на редактирование
                   if(btnEdit) {
-                    btnEdit.style.display = editLink ? 'inline-flex' : 'none';
-                    if(editLink) {
+                    btnEdit.style.display = canEdit ? 'inline-flex' : 'none';
+                    if(canEdit) {
                       btnEdit.onclick = async () => {
                         const url = `/tasks/${taskId}/edit/?modal=1`;
                         try {
