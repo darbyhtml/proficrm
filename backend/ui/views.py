@@ -4266,6 +4266,9 @@ def task_create(request: HttpRequest) -> HttpResponse:
     else:
         form.fields["assigned_to"].queryset = User.objects.only("id", "first_name", "last_name").order_by("last_name", "first_name")
 
+    # Оптимизация queryset для типа задачи (используем only() для загрузки только необходимых полей)
+    form.fields["type"].queryset = TaskType.objects.only("id", "name", "icon", "color").order_by("name")
+
     # Если запрос на модалку (через AJAX или параметр modal=1)
     if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.GET.get("modal") == "1":
         return render(request, "ui/task_create_modal.html", {"form": form})
