@@ -622,6 +622,10 @@
               if (window.initTaskTypeSelects) {
                 window.initTaskTypeSelects();
               }
+              // Инициализация виджета выбора компании
+              if (window.initMsSingleWidgets) {
+                window.initMsSingleWidgets(modalContent);
+              }
             }, 100);
             
             // Обработка формы
@@ -714,6 +718,10 @@
             setTimeout(function() {
               if (window.initTaskTypeSelects) {
                 window.initTaskTypeSelects();
+              }
+              // Инициализация виджета выбора компании
+              if (window.initMsSingleWidgets) {
+                window.initMsSingleWidgets(modalContent);
               }
             }, 100);
             

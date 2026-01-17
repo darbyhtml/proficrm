@@ -1629,6 +1629,83 @@
 
   <script>
     (function() {
+      // Модальное окно для создания задачи
+      const createModal = document.getElementById('taskCreateModal');
+      const createModalContent = document.getElementById('taskCreateModalContent');
+      if (createModal && createModalContent) {
+        function closeCreateModal() {
+          createModal.classList.add('hidden');
+          createModalContent.innerHTML = '';
+        }
+        
+        document.addEventListener('click', (e) => {
+          const closeBtn = e.target.closest('[data-close-task-create-modal]');
+          if (closeBtn) {
+            e.preventDefault();
+            closeCreateModal();
+          }
+        });
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && !createModal.classList.contains('hidden')) closeCreateModal();
+        });
+        createModal.querySelector('.bg-black\\/35')?.addEventListener('click', (e) => {
+          if (e.target === e.currentTarget) closeCreateModal();
+        });
+        
+        // Создание задачи
+        document.querySelectorAll('[data-create-task]').forEach(btn => {
+          btn.addEventListener('click', async function() {
+            const companyId = this.dataset.companyId || '';
+            const url = `/tasks/new/?modal=1${companyId ? '&company=' + companyId : ''}`;
+            
+            try {
+              const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+              if (!res.ok) throw new Error('Ошибка загрузки формы');
+              const html = await res.text();
+              createModalContent.innerHTML = html;
+              createModal.classList.remove('hidden');
+              
+              // Инициализация select с небольшой задержкой для гарантии обновления DOM
+              setTimeout(function() {
+                if (window.initTaskTypeSelects) {
+                  window.initTaskTypeSelects();
+                }
+                // Инициализация виджета выбора компании
+                if (window.initMsSingleWidgets) {
+                  window.initMsSingleWidgets(createModalContent);
+                }
+              }, 100);
+              
+              const form = createModalContent.querySelector('[data-task-create-form]');
+              if (form) {
+                form.addEventListener('submit', async function(e) {
+                  e.preventDefault();
+                  const formData = new FormData(form);
+                  try {
+                    const res = await fetch(form.action, {
+                      method: 'POST',
+                      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                      body: formData
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                      closeCreateModal();
+                      location.reload();
+                    } else {
+                      alert('Ошибка: ' + (data.error || 'Не удалось создать задачу'));
+                    }
+                  } catch (err) {
+                    alert('Ошибка при создании: ' + err.message);
+                  }
+                }, { once: true });
+              }
+            } catch (err) {
+              alert('Ошибка загрузки формы: ' + err.message);
+            }
+          });
+        });
+      }
+      
       const modal = document.getElementById('taskEditModal');
       const modalContent = document.getElementById('taskEditModalContent');
       if (!modal || !modalContent) return;
@@ -1670,6 +1747,10 @@
             setTimeout(function() {
               if (window.initTaskTypeSelects) {
                 window.initTaskTypeSelects();
+              }
+              // Инициализация виджета выбора компании
+              if (window.initMsSingleWidgets) {
+                window.initMsSingleWidgets(modalContent);
               }
             }, 100);
             
