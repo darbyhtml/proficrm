@@ -1,6 +1,48 @@
 {% extends "ui/base.html" %}
 {% block title %}Рабочий стол — CRM ПРОФИ{% endblock %}
 
+{% block extra_head %}
+<style>
+  /* Анимации появления карточек */
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .dashboard-card {
+    animation: slideIn 0.3s ease-out;
+  }
+  .dashboard-card:nth-child(1) { animation-delay: 0.05s; }
+  .dashboard-card:nth-child(2) { animation-delay: 0.1s; }
+  .dashboard-card:nth-child(3) { animation-delay: 0.15s; }
+  .dashboard-card:nth-child(4) { animation-delay: 0.2s; }
+  .dashboard-card:nth-child(5) { animation-delay: 0.25s; }
+  
+  /* Мобильная оптимизация */
+  @media (max-width: 640px) {
+    .card-pad {
+      padding: 12px;
+    }
+    .dashboard-card {
+      min-height: 44px; /* Минимальный размер для touch */
+    }
+  }
+  
+  /* Анимация спиннера */
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  .animate-spin {
+    animation: spin 1s linear infinite;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
   <div class="space-y-6">
     <div class="flex items-end justify-between">
@@ -42,145 +84,254 @@
       </div>
     </div>
 
+    {# Индикатор обновления #}
+    <div id="dashboard-update-indicator" class="hidden fixed top-4 right-4 z-50">
+      <div class="flex items-center gap-2 bg-white border border-brand-soft rounded-lg px-3 py-2 shadow-lg">
+        <svg class="animate-spin w-4 h-4 text-brand-teal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12a9 9 0 11-6.219-8.56"/>
+        </svg>
+        <span class="text-sm text-brand-dark">Обновление...</span>
+      </div>
+    </div>
+
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
       {# 1 строка: На сегодня + Новые задачи #}
-      <section class="card card-pad">
-        <div class="font-medium mb-3">На сегодня</div>
+      <section class="card card-pad dashboard-card">
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-medium">
+            На сегодня
+            {% if tasks_today %}
+              <span class="ml-2 badge badge-new">{{ tasks_today|length }}</span>
+            {% endif %}
+          </div>
+        </div>
         {% if tasks_today %}
           <ul class="space-y-2">
             {% for t in tasks_today %}
-              <li class="rounded-lg border p-3 {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %}" data-status="{{ t.status }}">
-                <div class="flex items-start justify-between gap-3">
-                  <div class="text-sm font-medium">{{ t.title }}</div>
-                  <div class="flex items-center gap-2 flex-shrink-0">
-                    {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}
-                      <span class="badge badge-danger">Срочно</span>
-                    {% endif %}
-                    <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
+              <li class="group">
+                <a href="/tasks/{{ t.id }}/" class="block rounded-lg border p-3 transition-all {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}task-overdue border-red-400{% else %}border-orange-300 bg-orange-50/30{% endif %} hover:border-brand-teal/50 hover:bg-brand-soft/20" data-status="{{ t.status }}">
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex-1">
+                      <div class="text-sm font-medium">{{ t.title }}</div>
+                      <div class="text-xs text-brand-dark/70 mt-1">
+                        {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/" onclick="event.stopPropagation()">{{ t.company.name }}</a>{% endif %}
+                        {% if t.due_at %} · <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}">{{ t.due_at|date:"d.m.Y H:i" }}</span>{% endif %}
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                      {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}
+                        <svg class="w-4 h-4 text-red-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M12 8v4"/><path d="M12 16h.01"/>
+                        </svg>
+                        <span class="badge badge-danger">Срочно</span>
+                      {% endif %}
+                      <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
+                    </div>
                   </div>
-                </div>
-                <div class="text-xs text-brand-dark/70">
-                  {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>{% endif %}
-                  {% if t.due_at %} · <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}">{{ t.due_at }}</span>{% endif %}
-                </div>
+                </a>
               </li>
             {% endfor %}
           </ul>
         {% else %}
-          <div class="text-sm text-brand-dark/70">На сегодня задач нет.</div>
+          <div class="flex flex-col items-center justify-center py-8 text-center">
+            <svg class="w-12 h-12 text-brand-dark/30 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M8 2v3M16 2v3M3 6h18M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6"/>
+              <path d="M7 10h10M7 14h10"/>
+            </svg>
+            <div class="text-sm font-medium text-brand-dark/70 mb-1">На сегодня задач нет</div>
+            <div class="text-xs text-brand-dark/50 mb-4">Отличная работа! Все задачи выполнены.</div>
+            <a href="/tasks/new/" class="btn btn-outline text-xs">+ Создать задачу</a>
+          </div>
         {% endif %}
       </section>
 
-      <section class="card card-pad" id="section-tasks-new">
+      <section class="card card-pad dashboard-card" id="section-tasks-new">
         <div class="flex items-center justify-between mb-3">
-          <div class="font-medium">Новые задачи</div>
-          <a class="text-sm link" href="/tasks/?mine=1&status=new">Все новые</a>
+          <div class="font-medium">
+            Новые задачи
+            {% if tasks_new %}
+              <span class="ml-2 badge badge-new">{{ tasks_new|length }}</span>
+            {% endif %}
+          </div>
+          {% if tasks_new %}
+            <a class="text-sm link" href="/tasks/?mine=1&status=new">Все новые</a>
+          {% endif %}
         </div>
         {% if tasks_new %}
           <ul class="space-y-2">
             {% for t in tasks_new %}
-              <li class="rounded-lg border p-3">
-                <div class="flex items-start justify-between gap-3">
-                  <div class="text-sm font-medium">{{ t.title }}</div>
-                  <span class="badge badge-new">Новая</span>
-                </div>
-                <div class="text-xs text-brand-dark/70">
-                  {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>{% endif %}
-                  {% if t.created_by %} · назначил: {{ t.created_by }}{% endif %}
-                  · {{ t.created_at }}
-                </div>
+              <li class="group">
+                <a href="/tasks/{{ t.id }}/" class="block rounded-lg border border-blue-300 bg-blue-50/30 p-3 hover:border-brand-teal/50 hover:bg-brand-soft/20 transition-all">
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex-1">
+                      <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-blue-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+                        </svg>
+                        <div class="text-sm font-medium">{{ t.title }}</div>
+                      </div>
+                      <div class="text-xs text-brand-dark/70 mt-1">
+                        {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/" onclick="event.stopPropagation()">{{ t.company.name }}</a>{% endif %}
+                        {% if t.created_by %} · назначил: {{ t.created_by }}{% endif %}
+                        · {{ t.created_at|date:"d.m.Y H:i" }}
+                      </div>
+                    </div>
+                    <span class="badge badge-new flex-shrink-0">Новая</span>
+                  </div>
+                </a>
               </li>
             {% endfor %}
           </ul>
         {% else %}
-          <div class="text-sm text-brand-dark/70">Новых задач нет.</div>
+          <div class="flex flex-col items-center justify-center py-8 text-center">
+            <svg class="w-12 h-12 text-brand-dark/30 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/>
+            </svg>
+            <div class="text-sm font-medium text-brand-dark/70 mb-1">Новых задач нет</div>
+            <div class="text-xs text-brand-dark/50 mb-4">Новые задачи появятся здесь</div>
+            <a href="/tasks/new/" class="btn btn-outline text-xs">+ Создать задачу</a>
+          </div>
         {% endif %}
       </section>
 
       {# 2 строка: Просрочено + Договоры #}
-      <section class="card card-pad" id="section-overdue">
-        <div class="font-medium mb-3">Просрочено</div>
+      <section class="card card-pad dashboard-card" id="section-overdue">
+        <div class="font-medium mb-3">
+          Просрочено
+          {% if overdue %}
+            <span class="ml-2 badge badge-danger">{{ overdue|length }}</span>
+          {% endif %}
+        </div>
         {% if overdue %}
           <ul class="space-y-2">
             {% for t in overdue %}
-              <li class="rounded-lg border p-3 task-overdue">
-                <div class="flex items-start justify-between gap-3">
-                  <div class="text-sm font-medium">{{ t.title }}</div>
-                  <div class="flex items-center gap-2 flex-shrink-0">
-                    <span class="badge badge-danger">Просрочено</span>
-                    <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
+              <li class="group">
+                <a href="/tasks/{{ t.id }}/" class="block rounded-lg border-2 border-red-400 bg-red-50/50 p-3 hover:border-red-500 hover:bg-red-50 transition-all">
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex-1">
+                      <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4 text-red-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M12 8v4"/><path d="M12 16h.01"/>
+                        </svg>
+                        <div class="text-sm font-medium">{{ t.title }}</div>
+                      </div>
+                      <div class="text-xs text-brand-dark/70 mt-1">
+                        {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/" onclick="event.stopPropagation()">{{ t.company.name }}</a>{% endif %}
+                        {% if t.due_at %} · <span class="text-red-700 font-medium">дедлайн: {{ t.due_at|date:"d.m.Y H:i" }}</span>{% endif %}
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                      <span class="badge badge-danger">Просрочено</span>
+                      <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
+                    </div>
                   </div>
-                </div>
-                <div class="text-xs text-brand-dark/70">
-                  {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>{% endif %}
-                  {% if t.due_at %} · <span class="text-red-700">дедлайн: {{ t.due_at }}</span>{% endif %}
-                </div>
+                </a>
               </li>
             {% endfor %}
           </ul>
         {% else %}
-          <div class="text-sm text-brand-dark/70">Нет просроченных задач.</div>
+          <div class="flex flex-col items-center justify-center py-8 text-center">
+            <svg class="w-12 h-12 text-brand-dark/30 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/>
+            </svg>
+            <div class="text-sm font-medium text-brand-dark/70 mb-1">Нет просроченных задач</div>
+            <div class="text-xs text-brand-dark/50">Отлично! Все задачи в срок.</div>
+          </div>
         {% endif %}
       </section>
 
-      <section class="card card-pad" id="section-contracts">
+      <section class="card card-pad dashboard-card" id="section-contracts">
         <div class="flex items-center justify-between mb-3">
-          <div class="font-medium">Договоры</div>
-          <a class="text-sm link" href="/companies/?contract_type=&q=">Список компаний</a>
+          <div class="font-medium">
+            Договоры
+            {% if contracts_soon %}
+              <span class="ml-2 badge {% if contracts_soon|length > 0 and contracts_soon.0.level == 'danger' %}badge-danger{% else %}badge-warn{% endif %}">{{ contracts_soon|length }}</span>
+            {% endif %}
+          </div>
+          {% if contracts_soon %}
+            <a class="text-sm link" href="/companies/?contract_type=&q=">Список компаний</a>
+          {% endif %}
         </div>
         {% if contracts_soon %}
           <ul class="space-y-2">
             {% for item in contracts_soon %}
-              <li class="rounded-lg border p-3 {% if item.level == 'danger' %}task-overdue{% else %}bg-brand-orange/10 border-brand-orange/40{% endif %}">
-                <div class="flex items-start justify-between gap-3">
-                  <div class="text-sm font-medium">
-                    <a class="link" href="/companies/{{ item.company.id }}/">{{ item.company.name }}</a>
+              <li class="group">
+                <a href="/companies/{{ item.company.id }}/" class="block rounded-lg border p-3 transition-all {% if item.level == 'danger' %}task-overdue border-red-400{% else %}bg-brand-orange/10 border-brand-orange/40{% endif %} hover:border-brand-teal/50 hover:bg-brand-soft/20">
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex-1">
+                      <div class="text-sm font-medium">
+                        {{ item.company.name }}
+                      </div>
+                      <div class="text-xs text-brand-dark/70 mt-1">
+                        {% if item.company.contract_type %}{{ item.company.get_contract_type_display }}{% else %}—{% endif %}
+                        {% if item.company.contract_until %} · до <span class="{% if item.level == 'danger' %}text-red-700 font-medium{% endif %}">{{ item.company.contract_until|date:"d.m.Y" }}</span>{% endif %}
+                      </div>
+                    </div>
+                    <span class="badge {% if item.level == 'danger' %}badge-danger{% else %}badge-warn{% endif %} flex-shrink-0">
+                      {% if item.days_left is not None %}
+                        {{ item.days_left }} дн.
+                      {% else %}
+                        —
+                      {% endif %}
+                    </span>
                   </div>
-                  <span class="badge {% if item.level == 'danger' %}badge-danger{% else %}badge-warn{% endif %}">
-                    {% if item.days_left is not None %}
-                      {{ item.days_left }} дн.
-                    {% else %}
-                      —
-                    {% endif %}
-                  </span>
-                </div>
-                <div class="text-xs text-brand-dark/70 mt-1">
-                  {% if item.company.contract_type %}{{ item.company.get_contract_type_display }}{% else %}—{% endif %}
-                  {% if item.company.contract_until %} · до <span class="{% if item.level == 'danger' %}text-red-700{% endif %}">{{ item.company.contract_until|date:"d.m.Y" }}</span>{% endif %}
-                </div>
+                </a>
               </li>
             {% endfor %}
           </ul>
         {% else %}
-          <div class="text-sm text-brand-dark/70">Ближайших окончаний договоров нет.</div>
+          <div class="flex flex-col items-center justify-center py-8 text-center">
+            <svg class="w-12 h-12 text-brand-dark/30 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/>
+            </svg>
+            <div class="text-sm font-medium text-brand-dark/70 mb-1">Ближайших окончаний договоров нет</div>
+            <div class="text-xs text-brand-dark/50">Все договоры в порядке</div>
+          </div>
         {% endif %}
       </section>
 
       {# 3 строка: Задачи на неделю — на всю ширину #}
-      <section class="card card-pad lg:col-span-2">
-        <div class="font-medium mb-3">Задачи на неделю</div>
+      <section class="card card-pad lg:col-span-2 dashboard-card">
+        <div class="font-medium mb-3">
+          Задачи на неделю
+          {% if tasks_week %}
+            <span class="ml-2 badge badge-progress">{{ tasks_week|length }}</span>
+          {% endif %}
+        </div>
         {% if tasks_week %}
           <ul class="space-y-2">
             {% for t in tasks_week %}
-              <li class="rounded-lg border p-3 {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %}" data-status="{{ t.status }}">
-                <div class="flex items-start justify-between gap-3">
-                  <div class="text-sm font-medium">{{ t.title }}</div>
-                  <div class="flex items-center gap-2 flex-shrink-0">
-                    {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}
-                      <span class="badge badge-danger">Просрочено</span>
-                    {% endif %}
-                    <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
+              <li class="group">
+                <a href="/tasks/{{ t.id }}/" class="block rounded-lg border p-3 transition-all {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}task-overdue border-red-400{% else %}hover:border-brand-teal/50 hover:bg-brand-soft/20{% endif %}" data-status="{{ t.status }}">
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex-1">
+                      <div class="text-sm font-medium">{{ t.title }}</div>
+                      <div class="text-xs text-brand-dark/70 mt-1">
+                        {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/" onclick="event.stopPropagation()">{{ t.company.name }}</a>{% endif %}
+                        {% if t.due_at %} · <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}">{{ t.due_at|date:"d.m.Y H:i" }}</span>{% endif %}
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                      {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}
+                        <span class="badge badge-danger">Просрочено</span>
+                      {% endif %}
+                      <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
+                    </div>
                   </div>
-                </div>
-                <div class="text-xs text-brand-dark/70">
-                  {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>{% endif %}
-                  {% if t.due_at %} · <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}">{{ t.due_at }}</span>{% endif %}
-                </div>
+                </a>
               </li>
             {% endfor %}
           </ul>
         {% else %}
-          <div class="text-sm text-brand-dark/70">На ближайшую неделю задач нет.</div>
+          <div class="flex flex-col items-center justify-center py-8 text-center">
+            <svg class="w-12 h-12 text-brand-dark/30 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M8 2v3M16 2v3M3 6h18M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6"/>
+              <path d="M7 10h10M7 14h10"/>
+            </svg>
+            <div class="text-sm font-medium text-brand-dark/70 mb-1">На ближайшую неделю задач нет</div>
+            <div class="text-xs text-brand-dark/50 mb-4">Задачи на неделю появятся здесь</div>
+            <a href="/tasks/new/" class="btn btn-outline text-xs">+ Создать задачу</a>
+          </div>
         {% endif %}
       </section>
     </div>
@@ -343,6 +494,57 @@
           document.execCommand('copy');
         }
       });
+    })();
+  </script>
+
+  {# AJAX Polling с индикатором обновления #}
+  <script>
+    (function(){
+      const updateIndicator = document.getElementById('dashboard-update-indicator');
+      let pollInterval = null;
+      let isPolling = false;
+      
+      function showUpdateIndicator() {
+        if(updateIndicator) updateIndicator.classList.remove('hidden');
+      }
+      
+      function hideUpdateIndicator() {
+        if(updateIndicator) updateIndicator.classList.add('hidden');
+      }
+      
+      async function pollDashboard() {
+        if(isPolling) return;
+        isPolling = true;
+        showUpdateIndicator();
+        
+        try {
+          const response = await fetch('/api/dashboard/poll/', {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+          });
+          
+          if(response.ok) {
+            const data = await response.json();
+            // Если есть изменения, можно обновить страницу или обновить только нужные секции
+            // Пока просто скрываем индикатор
+          }
+        } catch(e) {
+          console.error('Dashboard poll error:', e);
+        } finally {
+          hideUpdateIndicator();
+          isPolling = false;
+        }
+      }
+      
+      // Запускаем polling каждые 30 секунд
+      if(updateIndicator) {
+        pollInterval = setInterval(pollDashboard, 30000);
+        
+        // Останавливаем polling при уходе со страницы
+        window.addEventListener('beforeunload', () => {
+          if(pollInterval) clearInterval(pollInterval);
+        });
+      }
     })();
   </script>
 {% endblock %}
