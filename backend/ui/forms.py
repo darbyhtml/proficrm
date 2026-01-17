@@ -230,7 +230,8 @@ class TaskForm(forms.ModelForm):
             "description": forms.Textarea(attrs={"rows": 4, "class": "w-full rounded-lg border px-3 py-2"}),
             "company": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             # type фактически используется как «Задача» (тип задачи из справочника)
-            "type": TaskTypeSelectWidget(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            # ВРЕМЕННО: используем обычный Select для диагностики
+            "type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2 task-type-select"}),
             "assigned_to": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "recurrence_rrule": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
@@ -266,7 +267,8 @@ class TaskEditForm(forms.ModelForm):
         fields = ["description", "type", "due_at"]
         widgets = {
             "description": forms.Textarea(attrs={"rows": 4, "class": "w-full rounded-lg border px-3 py-2"}),
-            "type": TaskTypeSelectWidget(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            # ВРЕМЕННО: используем обычный Select для диагностики
+            "type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2 task-type-select"}),
         }
 
 class BranchForm(forms.ModelForm):
