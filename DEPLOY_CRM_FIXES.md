@@ -141,12 +141,31 @@ docker-compose exec web python manage.py cleanup_old_tasks --dry-run --months 3
 Для автоматической очистки выполненных задач можно добавить в cron:
 
 ```bash
-# Редактировать crontab
+# 1. Редактировать crontab
 crontab -e
 
-# Добавить строку (запуск каждый день в 3:00 ночи)
+# 2. Выбрать редактор (например, 1 для nano)
+
+# 3. В открывшемся редакторе добавить строку (запуск каждый день в 3:00 ночи):
 0 3 * * * cd /opt/proficrm && docker-compose exec -T web python manage.py cleanup_old_tasks --months 3 >> /var/log/crm_cleanup.log 2>&1
+
+# 4. Сохранить файл (в nano: Ctrl+O, Enter, Ctrl+X)
+
+# 5. Проверить, что задача добавлена:
+crontab -l
 ```
+
+**Важно:** 
+- Команда должна быть на одной строке
+- Путь к лог-файлу `/var/log/crm_cleanup.log` должен существовать или быть создан:
+  ```bash
+  sudo touch /var/log/crm_cleanup.log
+  sudo chmod 666 /var/log/crm_cleanup.log
+  ```
+- Или используйте путь, доступный для записи без sudo:
+  ```bash
+  0 3 * * * cd /opt/proficrm && docker-compose exec -T web python manage.py cleanup_old_tasks --months 3 >> /opt/proficrm/logs/crm_cleanup.log 2>&1
+  ```
 
 ---
 
