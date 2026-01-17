@@ -33,22 +33,29 @@ def ui_globals(request):
 
     if is_auth and is_admin:
         session = getattr(request, "session", {})
+        # Проверяем, включён ли режим просмотра администратора
+        view_as_enabled = session.get("view_as_enabled", False)
 
-        as_role = session.get("view_as_role")
-        valid_roles = {choice[0] for choice in User.Role.choices}
-        if as_role in valid_roles:
-            view_as_role = as_role
+        # Режим просмотра работает только если он включён
+        if view_as_enabled:
+            as_role = session.get("view_as_role")
+            valid_roles = {choice[0] for choice in User.Role.choices}
+            if as_role in valid_roles:
+                view_as_role = as_role
 
-        as_branch_id = session.get("view_as_branch_id")
-        if as_branch_id:
-            try:
-                bid = int(as_branch_id)
-                view_as_branch = Branch.objects.filter(id=bid).first() or view_as_branch
-            except (TypeError, ValueError):
-                pass
+            as_branch_id = session.get("view_as_branch_id")
+            if as_branch_id:
+                try:
+                    bid = int(as_branch_id)
+                    view_as_branch = Branch.objects.filter(id=bid).first() or view_as_branch
+                except (TypeError, ValueError):
+                    pass
 
-        # Список филиалов для выпадающего списка админа
-        view_as_branches = list(Branch.objects.all().order_by("name"))
+            # Список филиалов для выпадающего списка админа
+            view_as_branches = list(Branch.objects.all().order_by("name"))
+        else:
+            # Если режим отключён, сбрасываем настройки просмотра
+            view_as_branches = []
 
     # Подписи для баннера "просмотр как"
     view_as_role_label = ""

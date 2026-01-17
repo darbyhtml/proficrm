@@ -4449,8 +4449,26 @@ def settings_users(request: HttpRequest) -> HttpResponse:
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
+    
+    # Проверяем, включён ли режим просмотра администратора
+    view_as_enabled = request.session.get("view_as_enabled", False)
+    
+    # Обработка переключения режима просмотра
+    if request.method == "POST" and "toggle_view_as" in request.POST:
+        view_as_enabled = request.POST.get("view_as_enabled") == "on"
+        request.session["view_as_enabled"] = view_as_enabled
+        if not view_as_enabled:
+            # Если режим отключён, сбрасываем настройки просмотра
+            request.session.pop("view_as_role", None)
+            request.session.pop("view_as_branch_id", None)
+        messages.success(request, f"Режим просмотра администратора {'включён' if view_as_enabled else 'выключен'}.")
+        return redirect("settings_users")
+    
     users = User.objects.select_related("branch").order_by("username")
-    return render(request, "ui/settings/users.html", {"users": users})
+    return render(request, "ui/settings/users.html", {
+        "users": users,
+        "view_as_enabled": view_as_enabled,
+    })
 
 
 @login_required
@@ -4461,9 +4479,27 @@ def settings_user_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = UserCreateForm(request.POST)
         if form.is_valid():
-            form.save()
-            messages.success(request, "Пользователь создан.")
-            return redirect("settings_users")
+            user = form.save(commit=True, created_by=request.user)
+            # Получаем последний сгенерированный ключ для отображения
+            from accounts.models import MagicLinkToken
+            last_token = MagicLinkToken.objects.filter(user=user).order_by("-created_at").first()
+            messages.success(request, f"Пользователь {user} создан. Ключ доступа сгенерирован автоматически.")
+            # Сохраняем информацию о сгенерированном ключе в сессии для отображения
+            if last_token:
+                from django.conf import settings as django_settings
+                from django.contrib.sites.models import Site
+                try:
+                    site = Site.objects.get_current()
+                    base_url = f"http://{site.domain}"
+                except Exception:
+                    base_url = request.build_absolute_uri("/")[:-1]
+                public_base_url = getattr(django_settings, "PUBLIC_BASE_URL", None)
+                if public_base_url:
+                    base_url = public_base_url.rstrip("/")
+                # Генерируем токен для отображения (но мы его не храним в открытом виде)
+                # Вместо этого показываем сообщение, что ключ нужно сгенерировать отдельно
+                request.session["user_created"] = {"user_id": user.id}
+            return redirect("settings_user_edit", user_id=user.id)
     else:
         form = UserCreateForm()
     return render(request, "ui/settings/user_form.html", {"form": form, "mode": "create"})
@@ -4476,14 +4512,13 @@ def settings_user_edit(request: HttpRequest, user_id: int) -> HttpResponse:
         return redirect("dashboard")
     u = get_object_or_404(User, id=user_id)
     
-    # Получаем последний активный токен для отображения статуса
-    last_token = None
+    # Получаем все токены доступа для отображения истории
+    all_tokens = []
     if u.is_active:
-        last_token = (
+        all_tokens = (
             MagicLinkToken.objects.filter(user=u)
             .order_by("-created_at")
             .select_related("created_by")
-            .first()
         )
     
     # Проверяем, была ли только что сгенерирована ссылка (из сессии)
@@ -4492,6 +4527,13 @@ def settings_user_edit(request: HttpRequest, user_id: int) -> HttpResponse:
         session_data = request.session.pop("magic_link_generated")
         if session_data.get("user_id") == user_id:
             magic_link_generated = session_data
+    
+    # Проверяем, был ли только что создан пользователь
+    user_created = None
+    if "user_created" in request.session:
+        session_data = request.session.pop("user_created")
+        if session_data.get("user_id") == user_id:
+            user_created = True
     
     if request.method == "POST":
         form = UserEditForm(request.POST, instance=u)
@@ -4502,6 +4544,20 @@ def settings_user_edit(request: HttpRequest, user_id: int) -> HttpResponse:
     else:
         form = UserEditForm(instance=u)
     
+    # Получаем информацию о сессиях пользователя
+    from django.contrib.sessions.models import Session
+    from django.contrib.auth import SESSION_KEY
+    active_sessions = []
+    for session in Session.objects.filter(expire_date__gte=timezone.now()):
+        session_data = session.get_decoded()
+        user_id_from_session = session_data.get(SESSION_KEY)
+        if user_id_from_session and int(user_id_from_session) == u.id:
+            active_sessions.append({
+                "session_key": session.session_key,
+                "expire_date": session.expire_date,
+                "last_activity": session.expire_date,  # Приблизительно
+            })
+    
     return render(
         request,
         "ui/settings/user_form.html",
@@ -4509,8 +4565,10 @@ def settings_user_edit(request: HttpRequest, user_id: int) -> HttpResponse:
             "form": form,
             "mode": "edit",
             "u": u,
-            "last_magic_link_token": last_token,
+            "all_magic_link_tokens": all_tokens,
             "magic_link_generated": magic_link_generated,
+            "user_created": user_created,
+            "active_sessions": active_sessions,
             "now": timezone.now(),
         },
     )
@@ -4546,7 +4604,7 @@ def settings_user_magic_link_generate(request: HttpRequest, user_id: int) -> Htt
     magic_link, plain_token = MagicLinkToken.create_for_user(
         user=user,
         created_by=admin_user,
-        ttl_minutes=30,
+        # TTL по умолчанию 24 часа (1440 минут)
     )
     
     # Формируем полную ссылку
@@ -4594,6 +4652,51 @@ def settings_user_magic_link_generate(request: HttpRequest, user_id: int) -> Htt
     }
     messages.success(request, f"Ссылка входа создана для {user}. Она будет показана на странице редактирования.")
     return redirect("settings_user_edit", user_id=user_id)
+
+
+@login_required
+def settings_user_logout(request: HttpRequest, user_id: int) -> HttpResponse:
+    """
+    Принудительное разлогинивание пользователя (завершение всех его сессий).
+    URL: /settings/users/<user_id>/logout/
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+    
+    target_user = get_object_or_404(User, id=user_id)
+    admin_user: User = request.user
+    
+    if request.method == "POST":
+        # Удаляем все сессии пользователя
+        from django.contrib.sessions.models import Session
+        from django.contrib.auth import SESSION_KEY
+        
+        sessions_deleted = 0
+        for session in Session.objects.filter(expire_date__gte=timezone.now()):
+            session_data = session.get_decoded()
+            user_id_from_session = session_data.get(SESSION_KEY)
+            if user_id_from_session and int(user_id_from_session) == target_user.id:
+                session.delete()
+                sessions_deleted += 1
+        
+        # Логируем действие
+        try:
+            log_event(
+                actor=admin_user,
+                verb=ActivityEvent.Verb.UPDATE,
+                entity_type="security",
+                entity_id=f"user_logout:{target_user.id}",
+                message=f"Администратор {admin_user} разлогинил пользователя {target_user}",
+                meta={"target_user_id": target_user.id, "sessions_deleted": sessions_deleted},
+            )
+        except Exception:
+            pass
+        
+        messages.success(request, f"Пользователь {target_user} разлогинен. Завершено сессий: {sessions_deleted}.")
+        return redirect("settings_users")
+    
+    return redirect("settings_users")
 
 
 @login_required

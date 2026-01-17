@@ -14,7 +14,7 @@ from django.utils import timezone
 from django.conf import settings
 import hashlib
 
-from accounts.models import MagicLinkToken
+from accounts.models import MagicLinkToken, User
 from accounts.security import (
     get_client_ip,
     is_user_locked_out,
@@ -97,7 +97,90 @@ class SecureLoginView(auth_views.LoginView):
                     error_message="Вход только по одноразовой ссылке. Обратитесь к администратору для получения ссылки входа."
                 )
             )
-        # Обычная логика входа
+        
+        # Проверяем, используется ли ключ доступа вместо пароля
+        access_key = request.POST.get("access_key", "").strip()
+        username = request.POST.get("username", "").strip()
+        
+        if access_key:
+            # Вход по ключу доступа
+            ip = get_client_ip(request)
+            user_agent = request.META.get("HTTP_USER_AGENT", "")[:255]
+            
+            # Rate limiting: не чаще 5 попыток в минуту с одного IP
+            if is_ip_rate_limited(ip, "access_key_login", 5, 60):
+                return self.render_to_response(
+                    self.get_context_data(
+                        error_message="Слишком много попыток входа. Попробуйте через минуту."
+                    )
+                )
+            
+            # Ищем пользователя по логину
+            try:
+                user = User.objects.get(username=username, is_active=True)
+            except User.DoesNotExist:
+                record_failed_login_attempt(username, ip, "user_not_found")
+                return self.render_to_response(
+                    self.get_context_data(
+                        error_message="Неверный логин или ключ доступа."
+                    )
+                )
+            
+            # Ищем валидный токен для этого пользователя
+            import hashlib
+            try:
+                token_hash = hashlib.sha256(access_key.encode()).hexdigest()
+            except Exception:
+                record_failed_login_attempt(username, ip, "invalid_token_format")
+                return self.render_to_response(
+                    self.get_context_data(
+                        error_message="Неверный формат ключа доступа."
+                    )
+                )
+            
+            try:
+                magic_link = MagicLinkToken.objects.get(token_hash=token_hash, user=user)
+            except MagicLinkToken.DoesNotExist:
+                record_failed_login_attempt(username, ip, "token_not_found")
+                return self.render_to_response(
+                    self.get_context_data(
+                        error_message="Неверный логин или ключ доступа."
+                    )
+                )
+            
+            # Проверяем валидность токена
+            if not magic_link.is_valid():
+                reason = "истёк" if timezone.now() >= magic_link.expires_at else "уже использован"
+                record_failed_login_attempt(username, ip, f"token_{reason}")
+                return self.render_to_response(
+                    self.get_context_data(
+                        error_message=f"Ключ доступа {reason}. Обратитесь к администратору для получения нового ключа."
+                    )
+                )
+            
+            # Вход успешен
+            login(request, user)
+            magic_link.mark_as_used(ip_address=ip, user_agent=user_agent)
+            clear_login_attempts(username)
+            
+            # Логируем успешный вход
+            try:
+                log_event(
+                    actor=user,
+                    verb=ActivityEvent.Verb.UPDATE,
+                    entity_type="security",
+                    entity_id=f"access_key_login_success:{user.id}",
+                    message="Успешный вход по ключу доступа",
+                    meta={"ip": ip, "user_agent": user_agent[:100]},
+                )
+            except Exception:
+                pass
+            
+            # Редирект
+            redirect_to = request.POST.get("next") or settings.LOGIN_REDIRECT_URL
+            return redirect(redirect_to)
+        
+        # Обычная логика входа по паролю (для обратной совместимости, если нужно)
         return super().post(request, *args, **kwargs)
 
 

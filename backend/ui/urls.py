@@ -76,6 +76,7 @@ urlpatterns = [
     path("settings/users/new/", views.settings_user_create, name="settings_user_create"),
     path("settings/users/<int:user_id>/edit/", views.settings_user_edit, name="settings_user_edit"),
     path("settings/users/<int:user_id>/magic-link/generate/", views.settings_user_magic_link_generate, name="settings_user_magic_link_generate"),
+    path("settings/users/<int:user_id>/logout/", views.settings_user_logout, name="settings_user_logout"),
     path("settings/dicts/", views.settings_dicts, name="settings_dicts"),
     path("settings/dicts/company-status/new/", views.settings_company_status_create, name="settings_company_status_create"),
     path("settings/dicts/company-status/<int:status_id>/edit/", views.settings_company_status_edit, name="settings_company_status_edit"),

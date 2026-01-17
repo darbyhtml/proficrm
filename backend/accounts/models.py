@@ -98,15 +98,17 @@ class MagicLinkToken(models.Model):
         """
         Генерирует новый токен и его хэш.
         Возвращает (token, token_hash).
+        Токен длиной 48 байт (64 символа в base64) для максимальной безопасности.
         """
-        token = secrets.token_urlsafe(32)
+        token = secrets.token_urlsafe(48)
         token_hash = hashlib.sha256(token.encode()).hexdigest()
         return token, token_hash
 
     @staticmethod
-    def create_for_user(user: User, created_by: User, ttl_minutes: int = 30) -> tuple["MagicLinkToken", str]:
+    def create_for_user(user: User, created_by: User, ttl_minutes: int = 1440) -> tuple["MagicLinkToken", str]:
         """
         Создаёт новый токен для пользователя.
+        По умолчанию TTL = 24 часа (1440 минут).
         Возвращает (MagicLinkToken instance, plain_token).
         """
         token, token_hash = MagicLinkToken.generate_token()

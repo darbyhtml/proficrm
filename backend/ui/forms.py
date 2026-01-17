@@ -352,9 +352,10 @@ class TaskTypeForm(forms.ModelForm):
 
 
 class UserCreateForm(forms.ModelForm):
-    password1 = forms.CharField(label="Пароль", widget=forms.PasswordInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "id": "id_password1"}))
-    password2 = forms.CharField(label="Пароль ещё раз", widget=forms.PasswordInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "id": "id_password2"}))
-
+    """
+    Форма создания пользователя.
+    Пароли не используются - вместо них генерируется ключ доступа.
+    """
     class Meta:
         model = User
         # data_scope больше не используем: вся база компаний видна всем пользователям.
@@ -368,32 +369,30 @@ class UserCreateForm(forms.ModelForm):
             "branch": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
 
-    def clean(self):
-        cleaned = super().clean()
-        p1 = cleaned.get("password1") or ""
-        p2 = cleaned.get("password2") or ""
-        if p1 != p2:
-            raise ValidationError("Пароли не совпадают.")
-        validate_password(p1)
-        return cleaned
-
-    def save(self, commit=True):
+    def save(self, commit=True, created_by=None):
+        """
+        Сохраняет пользователя и автоматически генерирует ключ доступа.
+        created_by - администратор, который создаёт пользователя (для логирования).
+        """
         user = super().save(commit=False)
-        user.set_password(self.cleaned_data["password1"])
+        # Устанавливаем неиспользуемый пароль (вход только по ключу доступа)
+        user.set_unusable_password()
         # Админка доступна только ADMIN + is_staff
         user.is_staff = user.role == User.Role.ADMIN
         if commit:
             user.save()
+            # Автоматически генерируем ключ доступа для нового пользователя
+            if created_by:
+                from accounts.models import MagicLinkToken
+                MagicLinkToken.create_for_user(user=user, created_by=created_by)
         return user
 
 
 class UserEditForm(forms.ModelForm):
-    new_password = forms.CharField(
-        label="Новый пароль (не обязательно)",
-        required=False,
-        widget=forms.PasswordInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "id": "id_new_password"}),
-    )
-
+    """
+    Форма редактирования пользователя.
+    Пароли не используются - вместо них используется генерация ключа доступа.
+    """
     class Meta:
         model = User
         # data_scope больше не используем: вся база компаний видна всем пользователям.
@@ -407,19 +406,13 @@ class UserEditForm(forms.ModelForm):
             "branch": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
 
-    def clean_new_password(self):
-        p = self.cleaned_data.get("new_password") or ""
-        if p:
-            validate_password(p)
-        return p
-
     def save(self, commit=True):
         user = super().save(commit=False)
         # Админка доступна только ADMIN + is_staff
         user.is_staff = user.role == User.Role.ADMIN
-        p = self.cleaned_data.get("new_password") or ""
-        if p:
-            user.set_password(p)
+        # Убеждаемся, что пароль неиспользуемый (если пользователь был создан до миграции)
+        if not user.has_usable_password():
+            user.set_unusable_password()
         if commit:
             user.save()
         return user
