@@ -4820,8 +4820,9 @@ def task_edit(request: HttpRequest, task_id) -> HttpResponse:
     else:
         form = TaskEditForm(instance=task)
     
-    # Оптимизация queryset'ов для формы редактирования (используем only() для загрузки только необходимых полей)
-    form.fields["company"].queryset = _editable_company_qs(user).only("id", "name").order_by("name")
+    # Оптимизация queryset'ов для формы редактирования
+    # Не используем only() здесь, т.к. _editable_company_qs использует select_related
+    form.fields["company"].queryset = _editable_company_qs(user).order_by("name")
     if user.role == User.Role.MANAGER:
         form.fields["assigned_to"].queryset = User.objects.filter(id=user.id).only("id", "first_name", "last_name")
     elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
