@@ -4486,16 +4486,6 @@ def settings_user_create(request: HttpRequest) -> HttpResponse:
             messages.success(request, f"Пользователь {user} создан. Ключ доступа сгенерирован автоматически.")
             # Сохраняем информацию о сгенерированном ключе в сессии для отображения
             if last_token:
-                from django.conf import settings as django_settings
-                from django.contrib.sites.models import Site
-                try:
-                    site = Site.objects.get_current()
-                    base_url = f"http://{site.domain}"
-                except Exception:
-                    base_url = request.build_absolute_uri("/")[:-1]
-                public_base_url = getattr(django_settings, "PUBLIC_BASE_URL", None)
-                if public_base_url:
-                    base_url = public_base_url.rstrip("/")
                 # Генерируем токен для отображения (но мы его не храним в открытом виде)
                 # Вместо этого показываем сообщение, что ключ нужно сгенерировать отдельно
                 request.session["user_created"] = {"user_id": user.id}
@@ -4608,17 +4598,12 @@ def settings_user_magic_link_generate(request: HttpRequest, user_id: int) -> Htt
     )
     
     # Формируем полную ссылку
-    from django.contrib.sites.models import Site
-    try:
-        site = Site.objects.get_current()
-        base_url = f"http://{site.domain}"
-    except Exception:
-        base_url = request.build_absolute_uri("/")[:-1]
-    
-    # Используем PUBLIC_BASE_URL если есть
+    # Используем PUBLIC_BASE_URL если есть, иначе используем request
     public_base_url = getattr(django_settings, "PUBLIC_BASE_URL", None)
     if public_base_url:
         base_url = public_base_url.rstrip("/")
+    else:
+        base_url = request.build_absolute_uri("/")[:-1]
     
     magic_link_url = f"{base_url}/auth/magic/{plain_token}/"
     
