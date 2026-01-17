@@ -98,10 +98,6 @@ if not DEBUG:
     
     # Защита от утечки информации через ошибки
     SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
-
-# Magic Link Authentication
-# Если установлено в 1, вход по паролю отключается (только magic links)
-MAGIC_LINK_ONLY = os.getenv("MAGIC_LINK_ONLY", "0") == "1"
     
     # Content Security Policy (CSP) - защита от XSS
     # Разрешаем только доверенные источники для скриптов и стилей
@@ -127,6 +123,10 @@ MAGIC_LINK_ONLY = os.getenv("MAGIC_LINK_ONLY", "0") == "1"
 else:
     # В development режиме CSP не применяется (может мешать разработке)
     CSP_HEADER = None
+
+# Magic Link Authentication
+# Если установлено в 1, вход по паролю отключается (только magic links)
+MAGIC_LINK_ONLY = os.getenv("MAGIC_LINK_ONLY", "0") == "1"
 
 
 # Application definition
