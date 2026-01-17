@@ -545,23 +545,40 @@
           openModal();
           
           try {
-            const res = await fetch(`/tasks/${taskId}/?modal=1`, {
+            // Используем task_list с параметром view_task для просмотра
+            const res = await fetch(`/tasks/?view_task=${taskId}`, {
               headers: { 'X-Requested-With': 'XMLHttpRequest' }
             });
             if(!res.ok) throw new Error('Ошибка загрузки задачи');
             const html = await res.text();
             
-            // Парсим HTML и извлекаем нужные данные
+            // Парсим HTML и извлекаем модальное окно
             const parser = new DOMParser();
             const doc = parser.parseFromString(html, 'text/html');
-            const taskTitle = doc.querySelector('h1, h2, .task-title')?.textContent?.trim() || 'Задача';
-            const taskContent = doc.querySelector('.task-content, .card, main')?.innerHTML || html;
+            const taskModal = doc.querySelector('#taskViewModal');
             
-            modalTitle.textContent = taskTitle;
-            modalContent.innerHTML = taskContent;
+            if(taskModal) {
+              const taskContent = taskModal.querySelector('.card')?.innerHTML || '';
+              modalContent.innerHTML = taskContent;
+              const titleEl = taskModal.querySelector('h2');
+              if(titleEl) modalTitle.textContent = titleEl.textContent.trim();
+            } else {
+              // Fallback: используем task_edit для редактирования
+              const editRes = await fetch(`/tasks/${taskId}/edit/?modal=1`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+              });
+              if(editRes.ok) {
+                const editHtml = await editRes.text();
+                modalContent.innerHTML = editHtml;
+                modalTitle.textContent = 'Редактирование задачи';
+              } else {
+                throw new Error('Не удалось загрузить задачу');
+              }
+            }
           } catch(e) {
             console.error('Task view error:', e);
             modalContent.innerHTML = '<div class="text-center py-8 text-red-600">Ошибка загрузки задачи</div>';
+            modalTitle.textContent = 'Ошибка';
           }
         });
       });
