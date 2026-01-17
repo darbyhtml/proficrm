@@ -4250,15 +4250,18 @@ def task_create(request: HttpRequest) -> HttpResponse:
         form = TaskForm(initial=initial)
 
     # Выбор компании: только те, которые пользователь может редактировать
-    form.fields["company"].queryset = _editable_company_qs(user).order_by("name")
+    # Оптимизация: используем only() для загрузки только необходимых полей
+    form.fields["company"].queryset = _editable_company_qs(user).only("id", "name").order_by("name")
 
-    # Ограничить назначаемых
+    # Ограничить назначаемых (оптимизация: используем only() для загрузки только необходимых полей)
     if user.role == User.Role.MANAGER:
-        form.fields["assigned_to"].queryset = User.objects.filter(id=user.id)
+        form.fields["assigned_to"].queryset = User.objects.filter(id=user.id).only("id", "first_name", "last_name")
     elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
-        form.fields["assigned_to"].queryset = User.objects.filter(Q(id=user.id) | Q(branch_id=user.branch_id, role=User.Role.MANAGER)).order_by("last_name", "first_name")
+        form.fields["assigned_to"].queryset = User.objects.filter(
+            Q(id=user.id) | Q(branch_id=user.branch_id, role=User.Role.MANAGER)
+        ).only("id", "first_name", "last_name").order_by("last_name", "first_name")
     else:
-        form.fields["assigned_to"].queryset = User.objects.order_by("last_name", "first_name")
+        form.fields["assigned_to"].queryset = User.objects.only("id", "first_name", "last_name").order_by("last_name", "first_name")
 
     # Если запрос на модалку (через AJAX или параметр modal=1)
     if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.GET.get("modal") == "1":
@@ -4751,7 +4754,17 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
 def task_edit(request: HttpRequest, task_id) -> HttpResponse:
     """Редактирование задачи (поддержка AJAX для модалок)"""
     user: User = request.user
-    task = get_object_or_404(Task.objects.select_related("company", "assigned_to", "created_by", "type"), id=task_id)
+    task = get_object_or_404(
+        Task.objects.select_related("company", "assigned_to", "created_by", "type").only(
+            "id", "title", "description", "status", "due_at", "created_at", "completed_at", "recurrence_rrule",
+            "company_id", "assigned_to_id", "created_by_id", "type_id",
+            "company__id", "company__name",
+            "assigned_to__id", "assigned_to__first_name", "assigned_to__last_name",
+            "created_by__id", "created_by__first_name", "created_by__last_name",
+            "type__id", "type__name", "type__color", "type__icon"
+        ),
+        id=task_id
+    )
 
     if not _can_edit_task_ui(user, task):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
