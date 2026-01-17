@@ -597,10 +597,21 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         level = "danger" if (days_left is not None and days_left < 14) else "warn"
         contracts_soon.append({"company": c, "days_left": days_left, "level": level})
 
+    # Сопоставляем задачи без типа с TaskType по точному совпадению названия
+    # Загружаем все TaskType для сопоставления
+    from tasksapp.models import TaskType
+    task_types_by_name = {tt.name: tt for tt in TaskType.objects.all()}
+    
     # Добавляем права доступа к задачам для модального окна
-    # Подготавливаем задачи с правами доступа
+    # Подготавливаем задачи с правами доступа и сопоставляем с TaskType
     for task_list in [tasks_new_list, tasks_today_list, overdue_list, tasks_week_list]:
         for task in task_list:
+            # Если у задачи нет типа, но есть title, проверяем точное совпадение с TaskType
+            if not task.type and task.title and task.title in task_types_by_name:
+                task.type = task_types_by_name[task.title]  # type: ignore[assignment]
+                # Сохраняем связь в БД для будущих запросов
+                task.type_id = task_types_by_name[task.title].id  # type: ignore[attr-defined]
+            
             task.can_manage_status = _can_manage_task_status_ui(user, task)  # type: ignore[attr-defined]
             task.can_edit_task = _can_edit_task_ui(user, task)  # type: ignore[attr-defined]
             task.can_delete_task = _can_delete_task_ui(user, task)  # type: ignore[attr-defined]

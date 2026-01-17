@@ -7,6 +7,7 @@ from accounts.models import Branch, User
 from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactEmail, ContactPhone
 from tasksapp.models import Task, TaskType
 from ui.models import UiGlobalConfig
+from ui.widgets import TaskTypeSelectWidget
 
 
 class CompanyCreateForm(forms.ModelForm):
@@ -229,7 +230,7 @@ class TaskForm(forms.ModelForm):
             "description": forms.Textarea(attrs={"rows": 4, "class": "w-full rounded-lg border px-3 py-2"}),
             "company": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             # type фактически используется как «Задача» (тип задачи из справочника)
-            "type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "type": TaskTypeSelectWidget(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "assigned_to": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "recurrence_rrule": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
@@ -265,7 +266,7 @@ class TaskEditForm(forms.ModelForm):
         fields = ["description", "type", "due_at"]
         widgets = {
             "description": forms.Textarea(attrs={"rows": 4, "class": "w-full rounded-lg border px-3 py-2"}),
-            "type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "type": TaskTypeSelectWidget(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
 
 class BranchForm(forms.ModelForm):
