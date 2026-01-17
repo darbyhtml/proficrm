@@ -635,8 +635,8 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         "tasks_week_count": tasks_week_count,
     }
 
-    # Кэшируем на 2 минуты
-    cache.set(cache_key, context, timeout=120)
+    # ВРЕМЕННО ОТКЛЮЧАЕМ КЭШ ДЛЯ ОТЛАДКИ
+    # cache.set(cache_key, context, timeout=120)
     
     return render(request, "ui/dashboard.html", context)
 
