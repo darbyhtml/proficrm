@@ -344,10 +344,17 @@
       {# 3 строка: Задачи на неделю — на всю ширину #}
       <section class="card card-pad lg:col-span-2 dashboard-card">
         <div class="flex items-center justify-between mb-3">
-          <div class="font-medium">
-            Задачи на неделю
-            {% if tasks_week_count > 0 %}
-              <span class="ml-2 badge badge-progress">{{ tasks_week_count }}</span>
+          <div>
+            <div class="font-medium">
+              Задачи на неделю
+              {% if tasks_week_count > 0 %}
+                <span class="ml-2 badge badge-progress">{{ tasks_week_count }}</span>
+              {% endif %}
+            </div>
+            {% if week_monday and week_sunday %}
+              <div class="text-xs text-brand-dark/60 mt-0.5">
+                с {{ week_monday|date:"d.m.Y" }} по {{ week_sunday|date:"d.m.Y" }}
+              </div>
             {% endif %}
           </div>
           {% if tasks_week_count > 5 %}

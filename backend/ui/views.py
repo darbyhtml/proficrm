@@ -501,8 +501,15 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     today_date = timezone.localdate(now)
     today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow_start = today_start + timedelta(days=1)
-    week_start = tomorrow_start
-    week_end = today_start + timedelta(days=8)  # exclusive: [завтра; завтра+7дней)
+    
+    # Неделя: с понедельника по воскресенье
+    # Находим понедельник текущей недели (0 = понедельник, 6 = воскресенье)
+    days_since_monday = today_date.weekday()  # 0 = понедельник, 6 = воскресенье
+    week_monday = today_date - timedelta(days=days_since_monday)
+    week_sunday = week_monday + timedelta(days=6)
+    week_start = timezone.make_aware(datetime.combine(week_monday, datetime.min.time()))
+    week_end = timezone.make_aware(datetime.combine(week_sunday, datetime.max.time())) + timedelta(seconds=1)  # inclusive: до конца воскресенья
+    
     contract_until_30 = today_date + timedelta(days=30)
 
     # Кэш-ключ: включает user_id и дату (инвалидируется при изменении дня)
@@ -537,30 +544,13 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     overdue_list = []
     tasks_week_list = []
     tasks_new_list = []
+    tasks_new_all = []  # Все задачи для блока "Задачи" (кроме просроченных)
 
-    # Собираем задачи (статусы NEW и IN_PROGRESS) БЕЗ due_at - это блок "Задачи"
-    # Задачи с due_at будут обработаны в следующем цикле и попадут в категории по датам
-    tasks_new_all = []
-    tasks_with_due_at_ids = set()  # Запоминаем ID задач с due_at, чтобы исключить их из блока "Задачи"
-    
-    # Сначала проходим по всем задачам и запоминаем те, у которых есть due_at
-    for task in all_tasks:
-        if task.due_at is not None:
-            tasks_with_due_at_ids.add(task.id)
-    
-    # Теперь собираем задачи БЕЗ due_at для блока "Задачи"
-    for task in all_tasks:
-        if task.status in [Task.Status.NEW, Task.Status.IN_PROGRESS] and task.id not in tasks_with_due_at_ids:
-            tasks_new_all.append(task)
-
-    # Сортируем задачи по created_at (desc)
-    tasks_new_all.sort(key=lambda t: t.created_at, reverse=True)
-    tasks_new_count = len(tasks_new_all)  # Общее количество для счетчика
-    tasks_new_list = tasks_new_all[:5]  # Показываем только 5 на dashboard
-
-    # Обрабатываем ВСЕ задачи с due_at (включая NEW и IN_PROGRESS) - категоризируем по датам
+    # Проходим по всем задачам и категоризируем их
     for task in all_tasks:
         if task.due_at is None:
+            # Задачи без дедлайна идут в блок "Задачи"
+            tasks_new_all.append(task)
             continue
         
         task_due_local = timezone.localtime(task.due_at)
@@ -568,29 +558,40 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         # Просроченные (due_at в прошлом относительно текущего момента)
         if task_due_local < local_now:
             overdue_list.append(task)
+            continue  # Просроченные не попадают в другие категории
         
-        # На сегодня (может быть одновременно просроченной и на сегодня)
+        # На сегодня
         if today_start <= task_due_local < tomorrow_start:
             tasks_today_list.append(task)
         
-        # На неделю (завтра + 7 дней) - исключаем задачи на сегодня
-        elif week_start <= task_due_local < week_end:
+        # На неделю (с понедельника по воскресенье текущей недели)
+        if week_start <= task_due_local < week_end:
             tasks_week_list.append(task)
+        
+        # Все остальные задачи с дедлайном (не просроченные) идут в блок "Задачи"
+        tasks_new_all.append(task)
 
-    # Сортируем: просроченные - по дате (самые старые первыми), остальные - по ближайшему дедлайну
+    # Сортируем:
+    # - Просроченные: по дате (самые старые первыми)
+    # - На сегодня: по ближайшему дедлайну
+    # - На неделю: по ближайшему дедлайну
+    # - Задачи: по ближайшему дедлайну (ближайшие первыми), затем по created_at
     overdue_list.sort(key=lambda t: t.due_at or timezone.now())
     tasks_today_list.sort(key=lambda t: t.due_at or timezone.now())
     tasks_week_list.sort(key=lambda t: t.due_at or timezone.now())
+    tasks_new_all.sort(key=lambda t: (t.due_at or timezone.max, -t.created_at.timestamp() if t.created_at else 0))
     
     # Подсчитываем общие количества
     overdue_count = len(overdue_list)
     tasks_today_count = len(tasks_today_list)
     tasks_week_count = len(tasks_week_list)
+    tasks_new_count = len(tasks_new_all)
     
     # Ограничиваем до 5 для отображения на dashboard
-    overdue_list = overdue_list[:5]
+    overdue_list = overdue_list[:5]  # 5 самых просроченных
     tasks_today_list = tasks_today_list[:5]
     tasks_week_list = tasks_week_list[:5]
+    tasks_new_list = tasks_new_all[:5]  # 5 ближайших к дедлайну (кроме просроченных)
 
     # Договоры, которые подходят по сроку (<= 30 дней) — только для ответственного
     contracts_soon_qs = (
@@ -641,6 +642,9 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         "tasks_today_count": tasks_today_count,
         "overdue_count": overdue_count,
         "tasks_week_count": tasks_week_count,
+        # Диапазон дат для "Задачи на неделю"
+        "week_monday": week_monday,
+        "week_sunday": week_sunday,
     }
 
     # ВРЕМЕННО ОТКЛЮЧАЕМ КЭШ ДЛЯ ОТЛАДКИ
