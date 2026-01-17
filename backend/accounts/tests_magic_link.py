@@ -135,10 +135,10 @@ class MagicLinkLoginTestCase(TestCase):
             created_by=self.admin,
             ttl_minutes=30,
         )
+        token_id = magic_link.id  # Сохраняем ID для последующей проверки
         
         # Симулируем запрос
         from django.test import Client
-        from django.db import transaction
         client = Client()
         
         # Используем follow=False, чтобы не следовать редиректу и проверить статус
@@ -150,13 +150,11 @@ class MagicLinkLoginTestCase(TestCase):
             self.assertIn("/", response.url)
         
         # Проверяем, что токен помечен как использованный
-        # Важно: обновляем объект из БД после запроса
-        # Используем refresh_from_db() чтобы получить актуальные данные из БД
-        magic_link.refresh_from_db()
-        # Также проверяем, что used_at не None
-        self.assertIsNotNone(magic_link.used_at, 
+        # Важно: получаем объект заново из БД, чтобы избежать проблем с кэшированием
+        magic_link_after = MagicLinkToken.objects.get(id=token_id)
+        self.assertIsNotNone(magic_link_after.used_at, 
                             f"Токен должен быть помечен как использованный после входа. "
-                            f"Текущее значение used_at: {magic_link.used_at}")
+                            f"Текущее значение used_at: {magic_link_after.used_at}")
 
     def test_magic_link_login_invalid_token(self):
         """Невалидный токен не работает."""
