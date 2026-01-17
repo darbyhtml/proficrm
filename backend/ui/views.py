@@ -4815,6 +4815,17 @@ def task_edit(request: HttpRequest, task_id) -> HttpResponse:
     else:
         form = TaskEditForm(instance=task)
     
+    # Оптимизация queryset'ов для формы редактирования (используем only() для загрузки только необходимых полей)
+    form.fields["company"].queryset = _editable_company_qs(user).only("id", "name").order_by("name")
+    if user.role == User.Role.MANAGER:
+        form.fields["assigned_to"].queryset = User.objects.filter(id=user.id).only("id", "first_name", "last_name")
+    elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+        form.fields["assigned_to"].queryset = User.objects.filter(
+            Q(id=user.id) | Q(branch_id=user.branch_id, role=User.Role.MANAGER)
+        ).only("id", "first_name", "last_name").order_by("last_name", "first_name")
+    else:
+        form.fields["assigned_to"].queryset = User.objects.only("id", "first_name", "last_name").order_by("last_name", "first_name")
+    
     # Если запрос на модалку (через AJAX или параметр modal=1)
     if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.GET.get("modal") == "1":
         return render(request, "ui/task_edit_modal.html", {"form": form, "task": task, "can_delete_task": can_delete_task})
