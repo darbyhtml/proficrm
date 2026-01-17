@@ -80,7 +80,7 @@
           </svg>
           + Новая компания
         </a>
-        <a href="/tasks/new/" class="btn btn-primary" style="min-height:38px">+ Новая задача</a>
+        <button type="button" class="btn btn-primary" style="min-height:38px" data-create-task>+ Новая задача</button>
       </div>
     </div>
 
@@ -156,7 +156,7 @@
             </svg>
             <div class="text-sm font-medium text-brand-dark/70 mb-1">На сегодня задач нет</div>
             <div class="text-xs text-brand-dark/50 mb-4">Отличная работа! Все задачи выполнены.</div>
-            <a href="/tasks/new/" class="btn btn-outline text-xs">+ Создать задачу</a>
+            <button type="button" class="btn btn-outline text-xs" data-create-task>+ Создать задачу</button>
           </div>
         {% endif %}
       </section>
@@ -222,7 +222,7 @@
             </svg>
             <div class="text-sm font-medium text-brand-dark/70 mb-1">Новых задач нет</div>
             <div class="text-xs text-brand-dark/50 mb-4">Новые задачи появятся здесь</div>
-            <a href="/tasks/new/" class="btn btn-outline text-xs">+ Создать задачу</a>
+            <button type="button" class="btn btn-outline text-xs" data-create-task>+ Создать задачу</button>
           </div>
         {% endif %}
       </section>
@@ -402,10 +402,26 @@
             </svg>
             <div class="text-sm font-medium text-brand-dark/70 mb-1">На ближайшую неделю задач нет</div>
             <div class="text-xs text-brand-dark/50 mb-4">Задачи на неделю появятся здесь</div>
-            <a href="/tasks/new/" class="btn btn-outline text-xs">+ Создать задачу</a>
+            <button type="button" class="btn btn-outline text-xs" data-create-task>+ Создать задачу</button>
           </div>
         {% endif %}
       </section>
+    </div>
+
+    {# Модальное окно для создания задачи #}
+    <div id="taskCreateModal" class="fixed inset-0 z-[200] hidden">
+      <div class="fixed inset-0 bg-black/35" data-close-task-create-modal></div>
+      <div class="absolute inset-x-4 top-12 mx-auto max-w-lg max-h-[90vh] overflow-y-auto">
+        <div id="taskCreateModalContent"></div>
+      </div>
+    </div>
+
+    {# Модальное окно для редактирования задачи #}
+    <div id="taskEditModal" class="fixed inset-0 z-[200] hidden">
+      <div class="fixed inset-0 bg-black/35" data-close-task-modal></div>
+      <div class="absolute inset-x-4 top-12 mx-auto max-w-lg max-h-[90vh] overflow-y-auto">
+        <div id="taskEditModalContent"></div>
+      </div>
     </div>
 
     {# Модальное окно для просмотра задачи #}
@@ -785,7 +801,52 @@
                   if(btnEdit) {
                     btnEdit.style.display = editLink ? 'inline-flex' : 'none';
                     if(editLink) {
-                      btnEdit.onclick = () => window.location.href = `/tasks/${taskId}/edit/`;
+                      btnEdit.onclick = async () => {
+                        const url = `/tasks/${taskId}/edit/?modal=1`;
+                        try {
+                          const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                          if (!res.ok) throw new Error('Ошибка загрузки формы');
+                          const html = await res.text();
+                          const editModal = document.getElementById('taskEditModal');
+                          const editModalContent = document.getElementById('taskEditModalContent');
+                          if (editModal && editModalContent) {
+                            editModalContent.innerHTML = html;
+                            editModal.classList.remove('hidden');
+                            // Закрываем текущее модальное окно просмотра
+                            taskViewModal.classList.add('hidden');
+                            // Инициализация select
+                            if (window.initTaskTypeSelects) {
+                              window.initTaskTypeSelects();
+                            }
+                            // Обработка формы редактирования
+                            const form = editModalContent.querySelector('[data-task-edit-form]');
+                            if (form) {
+                              form.addEventListener('submit', async function(e) {
+                                e.preventDefault();
+                                const formData = new FormData(form);
+                                try {
+                                  const res = await fetch(form.action, {
+                                    method: 'POST',
+                                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                                    body: formData
+                                  });
+                                  const data = await res.json();
+                                  if (data.ok) {
+                                    editModal.classList.add('hidden');
+                                    location.reload();
+                                  } else {
+                                    alert('Ошибка: ' + (data.error || 'Не удалось сохранить'));
+                                  }
+                                } catch (err) {
+                                  alert('Ошибка при сохранении: ' + err.message);
+                                }
+                              }, { once: true });
+                            }
+                          }
+                        } catch (err) {
+                          alert('Ошибка загрузки формы: ' + err.message);
+                        }
+                      };
                     }
                   }
                   
@@ -861,6 +922,154 @@
           if(!window.currentDashboardTaskId) return;
           const deleteModal = document.getElementById('taskDeleteModal');
           if(deleteModal) deleteModal.classList.remove('hidden');
+        });
+      }
+    })();
+  </script>
+
+  <script>
+    (function() {
+      // Модальное окно для создания задачи
+      const createModal = document.getElementById('taskCreateModal');
+      const createModalContent = document.getElementById('taskCreateModalContent');
+      if (!createModal || !createModalContent) return;
+
+      function closeCreateModal() {
+        createModal.classList.add('hidden');
+        createModalContent.innerHTML = '';
+      }
+
+      document.addEventListener('click', (e) => {
+        const closeBtn = e.target.closest('[data-close-task-create-modal]');
+        if (closeBtn) {
+          e.preventDefault();
+          closeCreateModal();
+        }
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !createModal.classList.contains('hidden')) closeCreateModal();
+      });
+      createModal.querySelector('.bg-black\\/35')?.addEventListener('click', (e) => {
+        if (e.target === e.currentTarget) closeCreateModal();
+      });
+
+      // Создание задачи
+      document.querySelectorAll('[data-create-task]').forEach(btn => {
+        btn.addEventListener('click', async function() {
+          const companyId = this.dataset.companyId || '';
+          const url = `/tasks/new/?modal=1${companyId ? '&company=' + companyId : ''}`;
+          
+          try {
+            const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            if (!res.ok) throw new Error('Ошибка загрузки формы');
+            const html = await res.text();
+            createModalContent.innerHTML = html;
+            createModal.classList.remove('hidden');
+            
+            if (window.initTaskTypeSelects) {
+              window.initTaskTypeSelects();
+            }
+            
+            const form = createModalContent.querySelector('[data-task-create-form]');
+            if (form) {
+              form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const formData = new FormData(form);
+                try {
+                  const res = await fetch(form.action, {
+                    method: 'POST',
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    body: formData
+                  });
+                  const data = await res.json();
+                  if (data.ok) {
+                    closeCreateModal();
+                    location.reload();
+                  } else {
+                    alert('Ошибка: ' + (data.error || 'Не удалось создать задачу'));
+                  }
+                } catch (err) {
+                  alert('Ошибка при создании: ' + err.message);
+                }
+              }, { once: true });
+            }
+          } catch (err) {
+            alert('Ошибка загрузки формы: ' + err.message);
+          }
+        });
+      });
+
+      // Модальное окно для редактирования задачи
+      const editModal = document.getElementById('taskEditModal');
+      const editModalContent = document.getElementById('taskEditModalContent');
+      if (editModal && editModalContent) {
+        function closeEditModal() {
+          editModal.classList.add('hidden');
+          editModalContent.innerHTML = '';
+        }
+
+        document.addEventListener('click', (e) => {
+          const closeBtn = e.target.closest('[data-close-task-modal]');
+          if (closeBtn) {
+            e.preventDefault();
+            closeEditModal();
+          }
+        });
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && !editModal.classList.contains('hidden')) closeEditModal();
+        });
+        editModal.querySelector('.bg-black\\/35')?.addEventListener('click', (e) => {
+          if (e.target === e.currentTarget) closeEditModal();
+        });
+
+        // Редактирование задачи
+        document.querySelectorAll('[data-edit-task]').forEach(btn => {
+          btn.addEventListener('click', async function() {
+            const taskId = this.dataset.taskId;
+            const url = `/tasks/${taskId}/edit/?modal=1`;
+            
+            try {
+              const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+              if (!res.ok) throw new Error('Ошибка загрузки формы');
+              const html = await res.text();
+              editModalContent.innerHTML = html;
+              editModal.classList.remove('hidden');
+              
+              // Закрываем модальное окно просмотра, если открыто
+              const viewModal = document.getElementById('taskViewModal');
+              if (viewModal) viewModal.classList.add('hidden');
+              
+              if (window.initTaskTypeSelects) {
+                window.initTaskTypeSelects();
+              }
+              
+              const form = editModalContent.querySelector('[data-task-edit-form]');
+              if (form) {
+                form.addEventListener('submit', async function(e) {
+                  e.preventDefault();
+                  const formData = new FormData(form);
+                  try {
+                    const res = await fetch(form.action, {
+                      method: 'POST',
+                      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                      body: formData
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                      closeEditModal();
+                      location.reload();
+                    } else {
+                      alert('Ошибка: ' + (data.error || 'Не удалось сохранить'));
+                    }
+                  } catch (err) {
+                    alert('Ошибка при сохранении: ' + err.message);
+                  }
+                }, { once: true });
+              }
+            } catch (err) {
+              alert('Ошибка загрузки формы: ' + err.message);
+            }
+          });
         });
       }
     })();

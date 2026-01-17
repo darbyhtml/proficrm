@@ -4148,6 +4148,13 @@ def task_create(request: HttpRequest) -> HttpResponse:
                     company_id=task.company_id,
                     message=f"Создана задача: {task.title}",
                 )
+            # Если AJAX запрос - возвращаем JSON
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return JsonResponse({
+                    "ok": True,
+                    "task_id": str(task.id),
+                    "message": "Задача создана успешно.",
+                })
             return redirect("task_list")
     else:
         initial = {"assigned_to": user}
@@ -4176,6 +4183,10 @@ def task_create(request: HttpRequest) -> HttpResponse:
     else:
         form.fields["assigned_to"].queryset = User.objects.order_by("last_name", "first_name")
 
+    # Если запрос на модалку (через AJAX или параметр modal=1)
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.GET.get("modal") == "1":
+        return render(request, "ui/task_create_modal.html", {"form": form})
+    
     return render(request, "ui/task_create.html", {"form": form})
 
 def _can_manage_task_status_ui(user: User, task: Task) -> bool:

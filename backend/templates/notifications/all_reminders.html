@@ -17,7 +17,7 @@
         <h2 class="text-lg font-semibold mb-3 text-brand-orange">Просроченные задачи ({{ overdue_tasks.count }})</h2>
         <div class="space-y-2">
           {% for t in overdue_tasks %}
-            <a href="/tasks/{{ t.id }}/edit/" class="block rounded-xl border border-brand-orange/40 px-4 py-3 bg-brand-orange/10 hover:bg-brand-orange/20">
+            <button type="button" class="w-full text-left block rounded-xl border border-brand-orange/40 px-4 py-3 bg-brand-orange/10 hover:bg-brand-orange/20" data-edit-task data-task-id="{{ t.id }}">
               <div class="text-sm font-medium">{{ t.title }}</div>
               {% if t.company %}
                 <div class="text-xs muted mt-1">{{ t.company.name }}</div>
@@ -37,7 +37,7 @@
         <h2 class="text-lg font-semibold mb-3 text-brand-teal">Задачи на сегодня ({{ today_tasks.count }})</h2>
         <div class="space-y-2">
           {% for t in today_tasks %}
-            <a href="/tasks/{{ t.id }}/edit/" class="block rounded-xl border border-brand-teal/40 px-4 py-3 bg-brand-teal/10 hover:bg-brand-teal/20">
+            <button type="button" class="w-full text-left block rounded-xl border border-brand-teal/40 px-4 py-3 bg-brand-teal/10 hover:bg-brand-teal/20" data-edit-task data-task-id="{{ t.id }}">
               <div class="text-sm font-medium">{{ t.title }}</div>
               {% if t.company %}
                 <div class="text-xs muted mt-1">{{ t.company.name }}</div>
@@ -54,13 +54,13 @@
         <h2 class="text-lg font-semibold mb-3 text-brand-dark">На этой неделе ({{ week_tasks.count }})</h2>
         <div class="space-y-2">
           {% for t in week_tasks %}
-            <a href="/tasks/{{ t.id }}/edit/" class="block rounded-xl border border-brand-soft px-4 py-3 bg-brand-soft/20 hover:bg-brand-soft/40">
+            <button type="button" class="w-full text-left block rounded-xl border border-brand-soft px-4 py-3 bg-brand-soft/20 hover:bg-brand-soft/40" data-edit-task data-task-id="{{ t.id }}">
               <div class="text-sm font-medium">{{ t.title }}</div>
               {% if t.company %}
                 <div class="text-xs muted mt-1">{{ t.company.name }}</div>
               {% endif %}
               <div class="text-[11px] muted-2 mt-2">Дедлайн: {{ t.due_at|date:"d.m.Y H:i" }}</div>
-            </a>
+            </button>
           {% endfor %}
         </div>
       </div>
@@ -92,7 +92,7 @@
         <h2 class="text-lg font-semibold mb-3 text-brand-dark/70">Будущие задачи ({{ future_tasks.count }})</h2>
         <div class="space-y-2">
           {% for t in future_tasks %}
-            <a href="/tasks/{{ t.id }}/edit/" class="block rounded-xl border border-brand-soft px-4 py-3 bg-white opacity-75 hover:bg-brand-soft/20">
+            <button type="button" class="w-full text-left block rounded-xl border border-brand-soft px-4 py-3 bg-white opacity-75 hover:bg-brand-soft/20" data-edit-task data-task-id="{{ t.id }}">
               <div class="text-sm font-medium text-brand-dark/70">{{ t.title }}</div>
               {% if t.company %}
                 <div class="text-xs muted mt-1">{{ t.company.name }}</div>

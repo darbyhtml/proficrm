@@ -1,0 +1,106 @@
+<div class="bg-white border rounded-2xl p-4 space-y-3">
+  <div class="flex items-center justify-between mb-2">
+    <h2 class="text-lg font-semibold">Новая задача</h2>
+    <button type="button" class="btn btn-outline flex-shrink-0" style="padding:.35rem .5rem;font-size:.875rem" data-close-task-create-modal aria-label="Закрыть" title="Закрыть">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+
+  <form method="post" data-task-create-form action="/tasks/new/">
+    {% csrf_token %}
+    
+    <div>
+      <label class="block text-sm text-brand-dark/80 mb-1">Задача</label>
+      {{ form.type }}
+    </div>
+    
+    <div class="mt-3">
+      <label class="block text-sm text-brand-dark/80 mb-1">Описание</label>
+      {{ form.description }}
+    </div>
+
+    <div class="mt-3">
+      <label class="block text-sm text-brand-dark/80 mb-1">Компания</label>
+      <div class="space-y-1">
+        <input
+          type="text"
+          id="task-company-search"
+          placeholder="Начните вводить название компании…"
+          class="w-full rounded-lg border px-3 py-2 text-sm"
+          autocomplete="off"
+        >
+        {{ form.company }}
+      </div>
+    </div>
+
+    <div class="mt-3 rounded-xl border border-brand-soft bg-brand-soft/15 px-4 py-3">
+      <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
+        {{ form.apply_to_org_branches }}
+        <span>Поставить задачу на <b>все филиалы организации</b></span>
+      </label>
+      <div class="text-xs muted-2 mt-1">Полезно, если у клиента несколько филиалов и задача должна быть видна в каждой карточке.</div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Кому</label>
+        {{ form.assigned_to }}
+        <div class="text-xs text-brand-dark/70 mt-1">Менеджер может назначать только себе.</div>
+      </div>
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Дедлайн</label>
+        {{ form.due_at }}
+      </div>
+    </div>
+
+    <div class="mt-3">
+      <label class="block text-sm text-brand-dark/80 mb-1">Повтор (RRULE)</label>
+      {{ form.recurrence_rrule }}
+      <div class="text-xs text-brand-dark/70 mt-1">Можно оставить пустым. Пример: <span class="font-mono">FREQ=WEEKLY;BYDAY=MO</span></div>
+    </div>
+
+    {% if form.errors %}
+      <div class="rounded-lg border border-brand-orange/60 bg-brand-orange/20 p-3 text-sm text-brand-dark mt-3">
+        {% for field, errors in form.errors.items %}
+          {% for error in errors %}
+            <div>{{ error }}</div>
+          {% endfor %}
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="flex gap-2 items-center flex-wrap mt-4">
+      <button class="btn btn-primary" type="submit">Создать</button>
+      <button type="button" class="btn btn-outline" data-close-task-create-modal>Отмена</button>
+    </div>
+  </form>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('task-company-search');
+    const companySelect = document.getElementById('id_company');
+    if (!searchInput || !companySelect) return;
+
+    searchInput.addEventListener('input', () => {
+      const q = searchInput.value.trim().toLowerCase();
+      if (!q) {
+        return;
+      }
+      let firstMatch = null;
+      for (const opt of companySelect.options) {
+        if (!opt.value) continue;
+        const text = (opt.text || '').toLowerCase();
+        if (text.includes(q)) {
+          firstMatch = opt;
+          break;
+        }
+      }
+      if (firstMatch) {
+        companySelect.value = firstMatch.value;
+      }
+    });
+  });
+</script>
