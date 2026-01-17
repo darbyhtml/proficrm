@@ -7,7 +7,7 @@ from accounts.models import Branch, User
 from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactEmail, ContactPhone
 from tasksapp.models import Task, TaskType
 from ui.models import UiGlobalConfig
-from ui.widgets import TaskTypeSelectWidget
+from ui.widgets import TaskTypeSelectWidget, UserSelectWithBranchWidget
 
 
 class CompanyCreateForm(forms.ModelForm):
@@ -225,7 +225,7 @@ class TaskForm(forms.ModelForm):
     class Meta:
         model = Task
         # Заголовок теперь не вводится руками — он берётся из выбранного типа/статуса.
-        fields = ["description", "company", "type", "assigned_to", "due_at", "recurrence_rrule"]
+        fields = ["description", "company", "type", "assigned_to", "due_at"]
         widgets = {
             "description": forms.Textarea(attrs={"rows": 4, "class": "w-full rounded-lg border px-3 py-2"}),
             "company": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),

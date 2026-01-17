@@ -4264,15 +4264,17 @@ def task_create(request: HttpRequest) -> HttpResponse:
         company_qs = company_qs[:200]
     form.fields["company"].queryset = company_qs
 
-    # Ограничить назначаемых (оптимизация: используем only() для загрузки только необходимых полей)
+    # Ограничить назначаемых с группировкой по городам филиалов (как при передаче компании)
     if user.role == User.Role.MANAGER:
-        form.fields["assigned_to"].queryset = User.objects.filter(id=user.id).only("id", "first_name", "last_name")
+        form.fields["assigned_to"].queryset = User.objects.filter(id=user.id).select_related("branch").only("id", "first_name", "last_name", "branch__name")
     elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
         form.fields["assigned_to"].queryset = User.objects.filter(
             Q(id=user.id) | Q(branch_id=user.branch_id, role=User.Role.MANAGER)
-        ).only("id", "first_name", "last_name").order_by("last_name", "first_name")
+        ).select_related("branch").only("id", "first_name", "last_name", "branch__name").order_by("branch__name", "last_name", "first_name")
     else:
-        form.fields["assigned_to"].queryset = User.objects.only("id", "first_name", "last_name").order_by("last_name", "first_name")
+        # Используем get_transfer_targets для группировки по городам
+        from companies.permissions import get_transfer_targets
+        form.fields["assigned_to"].queryset = get_transfer_targets(user)
 
     # Оптимизация queryset для типа задачи (используем only() для загрузки только необходимых полей)
     form.fields["type"].queryset = TaskType.objects.only("id", "name").order_by("name")
