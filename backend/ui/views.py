@@ -776,7 +776,7 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
     from tasksapp.models import TaskType
     task_types_by_name = {tt.name: tt for tt in TaskType.objects.all()}
     
-    # Применяем сопоставление ко всем задачам
+    # Применяем сопоставление ко всем задачам и добавляем права доступа
     tasks_to_update = []
     for task_list in [tasks_new_list, tasks_today_list, overdue_list, tasks_week_list]:
         for task in task_list:
@@ -785,6 +785,11 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
                 task.type = task_type  # type: ignore[assignment]
                 task.type_id = task_type.id  # type: ignore[attr-defined]
                 tasks_to_update.append(task.id)
+            
+            # Добавляем права доступа к задачам (для кнопок редактирования/удаления)
+            task.can_manage_status = _can_manage_task_status_ui(user, task)  # type: ignore[attr-defined]
+            task.can_edit_task = _can_edit_task_ui(user, task)  # type: ignore[attr-defined]
+            task.can_delete_task = _can_delete_task_ui(user, task)  # type: ignore[attr-defined]
     
     # Сохраняем в БД пакетно для оптимизации
     if tasks_to_update:
