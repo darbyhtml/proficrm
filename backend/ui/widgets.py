@@ -96,16 +96,7 @@ class UserSelectWithBranchWidget(forms.Select):
         has_selected = False
         
         # Группируем choices по branch__name
-        # Сначала загружаем всех пользователей одним запросом для оптимизации
         from collections import defaultdict
-        from accounts.models import User
-        
-        user_ids = [str(opt[0]) for opt in self.choices if opt[0] and opt[0] != '']
-        users_dict = {}
-        if user_ids:
-            users = User.objects.filter(id__in=user_ids).select_related('branch').only('id', 'branch__name')
-            users_dict = {str(u.id): u for u in users}
-        
         grouped = defaultdict(list)
         
         for index, (option_value, option_label) in enumerate(self.choices):
@@ -115,28 +106,36 @@ class UserSelectWithBranchWidget(forms.Select):
             # Получаем пользователя для определения города
             branch_name = "Без филиала"
             if option_value and option_value != '':
-                user = users_dict.get(str(option_value))
-                if user and user.branch:
-                    branch_name = user.branch.name
+                try:
+                    from accounts.models import User
+                    user = User.objects.select_related('branch').filter(id=option_value).first()
+                    if user and user.branch:
+                        branch_name = user.branch.name
+                except Exception:
+                    pass
             
             grouped[branch_name].append((index, option_value, option_label))
             
             if str(option_value) == str(value):
                 has_selected = True
         
-        # Формируем optgroups
+        # Формируем optgroups (исключаем "Без филиала" и пустые группы)
         group_index = 0
         for branch_name in sorted(grouped.keys()):
+            # Пропускаем группу "Без филиала"
+            if branch_name == "Без филиала":
+                continue
+            
             subgroup = []
             for index, option_value, option_label in grouped[branch_name]:
                 option = self.create_option(name, value, option_label, str(option_value) == str(value), index)
                 subgroup.append(option)
-            groups.append((branch_name, subgroup, group_index))
-            group_index += 1
+            
+            # Добавляем группу только если в ней есть опции
+            if subgroup:
+                groups.append((branch_name, subgroup, group_index))
+                group_index += 1
         
-        if value and not has_selected:
-            # Если значение не найдено в choices, добавляем его
-            option = self.create_option(name, value, str(value), True, len(groups))
-            groups.append(("Другое", [option], len(groups)))
+        # Не добавляем группу "Другое" - если значение не найдено, просто не показываем его
         
         return groups
