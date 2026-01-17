@@ -506,14 +506,15 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     contract_until_30 = today_date + timedelta(days=30)
 
     # Кэш-ключ: включает user_id и дату (инвалидируется при изменении дня)
-    cache_key = f"dashboard_{user.id}_{today_date.isoformat()}"
-    cached_data = cache.get(cache_key)
-    
-    if cached_data:
-        # Восстанавливаем datetime объекты из строк (кэш сериализует их)
-        cached_data["now"] = now
-        cached_data["local_now"] = local_now
-        return render(request, "ui/dashboard.html", cached_data)
+    # ВРЕМЕННО ОТКЛЮЧАЕМ КЭШ ДЛЯ ОТЛАДКИ
+    # cache_key = f"dashboard_{user.id}_{today_date.isoformat()}"
+    # cached_data = cache.get(cache_key)
+    # 
+    # if cached_data:
+    #     # Восстанавливаем datetime объекты из строк (кэш сериализует их)
+    #     cached_data["now"] = now
+    #     cached_data["local_now"] = local_now
+    #     return render(request, "ui/dashboard.html", cached_data)
 
     # ОПТИМИЗАЦИЯ: Объединяем запросы задач в один с фильтрацией в Python
     # Получаем все активные задачи пользователя одним запросом
