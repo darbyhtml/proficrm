@@ -18,26 +18,76 @@ class TaskTypeSelectWidget(forms.Select):
     
     def optgroups(self, name, value, attrs=None):
         """Переопределяем optgroups для добавления data-атрибутов ко всем опциям."""
+        from django.forms.widgets import flatatt
+        
         groups = []
         has_selected = False
         
-        # Получаем данные TaskType
+        # Получаем данные TaskType один раз
         task_types = self._get_task_types()
         
         for index, (option_value, option_label) in enumerate(self.choices):
             if option_value is None:
                 option_value = ''
             
-            subgroup = []
-            subgroup.append(self.render_option(name, value, option_value, option_label, index, task_types))
-            groups.append((None, subgroup, index))
-            
-            if option_value == value:
+            option_value = str(option_value)
+            selected = str(option_value) == str(value)
+            if selected:
                 has_selected = True
+            
+            # Получаем TaskType данные
+            task_type_data = None
+            if option_value and option_value != '' and task_types:
+                task_type_data = task_types.get(option_value)
+            
+            # Формируем HTML опции
+            if task_type_data:
+                icon = task_type_data.get('icon', '') or ''
+                color = task_type_data.get('color', '') or ''
+                name_text = task_type_data.get('name', option_label) or option_label
+                option_html = format_html(
+                    '<option value="{}"{} data-icon="{}" data-color="{}">{}</option>',
+                    option_value,
+                    ' selected' if selected else '',
+                    icon,
+                    color,
+                    name_text
+                )
+            else:
+                option_html = format_html(
+                    '<option value="{}"{}>{}</option>',
+                    option_value,
+                    ' selected' if selected else '',
+                    option_label
+                )
+            
+            subgroup = [option_html]
+            groups.append((None, subgroup, index))
         
         if value and not has_selected:
             # Если значение не найдено в choices, добавляем его
-            groups.append((None, [self.render_option(name, value, value, value, len(groups), task_types)], len(groups)))
+            task_type_data = None
+            if task_types:
+                task_type_data = task_types.get(str(value))
+            
+            if task_type_data:
+                icon = task_type_data.get('icon', '') or ''
+                color = task_type_data.get('color', '') or ''
+                name_text = task_type_data.get('name', str(value)) or str(value)
+                option_html = format_html(
+                    '<option value="{}" selected data-icon="{}" data-color="{}">{}</option>',
+                    value,
+                    icon,
+                    color,
+                    name_text
+                )
+            else:
+                option_html = format_html(
+                    '<option value="{}" selected>{}</option>',
+                    value,
+                    value
+                )
+            groups.append((None, [option_html], len(groups)))
         
         return groups
     
@@ -88,59 +138,3 @@ class TaskTypeSelectWidget(forms.Select):
                 self._task_types_cache = {}
         return self._task_types_cache
     
-    def render_option(self, name, value, option_value, option_label, index, task_types=None):
-        """Переопределяем рендеринг опции для добавления data-атрибутов с иконками и цветами."""
-        if option_value is None:
-            option_value = ''
-        option_value = str(option_value)
-        
-        # Получаем TaskType из кэша (без запросов к БД)
-        task_type_data = None
-        if option_value and option_value != '':
-            try:
-                if task_types is None:
-                    task_types = self._get_task_types()
-                if task_types:
-                    task_type_data = task_types.get(option_value)
-            except Exception as e:
-                # Если что-то пошло не так, используем обычный рендеринг
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Ошибка при получении TaskType для option_value={option_value}: {e}")
-                task_type_data = None
-        
-        # Если нашли TaskType, добавляем data-атрибуты
-        if task_type_data:
-            selected = 'selected' if str(option_value) == str(value) else ''
-            try:
-                icon = task_type_data.get('icon', '') or ''
-                color = task_type_data.get('color', '') or ''
-                name_text = task_type_data.get('name', option_label) or option_label
-                # Логируем для отладки
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.info(f"TaskTypeSelectWidget.render_option: option_value={option_value}, icon={icon}, color={color}, name={name_text}")
-                result = format_html(
-                    '<option value="{}" {} data-icon="{}" data-color="{}">{}</option>',
-                    option_value,
-                    selected,
-                    icon,
-                    color,
-                    name_text
-                )
-                return result
-            except Exception as e:
-                import logging
-                logger = logging.getLogger(__name__)
-                logger.error(f"Ошибка при форматировании HTML для option_value={option_value}: {e}")
-                # Если format_html не работает, используем обычный рендеринг
-                pass
-        
-        # Обычный рендеринг для пустых опций
-        selected = 'selected' if str(option_value) == str(value) else ''
-        return format_html(
-            '<option value="{}" {}>{}</option>',
-            option_value,
-            selected,
-            option_label
-        )
