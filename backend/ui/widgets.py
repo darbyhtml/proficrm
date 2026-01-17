@@ -44,6 +44,13 @@ class TaskTypeSelectWidget(forms.Select):
                         }
                         for tt in task_types
                     }
+                    # Логируем для отладки (можно убрать позже)
+                    import logging
+                    logger = logging.getLogger(__name__)
+                    logger.info(f"TaskTypeSelectWidget: загружено {len(cached_data)} типов задач из БД")
+                    if cached_data:
+                        sample = list(cached_data.values())[0]
+                        logger.info(f"TaskTypeSelectWidget: пример данных - {sample}")
                     try:
                         cache.set(cache_key, cached_data, 300)  # 5 минут
                     except Exception:
