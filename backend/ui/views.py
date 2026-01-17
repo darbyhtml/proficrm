@@ -4479,16 +4479,27 @@ def settings_user_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = UserCreateForm(request.POST)
         if form.is_valid():
-            user = form.save(commit=True, created_by=request.user)
-            # Получаем последний сгенерированный ключ для отображения
-            from accounts.models import MagicLinkToken
-            last_token = MagicLinkToken.objects.filter(user=user).order_by("-created_at").first()
-            messages.success(request, f"Пользователь {user} создан. Ключ доступа сгенерирован автоматически.")
-            # Сохраняем информацию о сгенерированном ключе в сессии для отображения
-            if last_token:
-                # Генерируем токен для отображения (но мы его не храним в открытом виде)
-                # Вместо этого показываем сообщение, что ключ нужно сгенерировать отдельно
-                request.session["user_created"] = {"user_id": user.id}
+            user = form.save(commit=True, created_by=request.user, request=request)
+            # Сохраняем информацию о созданном пользователе в сессии для отображения
+            request.session["user_created"] = {"user_id": user.id}
+            
+            # Если для не-администратора был сгенерирован ключ, но ссылка не была сформирована, формируем её здесь
+            if user.role != User.Role.ADMIN and "magic_link_generated" in request.session:
+                session_data = request.session["magic_link_generated"]
+                if not session_data.get("link"):
+                    from django.conf import settings as django_settings
+                    public_base_url = getattr(django_settings, "PUBLIC_BASE_URL", None)
+                    if public_base_url:
+                        base_url = public_base_url.rstrip("/")
+                    else:
+                        base_url = request.build_absolute_uri("/")[:-1]
+                    session_data["link"] = f"{base_url}/auth/magic/{session_data['token']}/"
+                    request.session["magic_link_generated"] = session_data
+            
+            if user.role == User.Role.ADMIN:
+                messages.success(request, f"Пользователь {user} создан. Пароль сгенерирован автоматически.")
+            else:
+                messages.success(request, f"Пользователь {user} создан. Ключ доступа сгенерирован автоматически.")
             return redirect("settings_user_edit", user_id=user.id)
     else:
         form = UserCreateForm()
@@ -4545,6 +4556,13 @@ def settings_user_edit(request: HttpRequest, user_id: int) -> HttpResponse:
         if session_data.get("user_id") == user_id:
             user_created = True
     
+    # Проверяем, был ли сгенерирован пароль для администратора
+    admin_password_generated = None
+    if "admin_password_generated" in request.session:
+        session_data = request.session.pop("admin_password_generated")
+        if session_data.get("user_id") == user_id:
+            admin_password_generated = session_data
+    
     if request.method == "POST":
         form = UserEditForm(request.POST, instance=u)
         if form.is_valid():
@@ -4578,6 +4596,7 @@ def settings_user_edit(request: HttpRequest, user_id: int) -> HttpResponse:
             "all_magic_link_tokens": all_tokens,
             "magic_link_generated": magic_link_generated,
             "user_created": user_created,
+            "admin_password_generated": admin_password_generated,
             "active_sessions": active_sessions,
             "now": timezone.now(),
         },
@@ -4651,6 +4670,7 @@ def settings_user_magic_link_generate(request: HttpRequest, user_id: int) -> Htt
     
     # Для обычного запроса сохраняем в сессии и редиректим
     request.session["magic_link_generated"] = {
+        "token": plain_token,  # Сохраняем сам ключ для отображения
         "link": magic_link_url,
         "expires_at": magic_link.expires_at.isoformat(),
         "user_id": user_id,

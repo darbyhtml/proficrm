@@ -52,7 +52,7 @@
       {% if mode == 'create' %}
         <div class="rounded-lg border border-brand-teal/60 bg-brand-teal/10 p-3 text-sm text-brand-dark">
           <div class="font-semibold mb-1">ℹ️ Информация о входе</div>
-          <div>При создании пользователя автоматически будет сгенерирован ключ доступа. Пароль не требуется.</div>
+          <div id="create-info-text">При создании пользователя автоматически будет сгенерирован ключ доступа. Пароль не требуется.</div>
         </div>
       {% else %}
         {% if u.role == 'admin' %}
@@ -106,22 +106,83 @@
         {% if user_created %}
           <div class="rounded-lg border border-brand-teal/60 bg-brand-teal/10 p-3 text-sm text-brand-dark">
             <div class="font-semibold mb-1">✅ Пользователь создан</div>
-            <div>Ключ доступа был автоматически сгенерирован при создании. Сгенерируйте новый ключ, чтобы увидеть его.</div>
+            {% if u.role == 'admin' %}
+              <div>Пароль был автоматически сгенерирован при создании. Также можно создать ключ доступа при желании.</div>
+            {% else %}
+              <div>Ключ доступа был автоматически сгенерирован при создании. Сгенерируйте новый ключ, чтобы увидеть его.</div>
+            {% endif %}
           </div>
         {% endif %}
 
         {% if magic_link_generated %}
           <div class="rounded-lg border border-brand-teal/60 bg-brand-teal/10 p-4 space-y-2">
             <div class="text-sm font-semibold text-brand-dark">Новый ключ создан:</div>
-            <div class="flex items-center gap-2">
-              <input type="text" id="magicLinkInput" value="{{ magic_link_generated.link }}" readonly class="input flex-1 font-mono text-xs" />
-              <button type="button" class="btn btn-outline text-sm" onclick="copyMagicLink()">📋 Копировать</button>
+            
+            <!-- Вкладки для переключения между ключом и ссылкой -->
+            <div class="flex border-b border-brand-soft">
+              <button 
+                type="button"
+                id="tab-key-token"
+                class="flex-1 px-4 py-2 text-sm font-medium text-center transition-colors bg-brand-teal text-white"
+                onclick="switchAccessKeyTab('token')"
+              >
+                Ключ доступа
+              </button>
+              <button 
+                type="button"
+                id="tab-key-link"
+                class="flex-1 px-4 py-2 text-sm font-medium text-center transition-colors text-brand-dark/60 hover:text-brand-dark hover:bg-brand-soft/20"
+                onclick="switchAccessKeyTab('link')"
+              >
+                Ссылка
+              </button>
             </div>
+            
+            <!-- Содержимое вкладки "Ключ доступа" -->
+            <div id="access-key-token-content" class="space-y-2">
+              <div class="flex items-center gap-2">
+                <input type="text" id="magicTokenInput" value="{{ magic_link_generated.token }}" readonly class="input flex-1 font-mono text-xs" />
+                <button type="button" class="btn btn-outline text-sm" onclick="copyMagicToken()">📋 Копировать</button>
+              </div>
+            </div>
+            
+            <!-- Содержимое вкладки "Ссылка" -->
+            <div id="access-key-link-content" class="space-y-2 hidden">
+              <div class="flex items-center gap-2">
+                <input type="text" id="magicLinkInput" value="{{ magic_link_generated.link }}" readonly class="input flex-1 font-mono text-xs" />
+                <button type="button" class="btn btn-outline text-sm" onclick="copyMagicLink()">📋 Копировать</button>
+              </div>
+            </div>
+            
             <div class="text-xs text-brand-dark/70">
               Истекает: {{ magic_link_generated.expires_at|date:"d.m.Y H:i" }} (через 24 часа)
             </div>
             <div class="text-xs text-brand-dark/60">
               ⚠️ Ключ показывается только один раз. Сохраните его или скопируйте.
+            </div>
+          </div>
+        {% endif %}
+        
+        {% if admin_password_generated %}
+          <div class="rounded-lg border border-brand-teal/60 bg-brand-teal/10 p-4 space-y-2">
+            <div class="text-sm font-semibold text-brand-dark">Пароль для администратора создан:</div>
+            <div class="flex items-center gap-2">
+              <div class="relative flex-1">
+                <input type="password" id="adminPasswordInput" value="{{ admin_password_generated.password }}" readonly class="input w-full font-mono text-xs pr-10" />
+                <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 text-brand-dark/60 hover:text-brand-dark" id="toggle-admin-password" title="Показать/скрыть пароль">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" id="eye-icon-admin-password">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                  </svg>
+                  <svg class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" id="eye-off-icon-admin-password">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.29 3.29m0 0A9.976 9.976 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+                  </svg>
+                </button>
+              </div>
+              <button type="button" class="btn btn-outline text-sm" onclick="copyAdminPassword()">📋 Копировать</button>
+            </div>
+            <div class="text-xs text-brand-dark/60">
+              ⚠️ Пароль показывается только один раз. Сохраните его или скопируйте.
             </div>
           </div>
         {% endif %}
@@ -201,6 +262,33 @@
   </div>
 
   <script>
+    function switchAccessKeyTab(tab) {
+      const tokenTab = document.getElementById('tab-key-token');
+      const linkTab = document.getElementById('tab-key-link');
+      const tokenContent = document.getElementById('access-key-token-content');
+      const linkContent = document.getElementById('access-key-link-content');
+      
+      if (tab === 'token') {
+        // Активируем вкладку "Ключ доступа"
+        tokenTab.classList.remove('text-brand-dark/60', 'hover:text-brand-dark', 'hover:bg-brand-soft/20');
+        tokenTab.classList.add('bg-brand-teal', 'text-white');
+        linkTab.classList.remove('bg-brand-teal', 'text-white');
+        linkTab.classList.add('text-brand-dark/60', 'hover:text-brand-dark', 'hover:bg-brand-soft/20');
+        
+        tokenContent.classList.remove('hidden');
+        linkContent.classList.add('hidden');
+      } else {
+        // Активируем вкладку "Ссылка"
+        linkTab.classList.remove('text-brand-dark/60', 'hover:text-brand-dark', 'hover:bg-brand-soft/20');
+        linkTab.classList.add('bg-brand-teal', 'text-white');
+        tokenTab.classList.remove('bg-brand-teal', 'text-white');
+        tokenTab.classList.add('text-brand-dark/60', 'hover:text-brand-dark', 'hover:bg-brand-soft/20');
+        
+        linkContent.classList.remove('hidden');
+        tokenContent.classList.add('hidden');
+      }
+    }
+    
     function copyMagicLink() {
       const input = document.getElementById('magicLinkInput');
       if (input) {
@@ -208,6 +296,26 @@
         input.setSelectionRange(0, 99999); // Для мобильных
         document.execCommand('copy');
         alert('Ссылка скопирована в буфер обмена');
+      }
+    }
+    
+    function copyMagicToken() {
+      const input = document.getElementById('magicTokenInput');
+      if (input) {
+        input.select();
+        input.setSelectionRange(0, 99999); // Для мобильных
+        document.execCommand('copy');
+        alert('Ключ доступа скопирован в буфер обмена');
+      }
+    }
+    
+    function copyAdminPassword() {
+      const input = document.getElementById('adminPasswordInput');
+      if (input) {
+        input.select();
+        input.setSelectionRange(0, 99999); // Для мобильных
+        document.execCommand('copy');
+        alert('Пароль скопирован в буфер обмена');
       }
     }
 
@@ -282,12 +390,45 @@
 
       // Переключение для new_password
       togglePasswordVisibility('id_new_password', 'toggle-new-password', 'eye-icon-new-password', 'eye-off-icon-new-password');
+      
+      // Переключение для admin password (при создании)
+      const toggleAdminPassword = document.getElementById('toggle-admin-password');
+      const adminPasswordInput = document.getElementById('adminPasswordInput');
+      const eyeIconAdminPassword = document.getElementById('eye-icon-admin-password');
+      const eyeOffIconAdminPassword = document.getElementById('eye-off-icon-admin-password');
+      
+      if (toggleAdminPassword && adminPasswordInput && eyeIconAdminPassword && eyeOffIconAdminPassword) {
+        toggleAdminPassword.addEventListener('click', () => {
+          if (adminPasswordInput.type === 'password') {
+            adminPasswordInput.type = 'text';
+            eyeIconAdminPassword.classList.add('hidden');
+            eyeOffIconAdminPassword.classList.remove('hidden');
+          } else {
+            adminPasswordInput.type = 'password';
+            eyeIconAdminPassword.classList.remove('hidden');
+            eyeOffIconAdminPassword.classList.add('hidden');
+          }
+        });
+      }
 
       // Обработка генерации через AJAX (если нужно)
       const form = document.getElementById('magicLinkGenerateForm');
       if (form) {
         form.addEventListener('submit', (e) => {
           // Обычная отправка формы (не AJAX) - сервер вернёт редирект с данными в сессии
+        });
+      }
+      
+      // Обновление текста при создании пользователя в зависимости от роли
+      const roleSelect = document.getElementById('id_role');
+      const createInfoText = document.getElementById('create-info-text');
+      if (roleSelect && createInfoText) {
+        roleSelect.addEventListener('change', () => {
+          if (roleSelect.value === 'admin') {
+            createInfoText.textContent = 'При создании администратора автоматически будет сгенерирован пароль. Также можно будет создать ключ доступа при желании.';
+          } else {
+            createInfoText.textContent = 'При создании пользователя автоматически будет сгенерирован ключ доступа. Пароль не требуется.';
+          }
         });
       }
     });

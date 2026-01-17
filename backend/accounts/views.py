@@ -190,8 +190,74 @@ class SecureLoginView(auth_views.LoginView):
             redirect_to = request.POST.get("next") or settings.LOGIN_REDIRECT_URL
             return redirect(redirect_to)
         
-        # Обычная логика входа по паролю (для обратной совместимости, если нужно)
-        return super().post(request, *args, **kwargs)
+        # Вход по логину и паролю (только для администраторов)
+        if login_type == "password" and username and password:
+            ip = get_client_ip(request)
+            
+            # Rate limiting: не чаще 5 попыток в минуту с одного IP
+            if is_ip_rate_limited(ip, "password_login", 5, 60):
+                return self.render_to_response(
+                    self.get_context_data(
+                        error_message="Слишком много попыток входа. Попробуйте через минуту."
+                    )
+                )
+            
+            # Аутентифицируем пользователя
+            user = authenticate(request, username=username, password=password)
+            
+            if user is None:
+                record_failed_login_attempt(username, ip, "invalid_credentials")
+                return self.render_to_response(
+                    self.get_context_data(
+                        error_message="Неверный логин или пароль."
+                    )
+                )
+            
+            # Проверяем, что пользователь - администратор
+            if user.role != User.Role.ADMIN:
+                record_failed_login_attempt(username, ip, "non_admin_password_login")
+                return self.render_to_response(
+                    self.get_context_data(
+                        error_message="Вход по логину и паролю доступен только для администраторов. Для входа используйте ключ доступа, обратитесь к администратору."
+                    )
+                )
+            
+            # Проверяем, что пользователь активен
+            if not user.is_active:
+                record_failed_login_attempt(username, ip, "user_inactive")
+                return self.render_to_response(
+                    self.get_context_data(
+                        error_message="Аккаунт неактивен."
+                    )
+                )
+            
+            # Вход успешен
+            login(request, user)
+            clear_login_attempts(user.username)
+            
+            # Логируем успешный вход
+            try:
+                log_event(
+                    actor=user,
+                    verb=ActivityEvent.Verb.UPDATE,
+                    entity_type="security",
+                    entity_id=f"password_login_success:{user.id}",
+                    message="Успешный вход по логину и паролю (администратор)",
+                    meta={"ip": ip},
+                )
+            except Exception:
+                pass
+            
+            # Редирект
+            redirect_to = request.POST.get("next") or settings.LOGIN_REDIRECT_URL
+            return redirect(redirect_to)
+        
+        # Если не указан тип входа или другие случаи, возвращаем ошибку
+        return self.render_to_response(
+            self.get_context_data(
+                error_message="Неверный тип входа."
+            )
+        )
 
 
 @require_http_methods(["GET"])

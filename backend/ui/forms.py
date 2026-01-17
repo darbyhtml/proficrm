@@ -369,22 +369,67 @@ class UserCreateForm(forms.ModelForm):
             "branch": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
 
-    def save(self, commit=True, created_by=None):
+    def save(self, commit=True, created_by=None, request=None):
         """
-        Сохраняет пользователя и автоматически генерирует ключ доступа.
+        Сохраняет пользователя.
+        Для администраторов автоматически генерируется пароль.
+        Для остальных пользователей генерируется ключ доступа.
         created_by - администратор, который создаёт пользователя (для логирования).
+        request - объект HttpRequest для сохранения данных в сессии (опционально).
         """
         user = super().save(commit=False)
-        # Устанавливаем неиспользуемый пароль (вход только по ключу доступа)
-        user.set_unusable_password()
         # Админка доступна только ADMIN + is_staff
         user.is_staff = user.role == User.Role.ADMIN
+        
         if commit:
+            # Для администраторов генерируем пароль
+            if user.role == User.Role.ADMIN:
+                import secrets
+                import string
+                # Генерируем сложный пароль: минимум 16 символов, включая буквы, цифры и спецсимволы
+                alphabet = string.ascii_letters + string.digits + "!@#$%^&*()_+-=[]{}|;:,.<>?"
+                password = ''.join(secrets.choice(alphabet) for _ in range(16))
+                user.set_password(password)
+                # Сохраняем пароль в сессии для отображения (только один раз)
+                if request and created_by:
+                    request.session["admin_password_generated"] = {
+                        "user_id": None,  # Будет установлен после сохранения user
+                        "password": password,
+                    }
+            else:
+                # Для не-администраторов устанавливаем неиспользуемый пароль и генерируем ключ доступа
+                user.set_unusable_password()
+            
             user.save()
-            # Автоматически генерируем ключ доступа для нового пользователя
-            if created_by:
+            
+            # Обновляем user_id в сессии, если пароль был сохранен
+            if user.role == User.Role.ADMIN and request and "admin_password_generated" in request.session:
+                request.session["admin_password_generated"]["user_id"] = user.id
+            
+            # Автоматически генерируем ключ доступа только для не-администраторов
+            if user.role != User.Role.ADMIN and created_by:
                 from accounts.models import MagicLinkToken
-                MagicLinkToken.create_for_user(user=user, created_by=created_by)
+                magic_link, plain_token = MagicLinkToken.create_for_user(user=user, created_by=created_by)
+                # Сохраняем plain_token в сессии для отображения
+                if request:
+                    from django.conf import settings as django_settings
+                    public_base_url = getattr(django_settings, "PUBLIC_BASE_URL", None)
+                    if public_base_url:
+                        base_url = public_base_url.rstrip("/")
+                    else:
+                        # Если нет request, base_url будет установлен в view
+                        base_url = ""
+                    if base_url:
+                        magic_link_url = f"{base_url}/auth/magic/{plain_token}/"
+                    else:
+                        magic_link_url = None
+                    
+                    request.session["magic_link_generated"] = {
+                        "token": plain_token,
+                        "link": magic_link_url,
+                        "expires_at": magic_link.expires_at.isoformat(),
+                        "user_id": user.id,
+                    }
         return user
 
 
