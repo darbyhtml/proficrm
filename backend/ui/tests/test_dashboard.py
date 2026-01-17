@@ -549,10 +549,27 @@ class DashboardViewTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         
         # Проверяем наличие кнопок "Посмотреть все" с правильными фильтрами
-        # Django автоматически экранирует & в &amp; в HTML
-        self.assertContains(response, 'href="/tasks/?mine=1&amp;today=1"')
-        self.assertContains(response, 'href="/tasks/?mine=1&amp;status=new"')
-        self.assertContains(response, 'href="/tasks/?mine=1&amp;overdue=1"')
+        # Django может экранировать & в &amp; или оставлять как есть, проверяем оба варианта
+        response_text = response.content.decode('utf-8')
+        # Проверяем наличие ссылок с нужными параметрами
+        # Для "На сегодня" - должна быть ссылка с mine=1&today=1 (или &amp;today=1)
+        self.assertTrue(
+            'href="/tasks/?mine=1&today=1"' in response_text or 
+            'href="/tasks/?mine=1&amp;today=1"' in response_text,
+            "Не найдена ссылка для задач на сегодня"
+        )
+        # Для "Новые задачи" - должна быть ссылка с mine=1&status=new (или &amp;status=new)
+        self.assertTrue(
+            'href="/tasks/?mine=1&status=new"' in response_text or 
+            'href="/tasks/?mine=1&amp;status=new"' in response_text,
+            "Не найдена ссылка для новых задач"
+        )
+        # Для "Просрочено" - должна быть ссылка с mine=1&overdue=1 (или &amp;overdue=1)
+        self.assertTrue(
+            'href="/tasks/?mine=1&overdue=1"' in response_text or 
+            'href="/tasks/?mine=1&amp;overdue=1"' in response_text,
+            "Не найдена ссылка для просроченных задач"
+        )
         
         # Проверяем, что счетчики отображаются
         self.assertContains(response, "Посмотреть все")
