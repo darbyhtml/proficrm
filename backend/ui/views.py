@@ -4304,12 +4304,16 @@ def _can_edit_task_ui(user: User, task: Task) -> bool:
     """
     Право на редактирование задачи:
     - Создатель всегда может редактировать свою задачу
+    - Исполнитель (assigned_to) может редактировать назначенную ему задачу
     - Администратор / управляющий — любые задачи
     - Ответственный за карточку компании (company.responsible)
     - Директор филиала / РОП — задачи своего филиала
     """
     # Создатель всегда может редактировать свою задачу
     if task.created_by_id and task.created_by_id == user.id:
+        return True
+    # Исполнитель может редактировать назначенную ему задачу
+    if task.assigned_to_id and task.assigned_to_id == user.id:
         return True
     # Админ/управляющий — любые задачи
     if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
