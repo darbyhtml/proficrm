@@ -96,7 +96,16 @@ class UserSelectWithBranchWidget(forms.Select):
         has_selected = False
         
         # Группируем choices по branch__name
+        # Сначала загружаем всех пользователей одним запросом для оптимизации
         from collections import defaultdict
+        from accounts.models import User
+        
+        user_ids = [str(opt[0]) for opt in self.choices if opt[0] and opt[0] != '']
+        users_dict = {}
+        if user_ids:
+            users = User.objects.filter(id__in=user_ids).select_related('branch').only('id', 'branch__name')
+            users_dict = {str(u.id): u for u in users}
+        
         grouped = defaultdict(list)
         
         for index, (option_value, option_label) in enumerate(self.choices):
@@ -106,13 +115,9 @@ class UserSelectWithBranchWidget(forms.Select):
             # Получаем пользователя для определения города
             branch_name = "Без филиала"
             if option_value and option_value != '':
-                try:
-                    from accounts.models import User
-                    user = User.objects.select_related('branch').filter(id=option_value).first()
-                    if user and user.branch:
-                        branch_name = user.branch.name
-                except Exception:
-                    pass
+                user = users_dict.get(str(option_value))
+                if user and user.branch:
+                    branch_name = user.branch.name
             
             grouped[branch_name].append((index, option_value, option_label))
             
