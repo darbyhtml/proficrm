@@ -521,11 +521,12 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     all_tasks = (
         Task.objects.filter(assigned_to=user)
         .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
-        .select_related("company", "created_by")
+        .select_related("company", "created_by", "type")
         .only(
-            "id", "title", "status", "due_at", "created_at",
+            "id", "title", "status", "due_at", "created_at", "type_id",
             "company__id", "company__name",
-            "created_by__id", "created_by__first_name", "created_by__last_name"
+            "created_by__id", "created_by__first_name", "created_by__last_name",
+            "type__id", "type__name", "type__color", "type__icon"
         )
         .order_by("due_at", "-created_at")
     )
