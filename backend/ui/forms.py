@@ -231,8 +231,7 @@ class TaskForm(forms.ModelForm):
             "company": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             # type фактически используется как «Задача» (тип задачи из справочника)
             "type": TaskTypeSelectWidget(attrs={"class": "w-full rounded-lg border px-3 py-2 task-type-select"}),
-            "assigned_to": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "recurrence_rrule": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "assigned_to": UserSelectWithBranchWidget(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
 
 
