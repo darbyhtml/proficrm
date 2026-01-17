@@ -541,9 +541,10 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         if task.status == Task.Status.NEW:
             tasks_new_list.append(task)
 
-    # Сортируем новые задачи по created_at (desc) и применяем лимит
+    # Сортируем новые задачи по created_at (desc)
     tasks_new_list.sort(key=lambda t: t.created_at, reverse=True)
-    tasks_new_list = tasks_new_list[:20]
+    tasks_new_count = len(tasks_new_list)
+    tasks_new_list = tasks_new_list[:5]  # Показываем только 5 на dashboard
 
     # Остальные задачи (с due_at) - обрабатываем в одном проходе
     for task in all_tasks:
@@ -557,8 +558,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         
         # Просроченные (due_at в прошлом относительно текущего момента)
         if task_due_local < local_now:
-            if len(overdue_list) < 20:  # Лимит 20
-                overdue_list.append(task)
+            overdue_list.append(task)
         
         # На сегодня (может быть одновременно просроченной и на сегодня)
         if today_start <= task_due_local < tomorrow_start:
@@ -566,13 +566,22 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         
         # На неделю (завтра + 7 дней) - исключаем задачи на сегодня
         elif week_start <= task_due_local < week_end:
-            if len(tasks_week_list) < 50:  # Лимит 50
-                tasks_week_list.append(task)
+            tasks_week_list.append(task)
 
-    # Сортируем по due_at
-    tasks_today_list.sort(key=lambda t: t.due_at or timezone.now())
+    # Сортируем: просроченные - по дате (самые старые первыми), остальные - по ближайшему дедлайну
     overdue_list.sort(key=lambda t: t.due_at or timezone.now())
+    tasks_today_list.sort(key=lambda t: t.due_at or timezone.now())
     tasks_week_list.sort(key=lambda t: t.due_at or timezone.now())
+    
+    # Подсчитываем общие количества
+    overdue_count = len(overdue_list)
+    tasks_today_count = len(tasks_today_list)
+    tasks_week_count = len(tasks_week_list)
+    
+    # Ограничиваем до 5 для отображения на dashboard
+    overdue_list = overdue_list[:5]
+    tasks_today_list = tasks_today_list[:5]
+    tasks_week_list = tasks_week_list[:5]
 
     # Договоры, которые подходят по сроку (<= 30 дней) — только для ответственного
     contracts_soon_qs = (
@@ -587,6 +596,17 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         level = "danger" if (days_left is not None and days_left < 14) else "warn"
         contracts_soon.append({"company": c, "days_left": days_left, "level": level})
 
+    # Добавляем права доступа к задачам для модального окна
+    from tasksapp.models import Task as TaskModel
+    from companies.permissions import _can_manage_task_status_ui, _can_edit_task_ui, _can_delete_task_ui
+    
+    # Подготавливаем задачи с правами доступа
+    for task_list in [tasks_new_list, tasks_today_list, overdue_list, tasks_week_list]:
+        for task in task_list:
+            task.can_manage_status = _can_manage_task_status_ui(user, task)  # type: ignore[attr-defined]
+            task.can_edit_task = _can_edit_task_ui(user, task)  # type: ignore[attr-defined]
+            task.can_delete_task = _can_delete_task_ui(user, task)  # type: ignore[attr-defined]
+
     context = {
         "now": now,
         "local_now": local_now,
@@ -596,6 +616,11 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         "tasks_week": tasks_week_list,
         "contracts_soon": contracts_soon,
         "can_view_cold_call_reports": _can_view_cold_call_reports(user),
+        # Общие количества для кнопок "Посмотреть все"
+        "tasks_new_count": tasks_new_count,
+        "tasks_today_count": tasks_today_count,
+        "overdue_count": overdue_count,
+        "tasks_week_count": tasks_week_count,
     }
 
     # Кэшируем на 2 минуты

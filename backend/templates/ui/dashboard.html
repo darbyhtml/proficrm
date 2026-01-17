@@ -100,10 +100,16 @@
         <div class="flex items-center justify-between mb-3">
           <div class="font-medium">
             На сегодня
-            {% if tasks_today %}
-              <span class="ml-2 badge badge-new">{{ tasks_today|length }}</span>
+            {% if tasks_today_count > 0 %}
+              <span class="ml-2 badge {% if tasks_today_count > 5 %}badge-progress{% else %}badge-new{% endif %}">{{ tasks_today_count }}</span>
             {% endif %}
           </div>
+          {% if tasks_today_count > 5 %}
+            <a class="text-sm link" href="/tasks/?mine=1&today=1">
+              Посмотреть все
+              <span class="text-xs text-brand-dark/60">({{ tasks_today_count }})</span>
+            </a>
+          {% endif %}
         </div>
         {% if tasks_today %}
           <ul class="space-y-2">
@@ -113,9 +119,16 @@
                   <div class="flex items-start justify-between gap-3">
                     <div class="flex-1 min-w-0">
                       <div class="text-sm font-medium">{{ t.title }}</div>
-                      <div class="text-xs text-brand-dark/70 mt-1">
+                      <div class="text-xs text-brand-dark/70 mt-1 flex items-center gap-1 flex-wrap">
                         {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
-                        {% if t.due_at %} · <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700 font-medium{% endif %}">{{ t.due_at|date:"d.m.Y H:i" }}</span>{% endif %}
+                        {% if t.due_at %}
+                          <span class="inline-flex items-center gap-1">
+                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M8 2v3M16 2v3M3 6h18M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6"/>
+                            </svg>
+                            <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700 font-medium{% else %}text-brand-dark/70{% endif %}">{{ t.due_at|date:"d.m.Y H:i" }}</span>
+                          </span>
+                        {% endif %}
                       </div>
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
@@ -146,12 +159,15 @@
         <div class="flex items-center justify-between mb-3">
           <div class="font-medium">
             Новые задачи
-            {% if tasks_new %}
-              <span class="ml-2 badge badge-new">{{ tasks_new|length }}</span>
+            {% if tasks_new_count > 0 %}
+              <span class="ml-2 badge badge-new">{{ tasks_new_count }}</span>
             {% endif %}
           </div>
-          {% if tasks_new %}
-            <a class="text-sm link" href="/tasks/?mine=1&status=new">Все новые</a>
+          {% if tasks_new_count > 5 %}
+            <a class="text-sm link" href="/tasks/?mine=1&status=new">
+              Посмотреть все
+              <span class="text-xs text-brand-dark/60">({{ tasks_new_count }})</span>
+            </a>
           {% endif %}
         </div>
         {% if tasks_new %}
@@ -162,10 +178,19 @@
                   <div class="flex items-start justify-between gap-3">
                     <div class="flex-1 min-w-0">
                       <div class="text-sm font-medium">{{ t.title }}</div>
-                      <div class="text-xs text-brand-dark/70 mt-1">
+                      <div class="text-xs text-brand-dark/70 mt-1 flex items-center gap-1 flex-wrap">
                         {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
                         {% if t.created_by %} · назначил: {{ t.created_by }}{% endif %}
-                        · {{ t.created_at|date:"d.m.Y H:i" }}
+                        {% if t.due_at %}
+                          <span class="inline-flex items-center gap-1">
+                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M8 2v3M16 2v3M3 6h18M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6"/>
+                            </svg>
+                            <span class="{% if t.due_at and t.due_at < local_now %}text-red-700 font-medium{% else %}text-brand-dark/70{% endif %}">{{ t.due_at|date:"d.m.Y H:i" }}</span>
+                          </span>
+                        {% else %}
+                          · {{ t.created_at|date:"d.m.Y H:i" }}
+                        {% endif %}
                       </div>
                     </div>
                     <span class="badge badge-new flex-shrink-0">Новая</span>
@@ -188,10 +213,18 @@
 
       {# 2 строка: Просрочено + Договоры #}
       <section class="card card-pad dashboard-card" id="section-overdue">
-        <div class="font-medium mb-3">
-          Просрочено
-          {% if overdue %}
-            <span class="ml-2 badge badge-danger">{{ overdue|length }}</span>
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-medium">
+            Просрочено
+            {% if overdue_count > 0 %}
+              <span class="ml-2 badge badge-danger">{{ overdue_count }}</span>
+            {% endif %}
+          </div>
+          {% if overdue_count > 5 %}
+            <a class="text-sm link" href="/tasks/?mine=1&overdue=1">
+              Посмотреть все
+              <span class="text-xs text-brand-dark/60">({{ overdue_count }})</span>
+            </a>
           {% endif %}
         </div>
         {% if overdue %}
@@ -202,9 +235,16 @@
                   <div class="flex items-start justify-between gap-3">
                     <div class="flex-1 min-w-0">
                       <div class="text-sm font-medium">{{ t.title }}</div>
-                      <div class="text-xs text-brand-dark/70 mt-1">
+                      <div class="text-xs text-brand-dark/70 mt-1 flex items-center gap-1 flex-wrap">
                         {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
-                        {% if t.due_at %} · <span class="text-red-700 font-medium">дедлайн: {{ t.due_at|date:"d.m.Y H:i" }}</span>{% endif %}
+                        {% if t.due_at %}
+                          <span class="inline-flex items-center gap-1">
+                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M8 2v3M16 2v3M3 6h18M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6"/>
+                            </svg>
+                            <span class="text-red-700 font-medium">{{ t.due_at|date:"d.m.Y H:i" }}</span>
+                          </span>
+                        {% endif %}
                       </div>
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
@@ -279,10 +319,18 @@
 
       {# 3 строка: Задачи на неделю — на всю ширину #}
       <section class="card card-pad lg:col-span-2 dashboard-card">
-        <div class="font-medium mb-3">
-          Задачи на неделю
-          {% if tasks_week %}
-            <span class="ml-2 badge badge-progress">{{ tasks_week|length }}</span>
+        <div class="flex items-center justify-between mb-3">
+          <div class="font-medium">
+            Задачи на неделю
+            {% if tasks_week_count > 0 %}
+              <span class="ml-2 badge badge-progress">{{ tasks_week_count }}</span>
+            {% endif %}
+          </div>
+          {% if tasks_week_count > 5 %}
+            <a class="text-sm link" href="/tasks/?mine=1">
+              Посмотреть все
+              <span class="text-xs text-brand-dark/60">({{ tasks_week_count }})</span>
+            </a>
           {% endif %}
         </div>
         {% if tasks_week %}
@@ -293,9 +341,16 @@
                   <div class="flex items-start justify-between gap-3">
                     <div class="flex-1 min-w-0">
                       <div class="text-sm font-medium">{{ t.title }}</div>
-                      <div class="text-xs text-brand-dark/70 mt-1">
+                      <div class="text-xs text-brand-dark/70 mt-1 flex items-center gap-1 flex-wrap">
                         {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
-                        {% if t.due_at %} · <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700 font-medium{% endif %}">{{ t.due_at|date:"d.m.Y H:i" }}</span>{% endif %}
+                        {% if t.due_at %}
+                          <span class="inline-flex items-center gap-1">
+                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M8 2v3M16 2v3M3 6h18M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6"/>
+                            </svg>
+                            <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700 font-medium{% else %}text-brand-dark/70{% endif %}">{{ t.due_at|date:"d.m.Y H:i" }}</span>
+                          </span>
+                        {% endif %}
                       </div>
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
@@ -330,6 +385,7 @@
         <div class="card card-pad">
           <div class="flex items-start justify-between gap-3 mb-4">
             <div class="flex-1">
+              <div class="flex items-center gap-2 mb-2" id="taskViewBadges"></div>
               <h2 class="text-xl font-semibold text-brand-dark" id="taskViewTitle">Загрузка...</h2>
             </div>
             <button type="button" class="btn btn-outline flex-shrink-0" style="padding:.35rem .5rem;font-size:.75rem" data-close-task-view aria-label="Закрыть" title="Закрыть">✕</button>
@@ -340,6 +396,79 @@
                 <path d="M21 12a9 9 0 11-6.219-8.56"/>
               </svg>
               <div class="text-sm text-brand-dark/70">Загрузка задачи...</div>
+            </div>
+          </div>
+          {# Кнопки действий #}
+          <div class="flex flex-wrap items-center gap-2 pt-4 mt-4 border-t" id="taskViewActions" style="display:none">
+            <button type="button" class="btn btn-outline text-sm" id="taskViewEdit" style="display:none">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+              </svg>
+              Редактировать
+            </button>
+            <form method="post" action="" id="taskViewInProgressForm" style="display:none" class="inline">
+              {% csrf_token %}
+              <button type="submit" name="status" value="in_progress" class="btn btn-secondary text-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>
+                  <path d="M8 2v4"/><path d="M16 2v4"/><path d="M8 10h8"/><path d="M8 14h8"/>
+                </svg>
+                В работу
+              </button>
+            </form>
+            <button type="button" class="btn btn-primary text-sm" id="taskViewComplete" style="display:none">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+              Выполнено
+            </button>
+            <button type="button" class="btn btn-outline text-sm" style="border-color:rgba(239,68,68,.35);color:#b91c1c;background:rgba(239,68,68,.06)" id="taskViewDelete" style="display:none">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 7h12M10 11v6M14 11v6M9 7l1-3h4l1 3M19 7l-1 12H6L5 7"/>
+              </svg>
+              Удалить
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# Модальное окно для выполнения задачи #}
+    <div id="taskCompleteModal" class="fixed inset-0 z-[200] hidden">
+      <div class="fixed inset-0 bg-black/35" data-close-task-complete-modal></div>
+      <div class="absolute inset-x-4 top-12 mx-auto max-w-md">
+        <div class="bg-white border rounded-2xl p-4">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold">Отметить задачу как выполненную?</h2>
+            <button type="button" class="btn btn-outline flex-shrink-0" style="padding:.35rem .5rem;font-size:.75rem" data-close-task-complete-modal aria-label="Закрыть" title="Закрыть">✕</button>
+          </div>
+          <div class="space-y-4">
+            <p class="text-sm text-brand-dark/70">Нужно ли перенести данные задачи в заметки?</p>
+            <div class="flex gap-2 pt-2 border-t">
+              <button type="button" class="btn btn-primary flex-1" id="taskCompleteWithNote">Да, перенести</button>
+              <button type="button" class="btn btn-outline flex-1" id="taskCompleteWithoutNote">Нет, только выполнить</button>
+              <button type="button" class="btn btn-outline" data-close-task-complete-modal>Отмена</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# Модальное окно для удаления задачи #}
+    <div id="taskDeleteModal" class="fixed inset-0 z-[200] hidden">
+      <div class="fixed inset-0 bg-black/35" data-close-task-delete-modal></div>
+      <div class="absolute inset-x-4 top-12 mx-auto max-w-md">
+        <div class="bg-white border rounded-2xl p-4">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold">Удалить задачу?</h2>
+            <button type="button" class="btn btn-outline flex-shrink-0" style="padding:.35rem .5rem;font-size:.75rem" data-close-task-delete-modal aria-label="Закрыть" title="Закрыть">✕</button>
+          </div>
+          <div class="space-y-4">
+            <p class="text-sm text-brand-dark/70">Нужно ли перенести данные задачи в заметки перед удалением?</p>
+            <div class="flex gap-2 pt-2 border-t">
+              <button type="button" class="btn btn-primary flex-1" id="taskDeleteWithNote">Да, перенести</button>
+              <button type="button" class="btn btn-outline flex-1" id="taskDeleteWithoutNote">Нет, удалить</button>
+              <button type="button" class="btn btn-outline" data-close-task-delete-modal>Отмена</button>
             </div>
           </div>
         </div>
@@ -507,18 +636,32 @@
     })();
   </script>
 
-  {# Модальное окно для просмотра задач #}
+  {# Модальное окно для просмотра задач с кнопками действий #}
   <script>
     (function(){
       const modal = document.getElementById('taskViewModal');
       const modalContent = document.getElementById('taskViewContent');
       const modalTitle = document.getElementById('taskViewTitle');
+      const modalBadges = document.getElementById('taskViewBadges');
+      const modalActions = document.getElementById('taskViewActions');
+      const btnEdit = document.getElementById('taskViewEdit');
+      const btnInProgress = document.getElementById('taskViewInProgressForm');
+      const btnComplete = document.getElementById('taskViewComplete');
+      const btnDelete = document.getElementById('taskViewDelete');
+      
       if(!modal || !modalContent || !modalTitle) return;
+
+      // Используем глобальную переменную для передачи taskId между скриптами
+      window.currentDashboardTaskId = null;
+      const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
 
       function closeModal() {
         modal.classList.add('hidden');
         modalContent.innerHTML = '<div class="text-center py-8"><svg class="animate-spin w-6 h-6 text-brand-teal mx-auto mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg><div class="text-sm text-brand-dark/70">Загрузка задачи...</div></div>';
         modalTitle.textContent = 'Загрузка...';
+        if(modalBadges) modalBadges.innerHTML = '';
+        if(modalActions) modalActions.style.display = 'none';
+        window.currentDashboardTaskId = null;
       }
 
       function openModal() {
@@ -542,6 +685,7 @@
           const taskId = this.dataset.taskId;
           if(!taskId) return;
           
+          window.currentDashboardTaskId = taskId;
           openModal();
           
           try {
@@ -558,30 +702,254 @@
             const taskModal = doc.querySelector('#taskViewModal');
             
             if(taskModal) {
-              const taskContent = taskModal.querySelector('.card')?.innerHTML || '';
-              modalContent.innerHTML = taskContent;
-              const titleEl = taskModal.querySelector('h2');
-              if(titleEl) modalTitle.textContent = titleEl.textContent.trim();
-            } else {
-              // Fallback: используем task_edit для редактирования
-              const editRes = await fetch(`/tasks/${taskId}/edit/?modal=1`, {
-                headers: { 'X-Requested-With': 'XMLHttpRequest' }
-              });
-              if(editRes.ok) {
-                const editHtml = await editRes.text();
-                modalContent.innerHTML = editHtml;
-                modalTitle.textContent = 'Редактирование задачи';
-              } else {
-                throw new Error('Не удалось загрузить задачу');
+              const card = taskModal.querySelector('.card');
+              if(card) {
+                // Извлекаем контент (секция space-y-3 с информацией о задаче)
+                const contentDiv = card.querySelector('.space-y-3');
+                if(contentDiv) {
+                  modalContent.innerHTML = contentDiv.outerHTML;
+                } else {
+                  // Fallback: берем весь контент кроме заголовка
+                  const allContent = card.innerHTML;
+                  const titleMatch = allContent.match(/<h2[^>]*>.*?<\/h2>/);
+                  modalContent.innerHTML = allContent.replace(titleMatch?.[0] || '', '');
+                }
+                
+                const titleEl = taskModal.querySelector('h2');
+                if(titleEl) modalTitle.textContent = titleEl.textContent.trim();
+                
+                // Извлекаем бейдж статуса и кнопку редактирования
+                const badgeContainer = taskModal.querySelector('.flex.items-center.gap-2');
+                if(badgeContainer && modalBadges) {
+                  const badge = badgeContainer.querySelector('.badge');
+                  if(badge) modalBadges.innerHTML = badge.outerHTML;
+                }
+                
+                // Извлекаем данные задачи для определения прав
+                const editLink = taskModal.querySelector('a[href*="/tasks/"][href*="/edit/"]');
+                const statusBadge = taskModal.querySelector('.badge');
+                const statusText = statusBadge?.textContent?.trim() || '';
+                const status = statusText === 'Новая' ? 'new' : 
+                              statusText === 'В работе' ? 'in_progress' : 
+                              statusText === 'Выполнена' ? 'done' : 'cancelled';
+                
+                // Показываем кнопки действий с учетом прав и статуса
+                if(modalActions) {
+                  modalActions.style.display = 'flex';
+                  
+                  // Редактировать - показываем если есть ссылка на редактирование
+                  if(btnEdit) {
+                    btnEdit.style.display = editLink ? 'inline-flex' : 'none';
+                    if(editLink) {
+                      btnEdit.onclick = () => window.location.href = `/tasks/${taskId}/edit/`;
+                    }
+                  }
+                  
+                  // В работу - показываем только если статус "Новая"
+                  if(btnInProgress) {
+                    btnInProgress.style.display = (status === 'new') ? 'inline-block' : 'none';
+                    if(status === 'new') {
+                      btnInProgress.action = `/tasks/${taskId}/status/`;
+                    }
+                  }
+                  
+                  // Выполнено - показываем если статус не "Выполнена"
+                  if(btnComplete) {
+                    btnComplete.style.display = (status !== 'done') ? 'inline-flex' : 'none';
+                  }
+                  
+                  // Удалить - показываем всегда (права проверит сервер)
+                  if(btnDelete) {
+                    btnDelete.style.display = 'inline-flex';
+                  }
+                }
               }
+            } else {
+              throw new Error('Не удалось загрузить задачу');
             }
           } catch(e) {
             console.error('Task view error:', e);
             modalContent.innerHTML = '<div class="text-center py-8 text-red-600">Ошибка загрузки задачи</div>';
             modalTitle.textContent = 'Ошибка';
+            if(modalActions) modalActions.style.display = 'none';
           }
         });
       });
+
+      // Обработка кнопки "Выполнено"
+      if(btnComplete) {
+        btnComplete.addEventListener('click', function() {
+          if(!currentTaskId) return;
+          const completeModal = document.getElementById('taskCompleteModal');
+          if(completeModal) completeModal.classList.remove('hidden');
+        });
+      }
+
+      // Обработка кнопки "Удалить"
+      if(btnDelete) {
+        btnDelete.addEventListener('click', function() {
+          if(!currentTaskId) return;
+          const deleteModal = document.getElementById('taskDeleteModal');
+          if(deleteModal) deleteModal.classList.remove('hidden');
+        });
+      }
+    })();
+  </script>
+
+  {# Модальные окна для выполнения и удаления задач #}
+  <script>
+    (function(){
+      // Используем глобальную переменную для хранения taskId
+      window.currentDashboardTaskId = null;
+      const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+
+      // Модальное окно выполнения задачи
+      const completeModal = document.getElementById('taskCompleteModal');
+      const btnComplete = document.getElementById('taskViewComplete');
+      
+      if(completeModal) {
+        function closeCompleteModal() {
+          completeModal.classList.add('hidden');
+        }
+
+        completeModal.querySelectorAll('[data-close-task-complete-modal]').forEach(b => {
+          b.addEventListener('click', closeCompleteModal);
+        });
+        document.addEventListener('keydown', (e) => {
+          if(e.key === 'Escape' && !completeModal.classList.contains('hidden')) closeCompleteModal();
+        });
+        completeModal.querySelector('.bg-black\\/35')?.addEventListener('click', (e) => {
+          if(e.target === e.currentTarget) closeCompleteModal();
+        });
+
+        // Открытие модального окна выполнения
+        if(btnComplete) {
+          btnComplete.addEventListener('click', function() {
+            if(window.currentDashboardTaskId) {
+              completeModal.classList.remove('hidden');
+            }
+          });
+        }
+
+        document.getElementById('taskCompleteWithNote')?.addEventListener('click', function() {
+          if(!window.currentDashboardTaskId) return;
+          const formData = new FormData();
+          formData.append('status', 'done');
+          formData.append('save_to_notes', '1');
+          formData.append('csrfmiddlewaretoken', csrftoken);
+          
+          fetch(`/tasks/${window.currentDashboardTaskId}/status/`, {
+            method: 'POST',
+            body: formData,
+            headers: {'X-Requested-With': 'XMLHttpRequest'}
+          })
+          .then(r => r.json())
+          .then(data => {
+            if(data.success) {
+              window.location.reload();
+            } else {
+              alert(data.error || 'Ошибка при выполнении задачи');
+            }
+          })
+          .catch(err => alert('Ошибка: ' + err.message));
+        });
+
+        document.getElementById('taskCompleteWithoutNote')?.addEventListener('click', function() {
+          if(!window.currentDashboardTaskId) return;
+          const formData = new FormData();
+          formData.append('status', 'done');
+          formData.append('save_to_notes', '0');
+          formData.append('csrfmiddlewaretoken', csrftoken);
+          
+          fetch(`/tasks/${window.currentDashboardTaskId}/status/`, {
+            method: 'POST',
+            body: formData,
+            headers: {'X-Requested-With': 'XMLHttpRequest'}
+          })
+          .then(r => r.json())
+          .then(data => {
+            if(data.success) {
+              window.location.reload();
+            } else {
+              alert(data.error || 'Ошибка при выполнении задачи');
+            }
+          })
+          .catch(err => alert('Ошибка: ' + err.message));
+        });
+      }
+
+      // Модальное окно удаления задачи
+      const deleteModal = document.getElementById('taskDeleteModal');
+      
+      if(deleteModal) {
+        function closeDeleteModal() {
+          deleteModal.classList.add('hidden');
+        }
+
+        deleteModal.querySelectorAll('[data-close-task-delete-modal]').forEach(b => {
+          b.addEventListener('click', closeDeleteModal);
+        });
+        document.addEventListener('keydown', (e) => {
+          if(e.key === 'Escape' && !deleteModal.classList.contains('hidden')) closeDeleteModal();
+        });
+        deleteModal.querySelector('.bg-black\\/35')?.addEventListener('click', (e) => {
+          if(e.target === e.currentTarget) closeDeleteModal();
+        });
+
+        // Открытие модального окна удаления
+        const btnDeleteView = document.getElementById('taskViewDelete');
+        if(btnDeleteView) {
+          btnDeleteView.addEventListener('click', function() {
+            if(window.currentDashboardTaskId) {
+              deleteModal.classList.remove('hidden');
+            }
+          });
+        }
+
+        document.getElementById('taskDeleteWithNote')?.addEventListener('click', function() {
+          if(!window.currentDashboardTaskId) return;
+          const formData = new FormData();
+          formData.append('save_to_notes', '1');
+          formData.append('csrfmiddlewaretoken', csrftoken);
+          
+          fetch(`/tasks/${window.currentDashboardTaskId}/delete/`, {
+            method: 'POST',
+            body: formData,
+            headers: {'X-Requested-With': 'XMLHttpRequest'}
+          })
+          .then(r => r.json())
+          .then(data => {
+            if(data.success) {
+              window.location.reload();
+            } else {
+              alert(data.error || 'Ошибка при удалении задачи');
+            }
+          })
+          .catch(err => alert('Ошибка: ' + err.message));
+        });
+
+        document.getElementById('taskDeleteWithoutNote')?.addEventListener('click', function() {
+          if(!window.currentDashboardTaskId) return;
+          const formData = new FormData();
+          formData.append('save_to_notes', '0');
+          formData.append('csrfmiddlewaretoken', csrftoken);
+          
+          fetch(`/tasks/${window.currentDashboardTaskId}/delete/`, {
+            method: 'POST',
+            body: formData,
+            headers: {'X-Requested-With': 'XMLHttpRequest'}
+          })
+          .then(r => r.json())
+          .then(data => {
+            if(data.success) {
+              window.location.reload();
+            } else {
+              alert(data.error || 'Ошибка при удалении задачи');
+            }
+          })
+          .catch(err => alert('Ошибка: ' + err.message));
+        });
+      }
     })();
   </script>
 
