@@ -138,7 +138,9 @@ class MagicLinkLoginTestCase(TestCase):
         
         # Симулируем запрос
         from django.test import Client
+        from django.db import transaction
         client = Client()
+        
         # Используем follow=False, чтобы не следовать редиректу и проверить статус
         response = client.get(f"/auth/magic/{plain_token}/", follow=False)
         
@@ -149,15 +151,12 @@ class MagicLinkLoginTestCase(TestCase):
         
         # Проверяем, что токен помечен как использованный
         # Важно: обновляем объект из БД после запроса
+        # Используем refresh_from_db() чтобы получить актуальные данные из БД
         magic_link.refresh_from_db()
-        self.assertIsNotNone(magic_link.used_at, "Токен должен быть помечен как использованный после входа")
-        
-        # Дополнительно проверяем, что пользователь залогинен
-        # Если follow=True, можно проверить, что пользователь действительно вошёл
-        response_with_follow = client.get(f"/auth/magic/{plain_token}/", follow=True)
-        # После входа должен быть редирект или доступ к защищённой странице
-        # Но токен уже использован, так что может быть ошибка 400
-        # Это нормально - проверяем только, что первый запрос прошёл успешно
+        # Также проверяем, что used_at не None
+        self.assertIsNotNone(magic_link.used_at, 
+                            f"Токен должен быть помечен как использованный после входа. "
+                            f"Текущее значение used_at: {magic_link.used_at}")
 
     def test_magic_link_login_invalid_token(self):
         """Невалидный токен не работает."""
