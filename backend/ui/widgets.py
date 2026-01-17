@@ -51,11 +51,12 @@ class TaskTypeSelectWidget(forms.Select):
                     if cached_data:
                         sample = list(cached_data.values())[0]
                         logger.info(f"TaskTypeSelectWidget: пример данных - {sample}")
-                    try:
-                        cache.set(cache_key, cached_data, 300)  # 5 минут
-                    except Exception:
-                        # Если кэш недоступен, просто используем данные без кэширования
-                        pass
+                    # ВРЕМЕННО ОТКЛЮЧАЕМ КЭШ ДЛЯ ОТЛАДКИ
+                    # try:
+                    #     cache.set(cache_key, cached_data, 300)  # 5 минут
+                    # except Exception:
+                    #     # Если кэш недоступен, просто используем данные без кэширования
+                    #     pass
                 self._task_types_cache = cached_data
             except Exception:
                 # Если что-то пошло не так, возвращаем пустой словарь
@@ -89,7 +90,11 @@ class TaskTypeSelectWidget(forms.Select):
                 icon = task_type_data.get('icon', '') or ''
                 color = task_type_data.get('color', '') or ''
                 name = task_type_data.get('name', option_label) or option_label
-                return format_html(
+                # Логируем для отладки
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.info(f"TaskTypeSelectWidget.render_option: option_value={option_value}, icon={icon}, color={color}, name={name}")
+                result = format_html(
                     '<option value="{}" {} data-icon="{}" data-color="{}">{}</option>',
                     option_value,
                     selected,
@@ -97,6 +102,7 @@ class TaskTypeSelectWidget(forms.Select):
                     color,
                     name
                 )
+                return result
             except Exception as e:
                 import logging
                 logger = logging.getLogger(__name__)
