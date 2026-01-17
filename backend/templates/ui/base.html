@@ -142,39 +142,6 @@
         border-radius: 4px;
       }
       
-      /* Обёртка для datetime-local с подписями */
-      .datetime-wrapper {
-        position: relative;
-      }
-      
-      .datetime-time-labels {
-        position: absolute;
-        right: 40px;
-        top: 50%;
-        transform: translateY(-50%);
-        display: none;
-        gap: 12px;
-        pointer-events: none;
-        z-index: 1;
-        align-items: center;
-      }
-      
-      .datetime-time-labels.show {
-        display: flex;
-      }
-      
-      .datetime-time-labels span {
-        font-size: 11px;
-        color: rgba(0,61,56,.6);
-        font-weight: 500;
-        white-space: nowrap;
-      }
-      
-      input[type="datetime-local"]:focus ~ .datetime-time-labels,
-      input[type="datetime-local"]:not(:placeholder-shown) ~ .datetime-time-labels {
-        display: flex;
-      }
-      
       /* Стилизация всплывающего календарика браузера через CSS переменные */
       input[type="datetime-local"],
       input[type="date"] {
