@@ -991,6 +991,12 @@
           document.querySelectorAll('[data-ms-single="1"]').forEach(initOne);
         }
         document.addEventListener('DOMContentLoaded', initAll);
+        
+        // Экспортируем функцию для инициализации виджетов в динамически загруженном контенте
+        window.initMsSingleWidgets = function(container) {
+          const widgets = container ? container.querySelectorAll('[data-ms-single="1"]') : document.querySelectorAll('[data-ms-single="1"]');
+          widgets.forEach(initOne);
+        };
       })();
     </script>
     <script>
