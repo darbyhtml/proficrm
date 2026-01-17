@@ -72,13 +72,13 @@
             </span>
           </button>
         {% endif %}
-        <a href="/companies/new/" class="btn btn-outline text-sm">
+        <a href="/companies/new/" class="btn btn-secondary text-sm">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
             <circle cx="9" cy="7" r="4"/>
             <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>
           </svg>
-          Компания
+          + Компания
         </a>
         <a href="/tasks/new/" class="btn btn-primary">+ Новая задача</a>
       </div>
@@ -108,27 +108,24 @@
         {% if tasks_today %}
           <ul class="space-y-2">
             {% for t in tasks_today %}
-              <li class="group">
-                <a href="/tasks/{{ t.id }}/" class="block rounded-lg border p-3 transition-all {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}task-overdue border-red-400{% else %}border-orange-300 bg-orange-50/30{% endif %} hover:border-brand-teal/50 hover:bg-brand-soft/20" data-status="{{ t.status }}">
+              <li>
+                <button type="button" class="w-full text-left rounded-lg border p-3 transition-all hover:border-brand-teal/50 hover:bg-brand-soft/20 {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}border-red-300 bg-red-50/50{% else %}border-brand-soft{% endif %}" data-view-task data-task-id="{{ t.id }}">
                   <div class="flex items-start justify-between gap-3">
-                    <div class="flex-1">
+                    <div class="flex-1 min-w-0">
                       <div class="text-sm font-medium">{{ t.title }}</div>
                       <div class="text-xs text-brand-dark/70 mt-1">
-                        {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/" onclick="event.stopPropagation()">{{ t.company.name }}</a>{% endif %}
-                        {% if t.due_at %} · <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}">{{ t.due_at|date:"d.m.Y H:i" }}</span>{% endif %}
+                        {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
+                        {% if t.due_at %} · <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700 font-medium{% endif %}">{{ t.due_at|date:"d.m.Y H:i" }}</span>{% endif %}
                       </div>
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
                       {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}
-                        <svg class="w-4 h-4 text-red-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M12 8v4"/><path d="M12 16h.01"/>
-                        </svg>
-                        <span class="badge badge-danger">Срочно</span>
+                        <span class="badge badge-danger text-xs">Срочно</span>
                       {% endif %}
                       <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
                     </div>
                   </div>
-                </a>
+                </button>
               </li>
             {% endfor %}
           </ul>
@@ -160,25 +157,20 @@
         {% if tasks_new %}
           <ul class="space-y-2">
             {% for t in tasks_new %}
-              <li class="group">
-                <a href="/tasks/{{ t.id }}/" class="block rounded-lg border border-blue-300 bg-blue-50/30 p-3 hover:border-brand-teal/50 hover:bg-brand-soft/20 transition-all">
+              <li>
+                <button type="button" class="w-full text-left rounded-lg border border-brand-soft p-3 transition-all hover:border-brand-teal/50 hover:bg-brand-soft/20" data-view-task data-task-id="{{ t.id }}">
                   <div class="flex items-start justify-between gap-3">
-                    <div class="flex-1">
-                      <div class="flex items-center gap-2">
-                        <svg class="w-4 h-4 text-blue-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
-                        </svg>
-                        <div class="text-sm font-medium">{{ t.title }}</div>
-                      </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="text-sm font-medium">{{ t.title }}</div>
                       <div class="text-xs text-brand-dark/70 mt-1">
-                        {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/" onclick="event.stopPropagation()">{{ t.company.name }}</a>{% endif %}
+                        {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
                         {% if t.created_by %} · назначил: {{ t.created_by }}{% endif %}
                         · {{ t.created_at|date:"d.m.Y H:i" }}
                       </div>
                     </div>
                     <span class="badge badge-new flex-shrink-0">Новая</span>
                   </div>
-                </a>
+                </button>
               </li>
             {% endfor %}
           </ul>
@@ -205,27 +197,22 @@
         {% if overdue %}
           <ul class="space-y-2">
             {% for t in overdue %}
-              <li class="group">
-                <a href="/tasks/{{ t.id }}/" class="block rounded-lg border-2 border-red-400 bg-red-50/50 p-3 hover:border-red-500 hover:bg-red-50 transition-all">
+              <li>
+                <button type="button" class="w-full text-left rounded-lg border border-red-300 bg-red-50/50 p-3 transition-all hover:border-red-400 hover:bg-red-50" data-view-task data-task-id="{{ t.id }}">
                   <div class="flex items-start justify-between gap-3">
-                    <div class="flex-1">
-                      <div class="flex items-center gap-2">
-                        <svg class="w-4 h-4 text-red-600 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M12 8v4"/><path d="M12 16h.01"/>
-                        </svg>
-                        <div class="text-sm font-medium">{{ t.title }}</div>
-                      </div>
+                    <div class="flex-1 min-w-0">
+                      <div class="text-sm font-medium">{{ t.title }}</div>
                       <div class="text-xs text-brand-dark/70 mt-1">
-                        {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/" onclick="event.stopPropagation()">{{ t.company.name }}</a>{% endif %}
+                        {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
                         {% if t.due_at %} · <span class="text-red-700 font-medium">дедлайн: {{ t.due_at|date:"d.m.Y H:i" }}</span>{% endif %}
                       </div>
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
-                      <span class="badge badge-danger">Просрочено</span>
+                      <span class="badge badge-danger text-xs">Просрочено</span>
                       <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
                     </div>
                   </div>
-                </a>
+                </button>
               </li>
             {% endfor %}
           </ul>
@@ -301,24 +288,24 @@
         {% if tasks_week %}
           <ul class="space-y-2">
             {% for t in tasks_week %}
-              <li class="group">
-                <a href="/tasks/{{ t.id }}/" class="block rounded-lg border p-3 transition-all {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}task-overdue border-red-400{% else %}hover:border-brand-teal/50 hover:bg-brand-soft/20{% endif %}" data-status="{{ t.status }}">
+              <li>
+                <button type="button" class="w-full text-left rounded-lg border border-brand-soft p-3 transition-all hover:border-brand-teal/50 hover:bg-brand-soft/20 {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}border-red-300 bg-red-50/50{% endif %}" data-view-task data-task-id="{{ t.id }}">
                   <div class="flex items-start justify-between gap-3">
-                    <div class="flex-1">
+                    <div class="flex-1 min-w-0">
                       <div class="text-sm font-medium">{{ t.title }}</div>
                       <div class="text-xs text-brand-dark/70 mt-1">
-                        {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/" onclick="event.stopPropagation()">{{ t.company.name }}</a>{% endif %}
-                        {% if t.due_at %} · <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}">{{ t.due_at|date:"d.m.Y H:i" }}</span>{% endif %}
+                        {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
+                        {% if t.due_at %} · <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700 font-medium{% endif %}">{{ t.due_at|date:"d.m.Y H:i" }}</span>{% endif %}
                       </div>
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
                       {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}
-                        <span class="badge badge-danger">Просрочено</span>
+                        <span class="badge badge-danger text-xs">Просрочено</span>
                       {% endif %}
                       <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
                     </div>
                   </div>
-                </a>
+                </button>
               </li>
             {% endfor %}
           </ul>
@@ -334,6 +321,29 @@
           </div>
         {% endif %}
       </section>
+    </div>
+
+    {# Модальное окно для просмотра задачи #}
+    <div id="taskViewModal" class="fixed inset-0 z-[200] hidden">
+      <div class="fixed inset-0 bg-black/35" data-close-task-view></div>
+      <div class="absolute inset-x-4 top-12 mx-auto max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div class="card card-pad">
+          <div class="flex items-start justify-between gap-3 mb-4">
+            <div class="flex-1">
+              <h2 class="text-xl font-semibold text-brand-dark" id="taskViewTitle">Загрузка...</h2>
+            </div>
+            <button type="button" class="btn btn-outline flex-shrink-0" style="padding:.35rem .5rem;font-size:.75rem" data-close-task-view aria-label="Закрыть" title="Закрыть">✕</button>
+          </div>
+          <div id="taskViewContent">
+            <div class="text-center py-8">
+              <svg class="animate-spin w-6 h-6 text-brand-teal mx-auto mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12a9 9 0 11-6.219-8.56"/>
+              </svg>
+              <div class="text-sm text-brand-dark/70">Загрузка задачи...</div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div id="coldCallsModal" class="fixed inset-0 z-[200] hidden">
@@ -493,6 +503,67 @@
           txtEl.select();
           document.execCommand('copy');
         }
+      });
+    })();
+  </script>
+
+  {# Модальное окно для просмотра задач #}
+  <script>
+    (function(){
+      const modal = document.getElementById('taskViewModal');
+      const modalContent = document.getElementById('taskViewContent');
+      const modalTitle = document.getElementById('taskViewTitle');
+      if(!modal || !modalContent || !modalTitle) return;
+
+      function closeModal() {
+        modal.classList.add('hidden');
+        modalContent.innerHTML = '<div class="text-center py-8"><svg class="animate-spin w-6 h-6 text-brand-teal mx-auto mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg><div class="text-sm text-brand-dark/70">Загрузка задачи...</div></div>';
+        modalTitle.textContent = 'Загрузка...';
+      }
+
+      function openModal() {
+        modal.classList.remove('hidden');
+      }
+
+      // Закрытие модалки
+      modal.querySelectorAll('[data-close-task-view]').forEach(btn => {
+        btn.addEventListener('click', closeModal);
+      });
+      document.addEventListener('keydown', (e) => {
+        if(e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+      });
+      modal.querySelector('.bg-black\\/35')?.addEventListener('click', (e) => {
+        if(e.target === e.currentTarget) closeModal();
+      });
+
+      // Открытие задачи в модальном окне
+      document.querySelectorAll('[data-view-task]').forEach(btn => {
+        btn.addEventListener('click', async function() {
+          const taskId = this.dataset.taskId;
+          if(!taskId) return;
+          
+          openModal();
+          
+          try {
+            const res = await fetch(`/tasks/${taskId}/?modal=1`, {
+              headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            if(!res.ok) throw new Error('Ошибка загрузки задачи');
+            const html = await res.text();
+            
+            // Парсим HTML и извлекаем нужные данные
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const taskTitle = doc.querySelector('h1, h2, .task-title')?.textContent?.trim() || 'Задача';
+            const taskContent = doc.querySelector('.task-content, .card, main')?.innerHTML || html;
+            
+            modalTitle.textContent = taskTitle;
+            modalContent.innerHTML = taskContent;
+          } catch(e) {
+            console.error('Task view error:', e);
+            modalContent.innerHTML = '<div class="text-center py-8 text-red-600">Ошибка загрузки задачи</div>';
+          }
+        });
       });
     })();
   </script>
