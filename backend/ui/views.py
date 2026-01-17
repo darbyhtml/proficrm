@@ -539,14 +539,15 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 
     # Собираем задачи (статусы NEW и IN_PROGRESS) БЕЗ due_at - это блок "Задачи"
     # Задачи с due_at будут обработаны в следующем цикле и попадут в категории по датам
+    tasks_new_all = []
     for task in all_tasks:
         if task.status in [Task.Status.NEW, Task.Status.IN_PROGRESS] and task.due_at is None:
-            tasks_new_list.append(task)
+            tasks_new_all.append(task)
 
     # Сортируем задачи по created_at (desc)
-    tasks_new_list.sort(key=lambda t: t.created_at, reverse=True)
-    tasks_new_count = len(tasks_new_list)
-    tasks_new_list = tasks_new_list[:5]  # Показываем только 5 на dashboard
+    tasks_new_all.sort(key=lambda t: t.created_at, reverse=True)
+    tasks_new_count = len(tasks_new_all)  # Общее количество для счетчика
+    tasks_new_list = tasks_new_all[:5]  # Показываем только 5 на dashboard
 
     # Обрабатываем ВСЕ задачи с due_at (включая NEW и IN_PROGRESS) - категоризируем по датам
     for task in all_tasks:
