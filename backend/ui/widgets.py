@@ -16,6 +16,31 @@ class TaskTypeSelectWidget(forms.Select):
         # Кэш для TaskType (загружаем один раз)
         self._task_types_cache = None
     
+    def optgroups(self, name, value, attrs=None):
+        """Переопределяем optgroups для добавления data-атрибутов ко всем опциям."""
+        groups = []
+        has_selected = False
+        
+        # Получаем данные TaskType
+        task_types = self._get_task_types()
+        
+        for index, (option_value, option_label) in enumerate(self.choices):
+            if option_value is None:
+                option_value = ''
+            
+            subgroup = []
+            subgroup.append(self.render_option(name, value, option_value, option_label, index, task_types))
+            groups.append((None, subgroup, index))
+            
+            if option_value == value:
+                has_selected = True
+        
+        if value and not has_selected:
+            # Если значение не найдено в choices, добавляем его
+            groups.append((None, [self.render_option(name, value, value, value, len(groups), task_types)], len(groups)))
+        
+        return groups
+    
     def _get_task_types(self):
         """Загружает все TaskType одним запросом и кэширует."""
         if self._task_types_cache is None:
@@ -63,7 +88,7 @@ class TaskTypeSelectWidget(forms.Select):
                 self._task_types_cache = {}
         return self._task_types_cache
     
-    def render_option(self, selected_choices, option_value, option_label):
+    def render_option(self, name, value, option_value, option_label, index, task_types=None):
         """Переопределяем рендеринг опции для добавления data-атрибутов с иконками и цветами."""
         if option_value is None:
             option_value = ''
@@ -73,7 +98,8 @@ class TaskTypeSelectWidget(forms.Select):
         task_type_data = None
         if option_value and option_value != '':
             try:
-                task_types = self._get_task_types()
+                if task_types is None:
+                    task_types = self._get_task_types()
                 if task_types:
                     task_type_data = task_types.get(option_value)
             except Exception as e:
@@ -85,22 +111,22 @@ class TaskTypeSelectWidget(forms.Select):
         
         # Если нашли TaskType, добавляем data-атрибуты
         if task_type_data:
-            selected = 'selected' if option_value in selected_choices else ''
+            selected = 'selected' if str(option_value) == str(value) else ''
             try:
                 icon = task_type_data.get('icon', '') or ''
                 color = task_type_data.get('color', '') or ''
-                name = task_type_data.get('name', option_label) or option_label
+                name_text = task_type_data.get('name', option_label) or option_label
                 # Логируем для отладки
                 import logging
                 logger = logging.getLogger(__name__)
-                logger.info(f"TaskTypeSelectWidget.render_option: option_value={option_value}, icon={icon}, color={color}, name={name}")
+                logger.info(f"TaskTypeSelectWidget.render_option: option_value={option_value}, icon={icon}, color={color}, name={name_text}")
                 result = format_html(
                     '<option value="{}" {} data-icon="{}" data-color="{}">{}</option>',
                     option_value,
                     selected,
                     icon,
                     color,
-                    name
+                    name_text
                 )
                 return result
             except Exception as e:
@@ -111,7 +137,7 @@ class TaskTypeSelectWidget(forms.Select):
                 pass
         
         # Обычный рендеринг для пустых опций
-        selected = 'selected' if option_value in selected_choices else ''
+        selected = 'selected' if str(option_value) == str(value) else ''
         return format_html(
             '<option value="{}" {}>{}</option>',
             option_value,
