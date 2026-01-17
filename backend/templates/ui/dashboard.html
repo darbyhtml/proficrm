@@ -164,13 +164,13 @@
       <section class="card card-pad dashboard-card" id="section-tasks-new">
         <div class="flex items-center justify-between mb-3">
           <div class="font-medium">
-            Новые задачи
+            Задачи
             {% if tasks_new_count > 0 %}
               <span class="ml-2 badge badge-new">{{ tasks_new_count }}</span>
             {% endif %}
           </div>
           {% if tasks_new_count > 5 %}
-            <a class="text-sm link" href="/tasks/?mine=1&status=new">
+            <a class="text-sm link" href="/tasks/?mine=1&status=new,in_progress">
               Посмотреть все
               <span class="text-xs text-brand-dark/60">({{ tasks_new_count }})</span>
             </a>
@@ -220,8 +220,8 @@
             <svg class="w-12 h-12 text-brand-dark/30 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/>
             </svg>
-            <div class="text-sm font-medium text-brand-dark/70 mb-1">Новых задач нет</div>
-            <div class="text-xs text-brand-dark/50 mb-4">Новые задачи появятся здесь</div>
+            <div class="text-sm font-medium text-brand-dark/70 mb-1">Задач нет</div>
+            <div class="text-xs text-brand-dark/50 mb-4">Задачи появятся здесь</div>
             <button type="button" class="btn btn-outline text-xs" data-create-task>+ Создать задачу</button>
           </div>
         {% endif %}

@@ -537,19 +537,19 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     tasks_week_list = []
     tasks_new_list = []
 
-    # Сначала собираем новые задачи (статус NEW)
+    # Собираем задачи (статусы NEW и IN_PROGRESS) - теперь это просто "Задачи"
     for task in all_tasks:
-        if task.status == Task.Status.NEW:
+        if task.status in [Task.Status.NEW, Task.Status.IN_PROGRESS]:
             tasks_new_list.append(task)
 
-    # Сортируем новые задачи по created_at (desc)
+    # Сортируем задачи по created_at (desc)
     tasks_new_list.sort(key=lambda t: t.created_at, reverse=True)
     tasks_new_count = len(tasks_new_list)
     tasks_new_list = tasks_new_list[:5]  # Показываем только 5 на dashboard
 
     # Остальные задачи (с due_at) - обрабатываем в одном проходе
     for task in all_tasks:
-        if task.status == Task.Status.NEW:
+        if task.status in [Task.Status.NEW, Task.Status.IN_PROGRESS]:
             continue  # Уже обработали
         
         if task.due_at is None:
@@ -608,9 +608,12 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         for task in task_list:
             # Если у задачи нет типа, но есть title, проверяем точное совпадение с TaskType
             if not task.type and task.title and task.title in task_types_by_name:
-                task.type = task_types_by_name[task.title]  # type: ignore[assignment]
+                task_type = task_types_by_name[task.title]
+                task.type = task_type  # type: ignore[assignment]
                 # Сохраняем связь в БД для будущих запросов
-                task.type_id = task_types_by_name[task.title].id  # type: ignore[attr-defined]
+                task.type_id = task_type.id  # type: ignore[attr-defined]
+                # Сохраняем в БД, чтобы не делать это каждый раз
+                Task.objects.filter(id=task.id).update(type_id=task_type.id)
             
             task.can_manage_status = _can_manage_task_status_ui(user, task)  # type: ignore[attr-defined]
             task.can_edit_task = _can_edit_task_ui(user, task)  # type: ignore[attr-defined]
@@ -690,7 +693,7 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
     tasks_new_list = []
 
     for task in all_tasks:
-        if task.status == Task.Status.NEW:
+        if task.status in [Task.Status.NEW, Task.Status.IN_PROGRESS]:
             tasks_new_list.append(task)
             if len(tasks_new_list) >= 20:
                 break
@@ -699,7 +702,7 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
     tasks_new_list = tasks_new_list[:20]
 
     for task in all_tasks:
-        if task.status == Task.Status.NEW:
+        if task.status in [Task.Status.NEW, Task.Status.IN_PROGRESS]:
             continue
         
         if task.due_at is None:
@@ -742,6 +745,27 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
             "level": level,
         })
 
+    # Сопоставляем задачи без типа с TaskType по точному совпадению названия
+    from tasksapp.models import TaskType
+    task_types_by_name = {tt.name: tt for tt in TaskType.objects.all()}
+    
+    # Применяем сопоставление ко всем задачам
+    tasks_to_update = []
+    for task_list in [tasks_new_list, tasks_today_list, overdue_list, tasks_week_list]:
+        for task in task_list:
+            if not task.type and task.title and task.title in task_types_by_name:
+                task_type = task_types_by_name[task.title]
+                task.type = task_type  # type: ignore[assignment]
+                task.type_id = task_type.id  # type: ignore[attr-defined]
+                tasks_to_update.append(task.id)
+    
+    # Сохраняем в БД пакетно для оптимизации
+    if tasks_to_update:
+        for task_id in tasks_to_update:
+            task = next((t for task_list in [tasks_new_list, tasks_today_list, overdue_list, tasks_week_list] for t in task_list if t.id == task_id), None)
+            if task and task.type_id:
+                Task.objects.filter(id=task_id).update(type_id=task.type_id)
+    
     # Сериализуем задачи для JSON
     def serialize_task(task):
         return {
@@ -3788,7 +3812,12 @@ def task_list(request: HttpRequest) -> HttpResponse:
     status = (request.GET.get("status") or "").strip()
     show_done = (request.GET.get("show_done") or "").strip()
     if status:
-        qs = qs.filter(status=status)
+        # Поддерживаем множественные статусы через запятую (например, "new,in_progress")
+        if ',' in status:
+            statuses = [s.strip() for s in status.split(',')]
+            qs = qs.filter(status__in=statuses)
+        else:
+            qs = qs.filter(status=status)
     else:
         # По умолчанию не показываем выполненные задачи, чтобы они не мешали в списке.
         if show_done != "1":
@@ -3994,6 +4023,27 @@ def task_list(request: HttpRequest) -> HttpResponse:
 
     # Подсчитываем общее количество задач после всех фильтров (до пагинации)
     tasks_count = qs.count()
+    
+    # Сопоставляем задачи без типа с TaskType по точному совпадению названия
+    # Загружаем все TaskType для сопоставления
+    from tasksapp.models import TaskType
+    task_types_by_name = {tt.name: tt for tt in TaskType.objects.all()}
+    
+    # Применяем сопоставление к задачам на текущей странице
+    tasks_to_update = []
+    for task in page.object_list:
+        if not task.type and task.title and task.title in task_types_by_name:
+            task_type = task_types_by_name[task.title]
+            task.type = task_type  # type: ignore[assignment]
+            task.type_id = task_type.id  # type: ignore[attr-defined]
+            tasks_to_update.append(task.id)
+    
+    # Сохраняем в БД пакетно для оптимизации
+    if tasks_to_update:
+        for task_id in tasks_to_update:
+            task = next((t for t in page.object_list if t.id == task_id), None)
+            if task and task.type_id:
+                Task.objects.filter(id=task_id).update(type_id=task.type_id)
     
     # Сохраняем сортировку в cookie, если она была изменена через GET параметры
     response = render(
