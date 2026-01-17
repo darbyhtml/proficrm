@@ -685,16 +685,16 @@
             renderNotifs(data.notif_items || [], data.notif_unread_count || 0);
             bindNotifActions();
 
-            // лёгкий лайв-сигнал: кольцо на колокольчике
-            if(hasNew){
-              const btn = document.getElementById('notifBtn');
-              if(btn){
-                btn.classList.add('ring-4','ring-brand-teal/15');
-                setTimeout(() => btn.classList.remove('ring-4','ring-brand-teal/15'), 1200);
-              }
-              // Браузерное уведомление + системный/браузерный звук (если браузер/ОС его позволяют)
-              if(newest) showBrowserNotification(newest);
-            }
+            // Убрана анимация кольца на колокольчике и браузерные уведомления - слишком отвлекают
+            // if(hasNew){
+            //   const btn = document.getElementById('notifBtn');
+            //   if(btn){
+            //     btn.classList.add('ring-4','ring-brand-teal/15');
+            //     setTimeout(() => btn.classList.remove('ring-4','ring-brand-teal/15'), 1200);
+            //   }
+            //   // Браузерное уведомление + системный/браузерный звук (если браузер/ОС его позволяют)
+            //   if(newest) showBrowserNotification(newest);
+            // }
           }catch(_e){
           }finally{
             pollInFlight = false;

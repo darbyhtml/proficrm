@@ -4651,35 +4651,16 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
     task_url = f"/tasks/?view_task={task.id}"
 
     if new_status == Task.Status.DONE:
-        # Уведомления о выполненной задаче:
-        # 1) Исполнитель (кто поменял статус)
-        # 2) Ответственный за задачу (assigned_to)
-        # 3) Создатель задачи
-        # 4) Директор филиала / РОП по филиалу компании/ответственного
-        # 5) Управляющие группой компаний
+        # Уведомления о выполненной задаче (упрощенная логика - только ключевые получатели):
+        # 1) Ответственный за задачу (assigned_to) - если это не тот, кто выполнил
+        # 2) Создатель задачи - если это не тот, кто выполнил, и не ответственный
         recipient_ids: set[int] = set()
-        recipient_ids.add(user.id)
-        if task.assigned_to_id:
+        
+        if task.assigned_to_id and task.assigned_to_id != user.id:
             recipient_ids.add(task.assigned_to_id)
-        if task.created_by_id:
+        
+        if task.created_by_id and task.created_by_id != user.id and task.created_by_id not in recipient_ids:
             recipient_ids.add(task.created_by_id)
-
-        branch_id = None
-        if task.company_id and getattr(task, "company", None):
-            branch_id = getattr(task.company, "branch_id", None)
-        if not branch_id and getattr(task, "assigned_to", None):
-            branch_id = getattr(task.assigned_to, "branch_id", None)
-
-        if branch_id:
-            for uid in User.objects.filter(
-                is_active=True,
-                role__in=[User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD],
-                branch_id=branch_id,
-            ).values_list("id", flat=True):
-                recipient_ids.add(int(uid))
-
-        for uid in User.objects.filter(is_active=True, role=User.Role.GROUP_MANAGER).values_list("id", flat=True):
-            recipient_ids.add(int(uid))
 
         for uid in recipient_ids:
             try:
@@ -4693,16 +4674,7 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
                 body=f"{task.title}",
                 url=task_url,
             )
-    else:
-        # Для остальных статусов сохраняем старую логику: уведомляем создателя (если это не он меняет)
-        if task.created_by_id and task.created_by_id != user.id:
-            notify(
-                user=task.created_by,
-                kind=Notification.Kind.TASK,
-                title="Статус изменён",
-                body=f"{task.title}: {task.get_status_display()}",
-                url=task_url,
-            )
+    # Убраны уведомления о изменении статуса на другие статусы (кроме "Выполнена") - они слишком отвлекают
     if task.company_id:
         log_event(
             actor=user,
