@@ -1,5 +1,6 @@
 from django import forms
 from django.utils.html import format_html
+from django.core.cache import cache
 
 
 class TaskTypeSelectWidget(forms.Select):
@@ -12,6 +13,22 @@ class TaskTypeSelectWidget(forms.Select):
             attrs = {}
         attrs.setdefault('class', 'w-full rounded-lg border px-3 py-2 task-type-select')
         self.attrs = attrs
+        # Кэш для TaskType (загружаем один раз)
+        self._task_types_cache = None
+    
+    def _get_task_types(self):
+        """Загружает все TaskType одним запросом и кэширует."""
+        if self._task_types_cache is None:
+            from tasksapp.models import TaskType
+            # Используем кэш Django для оптимизации (TTL 5 минут)
+            cache_key = 'task_types_all'
+            self._task_types_cache = cache.get(cache_key)
+            if self._task_types_cache is None:
+                self._task_types_cache = {
+                    str(tt.id): tt for tt in TaskType.objects.only('id', 'name', 'icon', 'color').all()
+                }
+                cache.set(cache_key, self._task_types_cache, 300)  # 5 минут
+        return self._task_types_cache
     
     def render_option(self, selected_choices, option_value, option_label):
         """Переопределяем рендеринг опции для добавления data-атрибутов с иконками и цветами."""
@@ -19,14 +36,11 @@ class TaskTypeSelectWidget(forms.Select):
             option_value = ''
         option_value = str(option_value)
         
-        # Получаем TaskType для этой опции
+        # Получаем TaskType из кэша (без запросов к БД)
         task_type = None
         if option_value:
-            try:
-                from tasksapp.models import TaskType
-                task_type = TaskType.objects.filter(id=int(option_value)).first()
-            except (ValueError, TypeError):
-                pass
+            task_types = self._get_task_types()
+            task_type = task_types.get(option_value)
         
         # Если нашли TaskType, добавляем data-атрибуты
         if task_type:

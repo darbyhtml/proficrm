@@ -4251,7 +4251,13 @@ def task_create(request: HttpRequest) -> HttpResponse:
 
     # Выбор компании: только те, которые пользователь может редактировать
     # Оптимизация: используем only() для загрузки только необходимых полей
-    form.fields["company"].queryset = _editable_company_qs(user).only("id", "name").order_by("name")
+    # Дополнительно: ограничиваем количество для модального окна (первые 1000 для autocomplete)
+    company_qs = _editable_company_qs(user).only("id", "name").order_by("name")
+    # Для модального окна ограничиваем количество компаний (если их очень много)
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.GET.get("modal") == "1":
+        # В модальном окне используем autocomplete, поэтому ограничиваем до 1000
+        company_qs = company_qs[:1000]
+    form.fields["company"].queryset = company_qs
 
     # Ограничить назначаемых (оптимизация: используем only() для загрузки только необходимых полей)
     if user.role == User.Role.MANAGER:
