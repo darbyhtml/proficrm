@@ -157,9 +157,12 @@
             modalContent.innerHTML = html;
             modal.classList.remove('hidden');
             
-            if (window.initTaskTypeSelects) {
-              window.initTaskTypeSelects();
-            }
+            // Инициализация select для типа задачи с задержкой
+            setTimeout(function() {
+              if (window.initTaskTypeSelects) {
+                window.initTaskTypeSelects();
+              }
+            }, 100);
             
             const form = modalContent.querySelector('[data-task-edit-form]');
             if (form) {

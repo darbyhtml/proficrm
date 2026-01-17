@@ -825,10 +825,12 @@
                             editModal.classList.remove('hidden');
                             // Закрываем текущее модальное окно просмотра
                             taskViewModal.classList.add('hidden');
-                            // Инициализация select
-                            if (window.initTaskTypeSelects) {
-                              window.initTaskTypeSelects();
-                            }
+                            // Инициализация select с небольшой задержкой для гарантии обновления DOM
+                            setTimeout(function() {
+                              if (window.initTaskTypeSelects) {
+                                window.initTaskTypeSelects();
+                              }
+                            }, 100);
                             // Обработка формы редактирования
                             const form = editModalContent.querySelector('[data-task-edit-form]');
                             if (form) {
@@ -977,9 +979,12 @@
             createModalContent.innerHTML = html;
             createModal.classList.remove('hidden');
             
-            if (window.initTaskTypeSelects) {
-              window.initTaskTypeSelects();
-            }
+            // Инициализация select с небольшой задержкой для гарантии обновления DOM
+            setTimeout(function() {
+              if (window.initTaskTypeSelects) {
+                window.initTaskTypeSelects();
+              }
+            }, 100);
             
             const form = createModalContent.querySelector('[data-task-create-form]');
             if (form) {
@@ -1050,9 +1055,12 @@
               const viewModal = document.getElementById('taskViewModal');
               if (viewModal) viewModal.classList.add('hidden');
               
-              if (window.initTaskTypeSelects) {
-                window.initTaskTypeSelects();
-              }
+              // Инициализация select с небольшой задержкой для гарантии обновления DOM
+              setTimeout(function() {
+                if (window.initTaskTypeSelects) {
+                  window.initTaskTypeSelects();
+                }
+              }, 100);
               
               const form = editModalContent.querySelector('[data-task-edit-form]');
               if (form) {

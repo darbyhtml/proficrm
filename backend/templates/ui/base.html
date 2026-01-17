@@ -1216,9 +1216,11 @@
       // Кастомный dropdown для выбора типа задачи с иконками и цветами
       (function() {
         window.initTaskTypeSelects = function() {
-          document.querySelectorAll('select.task-type-select').forEach(function(select) {
-            if (select.dataset.customDropdown) return;
-            select.dataset.customDropdown = 'true';
+          // Используем setTimeout для гарантии, что DOM обновлен
+          setTimeout(function() {
+            document.querySelectorAll('select.task-type-select').forEach(function(select) {
+              if (select.dataset.customDropdown) return;
+              select.dataset.customDropdown = 'true';
             
             // Скрываем оригинальный select
             select.style.display = 'none';
@@ -1370,7 +1372,8 @@
             wrapper.appendChild(dropdown);
             select.parentNode.insertBefore(wrapper, select);
             wrapper.appendChild(select);
-          });
+            });
+          }, 50); // Небольшая задержка для гарантии обновления DOM
         };
         
         // Инициализация при загрузке
