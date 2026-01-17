@@ -391,8 +391,15 @@ class UserCreateForm(forms.ModelForm):
 class UserEditForm(forms.ModelForm):
     """
     Форма редактирования пользователя.
-    Пароли не используются - вместо них используется генерация ключа доступа.
+    Для администраторов доступна генерация пароля.
     """
+    new_password = forms.CharField(
+        label="Новый пароль (только для администраторов)",
+        required=False,
+        widget=forms.PasswordInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "id": "id_new_password"}),
+        help_text="Оставьте пустым, чтобы не менять пароль. Доступно только для пользователей с ролью 'Администратор'.",
+    )
+
     class Meta:
         model = User
         # data_scope больше не используем: вся база компаний видна всем пользователям.
@@ -406,13 +413,26 @@ class UserEditForm(forms.ModelForm):
             "branch": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
 
+    def clean_new_password(self):
+        p = self.cleaned_data.get("new_password") or ""
+        if p:
+            validate_password(p)
+        return p
+
     def save(self, commit=True):
         user = super().save(commit=False)
         # Админка доступна только ADMIN + is_staff
         user.is_staff = user.role == User.Role.ADMIN
-        # Убеждаемся, что пароль неиспользуемый (если пользователь был создан до миграции)
-        if not user.has_usable_password():
-            user.set_unusable_password()
+        
+        # Устанавливаем пароль только для администраторов
+        p = self.cleaned_data.get("new_password") or ""
+        if p and user.role == User.Role.ADMIN:
+            user.set_password(p)
+        elif user.role != User.Role.ADMIN:
+            # Для не-администраторов устанавливаем неиспользуемый пароль
+            if not user.has_usable_password():
+                user.set_unusable_password()
+        
         if commit:
             user.save()
         return user

@@ -33,6 +33,14 @@ class SecureLoginView(auth_views.LoginView):
     
     template_name = "registration/login.html"
     
+    def dispatch(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
+        """Редиректим на главную, если пользователь уже авторизован."""
+        if request.user.is_authenticated:
+            from django.shortcuts import redirect
+            from django.conf import settings
+            return redirect(settings.LOGIN_REDIRECT_URL)
+        return super().dispatch(request, *args, **kwargs)
+    
     def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
         ip = get_client_ip(request)
         username = request.POST.get("username", "").strip()
@@ -98,12 +106,14 @@ class SecureLoginView(auth_views.LoginView):
                 )
             )
         
-        # Проверяем, используется ли ключ доступа вместо пароля
+        # Определяем тип входа
+        login_type = request.POST.get("login_type", "access_key")
         access_key = request.POST.get("access_key", "").strip()
         username = request.POST.get("username", "").strip()
+        password = request.POST.get("password", "").strip()
         
-        if access_key:
-            # Вход по ключу доступа
+        # Вход по ключу доступа (без логина)
+        if login_type == "access_key" and access_key:
             ip = get_client_ip(request)
             user_agent = request.META.get("HTTP_USER_AGENT", "")[:255]
             
@@ -115,23 +125,12 @@ class SecureLoginView(auth_views.LoginView):
                     )
                 )
             
-            # Ищем пользователя по логину
-            try:
-                user = User.objects.get(username=username, is_active=True)
-            except User.DoesNotExist:
-                record_failed_login_attempt(username, ip, "user_not_found")
-                return self.render_to_response(
-                    self.get_context_data(
-                        error_message="Неверный логин или ключ доступа."
-                    )
-                )
-            
-            # Ищем валидный токен для этого пользователя
+            # Ищем валидный токен по хэшу (без логина)
             import hashlib
             try:
                 token_hash = hashlib.sha256(access_key.encode()).hexdigest()
             except Exception:
-                record_failed_login_attempt(username, ip, "invalid_token_format")
+                record_failed_login_attempt("", ip, "invalid_token_format")
                 return self.render_to_response(
                     self.get_context_data(
                         error_message="Неверный формат ключа доступа."
@@ -139,29 +138,40 @@ class SecureLoginView(auth_views.LoginView):
                 )
             
             try:
-                magic_link = MagicLinkToken.objects.get(token_hash=token_hash, user=user)
+                magic_link = MagicLinkToken.objects.get(token_hash=token_hash)
             except MagicLinkToken.DoesNotExist:
-                record_failed_login_attempt(username, ip, "token_not_found")
+                record_failed_login_attempt("", ip, "token_not_found")
                 return self.render_to_response(
                     self.get_context_data(
-                        error_message="Неверный логин или ключ доступа."
+                        error_message="Неверный ключ доступа."
                     )
                 )
+            
+            user = magic_link.user
             
             # Проверяем валидность токена
             if not magic_link.is_valid():
                 reason = "истёк" if timezone.now() >= magic_link.expires_at else "уже использован"
-                record_failed_login_attempt(username, ip, f"token_{reason}")
+                record_failed_login_attempt(user.username if user else "", ip, f"token_{reason}")
                 return self.render_to_response(
                     self.get_context_data(
                         error_message=f"Ключ доступа {reason}. Обратитесь к администратору для получения нового ключа."
                     )
                 )
             
+            # Проверяем, что пользователь активен
+            if not user.is_active:
+                record_failed_login_attempt(user.username, ip, "user_inactive")
+                return self.render_to_response(
+                    self.get_context_data(
+                        error_message="Аккаунт неактивен."
+                    )
+                )
+            
             # Вход успешен
             login(request, user)
             magic_link.mark_as_used(ip_address=ip, user_agent=user_agent)
-            clear_login_attempts(username)
+            clear_login_attempts(user.username)
             
             # Логируем успешный вход
             try:

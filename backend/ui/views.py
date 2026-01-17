@@ -4510,6 +4510,26 @@ def settings_user_edit(request: HttpRequest, user_id: int) -> HttpResponse:
             .order_by("-created_at")
             .select_related("created_by")
         )
+        
+        # Получаем дату последней активности для каждого токена (если токен использован)
+        from audit.models import ActivityEvent
+        for token in all_tokens:
+            if token.used_at:
+                # Ищем последнюю активность пользователя после использования токена
+                last_activity = (
+                    ActivityEvent.objects.filter(
+                        actor=u,
+                        created_at__gte=token.used_at
+                    )
+                    .order_by("-created_at")
+                    .first()
+                )
+                if last_activity:
+                    token.last_activity = last_activity.created_at
+                else:
+                    token.last_activity = token.used_at
+            else:
+                token.last_activity = None
     
     # Проверяем, была ли только что сгенерирована ссылка (из сессии)
     magic_link_generated = None
