@@ -1533,10 +1533,14 @@
             
             // Показываем подписи когда input в фокусе или имеет значение
             function updateLabelsVisibility() {
-              if (input === document.activeElement || input.value) {
+              // Показываем подписи когда календарик открыт (input в фокусе) или есть значение
+              if (input === document.activeElement) {
+                timeLabelsContainer.classList.add('show');
+              } else if (input.value) {
+                // Если есть значение, показываем подписи
                 timeLabelsContainer.classList.add('show');
               } else {
-                // Небольшая задержка, чтобы календарик успел закрыться
+                // Скрываем с задержкой, чтобы календарик успел закрыться
                 setTimeout(function() {
                   if (input !== document.activeElement) {
                     timeLabelsContainer.classList.remove('show');
@@ -1548,7 +1552,16 @@
             input.addEventListener('focus', function() {
               timeLabelsContainer.classList.add('show');
             });
-            input.addEventListener('blur', updateLabelsVisibility);
+            input.addEventListener('blur', function() {
+              // При потере фокуса скрываем подписи, если нет значения
+              if (!input.value) {
+                setTimeout(function() {
+                  if (input !== document.activeElement) {
+                    timeLabelsContainer.classList.remove('show');
+                  }
+                }, 300);
+              }
+            });
             input.addEventListener('change', function() {
               if (input.value) {
                 timeLabelsContainer.classList.add('show');
