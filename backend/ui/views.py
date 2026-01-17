@@ -4158,10 +4158,21 @@ def task_create(request: HttpRequest) -> HttpResponse:
                     if not _can_edit_company(user, c):
                         skipped += 1
                         continue
-                    # Если менеджер создает задачу для компании, где он ответственный, то статус "В работе"
-                    initial_status = Task.Status.NEW
-                    if user.role == User.Role.MANAGER and c.responsible_id == user.id:
+                    # Логика установки статуса при создании задачи по организации:
+                    # 1. Если создатель создает задачу сам себе -> статус "В работе"
+                    if task.assigned_to_id == user.id:
                         initial_status = Task.Status.IN_PROGRESS
+                    # 2. Если РОП/директор/управляющий/админ создает задачу кому-то другому -> статус "Новая"
+                    elif user.role in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR, User.Role.GROUP_MANAGER, User.Role.ADMIN):
+                        if task.assigned_to_id and task.assigned_to_id != user.id:
+                            initial_status = Task.Status.NEW
+                        else:
+                            initial_status = Task.Status.IN_PROGRESS
+                    # 3. Для менеджеров: если создает задачу для компании, где он ответственный -> статус "В работе"
+                    elif user.role == User.Role.MANAGER and c.responsible_id == user.id:
+                        initial_status = Task.Status.IN_PROGRESS
+                    else:
+                        initial_status = Task.Status.NEW
                     
                     t = Task(
                         created_by=user,
@@ -4204,8 +4215,16 @@ def task_create(request: HttpRequest) -> HttpResponse:
             if task.type:
                 task.title = task.type.name
             
-            # Если менеджер создает задачу для компании, где он ответственный, то статус "В работе"
-            if user.role == User.Role.MANAGER and task.company_id and comp:
+            # Логика установки статуса при создании задачи:
+            # 1. Если создатель создает задачу сам себе -> статус "В работе"
+            if task.assigned_to_id == user.id:
+                task.status = Task.Status.IN_PROGRESS
+            # 2. Если РОП/директор/управляющий/админ создает задачу кому-то другому -> статус "Новая" (по умолчанию)
+            elif user.role in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR, User.Role.GROUP_MANAGER, User.Role.ADMIN):
+                if task.assigned_to_id and task.assigned_to_id != user.id:
+                    task.status = Task.Status.NEW
+            # 3. Для менеджеров: если создает задачу для компании, где он ответственный -> статус "В работе"
+            elif user.role == User.Role.MANAGER and task.company_id and comp:
                 if comp.responsible_id == user.id:
                     task.status = Task.Status.IN_PROGRESS
             
