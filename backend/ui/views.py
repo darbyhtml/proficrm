@@ -541,8 +541,16 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     # Собираем задачи (статусы NEW и IN_PROGRESS) БЕЗ due_at - это блок "Задачи"
     # Задачи с due_at будут обработаны в следующем цикле и попадут в категории по датам
     tasks_new_all = []
+    tasks_with_due_at_ids = set()  # Запоминаем ID задач с due_at, чтобы исключить их из блока "Задачи"
+    
+    # Сначала проходим по всем задачам и запоминаем те, у которых есть due_at
     for task in all_tasks:
-        if task.status in [Task.Status.NEW, Task.Status.IN_PROGRESS] and task.due_at is None:
+        if task.due_at is not None:
+            tasks_with_due_at_ids.add(task.id)
+    
+    # Теперь собираем задачи БЕЗ due_at для блока "Задачи"
+    for task in all_tasks:
+        if task.status in [Task.Status.NEW, Task.Status.IN_PROGRESS] and task.id not in tasks_with_due_at_ids:
             tasks_new_all.append(task)
 
     # Сортируем задачи по created_at (desc)
