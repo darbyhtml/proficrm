@@ -4824,17 +4824,8 @@ def task_edit(request: HttpRequest, task_id) -> HttpResponse:
     else:
         form = TaskEditForm(instance=task)
     
-    # Оптимизация queryset'ов для формы редактирования
-    # Не используем only() здесь, т.к. _editable_company_qs использует select_related
-    form.fields["company"].queryset = _editable_company_qs(user).order_by("name")
-    if user.role == User.Role.MANAGER:
-        form.fields["assigned_to"].queryset = User.objects.filter(id=user.id).only("id", "first_name", "last_name")
-    elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
-        form.fields["assigned_to"].queryset = User.objects.filter(
-            Q(id=user.id) | Q(branch_id=user.branch_id, role=User.Role.MANAGER)
-        ).only("id", "first_name", "last_name").order_by("last_name", "first_name")
-    else:
-        form.fields["assigned_to"].queryset = User.objects.only("id", "first_name", "last_name").order_by("last_name", "first_name")
+    # Оптимизация queryset для типа задачи (используем only() для загрузки только необходимых полей)
+    form.fields["type"].queryset = TaskType.objects.only("id", "name").order_by("name")
     
     # Если запрос на модалку (через AJAX или параметр modal=1)
     if request.headers.get("X-Requested-With") == "XMLHttpRequest" or request.GET.get("modal") == "1":
