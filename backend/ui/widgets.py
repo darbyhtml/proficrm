@@ -16,80 +16,28 @@ class TaskTypeSelectWidget(forms.Select):
         # Кэш для TaskType (загружаем один раз)
         self._task_types_cache = None
     
-    def optgroups(self, name, value, attrs=None):
-        """Переопределяем optgroups для добавления data-атрибутов ко всем опциям."""
-        from django.forms.widgets import flatatt
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        """Переопределяем create_option для добавления data-атрибутов."""
+        option = super().create_option(name, value, label, selected, index, subindex, attrs)
         
-        groups = []
-        has_selected = False
-        
-        # Получаем данные TaskType один раз
-        task_types = self._get_task_types()
-        
-        for index, (option_value, option_label) in enumerate(self.choices):
-            if option_value is None:
-                option_value = ''
-            
-            option_value = str(option_value)
-            selected = str(option_value) == str(value)
-            if selected:
-                has_selected = True
-            
-            # Получаем TaskType данные
-            task_type_data = None
-            if option_value and option_value != '' and task_types:
-                task_type_data = task_types.get(option_value)
-            
-            # Формируем HTML опции
-            if task_type_data:
-                icon = task_type_data.get('icon', '') or ''
-                color = task_type_data.get('color', '') or ''
-                name_text = task_type_data.get('name', option_label) or option_label
-                option_html = format_html(
-                    '<option value="{}"{} data-icon="{}" data-color="{}">{}</option>',
-                    option_value,
-                    ' selected' if selected else '',
-                    icon,
-                    color,
-                    name_text
-                )
-            else:
-                option_html = format_html(
-                    '<option value="{}"{}>{}</option>',
-                    option_value,
-                    ' selected' if selected else '',
-                    option_label
-                )
-            
-            subgroup = [option_html]
-            groups.append((None, subgroup, index))
-        
-        if value and not has_selected:
-            # Если значение не найдено в choices, добавляем его
-            task_type_data = None
+        # Получаем TaskType данные
+        if value and value != '':
+            task_types = self._get_task_types()
             if task_types:
                 task_type_data = task_types.get(str(value))
-            
-            if task_type_data:
-                icon = task_type_data.get('icon', '') or ''
-                color = task_type_data.get('color', '') or ''
-                name_text = task_type_data.get('name', str(value)) or str(value)
-                option_html = format_html(
-                    '<option value="{}" selected data-icon="{}" data-color="{}">{}</option>',
-                    value,
-                    icon,
-                    color,
-                    name_text
-                )
-            else:
-                option_html = format_html(
-                    '<option value="{}" selected>{}</option>',
-                    value,
-                    value
-                )
-            groups.append((None, [option_html], len(groups)))
+                if task_type_data:
+                    icon = task_type_data.get('icon', '') or ''
+                    color = task_type_data.get('color', '') or ''
+                    # Добавляем data-атрибуты к attrs опции
+                    if 'attrs' not in option:
+                        option['attrs'] = {}
+                    option['attrs']['data-icon'] = icon
+                    option['attrs']['data-color'] = color
+                    # Обновляем label на name из справочника
+                    if task_type_data.get('name'):
+                        option['label'] = task_type_data.get('name')
         
-        return groups
+        return option
     
     def _get_task_types(self):
         """Загружает все TaskType одним запросом и кэширует."""
