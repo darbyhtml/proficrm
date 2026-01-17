@@ -444,9 +444,12 @@ class DashboardViewTestCase(TestCase):
 
     def test_contracts_soon_limit_50_companies(self):
         """Тест: договоры ограничены 50 компаниями."""
-        # Создаём 55 компаний с договорами (в пределах 30 дней)
+        # Создаём 55 компаний с договорами (в пределах 30 дней, чтобы все попали в фильтр)
         for i in range(55):
-            contract_until = self.today_date + timedelta(days=1 + i)  # От 1 до 55 дней
+            # Создаём договоры от 1 до 30 дней (все попадут в фильтр)
+            # Используем остаток от деления, чтобы циклически распределить по 30 дням
+            days_offset = (i % 30) + 1  # От 1 до 30 дней
+            contract_until = self.today_date + timedelta(days=days_offset)
             Company.objects.create(
                 name=f"Компания {i}",
                 responsible=self.user,
