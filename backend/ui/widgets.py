@@ -16,29 +16,6 @@ class TaskTypeSelectWidget(forms.Select):
         # Кэш для TaskType (загружаем один раз)
         self._task_types_cache = None
     
-    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
-        """Переопределяем create_option для добавления data-атрибутов."""
-        option = super().create_option(name, value, label, selected, index, subindex, attrs)
-        
-        # Получаем TaskType данные
-        if value and value != '':
-            task_types = self._get_task_types()
-            if task_types:
-                task_type_data = task_types.get(str(value))
-                if task_type_data:
-                    icon = task_type_data.get('icon', '') or ''
-                    color = task_type_data.get('color', '') or ''
-                    # Добавляем data-атрибуты к attrs опции
-                    if 'attrs' not in option:
-                        option['attrs'] = {}
-                    option['attrs']['data-icon'] = icon
-                    option['attrs']['data-color'] = color
-                    # Обновляем label на name из справочника
-                    if task_type_data.get('name'):
-                        option['label'] = task_type_data.get('name')
-        
-        return option
-    
     def _get_task_types(self):
         """Загружает все TaskType одним запросом и кэширует."""
         if self._task_types_cache is None:
@@ -86,3 +63,80 @@ class TaskTypeSelectWidget(forms.Select):
                 self._task_types_cache = {}
         return self._task_types_cache
     
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        """Переопределяем create_option для добавления data-атрибутов."""
+        option = super().create_option(name, value, label, selected, index, subindex, attrs)
+        
+        # Получаем TaskType данные
+        if value and value != '':
+            task_types = self._get_task_types()
+            if task_types:
+                task_type_data = task_types.get(str(value))
+                if task_type_data:
+                    icon = task_type_data.get('icon', '') or ''
+                    color = task_type_data.get('color', '') or ''
+                    # Добавляем data-атрибуты к attrs опции
+                    if 'attrs' not in option:
+                        option['attrs'] = {}
+                    option['attrs']['data-icon'] = icon
+                    option['attrs']['data-color'] = color
+                    # Обновляем label на name из справочника
+                    if task_type_data.get('name'):
+                        option['label'] = task_type_data.get('name')
+        
+        return option
+
+
+class UserSelectWithBranchWidget(forms.Select):
+    """Кастомный виджет для выбора пользователя с группировкой по городам филиалов."""
+    
+    def optgroups(self, name, value, attrs=None):
+        """Группируем пользователей по городам филиалов."""
+        groups = []
+        has_selected = False
+        
+        # Группируем choices по branch__name
+        # Сначала загружаем всех пользователей одним запросом для оптимизации
+        from collections import defaultdict
+        from accounts.models import User
+        
+        user_ids = [str(opt[0]) for opt in self.choices if opt[0] and opt[0] != '']
+        users_dict = {}
+        if user_ids:
+            users = User.objects.filter(id__in=user_ids).select_related('branch').only('id', 'branch__name')
+            users_dict = {str(u.id): u for u in users}
+        
+        grouped = defaultdict(list)
+        
+        for index, (option_value, option_label) in enumerate(self.choices):
+            if option_value is None:
+                option_value = ''
+            
+            # Получаем пользователя для определения города
+            branch_name = "Без филиала"
+            if option_value and option_value != '':
+                user = users_dict.get(str(option_value))
+                if user and user.branch:
+                    branch_name = user.branch.name
+            
+            grouped[branch_name].append((index, option_value, option_label))
+            
+            if str(option_value) == str(value):
+                has_selected = True
+        
+        # Формируем optgroups
+        group_index = 0
+        for branch_name in sorted(grouped.keys()):
+            subgroup = []
+            for index, option_value, option_label in grouped[branch_name]:
+                option = self.create_option(name, value, option_label, str(option_value) == str(value), index)
+                subgroup.append(option)
+            groups.append((branch_name, subgroup, group_index))
+            group_index += 1
+        
+        if value and not has_selected:
+            # Если значение не найдено в choices, добавляем его
+            option = self.create_option(name, value, str(value), True, len(groups))
+            groups.append(("Другое", [option], len(groups)))
+        
+        return groups
