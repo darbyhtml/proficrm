@@ -119,7 +119,6 @@ def import_amo_csv(
     import_notes: bool = True,
     import_contacts: bool = True,
     set_responsible: bool = True,
-    set_lead_state: bool = True,
 ) -> ImportResult:
     """
     Импорт из CSV в формате amo/base.csv.
@@ -256,8 +255,6 @@ def import_amo_csv(
                             amocrm_company_id=int(amo_id) if str(amo_id).isdigit() else None,
                             raw_fields={"source": "amo_import", "amo_row": row},
                         )
-                        if set_lead_state and is_cold_flag:
-                            company.lead_state = Company.LeadState.COLD
                         result.created_companies += 1
                         created = True
                     else:
@@ -301,10 +298,6 @@ def import_amo_csv(
                             changed = True
                         if str(amo_id).isdigit() and company.amocrm_company_id != int(amo_id):
                             company.amocrm_company_id = int(amo_id)
-                            changed = True
-                        if set_lead_state and is_cold_flag and company.lead_state != Company.LeadState.COLD:
-                            # не трогаем обратный перевод warm->cold, кроме явного флага
-                            company.lead_state = Company.LeadState.COLD
                             changed = True
                         if changed:
                             result.updated_companies += 1

@@ -24,18 +24,6 @@ urlpatterns = [
     path("companies/<uuid:company_id>/contract/update/", views.company_contract_update, name="company_contract_update"),
     path("companies/<uuid:company_id>/cold-call/toggle/", views.company_cold_call_toggle, name="company_cold_call_toggle"),
     path("companies/<uuid:company_id>/cold-call/reset/", views.company_cold_call_reset, name="company_cold_call_reset"),
-    path("companies/<uuid:company_id>/lead-state/request/", views.company_lead_state_request_create, name="company_lead_state_request_create"),
-    path(
-        "companies/<uuid:company_id>/lead-state/request/<uuid:req_id>/approve/",
-        views.company_lead_state_request_approve,
-        name="company_lead_state_request_approve",
-    ),
-    path(
-        "companies/<uuid:company_id>/lead-state/request/<uuid:req_id>/cancel/",
-        views.company_lead_state_request_cancel,
-        name="company_lead_state_request_cancel",
-    ),
-    path("companies/<uuid:company_id>/lead-state/set/", views.company_lead_state_set, name="company_lead_state_set"),
     path("companies/<uuid:company_id>/transfer/", views.company_transfer, name="company_transfer"),
     path("companies/<uuid:company_id>/delete-request/", views.company_delete_request_create, name="company_delete_request_create"),
     path("companies/<uuid:company_id>/delete-request/<int:req_id>/cancel/", views.company_delete_request_cancel, name="company_delete_request_cancel"),

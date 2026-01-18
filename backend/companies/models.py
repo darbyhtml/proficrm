@@ -52,18 +52,6 @@ class Company(models.Model):
     address = models.CharField("Адрес", max_length=500, blank=True, default="")
     website = models.CharField("Сайт", max_length=255, blank=True, default="")
     activity_kind = models.CharField("Вид деятельности", max_length=255, blank=True, default="", db_index=True)
-    class LeadState(models.TextChoices):
-        COLD = "cold", "Холодный контакт"
-        WARM = "warm", "Теплый контакт"
-
-    lead_state = models.CharField(
-        "Состояние контакта",
-        max_length=8,
-        choices=LeadState.choices,
-        default=LeadState.WARM,
-        db_index=True,
-        help_text="Холодный/тёплый контакт (влияет на доступность отметок «холодный звонок»).",
-    )
     # Устаревшее: раньше отметка была на всю компанию. Оставляем поле для обратной совместимости/данных,
     # но в UI/логике используем отметки на контактах.
     is_cold_call = models.BooleanField("Холодный звонок (устар.)", default=False, db_index=True)
@@ -409,48 +397,6 @@ class ContactPhone(models.Model):
     def __str__(self) -> str:
         return self.value
 
-
-class CompanyLeadStateRequest(models.Model):
-    """
-    Запрос менеджера на смену состояния карточки (холодная/тёплая).
-    Подтверждается РОП или директором филиала; после решения у второго уведомление должно исчезнуть.
-    """
-
-    class Status(models.TextChoices):
-        PENDING = "pending", "Ожидает решения"
-        APPROVED = "approved", "Подтверждено"
-        CANCELLED = "cancelled", "Отклонено"
-
-    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    company = models.ForeignKey(Company, on_delete=models.CASCADE, related_name="lead_state_requests", verbose_name="Компания")
-    requested_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name="lead_state_requests",
-        verbose_name="Кто запросил",
-    )
-    requested_state = models.CharField("Запрошенное состояние", max_length=8, choices=Company.LeadState.choices)
-    note = models.TextField("Примечание", blank=True, default="")
-    status = models.CharField("Статус", max_length=16, choices=Status.choices, default=Status.PENDING, db_index=True)
-    created_at = models.DateTimeField("Создано", auto_now_add=True, db_index=True)
-
-    decided_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="lead_state_decisions",
-        verbose_name="Кто решил",
-    )
-    decision_note = models.TextField("Комментарий решения", blank=True, default="")
-    decided_at = models.DateTimeField("Когда решили", null=True, blank=True, db_index=True)
-
-    class Meta:
-        indexes = [
-            models.Index(fields=["company", "status", "created_at"]),
-            models.Index(fields=["status", "created_at"]),
-        ]
 
 class CompanyDeletionRequest(models.Model):
     class Status(models.TextChoices):

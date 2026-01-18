@@ -18,7 +18,7 @@
         <div class="flex gap-2">
           <a href="/companies/new/" class="btn btn-primary">+ Добавить компанию</a>
           {% if is_admin %}
-            <a href="/companies/export/?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}&cold_call={{ cold_call }}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}" class="btn btn-outline">Экспорт CSV</a>
+            <a href="/companies/export/?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}" class="btn btn-outline">Экспорт CSV</a>
           {% endif %}
         </div>
       </div>
@@ -85,14 +85,6 @@
           {% for val, label in contract_types %}
             <option value="{{ val }}" {% if contract_type == val %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label class="block text-sm text-brand-dark/80 mb-1">Состояние</label>
-        <select name="cold_call" class="select w-full">
-          <option value="">Любой</option>
-          <option value="1" {% if cold_call == "1" %}selected{% endif %}>Холодный контакт</option>
-          <option value="0" {% if cold_call == "0" %}selected{% endif %}>Теплый контакт</option>
         </select>
       </div>
       <div class="col-span-full flex flex-col md:flex-row md:items-end md:flex-wrap gap-2 justify-between">
@@ -256,16 +248,13 @@
           </thead>
           <tbody>
             {% for c in page.object_list %}
-              <tr onclick="window.location='/companies/{{ c.id }}/'" style="cursor:pointer" class="{% if c.has_overdue %}company-row-overdue{% elif c.lead_state == 'cold' %}company-row-cold{% endif %}">
+              <tr onclick="window.location='/companies/{{ c.id }}/'" style="cursor:pointer" class="{% if c.has_overdue %}company-row-overdue{% endif %}">
                 <td onclick="event.stopPropagation()">
                   <input class="bulk-company" type="checkbox" name="company_ids" value="{{ c.id }}" form="bulkTransferForm" data-can-transfer="{% if c.can_transfer %}1{% else %}0{% endif %}" />
                 </td>
                 {% if "name" in company_list_columns %}
                   <td>
                     <a class="link" href="/companies/{{ c.id }}/" onclick="event.stopPropagation()">{{ c.name }}</a>
-                    {% if c.lead_state == 'cold' %}
-                      <span class="badge badge-warn ml-2" style="padding:.1rem .35rem;font-size:.65rem">Холодный контакт</span>
-                    {% endif %}
                     {% if "address" in company_list_columns %}
                       <div class="text-xs text-brand-dark/70">{{ c.address }}</div>
                     {% endif %}
@@ -331,7 +320,6 @@
             {% if branch %}<input type="hidden" name="branch" value="{{ branch }}" />{% endif %}
             {% if sphere %}<input type="hidden" name="sphere" value="{{ sphere }}" />{% endif %}
             {% if contract_type %}<input type="hidden" name="contract_type" value="{{ contract_type }}" />{% endif %}
-            {% if cold_call %}<input type="hidden" name="cold_call" value="{{ cold_call }}" />{% endif %}
             {% if overdue %}<input type="hidden" name="overdue" value="{{ overdue }}" />{% endif %}
             {% if sort %}<input type="hidden" name="sort" value="{{ sort }}" />{% endif %}
             {% if dir %}<input type="hidden" name="dir" value="{{ dir }}" />{% endif %}

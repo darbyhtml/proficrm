@@ -24,22 +24,6 @@
                 {% if delete_req %}Запрос отправлен{% else %}Запросить удаление{% endif %}
               </button>
             {% endif %}
-            {% if can_request_lead_state %}
-              <button
-                type="button"
-                class="btn btn-outline"
-                style="padding:.35rem .6rem;font-size:.75rem"
-                id="openLeadStateReqModal"
-                {% if lead_state_req %}disabled{% endif %}
-                title="{% if lead_state_req %}Запрос уже отправлен{% else %}Запросить смену состояния{% endif %}"
-              >
-                {% if lead_state_req %}
-                  Запрос состояния
-                {% else %}
-                  Сделать теплым
-                {% endif %}
-              </button>
-            {% endif %}
           </div>
         </div>
         <div class="text-sm text-brand-dark/80">
@@ -71,48 +55,6 @@
               {% endif %}
             </div>
           </div>
-          {% endif %}
-        {% endif %}
-        {% if lead_state_req %}
-          {% if can_decide_lead_state or can_request_lead_state %}
-            <div class="mt-3 rounded-xl border border-brand-orange/60 bg-brand-orange/15 px-4 py-3 text-sm text-brand-dark">
-              <div class="flex items-start justify-between gap-3">
-                <div class="min-w-0">
-                  <div class="font-medium">Запрос смены состояния</div>
-                  <div class="text-xs muted-2 mt-1">
-                    От: <b>{{ lead_state_req.requested_by|default:"—" }}</b> · {{ lead_state_req.created_at }}
-                  </div>
-                  <div class="mt-2 flex flex-wrap items-center gap-2">
-                    <span class="badge badge-warn" style="padding:.1rem .35rem;font-size:.65rem">Нужно изменить</span>
-                    <span class="text-sm">
-                      → <b>{% if lead_state_req.requested_state == "warm" %}Теплый контакт{% else %}Холодный контакт{% endif %}</b>
-                    </span>
-                  </div>
-                  {% if lead_state_req.note %}
-                    <div class="mt-2 whitespace-pre-line">{{ lead_state_req.note }}</div>
-                  {% endif %}
-                  <div class="text-xs muted-2 mt-2">
-                    После решения запрос будет закрыт, а уведомление у второго руководителя исчезнет.
-                  </div>
-                </div>
-                {% if can_decide_lead_state %}
-                  <div class="flex flex-col gap-2 shrink-0">
-                    <button
-                      type="button"
-                      class="btn btn-outline"
-                      style="padding:.35rem .6rem;font-size:.75rem;border-color:rgba(239,68,68,.35);color:#b91c1c;background:rgba(239,68,68,.06)"
-                      id="openCancelLeadStateReqModal"
-                    >
-                      Отклонить
-                    </button>
-                    <form method="post" action="/companies/{{ company.id }}/lead-state/request/{{ lead_state_req.id }}/approve/" onsubmit="return confirm('Подтвердить смену состояния карточки?');">
-                      {% csrf_token %}
-                      <button type="submit" class="btn btn-primary" style="padding:.35rem .6rem;font-size:.75rem">Подтвердить</button>
-                    </form>
-                  </div>
-                {% endif %}
-              </div>
-            </div>
           {% endif %}
         {% endif %}
         {% if pinned_note %}
@@ -234,33 +176,6 @@
           <div>
             <div class="text-brand-dark/50">Руководитель</div>
             <div>{{ company.contact_name|default:"—" }}</div>
-          </div>
-          <div>
-            <div class="text-brand-dark/50">Состояние</div>
-            <div class="flex flex-wrap items-center gap-2">
-              {% if is_cold_company %}
-                <span class="badge badge-warn" style="padding:.1rem .35rem;font-size:.65rem">Холодный контакт</span>
-              {% else %}
-                <span class="badge" style="padding:.1rem .35rem;font-size:.65rem">Теплый контакт</span>
-              {% endif %}
-              {% if can_set_warm %}
-                <form method="post" action="/companies/{{ company.id }}/lead-state/set/">
-                  {% csrf_token %}
-                  <input type="hidden" name="lead_state" value="warm" />
-                  <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" type="submit">
-                    Сделать теплым
-                  </button>
-                </form>
-              {% elif can_revert_lead_state %}
-                <form method="post" action="/companies/{{ company.id }}/lead-state/set/">
-                  {% csrf_token %}
-                  <input type="hidden" name="lead_state" value="cold" />
-                  <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem;border-color:rgba(239,68,68,.35);color:#b91c1c;background:rgba(239,68,68,.06)" type="submit" onclick="return confirm('Вернуть в «Холодный контакт»?');">
-                    Вернуть в холодный (админ)
-                  </button>
-                </form>
-              {% endif %}
-            </div>
           </div>
           <div class="{% if contract_alert == 'danger' %}rounded-xl border border-red-400/40 bg-red-500/5 p-2 -m-2{% elif contract_alert == 'warn' %}rounded-xl border border-brand-orange/50 bg-brand-orange/10 p-2 -m-2{% endif %}">
             <div class="text-brand-dark/50 flex items-center gap-2">
@@ -561,43 +476,6 @@
         <div class="font-medium mb-3">Быстро</div>
         {% if can_edit_company %}
           <button type="button" class="btn btn-primary w-full" data-create-task data-company-id="{{ company.id }}">+ Поставить задачу</button>
-        {# переносим отметку холодного звонка (осн. контакт) к телефону в "Данные" #}
-          <div class="mt-4 border-t pt-4">
-            <div class="font-medium mb-2">Состояние контакта</div>
-            <div class="flex flex-wrap items-center justify-between gap-2">
-              <div class="text-sm">
-                {% if is_cold_company %}
-                  <span class="badge badge-warn" style="padding:.1rem .35rem;font-size:.65rem">Холодный контакт</span>
-                {% else %}
-                  <span class="badge" style="padding:.1rem .35rem;font-size:.65rem">Теплый контакт</span>
-                {% endif %}
-              </div>
-              <div class="shrink-0">
-                {% if can_set_warm %}
-                  <form method="post" action="/companies/{{ company.id }}/lead-state/set/">
-                    {% csrf_token %}
-                    <input type="hidden" name="lead_state" value="warm" />
-                    <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" type="submit">
-                      Сделать теплым
-                    </button>
-                  </form>
-                {% elif can_revert_lead_state %}
-                  <form method="post" action="/companies/{{ company.id }}/lead-state/set/">
-                    {% csrf_token %}
-                    <input type="hidden" name="lead_state" value="cold" />
-                    <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem;border-color:rgba(239,68,68,.35);color:#b91c1c;background:rgba(239,68,68,.06)" type="submit" onclick="return confirm('Вернуть в «Холодный контакт»?');">
-                      Вернуть в холодный (админ)
-                    </button>
-                  </form>
-                {% else %}
-                  <div class="text-xs muted-2">Нет прав на смену состояния.</div>
-                {% endif %}
-              </div>
-            </div>
-            {% if lead_state_req %}
-              <div class="text-xs muted-2 mt-2">Есть запрос на смену состояния — дождитесь решения руководителя.</div>
-            {% endif %}
-          </div>
           <div class="mt-3">
             <div class="text-xs text-brand-dark/70 mb-1">Передать другому менеджеру</div>
             <form method="post" action="/companies/{{ company.id }}/transfer/" class="flex gap-2">
@@ -1180,37 +1058,6 @@
       </div>
     {% endif %}
 
-    {% if can_request_lead_state %}
-      <div id="leadStateReqModal" class="fixed inset-0 z-[200] hidden">
-        <div class="fixed inset-0 bg-black/35" data-close-leadstate></div>
-        <div class="absolute inset-x-4 top-24 mx-auto max-w-lg">
-          <div class="card card-pad">
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <div class="font-medium">Запросить смену состояния карточки</div>
-                <div class="text-xs muted-2 mt-1">Запрос уйдёт РОП и директору филиала (после решения у второго уведомление исчезнет).</div>
-              </div>
-              <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" data-close-leadstate aria-label="Закрыть" title="Закрыть">✕</button>
-            </div>
-            <form method="post" action="/companies/{{ company.id }}/lead-state/request/" class="mt-3 space-y-2">
-              {% csrf_token %}
-              <input type="hidden" name="requested_state" value="warm" />
-              <div class="text-sm">
-                Запрос: <b>сделать теплым</b>
-              </div>
-              <div>
-                <label class="block text-xs text-brand-dark/70 mb-1">Примечание (почему меняем)</label>
-                <textarea name="note" class="textarea" rows="4" placeholder="Коротко поясните причину"></textarea>
-              </div>
-              <div class="flex gap-2">
-                <button class="btn btn-primary" type="submit">Отправить</button>
-                <button class="btn btn-outline" type="button" data-close-leadstate>Отмена</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    {% endif %}
 
     {% if can_delete_company %}
       <div id="deleteCompanyModal" class="fixed inset-0 z-[200] hidden">
@@ -1271,33 +1118,6 @@
       </div>
     {% endif %}
 
-    {% if can_decide_lead_state and lead_state_req %}
-      <div id="cancelLeadStateReqModal" class="fixed inset-0 z-[200] hidden">
-        <div class="fixed inset-0 bg-black/35" data-close-cancelleadstate></div>
-        <div class="absolute inset-x-4 top-24 mx-auto max-w-lg">
-          <div class="card card-pad">
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <div class="font-medium">Отклонить запрос смены состояния</div>
-                <div class="text-xs muted-2 mt-1">Менеджеру уйдёт уведомление с причиной.</div>
-              </div>
-              <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" data-close-cancelleadstate aria-label="Закрыть" title="Закрыть">✕</button>
-            </div>
-            <form method="post" action="/companies/{{ company.id }}/lead-state/request/{{ lead_state_req.id }}/cancel/" class="mt-3 space-y-2">
-              {% csrf_token %}
-              <div>
-                <label class="block text-xs text-brand-dark/70 mb-1">Почему отклонили?</label>
-                <textarea name="decision_note" class="textarea" rows="4" placeholder="Причина" required></textarea>
-              </div>
-              <div class="flex gap-2">
-                <button class="btn btn-outline" type="submit">Отклонить</button>
-                <button class="btn btn-outline" type="button" data-close-cancelleadstate>Отмена</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    {% endif %}
 
     {% if can_edit_company %}
       <div id="contractModal" class="fixed inset-0 z-[200] hidden">
@@ -1390,37 +1210,6 @@
           document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeM(); });
         }
 
-        const leadStateReqModal = document.getElementById('leadStateReqModal');
-        const openLeadStateReq = document.getElementById('openLeadStateReqModal');
-        if (leadStateReqModal && openLeadStateReq && !openLeadStateReq.disabled) {
-          const closeBtns = leadStateReqModal.querySelectorAll('[data-close-leadstate]');
-          function openM() { leadStateReqModal.classList.remove('hidden'); }
-          function closeM() { leadStateReqModal.classList.add('hidden'); }
-          openLeadStateReq.addEventListener('click', openM);
-          closeBtns.forEach(b => b.addEventListener('click', closeM));
-          document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeM(); });
-        }
-        const openLeadStateReq2 = document.getElementById('openLeadStateReqModal2');
-        if (leadStateReqModal && openLeadStateReq2 && !openLeadStateReq2.disabled) {
-          function openM() { leadStateReqModal.classList.remove('hidden'); }
-          openLeadStateReq2.addEventListener('click', openM);
-        }
-        const openLeadStateReqQuick = document.getElementById('openLeadStateReqModalQuick');
-        if (leadStateReqModal && openLeadStateReqQuick && !openLeadStateReqQuick.disabled) {
-          function openM() { leadStateReqModal.classList.remove('hidden'); }
-          openLeadStateReqQuick.addEventListener('click', openM);
-        }
-
-        const cancelLeadStateReqModal = document.getElementById('cancelLeadStateReqModal');
-        const openCancelLeadStateReq = document.getElementById('openCancelLeadStateReqModal');
-        if (cancelLeadStateReqModal && openCancelLeadStateReq) {
-          const closeBtns = cancelLeadStateReqModal.querySelectorAll('[data-close-cancelleadstate]');
-          function openM() { cancelLeadStateReqModal.classList.remove('hidden'); }
-          function closeM() { cancelLeadStateReqModal.classList.add('hidden'); }
-          openCancelLeadStateReq.addEventListener('click', openM);
-          closeBtns.forEach(b => b.addEventListener('click', closeM));
-          document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeM(); });
-        }
 
         // Ждем, пока DOM готов и uiToast определена
         function initCallPhone() {

@@ -5,7 +5,6 @@ from accounts.scope import apply_company_scope
 from .models import (
     Company,
     CompanyDeletionRequest,
-    CompanyLeadStateRequest,
     CompanyNote,
     CompanySphere,
     CompanyStatus,
@@ -85,11 +84,5 @@ class CompanyDeletionRequestAdmin(admin.ModelAdmin):
     readonly_fields = ("company_id_snapshot", "company_name_snapshot", "requested_by", "requested_by_branch", "created_at")
 
 
-@admin.register(CompanyLeadStateRequest)
-class CompanyLeadStateRequestAdmin(admin.ModelAdmin):
-    list_display = ("company", "requested_by", "requested_state", "status", "decided_by", "created_at", "decided_at")
-    list_filter = ("status", "requested_state", "created_at", "decided_at")
-    search_fields = ("company__name", "requested_by__username", "note", "decision_note")
-    readonly_fields = ("company", "requested_by", "created_at")
 
 # Register your models here.
