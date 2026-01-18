@@ -204,8 +204,8 @@
         align-items: center;
         justify-content: space-between;
         margin-bottom: 10px;
-        padding-bottom: 8px;
-        border-bottom: 1px solid rgba(194,226,222,.7);
+        padding-bottom: 0;
+        border-bottom: none;
       }
       
       .custom-datetime-popup .calendar-header .month-year {
@@ -435,6 +435,8 @@
         align-items: flex-start;
         padding-top: 10px;
         border-top: 1px solid rgba(194,226,222,.7);
+        flex: 1;
+        min-height: 0;
       }
       
       .custom-datetime-popup .calendar-section {
@@ -456,6 +458,8 @@
         display: flex;
         flex-direction: column;
         align-items: center;
+        min-height: 0;
+        height: 100%;
       }
       
       .custom-datetime-popup .time-column-label {
@@ -463,11 +467,12 @@
         font-weight: 600;
         color: rgba(0,61,56,.7);
         margin-bottom: 4px;
+        flex-shrink: 0;
       }
       
       .custom-datetime-popup .time-scroll {
         width: 100%;
-        max-height: 140px;
+        flex: 1;
         overflow-y: auto;
         overflow-x: hidden;
         display: flex;
@@ -476,6 +481,7 @@
         padding: 4px 0;
         scrollbar-width: thin;
         scrollbar-color: rgba(194,226,222,.6) transparent;
+        min-height: 0;
       }
       
       /* Кастомный скроллбар для WebKit */
