@@ -18,7 +18,7 @@
     </div>
 
     <div class="card card-pad space-y-3">
-      <form method="post" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <form method="post" id="migrate-form" class="grid grid-cols-1 md:grid-cols-2 gap-3">
         {% csrf_token %}
         <input type="hidden" name="offset" value="{{ form.offset.value|default:0 }}" />
 
@@ -106,7 +106,7 @@
     </div>
 
     {% if result %}
-      <div class="card card-pad">
+      <div class="card card-pad" id="result-container">
         <div class="font-medium mb-2">Результат</div>
         {% if result.error %}
           <div class="mb-4 rounded-xl border border-red-500/60 bg-red-500/20 px-4 py-3 text-sm text-red-700">
@@ -433,6 +433,28 @@
         migrateAllCheckbox.addEventListener('change', updateCustomFieldVisibility);
         // Инициализация при загрузке страницы
         updateCustomFieldVisibility();
+      }
+      
+      // Очистка результатов при отправке новой формы (не продолжения)
+      const migrateForm = document.getElementById('migrate-form');
+      const resultContainer = document.getElementById('result-container');
+      const continueForm = document.getElementById('continue-form');
+      
+      if (migrateForm && resultContainer) {
+        migrateForm.addEventListener('submit', function(e) {
+          // Проверяем, что это не форма продолжения (continue-form)
+          const form = e.target;
+          if (form.id === 'migrate-form') {
+            // Проверяем, что offset равен 0 или пустой (новый импорт, а не продолжение)
+            const offsetInput = form.querySelector('input[name="offset"]');
+            const offsetValue = offsetInput ? offsetInput.value : '0';
+            
+            // Если offset = 0, значит это новый импорт - скрываем результаты
+            if (offsetValue === '0' || offsetValue === '') {
+              resultContainer.style.display = 'none';
+            }
+          }
+        });
       }
     })();
   </script>
