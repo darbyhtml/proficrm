@@ -212,6 +212,73 @@
         font-size: 15px;
         font-weight: 600;
         color: var(--brand-dark);
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 6px;
+        transition: all 0.2s ease;
+        user-select: none;
+      }
+      
+      .custom-datetime-popup .calendar-header .month-year:hover {
+        background: rgba(194,226,222,.25);
+      }
+      
+      .custom-datetime-popup .month-year-selector {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
+        padding: 8px;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+      
+      .custom-datetime-popup .month-year-item {
+        padding: 8px;
+        text-align: center;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--brand-dark);
+        transition: all 0.2s ease;
+      }
+      
+      .custom-datetime-popup .month-year-item:hover {
+        background: rgba(194,226,222,.25);
+      }
+      
+      .custom-datetime-popup .month-year-item.selected {
+        background: var(--brand-teal);
+        color: #fff;
+        font-weight: 600;
+      }
+      
+      .custom-datetime-popup .year-selector {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
+        padding: 8px;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+      
+      .custom-datetime-popup .year-item {
+        padding: 8px;
+        text-align: center;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 13px;
+        color: var(--brand-dark);
+        transition: all 0.2s ease;
+      }
+      
+      .custom-datetime-popup .year-item:hover {
+        background: rgba(194,226,222,.25);
+      }
+      
+      .custom-datetime-popup .year-item.selected {
+        background: var(--brand-teal);
+        color: #fff;
+        font-weight: 600;
       }
       
       .custom-datetime-popup .calendar-header .nav-buttons {
@@ -1773,20 +1840,30 @@
             
             // Обновляем визуальный input
             function updateVisualInput() {
+              const textSpan = visualInput.querySelector('span');
               if (input.value) {
                 const date = new Date(input.value);
-                const formatted = date.toLocaleString('ru-RU', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit'
-                });
-                visualInput.textContent = formatted;
-                visualInput.style.color = 'var(--brand-dark)';
+                if (input.type === 'datetime-local') {
+                  const formatted = date.toLocaleString('ru-RU', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  });
+                  textSpan.textContent = formatted;
+                } else {
+                  const formatted = date.toLocaleDateString('ru-RU', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric'
+                  });
+                  textSpan.textContent = formatted;
+                }
+                textSpan.style.color = 'var(--brand-dark)';
               } else {
-                visualInput.textContent = 'Выберите дату и время';
-                visualInput.style.color = 'rgba(0,61,56,.5)';
+                textSpan.textContent = input.type === 'datetime-local' ? 'Выберите дату и время' : 'Выберите дату';
+                textSpan.style.color = 'rgba(0,61,56,.5)';
               }
             }
             updateVisualInput();
@@ -1857,6 +1934,7 @@
                       }).join('')}
                     </div>
                   </div>
+                  ${input.type === 'datetime-local' ? `
                   <div class="time-picker">
                     <div class="time-column">
                       <div class="time-column-label">Часы</div>
@@ -1889,6 +1967,7 @@
                       </div>
                     </div>
                   </div>
+                  ` : ''}
                 </div>
                 <div class="calendar-actions">
                   <button class="btn-delete" type="button">Удалить</button>
@@ -1898,6 +1977,11 @@
               `;
               
               // Обработчики событий
+              popup.querySelector('[data-action="select-month-year"]').addEventListener('click', () => {
+                showMonthYearSelector = true;
+                renderCalendar();
+              });
+              
               popup.querySelector('.prev-month').addEventListener('click', () => {
                 currentDate.setMonth(currentDate.getMonth() - 1);
                 renderCalendar();
@@ -1947,11 +2031,19 @@
               
               popup.querySelector('.btn-apply').addEventListener('click', () => {
                 if (selectedDate) {
-                  selectedDate.setHours(selectedHour, selectedMinute, 0, 0);
-                  // Преобразуем в локальное время для datetime-local
-                  const localDate = new Date(selectedDate.getTime() - selectedDate.getTimezoneOffset() * 60000);
-                  const isoString = localDate.toISOString().slice(0, 16);
-                  input.value = isoString;
+                  if (input.type === 'datetime-local') {
+                    selectedDate.setHours(selectedHour, selectedMinute, 0, 0);
+                    // Преобразуем в локальное время для datetime-local
+                    const localDate = new Date(selectedDate.getTime() - selectedDate.getTimezoneOffset() * 60000);
+                    const isoString = localDate.toISOString().slice(0, 16);
+                    input.value = isoString;
+                  } else {
+                    // Для date используем формат YYYY-MM-DD
+                    const year = selectedDate.getFullYear();
+                    const month = String(selectedDate.getMonth() + 1).padStart(2, '0');
+                    const day = String(selectedDate.getDate()).padStart(2, '0');
+                    input.value = `${year}-${month}-${day}`;
+                  }
                   updateVisualInput();
                   // Триггерим события для обновления формы
                   input.dispatchEvent(new Event('input', { bubbles: true }));
