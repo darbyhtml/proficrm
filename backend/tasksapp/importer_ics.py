@@ -88,6 +88,7 @@ class ImportTasksResult:
     created_tasks: int = 0
     skipped_existing: int = 0
     skipped_unmatched: int = 0
+    skipped_old_tasks: int = 0
     linked_to_company: int = 0
     without_company: int = 0
     created_companies: int = 0
@@ -173,6 +174,11 @@ def import_amocrm_ics(
             contact = _ics_unescape(props.get("CONTACT", ""))
             dt_start = _parse_dt(props.get("DTSTART", "")) or _parse_dt(props.get("DUE", ""))
 
+            # Фильтрация: импортируем только задачи с дедлайном на 2026 год и позже
+            if dt_start and dt_start.year < 2026:
+                res.skipped_old_tasks += 1
+                continue
+            
             company_name = _extract_company(contact, desc, summary)
             company = find_company(company_name)
             if company:
