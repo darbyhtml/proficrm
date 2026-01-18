@@ -1917,9 +1917,86 @@
               const today = new Date();
               today.setHours(0, 0, 0, 0);
               
+              if (showYearSelector) {
+                // Показываем выбор года
+                const currentYear = currentDate.getFullYear();
+                const startYear = currentYear - 10;
+                const endYear = currentYear + 10;
+                popup.innerHTML = `
+                  <div class="calendar-header">
+                    <div class="month-year" style="cursor: pointer;">Выберите год</div>
+                    <div class="nav-buttons">
+                      <button class="close-year-selector" type="button">✕</button>
+                    </div>
+                  </div>
+                  <div class="year-selector">
+                    ${Array(endYear - startYear + 1).fill(0).map((_, i) => {
+                      const y = startYear + i;
+                      return `<div class="year-item ${y === year ? 'selected' : ''}" data-year="${y}">${y}</div>`;
+                    }).join('')}
+                  </div>
+                `;
+                
+                popup.querySelectorAll('.year-item').forEach(item => {
+                  item.addEventListener('click', () => {
+                    const selectedYear = parseInt(item.dataset.year);
+                    currentDate.setFullYear(selectedYear);
+                    showYearSelector = false;
+                    renderCalendar();
+                  });
+                });
+                
+                popup.querySelector('.close-year-selector').addEventListener('click', () => {
+                  showYearSelector = false;
+                  renderCalendar();
+                });
+                
+                return;
+              }
+              
+              if (showMonthYearSelector) {
+                // Показываем выбор месяца
+                popup.innerHTML = `
+                  <div class="calendar-header">
+                    <div class="month-year" style="cursor: pointer;">Выберите месяц</div>
+                    <div class="nav-buttons">
+                      <button class="show-year-selector" type="button">${year}</button>
+                      <button class="close-month-selector" type="button">✕</button>
+                    </div>
+                  </div>
+                  <div class="month-year-selector">
+                    ${monthNames.map((name, idx) => {
+                      return `<div class="month-year-item ${idx === month ? 'selected' : ''}" data-month="${idx}">${name}</div>`;
+                    }).join('')}
+                  </div>
+                `;
+                
+                popup.querySelectorAll('.month-year-item').forEach(item => {
+                  item.addEventListener('click', () => {
+                    const selectedMonth = parseInt(item.dataset.month);
+                    currentDate.setMonth(selectedMonth);
+                    showMonthYearSelector = false;
+                    renderCalendar();
+                  });
+                });
+                
+                popup.querySelector('.show-year-selector').addEventListener('click', () => {
+                  showMonthYearSelector = false;
+                  showYearSelector = true;
+                  renderCalendar();
+                });
+                
+                popup.querySelector('.close-month-selector').addEventListener('click', () => {
+                  showMonthYearSelector = false;
+                  renderCalendar();
+                });
+                
+                return;
+              }
+              
               popup.innerHTML = `
                 <div class="calendar-header">
-                  <div class="month-year">${monthNames[month]} ${year}</div>
+                  <div class="month-year" data-action="select-month-year">${monthNames[month]} ${year}</div>
                   <div class="nav-buttons">
                     <button class="prev-month" type="button">‹</button>
                     <button class="next-month" type="button">›</button>
