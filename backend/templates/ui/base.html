@@ -214,12 +214,6 @@
         color: var(--brand-dark);
       }
       
-      .custom-datetime-popup .calendar-header .month-year {
-        font-size: 16px;
-        font-weight: 600;
-        color: var(--brand-dark);
-      }
-      
       .custom-datetime-popup .calendar-header .nav-buttons {
         display: flex;
         gap: 2px;
@@ -1966,17 +1960,7 @@
                 closePopup();
               });
               
-              // Прокручиваем к выбранным значениям
-              setTimeout(() => {
-                const selectedHourEl = popup.querySelector(`.time-item[data-hour="${selectedHour}"]`);
-                const selectedMinuteEl = popup.querySelector(`.time-item[data-minute="${selectedMinute}"]`);
-                if (selectedHourEl) {
-                  selectedHourEl.scrollIntoView({ behavior: 'auto', block: 'center' });
-                }
-                if (selectedMinuteEl) {
-                  selectedMinuteEl.scrollIntoView({ behavior: 'auto', block: 'center' });
-                }
-              }, 100);
+              // Выбранные значения уже видны, так как показываем только элементы вокруг них
             }
             
             function openPopup() {
