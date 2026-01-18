@@ -133,12 +133,14 @@
                 <tr>
                   <td class="text-xs px-3 py-1 whitespace-nowrap">{{ l.ts }}</td>
                   <td class="text-xs px-3 py-1">
+                    {% with level_lower=l.level_summary|lower|default:"" %}
                     <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] border
-                      {% if l.level_summary|lower|startswith:"error" %}border-red-300 text-red-700
-                      {% elif l.level_summary|lower|startswith:"warn" %}border-amber-300 text-amber-700
+                      {% if "error" in level_lower %}border-red-300 text-red-700
+                      {% elif "warn" in level_lower %}border-amber-300 text-amber-700
                       {% else %}border-slate-300 text-slate-700{% endif %}">
                       {{ l.level_summary|default:"—" }}
                     </span>
+                    {% endwith %}
                   </td>
                   <td class="text-xs px-3 py-1 font-mono">{{ l.source|default:"—" }}</td>
                   <td class="text-xs px-3 py-1">
