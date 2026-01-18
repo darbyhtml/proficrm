@@ -5717,11 +5717,11 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                     import_notes = bool(form.cleaned_data.get("import_notes"))
                     import_contacts = bool(form.cleaned_data.get("import_contacts"))
                     if import_notes and import_contacts:
-                        batch_size = min(batch_size, 3)  # если оба включены - очень маленькая пачка
+                        batch_size = min(batch_size, 10)  # если оба включены - увеличиваем до 10
                     elif import_notes:
-                        batch_size = min(batch_size, 5)  # только заметки
+                        batch_size = min(batch_size, 10)  # только заметки - увеличиваем до 10
                     elif import_contacts:
-                        batch_size = min(batch_size, 5)  # только контакты
+                        batch_size = min(batch_size, 10)  # только контакты - увеличиваем до 10
                     else:
                         batch_size = min(batch_size, 10)  # только компании/задачи
                     migrate_all = bool(form.cleaned_data.get("migrate_all_companies", False))
