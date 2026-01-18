@@ -432,7 +432,7 @@
       if (!searchInput || !dropdown) return;
 
       let debounceTimer = null;
-      let currentRequest = null;
+      let abortController = null;
 
       function formatRelativeTime(dateStr) {
         if (!dateStr) return '';
@@ -535,8 +535,9 @@
       }
 
       function fetchAutocomplete(query) {
-        if (currentRequest) {
-          currentRequest.abort();
+        // Отменяем предыдущий запрос, если он есть
+        if (abortController) {
+          abortController.abort();
         }
 
         if (query.length < 2) {
@@ -544,7 +545,12 @@
           return;
         }
 
-        currentRequest = fetch(`/companies/autocomplete/?q=${encodeURIComponent(query)}`)
+        // Создаем новый AbortController для этого запроса
+        abortController = new AbortController();
+
+        fetch(`/companies/autocomplete/?q=${encodeURIComponent(query)}`, {
+          signal: abortController.signal
+        })
           .then(response => {
             if (!response.ok) {
               throw new Error(`HTTP error! status: ${response.status}`);
@@ -558,7 +564,7 @@
               dropdown.innerHTML = '<div class="px-4 py-3 text-sm text-brand-dark/70">Ничего не найдено</div>';
               dropdown.classList.remove('hidden');
             }
-            currentRequest = null;
+            abortController = null;
           })
           .catch(err => {
             if (err.name !== 'AbortError') {
@@ -566,7 +572,7 @@
               dropdown.innerHTML = '<div class="px-4 py-3 text-sm text-red-600">Ошибка загрузки</div>';
               dropdown.classList.remove('hidden');
             }
-            currentRequest = null;
+            abortController = null;
           });
       }
 
