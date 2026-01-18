@@ -10,11 +10,6 @@
         <div class="flex items-start justify-between gap-3">
           <h1 class="text-2xl font-semibold">
             {{ company.name }}
-            {% if is_cold_company %}
-              <span class="badge badge-warn ml-2" style="padding:.15rem .45rem;font-size:.7rem">Холодный контакт</span>
-            {% else %}
-              <span class="badge ml-2" style="padding:.15rem .45rem;font-size:.7rem">Теплый контакт</span>
-            {% endif %}
           </h1>
           <div class="flex items-center gap-2 shrink-0">
             {% if can_delete_company %}
