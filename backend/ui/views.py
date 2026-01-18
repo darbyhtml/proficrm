@@ -4921,11 +4921,84 @@ def settings_users(request: HttpRequest) -> HttpResponse:
         messages.success(request, f"Режим просмотра администратора {'включён' if view_as_enabled else 'выключен'}.")
         return redirect("settings_users")
     
-    users = User.objects.select_related("branch").order_by("username")
-    return render(request, "ui/settings/users.html", {
+    # Получаем queryset пользователей
+    users = User.objects.select_related("branch")
+    
+    # Сортировка: читаем из GET или из cookies
+    sort_field = (request.GET.get("sort") or "").strip()
+    sort_dir = (request.GET.get("dir") or "").strip().lower()
+    
+    # Если параметры не указаны, читаем из cookies
+    if not sort_field:
+        cookie_sort = request.COOKIES.get("settings_users_sort", "")
+        if cookie_sort:
+            try:
+                # Формат в cookies: "field:direction" (например, "username:asc")
+                parts = cookie_sort.split(":")
+                if len(parts) == 2:
+                    sort_field, sort_dir = parts[0], parts[1]
+            except Exception:
+                pass
+    
+    # Валидация направления сортировки
+    if sort_dir not in ("asc", "desc"):
+        sort_dir = "asc"  # По умолчанию asc
+    
+    # Применяем сортировку
+    if sort_field == "username":
+        if sort_dir == "asc":
+            users = users.order_by("username")
+        else:
+            users = users.order_by("-username")
+    elif sort_field == "full_name":
+        if sort_dir == "asc":
+            users = users.order_by("last_name", "first_name", "username")
+        else:
+            users = users.order_by("-last_name", "-first_name", "username")
+    elif sort_field == "role":
+        if sort_dir == "asc":
+            users = users.order_by("role", "username")
+        else:
+            users = users.order_by("-role", "username")
+    elif sort_field == "branch":
+        if sort_dir == "asc":
+            users = users.order_by("branch__name", "username")
+        else:
+            users = users.order_by("-branch__name", "username")
+    elif sort_field == "is_active":
+        if sort_dir == "asc":
+            users = users.order_by("is_active", "username")
+        else:
+            users = users.order_by("-is_active", "username")
+    else:
+        # По умолчанию: сортировка по логину
+        sort_field = "username"
+        sort_dir = "asc"
+        users = users.order_by("username")
+    
+    # Формируем строку параметров для сохранения в URL (без sort и dir)
+    qs_params = request.GET.copy()
+    if "sort" in qs_params:
+        del qs_params["sort"]
+    if "dir" in qs_params:
+        del qs_params["dir"]
+    qs = qs_params.urlencode()
+    
+    # Сохраняем сортировку в cookie, если она была изменена через GET параметры
+    response = render(request, "ui/settings/users.html", {
         "users": users,
         "view_as_enabled": view_as_enabled,
+        "sort_field": sort_field,
+        "sort_dir": sort_dir,
+        "qs": qs,
     })
+    
+    # Устанавливаем cookie для сохранения сортировки (срок действия 1 год)
+    if sort_field:
+        cookie_value = f"{sort_field}:{sort_dir}"
+        response.set_cookie("settings_users_sort", cookie_value, max_age=31536000)  # 1 год
+    
+    return response
 
 
 @login_required

@@ -29,11 +29,71 @@
       <table class="min-w-full text-sm">
         <thead class="bg-brand-soft/40 text-brand-dark/80">
           <tr>
-            <th class="text-left px-4 py-3">Логин</th>
-            <th class="text-left px-4 py-3">ФИО</th>
-            <th class="text-left px-4 py-3">Роль</th>
-            <th class="text-left px-4 py-3">Филиал</th>
-            <th class="text-left px-4 py-3">Активен</th>
+            <th class="text-left px-4 py-3">
+              <a href="?{% if qs %}{{ qs }}&{% endif %}sort=username&dir={% if sort_field == 'username' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'username' %}text-brand-orange font-bold{% endif %}">
+                Логин
+                <div class="flex flex-col gap-0.5">
+                  <svg class="w-3 h-3 {% if sort_field == 'username' and sort_dir == 'asc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                  </svg>
+                  <svg class="w-3 h-3 {% if sort_field == 'username' and sort_dir == 'desc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                  </svg>
+                </div>
+              </a>
+            </th>
+            <th class="text-left px-4 py-3">
+              <a href="?{% if qs %}{{ qs }}&{% endif %}sort=full_name&dir={% if sort_field == 'full_name' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'full_name' %}text-brand-orange font-bold{% endif %}">
+                ФИО
+                <div class="flex flex-col gap-0.5">
+                  <svg class="w-3 h-3 {% if sort_field == 'full_name' and sort_dir == 'asc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                  </svg>
+                  <svg class="w-3 h-3 {% if sort_field == 'full_name' and sort_dir == 'desc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                  </svg>
+                </div>
+              </a>
+            </th>
+            <th class="text-left px-4 py-3">
+              <a href="?{% if qs %}{{ qs }}&{% endif %}sort=role&dir={% if sort_field == 'role' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'role' %}text-brand-orange font-bold{% endif %}">
+                Роль
+                <div class="flex flex-col gap-0.5">
+                  <svg class="w-3 h-3 {% if sort_field == 'role' and sort_dir == 'asc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                  </svg>
+                  <svg class="w-3 h-3 {% if sort_field == 'role' and sort_dir == 'desc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                  </svg>
+                </div>
+              </a>
+            </th>
+            <th class="text-left px-4 py-3">
+              <a href="?{% if qs %}{{ qs }}&{% endif %}sort=branch&dir={% if sort_field == 'branch' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'branch' %}text-brand-orange font-bold{% endif %}">
+                Филиал
+                <div class="flex flex-col gap-0.5">
+                  <svg class="w-3 h-3 {% if sort_field == 'branch' and sort_dir == 'asc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                  </svg>
+                  <svg class="w-3 h-3 {% if sort_field == 'branch' and sort_dir == 'desc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                  </svg>
+                </div>
+              </a>
+            </th>
+            <th class="text-left px-4 py-3">
+              <a href="?{% if qs %}{{ qs }}&{% endif %}sort=is_active&dir={% if sort_field == 'is_active' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'is_active' %}text-brand-orange font-bold{% endif %}">
+                Активен
+                <div class="flex flex-col gap-0.5">
+                  <svg class="w-3 h-3 {% if sort_field == 'is_active' and sort_dir == 'asc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                  </svg>
+                  <svg class="w-3 h-3 {% if sort_field == 'is_active' and sort_dir == 'desc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                  </svg>
+                </div>
+              </a>
+            </th>
             <th class="text-left px-4 py-3">Действия</th>
           </tr>
         </thead>
