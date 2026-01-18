@@ -24,71 +24,73 @@
       </div>
     </div>
 
-    <form class="card card-pad grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 w-full items-end" method="get">
-      <div class="md:col-span-1">
+    <form class="card card-pad space-y-4" method="get">
+      <div>
         <label class="block text-sm text-brand-dark/80 mb-1">Поиск</label>
         <div class="relative">
-          <input name="q" value="{{ q }}" id="company-search-input" class="input" placeholder="ИНН / название / адрес" autocomplete="off" />
+          <input name="q" value="{{ q }}" id="company-search-input" class="input w-full" placeholder="ИНН / название / адрес" autocomplete="off" />
           <div id="company-autocomplete-dropdown" class="absolute left-0 right-0 top-full mt-1 bg-white border border-brand-soft rounded-lg shadow-lg z-50 hidden max-h-64 overflow-y-auto"></div>
         </div>
       </div>
-      <div>
-        <label class="block text-sm text-brand-dark/80 mb-1">Ответственный</label>
-        <select name="responsible" class="select w-full">
-          <option value="">Любой</option>
-          {% if has_companies_without_responsible %}
-            <option value="none" {% if responsible == "none" %}selected{% endif %}>None</option>
-          {% endif %}
-          {% regroup responsibles by branch as branches_list %}
-          {% for branch_group in branches_list %}
-            <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
-              {% for u in branch_group.list %}
-                <option value="{{ u.id }}" {% if responsible == u.id|stringformat:"s" %}selected{% endif %}>
-                  {{ u }}
-                </option>
-              {% endfor %}
-            </optgroup>
-          {% endfor %}
-        </select>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 items-end">
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Ответственный</label>
+          <select name="responsible" class="select w-full">
+            <option value="">Любой</option>
+            {% if has_companies_without_responsible %}
+              <option value="none" {% if responsible == "none" %}selected{% endif %}>None</option>
+            {% endif %}
+            {% regroup responsibles by branch as branches_list %}
+            {% for branch_group in branches_list %}
+              <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
+                {% for u in branch_group.list %}
+                  <option value="{{ u.id }}" {% if responsible == u.id|stringformat:"s" %}selected{% endif %}>
+                    {{ u }}
+                  </option>
+                {% endfor %}
+              </optgroup>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Статус</label>
+          <select name="status" class="select w-full">
+            <option value="">Любой</option>
+            {% for s in statuses %}
+              <option value="{{ s.id }}" {% if status == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Филиал</label>
+          <select name="branch" class="select w-full">
+            <option value="">Любой</option>
+            {% for b in branches %}
+              <option value="{{ b.id }}" {% if branch == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Сфера</label>
+          <select name="sphere" class="select w-full">
+            <option value="">Любая</option>
+            {% for s in spheres %}
+              <option value="{{ s.id }}" {% if sphere == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Вид договора</label>
+          <select name="contract_type" class="select w-full">
+            <option value="">Любой</option>
+            {% for val, label in contract_types %}
+              <option value="{{ val }}" {% if contract_type == val %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
       </div>
-      <div>
-        <label class="block text-sm text-brand-dark/80 mb-1">Статус</label>
-        <select name="status" class="select w-full">
-          <option value="">Любой</option>
-          {% for s in statuses %}
-            <option value="{{ s.id }}" {% if status == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label class="block text-sm text-brand-dark/80 mb-1">Филиал</label>
-        <select name="branch" class="select w-full">
-          <option value="">Любой</option>
-          {% for b in branches %}
-            <option value="{{ b.id }}" {% if branch == b.id|stringformat:"s" %}selected{% endif %}>{{ b.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label class="block text-sm text-brand-dark/80 mb-1">Сфера</label>
-        <select name="sphere" class="select w-full">
-          <option value="">Любая</option>
-          {% for s in spheres %}
-            <option value="{{ s.id }}" {% if sphere == s.id|stringformat:"s" %}selected{% endif %}>{{ s.name }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label class="block text-sm text-brand-dark/80 mb-1">Вид договора</label>
-        <select name="contract_type" class="select w-full">
-          <option value="">Любой</option>
-          {% for val, label in contract_types %}
-            <option value="{{ val }}" {% if contract_type == val %}selected{% endif %}>{{ label }}</option>
-          {% endfor %}
-        </select>
-      </div>
-      <div class="col-span-full flex flex-col md:flex-row md:items-end md:flex-wrap gap-2 justify-between">
-        <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 md:mr-2">
+      <div class="flex flex-col md:flex-row md:items-center md:flex-wrap gap-2 justify-between">
+        <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
           <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %} />
           Только с просрочками
         </label>
