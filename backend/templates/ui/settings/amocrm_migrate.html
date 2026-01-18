@@ -44,7 +44,11 @@
             <option value="">— выберите —</option>
             {% regroup users by branch as branches_list %}
             {% for branch_group in branches_list %}
-              <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
+              {% if branch_group.grouper %}
+                <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
+              {% else %}
+                <optgroup label="Филиал: Без филиала">
+              {% endif %}
                 {% for u in branch_group.list %}
                   <option value="{{ u.id }}" {% if form.responsible_user_id.value|stringformat:"s" == u.id|stringformat:"s" %}selected{% endif %}>{{ u.name }} (id={{ u.id }})</option>
                 {% endfor %}
