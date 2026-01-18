@@ -1808,10 +1808,10 @@
       })();
     </script>
     <script>
-      // Кастомный календарик для datetime-local с подписями "Часы" и "Минуты"
+      // Кастомный календарик для datetime-local и date с подписями "Часы" и "Минуты"
       (function() {
         function initCustomDatetimePicker() {
-          document.querySelectorAll('input[type="datetime-local"]').forEach(function(input) {
+          document.querySelectorAll('input[type="datetime-local"], input[type="date"]').forEach(function(input) {
             if (input.dataset.customPickerInitialized) return;
             input.dataset.customPickerInitialized = 'true';
             
@@ -1836,11 +1836,24 @@
             visualInput.style.display = 'flex';
             visualInput.style.alignItems = 'center';
             visualInput.style.justifyContent = 'space-between';
+            visualInput.style.position = 'relative';
+            
+            // Добавляем текст
+            const textSpan = document.createElement('span');
+            textSpan.style.flex = '1';
+            visualInput.appendChild(textSpan);
+            
+            // Добавляем иконку календаря справа
+            const calendarIcon = document.createElement('div');
+            calendarIcon.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: rgba(0,61,56,.6); flex-shrink: 0;"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>';
+            calendarIcon.style.display = 'flex';
+            calendarIcon.style.alignItems = 'center';
+            calendarIcon.style.pointerEvents = 'none';
+            visualInput.appendChild(calendarIcon);
             wrapper.appendChild(visualInput);
             
             // Обновляем визуальный input
             function updateVisualInput() {
-              const textSpan = visualInput.querySelector('span');
               if (input.value) {
                 const date = new Date(input.value);
                 if (input.type === 'datetime-local') {
@@ -1885,8 +1898,10 @@
             
             let currentDate = input.value ? new Date(input.value) : new Date();
             let selectedDate = currentDate;
-            let selectedHour = currentDate.getHours();
-            let selectedMinute = currentDate.getMinutes();
+            let selectedHour = input.type === 'datetime-local' ? currentDate.getHours() : 0;
+            let selectedMinute = input.type === 'datetime-local' ? currentDate.getMinutes() : 0;
+            let showMonthYearSelector = false;
+            let showYearSelector = false;
             
             function renderCalendar() {
               const year = currentDate.getFullYear();
@@ -2024,8 +2039,10 @@
                 const now = new Date();
                 currentDate = new Date(now);
                 selectedDate = new Date(now);
-                selectedHour = now.getHours();
-                selectedMinute = now.getMinutes();
+                if (input.type === 'datetime-local') {
+                  selectedHour = now.getHours();
+                  selectedMinute = now.getMinutes();
+                }
                 renderCalendar();
               });
               
