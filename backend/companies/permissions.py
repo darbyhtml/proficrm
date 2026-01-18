@@ -109,6 +109,32 @@ def get_transfer_targets(user: User) -> QuerySet[User]:
     ).select_related("branch").order_by("branch__name", "last_name", "first_name")
 
 
+def get_users_for_lists(user: User = None, exclude_admin: bool = True) -> QuerySet[User]:
+    """
+    Универсальная функция для получения пользователей для списков.
+    
+    Исключает администраторов (ADMIN) по умолчанию.
+    Группирует по филиалам (сортировка по branch__name, last_name, first_name).
+    
+    Args:
+        user: Пользователь, для которого формируется список (опционально, для фильтрации по филиалу)
+        exclude_admin: Исключать ли администраторов (по умолчанию True)
+    
+    Returns:
+        QuerySet пользователей, отсортированный по филиалу, фамилии, имени
+    """
+    qs = User.objects.filter(is_active=True)
+    
+    # Исключаем администраторов
+    if exclude_admin:
+        qs = qs.exclude(role=User.Role.ADMIN)
+    
+    # Если указан пользователь и у него есть филиал, можно ограничить по филиалу
+    # Но для универсальности не ограничиваем - пусть вызывающий код сам фильтрует при необходимости
+    
+    return qs.select_related("branch").order_by("branch__name", "last_name", "first_name")
+
+
 def can_transfer_companies(user: User, company_ids: list) -> dict:
     """
     Проверка прав на массовую передачу компаний.

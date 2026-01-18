@@ -22,10 +22,15 @@
         <label class="block text-sm text-brand-dark/80 mb-1">Пользователь</label>
         <select name="user" class="select w-full">
           <option value="">Любой</option>
-          {% for u in users %}
-            <option value="{{ u.id }}" {% if filter_user == u.id|stringformat:"s" %}selected{% endif %}>
-              {{ u }}
-            </option>
+          {% regroup users by branch as branches_list %}
+          {% for branch_group in branches_list %}
+            <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
+              {% for u in branch_group.list %}
+                <option value="{{ u.id }}" {% if filter_user == u.id|stringformat:"s" %}selected{% endif %}>
+                  {{ u }}
+                </option>
+              {% endfor %}
+            </optgroup>
           {% endfor %}
         </select>
       </div>

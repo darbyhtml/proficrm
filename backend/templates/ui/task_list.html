@@ -36,8 +36,13 @@
           </svg>
           <select name="assigned_to" class="select" style="min-width:180px">
             <option value="">Любой исполнитель</option>
-            {% for u in filter_assignees %}
-              <option value="{{ u.id }}" {% if assigned_to|default:'' == u.id|stringformat:'s' %}selected{% endif %}>{{ u }}</option>
+            {% regroup filter_assignees by branch as branches_list %}
+            {% for branch_group in branches_list %}
+              <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
+                {% for u in branch_group.list %}
+                  <option value="{{ u.id }}" {% if assigned_to|default:'' == u.id|stringformat:'s' %}selected{% endif %}>{{ u }}</option>
+                {% endfor %}
+              </optgroup>
             {% endfor %}
           </select>
         </div>
@@ -89,8 +94,13 @@
             <label class="block text-sm text-brand-dark/80 mb-1">Переназначить на:</label>
             <select name="assigned_to_id" class="select w-full" required>
               <option value="">Выберите сотрудника</option>
-              {% for u in transfer_targets %}
-                <option value="{{ u.id }}">{{ u }}</option>
+              {% regroup transfer_targets by branch as branches_list %}
+              {% for branch_group in branches_list %}
+                <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
+                  {% for u in branch_group.list %}
+                    <option value="{{ u.id }}">{{ u }} ({{ u.get_role_display }})</option>
+                  {% endfor %}
+                </optgroup>
               {% endfor %}
             </select>
           </div>

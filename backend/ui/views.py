@@ -25,6 +25,7 @@ from companies.permissions import (
     editable_company_qs as editable_company_qs_perm,
     can_transfer_company,
     get_transfer_targets,
+    get_users_for_lists,
     can_transfer_companies,
 )
 from tasksapp.models import Task, TaskType
@@ -911,11 +912,12 @@ def analytics(request: HttpRequest) -> HttpResponse:
         period_label = timezone.localdate(now).strftime("%d.%m.%Y")
 
     # Кого показываем (админ НЕ отображается как субъект аналитики)
+    # Используем get_users_for_lists для исключения администраторов и группировки по филиалам
     if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
-        users_qs = User.objects.filter(is_active=True, role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]).select_related("branch")
+        users_qs = get_users_for_lists(user).filter(role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR])
     else:
-        users_qs = User.objects.filter(is_active=True, branch_id=user.branch_id, role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]).select_related("branch")
-    users_list = list(users_qs.order_by("branch__name", "last_name", "first_name"))
+        users_qs = get_users_for_lists(user).filter(branch_id=user.branch_id, role__in=[User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR])
+    users_list = list(users_qs)
     user_ids = [u.id for u in users_list]
 
     # Звонки за период (лимит на страницу, чтобы не убить UI)
@@ -1474,7 +1476,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "dir": direction,
             "sort_field": sort,
             "sort_dir": direction,
-            "responsibles": User.objects.order_by("last_name", "first_name"),
+            "responsibles": get_users_for_lists(user),
             "statuses": CompanyStatus.objects.order_by("name"),
             "spheres": CompanySphere.objects.order_by("name"),
             "branches": Branch.objects.order_by("name"),
@@ -3833,12 +3835,13 @@ def task_list(request: HttpRequest) -> HttpResponse:
     # Справочник "Кому поставлена задача" (assigned_to) для фильтра:
     # - админ / управляющий: все сотрудники
     # - остальные: только сотрудники своего филиала (если филиал задан)
+    # Используем get_users_for_lists для исключения администраторов и группировки по филиалам
     if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
-        assignees_qs = User.objects.filter(is_active=True).order_by("last_name", "first_name")
+        assignees_qs = get_users_for_lists(user)
     elif user.branch_id:
-        assignees_qs = User.objects.filter(is_active=True, branch_id=user.branch_id).order_by("last_name", "first_name")
+        assignees_qs = get_users_for_lists(user).filter(branch_id=user.branch_id)
     else:
-        assignees_qs = User.objects.filter(is_active=True).order_by("last_name", "first_name")
+        assignees_qs = get_users_for_lists(user)
     assignees = list(assignees_qs)
 
     status = (request.GET.get("status") or "").strip()
@@ -5902,7 +5905,7 @@ def settings_mobile_devices(request: HttpRequest) -> HttpResponse:
     paginator = Paginator(qs, per_page)
     page = paginator.get_page(request.GET.get("page"))
 
-    users = User.objects.filter(is_active=True).order_by("last_name", "first_name")
+    users = get_users_for_lists(request.user)
 
     return render(
         request,

@@ -103,7 +103,8 @@ class UserSelectWithBranchWidget(forms.Select):
         user_ids = [str(opt[0]) for opt in self.choices if opt[0] and opt[0] != '']
         users_dict = {}
         if user_ids:
-            users = User.objects.filter(id__in=user_ids).select_related('branch').only('id', 'branch__name')
+            # Исключаем администраторов из списка
+            users = User.objects.filter(id__in=user_ids).exclude(role=User.Role.ADMIN).select_related('branch').only('id', 'branch__name', 'role')
             users_dict = {str(u.id): u for u in users}
         
         grouped = defaultdict(list)

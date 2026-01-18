@@ -14,6 +14,7 @@ from accounts.models import User
 from audit.models import ActivityEvent
 from audit.service import log_event
 from companies.models import Company
+from companies.permissions import get_users_for_lists
 from accounts.models import Branch
 from companies.models import CompanySphere, CompanyStatus, ContactEmail, Contact
 from mailer.forms import CampaignForm, CampaignGenerateRecipientsForm, CampaignRecipientAddForm, MailAccountForm, GlobalMailAccountForm, EmailSignatureForm
@@ -325,7 +326,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "recipient_add_form": CampaignRecipientAddForm(),
             "generate_form": CampaignGenerateRecipientsForm(),
             "branches": Branch.objects.order_by("name"),
-            "responsibles": User.objects.order_by("last_name", "first_name"),
+            "responsibles": get_users_for_lists(request.user),
             "statuses": CompanyStatus.objects.order_by("name"),
             "spheres": CompanySphere.objects.order_by("name"),
             "recipients_by_company": recipients_by_company,

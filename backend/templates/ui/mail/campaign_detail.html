@@ -357,8 +357,13 @@
                 <label class="block text-xs muted mb-1">Ответственный</label>
                 <select class="select" name="responsible">
                   <option value="">Любой</option>
-                  {% for u in responsibles %}
-                    <option value="{{ u.id }}">{{ u }}</option>
+                  {% regroup responsibles by branch as branches_list %}
+                  {% for branch_group in branches_list %}
+                    <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
+                      {% for u in branch_group.list %}
+                        <option value="{{ u.id }}">{{ u }}</option>
+                      {% endfor %}
+                    </optgroup>
                   {% endfor %}
                 </select>
               </div>

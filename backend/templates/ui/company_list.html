@@ -36,10 +36,15 @@
           {% if has_companies_without_responsible %}
             <option value="none" {% if responsible == "none" %}selected{% endif %}>None</option>
           {% endif %}
-          {% for u in responsibles %}
-            <option value="{{ u.id }}" {% if responsible == u.id|stringformat:"s" %}selected{% endif %}>
-              {{ u }}
-            </option>
+          {% regroup responsibles by branch as branches_list %}
+          {% for branch_group in branches_list %}
+            <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
+              {% for u in branch_group.list %}
+                <option value="{{ u.id }}" {% if responsible == u.id|stringformat:"s" %}selected{% endif %}>
+                  {{ u }}
+                </option>
+              {% endfor %}
+            </optgroup>
           {% endfor %}
         </select>
       </div>

@@ -42,8 +42,13 @@
           <label class="block text-sm text-brand-dark/80 mb-1">Ответственный (amo)</label>
           <select class="select w-full" name="responsible_user_id" required>
             <option value="">— выберите —</option>
-            {% for u in users %}
-              <option value="{{ u.id }}" {% if form.responsible_user_id.value|stringformat:"s" == u.id|stringformat:"s" %}selected{% endif %}>{{ u.name }} (id={{ u.id }})</option>
+            {% regroup users by branch as branches_list %}
+            {% for branch_group in branches_list %}
+              <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
+                {% for u in branch_group.list %}
+                  <option value="{{ u.id }}" {% if form.responsible_user_id.value|stringformat:"s" == u.id|stringformat:"s" %}selected{% endif %}>{{ u.name }} (id={{ u.id }})</option>
+                {% endfor %}
+              </optgroup>
             {% endfor %}
           </select>
           <div class="text-xs muted-2 mt-1">Если не нашли человека — уточните имя в amo (в users list).</div>
