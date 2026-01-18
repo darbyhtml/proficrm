@@ -5670,7 +5670,20 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
     fields = []
     try:
         client = AmoClient(cfg)
-        users = fetch_amo_users(client)
+        amo_users_raw = fetch_amo_users(client)
+        # Сопоставляем пользователей AmoCRM с нашими пользователями для определения филиалов
+        from amocrm.migrate import _map_amo_user_to_local
+        users_with_branches = []
+        for amo_user in amo_users_raw:
+            local_user = _map_amo_user_to_local(amo_user)
+            # Добавляем информацию о филиале, если найден локальный пользователь
+            amo_user_copy = dict(amo_user)
+            if local_user and local_user.branch:
+                amo_user_copy['branch'] = local_user.branch
+            else:
+                amo_user_copy['branch'] = None
+            users_with_branches.append(amo_user_copy)
+        users = users_with_branches
         fields = fetch_company_custom_fields(client)
         cfg.last_error = ""
         cfg.save(update_fields=["last_error", "updated_at"])
