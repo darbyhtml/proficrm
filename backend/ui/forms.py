@@ -18,8 +18,8 @@ class CompanyCreateForm(forms.ModelForm):
         # Оптимизация queryset для head_company: ограничиваем только теми компаниями, которые пользователь может видеть
         # и ограничиваем количество для быстрой загрузки (первые 500)
         if user:
-            from companies.permissions import _editable_company_qs
-            head_company_qs = _editable_company_qs(user).order_by("name")[:500]
+            from companies.permissions import editable_company_qs
+            head_company_qs = editable_company_qs(user).order_by("name")[:500]
             self.fields["head_company"].queryset = head_company_qs
         else:
             # Если user не передан, ограничиваем просто по количеству
