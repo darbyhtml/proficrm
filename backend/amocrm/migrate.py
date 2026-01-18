@@ -802,6 +802,11 @@ def migrate_filtered(
                 if ts in (None, "", 0, "0"):
                     ts = t.get("due_at", None)
                 due_at = _parse_amo_due(ts)
+                
+                # Пропускаем задачи с дедлайном >= 2026 года
+                if due_at and due_at.year >= 2026:
+                    continue
+                
                 if res.tasks_preview is not None and len(res.tasks_preview) < 5:
                     res.tasks_preview.append(
                         {
