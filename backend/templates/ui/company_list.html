@@ -476,7 +476,7 @@
 
       function renderDropdown(items) {
         dropdown.innerHTML = '';
-        if (items.length === 0) {
+        if (!items || items.length === 0) {
           dropdown.innerHTML = '<div class="px-4 py-3 text-sm text-brand-dark/70">Ничего не найдено</div>';
           dropdown.classList.remove('hidden');
           return;
@@ -487,36 +487,36 @@
           div.className = 'px-4 py-2 hover:bg-brand-soft/40 cursor-pointer border-b border-brand-soft/50 last:border-b-0';
           
           // Подсвечиваем совпадения в названии
-          let nameHtml = item.match_in.name 
-            ? highlightMatch(item.name, item.query)
-            : escapeHtml(item.name);
+          let nameHtml = (item.match_in && item.match_in.name) 
+            ? highlightMatch(item.name, item.query || '')
+            : escapeHtml(item.name || '');
           
           // Подсвечиваем совпадения в ИНН
           let innHtml = '';
           if (item.inn) {
-            innHtml = item.match_in.inn
-              ? `<div class="text-xs text-brand-dark/70 mt-0.5">ИНН: ${highlightMatch(item.inn, item.query)}</div>`
+            innHtml = (item.match_in && item.match_in.inn)
+              ? `<div class="text-xs text-brand-dark/70 mt-0.5">ИНН: ${highlightMatch(item.inn, item.query || '')}</div>`
               : `<div class="text-xs text-brand-dark/70 mt-0.5">ИНН: ${escapeHtml(item.inn)}</div>`;
           }
           
           // Подсвечиваем совпадения в адресе
           let addressHtml = '';
           if (item.address) {
-            addressHtml = item.match_in.address
-              ? `<div class="text-xs text-brand-dark/70 mt-0.5">${highlightMatch(item.address, item.query)}</div>`
+            addressHtml = (item.match_in && item.match_in.address)
+              ? `<div class="text-xs text-brand-dark/70 mt-0.5">${highlightMatch(item.address, item.query || '')}</div>`
               : `<div class="text-xs text-brand-dark/70 mt-0.5">${escapeHtml(item.address)}</div>`;
           }
           
           // Показываем телефон, если поиск был по телефону или есть совпадение
           let phoneHtml = '';
           if (item.phone) {
-            phoneHtml = `<div class="text-xs text-brand-dark/70 mt-0.5">Телефон: ${highlightMatch(item.phone, item.query)}</div>`;
+            phoneHtml = `<div class="text-xs text-brand-dark/70 mt-0.5">Телефон: ${highlightMatch(item.phone, item.query || '')}</div>`;
           }
           
           // Показываем email, если поиск был по email или есть совпадение
           let emailHtml = '';
           if (item.email) {
-            emailHtml = `<div class="text-xs text-brand-dark/70 mt-0.5">Email: ${highlightMatch(item.email, item.query)}</div>`;
+            emailHtml = `<div class="text-xs text-brand-dark/70 mt-0.5">Email: ${highlightMatch(item.email, item.query || '')}</div>`;
           }
           
           div.innerHTML = `
@@ -545,14 +545,26 @@
         }
 
         currentRequest = fetch(`/companies/autocomplete/?q=${encodeURIComponent(query)}`)
-          .then(response => response.json())
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+          })
           .then(data => {
-            renderDropdown(data.items || []);
+            if (data.items && data.items.length > 0) {
+              renderDropdown(data.items);
+            } else {
+              dropdown.innerHTML = '<div class="px-4 py-3 text-sm text-brand-dark/70">Ничего не найдено</div>';
+              dropdown.classList.remove('hidden');
+            }
             currentRequest = null;
           })
           .catch(err => {
             if (err.name !== 'AbortError') {
               console.error('Autocomplete error:', err);
+              dropdown.innerHTML = '<div class="px-4 py-3 text-sm text-red-600">Ошибка загрузки</div>';
+              dropdown.classList.remove('hidden');
             }
             currentRequest = null;
           });
