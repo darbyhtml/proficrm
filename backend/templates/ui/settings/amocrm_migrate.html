@@ -435,19 +435,36 @@
         updateCustomFieldVisibility();
       }
       
-      // Очистка результатов при отправке новой формы (не продолжения)
+      // Очистка результатов при отправке основной формы (не продолжения)
       const migrateForm = document.getElementById('migrate-form');
       const resultContainer = document.getElementById('result-container');
       
       if (migrateForm && resultContainer) {
+        // Сохраняем текущего ответственного для сравнения
+        let lastResponsibleId = null;
+        const responsibleSelect = migrateForm.querySelector('select[name="responsible_user_id"]');
+        if (responsibleSelect) {
+          lastResponsibleId = responsibleSelect.value;
+        }
+        
         migrateForm.addEventListener('submit', function(e) {
           // Проверяем, что offset равен 0 или пустой (новый импорт, а не продолжение)
           const offsetInput = migrateForm.querySelector('input[name="offset"]');
           const offsetValue = offsetInput ? offsetInput.value : '0';
           
-          // Если offset = 0, значит это новый импорт - скрываем результаты старого импорта
-          if (offsetValue === '0' || offsetValue === '') {
+          // Получаем текущего ответственного
+          const currentResponsibleId = responsibleSelect ? responsibleSelect.value : null;
+          
+          // Если offset = 0 и это новый импорт (не продолжение), скрываем результаты
+          // Также скрываем, если изменился ответственный
+          if ((offsetValue === '0' || offsetValue === '') && 
+              (lastResponsibleId === null || currentResponsibleId === lastResponsibleId)) {
             resultContainer.style.display = 'none';
+          }
+          
+          // Обновляем сохраненный ID ответственного
+          if (responsibleSelect) {
+            lastResponsibleId = responsibleSelect.value;
           }
         });
       }
