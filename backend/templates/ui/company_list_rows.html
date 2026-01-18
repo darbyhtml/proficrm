@@ -1,0 +1,53 @@
+{% for c in companies %}
+  <tr onclick="window.location='/companies/{{ c.id }}/'" style="cursor:pointer" class="{% if c.has_overdue %}company-row-overdue{% endif %}">
+    <td onclick="event.stopPropagation()">
+      <input class="bulk-company" type="checkbox" name="company_ids" value="{{ c.id }}" form="bulkTransferForm" data-can-transfer="{% if c.can_transfer %}1{% else %}0{% endif %}" />
+    </td>
+    {% if "name" in company_list_columns %}
+      <td>
+        <a class="link" href="/companies/{{ c.id }}/" onclick="event.stopPropagation()">{{ c.name }}</a>
+        {% if "address" in company_list_columns %}
+          <div class="text-xs text-brand-dark/70">{{ c.address }}</div>
+        {% endif %}
+      </td>
+    {% endif %}
+    {% if "overdue" in company_list_columns %}
+      <td>
+        {% if c.has_overdue %}
+          <span class="badge badge-warn">Да</span>
+        {% else %}
+          <span class="muted-2">—</span>
+        {% endif %}
+      </td>
+    {% endif %}
+    {% if "inn" in company_list_columns %}<td>{{ c.inn }}</td>{% endif %}
+    {% if "status" in company_list_columns %}
+      <td>
+        {% if c.status %}
+          <span class="badge">{{ c.status.name }}</span>
+        {% else %}
+          <span class="muted-2">—</span>
+        {% endif %}
+      </td>
+    {% endif %}
+    {% if "spheres" in company_list_columns %}
+      <td>
+        {% for s in c.spheres.all %}
+          <span class="badge mr-1 mb-1">{{ s.name }}</span>
+        {% empty %}
+          <span class="text-brand-dark/70">—</span>
+        {% endfor %}
+      </td>
+    {% endif %}
+    {% if "responsible" in company_list_columns %}<td>{{ c.responsible }}</td>{% endif %}
+    {% if "branch" in company_list_columns %}<td>{{ c.branch }}</td>{% endif %}
+    {% if "updated_at" in company_list_columns %}
+      <td class="muted">
+        <div>{{ c.updated_at|date:"d.m.Y H:i" }}</div>
+        <div class="text-xs text-brand-dark/60 mt-0.5" data-updated-at="{{ c.updated_at|date:'c' }}"></div>
+      </td>
+    {% endif %}
+  </tr>
+{% empty %}
+  <tr><td class="muted" colspan="20" style="padding:1.25rem 1rem">Ничего не найдено.</td></tr>
+{% endfor %}

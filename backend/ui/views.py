@@ -1484,6 +1484,99 @@ def company_list(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+def company_list_ajax(request: HttpRequest) -> JsonResponse:
+    """
+    AJAX endpoint для получения списка компаний без перезагрузки страницы.
+    Возвращает HTML таблицы и метаданные для виртуального скроллинга.
+    """
+    user: User = request.user
+    now = timezone.now()
+    
+    # Используем ту же логику, что и в company_list
+    from django.core.cache import cache
+    cache_key_total = "companies_total_count"
+    companies_total = cache.get(cache_key_total)
+    if companies_total is None:
+        companies_total = Company.objects.all().order_by().count()
+        cache.set(cache_key_total, companies_total, 600)
+    
+    qs = (
+        _companies_with_overdue_flag(now=now)
+        .select_related("responsible", "branch", "status")
+        .prefetch_related("spheres")
+    )
+    
+    filter_params = dict(request.GET)
+    f = _apply_company_filters(qs=qs, params=filter_params, default_responsible_id=None)
+    qs = f["qs"]
+    
+    # Sorting
+    sort = (request.GET.get("sort") or "").strip() or "updated_at"
+    direction = (request.GET.get("dir") or "").strip().lower() or "desc"
+    direction = "asc" if direction == "asc" else "desc"
+    sort_map = {
+        "updated_at": "updated_at",
+        "name": "name",
+        "inn": "inn",
+        "status": "status__name",
+        "responsible": "responsible__last_name",
+        "branch": "branch__name",
+    }
+    sort_field = sort_map.get(sort, "updated_at")
+    if sort == "responsible":
+        order = [sort_field, "responsible__first_name", "name"]
+    else:
+        order = [sort_field, "name"]
+    if direction == "desc":
+        order = [f"-{f}" for f in order]
+    qs = qs.order_by(*order)
+    
+    companies_filtered = qs.order_by().count()
+    
+    # Пагинация
+    per_page = int(request.GET.get("per_page", request.session.get("company_list_per_page", 25)))
+    if per_page not in [25, 50, 100, 200]:
+        per_page = 25
+    
+    paginator = Paginator(qs, per_page)
+    page_num = int(request.GET.get("page", 1))
+    page = paginator.get_page(page_num)
+    
+    # Проверка прав на передачу
+    company_ids = [c.id for c in page.object_list]
+    transfer_check = can_transfer_companies(user, company_ids)
+    allowed_ids_set = set(transfer_check["allowed"])
+    for company in page.object_list:
+        company.can_transfer = company.id in allowed_ids_set  # type: ignore[attr-defined]
+    
+    # Получаем конфигурацию колонок
+    ui_cfg = UiGlobalConfig.load()
+    columns = ui_cfg.company_list_columns or ["name"]
+    
+    # Рендерим HTML строк таблицы
+    from django.template.loader import render_to_string
+    rows_html = render_to_string(
+        "ui/company_list_rows.html",
+        {
+            "companies": page.object_list,
+            "company_list_columns": columns,
+        },
+        request=request,
+    )
+    
+    return JsonResponse({
+        "html": rows_html,
+        "total": companies_total,
+        "filtered": companies_filtered,
+        "page": page_num,
+        "num_pages": paginator.num_pages,
+        "has_previous": page.has_previous(),
+        "has_next": page.has_next(),
+        "per_page": per_page,
+    })
+
+
+@login_required
 def company_bulk_transfer_preview(request: HttpRequest) -> JsonResponse:
     """
     AJAX: превью массового переназначения компаний.
