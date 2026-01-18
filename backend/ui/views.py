@@ -368,8 +368,19 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
                 | Q(contacts__phones__value__icontains=q)
             )
         
-        # Поиск по email в контактах
-        email_filters = Q(contacts__emails__value__icontains=q)
+        # Поиск по email (с нормализацией)
+        normalized_email = _normalize_email_for_search(q)
+        email_filters = Q()
+        if normalized_email:
+            # Ищем по нормализованному email в основном email компании
+            email_filters = Q(email__iexact=normalized_email)
+            # Ищем по нормализованному email в email контактов
+            email_filters |= Q(contacts__emails__value__iexact=normalized_email)
+            # Также ищем по частичному совпадению (на случай, если пользователь ввел часть email)
+            email_filters |= Q(email__icontains=q)
+            email_filters |= Q(contacts__emails__value__icontains=q)
+        else:
+            email_filters = Q(email__icontains=q) | Q(contacts__emails__value__icontains=q)
         
         # Поиск по ФИО в контактах
         # Разбиваем запрос на слова для более гибкого поиска
@@ -1895,16 +1906,25 @@ def company_create(request: HttpRequest) -> HttpResponse:
             )
             return redirect("company_detail", company_id=company.id)
     else:
-        form = CompanyCreateForm()
+        form = CompanyCreateForm(user=user)
 
     return render(request, "ui/company_create.html", {"form": form})
+
+
+def _normalize_email_for_search(email: str) -> str:
+    """
+    Нормализует email для поиска: убирает пробелы, приводит к нижнему регистру.
+    """
+    if not email:
+        return ""
+    return email.strip().lower()
 
 
 @login_required
 def company_autocomplete(request: HttpRequest) -> JsonResponse:
     """
     AJAX: автодополнение для поиска компаний.
-    Возвращает список компаний по запросу (название, ИНН, адрес).
+    Возвращает список компаний по запросу (название, ИНН, адрес, телефон, email).
     """
     q = (request.GET.get("q") or "").strip()
     if not q or len(q) < 2:
@@ -1922,12 +1942,40 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
     normalized_phone = _normalize_phone_for_search(q)
     phone_filters = Q()
     if normalized_phone and normalized_phone != q:
-        phone_filters = Q(phone=normalized_phone) | Q(phone__icontains=q)
+        # Ищем по нормализованному номеру в основном телефоне компании
+        phone_filters = Q(phone=normalized_phone)
+        # Ищем по нормализованному номеру в дополнительных телефонах компании
+        phone_filters |= Q(phones__value=normalized_phone)
+        # Ищем по нормализованному номеру в телефонах контактов
+        phone_filters |= Q(contacts__phones__value=normalized_phone)
+        # Также ищем по исходному запросу (на случай, если нормализация не сработала)
+        phone_filters |= Q(phone__icontains=q)
+        phone_filters |= Q(phones__value__icontains=q)
+        phone_filters |= Q(contacts__phones__value__icontains=q)
     else:
-        phone_filters = Q(phone__icontains=q)
+        # Если нормализация не удалась, ищем как есть
+        phone_filters = (
+            Q(phone__icontains=q)
+            | Q(phones__value__icontains=q)
+            | Q(contacts__phones__value__icontains=q)
+        )
+    
+    # Поиск по email (с нормализацией)
+    normalized_email = _normalize_email_for_search(q)
+    email_filters = Q()
+    if normalized_email:
+        # Ищем по нормализованному email в основном email компании
+        email_filters = Q(email__iexact=normalized_email)
+        # Ищем по нормализованному email в email контактов
+        email_filters |= Q(contacts__emails__value__iexact=normalized_email)
+        # Также ищем по частичному совпадению (на случай, если пользователь ввел часть email)
+        email_filters |= Q(email__icontains=q)
+        email_filters |= Q(contacts__emails__value__icontains=q)
+    else:
+        email_filters = Q(email__icontains=q) | Q(contacts__emails__value__icontains=q)
     
     qs = Company.objects.filter(
-        base_filters | phone_filters
+        base_filters | phone_filters | email_filters
     ).select_related("responsible", "branch", "status").distinct().order_by("-updated_at")[:10]
     
     items = []

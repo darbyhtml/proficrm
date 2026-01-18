@@ -11,6 +11,24 @@ from ui.widgets import TaskTypeSelectWidget, UserSelectWithBranchWidget
 
 
 class CompanyCreateForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+        
+        # Оптимизация queryset для head_company: ограничиваем только теми компаниями, которые пользователь может видеть
+        # и ограничиваем количество для быстрой загрузки (первые 500)
+        if user:
+            from companies.permissions import _editable_company_qs
+            head_company_qs = _editable_company_qs(user).order_by("name")[:500]
+            self.fields["head_company"].queryset = head_company_qs
+        else:
+            # Если user не передан, ограничиваем просто по количеству
+            self.fields["head_company"].queryset = Company.objects.only("id", "name").order_by("name")[:500]
+        
+        # Оптимизация queryset для status и spheres: используем only() для загрузки только необходимых полей
+        self.fields["status"].queryset = CompanyStatus.objects.only("id", "name").order_by("name")
+        self.fields["spheres"].queryset = CompanySphere.objects.only("id", "name").order_by("name")
+    
     class Meta:
         model = Company
         fields = [
