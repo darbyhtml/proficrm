@@ -33,7 +33,7 @@
           <label class="block text-sm text-brand-dark/80 mb-1">Размер пачки компаний</label>
           <input class="input" type="number" name="limit_companies" value="{{ form.limit_companies.value|default:10 }}" min="1" max="5000" />
           <div class="text-xs muted-2 mt-1">
-            <b>Автоматически уменьшается:</b> если включены заметки → до 5, если контакты → до 5, если оба → до 3.
+            Количество компаний, обрабатываемых за один запуск импорта.
             При 504 ошибке уменьшите до 3–5 или увеличьте таймаут nginx.
           </div>
         </div>

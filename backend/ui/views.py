@@ -5710,20 +5710,10 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                 messages.error(request, "Ошибка: клиент amoCRM не инициализирован. Проверьте настройки подключения.")
             else:
                 try:
-                    # Защита от nginx 504: уменьшаем batch_size в зависимости от того, что импортируем
+                    # Используем размер пачки, указанный пользователем
                     batch_size = int(form.cleaned_data.get("limit_companies") or 0)
                     if batch_size <= 0:
-                        batch_size = 10  # дефолт уменьшен с 50 до 10
-                    import_notes = bool(form.cleaned_data.get("import_notes"))
-                    import_contacts = bool(form.cleaned_data.get("import_contacts"))
-                    if import_notes and import_contacts:
-                        batch_size = min(batch_size, 10)  # если оба включены - увеличиваем до 10
-                    elif import_notes:
-                        batch_size = min(batch_size, 10)  # только заметки - увеличиваем до 10
-                    elif import_contacts:
-                        batch_size = min(batch_size, 10)  # только контакты - увеличиваем до 10
-                    else:
-                        batch_size = min(batch_size, 10)  # только компании/задачи
+                        batch_size = 10  # дефолт, если не указано
                     migrate_all = bool(form.cleaned_data.get("migrate_all_companies", False))
                     custom_field_id = form.cleaned_data.get("custom_field_id") or 0
                     
