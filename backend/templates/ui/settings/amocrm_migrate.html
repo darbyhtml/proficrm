@@ -438,21 +438,16 @@
       // Очистка результатов при отправке новой формы (не продолжения)
       const migrateForm = document.getElementById('migrate-form');
       const resultContainer = document.getElementById('result-container');
-      const continueForm = document.getElementById('continue-form');
       
       if (migrateForm && resultContainer) {
         migrateForm.addEventListener('submit', function(e) {
-          // Проверяем, что это не форма продолжения (continue-form)
-          const form = e.target;
-          if (form.id === 'migrate-form') {
-            // Проверяем, что offset равен 0 или пустой (новый импорт, а не продолжение)
-            const offsetInput = form.querySelector('input[name="offset"]');
-            const offsetValue = offsetInput ? offsetInput.value : '0';
-            
-            // Если offset = 0, значит это новый импорт - скрываем результаты
-            if (offsetValue === '0' || offsetValue === '') {
-              resultContainer.style.display = 'none';
-            }
+          // Проверяем, что offset равен 0 или пустой (новый импорт, а не продолжение)
+          const offsetInput = migrateForm.querySelector('input[name="offset"]');
+          const offsetValue = offsetInput ? offsetInput.value : '0';
+          
+          // Если offset = 0, значит это новый импорт - скрываем результаты старого импорта
+          if (offsetValue === '0' || offsetValue === '') {
+            resultContainer.style.display = 'none';
           }
         });
       }
