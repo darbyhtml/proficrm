@@ -2033,22 +2033,33 @@
               today.setHours(0, 0, 0, 0);
               
               if (showYearSelector) {
-                // Показываем выбор года
+                // Показываем выбор года с навигацией по десятилетиям
                 const currentYear = currentDate.getFullYear();
-                const startYear = currentYear - 10;
-                const endYear = currentYear + 10;
+                const decadeStart = Math.floor(currentYear / 10) * 10;
+                const startYear = decadeStart - 5;
+                const endYear = decadeStart + 14;
+                
                 popup.innerHTML = `
                   <div class="calendar-header">
                     <div class="month-year" style="cursor: pointer;">Выберите год</div>
                     <div class="nav-buttons">
-                      <button class="close-year-selector" type="button">✕</button>
+                      <button class="close-year-selector" type="button" style="font-size: 18px; line-height: 1;">✕</button>
                     </div>
                   </div>
                   <div class="year-selector">
-                    ${Array(endYear - startYear + 1).fill(0).map((_, i) => {
-                      const y = startYear + i;
-                      return `<div class="year-item ${y === year ? 'selected' : ''}" data-year="${y}">${y}</div>`;
-                    }).join('')}
+                    <div class="year-decade-header">
+                      <div class="year-decade-title">${decadeStart} - ${decadeStart + 9}</div>
+                      <div class="year-decade-nav">
+                        <button class="prev-decade" type="button">‹‹</button>
+                        <button class="next-decade" type="button">››</button>
+                      </div>
+                    </div>
+                    <div class="year-grid">
+                      ${Array(endYear - startYear + 1).fill(0).map((_, i) => {
+                        const y = startYear + i;
+                        return `<div class="year-item ${y === year ? 'selected' : ''}" data-year="${y}">${y}</div>`;
+                      }).join('')}
+                    </div>
                   </div>
                 `;
                 
@@ -2059,6 +2070,16 @@
                     showYearSelector = false;
                     renderCalendar();
                   });
+                });
+                
+                popup.querySelector('.prev-decade').addEventListener('click', () => {
+                  currentDate.setFullYear(currentDate.getFullYear() - 10);
+                  renderCalendar();
+                });
+                
+                popup.querySelector('.next-decade').addEventListener('click', () => {
+                  currentDate.setFullYear(currentDate.getFullYear() + 10);
+                  renderCalendar();
                 });
                 
                 popup.querySelector('.close-year-selector').addEventListener('click', () => {
