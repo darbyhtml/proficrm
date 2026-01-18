@@ -440,34 +440,14 @@
       const resultContainer = document.getElementById('result-container');
       
       if (migrateForm && resultContainer) {
-        // Сохраняем начальные значения формы для отслеживания изменений
-        let initialResponsibleId = null;
-        let initialOffset = null;
-        const responsibleSelect = migrateForm.querySelector('select[name="responsible_user_id"]');
-        const offsetInput = migrateForm.querySelector('input[name="offset"]');
-        
-        if (responsibleSelect) {
-          initialResponsibleId = responsibleSelect.value;
-        }
-        if (offsetInput) {
-          initialOffset = offsetInput.value || '0';
-        }
-        
         migrateForm.addEventListener('submit', function(e) {
           // Проверяем, что offset равен 0 или пустой (новый импорт, а не продолжение)
+          const offsetInput = migrateForm.querySelector('input[name="offset"]');
           const offsetValue = offsetInput ? offsetInput.value : '0';
-          const currentResponsibleId = responsibleSelect ? responsibleSelect.value : null;
           
-          // Скрываем результаты если:
-          // 1. offset = 0 (новый импорт, не продолжение)
-          // 2. ИЛИ изменился ответственный (даже если offset не 0, это новый импорт с другим ответственным)
-          const isNewImport = (offsetValue === '0' || offsetValue === '') && 
-                               (initialOffset === null || offsetValue === initialOffset);
-          const responsibleChanged = initialResponsibleId !== null && 
-                                     currentResponsibleId !== null && 
-                                     currentResponsibleId !== initialResponsibleId;
-          
-          if (isNewImport || responsibleChanged) {
+          // Если offset = 0, значит это новый импорт через основную форму - всегда скрываем результаты
+          // Форма продолжения (continue-form) имеет другой ID и не затронется
+          if (offsetValue === '0' || offsetValue === '') {
             resultContainer.style.display = 'none';
           }
         });

@@ -5705,6 +5705,10 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
     result = None
     if request.method == "POST":
         form = AmoMigrateFilterForm(request.POST)
+        # Если offset = 0, это новый импорт - очищаем результаты предыдущего импорта
+        offset = int(request.POST.get("offset") or 0)
+        if offset == 0:
+            result = None  # Явно очищаем результаты для нового импорта
         if form.is_valid():
             if not client:
                 messages.error(request, "Ошибка: клиент amoCRM не инициализирован. Проверьте настройки подключения.")
