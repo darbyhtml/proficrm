@@ -469,56 +469,91 @@
         if (!query || !text) return escapeHtml(text);
         const escapedText = escapeHtml(text);
         
-        // Нормализуем запрос и текст (убираем пробелы, скобки, дефисы для телефонных номеров)
-        const normalizeForSearch = (str) => str.replace(/[\s\-()]/g, '').toLowerCase();
-        const normalizedQuery = normalizeForSearch(query);
-        const normalizedText = normalizeForSearch(escapedText);
+        // Нормализуем для поиска: убираем пробелы, скобки, дефисы, приводим к нижнему регистру
+        const normalizePhone = (str) => {
+          return str.replace(/[\s\-()]/g, '').toLowerCase();
+        };
+        
+        const normalizedQuery = normalizePhone(query);
+        const normalizedText = normalizePhone(escapedText);
+        
+        // Варианты запроса: исходный и с заменой начальной 8 на +7 (для российских номеров)
+        const queryVariants = [normalizedQuery];
+        if (normalizedQuery.startsWith('8') && normalizedQuery.length >= 11) {
+          queryVariants.push('+7' + normalizedQuery.substring(1));
+        }
+        if (normalizedQuery.startsWith('+7')) {
+          queryVariants.push('8' + normalizedQuery.substring(2));
+        }
+        
+        // Варианты текста: исходный и с заменой начальной +7 на 8
+        const textVariants = [normalizedText];
+        if (normalizedText.startsWith('+7')) {
+          textVariants.push('8' + normalizedText.substring(2));
+        }
+        if (normalizedText.startsWith('8') && normalizedText.length >= 11) {
+          textVariants.push('+7' + normalizedText.substring(1));
+        }
         
         // Сначала пробуем найти точное совпадение в оригинальном тексте
         const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         let regex = new RegExp(`(${escapedQuery})`, 'gi');
         let result = escapedText.replace(regex, '<span style="font-weight: bold !important; color: #f97316 !important; background-color: #fff7ed !important;">$1</span>');
         
-        // Если не нашли, пробуем найти нормализованный запрос
-        if (!result.includes('<span') && normalizedQuery && normalizedQuery.length > 0) {
-          // Находим все вхождения нормализованного запроса в нормализованном тексте
-          const escapedNormalizedQuery = normalizedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const normalizedRegex = new RegExp(escapedNormalizedQuery, 'gi');
-          const matches = [...normalizedText.matchAll(normalizedRegex)];
-          
-          if (matches.length > 0) {
-            // Строим результат, вставляя подсветку в нужные места оригинального текста
-            let highlightedText = escapedText;
-            // Идем с конца, чтобы не сбить позиции при вставке
-            for (let i = matches.length - 1; i >= 0; i--) {
-              const match = matches[i];
-              const normalizedStart = match.index;
-              const normalizedEnd = normalizedStart + match[0].length;
+        // Если не нашли, пробуем найти через нормализованные варианты
+        if (!result.includes('<span')) {
+          for (const queryVariant of queryVariants) {
+            if (!queryVariant) continue;
+            
+            for (const textVariant of textVariants) {
+              if (!textVariant) continue;
               
-              // Находим соответствующие позиции в оригинальном тексте
-              let origStart = 0, origEnd = 0;
-              let normalizedPos = 0;
+              const escapedVariant = queryVariant.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const variantRegex = new RegExp(escapedVariant, 'gi');
+              const matches = [...textVariant.matchAll(variantRegex)];
               
-              for (let j = 0; j < escapedText.length; j++) {
-                const char = escapedText[j];
-                if (!/[\s\-()]/.test(char)) {
-                  if (normalizedPos === normalizedStart) origStart = j;
-                  if (normalizedPos === normalizedEnd - 1) {
-                    origEnd = j + 1;
-                    break;
+              if (matches.length > 0) {
+                // Находим позиции в оригинальном тексте
+                let highlightedText = escapedText;
+                
+                // Идем с конца, чтобы не сбить позиции при вставке
+                for (let i = matches.length - 1; i >= 0; i--) {
+                  const match = matches[i];
+                  const variantStart = match.index;
+                  const variantEnd = variantStart + match[0].length;
+                  
+                  // Находим соответствующие позиции в оригинальном тексте
+                  let origStart = 0, origEnd = 0;
+                  let variantPos = 0;
+                  
+                  for (let j = 0; j < escapedText.length; j++) {
+                    const char = escapedText[j];
+                    if (!/[\s\-()]/.test(char)) {
+                      if (variantPos === variantStart) {
+                        origStart = j;
+                      }
+                      if (variantPos === variantEnd - 1) {
+                        origEnd = j + 1;
+                        break;
+                      }
+                      variantPos++;
+                    }
                   }
-                  normalizedPos++;
+                  
+                  if (origEnd > origStart) {
+                    const before = highlightedText.substring(0, origStart);
+                    const matchText = highlightedText.substring(origStart, origEnd);
+                    const after = highlightedText.substring(origEnd);
+                    highlightedText = before + '<span style="font-weight: bold !important; color: #f97316 !important; background-color: #fff7ed !important;">' + matchText + '</span>' + after;
+                  }
                 }
-              }
-              
-              if (origEnd > origStart) {
-                const before = highlightedText.substring(0, origStart);
-                const matchText = highlightedText.substring(origStart, origEnd);
-                const after = highlightedText.substring(origEnd);
-                highlightedText = before + '<span style="font-weight: bold !important; color: #f97316 !important; background-color: #fff7ed !important;">' + matchText + '</span>' + after;
+                
+                result = highlightedText;
+                break;
               }
             }
-            result = highlightedText;
+            
+            if (result.includes('<span')) break;
           }
         }
         
