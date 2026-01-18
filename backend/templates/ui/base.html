@@ -188,10 +188,10 @@
         border: 1px solid rgba(194,226,222,.95);
         border-radius: 8px;
         box-shadow: 0 4px 12px rgba(0,61,56,.2);
-        padding: 8px;
+        padding: 10px;
         z-index: 10001;
-        width: 208px;
-        max-height: 200px;
+        width: 280px;
+        max-height: 240px;
         overflow-y: auto;
         font-family: system-ui, -apple-system, sans-serif;
         display: flex;
@@ -203,13 +203,13 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 4px;
-        padding-bottom: 4px;
+        margin-bottom: 6px;
+        padding-bottom: 6px;
         border-bottom: 1px solid rgba(194,226,222,.7);
       }
       
       .custom-datetime-popup .calendar-header .month-year {
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 600;
         color: var(--brand-dark);
       }
@@ -226,8 +226,8 @@
       }
       
       .custom-datetime-popup .calendar-header button {
-        width: 18px;
-        height: 18px;
+        width: 20px;
+        height: 20px;
         border: 1px solid rgba(194,226,222,.7);
         background: #fff;
         border-radius: 4px;
@@ -236,7 +236,7 @@
         align-items: center;
         justify-content: center;
         color: var(--brand-dark);
-        font-size: 12px;
+        font-size: 13px;
         transition: all 0.2s ease;
         padding: 0;
       }
@@ -303,9 +303,9 @@
       
       .custom-datetime-popup .calendar-time-wrapper {
         display: flex;
-        gap: 6px;
+        gap: 12px;
         align-items: flex-start;
-        padding-top: 4px;
+        padding-top: 6px;
         border-top: 1px solid rgba(194,226,222,.7);
       }
       
@@ -316,9 +316,11 @@
       
       .custom-datetime-popup .time-picker {
         display: flex;
-        gap: 4px;
+        gap: 6px;
         flex: 0 0 auto;
-        min-width: 56px;
+        min-width: 70px;
+        padding-left: 8px;
+        border-left: 1px solid rgba(194,226,222,.5);
       }
       
       .custom-datetime-popup .time-column {
@@ -329,31 +331,31 @@
       }
       
       .custom-datetime-popup .time-column-label {
-        font-size: 8px;
+        font-size: 9px;
         font-weight: 600;
         color: rgba(0,61,56,.7);
-        margin-bottom: 2px;
+        margin-bottom: 4px;
       }
       
       .custom-datetime-popup .time-scroll {
         width: 100%;
-        max-height: 72px;
+        max-height: 90px;
         overflow-y: auto;
         display: flex;
         flex-direction: column;
-        gap: 1px;
-        padding: 2px 0;
+        gap: 2px;
+        padding: 4px 0;
       }
       
       .custom-datetime-popup .time-item {
-        padding: 2px 4px;
+        padding: 3px 6px;
         text-align: center;
-        border-radius: 3px;
+        border-radius: 4px;
         cursor: pointer;
-        font-size: 10px;
+        font-size: 11px;
         color: var(--brand-dark);
         transition: all 0.2s ease;
-        min-height: 16px;
+        min-height: 20px;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -372,16 +374,16 @@
       .custom-datetime-popup .calendar-actions {
         display: flex;
         justify-content: space-between;
-        gap: 3px;
-        margin-top: 4px;
-        padding-top: 4px;
+        gap: 4px;
+        margin-top: 6px;
+        padding-top: 6px;
         border-top: 1px solid rgba(194,226,222,.7);
       }
       
       .custom-datetime-popup .calendar-actions button {
         flex: 1;
-        padding: 2px 4px;
-        font-size: 9px;
+        padding: 4px 6px;
+        font-size: 10px;
       }
       
       .custom-datetime-popup .calendar-actions button {
