@@ -65,7 +65,8 @@
         <div class="text-sm text-brand-dark/80">
           Прочитано событий: <b>{{ result.total_events }}</b>,
           добавлено задач: <b>{{ result.created_tasks }}</b>,
-          пропущено (уже было): <b>{{ result.skipped_existing }}</b>,
+          пропущено (уже было): <b>{{ result.skipped_existing }}</b>{% if result.skipped_old_tasks %},
+          пропущено (старые, до 2026 года): <b>{{ result.skipped_old_tasks }}</b>{% endif %},
           привязано к компании: <b>{{ result.linked_to_company }}</b>,
           без компании: <b>{{ result.without_company }}</b>,
           пропущено (нет компании): <b>{{ result.skipped_unmatched|default:0 }}</b>,

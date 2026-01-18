@@ -129,7 +129,7 @@
           обновлено: <b>{{ result.companies_updated }}</b>
         </div>
         <div class="text-sm text-brand-dark/80 mt-2">
-          Задач: найдено <b>{{ result.tasks_seen }}</b>, добавлено <b>{{ result.tasks_created }}</b>, пропущено (уже было) <b>{{ result.tasks_skipped_existing }}</b>
+          Задач: найдено <b>{{ result.tasks_seen }}</b>, добавлено <b>{{ result.tasks_created }}</b>, пропущено (уже было) <b>{{ result.tasks_skipped_existing }}</b>{% if result.tasks_skipped_old %}, пропущено (старые, до 2026 года) <b>{{ result.tasks_skipped_old }}</b>{% endif %}
         </div>
         <div class="text-sm text-brand-dark/80 mt-1">
           Заметок: найдено <b>{{ result.notes_seen }}</b>, добавлено <b>{{ result.notes_created }}</b>, пропущено (уже было) <b>{{ result.notes_skipped_existing }}</b>
