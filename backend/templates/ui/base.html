@@ -173,36 +173,43 @@
         bottom: 0;
         z-index: 10000;
         pointer-events: none;
+        display: none;
       }
       
       .custom-datetime-overlay.active {
+        display: block;
         pointer-events: auto;
+        background: rgba(0, 0, 0, 0.3);
       }
       
       .custom-datetime-popup {
-        position: fixed;
+        position: absolute;
         background: #fff;
         border: 1px solid rgba(194,226,222,.95);
-        border-radius: 16px;
-        box-shadow: 0 12px 30px rgba(0,61,56,.15);
-        padding: 16px;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0,61,56,.2);
+        padding: 12px;
         z-index: 10001;
-        min-width: 600px;
-        max-width: 90vw;
-        max-height: 90vh;
+        width: 520px;
+        max-height: 500px;
         overflow-y: auto;
         font-family: system-ui, -apple-system, sans-serif;
         display: flex;
         flex-direction: column;
+        pointer-events: auto;
       }
       
       .custom-datetime-popup .calendar-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 12px;
+        margin-bottom: 8px;
         padding-bottom: 8px;
         border-bottom: 1px solid rgba(194,226,222,.7);
+      }
+      
+      .custom-datetime-popup .calendar-header .month-year {
+        font-size: 14px;
       }
       
       .custom-datetime-popup .calendar-header .month-year {
@@ -303,7 +310,7 @@
       
       .custom-datetime-popup .calendar-time-wrapper {
         display: flex;
-        gap: 24px;
+        gap: 16px;
         align-items: flex-start;
       }
       
@@ -312,11 +319,19 @@
         min-width: 0;
       }
       
+      .custom-datetime-popup .calendar-days {
+        margin-bottom: 12px;
+      }
+      
       .custom-datetime-popup .time-picker {
         display: flex;
-        gap: 16px;
+        gap: 12px;
         flex: 0 0 auto;
-        min-width: 200px;
+        min-width: 140px;
+      }
+      
+      .custom-datetime-popup .time-scroll {
+        max-height: 180px;
       }
       
       .custom-datetime-popup .time-column {
@@ -366,9 +381,16 @@
       .custom-datetime-popup .calendar-actions {
         display: flex;
         justify-content: space-between;
-        margin-top: 16px;
-        padding-top: 16px;
+        gap: 8px;
+        margin-top: 12px;
+        padding-top: 12px;
         border-top: 1px solid rgba(194,226,222,.7);
+      }
+      
+      .custom-datetime-popup .calendar-actions button {
+        flex: 1;
+        padding: 6px 12px;
+        font-size: 13px;
       }
       
       .custom-datetime-popup .calendar-actions button {
@@ -1767,14 +1789,20 @@
             }
             updateVisualInput();
             
-            // Создаем overlay и popup
-            const overlay = document.createElement('div');
-            overlay.className = 'custom-datetime-overlay';
-            document.body.appendChild(overlay);
+            // Создаем overlay и popup (один раз для всех input)
+            let overlay = document.querySelector('.custom-datetime-overlay');
+            if (!overlay) {
+              overlay = document.createElement('div');
+              overlay.className = 'custom-datetime-overlay';
+              document.body.appendChild(overlay);
+            }
             
-            const popup = document.createElement('div');
-            popup.className = 'custom-datetime-popup';
-            overlay.appendChild(popup);
+            let popup = overlay.querySelector('.custom-datetime-popup');
+            if (!popup) {
+              popup = document.createElement('div');
+              popup.className = 'custom-datetime-popup';
+              overlay.appendChild(popup);
+            }
             
             let currentDate = input.value ? new Date(input.value) : new Date();
             let selectedDate = currentDate;
@@ -1945,10 +1973,21 @@
             
             function openPopup() {
               overlay.classList.add('active');
-              // Центрируем popup на экране
-              popup.style.top = '50%';
-              popup.style.left = '50%';
-              popup.style.transform = 'translate(-50%, -50%)';
+              const rect = visualInput.getBoundingClientRect();
+              // Позиционируем popup прямо под полем ввода
+              popup.style.top = (rect.bottom + 4) + 'px';
+              popup.style.left = rect.left + 'px';
+              popup.style.transform = 'none';
+              // Убеждаемся, что popup не выходит за границы экрана
+              setTimeout(() => {
+                const popupRect = popup.getBoundingClientRect();
+                if (popupRect.right > window.innerWidth) {
+                  popup.style.left = (window.innerWidth - popupRect.width - 8) + 'px';
+                }
+                if (popupRect.bottom > window.innerHeight) {
+                  popup.style.top = (rect.top - popupRect.height - 4) + 'px';
+                }
+              }, 0);
               renderCalendar();
             }
             
@@ -1963,11 +2002,20 @@
               }
             }
             
-            visualInput.addEventListener('click', openPopup);
+            visualInput.addEventListener('click', function(e) {
+              e.stopPropagation();
+              openPopup();
+            });
+            
             overlay.addEventListener('click', (e) => {
-              if (e.target === overlay || e.target.classList.contains('custom-datetime-overlay')) {
+              if (e.target === overlay) {
                 closePopup();
               }
+            });
+            
+            // Предотвращаем закрытие при клике на popup
+            popup.addEventListener('click', (e) => {
+              e.stopPropagation();
             });
             
             // Закрытие по Escape
