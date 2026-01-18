@@ -17,18 +17,47 @@
             <th class="text-left px-4 py-3">Кто</th>
             <th class="text-left px-4 py-3">Сущность</th>
             <th class="text-left px-4 py-3">Описание</th>
+            <th class="text-left px-4 py-3">Детали</th>
           </tr>
         </thead>
         <tbody>
           {% for e in events %}
             <tr class="border-t align-top">
-              <td class="px-4 py-3 text-brand-dark/70 whitespace-nowrap">{{ e.created_at }}</td>
+              <td class="px-4 py-3 text-brand-dark/70 whitespace-nowrap">{{ e.created_at|date:"d.m.Y H:i" }}</td>
               <td class="px-4 py-3">{{ e.actor|default:"—" }}</td>
               <td class="px-4 py-3 font-mono text-xs">{{ e.entity_type }}:{{ e.entity_id }}</td>
               <td class="px-4 py-3">{{ e.message|default:e.get_verb_display }}</td>
+              <td class="px-4 py-3 text-xs text-brand-dark/60">
+                {% if e.entity_type == "company_bulk_transfer" and e.meta %}
+                  <div class="space-y-1">
+                    {% if e.meta.count %}
+                      <div>Количество: <b>{{ e.meta.count }}</b></div>
+                    {% endif %}
+                    {% if e.meta.to %}
+                      <div>→ {{ e.meta.to.name|default:e.meta.to }} ({{ e.meta.to.role|default:"" }})</div>
+                    {% endif %}
+                    {% if e.meta.from %}
+                      <div>От: {% for old in e.meta.from %}{{ old.name }} ({{ old.count }}){% if not forloop.last %}, {% endif %}{% endfor %}</div>
+                    {% endif %}
+                    {% if e.meta.mode %}
+                      <div class="text-brand-dark/50">Режим: {{ e.meta.mode }}</div>
+                    {% endif %}
+                    {% if e.meta.companies_sample %}
+                      <div class="text-brand-dark/50">Компаний в логе: {{ e.meta.companies_sample|length }}</div>
+                    {% endif %}
+                  </div>
+                {% elif e.meta %}
+                  <details class="cursor-pointer">
+                    <summary class="text-brand-dark/70 hover:text-brand-dark">Показать детали</summary>
+                    <pre class="mt-2 text-xs bg-brand-soft/20 p-2 rounded overflow-x-auto">{{ e.meta }}</pre>
+                  </details>
+                {% else %}
+                  —
+                {% endif %}
+              </td>
             </tr>
           {% empty %}
-            <tr><td class="px-4 py-6 text-brand-dark/70" colspan="4">Пока событий нет.</td></tr>
+            <tr><td class="px-4 py-6 text-brand-dark/70" colspan="5">Пока событий нет.</td></tr>
           {% endfor %}
         </tbody>
       </table>

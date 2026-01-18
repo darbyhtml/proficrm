@@ -130,7 +130,7 @@
               </optgroup>
             {% endfor %}
           </select>
-          <button class="btn btn-primary" type="submit" id="bulkTransferBtn" onclick="return confirm('Переназначить выбранные компании?');" title="">Переназначить</button>
+          <button class="btn btn-primary" type="button" id="bulkTransferBtn" title="">Переназначить</button>
           <button class="btn btn-outline" type="button" id="bulkSelectFiltered">Выбрать все по фильтру</button>
           <button class="btn btn-outline" type="button" id="bulkClear">Снять выделение</button>
         </div>
@@ -334,6 +334,26 @@
     </div>
   </div>
 
+  <!-- Модальное окно для превью массового переназначения -->
+  <div id="bulkTransferModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center" style="display: none;">
+    <div class="bg-white rounded-2xl shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] flex flex-col">
+      <div class="px-6 py-4 border-b border-brand-soft flex items-center justify-between">
+        <h2 class="text-xl font-semibold">Подтверждение массового переназначения</h2>
+        <button type="button" id="bulkTransferModalClose" class="text-brand-dark/60 hover:text-brand-dark text-2xl leading-none">&times;</button>
+      </div>
+      <div class="px-6 py-4 overflow-y-auto flex-1" id="bulkTransferModalContent">
+        <div class="text-center py-8">
+          <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-teal"></div>
+          <p class="mt-4 text-brand-dark/70">Загрузка превью...</p>
+        </div>
+      </div>
+      <div class="px-6 py-4 border-t border-brand-soft flex items-center justify-end gap-3">
+        <button type="button" id="bulkTransferModalCancel" class="btn btn-outline">Отмена</button>
+        <button type="button" id="bulkTransferModalConfirm" class="btn btn-primary" disabled>Подтвердить переназначение</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     (function(){
       const form = document.getElementById('bulkTransferForm');
@@ -419,6 +439,126 @@
         originalUpdate();
         checkTransferRights();
       };
+      
+      // Модальное окно для превью
+      const modal = document.getElementById('bulkTransferModal');
+      const modalContent = document.getElementById('bulkTransferModalContent');
+      const modalClose = document.getElementById('bulkTransferModalClose');
+      const modalCancel = document.getElementById('bulkTransferModalCancel');
+      const modalConfirm = document.getElementById('bulkTransferModalConfirm');
+      const transferBtn = document.getElementById('bulkTransferBtn');
+      
+      function showModal() {
+        if (modal) modal.style.display = 'flex';
+      }
+      
+      function hideModal() {
+        if (modal) modal.style.display = 'none';
+      }
+      
+      if (modalClose) modalClose.addEventListener('click', hideModal);
+      if (modalCancel) modalCancel.addEventListener('click', hideModal);
+      
+      // Обработчик клика вне модального окна
+      if (modal) {
+        modal.addEventListener('click', (e) => {
+          if (e.target === modal) hideModal();
+        });
+      }
+      
+      // Обработчик кнопки "Переназначить"
+      if (transferBtn) {
+        transferBtn.addEventListener('click', async function(e) {
+          e.preventDefault();
+          
+          const responsibleSelect = form.querySelector('select[name="responsible_id"]');
+          const responsibleId = responsibleSelect ? responsibleSelect.value : '';
+          
+          if (!responsibleId) {
+            alert('Выберите нового ответственного');
+            return;
+          }
+          
+          // Собираем данные формы
+          const formData = new FormData(form);
+          formData.append('responsible_id', responsibleId);
+          
+          // Показываем модальное окно с загрузкой
+          showModal();
+          modalContent.innerHTML = '<div class="text-center py-8"><div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-teal"></div><p class="mt-4 text-brand-dark/70">Загрузка превью...</p></div>';
+          modalConfirm.disabled = true;
+          
+          try {
+            const response = await fetch('/companies/bulk-transfer/preview/', {
+              method: 'POST',
+              body: formData,
+              headers: {
+                'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value
+              }
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+              modalContent.innerHTML = `<div class="py-8"><div class="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">${data.error || 'Ошибка загрузки превью'}</div></div>`;
+              return;
+            }
+            
+            // Отображаем превью
+            let html = '<div class="space-y-4">';
+            
+            // Общая информация
+            html += '<div class="bg-brand-soft/30 rounded-lg p-4 space-y-2">';
+            html += `<div class="font-semibold">Будет переназначено компаний: <span class="text-brand-teal">${data.total_count}</span></div>`;
+            html += `<div class="text-sm text-brand-dark/70">Новый ответственный: <b>${escapeHtml(data.new_responsible.name)}</b> (${escapeHtml(data.new_responsible.role)})`;
+            if (data.new_responsible.branch !== '—') {
+              html += `, филиал: ${escapeHtml(data.new_responsible.branch)}`;
+            }
+            html += '</div>';
+            
+            // Старые ответственные
+            if (data.old_responsibles && data.old_responsibles.length > 0) {
+              html += '<div class="text-sm text-brand-dark/70 mt-2">';
+              html += 'Текущие ответственные: ';
+              html += data.old_responsibles.map(r => `${escapeHtml(r.name)} (${r.count})`).join(', ');
+              html += '</div>';
+            }
+            html += '</div>';
+            
+            // Список компаний (первые 50)
+            if (data.companies && data.companies.length > 0) {
+              html += '<div class="border border-brand-soft rounded-lg overflow-hidden">';
+              html += '<div class="bg-brand-soft/40 px-4 py-2 text-sm font-semibold">Список компаний (первые ' + data.companies.length + (data.total_count > data.companies.length ? ` из ${data.total_count}` : '') + '):</div>';
+              html += '<div class="max-h-96 overflow-y-auto">';
+              html += '<table class="min-w-full text-sm">';
+              html += '<thead class="bg-brand-soft/20"><tr><th class="text-left px-4 py-2">Компания</th><th class="text-left px-4 py-2">ИНН</th><th class="text-left px-4 py-2">Текущий ответственный</th><th class="text-left px-4 py-2">Филиал</th></tr></thead>';
+              html += '<tbody>';
+              data.companies.forEach(c => {
+                html += '<tr class="border-t border-brand-soft/50">';
+                html += `<td class="px-4 py-2">${escapeHtml(c.name)}</td>`;
+                html += `<td class="px-4 py-2 text-brand-dark/70">${c.inn || '—'}</td>`;
+                html += `<td class="px-4 py-2 text-brand-dark/70">${escapeHtml(c.old_responsible)}</td>`;
+                html += `<td class="px-4 py-2 text-brand-dark/70">${escapeHtml(c.old_branch)}</td>`;
+                html += '</tr>';
+              });
+              html += '</tbody></table></div></div>';
+            }
+            
+            html += '</div>';
+            modalContent.innerHTML = html;
+            modalConfirm.disabled = false;
+            
+            // Обработчик подтверждения
+            modalConfirm.onclick = function() {
+              form.submit();
+            };
+            
+          } catch (error) {
+            console.error('Error loading preview:', error);
+            modalContent.innerHTML = '<div class="py-8"><div class="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">Ошибка загрузки превью. Попробуйте обновить страницу.</div></div>';
+          }
+        });
+      }
       
       update();
     })();

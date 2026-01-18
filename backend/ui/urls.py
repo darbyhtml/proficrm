@@ -16,6 +16,7 @@ urlpatterns = [
     path("companies/autocomplete/", views.company_autocomplete, name="company_autocomplete"),
     path("companies/duplicates/", views.company_duplicates, name="company_duplicates"),
     path("companies/export/", views.company_export, name="company_export"),
+    path("companies/bulk-transfer/preview/", views.company_bulk_transfer_preview, name="company_bulk_transfer_preview"),
     path("companies/bulk-transfer/", views.company_bulk_transfer, name="company_bulk_transfer"),
     path("companies/new/", views.company_create, name="company_create"),
     path("companies/<uuid:company_id>/", views.company_detail, name="company_detail"),

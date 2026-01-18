@@ -1484,6 +1484,111 @@ def company_list(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+def company_bulk_transfer_preview(request: HttpRequest) -> JsonResponse:
+    """
+    AJAX: превью массового переназначения компаний.
+    Возвращает список компаний, которые будут изменены, без фактического изменения.
+    """
+    if request.method != "POST":
+        return JsonResponse({"error": "Method not allowed"}, status=405)
+    
+    user: User = request.user
+    new_resp_id = (request.POST.get("responsible_id") or "").strip()
+    apply_mode = (request.POST.get("apply_mode") or "selected").strip().lower()
+    
+    if not new_resp_id:
+        return JsonResponse({"error": "Выберите нового ответственного"}, status=400)
+    
+    try:
+        new_resp = User.objects.get(id=new_resp_id, is_active=True)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "Ответственный не найден"}, status=404)
+    
+    # Проверка прав на нового ответственного
+    if new_resp.role in (User.Role.GROUP_MANAGER, User.Role.ADMIN):
+        return JsonResponse({"error": "Нельзя передать компании управляющему или администратору"}, status=400)
+    
+    if new_resp.role not in (User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD):
+        return JsonResponse({"error": "Нового ответственного можно выбрать только из: менеджер / директор филиала / РОП"}, status=400)
+    
+    editable_qs = _editable_company_qs(user)
+    
+    # Режим "по фильтру"
+    if apply_mode == "filtered":
+        now = timezone.now()
+        qs = _companies_with_overdue_flag(now=now)
+        f = _apply_company_filters(qs=qs, params=request.POST)
+        qs = f["qs"]
+        qs = qs.filter(id__in=editable_qs.values_list("id", flat=True)).distinct()
+        cap = 5000
+        ids = list(qs.values_list("id", flat=True)[:cap])
+        if not ids:
+            return JsonResponse({"error": "Нет компаний для переназначения (или нет прав)"}, status=400)
+        if len(ids) >= cap:
+            return JsonResponse({"error": f"Выбрано слишком много компаний (>{cap}). Сузьте фильтр и повторите"}, status=400)
+    else:
+        ids = request.POST.getlist("company_ids") or []
+        ids = [i for i in ids if i]
+        if not ids:
+            return JsonResponse({"error": "Выберите хотя бы одну компанию"}, status=400)
+        ids = list(editable_qs.filter(id__in=ids).values_list("id", flat=True))
+        if not ids:
+            return JsonResponse({"error": "Нет выбранных компаний, доступных для переназначения"}, status=400)
+    
+    # Проверка прав на передачу
+    transfer_check = can_transfer_companies(user, ids)
+    if transfer_check["forbidden"]:
+        forbidden_names = [f["name"] for f in transfer_check["forbidden"][:5]]
+        if len(transfer_check["forbidden"]) > 5:
+            forbidden_names.append(f"... и ещё {len(transfer_check['forbidden']) - 5}")
+        return JsonResponse({
+            "error": f"Некоторые компании нельзя передать ({len(transfer_check['forbidden'])} из {len(ids)})",
+            "forbidden": forbidden_names
+        }, status=400)
+    
+    ids = transfer_check["allowed"]
+    if not ids:
+        return JsonResponse({"error": "Нет компаний, доступных для переназначения"}, status=400)
+    
+    # Получаем данные компаний для превью
+    companies = Company.objects.filter(id__in=ids).select_related("responsible", "branch", "status")[:100]
+    
+    companies_preview = []
+    old_responsibles = {}
+    for company in companies:
+        companies_preview.append({
+            "id": str(company.id),
+            "name": company.name,
+            "inn": company.inn or "",
+            "old_responsible": str(company.responsible) if company.responsible else "—",
+            "old_branch": str(company.branch) if company.branch else "—",
+        })
+        if company.responsible_id:
+            old_resp_id = str(company.responsible_id)
+            if old_resp_id not in old_responsibles:
+                old_responsibles[old_resp_id] = {
+                    "id": old_resp_id,
+                    "name": str(company.responsible),
+                    "count": 0,
+                }
+            old_responsibles[old_resp_id]["count"] += 1
+    
+    return JsonResponse({
+        "total_count": len(ids),
+        "preview_count": len(companies_preview),
+        "new_responsible": {
+            "id": str(new_resp.id),
+            "name": str(new_resp),
+            "role": new_resp.get_role_display(),
+            "branch": str(new_resp.branch) if new_resp.branch else "—",
+        },
+        "old_responsibles": list(old_responsibles.values()),
+        "companies": companies_preview,
+        "mode": apply_mode,
+    })
+
+
+@login_required
 @transaction.atomic
 def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
     """
@@ -1568,20 +1673,70 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
 
     now_ts = timezone.now()
     # Транзакция обеспечивается декоратором @transaction.atomic на функции
-    qs_to_update = Company.objects.filter(id__in=ids).select_related("responsible")
-    # фиксируем "старых" ответственных для лога (первых 20)
-    old_resps = list(qs_to_update.values_list("responsible_id", flat=True).distinct()[:20])
+    qs_to_update = Company.objects.filter(id__in=ids).select_related("responsible", "branch", "status")
+    
+    # Собираем детальную информацию для аудита
+    companies_data = []
+    old_responsibles_data = {}
+    for company in qs_to_update[:50]:  # Первые 50 для детального лога
+        companies_data.append({
+            "id": str(company.id),
+            "name": company.name,
+            "inn": company.inn or "",
+        })
+        if company.responsible_id:
+            old_resp_id = str(company.responsible_id)
+            if old_resp_id not in old_responsibles_data:
+                old_responsibles_data[old_resp_id] = {
+                    "id": old_resp_id,
+                    "name": str(company.responsible),
+                    "count": 0,
+                }
+            old_responsibles_data[old_resp_id]["count"] += 1
+    
+    # Получаем уникальные ID старых ответственных
+    old_resp_ids = list(qs_to_update.values_list("responsible_id", flat=True).distinct()[:20])
+    old_resp_ids = [str(rid) for rid in old_resp_ids if rid]
+    
+    # Собираем информацию о фильтрах (если был режим filtered)
+    filters_info = {}
+    if apply_mode == "filtered":
+        filters_info = {
+            "q": request.POST.get("q", ""),
+            "responsible": request.POST.get("responsible", ""),
+            "status": request.POST.get("status", ""),
+            "branch": request.POST.get("branch", ""),
+            "sphere": request.POST.get("sphere", ""),
+            "contract_type": request.POST.get("contract_type", ""),
+            "overdue": request.POST.get("overdue", ""),
+        }
+    
     updated = qs_to_update.update(responsible=new_resp, branch=new_resp.branch, updated_at=now_ts)
     _invalidate_company_count_cache()  # Инвалидируем кэш при массовом переназначении
 
     messages.success(request, f"Переназначено компаний: {updated}. Новый ответственный: {new_resp}.")
+    
+    # Расширенное логирование для аудита
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.UPDATE,
         entity_type="company_bulk_transfer",
         entity_id=str(new_resp.id),
-        message="Массовое переназначение компаний",
-        meta={"count": updated, "to": str(new_resp), "old_responsible_ids_sample": old_resps, "mode": apply_mode},
+        message=f"Массовое переназначение {updated} компаний → {new_resp}",
+        meta={
+            "count": updated,
+            "to": {
+                "id": str(new_resp.id),
+                "name": str(new_resp),
+                "role": new_resp.get_role_display(),
+                "branch": str(new_resp.branch) if new_resp.branch else None,
+            },
+            "from": list(old_responsibles_data.values()),  # Детальная информация о старых ответственных
+            "old_responsible_ids": old_resp_ids,
+            "mode": apply_mode,
+            "companies_sample": companies_data,  # Первые 50 компаний для детального лога
+            "filters": filters_info if apply_mode == "filtered" else None,
+        },
     )
     if new_resp.id != user.id:
         notify(
