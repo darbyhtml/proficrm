@@ -1903,6 +1903,76 @@ def company_create(request: HttpRequest) -> HttpResponse:
             company.branch = user.branch
             company.save()
             form.save_m2m()
+            
+            # Сохраняем дополнительные email адреса
+            new_company_emails: list[tuple[int, str]] = []
+            for key, value in request.POST.items():
+                if key.startswith("company_emails_"):
+                    raw = (value or "").strip()
+                    if not raw:
+                        continue
+                    try:
+                        index = int(key.replace("company_emails_", ""))
+                    except (ValueError, TypeError):
+                        continue
+                    new_company_emails.append((index, raw))
+            
+            # Сохраняем дополнительные телефоны компании
+            new_company_phones: list[tuple[int, str]] = []
+            for key, value in request.POST.items():
+                if key.startswith("company_phones_"):
+                    raw = (value or "").strip()
+                    if not raw:
+                        continue
+                    try:
+                        index = int(key.replace("company_phones_", ""))
+                    except (ValueError, TypeError):
+                        continue
+                    new_company_phones.append((index, raw))
+            
+            # Валидация телефонов: проверка на дубликаты
+            from ui.forms import _normalize_phone
+            all_phones = []
+            if company.phone:
+                normalized_main = _normalize_phone(company.phone)
+                if normalized_main:
+                    all_phones.append(normalized_main)
+            
+            for order, phone_value in new_company_phones:
+                normalized = _normalize_phone(phone_value)
+                if normalized:
+                    all_phones.append(normalized)
+            
+            # Проверка на дубликаты
+            if len(all_phones) != len(set(all_phones)):
+                form.add_error(None, "Есть повторяющиеся телефоны (основной телефон не должен совпадать с дополнительными).")
+                # Восстанавливаем введённые значения для отображения ошибки
+                company_emails = []
+                company_phones = []
+                for key, value in request.POST.items():
+                    if key.startswith("company_emails_"):
+                        company_emails.append(
+                            CompanyEmail(company=company, value=(value or "").strip())
+                        )
+                    if key.startswith("company_phones_"):
+                        company_phones.append(
+                            CompanyPhone(company=company, value=(value or "").strip())
+                        )
+                return render(
+                    request,
+                    "ui/company_create.html",
+                    {"form": form, "company_emails": company_emails, "company_phones": company_phones},
+                )
+            
+            # Сохраняем дополнительные email и телефоны
+            for order, email_value in sorted(new_company_emails, key=lambda x: x[0]):
+                CompanyEmail.objects.create(company=company, value=email_value, order=order)
+            
+            for order, phone_value in sorted(new_company_phones, key=lambda x: x[0]):
+                # Нормализуем телефон перед сохранением
+                normalized = _normalize_phone(phone_value)
+                CompanyPhone.objects.create(company=company, value=normalized if normalized else phone_value, order=order)
+            
             _invalidate_company_count_cache()  # Инвалидируем кэш при создании
             messages.success(request, "Компания создана.")
             log_event(
@@ -1917,7 +1987,7 @@ def company_create(request: HttpRequest) -> HttpResponse:
     else:
         form = CompanyCreateForm(user=user)
 
-    return render(request, "ui/company_create.html", {"form": form})
+    return render(request, "ui/company_create.html", {"form": form, "company_emails": [], "company_phones": []})
 
 
 @login_required
