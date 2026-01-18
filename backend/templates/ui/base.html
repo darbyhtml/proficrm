@@ -1908,12 +1908,6 @@
                 item.addEventListener('click', () => {
                   selectedHour = parseInt(item.dataset.hour);
                   renderCalendar();
-                  setTimeout(() => {
-                    const selectedElement = popup.querySelector(`.time-item[data-hour="${selectedHour}"]`);
-                    if (selectedElement) {
-                      selectedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }
-                  }, 50);
                 });
               });
               
@@ -1921,12 +1915,6 @@
                 item.addEventListener('click', () => {
                   selectedMinute = parseInt(item.dataset.minute);
                   renderCalendar();
-                  setTimeout(() => {
-                    const selectedElement = popup.querySelector(`.time-item[data-minute="${selectedMinute}"]`);
-                    if (selectedElement) {
-                      selectedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }
-                  }, 50);
                 });
               });
               
