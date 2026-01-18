@@ -432,7 +432,7 @@
       .custom-datetime-popup .calendar-time-wrapper {
         display: flex;
         gap: 14px;
-        align-items: flex-start;
+        align-items: stretch;
         padding-top: 10px;
         border-top: 1px solid rgba(194,226,222,.7);
       }
@@ -440,6 +440,8 @@
       .custom-datetime-popup .calendar-section {
         flex: 1;
         min-width: 0;
+        display: flex;
+        flex-direction: column;
       }
       
       .custom-datetime-popup .time-picker {
@@ -449,7 +451,6 @@
         min-width: 90px;
         padding-left: 10px;
         border-left: 1px solid rgba(194,226,222,.5);
-        align-self: stretch;
       }
       
       .custom-datetime-popup .time-column {
