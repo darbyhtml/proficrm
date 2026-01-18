@@ -314,6 +314,15 @@ def _normalize_phone_for_search(phone: str) -> str:
     return normalized
 
 
+def _normalize_email_for_search(email: str) -> str:
+    """
+    Нормализует email для поиска: убирает пробелы, приводит к нижнему регистру.
+    """
+    if not email:
+        return ""
+    return email.strip().lower()
+
+
 def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | None = None):
     """
     Единые фильтры компаний для:
@@ -1909,15 +1918,6 @@ def company_create(request: HttpRequest) -> HttpResponse:
         form = CompanyCreateForm(user=user)
 
     return render(request, "ui/company_create.html", {"form": form})
-
-
-def _normalize_email_for_search(email: str) -> str:
-    """
-    Нормализует email для поиска: убирает пробелы, приводит к нижнему регистру.
-    """
-    if not email:
-        return ""
-    return email.strip().lower()
 
 
 @login_required
