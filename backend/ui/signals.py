@@ -49,6 +49,3 @@ def invalidate_dashboard_on_company_change(sender, instance, **kwargs):
         invalidate_dashboard_cache(instance.responsible_id)
     # Инвалидируем кэш общего количества компаний
     cache.delete("companies_total_count")
-    # Инвалидируем кэш общего количества компаний
-    from ui.views import _invalidate_company_count_cache
-    _invalidate_company_count_cache()
