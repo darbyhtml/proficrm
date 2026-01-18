@@ -486,37 +486,33 @@
           const div = document.createElement('div');
           div.className = 'px-4 py-2 hover:bg-brand-soft/40 cursor-pointer border-b border-brand-soft/50 last:border-b-0';
           
-          // Подсвечиваем совпадения в названии
-          let nameHtml = (item.match_in && item.match_in.name) 
-            ? highlightMatch(item.name, item.query || '')
-            : escapeHtml(item.name || '');
+          const query = item.query || '';
+          
+          // Подсвечиваем совпадения везде, где встречается запрос
+          let nameHtml = highlightMatch(item.name || '', query);
           
           // Подсвечиваем совпадения в ИНН
           let innHtml = '';
           if (item.inn) {
-            innHtml = (item.match_in && item.match_in.inn)
-              ? `<div class="text-xs text-brand-dark/70 mt-0.5">ИНН: ${highlightMatch(item.inn, item.query || '')}</div>`
-              : `<div class="text-xs text-brand-dark/70 mt-0.5">ИНН: ${escapeHtml(item.inn)}</div>`;
+            innHtml = `<div class="text-xs text-brand-dark/70 mt-0.5">ИНН: ${highlightMatch(item.inn, query)}</div>`;
           }
           
           // Подсвечиваем совпадения в адресе
           let addressHtml = '';
           if (item.address) {
-            addressHtml = (item.match_in && item.match_in.address)
-              ? `<div class="text-xs text-brand-dark/70 mt-0.5">${highlightMatch(item.address, item.query || '')}</div>`
-              : `<div class="text-xs text-brand-dark/70 mt-0.5">${escapeHtml(item.address)}</div>`;
+            addressHtml = `<div class="text-xs text-brand-dark/70 mt-0.5">${highlightMatch(item.address, query)}</div>`;
           }
           
           // Показываем телефон, если поиск был по телефону или есть совпадение
           let phoneHtml = '';
           if (item.phone) {
-            phoneHtml = `<div class="text-xs text-brand-dark/70 mt-0.5">Телефон: ${highlightMatch(item.phone, item.query || '')}</div>`;
+            phoneHtml = `<div class="text-xs text-brand-dark/70 mt-0.5">Телефон: ${highlightMatch(item.phone, query)}</div>`;
           }
           
           // Показываем email, если поиск был по email или есть совпадение
           let emailHtml = '';
           if (item.email) {
-            emailHtml = `<div class="text-xs text-brand-dark/70 mt-0.5">Email: ${highlightMatch(item.email, item.query || '')}</div>`;
+            emailHtml = `<div class="text-xs text-brand-dark/70 mt-0.5">Email: ${highlightMatch(item.email, query)}</div>`;
           }
           
           div.innerHTML = `
