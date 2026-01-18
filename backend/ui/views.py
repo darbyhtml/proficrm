@@ -1901,6 +1901,50 @@ def company_create(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+def company_autocomplete(request: HttpRequest) -> JsonResponse:
+    """
+    AJAX: автодополнение для поиска компаний.
+    Возвращает список компаний по запросу (название, ИНН, адрес).
+    """
+    q = (request.GET.get("q") or "").strip()
+    if not q or len(q) < 2:
+        return JsonResponse({"items": []})
+    
+    # Используем ту же логику поиска, что и в _apply_company_filters
+    base_filters = (
+        Q(name__icontains=q)
+        | Q(inn__icontains=q)
+        | Q(legal_name__icontains=q)
+        | Q(address__icontains=q)
+    )
+    
+    # Поиск по телефонам (с нормализацией)
+    normalized_phone = _normalize_phone_for_search(q)
+    phone_filters = Q()
+    if normalized_phone and normalized_phone != q:
+        phone_filters = Q(phone=normalized_phone) | Q(phone__icontains=q)
+    else:
+        phone_filters = Q(phone__icontains=q)
+    
+    qs = Company.objects.filter(
+        base_filters | phone_filters
+    ).select_related("responsible", "branch", "status").distinct().order_by("-updated_at")[:10]
+    
+    items = []
+    for c in qs:
+        items.append({
+            "id": str(c.id),
+            "name": c.name,
+            "inn": c.inn or "",
+            "address": c.address or "",
+            "status": c.status.name if c.status else "",
+            "url": f"/companies/{c.id}/",
+        })
+    
+    return JsonResponse({"items": items})
+
+
+@login_required
 def company_duplicates(request: HttpRequest) -> HttpResponse:
     """
     JSON: подсказки дублей при создании компании.

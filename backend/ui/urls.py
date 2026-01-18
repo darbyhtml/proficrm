@@ -13,6 +13,7 @@ urlpatterns = [
     path("reports/cold-calls/month/", views.cold_calls_report_month, name="cold_calls_report_month"),
     path("reports/cold-calls/last-7-days/", views.cold_calls_report_last_7_days, name="cold_calls_report_last_7_days"),
     path("companies/", views.company_list, name="company_list"),
+    path("companies/autocomplete/", views.company_autocomplete, name="company_autocomplete"),
     path("companies/duplicates/", views.company_duplicates, name="company_duplicates"),
     path("companies/export/", views.company_export, name="company_export"),
     path("companies/bulk-transfer/", views.company_bulk_transfer, name="company_bulk_transfer"),
