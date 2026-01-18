@@ -2202,6 +2202,12 @@
                 item.addEventListener('click', () => {
                   selectedHour = parseInt(item.dataset.hour);
                   renderCalendar();
+                  setTimeout(() => {
+                    const selectedElement = popup.querySelector(`.time-item[data-hour="${selectedHour}"]`);
+                    if (selectedElement) {
+                      selectedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                  }, 50);
                 });
               });
               
@@ -2209,8 +2215,26 @@
                 item.addEventListener('click', () => {
                   selectedMinute = parseInt(item.dataset.minute);
                   renderCalendar();
+                  setTimeout(() => {
+                    const selectedElement = popup.querySelector(`.time-item[data-minute="${selectedMinute}"]`);
+                    if (selectedElement) {
+                      selectedElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                  }, 50);
                 });
               });
+              
+              // Прокручиваем к выбранным значениям при открытии
+              setTimeout(() => {
+                const selectedHourEl = popup.querySelector(`.time-item[data-hour="${selectedHour}"]`);
+                const selectedMinuteEl = popup.querySelector(`.time-item[data-minute="${selectedMinute}"]`);
+                if (selectedHourEl) {
+                  selectedHourEl.scrollIntoView({ behavior: 'auto', block: 'center' });
+                }
+                if (selectedMinuteEl) {
+                  selectedMinuteEl.scrollIntoView({ behavior: 'auto', block: 'center' });
+                }
+              }, 100);
               
               popup.querySelector('.btn-delete').addEventListener('click', () => {
                 input.value = '';
