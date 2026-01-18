@@ -6041,7 +6041,7 @@ def settings_mobile_overview(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
-def settings_mobile_device_detail(request: HttpRequest, pk: int) -> HttpResponse:
+def settings_mobile_device_detail(request: HttpRequest, pk) -> HttpResponse:
     """
     Детали конкретного устройства мобильного приложения:
     последние heartbeat/telemetry и бандлы логов.
