@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>502 — Технические шоколадки</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: #333;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+        
+        .error-code {
+            font-size: 120px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1;
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            font-size: 32px;
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+        
+        .message {
+            font-size: 18px;
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+        
+        .svg-container {
+            margin: 30px 0;
+            display: flex;
+            justify-content: center;
+        }
+        
+        .svg-container svg {
+            max-width: 300px;
+            height: auto;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 30px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        
+        .auto-refresh {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #999;
+        }
+        
+        .countdown {
+            font-weight: 600;
+            color: #667eea;
+        }
+        
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        
+        .bounce {
+            animation: bounce 2s infinite;
+        }
+        
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .rotate {
+            animation: rotate 3s linear infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="error-code">502</div>
+        <h1>Ой, кажется ведутся технические шоколадки! 🍫</h1>
+        
+        <div class="message">
+            Наш администратор сейчас что-то настраивает, перезагружает контейнеры или просто решил попить кофе ☕<br><br>
+            Страница обновится автоматически через <span class="countdown" id="countdown">5</span> секунд.<br>
+            Если эта страница висит уже очень долго, напишите администратору — возможно, он застрял в бесконечном цикле деплоя 🔄
+        </div>
+        
+        <div class="svg-container">
+            <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                <!-- Робот -->
+                <g class="bounce">
+                    <!-- Тело робота -->
+                    <rect x="50" y="80" width="100" height="80" rx="10" fill="#667eea" opacity="0.8"/>
+                    <rect x="60" y="90" width="80" height="60" rx="5" fill="#764ba2" opacity="0.6"/>
+                    
+                    <!-- Голова -->
+                    <circle cx="100" cy="60" r="25" fill="#667eea"/>
+                    <circle cx="100" cy="60" r="15" fill="#764ba2"/>
+                    
+                    <!-- Глаза -->
+                    <circle cx="92" cy="55" r="4" fill="white"/>
+                    <circle cx="108" cy="55" r="4" fill="white"/>
+                    <circle cx="92" cy="55" r="2" fill="#333"/>
+                    <circle cx="108" cy="55" r="2" fill="#333"/>
+                    
+                    <!-- Рот (улыбка) -->
+                    <path d="M 90 65 Q 100 70 110 65" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/>
+                    
+                    <!-- Антенна -->
+                    <line x1="100" y1="35" x2="100" y2="45" stroke="#764ba2" stroke-width="3" stroke-linecap="round"/>
+                    <circle cx="100" cy="32" r="3" fill="#764ba2"/>
+                    
+                    <!-- Руки -->
+                    <rect x="30" y="90" width="20" height="8" rx="4" fill="#667eea" opacity="0.8"/>
+                    <rect x="150" y="90" width="20" height="8" rx="4" fill="#667eea" opacity="0.8"/>
+                    
+                    <!-- Ноги -->
+                    <rect x="60" y="160" width="15" height="20" rx="5" fill="#667eea" opacity="0.8"/>
+                    <rect x="125" y="160" width="15" height="20" rx="5" fill="#667eea" opacity="0.8"/>
+                </g>
+                
+                <!-- Шоколадки вокруг -->
+                <g class="rotate" style="transform-origin: 100px 100px;">
+                    <rect x="20" y="20" width="15" height="20" rx="3" fill="#8B4513" opacity="0.6"/>
+                    <rect x="165" y="30" width="15" height="20" rx="3" fill="#8B4513" opacity="0.6"/>
+                    <rect x="25" y="170" width="15" height="20" rx="3" fill="#8B4513" opacity="0.6"/>
+                    <rect x="160" y="160" width="15" height="20" rx="3" fill="#8B4513" opacity="0.6"/>
+                </g>
+                
+                <!-- Звездочки -->
+                <g opacity="0.5">
+                    <path d="M 40 50 L 42 56 L 48 56 L 43 60 L 45 66 L 40 62 L 35 66 L 37 60 L 32 56 L 38 56 Z" fill="#FFD700"/>
+                    <path d="M 160 50 L 162 56 L 168 56 L 163 60 L 165 66 L 160 62 L 155 66 L 157 60 L 152 56 L 158 56 Z" fill="#FFD700"/>
+                    <path d="M 40 150 L 42 156 L 48 156 L 43 160 L 45 166 L 40 162 L 35 166 L 37 160 L 32 156 L 38 156 Z" fill="#FFD700"/>
+                    <path d="M 160 150 L 162 156 L 168 156 L 163 160 L 165 166 L 160 162 L 155 166 L 157 160 L 152 156 L 158 156 Z" fill="#FFD700"/>
+                </g>
+            </svg>
+        </div>
+        
+        <div class="actions">
+            <button class="btn btn-primary" onclick="location.reload()">Обновить сейчас</button>
+            <a href="/" class="btn btn-secondary">На главную</a>
+        </div>
+        
+        <div class="auto-refresh">
+            Автообновление через <span class="countdown" id="countdown-text">5</span> сек...
+        </div>
+    </div>
+    
+    <script>
+        let countdown = 5;
+        const countdownEl = document.getElementById('countdown');
+        const countdownTextEl = document.getElementById('countdown-text');
+        
+        const interval = setInterval(() => {
+            countdown--;
+            if (countdown <= 0) {
+                clearInterval(interval);
+                location.reload();
+            } else {
+                countdownEl.textContent = countdown;
+                countdownTextEl.textContent = countdown;
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

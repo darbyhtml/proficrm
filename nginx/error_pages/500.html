@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>500 — Внутренняя ошибка</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: #333;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+        
+        .error-code {
+            font-size: 120px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1;
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            font-size: 32px;
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+        
+        .message {
+            font-size: 18px;
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+        
+        .svg-container {
+            margin: 30px 0;
+            display: flex;
+            justify-content: center;
+        }
+        
+        .svg-container svg {
+            max-width: 300px;
+            height: auto;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 30px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(250, 112, 154, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        
+        .auto-refresh {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #999;
+        }
+        
+        .countdown {
+            font-weight: 600;
+            color: #fa709a;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        
+        .shake {
+            animation: shake 0.5s infinite;
+        }
+        
+        @keyframes explode {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        
+        .explode {
+            animation: explode 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="error-code">500</div>
+        <h1>Что-то пошло не так... 💥</h1>
+        
+        <div class="message">
+            Наш сервер столкнулся с неожиданной проблемой. Возможно, он просто решил взбунтоваться 🤖<br><br>
+            Страница обновится автоматически через <span class="countdown" id="countdown">5</span> секунд.<br>
+            Если эта страница висит уже очень долго, напишите администратору — возможно, серверу нужна помощь психолога 🛋️
+        </div>
+        
+        <div class="svg-container">
+            <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                <!-- Взрыв/ошибка -->
+                <g class="explode">
+                    <!-- Центральный круг -->
+                    <circle cx="100" cy="100" r="40" fill="#fee140" opacity="0.8"/>
+                    <circle cx="100" cy="100" r="30" fill="#fa709a" opacity="0.6"/>
+                    <circle cx="100" cy="100" r="20" fill="#ff6b6b"/>
+                    
+                    <!-- Вспышки -->
+                    <rect x="95" y="30" width="10" height="30" rx="5" fill="#fee140" opacity="0.8"/>
+                    <rect x="95" y="140" width="10" height="30" rx="5" fill="#fee140" opacity="0.8"/>
+                    <rect x="30" y="95" width="30" height="10" rx="5" fill="#fee140" opacity="0.8"/>
+                    <rect x="140" y="95" width="30" height="10" rx="5" fill="#fee140" opacity="0.8"/>
+                    
+                    <!-- Диагональные вспышки -->
+                    <rect x="50" y="50" width="10" height="20" rx="5" fill="#fa709a" opacity="0.7" transform="rotate(-45 55 60)"/>
+                    <rect x="140" y="50" width="10" height="20" rx="5" fill="#fa709a" opacity="0.7" transform="rotate(45 145 60)"/>
+                    <rect x="50" y="130" width="10" height="20" rx="5" fill="#fa709a" opacity="0.7" transform="rotate(45 55 140)"/>
+                    <rect x="140" y="130" width="10" height="20" rx="5" fill="#fa709a" opacity="0.7" transform="rotate(-45 145 140)"/>
+                </g>
+                
+                <!-- Восклицательный знак -->
+                <g class="shake">
+                    <rect x="95" y="70" width="10" height="30" rx="5" fill="white"/>
+                    <circle cx="100" cy="115" r="5" fill="white"/>
+                </g>
+                
+                <!-- Обломки вокруг -->
+                <g opacity="0.6">
+                    <rect x="20" y="20" width="8" height="8" rx="2" fill="#fa709a" transform="rotate(45 24 24)"/>
+                    <rect x="172" y="20" width="8" height="8" rx="2" fill="#fee140" transform="rotate(-45 176 24)"/>
+                    <rect x="20" y="172" width="8" height="8" rx="2" fill="#fee140" transform="rotate(-45 24 176)"/>
+                    <rect x="172" y="172" width="8" height="8" rx="2" fill="#fa709a" transform="rotate(45 176 176)"/>
+                </g>
+            </svg>
+        </div>
+        
+        <div class="actions">
+            <button class="btn btn-primary" onclick="location.reload()">Обновить сейчас</button>
+            <a href="/" class="btn btn-secondary">На главную</a>
+        </div>
+        
+        <div class="auto-refresh">
+            Автообновление через <span class="countdown" id="countdown-text">5</span> сек...
+        </div>
+    </div>
+    
+    <script>
+        let countdown = 5;
+        const countdownEl = document.getElementById('countdown');
+        const countdownTextEl = document.getElementById('countdown-text');
+        
+        const interval = setInterval(() => {
+            countdown--;
+            if (countdown <= 0) {
+                clearInterval(interval);
+                location.reload();
+            } else {
+                countdownEl.textContent = countdown;
+                countdownTextEl.textContent = countdown;
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

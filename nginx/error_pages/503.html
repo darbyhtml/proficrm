@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>503 — Сервис временно недоступен</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            color: #333;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+        
+        .error-code {
+            font-size: 120px;
+            font-weight: 900;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1;
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            font-size: 32px;
+            color: #333;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+        
+        .message {
+            font-size: 18px;
+            color: #666;
+            line-height: 1.6;
+            margin-bottom: 30px;
+        }
+        
+        .svg-container {
+            margin: 30px 0;
+            display: flex;
+            justify-content: center;
+        }
+        
+        .svg-container svg {
+            max-width: 300px;
+            height: auto;
+        }
+        
+        .actions {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 30px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(240, 147, 251, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f0f0f0;
+            color: #333;
+        }
+        
+        .btn-secondary:hover {
+            background: #e0e0e0;
+        }
+        
+        .auto-refresh {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #999;
+        }
+        
+        .countdown {
+            font-weight: 600;
+            color: #f5576c;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-15px); }
+        }
+        
+        .float {
+            animation: float 3s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="error-code">503</div>
+        <h1>Сервис временно на техобслуживании 🔧</h1>
+        
+        <div class="message">
+            Наш сервер сейчас перезагружается, обновляется или просто решил взять небольшой перерыв ☕<br><br>
+            Страница обновится автоматически через <span class="countdown" id="countdown">5</span> секунд.<br>
+            Если эта страница висит уже очень долго, напишите администратору — возможно, он застрял в бесконечном цикле деплоя 🔄
+        </div>
+        
+        <div class="svg-container">
+            <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                <!-- Сервер/компьютер -->
+                <g class="float">
+                    <!-- Монитор -->
+                    <rect x="40" y="40" width="120" height="90" rx="5" fill="#4a5568" opacity="0.9"/>
+                    <rect x="50" y="50" width="100" height="70" rx="3" fill="#1a202c"/>
+                    <rect x="55" y="55" width="90" height="60" fill="#2d3748"/>
+                    
+                    <!-- Экран (мерцающий) -->
+                    <g class="pulse">
+                        <rect x="60" y="65" width="70" height="40" fill="#48bb78" opacity="0.3"/>
+                        <text x="95" y="88" font-family="monospace" font-size="12" fill="#48bb78">LOADING...</text>
+                    </g>
+                    
+                    <!-- Подставка -->
+                    <rect x="85" y="130" width="30" height="5" rx="2" fill="#4a5568" opacity="0.9"/>
+                    <rect x="75" y="135" width="50" height="10" rx="3" fill="#2d3748"/>
+                    
+                    <!-- Кнопки -->
+                    <circle cx="145" cy="55" r="3" fill="#48bb78"/>
+                    <circle cx="155" cy="55" r="3" fill="#f56565"/>
+                </g>
+                
+                <!-- Инструменты вокруг -->
+                <g opacity="0.6">
+                    <rect x="20" y="160" width="25" height="5" rx="2" fill="#718096" transform="rotate(45 32.5 162.5)"/>
+                    <rect x="155" y="20" width="25" height="5" rx="2" fill="#718096" transform="rotate(-45 167.5 22.5)"/>
+                    <circle cx="30" cy="30" r="8" fill="none" stroke="#718096" stroke-width="2"/>
+                    <circle cx="170" cy="170" r="8" fill="none" stroke="#718096" stroke-width="2"/>
+                </g>
+                
+                <!-- Звездочки -->
+                <g opacity="0.5">
+                    <path d="M 25 80 L 27 86 L 33 86 L 28 90 L 30 96 L 25 92 L 20 96 L 22 90 L 17 86 L 23 86 Z" fill="#FFD700"/>
+                    <path d="M 175 80 L 177 86 L 183 86 L 178 90 L 180 96 L 175 92 L 170 96 L 172 90 L 167 86 L 173 86 Z" fill="#FFD700"/>
+                </g>
+            </svg>
+        </div>
+        
+        <div class="actions">
+            <button class="btn btn-primary" onclick="location.reload()">Обновить сейчас</button>
+            <a href="/" class="btn btn-secondary">На главную</a>
+        </div>
+        
+        <div class="auto-refresh">
+            Автообновление через <span class="countdown" id="countdown-text">5</span> сек...
+        </div>
+    </div>
+    
+    <script>
+        let countdown = 5;
+        const countdownEl = document.getElementById('countdown');
+        const countdownTextEl = document.getElementById('countdown-text');
+        
+        const interval = setInterval(() => {
+            countdown--;
+            if (countdown <= 0) {
+                clearInterval(interval);
+                location.reload();
+            } else {
+                countdownEl.textContent = countdown;
+                countdownTextEl.textContent = countdown;
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
