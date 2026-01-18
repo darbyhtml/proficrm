@@ -431,8 +431,9 @@ def fetch_tasks_for_companies(client: AmoClient, company_ids: list[int]) -> list
         return []
     # amo v4 tasks: /api/v4/tasks?filter[entity_type]=companies&filter[entity_id][]=...
     # Важно: режем на пачки, иначе URL может стать слишком длинным.
+    # Увеличиваем размер пачки до 10 для ускорения импорта
     out: list[dict[str, Any]] = []
-    batch = 50
+    batch = 10
     for i in range(0, len(company_ids), batch):
         ids = company_ids[i : i + batch]
         out.extend(
@@ -452,17 +453,21 @@ def fetch_notes_for_companies(client: AmoClient, company_ids: list[int]) -> list
         return []
     # В amoCRM заметки обычно берутся не общим /notes, а из сущности:
     # /api/v4/companies/{id}/notes
+    # Обрабатываем компании батчами по 10, чтобы ускорить импорт
     out: list[dict[str, Any]] = []
-    for cid in company_ids:
-        out.extend(
-            client.get_all_pages(
-                f"/api/v4/companies/{int(cid)}/notes",
-                params={},
-                embedded_key="notes",
-                limit=250,
-                max_pages=50,
+    batch = 10
+    for i in range(0, len(company_ids), batch):
+        batch_ids = company_ids[i : i + batch]
+        for cid in batch_ids:
+            out.extend(
+                client.get_all_pages(
+                    f"/api/v4/companies/{int(cid)}/notes",
+                    params={},
+                    embedded_key="notes",
+                    limit=250,
+                    max_pages=50,
+                )
             )
-        )
     return out
 
 
@@ -476,8 +481,8 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
         return []
     out: list[dict[str, Any]] = []
     # Согласно документации amoCRM, контакты можно получить через filter[company_id][]
-    # Получаем контакты батчами по 50 компаний, чтобы не превысить лимиты URL
-    batch = 50
+    # Увеличиваем размер пачки до 10 для ускорения импорта
+    batch = 10
     for i in range(0, len(company_ids), batch):
         ids_batch = company_ids[i : i + batch]
         try:
@@ -1104,8 +1109,8 @@ def migrate_filtered(
                 if contact_ids:
                     logger.debug(f"Fetching full contact data for {len(contact_ids)} contact IDs...")
                     try:
-                        # Запрашиваем контакты батчами по 50 ID (лимит amoCRM)
-                        batch_size = 50
+                        # Запрашиваем контакты батчами по 10 ID для ускорения импорта
+                        batch_size = 10
                         for i in range(0, len(contact_ids), batch_size):
                             ids_batch = contact_ids[i : i + batch_size]
                             logger.debug(f"Requesting contacts with IDs: {ids_batch[:10]}... (total {len(ids_batch)})")
