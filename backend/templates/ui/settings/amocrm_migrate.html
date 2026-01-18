@@ -435,36 +435,40 @@
         updateCustomFieldVisibility();
       }
       
-      // Очистка результатов при отправке основной формы (не продолжения)
+      // Очистка результатов при отправке основной формы (новый импорт)
       const migrateForm = document.getElementById('migrate-form');
       const resultContainer = document.getElementById('result-container');
       
       if (migrateForm && resultContainer) {
-        // Сохраняем текущего ответственного для сравнения
-        let lastResponsibleId = null;
+        // Сохраняем начальные значения формы для отслеживания изменений
+        let initialResponsibleId = null;
+        let initialOffset = null;
         const responsibleSelect = migrateForm.querySelector('select[name="responsible_user_id"]');
+        const offsetInput = migrateForm.querySelector('input[name="offset"]');
+        
         if (responsibleSelect) {
-          lastResponsibleId = responsibleSelect.value;
+          initialResponsibleId = responsibleSelect.value;
+        }
+        if (offsetInput) {
+          initialOffset = offsetInput.value || '0';
         }
         
         migrateForm.addEventListener('submit', function(e) {
           // Проверяем, что offset равен 0 или пустой (новый импорт, а не продолжение)
-          const offsetInput = migrateForm.querySelector('input[name="offset"]');
           const offsetValue = offsetInput ? offsetInput.value : '0';
-          
-          // Получаем текущего ответственного
           const currentResponsibleId = responsibleSelect ? responsibleSelect.value : null;
           
-          // Если offset = 0 и это новый импорт (не продолжение), скрываем результаты
-          // Также скрываем, если изменился ответственный
-          if ((offsetValue === '0' || offsetValue === '') && 
-              (lastResponsibleId === null || currentResponsibleId === lastResponsibleId)) {
-            resultContainer.style.display = 'none';
-          }
+          // Скрываем результаты если:
+          // 1. offset = 0 (новый импорт, не продолжение)
+          // 2. ИЛИ изменился ответственный (даже если offset не 0, это новый импорт с другим ответственным)
+          const isNewImport = (offsetValue === '0' || offsetValue === '') && 
+                               (initialOffset === null || offsetValue === initialOffset);
+          const responsibleChanged = initialResponsibleId !== null && 
+                                     currentResponsibleId !== null && 
+                                     currentResponsibleId !== initialResponsibleId;
           
-          // Обновляем сохраненный ID ответственного
-          if (responsibleSelect) {
-            lastResponsibleId = responsibleSelect.value;
+          if (isNewImport || responsibleChanged) {
+            resultContainer.style.display = 'none';
           }
         });
       }
