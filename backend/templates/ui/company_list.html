@@ -465,6 +465,15 @@
         return div.innerHTML;
       }
 
+      function highlightMatch(text, query) {
+        if (!query || !text) return escapeHtml(text);
+        const escapedText = escapeHtml(text);
+        const escapedQuery = escapeHtml(query);
+        // Создаем регулярное выражение для поиска с учетом регистра
+        const regex = new RegExp(`(${escapedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+        return escapedText.replace(regex, '<span class="font-bold" style="color: #f97316; background-color: #fff7ed;">$1</span>');
+      }
+
       function renderDropdown(items) {
         dropdown.innerHTML = '';
         if (items.length === 0) {
@@ -476,10 +485,46 @@
         items.forEach(item => {
           const div = document.createElement('div');
           div.className = 'px-4 py-2 hover:bg-brand-soft/40 cursor-pointer border-b border-brand-soft/50 last:border-b-0';
+          
+          // Подсвечиваем совпадения в названии
+          let nameHtml = item.match_in.name 
+            ? highlightMatch(item.name, item.query)
+            : escapeHtml(item.name);
+          
+          // Подсвечиваем совпадения в ИНН
+          let innHtml = '';
+          if (item.inn) {
+            innHtml = item.match_in.inn
+              ? `<div class="text-xs text-brand-dark/70 mt-0.5">ИНН: ${highlightMatch(item.inn, item.query)}</div>`
+              : `<div class="text-xs text-brand-dark/70 mt-0.5">ИНН: ${escapeHtml(item.inn)}</div>`;
+          }
+          
+          // Подсвечиваем совпадения в адресе
+          let addressHtml = '';
+          if (item.address) {
+            addressHtml = item.match_in.address
+              ? `<div class="text-xs text-brand-dark/70 mt-0.5">${highlightMatch(item.address, item.query)}</div>`
+              : `<div class="text-xs text-brand-dark/70 mt-0.5">${escapeHtml(item.address)}</div>`;
+          }
+          
+          // Показываем телефон, если поиск был по телефону или есть совпадение
+          let phoneHtml = '';
+          if (item.phone) {
+            phoneHtml = `<div class="text-xs text-brand-dark/70 mt-0.5">Телефон: ${highlightMatch(item.phone, item.query)}</div>`;
+          }
+          
+          // Показываем email, если поиск был по email или есть совпадение
+          let emailHtml = '';
+          if (item.email) {
+            emailHtml = `<div class="text-xs text-brand-dark/70 mt-0.5">Email: ${highlightMatch(item.email, item.query)}</div>`;
+          }
+          
           div.innerHTML = `
-            <div class="font-medium text-sm">${escapeHtml(item.name)}</div>
-            ${item.inn ? `<div class="text-xs text-brand-dark/70 mt-0.5">ИНН: ${escapeHtml(item.inn)}</div>` : ''}
-            ${item.address ? `<div class="text-xs text-brand-dark/70 mt-0.5">${escapeHtml(item.address)}</div>` : ''}
+            <div class="font-medium text-sm">${nameHtml}</div>
+            ${innHtml}
+            ${addressHtml}
+            ${phoneHtml}
+            ${emailHtml}
           `;
           div.addEventListener('click', () => {
             window.location.href = item.url;

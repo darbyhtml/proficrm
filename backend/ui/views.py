@@ -2004,10 +2004,49 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
     
     qs = Company.objects.filter(
         base_filters | phone_filters | email_filters
-    ).select_related("responsible", "branch", "status").distinct().order_by("-updated_at")[:10]
+    ).select_related("responsible", "branch", "status").prefetch_related("phones", "emails").distinct().order_by("-updated_at")[:10]
+    
+    # Определяем, по какому полю ищем
+    is_phone_search = normalized_phone and normalized_phone != q
+    is_email_search = normalized_email and normalized_email != q.lower()
     
     items = []
     for c in qs:
+        # Определяем, где найдено совпадение
+        match_in_name = q.lower() in (c.name or "").lower()
+        match_in_inn = q in (c.inn or "")
+        match_in_address = q.lower() in (c.address or "").lower()
+        match_in_phone = False
+        match_in_email = False
+        
+        # Проверяем совпадение в телефонах
+        matched_phone = None
+        # Проверяем основной телефон
+        if c.phone and (q in c.phone or (normalized_phone and normalized_phone in c.phone)):
+            match_in_phone = True
+            matched_phone = c.phone
+        # Проверяем дополнительные телефоны
+        if not matched_phone:
+            for phone_obj in c.phones.all():
+                if q in phone_obj.value or (normalized_phone and normalized_phone in phone_obj.value):
+                    match_in_phone = True
+                    matched_phone = phone_obj.value
+                    break
+        
+        # Проверяем совпадение в email
+        matched_email = None
+        # Проверяем основной email
+        if c.email and (q.lower() in c.email.lower() or (normalized_email and normalized_email == c.email.lower())):
+            match_in_email = True
+            matched_email = c.email
+        # Проверяем дополнительные email
+        if not matched_email:
+            for email_obj in c.emails.all():
+                if q.lower() in email_obj.value.lower() or (normalized_email and normalized_email == email_obj.value.lower()):
+                    match_in_email = True
+                    matched_email = email_obj.value
+                    break
+        
         items.append({
             "id": str(c.id),
             "name": c.name,
@@ -2015,6 +2054,16 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
             "address": c.address or "",
             "status": c.status.name if c.status else "",
             "url": f"/companies/{c.id}/",
+            "phone": matched_phone if match_in_phone else None,
+            "email": matched_email if match_in_email else None,
+            "match_in": {
+                "name": match_in_name,
+                "inn": match_in_inn,
+                "address": match_in_address,
+                "phone": match_in_phone,
+                "email": match_in_email,
+            },
+            "query": q,  # Передаем запрос для подсветки
         })
     
     return JsonResponse({"items": items})
