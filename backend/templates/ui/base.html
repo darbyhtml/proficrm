@@ -340,12 +340,26 @@
       .custom-datetime-popup .time-scroll {
         width: 100%;
         max-height: 200px;
-        overflow-y: visible;
+        overflow-y: hidden;
         overflow-x: hidden;
         display: flex;
         flex-direction: column;
         gap: 3px;
         padding: 6px 0;
+      }
+      
+      /* Скрываем скроллбары везде */
+      .custom-datetime-popup .time-scroll::-webkit-scrollbar {
+        display: none;
+      }
+      
+      .custom-datetime-popup {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+      
+      .custom-datetime-popup::-webkit-scrollbar {
+        display: none;
       }
       
       .custom-datetime-popup .time-item {
