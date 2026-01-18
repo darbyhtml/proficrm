@@ -366,6 +366,7 @@ class AmoMigrateResult:
     tasks_seen: int = 0
     tasks_created: int = 0
     tasks_skipped_existing: int = 0
+    tasks_skipped_old: int = 0
     tasks_updated: int = 0
     tasks_preview: list[dict] | None = None
 
@@ -803,8 +804,9 @@ def migrate_filtered(
                     ts = t.get("due_at", None)
                 due_at = _parse_amo_due(ts)
                 
-                # Пропускаем задачи с дедлайном >= 2026 года
-                if due_at and due_at.year >= 2026:
+                # Фильтрация: импортируем только задачи с дедлайном на 2026 год и позже
+                if due_at and due_at.year < 2026:
+                    res.tasks_skipped_old += 1
                     continue
                 
                 if res.tasks_preview is not None and len(res.tasks_preview) < 5:

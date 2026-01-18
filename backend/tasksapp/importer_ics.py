@@ -173,10 +173,6 @@ def import_amocrm_ics(
             contact = _ics_unescape(props.get("CONTACT", ""))
             dt_start = _parse_dt(props.get("DTSTART", "")) or _parse_dt(props.get("DUE", ""))
 
-            # Пропускаем задачи с дедлайном >= 2026 года
-            if dt_start and dt_start.year >= 2026:
-                continue
-
             company_name = _extract_company(contact, desc, summary)
             company = find_company(company_name)
             if company:
