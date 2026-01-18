@@ -2149,31 +2149,19 @@
                     <div class="time-column">
                       <div class="time-column-label">Часы</div>
                       <div class="time-scroll" id="hours-scroll">
-                        ${(() => {
-                          const start = Math.max(0, selectedHour - 3);
-                          const end = Math.min(23, selectedHour + 3);
-                          let html = '';
-                          for (let i = start; i <= end; i++) {
-                            const hour = String(i).padStart(2, '0');
-                            html += `<div class="time-item ${i === selectedHour ? 'selected' : ''}" data-hour="${i}">${hour}</div>`;
-                          }
-                          return html;
-                        })()}
+                        ${Array(24).fill(0).map((_, i) => {
+                          const hour = String(i).padStart(2, '0');
+                          return `<div class="time-item ${i === selectedHour ? 'selected' : ''}" data-hour="${i}">${hour}</div>`;
+                        }).join('')}
                       </div>
                     </div>
                     <div class="time-column">
                       <div class="time-column-label">Минуты</div>
                       <div class="time-scroll" id="minutes-scroll">
-                        ${(() => {
-                          const start = Math.max(0, selectedMinute - 3);
-                          const end = Math.min(59, selectedMinute + 3);
-                          let html = '';
-                          for (let i = start; i <= end; i++) {
-                            const minute = String(i).padStart(2, '0');
-                            html += `<div class="time-item ${i === selectedMinute ? 'selected' : ''}" data-minute="${i}">${minute}</div>`;
-                          }
-                          return html;
-                        })()}
+                        ${Array(60).fill(0).map((_, i) => {
+                          const minute = String(i).padStart(2, '0');
+                          return `<div class="time-item ${i === selectedMinute ? 'selected' : ''}" data-minute="${i}">${minute}</div>`;
+                        }).join('')}
                       </div>
                     </div>
                   </div>
