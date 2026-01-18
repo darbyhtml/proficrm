@@ -141,15 +141,15 @@
     </form>
 
     <!-- Индикатор загрузки -->
-    <div id="companyListLoading" class="hidden fixed inset-0 bg-black/20 z-40 flex items-center justify-center">
-      <div class="bg-white rounded-2xl shadow-xl p-8 flex flex-col items-center gap-4">
-        <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-brand-teal"></div>
-        <div class="text-brand-dark font-medium">Загрузка компаний...</div>
+    <div id="companyListLoading" class="hidden fixed inset-0 z-40 flex items-center justify-center" style="background: rgba(0, 61, 56, 0.15);">
+      <div class="bg-white rounded-2xl shadow-xl p-8 flex flex-col items-center gap-4" style="border: 1px solid rgba(194, 226, 222, 0.9);">
+        <div class="inline-block animate-spin rounded-full h-12 w-12" style="border: 3px solid rgba(194, 226, 222, 0.3); border-top-color: #01948E;"></div>
+        <div style="color: #003D38; font-weight: 500;">Загрузка компаний...</div>
       </div>
     </div>
 
     <div class="card overflow-hidden">
-      <div class="overflow-x-auto" id="companyListContainer" style="max-height: 70vh; overflow-y: auto;">
+      <div class="overflow-x-auto">
         <table class="table">
           <thead>
             <tr>
@@ -650,13 +650,9 @@
             throw new Error(data.error || 'Ошибка загрузки');
           }
           
-          // Обновляем тело таблицы
+          // Обновляем тело таблицы (всегда заменяем, не добавляем)
           if (companyListBody) {
-            if (resetPage) {
-              companyListBody.innerHTML = data.html;
-            } else {
-              companyListBody.innerHTML += data.html;
-            }
+            companyListBody.innerHTML = data.html;
           }
           
           // Обновляем пагинацию
@@ -760,28 +756,41 @@
         });
       }
       
-      // Виртуальный скроллинг: загрузка следующей страницы при прокрутке вниз
-      const container = document.getElementById('companyListContainer');
-      if (container) {
-        let scrollTimeout = null;
-        container.addEventListener('scroll', () => {
-          if (scrollTimeout) clearTimeout(scrollTimeout);
-          scrollTimeout = setTimeout(() => {
-            const scrollTop = container.scrollTop;
-            const scrollHeight = container.scrollHeight;
-            const clientHeight = container.clientHeight;
-            
-            // Загружаем следующую страницу, если прокрутили до 80% от конца
-            if (scrollTop + clientHeight >= scrollHeight * 0.8 && hasMore && !isLoading) {
-              currentPage++;
-              loadCompanies(false);
-            }
-          }, 100);
-        });
-      }
+      // Автоматическая подгрузка при изменении фильтров
+      let filterDebounceTimer = null;
+      const filterInputs = filterForm ? filterForm.querySelectorAll('input, select') : [];
       
-      // Инициализация: загружаем данные при первой загрузке страницы (если нужно)
-      // По умолчанию данные уже загружены сервером, но можно добавить проверку
+      filterInputs.forEach(input => {
+        // Пропускаем скрытые поля и кнопки
+        if (input.type === 'hidden' || input.type === 'submit' || input.type === 'button') {
+          return;
+        }
+        
+        input.addEventListener('change', () => {
+          // Очищаем предыдущий таймер
+          if (filterDebounceTimer) {
+            clearTimeout(filterDebounceTimer);
+          }
+          
+          // Устанавливаем новый таймер (500ms задержка)
+          filterDebounceTimer = setTimeout(() => {
+            loadCompanies(true);
+          }, 500);
+        });
+        
+        // Для текстового поля поиска - также на input
+        if (input.type === 'text') {
+          input.addEventListener('input', () => {
+            if (filterDebounceTimer) {
+              clearTimeout(filterDebounceTimer);
+            }
+            
+            filterDebounceTimer = setTimeout(() => {
+              loadCompanies(true);
+            }, 500);
+          });
+        }
+      });
     })();
   </script>
 
