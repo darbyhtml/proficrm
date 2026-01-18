@@ -180,15 +180,20 @@
       }
       
       .custom-datetime-popup {
-        position: absolute;
+        position: fixed;
         background: #fff;
         border: 1px solid rgba(194,226,222,.95);
         border-radius: 16px;
         box-shadow: 0 12px 30px rgba(0,61,56,.15);
         padding: 16px;
         z-index: 10001;
-        min-width: 320px;
+        min-width: 600px;
+        max-width: 90vw;
+        max-height: 90vh;
+        overflow-y: auto;
         font-family: system-ui, -apple-system, sans-serif;
+        display: flex;
+        flex-direction: column;
       }
       
       .custom-datetime-popup .calendar-header {
@@ -285,11 +290,33 @@
         font-weight: 600;
       }
       
+      .custom-datetime-popup .calendar-time-wrapper {
+        display: flex;
+        gap: 24px;
+        padding-top: 16px;
+        border-top: 1px solid rgba(194,226,222,.7);
+      }
+      
+      .custom-datetime-popup .calendar-section {
+        flex: 1;
+      }
+      
+      .custom-datetime-popup .calendar-time-wrapper {
+        display: flex;
+        gap: 24px;
+        align-items: flex-start;
+      }
+      
+      .custom-datetime-popup .calendar-section {
+        flex: 1;
+        min-width: 0;
+      }
+      
       .custom-datetime-popup .time-picker {
         display: flex;
         gap: 16px;
-        padding-top: 16px;
-        border-top: 1px solid rgba(194,226,222,.7);
+        flex: 0 0 auto;
+        min-width: 200px;
       }
       
       .custom-datetime-popup .time-column {
@@ -1772,55 +1799,59 @@
                 <div class="calendar-header">
                   <div class="month-year">${monthNames[month]} ${year}</div>
                   <div class="nav-buttons">
-                    <button class="prev-month">‹</button>
-                    <button class="next-month">›</button>
+                    <button class="prev-month" type="button">‹</button>
+                    <button class="next-month" type="button">›</button>
                   </div>
                 </div>
-                <div class="calendar-weekdays">
-                  ${weekdays.map(day => `<span>${day}</span>`).join('')}
-                </div>
-                <div class="calendar-days">
-                  ${Array(startDay).fill(0).map((_, i) => {
-                    const date = new Date(year, month, -startDay + i + 1);
-                    return `<div class="calendar-day other-month">${date.getDate()}</div>`;
-                  }).join('')}
-                  ${Array(daysInMonth).fill(0).map((_, i) => {
-                    const day = i + 1;
-                    const date = new Date(year, month, day);
-                    date.setHours(0, 0, 0, 0);
-                    const isToday = date.getTime() === today.getTime();
-                    const isSelected = selectedDate && date.getTime() === selectedDate.getTime();
-                    return `<div class="calendar-day ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}" data-day="${day}">${day}</div>`;
-                  }).join('')}
-                  ${Array(42 - startDay - daysInMonth).fill(0).map((_, i) => {
-                    const date = new Date(year, month + 1, i + 1);
-                    return `<div class="calendar-day other-month">${date.getDate()}</div>`;
-                  }).join('')}
-                </div>
-                <div class="time-picker">
-                  <div class="time-column">
-                    <div class="time-column-label">Часы</div>
-                    <div class="time-scroll" id="hours-scroll">
-                      ${Array(24).fill(0).map((_, i) => {
-                        const hour = String(i).padStart(2, '0');
-                        return `<div class="time-item ${i === selectedHour ? 'selected' : ''}" data-hour="${i}">${hour}</div>`;
+                <div class="calendar-time-wrapper">
+                  <div class="calendar-section">
+                    <div class="calendar-weekdays">
+                      ${weekdays.map(day => `<span>${day}</span>`).join('')}
+                    </div>
+                    <div class="calendar-days">
+                      ${Array(startDay).fill(0).map((_, i) => {
+                        const date = new Date(year, month, -startDay + i + 1);
+                        return `<div class="calendar-day other-month">${date.getDate()}</div>`;
+                      }).join('')}
+                      ${Array(daysInMonth).fill(0).map((_, i) => {
+                        const day = i + 1;
+                        const date = new Date(year, month, day);
+                        date.setHours(0, 0, 0, 0);
+                        const isToday = date.getTime() === today.getTime();
+                        const isSelected = selectedDate && date.getTime() === selectedDate.getTime();
+                        return `<div class="calendar-day ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}" data-day="${day}">${day}</div>`;
+                      }).join('')}
+                      ${Array(42 - startDay - daysInMonth).fill(0).map((_, i) => {
+                        const date = new Date(year, month + 1, i + 1);
+                        return `<div class="calendar-day other-month">${date.getDate()}</div>`;
                       }).join('')}
                     </div>
                   </div>
-                  <div class="time-column">
-                    <div class="time-column-label">Минуты</div>
-                    <div class="time-scroll" id="minutes-scroll">
-                      ${Array(60).fill(0).map((_, i) => {
-                        const minute = String(i).padStart(2, '0');
-                        return `<div class="time-item ${i === selectedMinute ? 'selected' : ''}" data-minute="${i}">${minute}</div>`;
-                      }).join('')}
+                  <div class="time-picker">
+                    <div class="time-column">
+                      <div class="time-column-label">Часы</div>
+                      <div class="time-scroll" id="hours-scroll">
+                        ${Array(24).fill(0).map((_, i) => {
+                          const hour = String(i).padStart(2, '0');
+                          return `<div class="time-item ${i === selectedHour ? 'selected' : ''}" data-hour="${i}">${hour}</div>`;
+                        }).join('')}
+                      </div>
+                    </div>
+                    <div class="time-column">
+                      <div class="time-column-label">Минуты</div>
+                      <div class="time-scroll" id="minutes-scroll">
+                        ${Array(60).fill(0).map((_, i) => {
+                          const minute = String(i).padStart(2, '0');
+                          return `<div class="time-item ${i === selectedMinute ? 'selected' : ''}" data-minute="${i}">${minute}</div>`;
+                        }).join('')}
+                      </div>
                     </div>
                   </div>
                 </div>
                 <div class="calendar-actions">
-                  <button class="btn-delete">Удалить</button>
-                  <button class="btn-today">Сегодня</button>
-                  <button class="btn-primary btn-apply">Применить</button>
+                  <button class="btn-delete" type="button">Удалить</button>
+                  <button class="btn-today" type="button">Сегодня</button>
+                  <button class="btn-primary btn-apply" type="button">Применить</button>
                 </div>
               `;
               
@@ -1887,9 +1918,13 @@
               popup.querySelector('.btn-apply').addEventListener('click', () => {
                 if (selectedDate) {
                   selectedDate.setHours(selectedHour, selectedMinute, 0, 0);
-                  const isoString = selectedDate.toISOString().slice(0, 16);
+                  // Преобразуем в локальное время для datetime-local
+                  const localDate = new Date(selectedDate.getTime() - selectedDate.getTimezoneOffset() * 60000);
+                  const isoString = localDate.toISOString().slice(0, 16);
                   input.value = isoString;
                   updateVisualInput();
+                  // Триггерим события для обновления формы
+                  input.dispatchEvent(new Event('input', { bubbles: true }));
                   input.dispatchEvent(new Event('change', { bubbles: true }));
                 }
                 closePopup();
@@ -1910,9 +1945,10 @@
             
             function openPopup() {
               overlay.classList.add('active');
-              const rect = visualInput.getBoundingClientRect();
-              popup.style.top = (rect.bottom + 8) + 'px';
-              popup.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 340)) + 'px';
+              // Центрируем popup на экране
+              popup.style.top = '50%';
+              popup.style.left = '50%';
+              popup.style.transform = 'translate(-50%, -50%)';
               renderCalendar();
             }
             
@@ -1920,12 +1956,22 @@
               overlay.classList.remove('active');
             }
             
+            // Обработчик Escape для закрытия
+            function handleEscape(e) {
+              if (e.key === 'Escape' && overlay.classList.contains('active')) {
+                closePopup();
+              }
+            }
+            
             visualInput.addEventListener('click', openPopup);
             overlay.addEventListener('click', (e) => {
-              if (e.target === overlay) {
+              if (e.target === overlay || e.target.classList.contains('custom-datetime-overlay')) {
                 closePopup();
               }
             });
+            
+            // Закрытие по Escape
+            document.addEventListener('keydown', handleEscape);
             
             input.addEventListener('change', updateVisualInput);
           });
