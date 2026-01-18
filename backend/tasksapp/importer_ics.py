@@ -175,7 +175,6 @@ def import_amocrm_ics(
 
             # Пропускаем задачи с дедлайном >= 2026 года
             if dt_start and dt_start.year >= 2026:
-                res.skipped_existing += 1
                 continue
 
             company_name = _extract_company(contact, desc, summary)
