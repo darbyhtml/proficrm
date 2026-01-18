@@ -255,6 +255,12 @@ def _notify_head_deleted_with_branches(*, actor: User, head_company: Company, de
     )
 
 
+def _invalidate_company_count_cache():
+    """Инвалидирует кэш общего количества компаний."""
+    from django.core.cache import cache
+    cache.delete("companies_total_count")
+
+
 def _companies_with_overdue_flag(*, now):
     """
     Базовый QS компаний с вычисляемым флагом просроченных задач `has_overdue`.
@@ -1371,8 +1377,13 @@ def company_list(request: HttpRequest) -> HttpResponse:
     user: User = request.user
     now = timezone.now()
     # Просмотр компаний: всем доступна вся база (без ограничения по филиалу/scope).
-    base_qs = Company.objects.all()
-    companies_total = base_qs.order_by().count()
+    # Кэшируем общее количество компаний (TTL 10 минут)
+    from django.core.cache import cache
+    cache_key_total = "companies_total_count"
+    companies_total = cache.get(cache_key_total)
+    if companies_total is None:
+        companies_total = Company.objects.all().order_by().count()
+        cache.set(cache_key_total, companies_total, 600)  # 10 минут
     qs = (
         _companies_with_overdue_flag(now=now)
         .select_related("responsible", "branch", "status")
@@ -1428,9 +1439,13 @@ def company_list(request: HttpRequest) -> HttpResponse:
     paginator = Paginator(qs, per_page)
     page = paginator.get_page(request.GET.get("page"))
     
+    # Оптимизация: пакетная проверка прав на передачу вместо проверки для каждой компании
+    company_ids = [c.id for c in page.object_list]
+    transfer_check = can_transfer_companies(user, company_ids)
+    allowed_ids_set = set(transfer_check["allowed"])
     # Добавляем флаг can_transfer для каждой компании (для UI проверки)
     for company in page.object_list:
-        company.can_transfer = can_transfer_company(user, company)  # type: ignore[attr-defined]
+        company.can_transfer = company.id in allowed_ids_set  # type: ignore[attr-defined]
     
     # Формируем qs для пагинации, включая per_page если он отличается от значения по умолчанию
     # Используем filter_params вместо request.GET, чтобы включить default_branch_id для директора филиала
@@ -1579,6 +1594,7 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
     # фиксируем "старых" ответственных для лога (первых 20)
     old_resps = list(qs_to_update.values_list("responsible_id", flat=True).distinct()[:20])
     updated = qs_to_update.update(responsible=new_resp, branch=new_resp.branch, updated_at=now_ts)
+    _invalidate_company_count_cache()  # Инвалидируем кэш при массовом переназначении
 
     messages.success(request, f"Переназначено компаний: {updated}. Новый ответственный: {new_resp}.")
     log_event(
@@ -1867,6 +1883,7 @@ def company_create(request: HttpRequest) -> HttpResponse:
             company.branch = user.branch
             company.save()
             form.save_m2m()
+            _invalidate_company_count_cache()  # Инвалидируем кэш при создании
             messages.success(request, "Компания создана.")
             log_event(
                 actor=user,
@@ -3387,6 +3404,7 @@ def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
     # При передаче обновляем филиал компании под филиал нового ответственного (может быть другой регион).
     company.branch = new_resp.branch
     company.save()
+    _invalidate_company_count_cache()  # Инвалидируем кэш при передаче компании
 
     messages.success(request, f"Ответственный обновлён: {new_resp}.")
     log_event(
@@ -3423,6 +3441,7 @@ def company_update(request: HttpRequest, company_id) -> HttpResponse:
     form = CompanyQuickEditForm(request.POST, instance=company)
     if form.is_valid():
         form.save()
+        _invalidate_company_count_cache()  # Инвалидируем кэш при обновлении (на случай изменения статуса/филиала)
         messages.success(request, "Карточка компании обновлена.")
         log_event(
             actor=user,
