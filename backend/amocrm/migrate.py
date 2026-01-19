@@ -1765,42 +1765,42 @@ def migrate_filtered(
                         # ОТЛАДКА: логируем сырую структуру контакта для первых 3
                         if structure_logged_count < 3:
                             logger.debug(f"===== RAW CONTACT STRUCTURE ({structure_logged_count + 1}) [index {ac_idx}] =====")
-                        logger.debug(f"  - Type: {type(ac)}")
-                        logger.debug(f"  - ac is None: {ac is None}")
-                        if ac is None:
-                            logger.debug(f"  - ⚠️ Contact is None!")
-                        elif isinstance(ac, dict):
-                            logger.debug(f"  - Keys: {list(ac.keys())}")
-                            logger.debug(f"  - Has 'id': {'id' in ac}, id value: {ac.get('id')}")
-                            logger.debug(f"  - Has 'first_name': {'first_name' in ac}, value: {ac.get('first_name')}")
-                            logger.debug(f"  - Has 'last_name': {'last_name' in ac}, value: {ac.get('last_name')}")
-                            logger.debug(f"  - Has 'custom_fields_values': {'custom_fields_values' in ac}")
-                            if 'custom_fields_values' in ac:
-                                cfv = ac.get('custom_fields_values')
-                                logger.debug(f"  - custom_fields_values type: {type(cfv)}, length: {len(cfv) if isinstance(cfv, list) else 'not_list'}")
-                                if isinstance(cfv, list) and len(cfv) > 0:
-                                    logger.debug(f"  - First custom_field: {cfv[0]}")
-                            logger.debug(f"  - Has 'phone': {'phone' in ac}, value: {ac.get('phone')}")
-                            logger.debug(f"  - Has 'email': {'email' in ac}, value: {ac.get('email')}")
-                            # Полная JSON-структура - ВАЖНО для поиска примечаний!
-                            import json
-                            try:
-                                json_str = json.dumps(ac, ensure_ascii=False, indent=2)
-                                # Увеличиваем размер для поиска примечаний
-                                logger.debug(f"  - Full JSON (first 5000 chars):\n{json_str[:5000]}")
-                                # Также проверяем наличие ключевых полей для примечаний
-                                note_related_keys = [k for k in ac.keys() if any(word in k.lower() for word in ["note", "comment", "remark", "примеч", "коммент"])]
-                                if note_related_keys:
-                                    logger.debug(f"  - ⚠️ Found note-related keys: {note_related_keys}")
-                                    for key in note_related_keys:
-                                        logger.debug(f"    - {key}: {str(ac.get(key))[:200]}")
-                            except Exception as e:
-                                logger.debug(f"  - JSON dump error: {e}")
-                                import traceback
-                                logger.debug(f"  - Traceback: {traceback.format_exc()}")
-                                logger.debug(f"  - Full contact (first 500 chars): {str(ac)[:500]}")
-                        else:
-                            logger.debug(f"  - Contact is not a dict: {ac}, type: {type(ac)}")
+                            logger.debug(f"  - Type: {type(ac)}")
+                            logger.debug(f"  - ac is None: {ac is None}")
+                            if ac is None:
+                                logger.debug(f"  - ⚠️ Contact is None!")
+                            elif isinstance(ac, dict):
+                                logger.debug(f"  - Keys: {list(ac.keys())}")
+                                logger.debug(f"  - Has 'id': {'id' in ac}, id value: {ac.get('id')}")
+                                logger.debug(f"  - Has 'first_name': {'first_name' in ac}, value: {ac.get('first_name')}")
+                                logger.debug(f"  - Has 'last_name': {'last_name' in ac}, value: {ac.get('last_name')}")
+                                logger.debug(f"  - Has 'custom_fields_values': {'custom_fields_values' in ac}")
+                                if 'custom_fields_values' in ac:
+                                    cfv = ac.get('custom_fields_values')
+                                    logger.debug(f"  - custom_fields_values type: {type(cfv)}, length: {len(cfv) if isinstance(cfv, list) else 'not_list'}")
+                                    if isinstance(cfv, list) and len(cfv) > 0:
+                                        logger.debug(f"  - First custom_field: {cfv[0]}")
+                                logger.debug(f"  - Has 'phone': {'phone' in ac}, value: {ac.get('phone')}")
+                                logger.debug(f"  - Has 'email': {'email' in ac}, value: {ac.get('email')}")
+                                # Полная JSON-структура - ВАЖНО для поиска примечаний!
+                                import json
+                                try:
+                                    json_str = json.dumps(ac, ensure_ascii=False, indent=2)
+                                    # Увеличиваем размер для поиска примечаний
+                                    logger.debug(f"  - Full JSON (first 5000 chars):\n{json_str[:5000]}")
+                                    # Также проверяем наличие ключевых полей для примечаний
+                                    note_related_keys = [k for k in ac.keys() if any(word in k.lower() for word in ["note", "comment", "remark", "примеч", "коммент"])]
+                                    if note_related_keys:
+                                        logger.debug(f"  - ⚠️ Found note-related keys: {note_related_keys}")
+                                        for key in note_related_keys:
+                                            logger.debug(f"    - {key}: {str(ac.get(key))[:200]}")
+                                except Exception as e:
+                                    logger.debug(f"  - JSON dump error: {e}")
+                                    import traceback
+                                    logger.debug(f"  - Traceback: {traceback.format_exc()}")
+                                    logger.debug(f"  - Full contact (first 500 chars): {str(ac)[:500]}")
+                            else:
+                                logger.debug(f"  - Contact is not a dict: {ac}, type: {type(ac)}")
                             logger.debug(f"===== END RAW STRUCTURE =====")
                             structure_logged_count += 1
                         
@@ -1808,17 +1808,17 @@ def migrate_filtered(
                         
                         # Добавляем заметки из contact_notes_map, если их нет в _embedded
                         if amo_contact_id and amo_contact_id in contact_notes_map:
-                        notes_from_map = contact_notes_map[amo_contact_id]
-                        if notes_from_map and isinstance(ac, dict):
-                            # Добавляем заметки в _embedded, если их там нет
-                            if "_embedded" not in ac:
-                                ac["_embedded"] = {}
-                            if not isinstance(ac["_embedded"], dict):
-                                ac["_embedded"] = {}
-                            if "notes" not in ac["_embedded"] or not ac["_embedded"]["notes"]:
-                                ac["_embedded"]["notes"] = notes_from_map
-                                if structure_logged_count < 3:
-                                    logger.debug(f"  -> Added {len(notes_from_map)} notes from contact_notes_map to contact {amo_contact_id}")
+                            notes_from_map = contact_notes_map[amo_contact_id]
+                            if notes_from_map and isinstance(ac, dict):
+                                # Добавляем заметки в _embedded, если их там нет
+                                if "_embedded" not in ac:
+                                    ac["_embedded"] = {}
+                                if not isinstance(ac["_embedded"], dict):
+                                    ac["_embedded"] = {}
+                                if "notes" not in ac["_embedded"] or not ac["_embedded"]["notes"]:
+                                    ac["_embedded"]["notes"] = notes_from_map
+                                    if structure_logged_count < 3:
+                                        logger.debug(f"  -> Added {len(notes_from_map)} notes from contact_notes_map to contact {amo_contact_id}")
                         
                         if not amo_contact_id:
                             # ОТЛАДКА: контакт без ID
@@ -1863,7 +1863,7 @@ def migrate_filtered(
                                     amo_company_id_for_contact = cid
                         
                         if not local_company:
-                        # ОТЛАДКА: контакт не связан с компанией из текущей пачки
+                            # ОТЛАДКА: контакт не связан с компанией из текущей пачки
                         # В dry-run показываем ВСЕ такие контакты
                         debug_count = getattr(res, '_debug_contacts_logged', 0)
                         if res.contacts_preview is None:
@@ -1906,712 +1906,712 @@ def migrate_filtered(
                             }
                             res.contacts_preview.append(debug_data)
                             res._debug_contacts_logged = debug_count + 1
-                        continue
-                    # Извлекаем данные контакта (делаем это ДО проверки на existing, чтобы всегда было в preview)
-                    # Парсим ФИО с помощью функции _parse_fio
-                    name_str = str(ac.get("name") or "").strip()
-                    first_name_raw = str(ac.get("first_name") or "").strip()
-                    last_name_raw = str(ac.get("last_name") or "").strip()
-                    last_name, first_name = _parse_fio(name_str, first_name_raw, last_name_raw)
-                    
-                    # ОТЛАДКА: логируем начало обработки контакта
-                    preview_count_before = len(res.contacts_preview) if res.contacts_preview else 0
-                    if preview_count_before < 3:
-                        logger.debug(f"Processing contact {amo_contact_id} (parsed: last_name={last_name}, first_name={first_name})")
-                        logger.debug(f"  - raw: name={name_str}, first_name={first_name_raw}, last_name={last_name_raw}")
-                        logger.debug(f"  - local_company: {local_company.id if local_company else None}")
-                        logger.debug(f"  - has custom_fields_values: {'custom_fields_values' in ac if isinstance(ac, dict) else False}")
-                        if isinstance(ac, dict) and 'custom_fields_values' in ac:
-                            cfv = ac.get('custom_fields_values')
-                            logger.debug(f"  - custom_fields_values: type={type(cfv)}, length={len(cfv) if isinstance(cfv, list) else 'not_list'}")
-                    
-                    # Проверяем, не импортировали ли уже этот контакт
-                    existing_contact = Contact.objects.filter(amocrm_contact_id=amo_contact_id, company=local_company).first()
-                    
-                    # В amoCRM телефоны и email могут быть:
-                    # 1. В стандартных полях (phone, email) - если они есть
-                    # 2. В custom_fields_values с field_code="PHONE"/"EMAIL" или по field_name
-                    # 3. В custom_fields_values по названию поля
-                    # phones/emails: сохраняем тип и комментарий (enum_code) для корректного отображения
-                    phones: list[tuple[str, str, str]] = []  # (type, value, comment)
-                    emails: list[tuple[str, str]] = []  # (type, value)
-                    position = ""
-                    cold_call_timestamp = None  # Timestamp холодного звонка из amoCRM
-                    note_text = ""  # "Примечание"/"Комментарий" контакта (одно на все номера)
-                    birthday_timestamp = None  # Timestamp дня рождения из amoCRM (если есть)
-                    
-                    # ОТЛАДКА: определяем счетчик для логирования (ДО использования)
-                    debug_count_for_extraction = len(res.contacts_preview) if res.contacts_preview else 0
-                    
-                    # ВАЖНО: сначала проверяем custom_fields (там хранится поле "Примечание"),
-                    # потом заметки (там могут быть служебные заметки типа call_out)
-                    
-                    # custom_fields_values для телефонов/почт/должности/примечаний
-                    custom_fields = ac.get("custom_fields_values") or []
-                    # ОТЛАДКА: логируем структуру custom_fields для первых контактов
-                    if debug_count_for_extraction < 3:
-                        logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
-                        logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}")
-                        logger.debug(f"  - ac.get('custom_fields_values'): {ac.get('custom_fields_values')}")
-                        # Логируем ВСЕ поля для отладки (чтобы увидеть, какие поля есть)
-                        if isinstance(custom_fields, list):
-                            logger.debug(f"  - ALL custom_fields ({len(custom_fields)} fields):")
-                            for cf_idx, cf in enumerate(custom_fields):
-                                if isinstance(cf, dict):
-                                    field_name = str(cf.get('field_name') or '').strip()
-                                    field_code = str(cf.get('field_code') or '').strip()
-                                    values = cf.get('values') or []
-                                    first_val = ""
-                                    if values and isinstance(values, list) and len(values) > 0:
-                                        v = values[0]
-                                        if isinstance(v, dict):
-                                            first_val = str(v.get('value', ''))[:100]
-                                        else:
-                                            first_val = str(v)[:100]
-                                    logger.debug(f"    [{cf_idx}] id={cf.get('field_id')}, code='{field_code}', name='{field_name}', type={cf.get('field_type')}, first_value='{first_val}'")
+                            continue
+        # Извлекаем данные контакта (делаем это ДО проверки на existing, чтобы всегда было в preview)
+        # Парсим ФИО с помощью функции _parse_fio
+        name_str = str(ac.get("name") or "").strip()
+    first_name_raw = str(ac.get("first_name") or "").strip()
+    last_name_raw = str(ac.get("last_name") or "").strip()
+    last_name, first_name = _parse_fio(name_str, first_name_raw, last_name_raw)
+    
+    # ОТЛАДКА: логируем начало обработки контакта
+    preview_count_before = len(res.contacts_preview) if res.contacts_preview else 0
+    if preview_count_before < 3:
+        logger.debug(f"Processing contact {amo_contact_id} (parsed: last_name={last_name}, first_name={first_name})")
+        logger.debug(f"  - raw: name={name_str}, first_name={first_name_raw}, last_name={last_name_raw}")
+        logger.debug(f"  - local_company: {local_company.id if local_company else None}")
+        logger.debug(f"  - has custom_fields_values: {'custom_fields_values' in ac if isinstance(ac, dict) else False}")
+        if isinstance(ac, dict) and 'custom_fields_values' in ac:
+            cfv = ac.get('custom_fields_values')
+            logger.debug(f"  - custom_fields_values: type={type(cfv)}, length={len(cfv) if isinstance(cfv, list) else 'not_list'}")
+    
+    # Проверяем, не импортировали ли уже этот контакт
+    existing_contact = Contact.objects.filter(amocrm_contact_id=amo_contact_id, company=local_company).first()
+    
+    # В amoCRM телефоны и email могут быть:
+    # 1. В стандартных полях (phone, email) - если они есть
+    # 2. В custom_fields_values с field_code="PHONE"/"EMAIL" или по field_name
+    # 3. В custom_fields_values по названию поля
+    # phones/emails: сохраняем тип и комментарий (enum_code) для корректного отображения
+    phones: list[tuple[str, str, str]] = []  # (type, value, comment)
+    emails: list[tuple[str, str]] = []  # (type, value)
+    position = ""
+    cold_call_timestamp = None  # Timestamp холодного звонка из amoCRM
+    note_text = ""  # "Примечание"/"Комментарий" контакта (одно на все номера)
+    birthday_timestamp = None  # Timestamp дня рождения из amoCRM (если есть)
+    
+    # ОТЛАДКА: определяем счетчик для логирования (ДО использования)
+    debug_count_for_extraction = len(res.contacts_preview) if res.contacts_preview else 0
+    
+    # ВАЖНО: сначала проверяем custom_fields (там хранится поле "Примечание"),
+    # потом заметки (там могут быть служебные заметки типа call_out)
+    
+    # custom_fields_values для телефонов/почт/должности/примечаний
+    custom_fields = ac.get("custom_fields_values") or []
+    # ОТЛАДКА: логируем структуру custom_fields для первых контактов
+    if debug_count_for_extraction < 3:
+        logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
+        logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}")
+        logger.debug(f"  - ac.get('custom_fields_values'): {ac.get('custom_fields_values')}")
+        # Логируем ВСЕ поля для отладки (чтобы увидеть, какие поля есть)
+        if isinstance(custom_fields, list):
+            logger.debug(f"  - ALL custom_fields ({len(custom_fields)} fields):")
+            for cf_idx, cf in enumerate(custom_fields):
+                if isinstance(cf, dict):
+                    field_name = str(cf.get('field_name') or '').strip()
+                    field_code = str(cf.get('field_code') or '').strip()
+                    values = cf.get('values') or []
+                    first_val = ""
+                    if values and isinstance(values, list) and len(values) > 0:
+                        v = values[0]
+                        if isinstance(v, dict):
+                            first_val = str(v.get('value', ''))[:100]
                         else:
-                            logger.debug(f"  - ⚠️ custom_fields is not a list: {type(custom_fields)}")
-                    
-                    # ПРОВЕРЯЕМ ВСЕ ВОЗМОЖНЫЕ МЕСТА ДЛЯ ПРИМЕЧАНИЙ:
-                    # 1. Прямые поля контакта - проверяем ВСЕ возможные варианты
-                    # В amoCRM примечание может быть в разных полях
-                    direct_note_keys = ["note", "notes", "comment", "comments", "remark", "remarks", "text", "description", "description_text"]
-                    for note_key in direct_note_keys:
-                        note_val_raw = ac.get(note_key)
-                        if note_val_raw:
-                            # Может быть строка или список
-                            if isinstance(note_val_raw, list):
-                                note_val = " ".join([str(v) for v in note_val_raw if v]).strip()
-                            else:
-                                note_val = str(note_val_raw).strip()
-                            # Пропускаем ID и очень короткие значения
-                            if note_val and len(note_val) > 3 and not note_val.isdigit():
-                                if not note_text:
+                            first_val = str(v)[:100]
+                    logger.debug(f"    [{cf_idx}] id={cf.get('field_id')}, code='{field_code}', name='{field_name}', type={cf.get('field_type')}, first_value='{first_val}'")
+        else:
+            logger.debug(f"  - ⚠️ custom_fields is not a list: {type(custom_fields)}")
+    
+    # ПРОВЕРЯЕМ ВСЕ ВОЗМОЖНЫЕ МЕСТА ДЛЯ ПРИМЕЧАНИЙ:
+    # 1. Прямые поля контакта - проверяем ВСЕ возможные варианты
+    # В amoCRM примечание может быть в разных полях
+    direct_note_keys = ["note", "notes", "comment", "comments", "remark", "remarks", "text", "description", "description_text"]
+    for note_key in direct_note_keys:
+        note_val_raw = ac.get(note_key)
+        if note_val_raw:
+            # Может быть строка или список
+            if isinstance(note_val_raw, list):
+                note_val = " ".join([str(v) for v in note_val_raw if v]).strip()
+            else:
+                note_val = str(note_val_raw).strip()
+            # Пропускаем ID и очень короткие значения
+            if note_val and len(note_val) > 3 and not note_val.isdigit():
+                if not note_text:
+                    note_text = note_val[:255]
+                    if debug_count_for_extraction < 3:
+                        logger.debug(f"  -> ✅ Found note_text in direct field '{note_key}': {note_text[:100]}")
+                else:
+                    # Объединяем, если уже есть
+                    combined = f"{note_text}; {note_val[:100]}"
+                    note_text = combined[:255]
+                    if debug_count_for_extraction < 3:
+                        logger.debug(f"  -> Appended note_text from direct field '{note_key}': {note_val[:100]}")
+    
+    # 2. В custom_fields_values - ПРИОРИТЕТ! Здесь хранится поле "Примечание"
+    # (обработка будет ниже в цикле по custom_fields)
+    
+    # 3. В _embedded.notes (если есть) - это заметки контакта из amoCRM (служебные, не примечания)
+    if isinstance(ac, dict) and "_embedded" in ac:
+        embedded = ac.get("_embedded") or {}
+        if isinstance(embedded, dict) and "notes" in embedded:
+            notes_list = embedded.get("notes") or []
+            if isinstance(notes_list, list) and notes_list:
+                if debug_count_for_extraction < 3:
+                    logger.debug(f"  -> Found {len(notes_list)} notes in _embedded.notes")
+                # Ищем примечание в заметках (обычно это текстовые заметки)
+                for note_idx, note_item in enumerate(notes_list):
+                    if isinstance(note_item, dict):
+                        # В заметках текст может быть в разных полях
+                        note_val = (
+                            str(note_item.get("text") or "").strip() or
+                            str(note_item.get("note") or "").strip() or
+                            str(note_item.get("comment") or "").strip() or
+                            str(note_item.get("note_type") or "").strip()  # иногда тип заметки содержит текст
+                        )
+                        # Также проверяем параметры заметки
+                        if not note_val and "params" in note_item:
+                            params = note_item.get("params") or {}
+                            if isinstance(params, dict):
+                                note_val = (
+                                    str(params.get("text") or "").strip() or
+                                    str(params.get("comment") or "").strip() or
+                                    str(params.get("note") or "").strip()
+                                )
+                        
+                        # ВАЖНО: не берем служебные заметки (call_out, call_in и т.д.) как примечание
+                        # Но берем заметки типа "common", "text", "common_message" - это могут быть примечания!
+                        note_type_val = str(note_item.get("note_type") or "").strip().lower()
+                        is_service_note = note_type_val in ["call_out", "call_in", "call", "amomail", "sms", "task"]
+                        is_note_type = note_type_val in ["common", "text", "common_message", "message", "note"]
+                        
+                        # Берем заметки типа "common"/"text" (это примечания) или любые заметки с текстом, если нет служебных
+                        if note_val and len(note_val) > 5:
+                            # ВАЖНО: заметки типа "common" или "text" - это ПРИОРИТЕТНЫЕ примечания
+                            # Они должны заменять служебные заметки (call_out и т.д.)
+                            if is_note_type:
+                                # Заменяем, если нет примечания ИЛИ если текущее примечание - служебная заметка
+                                current_is_service = note_text and (
+                                    "call_" in str(note_text).lower() or 
+                                    str(note_text).lower() in ["call_out", "call_in", "call", "amomail", "sms", "task"] or
+                                    len(str(note_text).strip()) < 10
+                                )
+                                if not note_text or current_is_service:
                                     note_text = note_val[:255]
                                     if debug_count_for_extraction < 3:
-                                        logger.debug(f"  -> ✅ Found note_text in direct field '{note_key}': {note_text[:100]}")
+                                        logger.debug(f"  -> ✅ Found note_text in _embedded.notes[{note_idx}] (type={note_type_val}): {note_text[:100]}")
                                 else:
-                                    # Объединяем, если уже есть
                                     combined = f"{note_text}; {note_val[:100]}"
                                     note_text = combined[:255]
                                     if debug_count_for_extraction < 3:
-                                        logger.debug(f"  -> Appended note_text from direct field '{note_key}': {note_val[:100]}")
-                    
-                    # 2. В custom_fields_values - ПРИОРИТЕТ! Здесь хранится поле "Примечание"
-                    # (обработка будет ниже в цикле по custom_fields)
-                    
-                    # 3. В _embedded.notes (если есть) - это заметки контакта из amoCRM (служебные, не примечания)
-                    if isinstance(ac, dict) and "_embedded" in ac:
-                        embedded = ac.get("_embedded") or {}
-                        if isinstance(embedded, dict) and "notes" in embedded:
-                            notes_list = embedded.get("notes") or []
-                            if isinstance(notes_list, list) and notes_list:
+                                        logger.debug(f"  -> Appended note_text from _embedded.notes[{note_idx}] (type={note_type_val}): {note_val[:100]}")
+                            # Если это не служебная заметка и у нас еще нет примечания - берем её
+                            elif not is_service_note and not note_text:
+                                note_text = note_val[:255]
                                 if debug_count_for_extraction < 3:
-                                    logger.debug(f"  -> Found {len(notes_list)} notes in _embedded.notes")
-                                # Ищем примечание в заметках (обычно это текстовые заметки)
-                                for note_idx, note_item in enumerate(notes_list):
-                                    if isinstance(note_item, dict):
-                                        # В заметках текст может быть в разных полях
-                                        note_val = (
-                                            str(note_item.get("text") or "").strip() or
-                                            str(note_item.get("note") or "").strip() or
-                                            str(note_item.get("comment") or "").strip() or
-                                            str(note_item.get("note_type") or "").strip()  # иногда тип заметки содержит текст
-                                        )
-                                        # Также проверяем параметры заметки
-                                        if not note_val and "params" in note_item:
-                                            params = note_item.get("params") or {}
-                                            if isinstance(params, dict):
-                                                note_val = (
-                                                    str(params.get("text") or "").strip() or
-                                                    str(params.get("comment") or "").strip() or
-                                                    str(params.get("note") or "").strip()
-                                                )
-                                        
-                                        # ВАЖНО: не берем служебные заметки (call_out, call_in и т.д.) как примечание
-                                        # Но берем заметки типа "common", "text", "common_message" - это могут быть примечания!
-                                        note_type_val = str(note_item.get("note_type") or "").strip().lower()
-                                        is_service_note = note_type_val in ["call_out", "call_in", "call", "amomail", "sms", "task"]
-                                        is_note_type = note_type_val in ["common", "text", "common_message", "message", "note"]
-                                        
-                                        # Берем заметки типа "common"/"text" (это примечания) или любые заметки с текстом, если нет служебных
-                                        if note_val and len(note_val) > 5:
-                                            # ВАЖНО: заметки типа "common" или "text" - это ПРИОРИТЕТНЫЕ примечания
-                                            # Они должны заменять служебные заметки (call_out и т.д.)
-                                            if is_note_type:
-                                                # Заменяем, если нет примечания ИЛИ если текущее примечание - служебная заметка
-                                                current_is_service = note_text and (
-                                                    "call_" in str(note_text).lower() or 
-                                                    str(note_text).lower() in ["call_out", "call_in", "call", "amomail", "sms", "task"] or
-                                                    len(str(note_text).strip()) < 10
-                                                )
-                                                if not note_text or current_is_service:
-                                                    note_text = note_val[:255]
-                                                    if debug_count_for_extraction < 3:
-                                                        logger.debug(f"  -> ✅ Found note_text in _embedded.notes[{note_idx}] (type={note_type_val}): {note_text[:100]}")
-                                                else:
-                                                    combined = f"{note_text}; {note_val[:100]}"
-                                                    note_text = combined[:255]
-                                                    if debug_count_for_extraction < 3:
-                                                        logger.debug(f"  -> Appended note_text from _embedded.notes[{note_idx}] (type={note_type_val}): {note_val[:100]}")
-                                            # Если это не служебная заметка и у нас еще нет примечания - берем её
-                                            elif not is_service_note and not note_text:
-                                                note_text = note_val[:255]
-                                                if debug_count_for_extraction < 3:
-                                                    logger.debug(f"  -> Found note_text in _embedded.notes[{note_idx}] (type={note_type_val}, not service): {note_text[:100]}")
-                                            # Берем первые 5 заметок (чтобы найти примечание)
-                                            if note_idx >= 4:
-                                                break
-                                        elif is_service_note and debug_count_for_extraction < 3:
-                                            logger.debug(f"  -> Skipped service note type '{note_type_val}' (not a real note)")
+                                    logger.debug(f"  -> Found note_text in _embedded.notes[{note_idx}] (type={note_type_val}, not service): {note_text[:100]}")
+                            # Берем первые 5 заметок (чтобы найти примечание)
+                            if note_idx >= 4:
+                                break
+                        elif is_service_note and debug_count_for_extraction < 3:
+                            logger.debug(f"  -> Skipped service note type '{note_type_val}' (not a real note)")
+    
+    # Стандартные поля (если есть)
+    if ac.get("phone"):
+        for pv in _split_multi(str(ac.get("phone"))):
+            phones.append((ContactPhone.PhoneType.OTHER, pv, ""))
+    if ac.get("email"):
+        ev = str(ac.get("email")).strip()
+        if ev:
+            emails.append((ContactEmail.EmailType.OTHER, ev))
+    
+    # custom_fields_values для телефонов/почт/должности/примечаний
+    custom_fields = ac.get("custom_fields_values") or []
+    # ОТЛАДКА: логируем структуру custom_fields для первых контактов
+    if debug_count_for_extraction < 3:
+        logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
+        logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}")
+        logger.debug(f"  - ac.get('custom_fields_values'): {ac.get('custom_fields_values')}")
+        # Логируем ВСЕ ключи контакта для поиска примечаний
+        if isinstance(ac, dict):
+            all_keys = list(ac.keys())
+            logger.debug(f"  - ALL contact keys: {all_keys}")
+            # Проверяем наличие полей, которые могут содержать примечания
+            for key in ["note", "notes", "comment", "comments", "remark", "remarks", "_embedded"]:
+                if key in ac:
+                    logger.debug(f"  - Found key '{key}': {str(ac.get(key))[:200]}")
+        # Логируем уже найденное примечание (если есть)
+        if note_text:
+            logger.debug(f"  - Already found note_text from direct fields: {note_text[:100]}")
+    
+    for cf_idx, cf in enumerate(custom_fields):
+        if not isinstance(cf, dict):
+            if debug_count_for_extraction < 3:
+                logger.debug(f"  - [field {cf_idx}] Skipped: not a dict, type={type(cf)}")
+            continue
+        field_id = int(cf.get("field_id") or 0)
+        # ВАЖНО: в amoCRM используется field_code (не code) и field_name (не name)
+        field_code = str(cf.get("field_code") or "").upper()  # PHONE, EMAIL в верхнем регистре
+        field_name = str(cf.get("field_name") or "").lower()  # "телефон", "должность"
+        field_type = str(cf.get("field_type") or "").lower()  # "multitext", "text", "date"
+        values = cf.get("values") or []
+        if not isinstance(values, list):
+            if debug_count_for_extraction < 3:
+                logger.debug(f"  - [field {cf_idx}] Skipped: values not a list, type={type(values)}")
+            continue
+        
+        if debug_count_for_extraction < 3:
+            logger.debug(f"  - [field {cf_idx}] field_id={field_id}, field_code={field_code}, field_name={field_name}, field_type={field_type}, values_count={len(values)}")
+        
+        for v_idx, v in enumerate(values):
+            # Согласно документации AmoCRM API v4:
+            # Значение может быть dict с полями: value, enum_id, enum_code
+            # Также может быть поле "enum" (строка) для обратной совместимости
+            if isinstance(v, dict):
+                # value может быть строкой, числом или объектом (для сложных типов)
+                value_raw = v.get("value")
+                if value_raw is None:
+                    continue
+                # Преобразуем value в строку (для телефонов/email это всегда строка)
+                if isinstance(value_raw, (str, int, float)):
+                    val = str(value_raw).strip()
+                elif isinstance(value_raw, dict):
+                    # Для сложных типов (например, связь с другими сущностями)
+                    # Пытаемся извлечь текстовое представление
+                    val = str(value_raw.get("value") or value_raw.get("name") or str(value_raw)).strip()
+                else:
+                    val = str(value_raw).strip()
+                
+                # enum_id - числовой идентификатор enum
+                enum_id = v.get("enum_id")
+                
+                # enum_code - строковый код enum (WORK, MOBILE и т.д.)
+                # Также проверяем поле "enum" для обратной совместимости
+                enum_code = v.get("enum_code") or v.get("enum")
+                if enum_code and not isinstance(enum_code, str):
+                    enum_code = str(enum_code)
+            elif isinstance(v, str):
+                val = v.strip()
+                enum_id = None
+                enum_code = None
+            else:
+                val = str(v).strip() if v else ""
+                enum_id = None
+                enum_code = None
+            
+            if not val:
+                continue
+            
+            # Телефоны: проверяем field_code="PHONE" или field_name содержит "телефон"
+            # В amoCRM field_type для телефонов обычно "multitext"
+            is_phone = (field_code == "PHONE" or 
+                       "телефон" in field_name)
+            # Email: проверяем field_code="EMAIL" или field_name содержит "email"/"почта"
+            is_email = (field_code == "EMAIL" or
+                       "email" in field_name or "почта" in field_name or "e-mail" in field_name)
+            # Должность: проверяем field_code="POSITION" или field_name содержит "должность"/"позиция"
+            is_position = (field_code == "POSITION" or
+                          "должность" in field_name or "позиция" in field_name)
+            # Холодный звонок: проверяем field_id=448321 (из примера), field_name и field_type="date"
+            is_cold_call_date = (
+                field_id == 448321 or  # Известный ID поля "Холодный звонок" из примера
+                (field_type == "date" and ("холодный" in field_name and "звонок" in field_name))
+            )
+            # День рождения: проверяем field_type="birthday" или field_name содержит "день рождения"/"birthday"
+            is_birthday = (
+                field_type == "birthday" or
+                ("день" in field_name and "рождени" in field_name) or
+                "birthday" in field_name.lower()
+            )
+            # Примечание/Комментарий (текстовое поле)
+            # Проверяем field_id=366537 (из примера), field_name, и field_code для большей надежности
+            is_note = (
+                field_id == 366537 or  # Известный ID поля "Примечание" из примера
+                any(k in field_name for k in ["примеч", "комментар", "коммент", "заметк"]) or
+                any(k in str(field_code or "").upper() for k in ["NOTE", "COMMENT", "REMARK"])
+            )
+            
+            if debug_count_for_extraction < 3:
+                logger.debug(f"    [value {v_idx}] val={val[:50]}, is_phone={is_phone}, is_email={is_email}, is_position={is_position}, is_cold_call_date={is_cold_call_date}, is_birthday={is_birthday}, is_note={is_note}")
+            
+            if is_phone:
+                # Определяем тип телефона:
+                # 1. По enum_code (WORK/MOBILE/...)
+                # 2. По названию поля (если содержит "раб" - WORK, "моб" - MOBILE)
+                t = str(enum_code or "").upper()
+                field_name_lower = field_name.lower()
+                
+                if t in ("WORK", "WORKDD", "WORK_DIRECT") or "раб" in field_name_lower:
+                    ptype = ContactPhone.PhoneType.WORK
+                elif t in ("MOBILE", "CELL") or "моб" in field_name_lower:
+                    ptype = ContactPhone.PhoneType.MOBILE
+                elif t == "HOME" or "дом" in field_name_lower:
+                    ptype = ContactPhone.PhoneType.HOME
+                elif t == "FAX" or "факс" in field_name_lower:
+                    ptype = ContactPhone.PhoneType.FAX
+                else:
+                    ptype = ContactPhone.PhoneType.OTHER
+                
+                # Парсим значение: может быть многострочным с комментарием
+                # Формат: "номер\nкомментарий" или "номер\nвремя - комментарий"
+                val_lines = [line.strip() for line in str(val).split("\n") if line.strip()]
+                if val_lines:
+                    # Первая строка - номер телефона
+                    phone_number = val_lines[0]
+                    # Остальные строки - комментарий (регион/город)
+                    phone_comment_parts = []
+                    for line in val_lines[1:]:
+                        # Убираем временные метки типа "22:05 - " или "20:05 - "
+                        line_clean = line
+                        # Паттерн: "время - текст" -> "текст"
+                        time_pattern = r'^\d{1,2}:\d{2}\s*-\s*'
+                        line_clean = re.sub(time_pattern, '', line_clean, flags=re.IGNORECASE)
+                        if line_clean.strip():
+                            phone_comment_parts.append(line_clean.strip())
                     
-                    # Стандартные поля (если есть)
-                    if ac.get("phone"):
-                        for pv in _split_multi(str(ac.get("phone"))):
-                            phones.append((ContactPhone.PhoneType.OTHER, pv, ""))
-                    if ac.get("email"):
-                        ev = str(ac.get("email")).strip()
-                        if ev:
-                            emails.append((ContactEmail.EmailType.OTHER, ev))
+                    phone_comment = " | ".join(phone_comment_parts) if phone_comment_parts else ""
                     
-                    # custom_fields_values для телефонов/почт/должности/примечаний
-                    custom_fields = ac.get("custom_fields_values") or []
-                    # ОТЛАДКА: логируем структуру custom_fields для первых контактов
+                    # Если комментарий пустой, используем enum_code как fallback
+                    if not phone_comment and enum_code:
+                        phone_comment = str(enum_code)
+                    
+                    # Разбиваем номер на несколько, если есть запятые/точки с запятой
+                    for pv in _split_multi(phone_number):
+                        if pv:  # Проверяем, что номер не пустой
+                            phones.append((ptype, pv, phone_comment))
+                    
                     if debug_count_for_extraction < 3:
-                        logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
-                        logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}")
-                        logger.debug(f"  - ac.get('custom_fields_values'): {ac.get('custom_fields_values')}")
-                        # Логируем ВСЕ ключи контакта для поиска примечаний
-                        if isinstance(ac, dict):
-                            all_keys = list(ac.keys())
-                            logger.debug(f"  - ALL contact keys: {all_keys}")
-                            # Проверяем наличие полей, которые могут содержать примечания
-                            for key in ["note", "notes", "comment", "comments", "remark", "remarks", "_embedded"]:
-                                if key in ac:
-                                    logger.debug(f"  - Found key '{key}': {str(ac.get(key))[:200]}")
-                        # Логируем уже найденное примечание (если есть)
-                        if note_text:
-                            logger.debug(f"  - Already found note_text from direct fields: {note_text[:100]}")
-                    
-                    for cf_idx, cf in enumerate(custom_fields):
-                        if not isinstance(cf, dict):
+                        logger.debug(f"      -> Added phone: {phone_number} (type={ptype}, comment='{phone_comment}')")
+                else:
+                    # Fallback: если нет строк, используем старое поведение
+                    for pv in _split_multi(val):
+                        if pv:
+                            comment = str(enum_code or "")
+                            phones.append((ptype, pv, comment))
                             if debug_count_for_extraction < 3:
-                                logger.debug(f"  - [field {cf_idx}] Skipped: not a dict, type={type(cf)}")
-                            continue
-                        field_id = int(cf.get("field_id") or 0)
-                        # ВАЖНО: в amoCRM используется field_code (не code) и field_name (не name)
-                        field_code = str(cf.get("field_code") or "").upper()  # PHONE, EMAIL в верхнем регистре
-                        field_name = str(cf.get("field_name") or "").lower()  # "телефон", "должность"
-                        field_type = str(cf.get("field_type") or "").lower()  # "multitext", "text", "date"
-                        values = cf.get("values") or []
-                        if not isinstance(values, list):
-                            if debug_count_for_extraction < 3:
-                                logger.debug(f"  - [field {cf_idx}] Skipped: values not a list, type={type(values)}")
-                            continue
-                        
+                                logger.debug(f"      -> Added phone (fallback): {pv} (type={ptype}, comment='{comment}')")
+            elif is_email:
+                # Определяем тип email:
+                # 1. По enum_code (WORK/PRIV/...)
+                # 2. По названию поля (если содержит "раб" - WORK, "личн" - PERSONAL)
+                t = str(enum_code or "").upper()
+                field_name_lower = field_name.lower()
+                
+                if t in ("WORK",) or "раб" in field_name_lower:
+                    etype = ContactEmail.EmailType.WORK
+                elif t in ("PRIV", "PERSONAL", "HOME") or "личн" in field_name_lower or "персон" in field_name_lower:
+                    etype = ContactEmail.EmailType.PERSONAL
+                else:
+                    etype = ContactEmail.EmailType.OTHER
+                
+                # Email обычно в одной строке, но может быть несколько через запятую
+                for ev in _split_multi(val):
+                    if ev and "@" in ev:  # Проверяем, что это похоже на email
+                        emails.append((etype, ev))
                         if debug_count_for_extraction < 3:
-                            logger.debug(f"  - [field {cf_idx}] field_id={field_id}, field_code={field_code}, field_name={field_name}, field_type={field_type}, values_count={len(values)}")
-                        
-                        for v_idx, v in enumerate(values):
-                            # Согласно документации AmoCRM API v4:
-                            # Значение может быть dict с полями: value, enum_id, enum_code
-                            # Также может быть поле "enum" (строка) для обратной совместимости
-                            if isinstance(v, dict):
-                                # value может быть строкой, числом или объектом (для сложных типов)
-                                value_raw = v.get("value")
-                                if value_raw is None:
-                                    continue
-                                # Преобразуем value в строку (для телефонов/email это всегда строка)
-                                if isinstance(value_raw, (str, int, float)):
-                                    val = str(value_raw).strip()
-                                elif isinstance(value_raw, dict):
-                                    # Для сложных типов (например, связь с другими сущностями)
-                                    # Пытаемся извлечь текстовое представление
-                                    val = str(value_raw.get("value") or value_raw.get("name") or str(value_raw)).strip()
-                                else:
-                                    val = str(value_raw).strip()
-                                
-                                # enum_id - числовой идентификатор enum
-                                enum_id = v.get("enum_id")
-                                
-                                # enum_code - строковый код enum (WORK, MOBILE и т.д.)
-                                # Также проверяем поле "enum" для обратной совместимости
-                                enum_code = v.get("enum_code") or v.get("enum")
-                                if enum_code and not isinstance(enum_code, str):
-                                    enum_code = str(enum_code)
-                            elif isinstance(v, str):
-                                val = v.strip()
-                                enum_id = None
-                                enum_code = None
-                            else:
-                                val = str(v).strip() if v else ""
-                                enum_id = None
-                                enum_code = None
-                            
-                            if not val:
-                                continue
-                            
-                            # Телефоны: проверяем field_code="PHONE" или field_name содержит "телефон"
-                            # В amoCRM field_type для телефонов обычно "multitext"
-                            is_phone = (field_code == "PHONE" or 
-                                       "телефон" in field_name)
-                            # Email: проверяем field_code="EMAIL" или field_name содержит "email"/"почта"
-                            is_email = (field_code == "EMAIL" or
-                                       "email" in field_name or "почта" in field_name or "e-mail" in field_name)
-                            # Должность: проверяем field_code="POSITION" или field_name содержит "должность"/"позиция"
-                            is_position = (field_code == "POSITION" or
-                                          "должность" in field_name or "позиция" in field_name)
-                            # Холодный звонок: проверяем field_id=448321 (из примера), field_name и field_type="date"
-                            is_cold_call_date = (
-                                field_id == 448321 or  # Известный ID поля "Холодный звонок" из примера
-                                (field_type == "date" and ("холодный" in field_name and "звонок" in field_name))
-                            )
-                            # День рождения: проверяем field_type="birthday" или field_name содержит "день рождения"/"birthday"
-                            is_birthday = (
-                                field_type == "birthday" or
-                                ("день" in field_name and "рождени" in field_name) or
-                                "birthday" in field_name.lower()
-                            )
-                            # Примечание/Комментарий (текстовое поле)
-                            # Проверяем field_id=366537 (из примера), field_name, и field_code для большей надежности
-                            is_note = (
-                                field_id == 366537 or  # Известный ID поля "Примечание" из примера
-                                any(k in field_name for k in ["примеч", "комментар", "коммент", "заметк"]) or
-                                any(k in str(field_code or "").upper() for k in ["NOTE", "COMMENT", "REMARK"])
-                            )
-                            
-                            if debug_count_for_extraction < 3:
-                                logger.debug(f"    [value {v_idx}] val={val[:50]}, is_phone={is_phone}, is_email={is_email}, is_position={is_position}, is_cold_call_date={is_cold_call_date}, is_birthday={is_birthday}, is_note={is_note}")
-                            
-                            if is_phone:
-                                # Определяем тип телефона:
-                                # 1. По enum_code (WORK/MOBILE/...)
-                                # 2. По названию поля (если содержит "раб" - WORK, "моб" - MOBILE)
-                                t = str(enum_code or "").upper()
-                                field_name_lower = field_name.lower()
-                                
-                                if t in ("WORK", "WORKDD", "WORK_DIRECT") or "раб" in field_name_lower:
-                                    ptype = ContactPhone.PhoneType.WORK
-                                elif t in ("MOBILE", "CELL") or "моб" in field_name_lower:
-                                    ptype = ContactPhone.PhoneType.MOBILE
-                                elif t == "HOME" or "дом" in field_name_lower:
-                                    ptype = ContactPhone.PhoneType.HOME
-                                elif t == "FAX" or "факс" in field_name_lower:
-                                    ptype = ContactPhone.PhoneType.FAX
-                                else:
-                                    ptype = ContactPhone.PhoneType.OTHER
-                                
-                                # Парсим значение: может быть многострочным с комментарием
-                                # Формат: "номер\nкомментарий" или "номер\nвремя - комментарий"
-                                val_lines = [line.strip() for line in str(val).split("\n") if line.strip()]
-                                if val_lines:
-                                    # Первая строка - номер телефона
-                                    phone_number = val_lines[0]
-                                    # Остальные строки - комментарий (регион/город)
-                                    phone_comment_parts = []
-                                    for line in val_lines[1:]:
-                                        # Убираем временные метки типа "22:05 - " или "20:05 - "
-                                        line_clean = line
-                                        # Паттерн: "время - текст" -> "текст"
-                                        time_pattern = r'^\d{1,2}:\d{2}\s*-\s*'
-                                        line_clean = re.sub(time_pattern, '', line_clean, flags=re.IGNORECASE)
-                                        if line_clean.strip():
-                                            phone_comment_parts.append(line_clean.strip())
-                                    
-                                    phone_comment = " | ".join(phone_comment_parts) if phone_comment_parts else ""
-                                    
-                                    # Если комментарий пустой, используем enum_code как fallback
-                                    if not phone_comment and enum_code:
-                                        phone_comment = str(enum_code)
-                                    
-                                    # Разбиваем номер на несколько, если есть запятые/точки с запятой
-                                    for pv in _split_multi(phone_number):
-                                        if pv:  # Проверяем, что номер не пустой
-                                            phones.append((ptype, pv, phone_comment))
-                                    
-                                    if debug_count_for_extraction < 3:
-                                        logger.debug(f"      -> Added phone: {phone_number} (type={ptype}, comment='{phone_comment}')")
-                                else:
-                                    # Fallback: если нет строк, используем старое поведение
-                                    for pv in _split_multi(val):
-                                        if pv:
-                                            comment = str(enum_code or "")
-                                            phones.append((ptype, pv, comment))
-                                            if debug_count_for_extraction < 3:
-                                                logger.debug(f"      -> Added phone (fallback): {pv} (type={ptype}, comment='{comment}')")
-                            elif is_email:
-                                # Определяем тип email:
-                                # 1. По enum_code (WORK/PRIV/...)
-                                # 2. По названию поля (если содержит "раб" - WORK, "личн" - PERSONAL)
-                                t = str(enum_code or "").upper()
-                                field_name_lower = field_name.lower()
-                                
-                                if t in ("WORK",) or "раб" in field_name_lower:
-                                    etype = ContactEmail.EmailType.WORK
-                                elif t in ("PRIV", "PERSONAL", "HOME") or "личн" in field_name_lower or "персон" in field_name_lower:
-                                    etype = ContactEmail.EmailType.PERSONAL
-                                else:
-                                    etype = ContactEmail.EmailType.OTHER
-                                
-                                # Email обычно в одной строке, но может быть несколько через запятую
-                                for ev in _split_multi(val):
-                                    if ev and "@" in ev:  # Проверяем, что это похоже на email
-                                        emails.append((etype, ev))
-                                        if debug_count_for_extraction < 3:
-                                            logger.debug(f"      -> Added email: {ev} (type={etype})")
-                            elif is_position:
-                                if not position:
-                                    position = val
-                                    if debug_count_for_extraction < 3:
-                                        logger.debug(f"      -> Set position: {val}")
-                            elif is_note:
-                                # ВАЖНО: примечание из custom_fields имеет ПРИОРИТЕТ над заметками
-                                # Если уже есть note_text из заметок - проверяем, не служебная ли это заметка
-                                is_current_note_service = (
-                                    not note_text or 
-                                    "call_" in str(note_text).lower() or 
-                                    note_text.lower() in ["call_out", "call_in", "call", "amomail", "sms", "task"] or
-                                    len(str(note_text).strip()) < 10  # Очень короткие значения тоже подозрительны
-                                )
-                                
-                                if is_current_note_service or not note_text:
-                                    # Заменяем служебные заметки на реальное примечание из custom_fields
-                                    note_text = val[:255]
-                                    if debug_count_for_extraction < 3:
-                                        logger.debug(f"      -> Found note_text in custom_field (field_name='{field_name}', field_code='{field_code}'): {note_text[:100]}")
-                                        if is_current_note_service:
-                                            logger.debug(f"      -> Replaced service note '{note_text[:50]}' with real note from custom_field")
-                                else:
-                                    # Если уже есть нормальное примечание, добавляем через точку с запятой
-                                    combined = f"{note_text}; {val[:100]}"
-                                    note_text = combined[:255]
-                                    if debug_count_for_extraction < 3:
-                                        logger.debug(f"      -> Appended note_text from custom_field: {val[:100]}")
-                            elif is_cold_call_date:
-                                # Холодный звонок: val может быть timestamp (Unix timestamp) или числом
-                                # Сохраняем для последующей обработки (берем первое значение, если их несколько)
-                                if cold_call_timestamp is None:
-                                    try:
-                                        # Если val - это строка, пытаемся преобразовать в число
-                                        if isinstance(val, str):
-                                            cold_call_timestamp = int(float(val))
-                                        else:
-                                            cold_call_timestamp = int(float(val))
-                                        # Будем использовать это значение при создании/обновлении контакта
-                                        if debug_count_for_extraction < 3:
-                                            logger.debug(f"      -> Found cold call date: {cold_call_timestamp} (from field_id={field_id})")
-                                    except (ValueError, TypeError):
-                                        if debug_count_for_extraction < 3:
-                                            logger.debug(f"      -> Invalid cold call timestamp: {val}")
-                                        cold_call_timestamp = None
-                            elif is_birthday:
-                                # День рождения: val может быть timestamp (Unix timestamp) или числом
-                                # Сохраняем для последующей обработки (берем первое значение, если их несколько)
-                                if birthday_timestamp is None:
-                                    try:
-                                        # Если val - это строка, пытаемся преобразовать в число
-                                        if isinstance(val, str):
-                                            birthday_timestamp = int(float(val))
-                                        else:
-                                            birthday_timestamp = int(float(val))
-                                        # Сохраняем в raw_fields (пока нет поля в модели)
-                                        if debug_count_for_extraction < 3:
-                                            logger.debug(f"      -> Found birthday: {birthday_timestamp} (from field_id={field_id})")
-                                    except (ValueError, TypeError):
-                                        if debug_count_for_extraction < 3:
-                                            logger.debug(f"      -> Invalid birthday timestamp: {val}")
-                                        birthday_timestamp = None
-                    
-                    # Убираем дубликаты
-                    # Дедуп
-                    dedup_phones: list[tuple[str, str, str]] = []
-                    seen_p = set()
-                    for pt, pv, pc in phones:
-                        pv2 = str(pv or "").strip()
-                        if not pv2:
-                            continue
-                        if pv2 in seen_p:
-                            continue
-                        seen_p.add(pv2)
-                        dedup_phones.append((pt, pv2, str(pc or "")))
-                    phones = dedup_phones
-
-                    # Если есть одно общее примечание, а номеров несколько — пишем его в comment первого номера
-                    if note_text and phones:
-                        pt0, pv0, pc0 = phones[0]
-                        if not (pc0 or "").strip():
-                            phones[0] = (pt0, pv0, note_text[:255])
-                            if debug_count_for_extraction < 3:
-                                logger.debug(f"  -> Applied note_text to first phone: {note_text[:100]}")
-                    elif debug_count_for_extraction < 3 and not note_text:
-                        logger.debug(f"  -> ⚠️ No note_text found for contact {amo_contact_id} (checked direct fields and custom_fields)")
-
-                    dedup_emails: list[tuple[str, str]] = []
-                    seen_e = set()
-                    for et, ev in emails:
-                        ev2 = str(ev or "").strip().lower()
-                        if not ev2:
-                            continue
-                        if ev2 in seen_e:
-                            continue
-                        seen_e.add(ev2)
-                        dedup_emails.append((et, ev2))
-                    emails = dedup_emails
-                    
-                    # ОТЛАДКА: сохраняем сырые данные для анализа
-                    # Собираем информацию о том, где искали примечания
-                    note_search_info = []
-                    if isinstance(ac, dict):
-                        # Проверяем прямые поля
-                        for note_key in ["note", "notes", "comment", "comments", "remark", "remarks"]:
-                            if note_key in ac:
-                                note_search_info.append(f"direct:{note_key}={bool(ac.get(note_key))}")
-                        # Проверяем _embedded
-                        if "_embedded" in ac:
-                            embedded = ac.get("_embedded") or {}
-                            if isinstance(embedded, dict) and "notes" in embedded:
-                                notes_list = embedded.get("notes") or []
-                                notes_count = len(notes_list) if isinstance(notes_list, list) else 0
-                                if notes_count > 0:
-                                    note_search_info.append(f"_embedded.notes={notes_count}")
-                                    # Показываем типы заметок для отладки
-                                    note_types = []
-                                    for note_item in notes_list[:3]:  # первые 3
-                                        if isinstance(note_item, dict):
-                                            note_type = str(note_item.get("note_type") or "").strip()
-                                            if note_type:
-                                                note_types.append(note_type)
-                                    if note_types:
-                                        note_search_info.append(f"note_types:{','.join(note_types)}")
-                                    # Показываем, есть ли текст в заметках
-                                    has_text = False
-                                    for note_item in notes_list[:3]:
-                                        if isinstance(note_item, dict):
-                                            if note_item.get("text") or note_item.get("params", {}).get("text"):
-                                                has_text = True
-                                                break
-                                    if has_text:
-                                        note_search_info.append("notes_has_text=True")
-                                    else:
-                                        note_search_info.append("notes_has_text=False")
-                        # Проверяем custom_fields на наличие полей с примечаниями
-                        note_fields_in_custom = []
-                        all_custom_field_names = []  # Для отладки - показываем ВСЕ поля
-                        all_custom_fields_with_values = []  # Для отладки - показываем ВСЕ поля с их значениями
-                        for cf in custom_fields:
-                            if isinstance(cf, dict):
-                                field_id = cf.get("field_id")  # ВАЖНО: field_id может быть числом (366537)
-                                field_name = str(cf.get("field_name") or "").strip()
-                                field_code = str(cf.get("field_code") or "").strip()
-                                field_name_lower = field_name.lower()
-                                field_code_upper = field_code.upper()
-                                
-                                # Сохраняем все поля для отладки (включая field_id)
-                                all_custom_field_names.append(f"id={field_id} name={field_name} code={field_code}")
-                                
-                                # Сохраняем все поля с их значениями для отладки
-                                values = cf.get("values") or []
-                                if values and isinstance(values, list) and len(values) > 0:
-                                    first_val = values[0]
-                                    if isinstance(first_val, dict):
-                                        val_text = str(first_val.get("value", ""))[:100]
-                                    else:
-                                        val_text = str(first_val)[:100]
-                                    if val_text:
-                                        all_custom_fields_with_values.append(f"id={field_id} name={field_name} code={field_code} value={val_text[:50]}")
-                                
-                                # Проверяем на примечания (расширенный список ключевых слов)
-                                # Также проверяем field_id - возможно, примечание имеет конкретный ID (например, 366537)
-                                is_note_field = (
-                                    any(k in field_name_lower for k in ["примеч", "комментар", "коммент", "заметк", "note", "comment", "remark"]) or
-                                    any(k in field_code_upper for k in ["NOTE", "COMMENT", "REMARK", "NOTE_TEXT", "COMMENT_TEXT"]) or
-                                    (field_id and str(field_id) in ["366537"])  # Известные ID полей примечаний
-                                )
-                                
-                                if is_note_field:
-                                    note_fields_in_custom.append(f"id={field_id} name={field_name}({field_code})")
-                                    # Логируем значение этого поля
-                                    if values and isinstance(values, list) and len(values) > 0:
-                                        first_val = values[0]
-                                        if isinstance(first_val, dict):
-                                            val_text = str(first_val.get("value", ""))[:100]
-                                        else:
-                                            val_text = str(first_val)[:100]
-                                        if val_text:
-                                            note_text = val_text[:255]  # Устанавливаем примечание!
-                                            note_search_info.append(f"found_note_value:{val_text[:50]}")
-                                            if debug_count_for_extraction < 3:
-                                                logger.debug(f"  -> ✅ Found note_text in custom_field id={field_id} name={field_name}: {note_text[:100]}")
-                        
-                        # Добавляем информацию о всех полях для отладки
-                        if all_custom_field_names:
-                            note_search_info.append(f"all_fields:{','.join(all_custom_field_names)}")
-                        if note_fields_in_custom:
-                            note_search_info.append(f"note_fields:{','.join(note_fields_in_custom)}")
-                        elif debug_count_for_extraction < 3:
-                            # Если не нашли поля с примечаниями, логируем все поля
-                            logger.debug(f"  -> ⚠️ No note fields found in custom_fields. All fields: {all_custom_field_names}")
-                    
-                    # Обрабатываем данные о холодном звонке из amoCRM (ДО использования в contact_debug)
-                    cold_marked_at_dt = None
-                    if cold_call_timestamp:
-                        try:
-                            UTC = getattr(timezone, "UTC", dt_timezone.utc)
-                            cold_marked_at_dt = timezone.datetime.fromtimestamp(cold_call_timestamp, tz=UTC)
-                        except Exception:
-                            cold_marked_at_dt = None
-                    
-                    debug_data = {
-                        "source": "amo_api",
-                        "amo_contact_id": amo_contact_id,
-                        "first_name": first_name,
-                        "last_name": last_name,
-                        "extracted_phones": phones,
-                        "extracted_emails": emails,
-                        "extracted_position": position,
-                        "extracted_note_text": note_text,  # Добавляем note_text для отладки
-                        "extracted_cold_call_timestamp": cold_call_timestamp,  # Timestamp холодного звонка
-                        "extracted_birthday_timestamp": birthday_timestamp,  # Timestamp дня рождения
-                        "note_search_info": note_search_info,  # Где искали примечания
-                        "custom_fields_count": len(custom_fields),
-                        "custom_fields_sample": custom_fields if dry_run else (custom_fields[:3] if custom_fields else []),  # В dry-run показываем все поля
-                        "has_phone_field": bool(ac.get("phone")),
-                        "has_email_field": bool(ac.get("email")),
-                    }
-                    
-                    # ПОЛНЫЙ АНАЛИЗ КОНТАКТА для dry-run
-                    # Используем новую функцию для извлечения ВСЕХ полей
-                    debug_count = getattr(res, '_debug_contacts_logged', 0)
-                    if res.contacts_preview is None:
-                        res.contacts_preview = []
-                    
-                    # В dry-run показываем ВСЕ контакты (до 1000), чтобы видеть все проблемы
-                    preview_limit = 1000 if dry_run else 10
-                    logger.info(f"migrate_filtered: обработка контакта {amo_contact_id}: debug_count={debug_count}, preview_limit={preview_limit}, local_company={'найдена' if local_company else 'не найдена'}")
-                    if debug_count < preview_limit:
-                        # Полный анализ контакта
-                        full_analysis = _analyze_contact_completely(ac)
-                        
-                        # Формируем понятный отчет для dry-run
-                        contact_debug = {
-                            "status": "UPDATED" if existing_contact else "CREATED",
-                            "amo_contact_id": amo_contact_id,
-                            "company_name": local_company.name if local_company else None,
-                            "company_id": local_company.id if local_company else None,
-                            
-                            # Стандартные поля
-                            "standard_fields": full_analysis.get("standard_fields", {}),
-                            "first_name": first_name,
-                            "last_name": last_name,
-                            
-                            # Извлеченные данные (что будет импортировано)
-                            "extracted_phones": [
-                                {
-                                    "value": p[1],
-                                    "type": str(p[0]),
-                                    "comment": p[2],
-                                }
-                                for p in phones
-                            ],
-                            "extracted_emails": [
-                                {
-                                    "value": e[1],
-                                    "type": str(e[0]),
-                                }
-                                for e in emails
-                            ],
-                            "extracted_position": position,
-                            "extracted_note_text": note_text,
-                            "extracted_cold_call": cold_marked_at_dt.isoformat() if cold_marked_at_dt else None,
-                            "extracted_birthday": birthday_timestamp,  # Timestamp дня рождения (если есть)
-                            
-                            # ВСЕ кастомные поля (полная информация)
-                            "all_custom_fields": [
-                                {
-                                    "field_id": cf.get("field_id"),
-                                    "field_name": cf.get("field_name"),
-                                    "field_code": cf.get("field_code"),
-                                    "field_type": cf.get("field_type"),
-                                    "values_count": cf.get("values_count", 0),
-                                    "values": [
-                                        {
-                                            "value": str(v.get("value", "")),
-                                            "enum_code": v.get("enum_code"),
-                                            "enum_id": v.get("enum_id"),
-                                            "enum": v.get("enum"),
-                                        }
-                                        for v in cf.get("values", [])
-                                    ],
-                                    "is_used": (
-                                        cf.get("field_code", "").upper() in ["PHONE", "EMAIL", "POSITION"] or
-                                        any(k in (cf.get("field_name") or "").lower() for k in ["телефон", "почта", "email", "должность", "позиция", "примеч", "комментар", "холодный"])
-                                    ),
-                                }
-                                for cf in full_analysis.get("custom_fields", [])
-                            ],
-                            "custom_fields_count": len(full_analysis.get("custom_fields", [])),
-                            
-                            # Вложенные данные (_embedded)
-                            "embedded_tags": full_analysis.get("embedded_data", {}).get("tags", []),
-                            "embedded_companies": full_analysis.get("embedded_data", {}).get("companies", []),
-                            "embedded_leads": full_analysis.get("embedded_data", {}).get("leads", []),
-                            "embedded_customers": full_analysis.get("embedded_data", {}).get("customers", []),
-                            "embedded_notes": full_analysis.get("embedded_data", {}).get("notes", []),
-                            "embedded_notes_count": len(full_analysis.get("embedded_data", {}).get("notes", [])),
-                            
-                            # Метаинформация
-                            "all_contact_keys": full_analysis.get("all_keys", []),
-                            "note_search_info": note_search_info,
-                            
-                            # Полная структура для первых 3 контактов (для глубокой отладки)
-                            "full_structure": None,
-                        }
-                        
-                        # Сохраняем полную структуру для первых 3 контактов
-                        preview_count = len(res.contacts_preview) if res.contacts_preview else 0
-                        if preview_count < 3 and isinstance(ac, dict):
-                            import json
-                            try:
-                                # Сохраняем полную структуру (ограничиваем размер для UI)
-                                contact_debug["full_structure"] = json.dumps(ac, ensure_ascii=False, indent=2)[:5000]
-                            except Exception as e:
-                                contact_debug["full_structure"] = f"JSON error: {e}\n{str(ac)[:2000]}"
-                        
-                        res.contacts_preview.append(contact_debug)
-                        res._debug_contacts_logged = debug_count + 1
-                        logger.info(f"migrate_filtered: ✅ контакт {amo_contact_id} добавлен в preview (всего в preview: {len(res.contacts_preview)})")
-                        
-                        # ОТЛАДКА: логируем, что добавили в preview
-                        if preview_count < 3:
-                            logger.debug(f"Added contact {amo_contact_id} to preview (count: {debug_count + 1}):")
-                            logger.debug(f"  - phones_found: {phones}")
-                            logger.debug(f"  - emails_found: {emails}")
-                            logger.debug(f"  - position_found: {position}")
-                            logger.debug(f"  - note_text_found: {note_text}")
-                            logger.debug(f"  - custom_fields_count: {len(full_analysis.get('custom_fields', []))}")
-                            logger.debug(f"  - all_custom_fields: {len(contact_debug.get('all_custom_fields', []))}")
-                    else:
-                        logger.info(f"migrate_filtered: ⚠️ контакт {amo_contact_id} НЕ добавлен в preview (превышен лимит: {debug_count} >= {preview_limit})")
-                    
-                    # Также логируем в консоль для первых контактов
-                    if contacts_processed <= 3:
-                        logger.debug(f"Contact {amo_contact_id}:")
-                        logger.debug(f"  - first_name: {first_name}")
-                        logger.debug(f"  - last_name: {last_name}")
-                        logger.debug(f"  - phones found: {phones}")
-                        logger.debug(f"  - emails found: {emails}")
-                        logger.debug(f"  - position found: {position}")
-                        logger.debug(f"  - note_text found: {note_text}")
-                        logger.debug(f"  - custom_fields_values count: {len(custom_fields)}")
-                        if custom_fields:
-                            logger.debug(f"  - custom_fields sample (first 3):")
-                            for idx, cf in enumerate(custom_fields[:3]):
-                                logger.debug(f"    [{idx}] field_id={cf.get('field_id')}, code={cf.get('code')}, name={cf.get('name')}, type={cf.get('type')}, values={cf.get('values')}")
+                            logger.debug(f"      -> Added email: {ev} (type={etype})")
+            elif is_position:
+                if not position:
+                    position = val
+                    if debug_count_for_extraction < 3:
+                        logger.debug(f"      -> Set position: {val}")
+            elif is_note:
+                # ВАЖНО: примечание из custom_fields имеет ПРИОРИТЕТ над заметками
+                # Если уже есть note_text из заметок - проверяем, не служебная ли это заметка
+                is_current_note_service = (
+                    not note_text or 
+                    "call_" in str(note_text).lower() or 
+                    note_text.lower() in ["call_out", "call_in", "call", "amomail", "sms", "task"] or
+                    len(str(note_text).strip()) < 10  # Очень короткие значения тоже подозрительны
+                )
+                
+                if is_current_note_service or not note_text:
+                    # Заменяем служебные заметки на реальное примечание из custom_fields
+                    note_text = val[:255]
+                    if debug_count_for_extraction < 3:
+                        logger.debug(f"      -> Found note_text in custom_field (field_name='{field_name}', field_code='{field_code}'): {note_text[:100]}")
+                        if is_current_note_service:
+                            logger.debug(f"      -> Replaced service note '{note_text[:50]}' with real note from custom_field")
+                else:
+                    # Если уже есть нормальное примечание, добавляем через точку с запятой
+                    combined = f"{note_text}; {val[:100]}"
+                    note_text = combined[:255]
+                    if debug_count_for_extraction < 3:
+                        logger.debug(f"      -> Appended note_text from custom_field: {val[:100]}")
+            elif is_cold_call_date:
+                # Холодный звонок: val может быть timestamp (Unix timestamp) или числом
+                # Сохраняем для последующей обработки (берем первое значение, если их несколько)
+                if cold_call_timestamp is None:
+                    try:
+                        # Если val - это строка, пытаемся преобразовать в число
+                        if isinstance(val, str):
+                            cold_call_timestamp = int(float(val))
                         else:
-                            logger.debug(f"  - ⚠️ custom_fields_values пуст или отсутствует")
-                        logger.debug(f"  - raw contact top-level keys: {list(ac.keys())[:15] if isinstance(ac, dict) else 'not_dict'}")
-                        logger.debug(f"  - has phone field: {bool(ac.get('phone')) if isinstance(ac, dict) else False}")
-                        logger.debug(f"  - has email field: {bool(ac.get('email')) if isinstance(ac, dict) else False}")
+                            cold_call_timestamp = int(float(val))
+                        # Будем использовать это значение при создании/обновлении контакта
+                        if debug_count_for_extraction < 3:
+                            logger.debug(f"      -> Found cold call date: {cold_call_timestamp} (from field_id={field_id})")
+                    except (ValueError, TypeError):
+                        if debug_count_for_extraction < 3:
+                            logger.debug(f"      -> Invalid cold call timestamp: {val}")
+                        cold_call_timestamp = None
+            elif is_birthday:
+                # День рождения: val может быть timestamp (Unix timestamp) или числом
+                # Сохраняем для последующей обработки (берем первое значение, если их несколько)
+                if birthday_timestamp is None:
+                    try:
+                        # Если val - это строка, пытаемся преобразовать в число
+                        if isinstance(val, str):
+                            birthday_timestamp = int(float(val))
+                        else:
+                            birthday_timestamp = int(float(val))
+                        # Сохраняем в raw_fields (пока нет поля в модели)
+                        if debug_count_for_extraction < 3:
+                            logger.debug(f"      -> Found birthday: {birthday_timestamp} (from field_id={field_id})")
+                    except (ValueError, TypeError):
+                        if debug_count_for_extraction < 3:
+                            logger.debug(f"      -> Invalid birthday timestamp: {val}")
+                        birthday_timestamp = None
+    
+    # Убираем дубликаты
+    # Дедуп
+    dedup_phones: list[tuple[str, str, str]] = []
+    seen_p = set()
+    for pt, pv, pc in phones:
+        pv2 = str(pv or "").strip()
+        if not pv2:
+            continue
+        if pv2 in seen_p:
+            continue
+        seen_p.add(pv2)
+        dedup_phones.append((pt, pv2, str(pc or "")))
+    phones = dedup_phones
+
+    # Если есть одно общее примечание, а номеров несколько — пишем его в comment первого номера
+    if note_text and phones:
+        pt0, pv0, pc0 = phones[0]
+        if not (pc0 or "").strip():
+            phones[0] = (pt0, pv0, note_text[:255])
+            if debug_count_for_extraction < 3:
+                logger.debug(f"  -> Applied note_text to first phone: {note_text[:100]}")
+    elif debug_count_for_extraction < 3 and not note_text:
+        logger.debug(f"  -> ⚠️ No note_text found for contact {amo_contact_id} (checked direct fields and custom_fields)")
+
+    dedup_emails: list[tuple[str, str]] = []
+    seen_e = set()
+    for et, ev in emails:
+        ev2 = str(ev or "").strip().lower()
+        if not ev2:
+            continue
+        if ev2 in seen_e:
+            continue
+        seen_e.add(ev2)
+        dedup_emails.append((et, ev2))
+    emails = dedup_emails
+    
+    # ОТЛАДКА: сохраняем сырые данные для анализа
+    # Собираем информацию о том, где искали примечания
+    note_search_info = []
+    if isinstance(ac, dict):
+        # Проверяем прямые поля
+        for note_key in ["note", "notes", "comment", "comments", "remark", "remarks"]:
+            if note_key in ac:
+                note_search_info.append(f"direct:{note_key}={bool(ac.get(note_key))}")
+        # Проверяем _embedded
+        if "_embedded" in ac:
+            embedded = ac.get("_embedded") or {}
+            if isinstance(embedded, dict) and "notes" in embedded:
+                notes_list = embedded.get("notes") or []
+                notes_count = len(notes_list) if isinstance(notes_list, list) else 0
+                if notes_count > 0:
+                    note_search_info.append(f"_embedded.notes={notes_count}")
+                    # Показываем типы заметок для отладки
+                    note_types = []
+                    for note_item in notes_list[:3]:  # первые 3
+                        if isinstance(note_item, dict):
+                            note_type = str(note_item.get("note_type") or "").strip()
+                            if note_type:
+                                note_types.append(note_type)
+                    if note_types:
+                        note_search_info.append(f"note_types:{','.join(note_types)}")
+                    # Показываем, есть ли текст в заметках
+                    has_text = False
+                    for note_item in notes_list[:3]:
+                        if isinstance(note_item, dict):
+                            if note_item.get("text") or note_item.get("params", {}).get("text"):
+                                has_text = True
+                                break
+                    if has_text:
+                        note_search_info.append("notes_has_text=True")
+                    else:
+                        note_search_info.append("notes_has_text=False")
+        # Проверяем custom_fields на наличие полей с примечаниями
+        note_fields_in_custom = []
+        all_custom_field_names = []  # Для отладки - показываем ВСЕ поля
+        all_custom_fields_with_values = []  # Для отладки - показываем ВСЕ поля с их значениями
+        for cf in custom_fields:
+            if isinstance(cf, dict):
+                field_id = cf.get("field_id")  # ВАЖНО: field_id может быть числом (366537)
+                field_name = str(cf.get("field_name") or "").strip()
+                field_code = str(cf.get("field_code") or "").strip()
+                field_name_lower = field_name.lower()
+                field_code_upper = field_code.upper()
+                
+                # Сохраняем все поля для отладки (включая field_id)
+                all_custom_field_names.append(f"id={field_id} name={field_name} code={field_code}")
+                
+                # Сохраняем все поля с их значениями для отладки
+                values = cf.get("values") or []
+                if values and isinstance(values, list) and len(values) > 0:
+                    first_val = values[0]
+                    if isinstance(first_val, dict):
+                        val_text = str(first_val.get("value", ""))[:100]
+                    else:
+                        val_text = str(first_val)[:100]
+                    if val_text:
+                        all_custom_fields_with_values.append(f"id={field_id} name={field_name} code={field_code} value={val_text[:50]}")
+                
+                # Проверяем на примечания (расширенный список ключевых слов)
+                # Также проверяем field_id - возможно, примечание имеет конкретный ID (например, 366537)
+                is_note_field = (
+                    any(k in field_name_lower for k in ["примеч", "комментар", "коммент", "заметк", "note", "comment", "remark"]) or
+                    any(k in field_code_upper for k in ["NOTE", "COMMENT", "REMARK", "NOTE_TEXT", "COMMENT_TEXT"]) or
+                    (field_id and str(field_id) in ["366537"])  # Известные ID полей примечаний
+                )
+                
+                if is_note_field:
+                    note_fields_in_custom.append(f"id={field_id} name={field_name}({field_code})")
+                    # Логируем значение этого поля
+                    if values and isinstance(values, list) and len(values) > 0:
+                        first_val = values[0]
+                        if isinstance(first_val, dict):
+                            val_text = str(first_val.get("value", ""))[:100]
+                        else:
+                            val_text = str(first_val)[:100]
+                        if val_text:
+                            note_text = val_text[:255]  # Устанавливаем примечание!
+                            note_search_info.append(f"found_note_value:{val_text[:50]}")
+                            if debug_count_for_extraction < 3:
+                                logger.debug(f"  -> ✅ Found note_text in custom_field id={field_id} name={field_name}: {note_text[:100]}")
+        
+        # Добавляем информацию о всех полях для отладки
+        if all_custom_field_names:
+            note_search_info.append(f"all_fields:{','.join(all_custom_field_names)}")
+        if note_fields_in_custom:
+            note_search_info.append(f"note_fields:{','.join(note_fields_in_custom)}")
+        elif debug_count_for_extraction < 3:
+            # Если не нашли поля с примечаниями, логируем все поля
+            logger.debug(f"  -> ⚠️ No note fields found in custom_fields. All fields: {all_custom_field_names}")
+    
+    # Обрабатываем данные о холодном звонке из amoCRM (ДО использования в contact_debug)
+    cold_marked_at_dt = None
+    if cold_call_timestamp:
+        try:
+            UTC = getattr(timezone, "UTC", dt_timezone.utc)
+            cold_marked_at_dt = timezone.datetime.fromtimestamp(cold_call_timestamp, tz=UTC)
+        except Exception:
+            cold_marked_at_dt = None
+    
+    debug_data = {
+        "source": "amo_api",
+        "amo_contact_id": amo_contact_id,
+        "first_name": first_name,
+        "last_name": last_name,
+        "extracted_phones": phones,
+        "extracted_emails": emails,
+        "extracted_position": position,
+        "extracted_note_text": note_text,  # Добавляем note_text для отладки
+        "extracted_cold_call_timestamp": cold_call_timestamp,  # Timestamp холодного звонка
+        "extracted_birthday_timestamp": birthday_timestamp,  # Timestamp дня рождения
+        "note_search_info": note_search_info,  # Где искали примечания
+        "custom_fields_count": len(custom_fields),
+        "custom_fields_sample": custom_fields if dry_run else (custom_fields[:3] if custom_fields else []),  # В dry-run показываем все поля
+        "has_phone_field": bool(ac.get("phone")),
+        "has_email_field": bool(ac.get("email")),
+    }
+    
+    # ПОЛНЫЙ АНАЛИЗ КОНТАКТА для dry-run
+    # Используем новую функцию для извлечения ВСЕХ полей
+    debug_count = getattr(res, '_debug_contacts_logged', 0)
+    if res.contacts_preview is None:
+        res.contacts_preview = []
+    
+    # В dry-run показываем ВСЕ контакты (до 1000), чтобы видеть все проблемы
+    preview_limit = 1000 if dry_run else 10
+    logger.info(f"migrate_filtered: обработка контакта {amo_contact_id}: debug_count={debug_count}, preview_limit={preview_limit}, local_company={'найдена' if local_company else 'не найдена'}")
+    if debug_count < preview_limit:
+        # Полный анализ контакта
+        full_analysis = _analyze_contact_completely(ac)
+        
+        # Формируем понятный отчет для dry-run
+        contact_debug = {
+            "status": "UPDATED" if existing_contact else "CREATED",
+            "amo_contact_id": amo_contact_id,
+            "company_name": local_company.name if local_company else None,
+            "company_id": local_company.id if local_company else None,
+            
+            # Стандартные поля
+            "standard_fields": full_analysis.get("standard_fields", {}),
+            "first_name": first_name,
+            "last_name": last_name,
+            
+            # Извлеченные данные (что будет импортировано)
+            "extracted_phones": [
+                {
+                    "value": p[1],
+                    "type": str(p[0]),
+                    "comment": p[2],
+                }
+                for p in phones
+            ],
+            "extracted_emails": [
+                {
+                    "value": e[1],
+                    "type": str(e[0]),
+                }
+                for e in emails
+            ],
+            "extracted_position": position,
+            "extracted_note_text": note_text,
+            "extracted_cold_call": cold_marked_at_dt.isoformat() if cold_marked_at_dt else None,
+            "extracted_birthday": birthday_timestamp,  # Timestamp дня рождения (если есть)
+            
+            # ВСЕ кастомные поля (полная информация)
+            "all_custom_fields": [
+                {
+                    "field_id": cf.get("field_id"),
+                    "field_name": cf.get("field_name"),
+                    "field_code": cf.get("field_code"),
+                    "field_type": cf.get("field_type"),
+                    "values_count": cf.get("values_count", 0),
+                    "values": [
+                        {
+                            "value": str(v.get("value", "")),
+                            "enum_code": v.get("enum_code"),
+                            "enum_id": v.get("enum_id"),
+                            "enum": v.get("enum"),
+                        }
+                        for v in cf.get("values", [])
+                    ],
+                    "is_used": (
+                        cf.get("field_code", "").upper() in ["PHONE", "EMAIL", "POSITION"] or
+                        any(k in (cf.get("field_name") or "").lower() for k in ["телефон", "почта", "email", "должность", "позиция", "примеч", "комментар", "холодный"])
+                    ),
+                }
+                for cf in full_analysis.get("custom_fields", [])
+            ],
+            "custom_fields_count": len(full_analysis.get("custom_fields", [])),
+            
+            # Вложенные данные (_embedded)
+            "embedded_tags": full_analysis.get("embedded_data", {}).get("tags", []),
+            "embedded_companies": full_analysis.get("embedded_data", {}).get("companies", []),
+            "embedded_leads": full_analysis.get("embedded_data", {}).get("leads", []),
+            "embedded_customers": full_analysis.get("embedded_data", {}).get("customers", []),
+            "embedded_notes": full_analysis.get("embedded_data", {}).get("notes", []),
+            "embedded_notes_count": len(full_analysis.get("embedded_data", {}).get("notes", [])),
+            
+            # Метаинформация
+            "all_contact_keys": full_analysis.get("all_keys", []),
+            "note_search_info": note_search_info,
+            
+            # Полная структура для первых 3 контактов (для глубокой отладки)
+            "full_structure": None,
+        }
+        
+        # Сохраняем полную структуру для первых 3 контактов
+        preview_count = len(res.contacts_preview) if res.contacts_preview else 0
+        if preview_count < 3 and isinstance(ac, dict):
+            import json
+            try:
+                # Сохраняем полную структуру (ограничиваем размер для UI)
+                contact_debug["full_structure"] = json.dumps(ac, ensure_ascii=False, indent=2)[:5000]
+            except Exception as e:
+                contact_debug["full_structure"] = f"JSON error: {e}\n{str(ac)[:2000]}"
+        
+        res.contacts_preview.append(contact_debug)
+        res._debug_contacts_logged = debug_count + 1
+        logger.info(f"migrate_filtered: ✅ контакт {amo_contact_id} добавлен в preview (всего в preview: {len(res.contacts_preview)})")
+        
+        # ОТЛАДКА: логируем, что добавили в preview
+        if preview_count < 3:
+            logger.debug(f"Added contact {amo_contact_id} to preview (count: {debug_count + 1}):")
+            logger.debug(f"  - phones_found: {phones}")
+            logger.debug(f"  - emails_found: {emails}")
+            logger.debug(f"  - position_found: {position}")
+            logger.debug(f"  - note_text_found: {note_text}")
+            logger.debug(f"  - custom_fields_count: {len(full_analysis.get('custom_fields', []))}")
+            logger.debug(f"  - all_custom_fields: {len(contact_debug.get('all_custom_fields', []))}")
+    else:
+        logger.info(f"migrate_filtered: ⚠️ контакт {amo_contact_id} НЕ добавлен в preview (превышен лимит: {debug_count} >= {preview_limit})")
+    
+    # Также логируем в консоль для первых контактов
+    if contacts_processed <= 3:
+        logger.debug(f"Contact {amo_contact_id}:")
+        logger.debug(f"  - first_name: {first_name}")
+        logger.debug(f"  - last_name: {last_name}")
+        logger.debug(f"  - phones found: {phones}")
+        logger.debug(f"  - emails found: {emails}")
+        logger.debug(f"  - position found: {position}")
+        logger.debug(f"  - note_text found: {note_text}")
+        logger.debug(f"  - custom_fields_values count: {len(custom_fields)}")
+        if custom_fields:
+            logger.debug(f"  - custom_fields sample (first 3):")
+            for idx, cf in enumerate(custom_fields[:3]):
+                logger.debug(f"    [{idx}] field_id={cf.get('field_id')}, code={cf.get('code')}, name={cf.get('name')}, type={cf.get('type')}, values={cf.get('values')}")
+        else:
+            logger.debug(f"  - ⚠️ custom_fields_values пуст или отсутствует")
+        logger.debug(f"  - raw contact top-level keys: {list(ac.keys())[:15] if isinstance(ac, dict) else 'not_dict'}")
+        logger.debug(f"  - has phone field: {bool(ac.get('phone')) if isinstance(ac, dict) else False}")
+        logger.debug(f"  - has email field: {bool(ac.get('email')) if isinstance(ac, dict) else False}")
                     
                     except Exception as e:
                         contacts_errors += 1
