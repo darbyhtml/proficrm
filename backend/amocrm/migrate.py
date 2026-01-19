@@ -1391,7 +1391,14 @@ def migrate_filtered(
                 structure_logged_count = 0
                 
                 # Теперь обрабатываем полные данные контактов
+                logger.debug(f"===== PROCESSING {len(full_contacts)} CONTACTS =====")
+                contacts_processed = 0
+                contacts_skipped = 0
                 for ac_idx, ac in enumerate(full_contacts):
+                    contacts_processed += 1
+                    if ac_idx < 5 or contacts_processed % 10 == 0:
+                        logger.debug(f"Processing contact {ac_idx + 1}/{len(full_contacts)} (processed: {contacts_processed}, skipped: {contacts_skipped})")
+                    
                     # ОТЛАДКА: логируем сырую структуру контакта для первых 3
                     if structure_logged_count < 3:
                         logger.debug(f"===== RAW CONTACT STRUCTURE ({structure_logged_count + 1}) [index {ac_idx}] =====")
@@ -2249,7 +2256,7 @@ def migrate_filtered(
                 logger.debug("Contact import error", exc_info=True)
                 pass
             finally:
-                logger.debug(f"===== CONTACT IMPORT FINISHED: created={res.contacts_created}, seen={res.contacts_seen} =====")
+                logger.debug(f"===== CONTACT IMPORT FINISHED: created={res.contacts_created}, seen={res.contacts_seen}, processed={contacts_processed}, skipped={contacts_skipped} =====")
         else:
             logger.debug(f"Contact import SKIPPED: import_contacts={import_contacts}, amo_ids={bool(amo_ids)}")
 
