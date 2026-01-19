@@ -1917,8 +1917,8 @@ def migrate_filtered(
                         # ОТЛАДКА: логируем начало обработки контакта
                         preview_count_before = len(res.contacts_preview) if res.contacts_preview else 0
                         if preview_count_before < 3:
-                        logger.debug(f"Processing contact {amo_contact_id} (parsed: last_name={last_name}, first_name={first_name})")
-                        logger.debug(f"  - raw: name={name_str}, first_name={first_name_raw}, last_name={last_name_raw}")
+                            logger.debug(f"Processing contact {amo_contact_id} (parsed: last_name={last_name}, first_name={first_name})")
+                            logger.debug(f"  - raw: name={name_str}, first_name={first_name_raw}, last_name={last_name_raw}")
                         logger.debug(f"  - local_company: {local_company.id if local_company else None}")
                         logger.debug(f"  - has custom_fields_values: {'custom_fields_values' in ac if isinstance(ac, dict) else False}")
                         if isinstance(ac, dict) and 'custom_fields_values' in ac:
