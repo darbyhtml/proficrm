@@ -4789,7 +4789,19 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: str 
     else:
         queryset = base_queryset
     
+    # Устанавливаем queryset
     form.fields["assigned_to"].queryset = queryset
+    
+    # Для администратора проверяем, что queryset действительно содержит всех пользователей
+    if user.role in (User.Role.GROUP_MANAGER, User.Role.ADMIN) or user.is_superuser:
+        import logging
+        logger = logging.getLogger(__name__)
+        final_qs = form.fields["assigned_to"].queryset
+        final_count = final_qs.count()
+        total_active = User.objects.filter(is_active=True).count()
+        # Проверяем, что queryset содержит пользователей из разных филиалов
+        branch_count = final_qs.values('branch_id').distinct().count()
+        logger.info(f"_set_assigned_to_queryset: Final queryset has {final_count} users (total active: {total_active}), {branch_count} branches")
 
 
 def _can_manage_task_status_ui(user: User, task: Task) -> bool:
