@@ -1258,8 +1258,8 @@ def migrate_filtered(
                 s = str(extra.get("worktime") or "").replace("–", "-").strip()
                 m = re.search(r"(\d{1,2})[:.](\d{2})\s*-\s*(\d{1,2})[:.](\d{2})", s)
                 if m:
-                        try:
-                            h1, m1, h2, m2 = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
+                    try:
+                        h1, m1, h2, m2 = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
                         if 0 <= h1 <= 23 and 0 <= h2 <= 23 and 0 <= m1 <= 59 and 0 <= m2 <= 59:
                             old_start = str(comp.workday_start) if comp.workday_start else ""
                             old_end = str(comp.workday_end) if comp.workday_end else ""
