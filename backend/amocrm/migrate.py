@@ -1533,11 +1533,24 @@ def migrate_filtered(
                         logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
                         logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}")
                         logger.debug(f"  - ac.get('custom_fields_values'): {ac.get('custom_fields_values')}")
-                        # Логируем ВСЕ поля для отладки
+                        # Логируем ВСЕ поля для отладки (чтобы увидеть, какие поля есть)
                         if isinstance(custom_fields, list):
+                            logger.debug(f"  - ALL custom_fields ({len(custom_fields)} fields):")
                             for cf_idx, cf in enumerate(custom_fields):
                                 if isinstance(cf, dict):
-                                    logger.debug(f"  - [field {cf_idx}] field_id={cf.get('field_id')}, field_code={cf.get('field_code')}, field_name={cf.get('field_name')}, field_type={cf.get('field_type')}, values={cf.get('values')}")
+                                    field_name = str(cf.get('field_name') or '').strip()
+                                    field_code = str(cf.get('field_code') or '').strip()
+                                    values = cf.get('values') or []
+                                    first_val = ""
+                                    if values and isinstance(values, list) and len(values) > 0:
+                                        v = values[0]
+                                        if isinstance(v, dict):
+                                            first_val = str(v.get('value', ''))[:100]
+                                        else:
+                                            first_val = str(v)[:100]
+                                    logger.debug(f"    [{cf_idx}] id={cf.get('field_id')}, code='{field_code}', name='{field_name}', type={cf.get('field_type')}, first_value='{first_val}'")
+                        else:
+                            logger.debug(f"  - ⚠️ custom_fields is not a list: {type(custom_fields)}")
                     
                     # ПРОВЕРЯЕМ ВСЕ ВОЗМОЖНЫЕ МЕСТА ДЛЯ ПРИМЕЧАНИЙ:
                     # 1. Прямые поля контакта (note, comments, comment) - редко используется
