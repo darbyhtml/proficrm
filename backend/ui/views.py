@@ -4491,6 +4491,14 @@ def task_create(request: HttpRequest) -> HttpResponse:
                         messages.error(request, "Можно назначать задачи только сотрудникам своего филиала.")
                         return redirect("task_create")
 
+            # Доп. ограничение: в списках исполнителей не должно быть ADMIN/GROUP_MANAGER,
+            # и назначать на них тоже нельзя.
+            if task.assigned_to and task.assigned_to.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+                if is_ajax:
+                    return JsonResponse({"ok": False, "error": "Нельзя назначать задачи администратору или управляющему компанией."}, status=400)
+                messages.error(request, "Нельзя назначать задачи администратору или управляющему компанией.")
+                return redirect("task_create")
+
             # Если включено "на все филиалы организации" — создаём копии по всем карточкам организации
             if apply_to_org and comp:
                 head = comp.head_company or comp
@@ -4663,15 +4671,6 @@ def task_create(request: HttpRequest) -> HttpResponse:
     # Ограничить назначаемых с группировкой по городам филиалов (как при передаче компании)
     # ВАЖНО: вызываем ПОСЛЕ создания формы, чтобы переустановить queryset
     _set_assigned_to_queryset(form, user)
-    
-    # Для администратора проверяем, что queryset содержит всех пользователей
-    if user.role in (User.Role.GROUP_MANAGER, User.Role.ADMIN) or user.is_superuser:
-        assigned_to_qs = form.fields["assigned_to"].queryset
-        total_users = User.objects.filter(is_active=True).count()
-        qs_count = assigned_to_qs.count()
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"Admin task_create: assigned_to queryset has {qs_count} users (total active: {total_users})")
 
     # Оптимизация queryset для типа задачи (используем only() для загрузки только необходимых полей)
     form.fields["type"].queryset = TaskType.objects.only("id", "name").order_by("name")
@@ -4717,31 +4716,40 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: str 
             # Очищаем значение через _clean_assigned_to_id
             current_user_id = _clean_assigned_to_id(assigned_to_value)
     
+    # Общие исключения для списков исполнителей:
+    # - не показываем "Без филиала" (branch is null)
+    # - не показываем пользователей с ролью ADMIN и GROUP_MANAGER
+    exclude_roles = (User.Role.ADMIN, User.Role.GROUP_MANAGER)
+
     # Устанавливаем queryset в зависимости от роли
     if user.role == User.Role.MANAGER:
         # Менеджер может назначать задачи только себе
-        base_queryset = User.objects.filter(id=user.id).select_related("branch").only("id", "first_name", "last_name", "branch__name")
+        base_queryset = User.objects.filter(id=user.id, is_active=True).select_related("branch")
     elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
-        # РОП и Директор филиала могут назначать задачи себе и менеджерам своего филиала
-        base_queryset = User.objects.filter(
-            Q(id=user.id) | Q(branch_id=user.branch_id, role=User.Role.MANAGER)
-        ).select_related("branch").only("id", "first_name", "last_name", "branch__name").order_by("branch__name", "last_name", "first_name")
+        # РОП и Директор филиала могут назначать задачи сотрудникам своего филиала
+        base_queryset = (
+            User.objects.filter(is_active=True, branch_id=user.branch_id)
+            .exclude(role__in=exclude_roles)
+            .select_related("branch")
+            .order_by("branch__name", "last_name", "first_name")
+        )
     elif user.role in (User.Role.GROUP_MANAGER, User.Role.ADMIN) or user.is_superuser:
-        # Управляющий и Администратор могут назначать задачи всем пользователям
-        # НЕ фильтруем по филиалу компании - администратор должен видеть всех
-        # ВАЖНО: не используем only(), чтобы не ограничивать поля, которые могут понадобиться виджету
-        base_queryset = User.objects.filter(is_active=True).select_related("branch").order_by("branch__name", "last_name", "first_name")
-        
-        # Логирование для отладки
-        import logging
-        logger = logging.getLogger(__name__)
-        qs_count = base_queryset.count()
-        total_active = User.objects.filter(is_active=True).count()
-        logger.info(f"_set_assigned_to_queryset: Admin queryset has {qs_count} users (total active: {total_active})")
+        # Управляющий и Администратор могут назначать задачи всем сотрудникам (кроме ADMIN/GROUP_MANAGER)
+        base_queryset = (
+            User.objects.filter(is_active=True)
+            .exclude(role__in=exclude_roles)
+            .exclude(branch__isnull=True)
+            .select_related("branch")
+            .order_by("branch__name", "last_name", "first_name")
+        )
     else:
         # Для остальных ролей используем get_transfer_targets (только менеджеры, директора, РОП)
         from companies.permissions import get_transfer_targets
-        base_queryset = get_transfer_targets(user)
+        base_queryset = (
+            get_transfer_targets(user)
+            .exclude(role__in=exclude_roles)
+            .exclude(branch__isnull=True)
+        )
     
     # Если есть выбранное значение и его нет в queryset, добавляем его
     if current_user_id:
@@ -4791,17 +4799,6 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: str 
     
     # Устанавливаем queryset
     form.fields["assigned_to"].queryset = queryset
-    
-    # Для администратора проверяем, что queryset действительно содержит всех пользователей
-    if user.role in (User.Role.GROUP_MANAGER, User.Role.ADMIN) or user.is_superuser:
-        import logging
-        logger = logging.getLogger(__name__)
-        final_qs = form.fields["assigned_to"].queryset
-        final_count = final_qs.count()
-        total_active = User.objects.filter(is_active=True).count()
-        # Проверяем, что queryset содержит пользователей из разных филиалов
-        branch_count = final_qs.values('branch_id').distinct().count()
-        logger.info(f"_set_assigned_to_queryset: Final queryset has {final_count} users (total active: {total_active}), {branch_count} branches")
 
 
 def _can_manage_task_status_ui(user: User, task: Task) -> bool:

@@ -139,13 +139,11 @@ class UserSelectWithBranchWidget(forms.Select):
             if str(option_value) in value_set:
                 has_selected = True
         
-        # Формируем optgroups (не скрываем "Без филиала", иначе часть сотрудников пропадает)
+        # Формируем optgroups. "Без филиала" НЕ показываем по требованию.
         group_index = 0
-        # Сортируем филиалы, но "Без филиала" отправляем в конец
+        # Сортируем филиалы, но исключаем "Без филиала"
         branch_names = [bn for bn in grouped.keys() if bn != "Без филиала"]
         branch_names.sort()
-        if "Без филиала" in grouped:
-            branch_names.append("Без филиала")
 
         for branch_name in branch_names:
             subgroup = []
