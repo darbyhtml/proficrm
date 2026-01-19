@@ -52,7 +52,7 @@
       </div>
       <div class="flex items-center gap-2 flex-wrap">
         {% if can_view_cold_call_reports %}
-          <button type="button" class="btn btn-outline" id="openColdDay" title="Отчёт по холодным звонкам за день" aria-label="Отчёт по холодным звонкам за день" style="min-height:38px">
+          <button type="button" class="btn btn-outline btn-min-h" id="openColdDay" title="Отчёт по холодным звонкам за день" aria-label="Отчёт по холодным звонкам за день">
             <span class="inline-flex items-center gap-2">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -60,7 +60,7 @@
               <span>ХЗ день</span>
             </span>
           </button>
-          <button type="button" class="btn btn-outline" id="openColdMonth" title="Отчёт по холодным звонкам за месяц" aria-label="Отчёт по холодным звонкам за месяц" style="min-height:38px">
+          <button type="button" class="btn btn-outline btn-min-h" id="openColdMonth" title="Отчёт по холодным звонкам за месяц" aria-label="Отчёт по холодным звонкам за месяц">
             <span class="inline-flex items-center gap-2">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M8 2v3M16 2v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -72,7 +72,7 @@
             </span>
           </button>
         {% endif %}
-        <a href="/companies/new/" class="btn btn-secondary" style="min-height:38px">
+        <a href="/companies/new/" class="btn btn-secondary btn-min-h">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
             <circle cx="9" cy="7" r="4"/>
@@ -80,7 +80,7 @@
           </svg>
           + Новая компания
         </a>
-        <button type="button" class="btn btn-primary" style="min-height:38px" data-create-task>+ Новая задача</button>
+        <button type="button" class="btn btn-primary btn-min-h" data-create-task>+ Новая задача</button>
       </div>
     </div>
 

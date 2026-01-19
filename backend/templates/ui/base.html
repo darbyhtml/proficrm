@@ -715,10 +715,10 @@
                   <div class="flex items-center justify-between">
                     <div class="font-medium">Уведомления</div>
                     <div class="flex items-center gap-2">
-                      <button id="notifEnableBrowser" type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" title="Разрешить уведомления браузера">Браузер</button>
+                      <button id="notifEnableBrowser" type="button" class="btn btn-outline btn-sm" title="Разрешить уведомления браузера">Браузер</button>
                       <form method="post" action="/notifications/mark-all-read/" id="notifMarkAllForm">
                         {% csrf_token %}
-                        <button class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" type="submit">Прочитано</button>
+                        <button class="btn btn-outline btn-sm" type="submit">Прочитано</button>
                       </form>
                     </div>
                   </div>
@@ -762,7 +762,7 @@
                           </div>
                           <form method="post" action="/notifications/{{ n.id }}/read/" class="js-notif-read-form">
                             {% csrf_token %}
-                            <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" type="submit" title="Отметить прочитанным">✓</button>
+                            <button class="btn btn-outline btn-sm" type="submit" title="Отметить прочитанным">✓</button>
                           </form>
                         </div>
                         {% if n.url %}
