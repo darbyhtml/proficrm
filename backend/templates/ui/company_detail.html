@@ -176,9 +176,9 @@
             <div class="text-brand-dark/50 flex items-center gap-2">
               <span>Договор</span>
               {% if contract_alert == 'danger' %}
-                <span class="badge badge-danger" style="padding:.1rem .35rem;font-size:.65rem">Срочно</span>
+                <span class="badge badge-danger badge-sm">Срочно</span>
               {% elif contract_alert == 'warn' %}
-                <span class="badge badge-warn" style="padding:.1rem .35rem;font-size:.65rem">Остался месяц</span>
+                <span class="badge badge-warn badge-sm">Остался месяц</span>
               {% endif %}
             </div>
             <div class="flex items-start justify-between gap-2">
@@ -211,7 +211,7 @@
                           type="submit"
                           class="btn btn-outline js-cold-mark"
                           data-cold-btn="primary"
-                          style="padding:.25rem .5rem;font-size:.75rem;"
+                          class="btn btn-outline btn-sm"
                           title="Отметить холодный звонок"
                           aria-label="Отметить холодный звонок"
                         >
@@ -228,7 +228,7 @@
                         <button
                           type="submit"
                           class="btn btn-outline"
-                          style="padding:.25rem .5rem;font-size:.75rem;background:#003D38;color:#fff;border-color:rgba(0,61,56,.35);"
+                          class="btn btn-outline btn-sm" style="background:#003D38;color:#fff;border-color:rgba(0,61,56,.35);"
                           title="Откатить отметку холодного звонка (только для администраторов)"
                           aria-label="Откатить отметку холодного звонка"
                           onclick="return confirm('Откатить отметку холодного звонка?');"
@@ -285,8 +285,8 @@
                   <div class="phone-comment-edit hidden mt-1">
                     <input type="text" class="input text-xs" value="{{ company.phone_comment|default:'' }}" placeholder="Комментарий к номеру" maxlength="255" data-comment-input style="padding:.35rem .5rem;font-size:.75rem" />
                     <div class="flex gap-1 mt-1">
-                      <button type="button" class="btn btn-primary text-xs" data-save-comment style="padding:.25rem .5rem">Сохранить</button>
-                      <button type="button" class="btn btn-outline text-xs" data-cancel-comment style="padding:.25rem .5rem">Отмена</button>
+                      <button type="button" class="btn btn-primary btn-sm" data-save-comment>Сохранить</button>
+                      <button type="button" class="btn btn-outline btn-sm" data-cancel-comment>Отмена</button>
                     </div>
                   </div>
                 </div>
@@ -312,7 +312,7 @@
                               <button
                                 type="submit"
                                 class="btn btn-outline"
-                                style="padding:.25rem .5rem;font-size:.75rem;"
+                                class="btn btn-outline btn-sm"
                                 title="Отметить холодный звонок"
                                 aria-label="Отметить холодный звонок"
                               >
@@ -329,7 +329,7 @@
                                 <button
                                   type="submit"
                                   class="btn btn-outline"
-                                  style="padding:.25rem .5rem;font-size:.75rem;background:#003D38;color:#fff;border-color:rgba(0,61,56,.35);"
+                                  class="btn btn-outline btn-sm" style="background:#003D38;color:#fff;border-color:rgba(0,61,56,.35);"
                                   title="Откатить отметку холодного звонка (только для администраторов)"
                                   aria-label="Откатить отметку холодного звонка"
                                   onclick="return confirm('Откатить отметку холодного звонка?');"
