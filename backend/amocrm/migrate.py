@@ -1963,7 +1963,7 @@ def migrate_filtered(
                         "extracted_note_text": note_text,  # Добавляем note_text для отладки
                         "note_search_info": note_search_info,  # Где искали примечания
                         "custom_fields_count": len(custom_fields),
-                        "custom_fields_sample": custom_fields[:3] if custom_fields else [],  # первые 3 для отладки
+                        "custom_fields_sample": custom_fields if dry_run else (custom_fields[:3] if custom_fields else []),  # В dry-run показываем все поля
                         "has_phone_field": bool(ac.get("phone")),
                         "has_email_field": bool(ac.get("email")),
                     }
