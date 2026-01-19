@@ -249,6 +249,11 @@ class TaskForm(forms.ModelForm):
             "type": TaskTypeSelectWidget(attrs={"class": "w-full rounded-lg border px-3 py-2 task-type-select"}),
             "assigned_to": UserSelectWithBranchWidget(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Queryset для assigned_to будет установлен в view после создания формы
+        # Здесь мы просто убеждаемся, что поле существует
 
 
 class TaskEditForm(forms.ModelForm):
