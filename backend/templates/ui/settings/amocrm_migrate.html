@@ -109,7 +109,7 @@
 
         <div class="md:col-span-2 flex gap-2">
           <button class="btn btn-primary" type="submit">Запустить</button>
-          <a class="btn btn-outline" href="/settings/amocrm/debug-contacts/?limit=5{% if form.responsible_user_id.value %}&responsible_user_id={{ form.responsible_user_id.value }}{% endif %}" target="_blank">🔍 Отладка контактов</a>
+          <a class="btn btn-outline" href="/settings/amocrm/debug-contacts/?limit=250{% if form.responsible_user_id.value %}&responsible_user_id={{ form.responsible_user_id.value }}{% endif %}" target="_blank">🔍 Отладка контактов (250)</a>
           <a class="btn btn-outline" href="/settings/amocrm/">Назад</a>
         </div>
       </form>

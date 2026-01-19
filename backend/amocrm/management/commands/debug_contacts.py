@@ -15,8 +15,8 @@ class Command(BaseCommand):
         parser.add_argument(
             "--limit",
             type=int,
-            default=5,
-            help="Количество контактов для анализа (по умолчанию 5)",
+            default=250,
+            help="Количество контактов для анализа (по умолчанию 250, максимум 250)",
         )
         parser.add_argument(
             "--responsible-user-id",
@@ -45,6 +45,8 @@ class Command(BaseCommand):
             raise CommandError(f"Ошибка создания клиента AmoCRM: {e}")
 
         self.stdout.write(self.style.SUCCESS(f"Подключение к AmoCRM: {cfg.domain}"))
+        # Ограничиваем максимум 250 (лимит AmoCRM API)
+        limit = min(limit, 250)
         self.stdout.write(f"Получаем {limit} контактов...\n")
 
         # Параметры запроса

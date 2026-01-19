@@ -6565,13 +6565,14 @@ def settings_amocrm_debug_contacts(request: HttpRequest) -> HttpResponse:
         messages.error(request, f"Ошибка создания клиента AmoCRM: {e}")
         return redirect("settings_amocrm_migrate")
 
-    limit = int(request.GET.get("limit", 5))
+    limit = int(request.GET.get("limit", 250))
     responsible_user_id = request.GET.get("responsible_user_id")
     
-    # Параметры запроса
+    # Параметры запроса (максимум 250 - лимит AmoCRM API)
+    limit = min(limit, 250)
     params = {
         "with": "custom_fields,notes,leads,customers,catalog_elements",
-        "limit": min(limit, 250),
+        "limit": limit,
     }
     
     if responsible_user_id:
