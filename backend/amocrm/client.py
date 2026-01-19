@@ -96,7 +96,9 @@ class AmoClient:
         self.refresh_token()
 
     def authorize_url(self) -> str:
-        # amo: /oauth2/authorize?client_id=...&redirect_uri=...&response_type=code
+        # amo: /oauth?client_id=...&redirect_uri=...&response_type=code
+        # Согласно документации AmoCRM: https://www.amocrm.ru/developers/content/oauth/oauth
+        # Правильный endpoint: /oauth (не /oauth2/authorize)
         qs = urllib.parse.urlencode(
             {
                 "client_id": self.cfg.client_id,
@@ -106,7 +108,7 @@ class AmoClient:
                 "state": "proficrm_migrate",
             }
         )
-        return f"{self.base}/oauth2/authorize?{qs}"
+        return f"{self.base}/oauth?{qs}"
 
     def exchange_code(self, code: str) -> None:
         url = f"{self.base}/oauth2/access_token"
