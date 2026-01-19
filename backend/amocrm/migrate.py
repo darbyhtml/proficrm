@@ -1914,10 +1914,11 @@ def migrate_filtered(
                             local_companies_by_amo_id[int(comp.amocrm_company_id)] = comp
                 
                 # Теперь обрабатываем полные данные контактов
+                # Сбрасываем счетчики перед началом обработки (они уже инициализированы до try)
                 logger.info(f"migrate_filtered: ===== НАЧАЛО ОБРАБОТКИ {len(full_contacts)} КОНТАКТОВ =====")
-                contacts_processed = 0
-                contacts_skipped = 0
-                contacts_errors = 0
+                contacts_processed = 0  # Сброс перед обработкой контактов
+                contacts_skipped = 0  # Сброс перед обработкой контактов
+                contacts_errors = 0  # Сброс перед обработкой контактов
                 for ac_idx, ac in enumerate(full_contacts):
                     contacts_processed += 1
                     if ac_idx < 5 or contacts_processed % 10 == 0:
@@ -3174,11 +3175,12 @@ def migrate_filtered(
                             res.contacts_created += 1
             except Exception as e:
                 # Если контакты недоступны — не валим всю миграцию
-                logger.debug(f"ERROR importing contacts: {type(e).__name__}: {e}")
+                contacts_errors += 1  # Увеличиваем счетчик ошибок при исключении
+                logger.error(f"ERROR importing contacts: {type(e).__name__}: {e}", exc_info=True)
                 import traceback
                 logger.debug("Contact import error", exc_info=True)
-                pass
             finally:
+                # Используем безопасный доступ к переменным (они должны быть инициализированы до try)
                 logger.info(f"migrate_filtered: ===== ИМПОРТ КОНТАКТОВ ЗАВЕРШЕН: created={res.contacts_created}, seen={res.contacts_seen}, processed={contacts_processed}, skipped={contacts_skipped}, errors={contacts_errors} =====")
         else:
             logger.info(f"migrate_filtered: обработка контактов пропущена: import_contacts={import_contacts}, dry_run={dry_run}, amo_ids={bool(amo_ids)}")
