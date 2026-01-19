@@ -99,7 +99,7 @@
             <li>Скопируйте URL из поля выше (или используйте автоматически сгенерированный):</li>
             <li class="ml-4">
               <code class="bg-brand-dark/5 px-2 py-1 rounded text-xs break-all">
-                {{ form.redirect_uri.value|default:request.build_absolute_uri:"/settings/amocrm/callback/" }}
+                {{ redirect_uri_display }}
               </code>
             </li>
             <li>Вставьте этот URL в настройки интеграции в AmoCRM</li>

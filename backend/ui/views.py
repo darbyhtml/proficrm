@@ -6326,10 +6326,13 @@ def settings_amocrm(request: HttpRequest) -> HttpResponse:
         except Exception:
             auth_url = ""
 
+    # Вычисляем redirect_uri для отображения в шаблоне
+    redirect_uri_display = cfg.redirect_uri or request.build_absolute_uri("/settings/amocrm/callback/")
+    
     return render(
         request,
         "ui/settings/amocrm.html",
-        {"form": form, "cfg": cfg, "auth_url": auth_url},
+        {"form": form, "cfg": cfg, "auth_url": auth_url, "redirect_uri_display": redirect_uri_display},
     )
 
 
