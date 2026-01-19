@@ -910,7 +910,9 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
                 contact_ids.append(contact_id)
                 logger.debug(f"fetch_contacts_for_companies: контакт {contact_id} не имеет custom_fields_values, нужны полные данные")
             else:
-                logger.debug(f"fetch_contacts_for_companies: контакт {contact_id} уже имеет custom_fields_values ({len(contact.get('custom_fields_values', []))} полей)")
+                custom_fields = contact.get('custom_fields_values') or []
+                custom_fields_count = len(custom_fields) if isinstance(custom_fields, list) else 0
+                logger.debug(f"fetch_contacts_for_companies: контакт {contact_id} уже имеет custom_fields_values ({custom_fields_count} полей)")
         
         # Запрашиваем полные данные только для контактов без custom_fields_values
         if contact_ids:
@@ -939,7 +941,9 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
                                     full_contact_id = int(full_contact.get("id") or 0)
                                     if full_contact_id:
                                         full_contacts_map[full_contact_id] = full_contact
-                                        logger.debug(f"fetch_contacts_for_companies: получены полные данные для контакта {full_contact_id} (custom_fields: {len(full_contact.get('custom_fields_values', []))} полей)")
+                                        custom_fields = full_contact.get('custom_fields_values') or []
+                                        custom_fields_count = len(custom_fields) if isinstance(custom_fields, list) else 0
+                                        logger.debug(f"fetch_contacts_for_companies: получены полные данные для контакта {full_contact_id} (custom_fields: {custom_fields_count} полей)")
                     
                 except Exception as e:
                     logger.warning(f"fetch_contacts_for_companies: ошибка при получении полных данных контактов (batch {i//batch_size + 1}): {e}", exc_info=True)
@@ -967,7 +971,9 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
                         full_contact["_embedded"]["companies"] = companies_from_simple
                     
                     updated_out.append(full_contact)
-                    logger.info(f"fetch_contacts_for_companies: заменен упрощенный контакт {contact_id} на полный с custom_fields ({len(full_contact.get('custom_fields_values', []))} полей)")
+                    custom_fields = full_contact.get('custom_fields_values') or []
+                    custom_fields_count = len(custom_fields) if isinstance(custom_fields, list) else 0
+                    logger.info(f"fetch_contacts_for_companies: заменен упрощенный контакт {contact_id} на полный с custom_fields ({custom_fields_count} полей)")
                 else:
                     # Если полных данных нет, оставляем как есть (возможно, уже есть custom_fields_values)
                     updated_out.append(contact)
