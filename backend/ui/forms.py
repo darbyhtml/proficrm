@@ -345,6 +345,8 @@ class TaskForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Заменяем стандартное поле assigned_to на кастомное, которое правильно обрабатывает значения
+        # ВАЖНО: queryset будет установлен в view через _set_assigned_to_queryset,
+        # поэтому здесь устанавливаем временный queryset на всех пользователей
         if 'assigned_to' in self.fields:
             # Сохраняем оригинальные параметры поля
             original_field = self.fields['assigned_to']
@@ -355,6 +357,7 @@ class TaskForm(forms.ModelForm):
                 label=original_field.label,
                 help_text=original_field.help_text,
             )
+            # ВАЖНО: queryset будет переустановлен в view, поэтому не ограничиваем его здесь
     
     def clean_assigned_to(self):
         """
