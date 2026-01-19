@@ -279,6 +279,7 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
     fid_employees = _find_field_id(field_meta, name_contains=["численность", "сотрудник", "штат"])
     fid_worktime = _find_field_id(field_meta, name_contains=["рабочее время", "часы работы", "режим работы", "работа с"])
     fid_tz = _find_field_id(field_meta, name_contains=["часовой пояс", "таймзона", "timezone"])
+    fid_note = _find_field_id(field_meta, name_contains=["примеч", "комментар", "коммент", "заметк"])
 
     return {
         "inn": first(fid_inn),
@@ -293,6 +294,7 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
         "employees_count": first(fid_employees),
         "worktime": first(fid_worktime),
         "work_timezone": first(fid_tz),
+        "note": first(fid_note),
     }
 
 
@@ -782,6 +784,7 @@ def migrate_filtered(
                         company_updates_diff["address"] = {"old": old_addr, "new": comp.address}
             phones = extra.get("phones") or []
             emails = extra.get("emails") or []
+            company_note = str(extra.get("note") or "").strip()[:255]
             # основной телефон/почта — в "Данные", остальные — в отдельный контакт (даже без ФИО/должности)
             if phones and not (comp.phone or "").strip():
                 new_phone = str(phones[0])[:50]
@@ -801,6 +804,15 @@ def migrate_filtered(
                 changed = True
                 if dry_run:
                     company_updates_diff["website"] = {"old": "", "new": new_website}
+            # Комментарий к основному телефону компании: импортируем "Примечание" из amoCRM
+            # Логика: если примечание одно, пишем его к первому телефону (в Company.phone_comment), не затирая ручное.
+            if company_note and not (comp.phone_comment or "").strip():
+                # Если основной телефон уже есть/будет — сохраняем комментарий
+                if (comp.phone or "").strip() or (phones and str(phones[0]).strip()):
+                    comp.phone_comment = company_note[:255]
+                    changed = True
+                    if dry_run:
+                        company_updates_diff["phone_comment"] = {"old": "", "new": company_note[:255]}
             if extra.get("activity_kind") and can_update("activity_kind"):
                 ak = str(extra.get("activity_kind") or "").strip()[:255]
                 old_ak = (comp.activity_kind or "").strip()
@@ -1440,6 +1452,7 @@ def migrate_filtered(
                     emails: list[tuple[str, str]] = []  # (type, value)
                     position = ""
                     cold_call_timestamp = None  # Timestamp холодного звонка из amoCRM
+                    note_text = ""  # "Примечание"/"Комментарий" контакта (одно на все номера)
                     
                     # Стандартные поля (если есть)
                     if ac.get("phone"):
@@ -1508,9 +1521,11 @@ def migrate_filtered(
                             # Холодный звонок: проверяем field_name содержит "холодный звонок" и field_type="date"
                             is_cold_call_date = (field_type == "date" and
                                                 ("холодный" in field_name and "звонок" in field_name))
+                            # Примечание/Комментарий (текстовое поле)
+                            is_note = any(k in field_name for k in ["примеч", "комментар", "коммент", "заметк"])
                             
                             if debug_count_for_extraction < 3:
-                                logger.debug(f"    [value {v_idx}] val={val[:50]}, is_phone={is_phone}, is_email={is_email}, is_position={is_position}, is_cold_call_date={is_cold_call_date}")
+                                logger.debug(f"    [value {v_idx}] val={val[:50]}, is_phone={is_phone}, is_email={is_email}, is_position={is_position}, is_cold_call_date={is_cold_call_date}, is_note={is_note}")
                             
                             if is_phone:
                                 # enum_code подсказывает тип (WORK/MOBILE/OTHER/...)
@@ -1546,6 +1561,9 @@ def migrate_filtered(
                                     position = val
                                     if debug_count_for_extraction < 3:
                                         logger.debug(f"      -> Set position: {val}")
+                            elif is_note:
+                                if not note_text:
+                                    note_text = val[:255]
                             elif is_cold_call_date:
                                 # Холодный звонок: val - это timestamp (Unix timestamp)
                                 # Сохраняем для последующей обработки (берем первое значение, если их несколько)
@@ -1573,6 +1591,12 @@ def migrate_filtered(
                         seen_p.add(pv2)
                         dedup_phones.append((pt, pv2, str(pc or "")))
                     phones = dedup_phones
+
+                    # Если есть одно общее примечание, а номеров несколько — пишем его в comment первого номера
+                    if note_text and phones:
+                        pt0, pv0, pc0 = phones[0]
+                        if not (pc0 or "").strip():
+                            phones[0] = (pt0, pv0, note_text[:255])
 
                     dedup_emails: list[tuple[str, str]] = []
                     seen_e = set()
