@@ -106,6 +106,7 @@ class ImportResult:
     company_rows: int = 0
     skipped_rows: int = 0
     preview_companies: list[dict] | None = None
+    preview_updates: list[dict] | None = None
 
 
 def import_amo_csv(
@@ -125,7 +126,40 @@ def import_amo_csv(
     Для твоего запроса: companies_only=True и limit_companies=20.
     """
     csv_path = Path(csv_path)
-    result = ImportResult(preview_companies=[])
+    result = ImportResult(preview_companies=[], preview_updates=[])
+                    # Доп. поля карточки
+                    employees_count_raw = _unescape(_get(row, "Численность сотрудников", "Численность сотрудников (Скайнет)", "Сотрудников"))
+                    worktime_raw = _unescape(_get(row, "Рабочее время", "Рабочее время (Скайнет)", "Часы работы"))
+                    timezone_raw = _unescape(_get(row, "Часовой пояс", "Часовой пояс (Скайнет)", "Таймзона", "Timezone"))
+
+                    def _parse_int(v: str) -> int | None:
+                        try:
+                            vv = _digits_only(v)
+                            if not vv:
+                                return None
+                            return int(vv)
+                        except Exception:
+                            return None
+
+                    def _parse_worktime(v: str) -> tuple[datetime.time | None, datetime.time | None]:
+                        # поддерживаем форматы: "09:00-18:00", "09:00–18:00", "с 9:00 до 18:00"
+                        import re
+                        s = (v or "").replace("–", "-").strip()
+                        if not s:
+                            return (None, None)
+                        m = re.search(r"(\d{1,2})[:.](\d{2})\s*-\s*(\d{1,2})[:.](\d{2})", s)
+                        if not m:
+                            return (None, None)
+                        try:
+                            h1, m1, h2, m2 = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
+                            if 0 <= h1 <= 23 and 0 <= h2 <= 23 and 0 <= m1 <= 59 and 0 <= m2 <= 59:
+                                return (datetime.time(h1, m1), datetime.time(h2, m2))
+                        except Exception:
+                            pass
+                        return (None, None)
+
+                    employees_count = _parse_int(employees_count_raw)
+                    workday_start, workday_end = _parse_worktime(worktime_raw)
 
     # Кеш пользователей
     # Важно: __str__ у нас = "Фамилия Имя", а get_full_name() у Django = "Имя Фамилия".
@@ -252,6 +286,10 @@ def import_amo_csv(
                             contact_name=contact_person_raw[:255] if contact_person_raw else "",
                             contact_position=contact_position[:255] if contact_position else "",
                             activity_kind=activity_short[:255] if activity_short else "",
+                            employees_count=employees_count,
+                            workday_start=workday_start,
+                            workday_end=workday_end,
+                            work_timezone=(timezone_raw or "")[:64],
                             amocrm_company_id=int(amo_id) if str(amo_id).isdigit() else None,
                             raw_fields={"source": "amo_import", "amo_row": row},
                         )
@@ -259,6 +297,25 @@ def import_amo_csv(
                         created = True
                     else:
                         changed = False
+                        # Мягкий режим "обновить, но не перезаписать": если поле уже меняли руками,
+                        # не трогаем. Сравниваем с последним импортированным значением из raw_fields.
+                        try:
+                            rf = dict(company.raw_fields or {})
+                        except Exception:
+                            rf = {}
+                        prev = rf.get("amo_values") or {}
+                        if not isinstance(prev, dict):
+                            prev = {}
+
+                        def can_update(field: str) -> bool:
+                            cur = getattr(company, field)
+                            if cur in ("", None):
+                                return True
+                            # если ранее импортировали и текущее значение равно "как было импортировано",
+                            # значит пользователь не менял — можно обновлять.
+                            if field in prev and prev.get(field) == cur:
+                                return True
+                            return False
                         # Обрезаем значения до max_length перед установкой
                         field_max_lengths = {
                             "name": 255,
@@ -286,13 +343,29 @@ def import_amo_csv(
                             ("contact_position", contact_position),
                             ("activity_kind", activity_short),
                         ):
-                            if value:
+                            if value and can_update(field):
                                 # Обрезаем значение до max_length
                                 max_len = field_max_lengths.get(field, 255)
                                 value_truncated = str(value).strip()[:max_len]
                                 if getattr(company, field) != value_truncated:
                                     setattr(company, field, value_truncated)
                                     changed = True
+
+                        # новые поля (работаем только если можно обновлять)
+                        if employees_count is not None and can_update("employees_count") and company.employees_count != employees_count:
+                            company.employees_count = employees_count
+                            changed = True
+                        if workday_start and can_update("workday_start") and company.workday_start != workday_start:
+                            company.workday_start = workday_start
+                            changed = True
+                        if workday_end and can_update("workday_end") and company.workday_end != workday_end:
+                            company.workday_end = workday_end
+                            changed = True
+                        if timezone_raw and can_update("work_timezone"):
+                            tzv = (timezone_raw or "").strip()[:64]
+                            if company.work_timezone != tzv:
+                                company.work_timezone = tzv
+                                changed = True
                         if responsible and company.responsible_id != responsible.id and set_responsible:
                             company.responsible = responsible
                             changed = True
@@ -301,6 +374,18 @@ def import_amo_csv(
                             changed = True
                         if changed:
                             result.updated_companies += 1
+                            # обновляем снимок импортированных значений
+                            prev.update(
+                                {
+                                    "activity_kind": company.activity_kind,
+                                    "employees_count": company.employees_count,
+                                    "workday_start": company.workday_start,
+                                    "workday_end": company.workday_end,
+                                    "work_timezone": company.work_timezone,
+                                }
+                            )
+                            rf["amo_values"] = prev
+                            company.raw_fields = rf
 
                     # статус/сферы (создаём справочники при необходимости)
                     status_obj = None

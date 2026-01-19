@@ -68,6 +68,29 @@
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Численность сотрудников</label>
+          {{ form.employees_count }}
+        </div>
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Часовой пояс</label>
+          {{ form.work_timezone }}
+          <div class="text-xs muted-2 mt-1">Например: Europe/Moscow, Asia/Yekaterinburg.</div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Рабочее время (с)</label>
+          {{ form.workday_start }}
+        </div>
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Рабочее время (до)</label>
+          {{ form.workday_end }}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div>
           <label class="block text-sm text-brand-dark/80 mb-1">Вид договора</label>
           {{ form.contract_type }}
         </div>

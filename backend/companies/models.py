@@ -52,6 +52,10 @@ class Company(models.Model):
     address = models.CharField("Адрес", max_length=500, blank=True, default="")
     website = models.CharField("Сайт", max_length=255, blank=True, default="")
     activity_kind = models.CharField("Вид деятельности", max_length=255, blank=True, default="", db_index=True)
+    employees_count = models.PositiveIntegerField("Численность сотрудников", null=True, blank=True)
+    workday_start = models.TimeField("Рабочее время: с", null=True, blank=True)
+    workday_end = models.TimeField("Рабочее время: до", null=True, blank=True)
+    work_timezone = models.CharField("Часовой пояс", max_length=64, blank=True, default="")
     # Устаревшее: раньше отметка была на всю компанию. Оставляем поле для обратной совместимости/данных,
     # но в UI/логике используем отметки на контактах.
     is_cold_call = models.BooleanField("Холодный звонок (устар.)", default=False, db_index=True)

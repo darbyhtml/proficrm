@@ -166,7 +166,22 @@
           </div>
           <div>
             <div class="text-brand-dark/50">Вид деятельности</div>
-            <div>{{ company.activity_kind|default:"—" }}</div>
+            <div class="whitespace-pre-line">{{ company.activity_kind|default:"—" }}</div>
+          </div>
+          <div>
+            <div class="text-brand-dark/50">Численность сотрудников</div>
+            <div>{{ company.employees_count|default:"—" }}</div>
+          </div>
+          <div>
+            <div class="text-brand-dark/50">Рабочее время</div>
+            <div>
+              {% if company.workday_start and company.workday_end %}
+                {{ company.workday_start|time:"H:i" }}–{{ company.workday_end|time:"H:i" }}
+                {% if company.work_timezone %}<span class="text-brand-dark/60 text-xs">({{ company.work_timezone }})</span>{% endif %}
+              {% else %}
+                —
+              {% endif %}
+            </div>
           </div>
           <div>
             <div class="text-brand-dark/50">Руководитель</div>
