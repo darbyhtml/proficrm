@@ -1,0 +1,176 @@
+{% extends "ui/base.html" %}
+{% block title %}amoCRM — отладка контактов{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div>
+      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> / <a class="underline" href="/settings/amocrm/">amoCRM</a> / <a class="underline" href="/settings/amocrm/migrate/">Миграция</a> /</div>
+      <h1 class="text-2xl font-semibold">🔍 Отладка структуры контактов из AmoCRM</h1>
+      <div class="text-sm text-brand-dark/70 mt-2">
+        Этот инструмент показывает полную структуру контактов из AmoCRM API, чтобы понять, какие поля доступны для импорта.
+      </div>
+    </div>
+
+    <div class="card card-pad">
+      <div class="mb-4">
+        <a class="btn btn-outline" href="/settings/amocrm/migrate/">← Назад к миграции</a>
+        <a class="btn btn-primary ml-2" href="?limit={{ limit }}{% if responsible_user_id %}&responsible_user_id={{ responsible_user_id }}{% endif %}">🔄 Обновить</a>
+      </div>
+
+      <div class="mb-4 p-3 bg-blue-50 rounded border border-blue-200">
+        <div class="text-sm">
+          <b>Проанализировано контактов:</b> {{ stats.total_contacts }}
+          {% if responsible_user_id %}
+            <br><b>Фильтр:</b> ответственный пользователь ID = {{ responsible_user_id }}
+          {% endif %}
+        </div>
+      </div>
+
+      {% if stats.field_types %}
+        <div class="mb-4 p-3 bg-gray-50 rounded border">
+          <div class="font-medium mb-2">📊 Статистика по кастомным полям:</div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div>
+              <b>Типы полей:</b>
+              <ul class="list-disc list-inside mt-1">
+                {% for field_type, count in stats.field_types.items %}
+                  <li>{{ field_type }}: {{ count }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+            <div>
+              <b>Коды полей (топ-10):</b>
+              <ul class="list-disc list-inside mt-1">
+                {% for field_code, count in stats.field_codes.items|slice:":10" %}
+                  <li>{{ field_code }}: {{ count }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+            <div>
+              <b>Названия полей (топ-10):</b>
+              <ul class="list-disc list-inside mt-1">
+                {% for field_name, count in stats.field_names.items|slice:":10" %}
+                  <li>{{ field_name }}: {{ count }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+      <div class="space-y-6">
+        {% for contact in contacts %}
+          <div class="border rounded-lg p-4">
+            <div class="font-medium text-lg mb-3">
+              Контакт #{{ forloop.counter }} (ID: {{ contact.id }})
+              {% if contact.name %}
+                — {{ contact.name }}
+              {% endif %}
+            </div>
+
+            <div class="space-y-4">
+              <!-- Стандартные поля -->
+              {% if contact.standard_fields %}
+                <div>
+                  <div class="font-medium mb-2">📝 Стандартные поля:</div>
+                  <div class="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+                    {% for key, value in contact.standard_fields.items %}
+                      <div><b>{{ key }}:</b> {{ value|default:"—" }}</div>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endif %}
+
+              <!-- Кастомные поля -->
+              {% if contact.custom_fields %}
+                <div>
+                  <div class="font-medium mb-2">📋 Кастомные поля ({{ contact.custom_fields|length }}):</div>
+                  <div class="space-y-2">
+                    {% for cf in contact.custom_fields %}
+                      <div class="p-2 bg-gray-50 rounded border text-sm">
+                        <div class="font-medium mb-1">
+                          Поле #{{ forloop.counter }}:
+                          <span class="text-gray-600">ID={{ cf.field_id }}, code={{ cf.field_code|default:"—" }}, type={{ cf.field_type|default:"—" }}</span>
+                        </div>
+                        <div class="mb-1"><b>Название:</b> {{ cf.field_name|default:"—" }}</div>
+                        <div>
+                          <b>Значения ({{ cf.values|length }}):</b>
+                          <ul class="list-disc list-inside mt-1 ml-4">
+                            {% for val in cf.values %}
+                              <li>
+                                {% if val.value %}
+                                  value: {{ val.value|truncatewords:20 }}
+                                {% endif %}
+                                {% if val.enum_code %}
+                                  <span class="text-gray-600">(enum_code: {{ val.enum_code }})</span>
+                                {% endif %}
+                                {% if val.enum_id %}
+                                  <span class="text-gray-600">(enum_id: {{ val.enum_id }})</span>
+                                {% endif %}
+                              </li>
+                            {% endfor %}
+                          </ul>
+                        </div>
+                      </div>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% else %}
+                <div class="text-sm text-gray-600">Кастомные поля отсутствуют</div>
+              {% endif %}
+
+              <!-- Вложенные данные -->
+              {% if contact.embedded %}
+                <div>
+                  <div class="font-medium mb-2">🔗 Вложенные данные (_embedded):</div>
+                  <div class="space-y-2 text-sm">
+                    {% for key, value in contact.embedded.items %}
+                      <div>
+                        <b>{{ key }}:</b>
+                        {% if value|length %}
+                          {{ value|length }} элементов
+                          {% if value|length <= 5 %}
+                            <ul class="list-disc list-inside mt-1 ml-4">
+                              {% for item in value %}
+                                <li>{{ item }}</li>
+                              {% endfor %}
+                            </ul>
+                          {% endif %}
+                        {% else %}
+                          {{ value }}
+                        {% endif %}
+                      </div>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% endif %}
+
+              <!-- Все ключи -->
+              <div>
+                <div class="font-medium mb-2">🔑 Все ключи контакта ({{ contact.all_keys|length }}):</div>
+                <div class="text-xs text-gray-600">{{ contact.all_keys|join:", " }}</div>
+              </div>
+
+              <!-- Полная JSON-структура -->
+              <details class="mt-2">
+                <summary class="font-medium cursor-pointer text-sm">📄 Полная JSON-структура</summary>
+                <pre class="mt-2 text-xs bg-gray-100 p-3 rounded overflow-auto max-h-96">{{ contact.full_json }}</pre>
+              </details>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <div class="mt-6 p-4 bg-yellow-50 rounded border border-yellow-200">
+        <div class="text-sm">
+          <b>💡 Как использовать эти данные:</b>
+          <ol class="list-decimal list-inside mt-2 space-y-1">
+            <li>Скопируйте полную JSON-структуру контакта (разверните "Полная JSON-структура")</li>
+            <li>Отправьте её разработчику для анализа</li>
+            <li>Или используйте для настройки импорта вручную</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

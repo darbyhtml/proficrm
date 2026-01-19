@@ -6540,6 +6540,124 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
         from django.http import HttpResponse
         return HttpResponse(f"Ошибка рендеринга страницы миграции: {str(e)}. Проверьте логи сервера для деталей.", status=500)
 
+
+@login_required
+def settings_amocrm_debug_contacts(request: HttpRequest) -> HttpResponse:
+    """
+    View для отладки структуры контактов из AmoCRM API.
+    Показывает все поля, которые приходят из API.
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    import json
+    from amocrm.client import AmoClient, AmoApiError
+
+    cfg = AmoApiConfig.load()
+    if not cfg.domain:
+        messages.error(request, "AmoCRM domain не настроен.")
+        return redirect("settings_amocrm_migrate")
+
+    try:
+        client = AmoClient(cfg)
+    except Exception as e:
+        messages.error(request, f"Ошибка создания клиента AmoCRM: {e}")
+        return redirect("settings_amocrm_migrate")
+
+    limit = int(request.GET.get("limit", 5))
+    responsible_user_id = request.GET.get("responsible_user_id")
+    
+    # Параметры запроса
+    params = {
+        "with": "custom_fields,notes,leads,customers,catalog_elements",
+        "limit": min(limit, 250),
+    }
+    
+    if responsible_user_id:
+        params["filter[responsible_user_id]"] = int(responsible_user_id)
+
+    try:
+        # Получаем контакты
+        contacts = client.get_all_pages(
+            "/api/v4/contacts",
+            params=params,
+            embedded_key="contacts",
+            limit=250,
+            max_pages=1,
+        )
+
+        if not contacts:
+            messages.warning(request, "Контакты не найдены!")
+            return redirect("settings_amocrm_migrate")
+
+        # Формируем данные для отображения
+        contacts_data = []
+        for contact in contacts[:limit]:
+            contact_info = {
+                "id": contact.get("id"),
+                "name": contact.get("name"),
+                "first_name": contact.get("first_name"),
+                "last_name": contact.get("last_name"),
+                "standard_fields": {},
+                "custom_fields": contact.get("custom_fields_values") or [],
+                "embedded": contact.get("_embedded") or {},
+                "all_keys": list(contact.keys()),
+                "full_json": json.dumps(contact, ensure_ascii=False, indent=2),
+            }
+            
+            # Стандартные поля
+            standard_fields = [
+                "id", "name", "first_name", "last_name",
+                "responsible_user_id", "group_id", "created_by", "updated_by",
+                "created_at", "updated_at", "is_deleted",
+                "phone", "email", "company_id", "closest_task_at", "account_id",
+            ]
+            for field in standard_fields:
+                value = contact.get(field)
+                if value is not None:
+                    contact_info["standard_fields"][field] = value
+            
+            contacts_data.append(contact_info)
+
+        # Статистика
+        stats = {
+            "total_contacts": len(contacts_data),
+            "field_types": {},
+            "field_codes": {},
+            "field_names": {},
+        }
+        
+        for contact in contacts_data:
+            for cf in contact["custom_fields"]:
+                field_type = cf.get("field_type", "unknown")
+                field_code = cf.get("field_code", "no_code")
+                field_name = cf.get("field_name", "no_name")
+                stats["field_types"][field_type] = stats["field_types"].get(field_type, 0) + 1
+                stats["field_codes"][field_code] = stats["field_codes"].get(field_code, 0) + 1
+                stats["field_names"][field_name] = stats["field_names"].get(field_name, 0) + 1
+
+        return render(
+            request,
+            "ui/settings/amocrm_debug_contacts.html",
+            {
+                "contacts": contacts_data,
+                "stats": stats,
+                "limit": limit,
+                "responsible_user_id": responsible_user_id,
+            },
+        )
+
+    except AmoApiError as e:
+        messages.error(request, f"Ошибка AmoCRM API: {e}")
+        return redirect("settings_amocrm_migrate")
+    except Exception as e:
+        import traceback
+        messages.error(request, f"Ошибка: {str(e)}")
+        print(f"AMOCRM_DEBUG_CONTACTS_ERROR: {traceback.format_exc()}")
+        return redirect("settings_amocrm_migrate")
+
+
 # UI settings (admin only)
 @login_required
 def settings_company_columns(request: HttpRequest) -> HttpResponse:
