@@ -2244,6 +2244,10 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
     if not q or len(q) < 2:
         return JsonResponse({"items": []})
 
+    # Подготовим нормализованные значения для последующей подсветки совпадений
+    normalized_phone = _normalize_phone_for_search(q)
+    normalized_email = _normalize_email_for_search(q)
+
     # Используем ту же логику поиска, что и в списке компаний,
     # чтобы поведение автодополнения и таблицы было полностью одинаковым
     base_qs = Company.objects.all()
