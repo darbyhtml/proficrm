@@ -178,6 +178,13 @@
               {% if company.workday_start and company.workday_end %}
                 {{ company.workday_start|time:"H:i" }}–{{ company.workday_end|time:"H:i" }}
                 {% if company.work_timezone %}<span class="text-brand-dark/60 text-xs">({{ company.work_timezone }})</span>{% endif %}
+                {% if worktime.status == "ok" %}
+                  <span class="badge badge-done badge-sm ml-2">Можно звонить</span>
+                {% elif worktime.status == "early" %}
+                  <span class="badge badge-warn badge-sm ml-2">Рано</span>
+                {% elif worktime.status == "late" %}
+                  <span class="badge badge-danger badge-sm ml-2">Поздно</span>
+                {% endif %}
               {% else %}
                 —
               {% endif %}

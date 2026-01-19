@@ -2445,6 +2445,35 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     # Исключаем выполненные задачи из списка "Последние задачи"
     now = timezone.now()
     local_now = timezone.localtime(now)
+    # Индикатор: можно ли звонить (рабочее время компании + часовой пояс)
+    worktime = {
+        "has": bool(company.workday_start and company.workday_end),
+        "status": None,  # "ok" | "late" | "early" | "unknown"
+        "label": "",
+    }
+    if company.workday_start and company.workday_end:
+        try:
+            from zoneinfo import ZoneInfo
+
+            tz_name = (company.work_timezone or "").strip() or "Europe/Moscow"
+            tz = ZoneInfo(tz_name)
+            now_tz = timezone.now().astimezone(tz)
+            tnow = now_tz.timetz().replace(tzinfo=None)
+            start = company.workday_start
+            end = company.workday_end
+            # простой случай: start < end (внутри суток)
+            if start <= tnow <= end:
+                worktime["status"] = "ok"
+                worktime["label"] = "Можно звонить"
+            elif tnow < start:
+                worktime["status"] = "early"
+                worktime["label"] = "Рано — ещё не рабочее время"
+            else:
+                worktime["status"] = "late"
+                worktime["label"] = "Уже не рабочее время"
+        except Exception:
+            worktime["status"] = "unknown"
+            worktime["label"] = ""
     tasks = (
         Task.objects.filter(company=company)
         .exclude(status=Task.Status.DONE)  # Исключаем выполненные задачи
@@ -4315,6 +4344,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
         {
             "now": now,
             "local_now": local_now,
+            "worktime": worktime,
             "page": page,
             "qs": qs_no_page,
             "status": status,

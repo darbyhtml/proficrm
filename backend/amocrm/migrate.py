@@ -275,6 +275,10 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
     fid_email = _find_field_id(field_meta, codes=["email"], name_contains=["email", "e-mail", "почта"])
     fid_web = _find_field_id(field_meta, codes=["web"], name_contains=["сайт", "web"])
     fid_director = _find_field_id(field_meta, name_contains=["руководитель", "директор", "генеральный"])
+    fid_activity = _find_field_id(field_meta, name_contains=["вид деятельности", "вид деят", "деятельност"])
+    fid_employees = _find_field_id(field_meta, name_contains=["численность", "сотрудник", "штат"])
+    fid_worktime = _find_field_id(field_meta, name_contains=["рабочее время", "часы работы", "режим работы", "работа с"])
+    fid_tz = _find_field_id(field_meta, name_contains=["часовой пояс", "таймзона", "timezone"])
 
     return {
         "inn": first(fid_inn),
@@ -285,6 +289,10 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
         "emails": list_vals(fid_email),
         "website": first(fid_web),
         "director": first(fid_director),
+        "activity_kind": first(fid_activity),
+        "employees_count": first(fid_employees),
+        "worktime": first(fid_worktime),
+        "work_timezone": first(fid_tz),
     }
 
 
@@ -672,6 +680,22 @@ def migrate_filtered(
             # заполнение "Данные" (только если поле пустое, чтобы не затереть уже заполненное вручную)
             # ВАЖНО: всегда обрезаем значения до max_length, даже если поле уже заполнено (защита от длинных значений)
             changed = False
+            # Мягкий режим update: если поле уже меняли руками, не перезаписываем.
+            try:
+                rf = dict(comp.raw_fields or {})
+            except Exception:
+                rf = {}
+            prev = rf.get("amo_values") or {}
+            if not isinstance(prev, dict):
+                prev = {}
+
+            def can_update(field: str) -> bool:
+                cur = getattr(comp, field)
+                if cur in ("", None):
+                    return True
+                if field in prev and prev.get(field) == cur:
+                    return True
+                return False
             if extra.get("legal_name"):
                 new_legal = str(extra["legal_name"]).strip()[:255]  # сначала strip, потом обрезка до max_length=255
                 if not (comp.legal_name or "").strip():
@@ -716,10 +740,66 @@ def migrate_filtered(
             if extra.get("website") and not (comp.website or "").strip():
                 comp.website = extra["website"][:255]
                 changed = True
+            if extra.get("activity_kind") and can_update("activity_kind"):
+                ak = str(extra.get("activity_kind") or "").strip()[:255]
+                if ak and comp.activity_kind != ak:
+                    comp.activity_kind = ak
+                    changed = True
+            if extra.get("employees_count") and can_update("employees_count"):
+                try:
+                    ec = int("".join(ch for ch in str(extra.get("employees_count") or "") if ch.isdigit()) or "0")
+                    if ec > 0 and comp.employees_count != ec:
+                        comp.employees_count = ec
+                        changed = True
+                except Exception:
+                    pass
+            if extra.get("work_timezone") and can_update("work_timezone"):
+                tzv = str(extra.get("work_timezone") or "").strip()[:64]
+                if tzv and comp.work_timezone != tzv:
+                    comp.work_timezone = tzv
+                    changed = True
+            if extra.get("worktime"):
+                # поддерживаем форматы: "09:00-18:00", "09:00–18:00", "с 9:00 до 18:00"
+                import re
+                s = str(extra.get("worktime") or "").replace("–", "-").strip()
+                m = re.search(r"(\d{1,2})[:.](\d{2})\s*-\s*(\d{1,2})[:.](\d{2})", s)
+                if m:
+                    try:
+                        h1, m1, h2, m2 = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
+                        if 0 <= h1 <= 23 and 0 <= h2 <= 23 and 0 <= m1 <= 59 and 0 <= m2 <= 59:
+                            if can_update("workday_start") and comp.workday_start != time(h1, m1):
+                                comp.workday_start = time(h1, m1)
+                                changed = True
+                            if can_update("workday_end") and comp.workday_end != time(h2, m2):
+                                comp.workday_end = time(h2, m2)
+                                changed = True
+                    except Exception:
+                        pass
             # Руководитель (contact_name) — заполняем из amo, если пусто
             if extra.get("director") and not (comp.contact_name or "").strip():
                 comp.contact_name = extra["director"][:255]
                 changed = True
+
+            if changed:
+                prev.update(
+                    {
+                        "legal_name": comp.legal_name,
+                        "inn": comp.inn,
+                        "kpp": comp.kpp,
+                        "address": comp.address,
+                        "phone": comp.phone,
+                        "email": comp.email,
+                        "website": comp.website,
+                        "director": comp.contact_name,
+                        "activity_kind": comp.activity_kind,
+                        "employees_count": comp.employees_count,
+                        "workday_start": comp.workday_start,
+                        "workday_end": comp.workday_end,
+                        "work_timezone": comp.work_timezone,
+                    }
+                )
+                rf["amo_values"] = prev
+                comp.raw_fields = rf
             if changed and not dry_run:
                 try:
                     comp.save()
