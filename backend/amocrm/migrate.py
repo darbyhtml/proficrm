@@ -1331,7 +1331,8 @@ def migrate_filtered(
 
         amo_ids = [int(c.get("id") or 0) for c in batch if int(c.get("id") or 0)]
 
-        if import_tasks and amo_ids:
+        # Задачи: запрашиваем только если нужно импортировать (не для dry-run без задач)
+        if import_tasks and amo_ids and not (dry_run and not import_tasks):
             tasks = fetch_tasks_for_companies(client, amo_ids)
             res.tasks_seen = len(tasks)
             for t in tasks:
@@ -1406,7 +1407,8 @@ def migrate_filtered(
                     task.save()
                 res.tasks_created += 1
 
-        if import_notes and amo_ids:
+        # Заметки: запрашиваем только если нужно импортировать (не для dry-run без заметок)
+        if import_notes and amo_ids and not (dry_run and not import_notes):
             try:
                 notes = fetch_notes_for_companies(client, amo_ids)
                 res.notes_seen = len(notes)

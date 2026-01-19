@@ -6656,6 +6656,7 @@ def settings_amocrm_contacts_dry_run(request: HttpRequest) -> HttpResponse:
 
     try:
         # Запускаем dry-run только для контактов
+        # КРИТИЧЕСКИ: не запрашиваем задачи и заметки - это слишком тяжело
         result = migrate_filtered(
             client=client,
             actor=request.user,
@@ -6666,8 +6667,8 @@ def settings_amocrm_contacts_dry_run(request: HttpRequest) -> HttpResponse:
             limit_companies=limit_companies,
             offset=offset,
             dry_run=True,  # Всегда dry-run
-            import_tasks=False,  # Не импортируем задачи
-            import_notes=False,  # Не импортируем заметки
+            import_tasks=False,  # НЕ запрашиваем задачи (слишком тяжело)
+            import_notes=False,  # НЕ запрашиваем заметки (слишком тяжело)
             import_contacts=True,  # Включаем импорт контактов для получения данных
             company_fields_meta=None,
             skip_field_filter=True,  # Берем все компании ответственного
