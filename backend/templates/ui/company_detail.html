@@ -1460,6 +1460,25 @@
                 // Инициализация виджета выбора компании
                 if (window.initMsSingleWidgets) {
                   window.initMsSingleWidgets(createModalContent);
+                  
+                  // Устанавливаем выбранную компанию после инициализации виджета
+                  if (companyId) {
+                    const companySelect = createModalContent.querySelector('select[name="company"], select#id_company');
+                    if (companySelect) {
+                      companySelect.value = companyId;
+                      // Триггерим событие change для обновления виджета
+                      companySelect.dispatchEvent(new Event('change', { bubbles: true }));
+                      // Обновляем визуальное отображение виджета
+                      const msWidget = companySelect.closest('[data-ms-single="1"]');
+                      if (msWidget) {
+                        const valueEl = msWidget.querySelector('.ms-value');
+                        const selectedOption = companySelect.options[companySelect.selectedIndex];
+                        if (valueEl && selectedOption) {
+                          valueEl.textContent = selectedOption.textContent.trim();
+                        }
+                      }
+                    }
+                  }
                 }
               }, 100);
               

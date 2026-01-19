@@ -82,23 +82,86 @@
       const companySelect = document.getElementById('id_company');
       if (!searchInput || !companySelect) return;
 
+      let searchTimeout = null;
+      let currentAbortController = null;
+
       searchInput.addEventListener('input', () => {
-        const q = searchInput.value.trim().toLowerCase();
-        if (!q) {
+        const q = searchInput.value.trim();
+        
+        // Отменяем предыдущий запрос
+        if (currentAbortController) {
+          currentAbortController.abort();
+        }
+        
+        // Если запрос < 2 символов, ищем по существующим опциям
+        if (!q || q.length < 2) {
+          // Обычный поиск по существующим опциям
+          let firstMatch = null;
+          for (const opt of companySelect.options) {
+            if (!opt.value) continue;
+            const text = (opt.text || '').toLowerCase();
+            if (text.includes(q.toLowerCase())) {
+              firstMatch = opt;
+              break;
+            }
+          }
+          if (firstMatch) {
+            companySelect.value = firstMatch.value;
+          }
           return;
         }
-        let firstMatch = null;
-        for (const opt of companySelect.options) {
-          if (!opt.value) continue;
-          const text = (opt.text || '').toLowerCase();
-          if (text.includes(q)) {
-            firstMatch = opt;
-            break;
-          }
+        
+        // AJAX поиск для запросов >= 2 символов
+        if (searchTimeout) {
+          clearTimeout(searchTimeout);
         }
-        if (firstMatch) {
-          companySelect.value = firstMatch.value;
-        }
+        
+        searchTimeout = setTimeout(() => {
+          currentAbortController = new AbortController();
+          
+          fetch(`/companies/autocomplete/?q=${encodeURIComponent(q)}`, {
+            signal: currentAbortController.signal,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+          })
+          .then(res => res.json())
+          .then(data => {
+            if (data.items && data.items.length > 0) {
+              // Временно сохраняем текущее значение
+              const currentValue = companySelect.value;
+              
+              // Очищаем опции (кроме пустой)
+              const emptyOpt = companySelect.querySelector('option[value=""]');
+              companySelect.innerHTML = '';
+              if (emptyOpt) {
+                companySelect.appendChild(emptyOpt);
+              }
+              
+              // Добавляем найденные компании
+              data.items.forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item.id;
+                opt.textContent = item.name;
+                if (item.inn) opt.textContent += ` (ИНН: ${item.inn})`;
+                companySelect.appendChild(opt);
+              });
+              
+              // Восстанавливаем текущее значение, если оно было
+              if (currentValue) {
+                companySelect.value = currentValue;
+              }
+              
+              // Автоматически выбираем первую найденную компанию
+              if (companySelect.options.length > 1) {
+                companySelect.value = companySelect.options[1].value;
+              }
+            }
+          })
+          .catch(err => {
+            if (err.name !== 'AbortError') {
+              console.error('Ошибка поиска компаний:', err);
+            }
+          });
+        }, 300); // Debounce 300ms
       });
     });
   </script>

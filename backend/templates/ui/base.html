@@ -1595,7 +1595,81 @@
           document.addEventListener('keydown', (e) => { if(e.key === 'Escape') close(); });
 
           if(search){
-            search.addEventListener('input', () => renderList(search.value));
+            // AJAX поиск для компаний в задачах
+            let searchTimeout = null;
+            let currentAbortController = null;
+            const isCompanySelect = select.name === 'company' || select.id === 'id_company';
+            
+            search.addEventListener('input', () => {
+              const query = search.value.trim();
+              
+              // Отменяем предыдущий запрос
+              if (currentAbortController) {
+                currentAbortController.abort();
+              }
+              
+              // Если это поле выбора компании и запрос >= 2 символов, используем AJAX
+              if (isCompanySelect && query.length >= 2) {
+                // Очищаем предыдущий таймаут
+                if (searchTimeout) {
+                  clearTimeout(searchTimeout);
+                }
+                
+                // Устанавливаем новый таймаут для debounce
+                searchTimeout = setTimeout(() => {
+                  currentAbortController = new AbortController();
+                  
+                  fetch(`/companies/autocomplete/?q=${encodeURIComponent(query)}`, {
+                    signal: currentAbortController.signal,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                  })
+                  .then(res => res.json())
+                  .then(data => {
+                    if (data.items && data.items.length > 0) {
+                      // Временно сохраняем текущее значение
+                      const currentValue = select.value;
+                      
+                      // Очищаем опции (кроме пустой)
+                      const emptyOpt = select.querySelector('option[value=""]');
+                      select.innerHTML = '';
+                      if (emptyOpt) {
+                        select.appendChild(emptyOpt);
+                      }
+                      
+                      // Добавляем найденные компании
+                      data.items.forEach(item => {
+                        const opt = document.createElement('option');
+                        opt.value = item.id;
+                        opt.textContent = item.name;
+                        if (item.inn) opt.textContent += ` (ИНН: ${item.inn})`;
+                        select.appendChild(opt);
+                      });
+                      
+                      // Восстанавливаем текущее значение, если оно было
+                      if (currentValue) {
+                        select.value = currentValue;
+                      }
+                      
+                      // Обновляем список
+                      renderList(query);
+                    } else {
+                      // Если ничего не найдено, показываем сообщение
+                      renderList(query);
+                    }
+                  })
+                  .catch(err => {
+                    if (err.name !== 'AbortError') {
+                      console.error('Ошибка поиска компаний:', err);
+                      // В случае ошибки показываем обычный поиск по существующим опциям
+                      renderList(query);
+                    }
+                  });
+                }, 300); // Debounce 300ms
+              } else {
+                // Обычный поиск по существующим опциям
+                renderList(query);
+              }
+            });
           }
           if(clearBtn){
             clearBtn.addEventListener('click', (e) => {
