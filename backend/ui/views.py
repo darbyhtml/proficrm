@@ -3626,7 +3626,11 @@ def contact_create(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company.id)
 
     contact = Contact(company=company)
-    is_modal = (request.GET.get("modal") == "1") or (request.POST.get("modal") == "1")
+    is_modal = (
+        request.headers.get("x-requested-with") == "XMLHttpRequest"
+        or (request.GET.get("modal") == "1")
+        or (request.POST.get("modal") == "1")
+    )
 
     if request.method == "POST":
         form = ContactForm(request.POST, instance=contact)
@@ -3688,7 +3692,11 @@ def contact_edit(request: HttpRequest, contact_id) -> HttpResponse:
         messages.error(request, "Нет прав на редактирование контактов этой компании.")
         return redirect("company_detail", company_id=company.id)
 
-    is_modal = (request.GET.get("modal") == "1") or (request.POST.get("modal") == "1")
+    is_modal = (
+        request.headers.get("x-requested-with") == "XMLHttpRequest"
+        or (request.GET.get("modal") == "1")
+        or (request.POST.get("modal") == "1")
+    )
 
     if request.method == "POST":
         form = ContactForm(request.POST, instance=contact)
