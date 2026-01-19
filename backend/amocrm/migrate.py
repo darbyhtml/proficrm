@@ -1977,8 +1977,8 @@ def migrate_filtered(
                         # В amoCRM примечание может быть в разных полях
                         direct_note_keys = ["note", "notes", "comment", "comments", "remark", "remarks", "text", "description", "description_text"]
                         for note_key in direct_note_keys:
-                        note_val_raw = ac.get(note_key)
-                        if note_val_raw:
+                            note_val_raw = ac.get(note_key)
+                            if note_val_raw:
                             # Может быть строка или список
                             if isinstance(note_val_raw, list):
                                 note_val = " ".join([str(v) for v in note_val_raw if v]).strip()
