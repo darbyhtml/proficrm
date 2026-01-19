@@ -16,7 +16,7 @@ from accounts.models import User
 from companies.models import Company, CompanyNote, CompanySphere, Contact, ContactEmail, ContactPhone
 from tasksapp.models import Task
 
-from .client import AmoClient
+from .client import AmoClient, AmoApiError
 
 logger = logging.getLogger(__name__)
 
