@@ -1528,12 +1528,28 @@
                       headers: { 'X-Requested-With': 'XMLHttpRequest' },
                       body: formData
                     });
+                    
+                    // Проверяем, является ли ответ JSON
+                    const contentType = res.headers.get("content-type");
+                    if (!contentType || !contentType.includes("application/json")) {
+                      const text = await res.text();
+                      throw new Error('Сервер вернул не JSON ответ. Возможно, произошла ошибка на сервере.');
+                    }
+                    
                     const data = await res.json();
                     if (data.ok) {
                       closeCreateModal();
                       location.reload();
                     } else {
-                      alert('Ошибка: ' + (data.error || 'Не удалось создать задачу'));
+                      // Показываем ошибки валидации, если они есть
+                      let errorMsg = data.error || 'Не удалось создать задачу';
+                      if (data.errors) {
+                        const errorList = Object.entries(data.errors).map(([field, errors]) => {
+                          return `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`;
+                        }).join('\n');
+                        errorMsg += '\n\n' + errorList;
+                      }
+                      alert('Ошибка: ' + errorMsg);
                     }
                   } catch (err) {
                     alert('Ошибка при создании: ' + err.message);
