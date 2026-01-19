@@ -373,11 +373,22 @@
             {% endif %}
             {% if result.contacts_preview %}
               <div class="text-sm text-brand-dark/80 mt-4">
-                <div class="font-medium">Контакты — отладка</div>
+                <div class="font-medium">📇 Контакты компаний — отладка (dry-run)</div>
+                <div class="text-xs text-gray-600 mb-2">
+                  Показываются все контакты, найденные у компаний из текущей пачки. 
+                  {% if not form.import_contacts.value %}
+                    <span class="text-orange-600 font-medium">⚠️ Импорт контактов выключен — включите опцию для реального импорта.</span>
+                  {% endif %}
+                </div>
                 <div class="space-y-2 mt-2">
                   {% for c in result.contacts_preview %}
-                    <div class="rounded-lg border p-3 text-xs {% if c.status == 'NO_CONTACTS_FOUND' or c.status == 'SKIPPED_NO_COMPANY_LINK' or c.status == 'SKIPPED_NO_LOCAL_COMPANY' %}bg-red-50{% endif %}">
-                      {% if c.status == 'NO_CONTACTS_FOUND' %}
+                    <div class="rounded-lg border p-3 text-xs {% if c.status == 'NO_CONTACTS_FOUND' or c.status == 'SKIPPED_NO_COMPANY_LINK' or c.status == 'SKIPPED_NO_LOCAL_COMPANY' %}bg-red-50{% elif c.status == 'INFO' %}bg-yellow-50{% endif %}">
+                      {% if c.status == 'INFO' %}
+                        <div class="font-medium mb-2 text-yellow-700">ℹ️ {{ c.message }}</div>
+                        {% if c.companies_count %}
+                          <div class="text-xs">Компаний в пачке: {{ c.companies_count }}</div>
+                        {% endif %}
+                      {% elif c.status == 'NO_CONTACTS_FOUND' %}
                         <div class="font-medium mb-2 text-red-600">⚠️ Контакты не найдены</div>
                         <div class="space-y-1">
                           <div><b>Проверено компаний:</b> {{ c.companies_checked }}</div>

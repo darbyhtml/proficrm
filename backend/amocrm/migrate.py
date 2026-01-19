@@ -1541,8 +1541,13 @@ def migrate_filtered(
         res.contacts_seen = 0
         res.contacts_created = 0
         
-        logger.debug(f"Contact import check: import_contacts={import_contacts}, amo_ids={bool(amo_ids)}, len={len(amo_ids) if amo_ids else 0}")
-        if import_contacts and amo_ids:
+        # В DRY-RUN всегда показываем контакты (даже если import_contacts=False),
+        # чтобы пользователь мог увидеть, что будет импортировано
+        # В реальном импорте обрабатываем только если import_contacts=True
+        should_process_contacts = (dry_run or import_contacts) and amo_ids
+        
+        logger.debug(f"Contact import check: import_contacts={import_contacts}, dry_run={dry_run}, should_process_contacts={should_process_contacts}, amo_ids={bool(amo_ids)}, len={len(amo_ids) if amo_ids else 0}")
+        if should_process_contacts:
             res._debug_contacts_logged = 0  # счетчик для отладки
             contacts_processed = 0  # счетчик обработанных контактов
             contacts_skipped = 0  # счетчик пропущенных контактов
@@ -2931,7 +2936,16 @@ def migrate_filtered(
             finally:
                 logger.debug(f"===== CONTACT IMPORT FINISHED: created={res.contacts_created}, seen={res.contacts_seen}, processed={contacts_processed}, skipped={contacts_skipped} =====")
         else:
-            logger.debug(f"Contact import SKIPPED: import_contacts={import_contacts}, amo_ids={bool(amo_ids)}")
+            logger.debug(f"Contact import SKIPPED: import_contacts={import_contacts}, dry_run={dry_run}, amo_ids={bool(amo_ids)}")
+            # В dry-run все равно показываем информацию, что контакты не будут импортированы
+            if dry_run and not import_contacts and amo_ids:
+                if res.contacts_preview is None:
+                    res.contacts_preview = []
+                res.contacts_preview.append({
+                    "status": "INFO",
+                    "message": "⚠️ Импорт контактов выключен. Включите опцию 'Импортировать контакты' для импорта.",
+                    "companies_count": len(amo_ids),
+                })
 
         if dry_run:
             transaction.set_rollback(True)
