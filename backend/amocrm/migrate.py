@@ -1611,8 +1611,12 @@ def migrate_filtered(
                         # Получаем контакты батчами по 50 компаний (лимит AmoCRM)
                         batch_size = 50
                         for i in range(0, len(amo_ids), batch_size):
+                            # Задержка между батчами (кроме первого)
+                            if i > 0:
+                                time.sleep(1.0)  # Задержка 1 сек между батчами для избежания rate limit
+                            
                             company_ids_batch = list(amo_ids)[i : i + batch_size]
-                            logger.debug(f"Trying to fetch contacts via filter[company_id][] for {len(company_ids_batch)} companies...")
+                            logger.debug(f"Trying to fetch contacts via filter[company_id][] for {len(company_ids_batch)} companies... (batch {i//batch_size + 1})")
                             contacts_alt = client.get_all_pages(
                                 "/api/v4/contacts",
                                 params={
@@ -1699,8 +1703,12 @@ def migrate_filtered(
                             # Запрашиваем контакты батчами по 50 ID (лимит amoCRM для filter[id][])
                             batch_size = 50
                             for i in range(0, len(contact_ids), batch_size):
+                                # Задержка между батчами (кроме первого)
+                                if i > 0:
+                                    time.sleep(1.0)  # Задержка 1 сек между батчами для избежания rate limit
+                                
                                 ids_batch = contact_ids[i : i + batch_size]
-                                logger.debug(f"Requesting contacts with IDs: {ids_batch[:10]}... (total {len(ids_batch)})")
+                                logger.debug(f"Requesting contacts with IDs: {ids_batch[:10]}... (total {len(ids_batch)}, batch {i//batch_size + 1})")
                                 
                                 # Согласно документации AmoCRM API v4:
                                 # - filter[id][] - массив ID контактов
