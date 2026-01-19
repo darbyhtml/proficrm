@@ -1730,6 +1730,14 @@ def migrate_filtered(
                                 contact_id_to_company_map[contact_id] = cid
                 
                 # Дополнительный запрос по ID нужен ТОЛЬКО если контакты неполные (редкий случай)
+                # Это происходит только если use_alternative_method=False, но контакты неполные
+                need_additional_fetch = False
+                if not use_alternative_method and amo_contacts and not full_contacts:
+                    # Проверяем, нужен ли дополнительный запрос
+                    first_contact = amo_contacts[0] if isinstance(amo_contacts[0], dict) else {}
+                    if "custom_fields_values" not in first_contact:
+                        need_additional_fetch = True
+                
                 if need_additional_fetch and amo_contacts:
                     contact_ids = [int(c.get("id") or 0) for c in amo_contacts if isinstance(c, dict) and c.get("id")]
                     if contact_ids:
