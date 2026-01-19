@@ -372,6 +372,9 @@
                           <div><b>Email найдены:</b> {% if c.emails_found %}{{ c.emails_found|join:", " }}{% else %}—{% endif %}</div>
                           <div><b>Должность найдена:</b> {{ c.position_found|default:"—" }}</div>
                           <div><b>Примечание найдено:</b> {{ c.note_text_found|default:"—"|truncatewords:30 }}</div>
+                          {% if c.note_search_info %}
+                            <div class="text-xs muted-2"><b>Где искали примечания:</b> {{ c.note_search_info|join:", " }}</div>
+                          {% endif %}
                           <div><b>custom_fields_values:</b> {{ c.custom_fields_count|default:0 }} полей</div>
                           {% if c.custom_fields_sample %}
                             <div class="mt-2">
@@ -398,6 +401,9 @@
                           <div><b>Email найдены:</b> {% if c.emails_found %}{{ c.emails_found|join:", " }}{% else %}—{% endif %}</div>
                           <div><b>Должность найдена:</b> {{ c.position_found|default:"—" }}</div>
                           <div><b>Примечание найдено:</b> {{ c.note_text_found|default:"—"|truncatewords:30 }}</div>
+                          {% if c.note_search_info %}
+                            <div class="text-xs muted-2"><b>Где искали примечания:</b> {{ c.note_search_info|join:", " }}</div>
+                          {% endif %}
                           <div><b>custom_fields_values:</b> {{ c.custom_fields_count|default:0 }} полей</div>
                           {% if c.custom_fields_sample %}
                             <div class="mt-2">
@@ -423,6 +429,9 @@
                           <div><b>Email найдены:</b> {% if c.emails_found %}{{ c.emails_found|join:", " }}{% else %}—{% endif %}</div>
                           <div><b>Должность найдена:</b> {{ c.position_found|default:"—" }}</div>
                           <div><b>Примечание найдено:</b> {{ c.note_text_found|default:"—"|truncatewords:30 }}</div>
+                          {% if c.note_search_info %}
+                            <div class="text-xs muted-2"><b>Где искали примечания:</b> {{ c.note_search_info|join:", " }}</div>
+                          {% endif %}
                           <div><b>custom_fields_values:</b> {{ c.custom_fields_count|default:0 }} полей</div>
                           {% if c.custom_fields_sample %}
                             <div class="mt-2">

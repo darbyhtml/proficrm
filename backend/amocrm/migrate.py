@@ -1454,6 +1454,34 @@ def migrate_filtered(
                     cold_call_timestamp = None  # Timestamp холодного звонка из amoCRM
                     note_text = ""  # "Примечание"/"Комментарий" контакта (одно на все номера)
                     
+                    # ОТЛАДКА: определяем счетчик для логирования (ДО использования)
+                    debug_count_for_extraction = len(res.contacts_preview) if res.contacts_preview else 0
+                    
+                    # ПРОВЕРЯЕМ ВСЕ ВОЗМОЖНЫЕ МЕСТА ДЛЯ ПРИМЕЧАНИЙ:
+                    # 1. Прямые поля контакта (note, comments, comment)
+                    for note_key in ["note", "notes", "comment", "comments", "remark", "remarks"]:
+                        if ac.get(note_key):
+                            note_val = str(ac.get(note_key) or "").strip()
+                            if note_val and not note_text:
+                                note_text = note_val[:255]
+                                if debug_count_for_extraction < 3:
+                                    logger.debug(f"  -> Found note_text in direct field '{note_key}': {note_text[:100]}")
+                    
+                    # 2. В _embedded.notes (если есть)
+                    if isinstance(ac, dict) and "_embedded" in ac:
+                        embedded = ac.get("_embedded") or {}
+                        if isinstance(embedded, dict) and "notes" in embedded:
+                            notes_list = embedded.get("notes") or []
+                            if isinstance(notes_list, list) and notes_list:
+                                # Берем текст из первой заметки
+                                first_note = notes_list[0]
+                                if isinstance(first_note, dict):
+                                    note_val = str(first_note.get("text") or first_note.get("note") or first_note.get("comment") or "").strip()
+                                    if note_val and not note_text:
+                                        note_text = note_val[:255]
+                                        if debug_count_for_extraction < 3:
+                                            logger.debug(f"  -> Found note_text in _embedded.notes: {note_text[:100]}")
+                    
                     # Стандартные поля (если есть)
                     if ac.get("phone"):
                         for pv in _split_multi(str(ac.get("phone"))):
@@ -1463,14 +1491,24 @@ def migrate_filtered(
                         if ev:
                             emails.append((ContactEmail.EmailType.OTHER, ev))
                     
-                    # custom_fields_values для телефонов/почт/должности
+                    # custom_fields_values для телефонов/почт/должности/примечаний
                     custom_fields = ac.get("custom_fields_values") or []
                     # ОТЛАДКА: логируем структуру custom_fields для первых контактов
-                    debug_count_for_extraction = len(res.contacts_preview) if res.contacts_preview else 0
                     if debug_count_for_extraction < 3:
                         logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
                         logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}")
                         logger.debug(f"  - ac.get('custom_fields_values'): {ac.get('custom_fields_values')}")
+                        # Логируем ВСЕ ключи контакта для поиска примечаний
+                        if isinstance(ac, dict):
+                            all_keys = list(ac.keys())
+                            logger.debug(f"  - ALL contact keys: {all_keys}")
+                            # Проверяем наличие полей, которые могут содержать примечания
+                            for key in ["note", "notes", "comment", "comments", "remark", "remarks", "_embedded"]:
+                                if key in ac:
+                                    logger.debug(f"  - Found key '{key}': {str(ac.get(key))[:200]}")
+                        # Логируем уже найденное примечание (если есть)
+                        if note_text:
+                            logger.debug(f"  - Already found note_text from direct fields: {note_text[:100]}")
                     
                     for cf_idx, cf in enumerate(custom_fields):
                         if not isinstance(cf, dict):
@@ -1569,12 +1607,14 @@ def migrate_filtered(
                                 # Берем первое найденное примечание (или объединяем, если их несколько)
                                 if not note_text:
                                     note_text = val[:255]
+                                    if debug_count_for_extraction < 3:
+                                        logger.debug(f"      -> Found note_text in custom_field (field_name='{field_name}', field_code='{field_code}'): {note_text[:100]}")
                                 else:
                                     # Если уже есть примечание, добавляем через точку с запятой (но не более 255 символов)
                                     combined = f"{note_text}; {val[:100]}"
                                     note_text = combined[:255]
-                                if debug_count_for_extraction < 3:
-                                    logger.debug(f"      -> Found note_text: {note_text[:100]}")
+                                    if debug_count_for_extraction < 3:
+                                        logger.debug(f"      -> Appended note_text from custom_field: {val[:100]}")
                             elif is_cold_call_date:
                                 # Холодный звонок: val - это timestamp (Unix timestamp)
                                 # Сохраняем для последующей обработки (берем первое значение, если их несколько)
@@ -1608,6 +1648,10 @@ def migrate_filtered(
                         pt0, pv0, pc0 = phones[0]
                         if not (pc0 or "").strip():
                             phones[0] = (pt0, pv0, note_text[:255])
+                            if debug_count_for_extraction < 3:
+                                logger.debug(f"  -> Applied note_text to first phone: {note_text[:100]}")
+                    elif debug_count_for_extraction < 3 and not note_text:
+                        logger.debug(f"  -> ⚠️ No note_text found for contact {amo_contact_id} (checked direct fields and custom_fields)")
 
                     dedup_emails: list[tuple[str, str]] = []
                     seen_e = set()
@@ -1622,6 +1666,31 @@ def migrate_filtered(
                     emails = dedup_emails
                     
                     # ОТЛАДКА: сохраняем сырые данные для анализа
+                    # Собираем информацию о том, где искали примечания
+                    note_search_info = []
+                    if isinstance(ac, dict):
+                        # Проверяем прямые поля
+                        for note_key in ["note", "notes", "comment", "comments", "remark", "remarks"]:
+                            if note_key in ac:
+                                note_search_info.append(f"direct:{note_key}={bool(ac.get(note_key))}")
+                        # Проверяем _embedded
+                        if "_embedded" in ac:
+                            embedded = ac.get("_embedded") or {}
+                            if isinstance(embedded, dict) and "notes" in embedded:
+                                notes_list = embedded.get("notes") or []
+                                note_search_info.append(f"_embedded.notes={len(notes_list) if isinstance(notes_list, list) else 0}")
+                        # Проверяем custom_fields на наличие полей с примечаниями
+                        note_fields_in_custom = []
+                        for cf in custom_fields:
+                            if isinstance(cf, dict):
+                                field_name = str(cf.get("field_name") or "").lower()
+                                field_code = str(cf.get("field_code") or "").upper()
+                                if any(k in field_name for k in ["примеч", "комментар", "коммент", "заметк"]) or \
+                                   any(k in field_code for k in ["NOTE", "COMMENT", "REMARK"]):
+                                    note_fields_in_custom.append(f"{field_name}({field_code})")
+                        if note_fields_in_custom:
+                            note_search_info.append(f"custom_fields:{','.join(note_fields_in_custom)}")
+                    
                     debug_data = {
                         "source": "amo_api",
                         "amo_contact_id": amo_contact_id,
@@ -1631,6 +1700,7 @@ def migrate_filtered(
                         "extracted_emails": emails,
                         "extracted_position": position,
                         "extracted_note_text": note_text,  # Добавляем note_text для отладки
+                        "note_search_info": note_search_info,  # Где искали примечания
                         "custom_fields_count": len(custom_fields),
                         "custom_fields_sample": custom_fields[:3] if custom_fields else [],  # первые 3 для отладки
                         "has_phone_field": bool(ac.get("phone")),
@@ -1685,6 +1755,7 @@ def migrate_filtered(
                             "emails_found": [e[1] for e in emails],
                             "position_found": position,
                             "note_text_found": note_text,  # Добавляем note_text для отладки
+                            "note_search_info": note_search_info,  # Где искали примечания
                             "custom_fields_count": len(custom_fields),
                             "custom_fields_sample": custom_fields_debug,
                             "raw_contact_keys": list(ac.keys())[:20] if isinstance(ac, dict) else [],
