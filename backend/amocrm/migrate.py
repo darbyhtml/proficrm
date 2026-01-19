@@ -1761,7 +1761,7 @@ def migrate_filtered(
                     if ac_idx < 5 or contacts_processed % 10 == 0:
                         logger.info(f"migrate_filtered: обработка контакта {ac_idx + 1}/{len(full_contacts)} (processed: {contacts_processed}, skipped: {contacts_skipped}, errors: {contacts_errors})")
                     
-                    try:
+                        try:
                         # ОТЛАДКА: логируем сырую структуру контакта для первых 3
                         if structure_logged_count < 3:
                             logger.debug(f"===== RAW CONTACT STRUCTURE ({structure_logged_count + 1}) [index {ac_idx}] =====")
