@@ -62,7 +62,7 @@
             <div class="flex flex-wrap items-center gap-2 mb-3">
               <span class="font-mono text-xs text-brand-dark/70">{{ call.created_at|date:"d.m.Y H:i:s" }}</span>
               <span class="font-mono text-sm font-medium">{{ call.phone_raw|format_phone }}</span>
-              <span class="badge badge-warn" style="padding:.2rem .5rem;font-size:.7rem">Холодный</span>
+              <span class="badge badge-warn badge-sm">Холодный</span>
               {% if call.contact %}
                 <span class="muted-2">· {{ call.contact }}</span>
               {% endif %}
