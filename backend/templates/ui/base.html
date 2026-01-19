@@ -83,19 +83,29 @@
       }
       .mail-progress__body{
         min-width:0;
+        display:flex;
+        flex-direction:column;
+        gap:2px;
       }
       .mail-progress__title,
-      .mail-progress__counts,
-      .mail-progress__counts-short{
+      .mail-progress__counts{
         max-width: 240px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .mail-progress__counts-short{ display:none; }
+      .mail-progress__counts-short{
+        display:none;
+        max-width: 240px;
+        white-space:pre-line;
+        line-height:1.25;
+      }
       .mail-progress.is-collapsed .mail-progress__title,
       .mail-progress.is-collapsed .mail-progress__counts{ display:none; }
       .mail-progress.is-collapsed .mail-progress__counts-short{ display:block; }
+      .mail-progress__limit{ display:none; }
+      .mail-progress--limit .mail-progress__limit{ display:block; }
+      .mail-progress.is-collapsed.mail-progress--limit .mail-progress__limit{ display:none; }
       .mail-progress.is-collapsed{ padding: 8px 10px; gap: 8px; }
       /* На совсем узких экранах делаем еще компактнее */
       @media (max-width: 480px){
@@ -1010,6 +1020,7 @@
         <div id="mailProgressText" class="text-sm font-medium mail-progress__title">—</div>
         <div id="mailProgressCounts" class="text-[11px] muted-2 mail-progress__counts">—</div>
         <div id="mailProgressCountsShort" class="text-[11px] muted-2 mail-progress__counts-short">—</div>
+        <div id="mailProgressLimit" class="hidden text-[11px] text-red-700 font-medium mail-progress__limit">Лимит на сегодня исчерпан</div>
         <button id="mailProgressClose" type="button" class="hidden absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center rounded-full border border-brand-soft bg-white text-brand-dark/60 hover:text-red-500 hover:border-red-400 transition-colors" title="Закрыть">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M18 6L6 18"/>
@@ -1868,8 +1879,9 @@
         const text = document.getElementById('mailProgressText');
         const counts = document.getElementById('mailProgressCounts');
         const countsShort = document.getElementById('mailProgressCountsShort');
+        const limitNote = document.getElementById('mailProgressLimit');
         const closeBtn = document.getElementById('mailProgressClose');
-        if (!widget || !circle || !pct || !text || !counts || !countsShort || !closeBtn) return;
+        if (!widget || !circle || !pct || !text || !counts || !countsShort || !limitNote || !closeBtn) return;
 
         const STORAGE_KEY = 'mail_progress_dismissed_campaign';
         let dismissedForCampaignId = null;
@@ -1910,9 +1922,24 @@
             widget.classList.remove('hidden');
             pct.textContent = `${p}%`;
             text.textContent = a.name || 'Кампания';
-            counts.textContent = `Отпр.: ${a.sent} · Ошибки: ${a.failed} · В очереди: ${a.pending}`;
-            countsShort.textContent = `Отпр.: ${a.sent}`;
+            counts.textContent = `Всего: ${a.total} · Отправлено: ${a.sent} · Ошибки: ${a.failed} · В очереди: ${a.pending}`;
+            countsShort.innerHTML = [
+              `Всего: <b>${a.total}</b>`,
+              `Отправлено: <b>${a.sent}</b>`,
+              `Ошибки: <b>${a.failed}</b>`,
+            ].join('<br>');
             circle.style.background = `conic-gradient(var(--brand-teal) ${deg}deg, rgba(194,226,222,.6) ${deg}deg)`;
+
+            // Лимит на сегодня
+            const limitReached = !!a.limit_reached;
+            if (limitReached) {
+              limitNote.classList.remove('hidden');
+              limitNote.textContent = `Лимит на сегодня (${a.per_user_daily_limit || '—'}) исчерпан`;
+              widget.classList.add('mail-progress--limit');
+            } else {
+              limitNote.classList.add('hidden');
+              widget.classList.remove('mail-progress--limit');
+            }
 
             // Крестик показываем только после завершения (SENT)
             if (status === 'sent') {
