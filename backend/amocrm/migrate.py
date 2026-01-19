@@ -1421,11 +1421,18 @@ def migrate_filtered(
                                     logger.debug(f"  - First custom_field: {cfv[0]}")
                             logger.debug(f"  - Has 'phone': {'phone' in ac}, value: {ac.get('phone')}")
                             logger.debug(f"  - Has 'email': {'email' in ac}, value: {ac.get('email')}")
-                            # Полная JSON-структура
+                            # Полная JSON-структура - ВАЖНО для поиска примечаний!
                             import json
                             try:
                                 json_str = json.dumps(ac, ensure_ascii=False, indent=2)
-                                logger.debug(f"  - Full JSON (first 2000 chars):\n{json_str[:2000]}")
+                                # Увеличиваем размер для поиска примечаний
+                                logger.debug(f"  - Full JSON (first 5000 chars):\n{json_str[:5000]}")
+                                # Также проверяем наличие ключевых полей для примечаний
+                                note_related_keys = [k for k in ac.keys() if any(word in k.lower() for word in ["note", "comment", "remark", "примеч", "коммент"])]
+                                if note_related_keys:
+                                    logger.debug(f"  - ⚠️ Found note-related keys: {note_related_keys}")
+                                    for key in note_related_keys:
+                                        logger.debug(f"    - {key}: {str(ac.get(key))[:200]}")
                             except Exception as e:
                                 logger.debug(f"  - JSON dump error: {e}")
                                 import traceback
@@ -1563,14 +1570,29 @@ def migrate_filtered(
                             logger.debug(f"  - ⚠️ custom_fields is not a list: {type(custom_fields)}")
                     
                     # ПРОВЕРЯЕМ ВСЕ ВОЗМОЖНЫЕ МЕСТА ДЛЯ ПРИМЕЧАНИЙ:
-                    # 1. Прямые поля контакта (note, comments, comment) - редко используется
-                    for note_key in ["note", "notes", "comment", "comments", "remark", "remarks"]:
-                        if ac.get(note_key):
-                            note_val = str(ac.get(note_key) or "").strip()
-                            if note_val and not note_text:
-                                note_text = note_val[:255]
-                                if debug_count_for_extraction < 3:
-                                    logger.debug(f"  -> Found note_text in direct field '{note_key}': {note_text[:100]}")
+                    # 1. Прямые поля контакта - проверяем ВСЕ возможные варианты
+                    # В amoCRM примечание может быть в разных полях
+                    direct_note_keys = ["note", "notes", "comment", "comments", "remark", "remarks", "text", "description", "description_text"]
+                    for note_key in direct_note_keys:
+                        note_val_raw = ac.get(note_key)
+                        if note_val_raw:
+                            # Может быть строка или список
+                            if isinstance(note_val_raw, list):
+                                note_val = " ".join([str(v) for v in note_val_raw if v]).strip()
+                            else:
+                                note_val = str(note_val_raw).strip()
+                            # Пропускаем ID и очень короткие значения
+                            if note_val and len(note_val) > 3 and not note_val.isdigit():
+                                if not note_text:
+                                    note_text = note_val[:255]
+                                    if debug_count_for_extraction < 3:
+                                        logger.debug(f"  -> ✅ Found note_text in direct field '{note_key}': {note_text[:100]}")
+                                else:
+                                    # Объединяем, если уже есть
+                                    combined = f"{note_text}; {note_val[:100]}"
+                                    note_text = combined[:255]
+                                    if debug_count_for_extraction < 3:
+                                        logger.debug(f"  -> Appended note_text from direct field '{note_key}': {note_val[:100]}")
                     
                     # 2. В custom_fields_values - ПРИОРИТЕТ! Здесь хранится поле "Примечание"
                     # (обработка будет ниже в цикле по custom_fields)
@@ -1604,23 +1626,31 @@ def migrate_filtered(
                                                 )
                                         
                                         # ВАЖНО: не берем служебные заметки (call_out, call_in и т.д.) как примечание
-                                        # Они обрабатываются отдельно и не должны попадать в note_text
+                                        # Но берем заметки типа "common", "text", "common_message" - это могут быть примечания!
                                         note_type_val = str(note_item.get("note_type") or "").strip().lower()
                                         is_service_note = note_type_val in ["call_out", "call_in", "call", "amomail", "sms", "task"]
+                                        is_note_type = note_type_val in ["common", "text", "common_message", "message", "note"]
                                         
-                                        if note_val and len(note_val) > 5 and not is_service_note:  # Игнорируем служебные и очень короткие значения
-                                            if not note_text:
+                                        # Берем заметки типа "common"/"text" (это примечания) или любые заметки с текстом, если нет служебных
+                                        if note_val and len(note_val) > 5:
+                                            # Если это заметка типа "common" или "text" - это точно примечание
+                                            if is_note_type:
+                                                if not note_text or is_service_note:
+                                                    note_text = note_val[:255]
+                                                    if debug_count_for_extraction < 3:
+                                                        logger.debug(f"  -> ✅ Found note_text in _embedded.notes[{note_idx}] (type={note_type_val}): {note_text[:100]}")
+                                                else:
+                                                    combined = f"{note_text}; {note_val[:100]}"
+                                                    note_text = combined[:255]
+                                                    if debug_count_for_extraction < 3:
+                                                        logger.debug(f"  -> Appended note_text from _embedded.notes[{note_idx}] (type={note_type_val}): {note_val[:100]}")
+                                            # Если это не служебная заметка и у нас еще нет примечания - берем её
+                                            elif not is_service_note and not note_text:
                                                 note_text = note_val[:255]
                                                 if debug_count_for_extraction < 3:
-                                                    logger.debug(f"  -> Found note_text in _embedded.notes[{note_idx}] (type={note_type_val}): {note_text[:100]}")
-                                            else:
-                                                # Объединяем несколько заметок
-                                                combined = f"{note_text}; {note_val[:100]}"
-                                                note_text = combined[:255]
-                                                if debug_count_for_extraction < 3:
-                                                    logger.debug(f"  -> Appended note_text from _embedded.notes[{note_idx}]: {note_val[:100]}")
-                                            # Берем первые 3 заметки (чтобы не перегружать)
-                                            if note_idx >= 2:
+                                                    logger.debug(f"  -> Found note_text in _embedded.notes[{note_idx}] (type={note_type_val}, not service): {note_text[:100]}")
+                                            # Берем первые 5 заметок (чтобы найти примечание)
+                                            if note_idx >= 4:
                                                 break
                                         elif is_service_note and debug_count_for_extraction < 3:
                                             logger.debug(f"  -> Skipped service note type '{note_type_val}' (not a real note)")
