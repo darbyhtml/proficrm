@@ -1897,22 +1897,40 @@ def migrate_filtered(
                         # Проверяем custom_fields на наличие полей с примечаниями
                         note_fields_in_custom = []
                         all_custom_field_names = []  # Для отладки - показываем ВСЕ поля
+                        all_custom_fields_with_values = []  # Для отладки - показываем ВСЕ поля с их значениями
                         for cf in custom_fields:
                             if isinstance(cf, dict):
+                                field_id = cf.get("field_id")  # ВАЖНО: field_id может быть числом (366537)
                                 field_name = str(cf.get("field_name") or "").strip()
                                 field_code = str(cf.get("field_code") or "").strip()
                                 field_name_lower = field_name.lower()
                                 field_code_upper = field_code.upper()
                                 
-                                # Сохраняем все поля для отладки
-                                all_custom_field_names.append(f"{field_name}({field_code})")
+                                # Сохраняем все поля для отладки (включая field_id)
+                                all_custom_field_names.append(f"id={field_id} name={field_name} code={field_code}")
+                                
+                                # Сохраняем все поля с их значениями для отладки
+                                values = cf.get("values") or []
+                                if values and isinstance(values, list) and len(values) > 0:
+                                    first_val = values[0]
+                                    if isinstance(first_val, dict):
+                                        val_text = str(first_val.get("value", ""))[:100]
+                                    else:
+                                        val_text = str(first_val)[:100]
+                                    if val_text:
+                                        all_custom_fields_with_values.append(f"id={field_id} name={field_name} code={field_code} value={val_text[:50]}")
                                 
                                 # Проверяем на примечания (расширенный список ключевых слов)
-                                if any(k in field_name_lower for k in ["примеч", "комментар", "коммент", "заметк", "note", "comment", "remark"]) or \
-                                   any(k in field_code_upper for k in ["NOTE", "COMMENT", "REMARK", "NOTE_TEXT", "COMMENT_TEXT"]):
-                                    note_fields_in_custom.append(f"{field_name}({field_code})")
+                                # Также проверяем field_id - возможно, примечание имеет конкретный ID (например, 366537)
+                                is_note_field = (
+                                    any(k in field_name_lower for k in ["примеч", "комментар", "коммент", "заметк", "note", "comment", "remark"]) or
+                                    any(k in field_code_upper for k in ["NOTE", "COMMENT", "REMARK", "NOTE_TEXT", "COMMENT_TEXT"]) or
+                                    (field_id and str(field_id) in ["366537"])  # Известные ID полей примечаний
+                                )
+                                
+                                if is_note_field:
+                                    note_fields_in_custom.append(f"id={field_id} name={field_name}({field_code})")
                                     # Логируем значение этого поля
-                                    values = cf.get("values") or []
                                     if values and isinstance(values, list) and len(values) > 0:
                                         first_val = values[0]
                                         if isinstance(first_val, dict):
@@ -1920,7 +1938,10 @@ def migrate_filtered(
                                         else:
                                             val_text = str(first_val)[:100]
                                         if val_text:
+                                            note_text = val_text[:255]  # Устанавливаем примечание!
                                             note_search_info.append(f"found_note_value:{val_text[:50]}")
+                                            if debug_count_for_extraction < 3:
+                                                logger.debug(f"  -> ✅ Found note_text in custom_field id={field_id} name={field_name}: {note_text[:100]}")
                         
                         # Добавляем информацию о всех полях для отладки
                         if all_custom_field_names:
