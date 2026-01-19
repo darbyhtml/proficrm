@@ -4320,6 +4320,66 @@ def task_list(request: HttpRequest) -> HttpResponse:
     return response
 
 
+def _clean_assigned_to_id(value) -> str | None:
+    """
+    Очищает и извлекает валидный UUID из значения assigned_to.
+    Обрабатывает различные форматы: строки, списки, JSON-строки.
+    
+    Args:
+        value: Значение из POST/GET запроса
+        
+    Returns:
+        Очищенный UUID в виде строки или None, если значение невалидно
+    """
+    if not value:
+        return None
+    
+    # Если это список, берем первый элемент
+    if isinstance(value, list):
+        if not value:
+            return None
+        value = value[0]
+    
+    # Преобразуем в строку
+    value_str = str(value).strip()
+    
+    if not value_str:
+        return None
+    
+    # Пытаемся распарсить JSON, если это JSON-строка
+    import json
+    try:
+        parsed = json.loads(value_str)
+        if isinstance(parsed, list) and parsed:
+            value_str = str(parsed[0]).strip()
+        elif parsed:
+            value_str = str(parsed).strip()
+    except (json.JSONDecodeError, ValueError, TypeError):
+        pass
+    
+    # Если все еще выглядит как список в строке, пытаемся извлечь значение
+    if value_str.startswith('[') and value_str.endswith(']'):
+        try:
+            # Пытаемся распарсить как Python список
+            import ast
+            parsed = ast.literal_eval(value_str)
+            if isinstance(parsed, list) and parsed:
+                value_str = str(parsed[0]).strip()
+        except (ValueError, SyntaxError, TypeError):
+            pass
+    
+    # Убираем кавычки, если есть
+    value_str = value_str.strip("'\"")
+    
+    # Проверяем, что это валидный UUID
+    try:
+        from uuid import UUID
+        UUID(value_str)
+        return value_str
+    except (ValueError, TypeError):
+        return None
+
+
 @login_required
 def task_create(request: HttpRequest) -> HttpResponse:
     user: User = request.user
@@ -4330,12 +4390,9 @@ def task_create(request: HttpRequest) -> HttpResponse:
         is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
         
         # Получаем выбранного пользователя из POST данных ДО создания формы
-        # assigned_to может прийти как одно значение или как список
+        # assigned_to может прийти в различных форматах, используем функцию очистки
         assigned_to_raw = request.POST.get("assigned_to", "")
-        if isinstance(assigned_to_raw, list):
-            assigned_to_id = assigned_to_raw[0].strip() if assigned_to_raw else ""
-        else:
-            assigned_to_id = assigned_to_raw.strip() if assigned_to_raw else ""
+        assigned_to_id = _clean_assigned_to_id(assigned_to_raw)
         
         # Создаем форму
         form = TaskForm(request.POST)
@@ -4498,7 +4555,7 @@ def task_create(request: HttpRequest) -> HttpResponse:
                 }, status=400)
             # Для не-AJAX запросов продолжаем рендеринг формы с ошибками
             # Устанавливаем queryset для assigned_to, чтобы форма могла быть отрендерена с ошибками
-            assigned_to_id_from_post = request.POST.get("assigned_to", "").strip() if request.method == "POST" else None
+            assigned_to_id_from_post = _clean_assigned_to_id(request.POST.get("assigned_to", "")) if request.method == "POST" else None
             _set_assigned_to_queryset(form, user, assigned_to_id=assigned_to_id_from_post)
     else:
         initial = {"assigned_to": user}
@@ -4578,7 +4635,8 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: str 
     
     # Если передан assigned_to_id (для POST запросов), используем его
     if assigned_to_id:
-        current_user_id = assigned_to_id.strip() if assigned_to_id else None
+        # Очищаем значение, если оно еще не очищено
+        current_user_id = _clean_assigned_to_id(assigned_to_id)
     
     # Если не передан, проверяем initial (для GET запросов)
     if not current_user_id and hasattr(form, 'initial') and 'assigned_to' in form.initial:
