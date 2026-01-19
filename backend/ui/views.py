@@ -63,7 +63,7 @@ from ui.models import UiGlobalConfig, AmoApiConfig
 
 from amocrm.client import AmoApiError, AmoClient
 from amocrm.migrate import fetch_amo_users, fetch_company_custom_fields, migrate_filtered
-from crm.utils import require_admin
+from crm.utils import require_admin, get_effective_user
 
 # Константы для фильтров
 RESPONSIBLE_FILTER_NONE = "none"  # Значение для фильтрации компаний без ответственного
@@ -145,8 +145,8 @@ def _detach_client_branches(*, head_company: Company) -> list[Company]:
 @login_required
 def view_as_update(request: HttpRequest) -> HttpResponse:
     """
-    Установить режим "просмотр как роль/филиал" для администратора.
-    Не меняет реальные права пользователя, используется только для фильтрации/отображения.
+    Установить режим "просмотр как роль/филиал/пользователь" для администратора.
+    При выборе конкретного пользователя применяются его реальные права.
     """
     user: User = request.user  # type: ignore[assignment]
     if not (user.is_superuser or user.role == User.Role.ADMIN):
@@ -156,28 +156,53 @@ def view_as_update(request: HttpRequest) -> HttpResponse:
     if request.method != "POST":
         return redirect(request.META.get("HTTP_REFERER") or "/")
 
+    view_user_id = (request.POST.get("view_user_id") or "").strip()
     view_role = (request.POST.get("view_role") or "").strip()
     view_branch_id = (request.POST.get("view_branch_id") or "").strip()
 
-    # Валидация и сохранение роли
-    valid_roles = {choice[0] for choice in User.Role.choices}
-    if view_role and view_role in valid_roles:
-        request.session["view_as_role"] = view_role
-    else:
-        request.session.pop("view_as_role", None)
-
-    # Валидация и сохранение филиала
-    if view_branch_id:
+    # Приоритет: если выбран конкретный пользователь, используем его
+    # и сбрасываем роль/филиал (они берутся из пользователя)
+    if view_user_id:
         try:
-            bid = int(view_branch_id)
-            if Branch.objects.filter(id=bid).exists():
-                request.session["view_as_branch_id"] = bid
+            user_id = int(view_user_id)
+            view_as_user = User.objects.filter(id=user_id, is_active=True).first()
+            if view_as_user:
+                request.session["view_as_user_id"] = user_id
+                # Автоматически устанавливаем роль и филиал из выбранного пользователя
+                request.session["view_as_role"] = view_as_user.role
+                if view_as_user.branch_id:
+                    request.session["view_as_branch_id"] = view_as_user.branch_id
+                else:
+                    request.session.pop("view_as_branch_id", None)
+                # Сбрасываем старые настройки
+                messages.success(request, f"Режим просмотра: от лица пользователя {view_as_user.get_full_name() or view_as_user.username}")
             else:
-                request.session.pop("view_as_branch_id", None)
+                request.session.pop("view_as_user_id", None)
         except (TypeError, ValueError):
-            request.session.pop("view_as_branch_id", None)
+            request.session.pop("view_as_user_id", None)
     else:
-        request.session.pop("view_as_branch_id", None)
+        # Если пользователь не выбран, работаем с ролью/филиалом как раньше
+        request.session.pop("view_as_user_id", None)
+        
+        # Валидация и сохранение роли
+        valid_roles = {choice[0] for choice in User.Role.choices}
+        if view_role and view_role in valid_roles:
+            request.session["view_as_role"] = view_role
+        else:
+            request.session.pop("view_as_role", None)
+
+        # Валидация и сохранение филиала
+        if view_branch_id:
+            try:
+                bid = int(view_branch_id)
+                if Branch.objects.filter(id=bid).exists():
+                    request.session["view_as_branch_id"] = bid
+                else:
+                    request.session.pop("view_as_branch_id", None)
+            except (TypeError, ValueError):
+                request.session.pop("view_as_branch_id", None)
+        else:
+            request.session.pop("view_as_branch_id", None)
 
     next_url = request.POST.get("next") or request.META.get("HTTP_REFERER") or "/"
     return redirect(next_url)
@@ -193,6 +218,7 @@ def view_as_reset(request: HttpRequest) -> HttpResponse:
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
 
+    request.session.pop("view_as_user_id", None)
     request.session.pop("view_as_role", None)
     request.session.pop("view_as_branch_id", None)
 

@@ -675,11 +675,22 @@
                 {% csrf_token %}
                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
                 <div class="flex items-center gap-1">
-                  <span class="text-brand-dark/60">Роль:</span>
+                  <span class="text-brand-dark/60">Пользователь:</span>
+                  <select name="view_user_id" class="select w-auto py-1 px-2 text-xs" style="min-width: 150px;">
+                    <option value="">— Выбрать —</option>
+                    {% for u in view_as_users %}
+                      <option value="{{ u.id }}" {% if view_as_user and view_as_user.id == u.id %}selected{% endif %}>
+                        {{ u.get_full_name|default:u.username }}{% if u.branch %} ({{ u.branch.name }}){% endif %}
+                      </option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="flex items-center gap-1">
+                  <span class="text-brand-dark/60">или Роль:</span>
                   <select name="view_role" class="select w-auto py-1 px-2 text-xs">
                     <option value="">Администратор</option>
                     {% for value,label in view_as_roles %}
-                      <option value="{{ value }}" {% if view_as_role == value %}selected{% endif %}>{{ label }}</option>
+                      <option value="{{ value }}" {% if not view_as_user and view_as_role == value %}selected{% endif %}>{{ label }}</option>
                     {% endfor %}
                   </select>
                 </div>
@@ -688,12 +699,12 @@
                   <select name="view_as_branch_id" class="select w-auto py-1 px-2 text-xs">
                     <option value="">Все</option>
                     {% for b in view_as_branches %}
-                      <option value="{{ b.id }}" {% if view_as_branch and view_as_branch.id == b.id %}selected{% endif %}>{{ b.name }}</option>
+                      <option value="{{ b.id }}" {% if not view_as_user and view_as_branch and view_as_branch.id == b.id %}selected{% endif %}>{{ b.name }}</option>
                     {% endfor %}
                   </select>
                 </div>
                 <button type="submit" class="btn btn-outline py-1 px-2 text-xs">Применить</button>
-                {% if view_as_role or view_as_branch %}
+                {% if view_as_user or view_as_role or view_as_branch %}
                   <a href="{% url 'view_as_reset' %}" class="text-xs text-brand-dark/60 underline">Сброс</a>
                 {% endif %}
               </form>
