@@ -732,15 +732,16 @@ def fetch_companies_by_responsible(client: AmoClient, responsible_user_id: int, 
     params = {f"filter[responsible_user_id]": responsible_user_id, "with": "custom_fields"}
     if with_contacts:
         # Добавляем contacts в with, чтобы получить контакты в _embedded.contacts
+        # Согласно документации: контакты в _embedded.contacts приходят ПОЛНЫМИ, включая custom_fields_values
         # НЕ запрашиваем notes здесь - это слишком тяжело, запросим отдельно если нужно
         params["with"] = "custom_fields,contacts"
     return client.get_all_pages(
         "/api/v4/companies",
         params=params,
         embedded_key="companies",
-        limit=50,  # Уменьшено до 50 для избежания 504 Gateway Timeout
+        limit=10,  # КРИТИЧЕСКИ уменьшено до 10 - даже для 3 компаний может быть много контактов
         max_pages=limit_pages,
-        delay_between_pages=0.5,  # Задержка между страницами для избежания rate limit
+        delay_between_pages=1.0,  # Увеличена задержка до 1 сек между страницами
     )
 
 
@@ -1583,8 +1584,9 @@ def migrate_filtered(
                 # Создаём set для быстрой проверки: контакты должны быть связаны только с компаниями из текущей пачки
                 amo_ids_set = set(amo_ids)
                 
-                # НОВЫЙ ПОДХОД: извлекаем контакты из _embedded.contacts каждого объекта компании
-                # Это более эффективно, чем отдельный запрос filter[company_id][]
+                # ОПТИМИЗИРОВАННЫЙ ПОДХОД: извлекаем контакты из _embedded.contacts каждого объекта компании
+                # Согласно документации AmoCRM: контакты в _embedded.contacts приходят ПОЛНЫМИ, включая custom_fields_values
+                # НЕ нужно делать дополнительные запросы по ID!
                 amo_contacts: list[dict[str, Any]] = []
                 companies_with_contacts: dict[int, list[dict[str, Any]]] = {}  # amo_id -> список контактов
                 
@@ -1598,18 +1600,6 @@ def migrate_filtered(
                     embedded = amo_c.get("_embedded") or {}
                     contacts_in_company = embedded.get("contacts") or []
                     if isinstance(contacts_in_company, list) and contacts_in_company:
-                        # ОТЛАДКА: проверяем структуру первого контакта
-                        if len(contacts_in_company) > 0:
-                            first_contact = contacts_in_company[0]
-                            logger.debug(f"Company {amo_company_id} first contact structure:")
-                            logger.debug(f"  - Type: {type(first_contact)}")
-                            if isinstance(first_contact, dict):
-                                logger.debug(f"  - Keys: {list(first_contact.keys())}")
-                                logger.debug(f"  - Has 'id': {'id' in first_contact}")
-                                logger.debug(f"  - Has 'custom_fields_values': {'custom_fields_values' in first_contact}")
-                                logger.debug(f"  - Has 'first_name': {'first_name' in first_contact}")
-                                logger.debug(f"  - Has 'last_name': {'last_name' in first_contact}")
-                                logger.debug(f"  - Sample (first 300 chars): {str(first_contact)[:300]}")
                         companies_with_contacts[amo_company_id] = contacts_in_company
                         amo_contacts.extend(contacts_in_company)
                         logger.debug(f"Company {amo_company_id} has {len(contacts_in_company)} contacts in _embedded.contacts")
@@ -1617,38 +1607,51 @@ def migrate_filtered(
                 res.contacts_seen = len(amo_contacts)
                 logger.debug(f"Extracted {res.contacts_seen} contacts from _embedded.contacts of {len(companies_with_contacts)} companies")
                 
-                # Флаг: были ли контакты получены через альтернативный метод
-                contacts_from_alt_method = False
+                # Согласно документации: контакты в _embedded.contacts уже ПОЛНЫЕ с custom_fields_values
+                # Проверяем это и используем их напрямую, БЕЗ дополнительных запросов
                 full_contacts: list[dict[str, Any]] = []
+                need_additional_fetch = False
                 
-                # ОТЛАДКА: если контактов не найдено в _embedded, пробуем альтернативный метод
+                if amo_contacts:
+                    # Проверяем первый контакт - есть ли у него нужные поля
+                    first_contact = amo_contacts[0] if isinstance(amo_contacts[0], dict) else {}
+                    if "custom_fields_values" in first_contact:
+                        # Контакты уже полные, используем их как есть
+                        full_contacts = amo_contacts
+                        logger.debug(f"Contacts from _embedded.contacts are FULL (have custom_fields_values), using them directly. Total: {len(full_contacts)}")
+                    else:
+                        # Контакты неполные, нужен дополнительный запрос (но это редко)
+                        need_additional_fetch = True
+                        logger.debug("Contacts from _embedded.contacts are incomplete, will fetch full data")
+                
+                # Альтернативный метод: если контактов нет в _embedded, пробуем через filter[company_id][]
                 if res.contacts_seen == 0:
                     logger.debug("No contacts found in _embedded.contacts, trying alternative method via filter[company_id][]")
                     # Альтернативный метод: получаем контакты через filter[company_id][]
                     # Согласно документации AmoCRM API v4: /api/v4/contacts?filter[company_id][]=1&filter[company_id][]=2
                     try:
-                        # Получаем контакты батчами по 10 компаний (уменьшено для избежания 504)
-                        batch_size = 10
+                        # КРИТИЧЕСКИ: получаем контакты батчами по 3 компании (для избежания 504)
+                        batch_size = 3
                         for i in range(0, len(amo_ids), batch_size):
-                            # Задержка между батчами (включая первый для безопасности)
+                            # Задержка между батчами (включая первый)
                             if i > 0:
-                                time.sleep(2.0)  # Увеличена задержка до 2 сек между батчами
+                                time.sleep(3.0)  # КРИТИЧЕСКИ: 3 сек между батчами
                             else:
-                                time.sleep(0.5)  # Небольшая задержка перед первым батчем
+                                time.sleep(1.0)  # Задержка перед первым батчем
                             
                             company_ids_batch = list(amo_ids)[i : i + batch_size]
                             logger.debug(f"Trying to fetch contacts via filter[company_id][] for {len(company_ids_batch)} companies... (batch {i//batch_size + 1})")
-                            # НЕ запрашиваем notes здесь - это слишком тяжело, только custom_fields
+                            # НЕ запрашиваем notes - это слишком тяжело, только custom_fields
                             contacts_alt = client.get_all_pages(
                                 "/api/v4/contacts",
                                 params={
                                     "filter[company_id][]": company_ids_batch,
-                                    "with": "custom_fields",  # Убрали notes - слишком тяжело
+                                    "with": "custom_fields",  # Только custom_fields, БЕЗ notes
                                 },
                                 embedded_key="contacts",
-                                limit=50,  # Уменьшено до 50
-                                max_pages=10,  # Ограничиваем страницы
-                                delay_between_pages=0.5,  # Задержка между страницами
+                                limit=25,  # КРИТИЧЕСКИ уменьшено до 25
+                                max_pages=5,  # Ограничиваем страницы
+                                delay_between_pages=1.0,  # Увеличена задержка до 1 сек
                             )
                             if isinstance(contacts_alt, list) and contacts_alt:
                                 logger.debug(f"Found {len(contacts_alt)} contacts via filter[company_id][] method")
@@ -1675,11 +1678,10 @@ def migrate_filtered(
                                                 if comp_id_direct in amo_ids_set:
                                                     contact_id_to_company_map[contact_id] = comp_id_direct
                                 res.contacts_seen = len(amo_contacts)
-                                contacts_from_alt_method = True
-                                # Если получили контакты через альтернативный метод, они уже полные
-                                # Не нужно делать дополнительный запрос по ID
+                                # Контакты через filter[company_id][] уже полные с custom_fields
                                 full_contacts = amo_contacts
-                                logger.debug(f"Using contacts from alternative method (already full data)")
+                                logger.debug(f"Using {len(full_contacts)} contacts from alternative method (already full data)")
+                                need_additional_fetch = False  # Не нужно дополнительных запросов
                                 break  # Нашли контакты, выходим из цикла
                     except Exception as e:
                         logger.debug(f"Error fetching contacts via filter[company_id][]: {e}", exc_info=True)
@@ -1697,126 +1699,65 @@ def migrate_filtered(
                         res.contacts_preview.append(debug_info)
                 
                 # Согласно документации AmoCRM API v4:
-                # 1. В _embedded.contacts компаний приходят только ссылки (id)
-                # 2. Для получения полных данных контактов используем filter[company_id][] или filter[id][]
-                # 3. Параметр with=custom_fields,notes для получения кастомных полей и заметок
+                # Контакты в _embedded.contacts приходят ПОЛНЫМИ с custom_fields_values
+                # НЕ нужно делать дополнительные запросы по ID, если контакты уже полные!
                 
-                # Собираем ID контактов из _embedded.contacts
-                contact_ids: list[int] = []
+                # Создаем маппинг контактов к компаниям
                 contact_id_to_company_map: dict[int, int] = {}  # contact_id -> amo_company_id
-                for ac in amo_contacts:
-                    if isinstance(ac, dict):
-                        contact_id = int(ac.get("id") or 0)
-                        if contact_id:
-                            contact_ids.append(contact_id)
-                            # Находим компанию для этого контакта
-                            for cid, contacts_list in companies_with_contacts.items():
-                                if ac in contacts_list:
-                                    contact_id_to_company_map[contact_id] = cid
-                                    break
+                for cid, contacts_list in companies_with_contacts.items():
+                    for contact in contacts_list:
+                        if isinstance(contact, dict):
+                            contact_id = int(contact.get("id") or 0)
+                            if contact_id:
+                                contact_id_to_company_map[contact_id] = cid
                 
-                # Получаем полные данные контактов по их ID
-                # Согласно документации: /api/v4/contacts?filter[id][]=1&filter[id][]=2&with=custom_fields
-                # Пропускаем, если контакты уже получены через альтернативный метод
-                # ВАЖНО: Если контакты уже есть в _embedded.contacts с нужными полями, не делаем дополнительный запрос
-                if not contacts_from_alt_method:
-                    # Проверяем, есть ли у контактов из _embedded нужные поля
-                    need_full_data = False
-                    if amo_contacts:
-                        first_contact = amo_contacts[0] if isinstance(amo_contacts[0], dict) else {}
-                        # Если нет custom_fields_values, нужен полный запрос
-                        if "custom_fields_values" not in first_contact:
-                            need_full_data = True
-                            logger.debug("Contacts from _embedded don't have custom_fields_values, fetching full data")
-                        else:
-                            logger.debug("Contacts from _embedded already have custom_fields_values, skipping additional request")
-                            # Используем контакты из _embedded как есть
-                            full_contacts = amo_contacts
-                    
-                    if need_full_data and contact_ids:
-                        logger.debug(f"Fetching full contact data for {len(contact_ids)} contact IDs...")
+                # Дополнительный запрос по ID нужен ТОЛЬКО если контакты неполные (редкий случай)
+                if need_additional_fetch and amo_contacts:
+                    contact_ids = [int(c.get("id") or 0) for c in amo_contacts if isinstance(c, dict) and c.get("id")]
+                    if contact_ids:
+                        logger.debug(f"Fetching full contact data for {len(contact_ids)} contact IDs (contacts were incomplete)...")
                         try:
-                            # Запрашиваем контакты батчами по 10 ID (уменьшено для избежания 504)
-                            batch_size = 10
+                            # КРИТИЧЕСКИ: батчи по 5 ID, большие задержки
+                            batch_size = 5
                             for i in range(0, len(contact_ids), batch_size):
-                                # Задержка между батчами (включая первый)
+                                # Задержка между батчами
                                 if i > 0:
-                                    time.sleep(2.0)  # Увеличена задержка до 2 сек
+                                    time.sleep(3.0)  # КРИТИЧЕСКИ: 3 сек между батчами
                                 else:
-                                    time.sleep(0.5)  # Небольшая задержка перед первым батчем
+                                    time.sleep(1.0)
                                 
                                 ids_batch = contact_ids[i : i + batch_size]
-                                logger.debug(f"Requesting contacts with IDs: {ids_batch[:10]}... (total {len(ids_batch)}, batch {i//batch_size + 1})")
+                                logger.debug(f"Requesting contacts with IDs: {ids_batch}... (batch {i//batch_size + 1})")
                                 
-                                # Согласно документации AmoCRM API v4:
-                                # - filter[id][] - массив ID контактов
-                                # - with=custom_fields - получить кастомные поля (БЕЗ notes - слишком тяжело)
-                                # - limit - количество на странице
                                 contacts_batch = client.get_all_pages(
                                     "/api/v4/contacts",
                                     params={
-                                        "filter[id][]": ids_batch,  # Массив ID для фильтрации
+                                        "filter[id][]": ids_batch,
                                         "with": "custom_fields",  # Только custom_fields, БЕЗ notes
                                     },
-                                    embedded_key="contacts",  # Ключ в _embedded для извлечения контактов
-                                    limit=50,  # Уменьшено до 50
-                                    max_pages=5,  # Ограничиваем количество страниц
-                                    delay_between_pages=0.5,  # Задержка 0.5 сек между страницами
+                                    embedded_key="contacts",
+                                    limit=25,  # КРИТИЧЕСКИ уменьшено
+                                    max_pages=3,  # Ограничиваем страницы
+                                    delay_between_pages=1.0,  # 1 сек между страницами
                                 )
-                                logger.debug(f"get_all_pages returned: type={type(contacts_batch)}, length={len(contacts_batch) if isinstance(contacts_batch, list) else 'not_list'}")
                                 if isinstance(contacts_batch, list):
                                     full_contacts.extend(contacts_batch)
                                     logger.debug(f"Fetched {len(contacts_batch)} full contacts for batch {i//batch_size + 1}")
-                                else:
-                                    logger.debug(f"⚠️ contacts_batch is not a list: {contacts_batch}")
-                                    # Если get_all_pages вернул не список, пробуем извлечь из ответа вручную
-                                    if isinstance(contacts_batch, dict) and "_embedded" in contacts_batch:
-                                        embedded = contacts_batch.get("_embedded", {})
-                                        if "contacts" in embedded and isinstance(embedded["contacts"], list):
-                                            full_contacts.extend(embedded["contacts"])
-                                            logger.debug(f"Extracted {len(embedded['contacts'])} contacts from _embedded")
-                                
-                                # ОТЛАДКА: детальная структура первого контакта из батча
-                                if i == 0 and contacts_batch:
-                                    first_full_contact = contacts_batch[0]
-                                    logger.debug(f"===== FIRST FULL CONTACT STRUCTURE =====")
-                                    logger.debug(f"  - Type: {type(first_full_contact)}")
-                                    if isinstance(first_full_contact, dict):
-                                        logger.debug(f"  - Keys: {list(first_full_contact.keys())}")
-                                        logger.debug(f"  - Has 'id': {'id' in first_full_contact}")
-                                        logger.debug(f"  - Has 'first_name': {'first_name' in first_full_contact}, value: {first_full_contact.get('first_name')}")
-                                        logger.debug(f"  - Has 'last_name': {'last_name' in first_full_contact}, value: {first_full_contact.get('last_name')}")
-                                        logger.debug(f"  - Has 'custom_fields_values': {'custom_fields_values' in first_full_contact}")
-                                        if 'custom_fields_values' in first_full_contact:
-                                            cfv = first_full_contact.get('custom_fields_values')
-                                            logger.debug(f"  - custom_fields_values type: {type(cfv)}, length: {len(cfv) if isinstance(cfv, list) else 'not_list'}")
-                                            if isinstance(cfv, list) and len(cfv) > 0:
-                                                logger.debug(f"  - First custom_field: {cfv[0]}")
-                                        logger.debug(f"  - Has 'phone': {'phone' in first_full_contact}, value: {first_full_contact.get('phone')}")
-                                        logger.debug(f"  - Has 'email': {'email' in first_full_contact}, value: {first_full_contact.get('email')}")
-                                        # Показываем полную структуру (первые 1000 символов)
-                                        import json
-                                        logger.debug(f"  - Full structure (first 1000 chars): {json.dumps(first_full_contact, ensure_ascii=False, indent=2)[:1000]}")
-                                    logger.debug(f"===== END FIRST FULL CONTACT =====")
                         except Exception as e:
                             logger.debug(f"Error fetching full contact data: {type(e).__name__}: {e}", exc_info=True)
-                        
-                        logger.debug(f"Total full contacts fetched: {len(full_contacts)}")
-                else:
-                    # Контакты уже получены через альтернативный метод, они полные
-                    logger.debug(f"Using {len(full_contacts)} contacts from alternative method (skip ID fetch)")
                 
-                # Получаем заметки контактов отдельно (если их нет в _embedded)
-                # Это нужно, потому что не все контакты могут иметь заметки в _embedded
-                contact_ids_for_notes = [int(c.get("id") or 0) for c in full_contacts if isinstance(c, dict) and c.get("id")]
+                # Заметки контактов: НЕ запрашиваем для dry-run (слишком тяжело)
+                # Заметки нужны только при реальном импорте, и то можно запросить отдельно
                 contact_notes_map: dict[int, list[dict[str, Any]]] = {}
-                if contact_ids_for_notes:
-                    logger.debug(f"Fetching notes for {len(contact_ids_for_notes)} contacts...")
-                    try:
-                        contact_notes_map = fetch_notes_for_contacts(client, contact_ids_for_notes)
-                        logger.debug(f"Fetched notes for {len(contact_notes_map)} contacts (total notes: {sum(len(notes) for notes in contact_notes_map.values())})")
-                    except Exception as e:
-                        logger.debug(f"Error fetching contact notes: {e}", exc_info=True)
+                if not dry_run and full_contacts:
+                    # Заметки запрашиваем только при реальном импорте, и то очень аккуратно
+                    contact_ids_for_notes = [int(c.get("id") or 0) for c in full_contacts if isinstance(c, dict) and c.get("id")]
+                    if contact_ids_for_notes and len(contact_ids_for_notes) <= 50:  # Только для небольшого количества
+                        logger.debug(f"Fetching notes for {len(contact_ids_for_notes)} contacts (real import only)...")
+                        try:
+                            contact_notes_map = fetch_notes_for_contacts(client, contact_ids_for_notes)
+                        except Exception as e:
+                            logger.debug(f"Error fetching contact notes: {e}", exc_info=True)
                 
                 # Отдельный счетчик для логирования структуры (не зависит от preview)
                 structure_logged_count = 0
