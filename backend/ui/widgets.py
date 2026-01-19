@@ -146,7 +146,8 @@ class UserSelectWithBranchWidget(forms.Select):
         branch_names.sort()
         if "Без филиала" in grouped:
             branch_names.append("Без филиала")
-            
+
+        for branch_name in branch_names:
             subgroup = []
             for index, option_value, option_label in grouped[branch_name]:
                 # ВАЖНО: value опции должен быть option_value (id пользователя),
