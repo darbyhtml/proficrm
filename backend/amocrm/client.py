@@ -157,8 +157,14 @@ class AmoClient:
                 if isinstance(value, list):
                     for item in value:
                         if item is not None:
-                            # Экранируем ключ и значение
-                            encoded_key = urllib.parse.quote(str(key), safe='[]=')
+                            # Для ключей вида "filter[id]" формируем "filter[id][]"
+                            # Для остальных ключей просто повторяем ключ
+                            if "[" in str(key) and "]" in str(key):
+                                # Ключ уже содержит [], добавляем еще []
+                                encoded_key = urllib.parse.quote(str(key) + "[]", safe='[]=')
+                            else:
+                                # Обычный ключ, просто повторяем
+                                encoded_key = urllib.parse.quote(str(key), safe='[]=')
                             encoded_value = urllib.parse.quote(str(item), safe='')
                             query_parts.append(f"{encoded_key}={encoded_value}")
                 else:

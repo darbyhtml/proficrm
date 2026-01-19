@@ -888,6 +888,95 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
     
     logger.info(f"fetch_contacts_for_companies: способ 1 (with=contacts): найдено {method1_contacts_count} контактов из {len(company_ids)} компаний")
     
+    # КРИТИЧЕСКИ ВАЖНО: контакты из _embedded.contacts могут быть в упрощенном формате без custom_fields_values
+    # Нужно запросить полные данные контактов отдельно, если они есть
+    if out:
+        logger.info(f"fetch_contacts_for_companies: проверяем, нужны ли полные данные для {len(out)} контактов...")
+        
+        # Проверяем, есть ли у контактов custom_fields_values
+        contacts_need_full_data = []
+        contact_ids = []
+        for contact in out:
+            if not isinstance(contact, dict):
+                continue
+            contact_id = int(contact.get("id") or 0)
+            if not contact_id:
+                continue
+            
+            # Проверяем, есть ли custom_fields_values
+            has_custom_fields = bool(contact.get("custom_fields_values"))
+            if not has_custom_fields:
+                contacts_need_full_data.append(contact)
+                contact_ids.append(contact_id)
+                logger.debug(f"fetch_contacts_for_companies: контакт {contact_id} не имеет custom_fields_values, нужны полные данные")
+            else:
+                logger.debug(f"fetch_contacts_for_companies: контакт {contact_id} уже имеет custom_fields_values ({len(contact.get('custom_fields_values', []))} полей)")
+        
+        # Запрашиваем полные данные только для контактов без custom_fields_values
+        if contact_ids:
+            logger.info(f"fetch_contacts_for_companies: запрашиваем полные данные для {len(contact_ids)} контактов без custom_fields_values...")
+            full_contacts_map: dict[int, dict[str, Any]] = {}
+            batch_size = 50  # Лимит AmoCRM API
+            for i in range(0, len(contact_ids), batch_size):
+                batch_ids = contact_ids[i:i + batch_size]
+                try:
+                    # Запрашиваем контакты с полными данными через filter[id][]
+                    # AmoClient._request обрабатывает списки правильно
+                    contacts_batch_data = client.get(
+                        "/api/v4/contacts",
+                        params={
+                            "filter[id]": batch_ids,  # Массив ID контактов - AmoClient обработает как filter[id][]=...
+                            "with": "custom_fields",  # Получаем custom_fields
+                        }
+                    )
+                    
+                    if isinstance(contacts_batch_data, dict):
+                        embedded_batch = contacts_batch_data.get("_embedded") or {}
+                        contacts_batch = embedded_batch.get("contacts") or []
+                        if isinstance(contacts_batch, list):
+                            for full_contact in contacts_batch:
+                                if isinstance(full_contact, dict):
+                                    full_contact_id = int(full_contact.get("id") or 0)
+                                    if full_contact_id:
+                                        full_contacts_map[full_contact_id] = full_contact
+                                        logger.debug(f"fetch_contacts_for_companies: получены полные данные для контакта {full_contact_id} (custom_fields: {len(full_contact.get('custom_fields_values', []))} полей)")
+                    
+                except Exception as e:
+                    logger.warning(f"fetch_contacts_for_companies: ошибка при получении полных данных контактов (batch {i//batch_size + 1}): {e}", exc_info=True)
+                    continue
+            
+            # Заменяем упрощенные контакты на полные, сохраняя _embedded.companies
+            logger.info(f"fetch_contacts_for_companies: получено полных данных для {len(full_contacts_map)} контактов из {len(contact_ids)} запрошенных")
+            updated_out = []
+            for contact in out:
+                if not isinstance(contact, dict):
+                    updated_out.append(contact)
+                    continue
+                
+                contact_id = int(contact.get("id") or 0)
+                if contact_id and contact_id in full_contacts_map:
+                    # Берем полный контакт, но сохраняем _embedded.companies из упрощенного
+                    full_contact = full_contacts_map[contact_id]
+                    embedded_from_simple = contact.get("_embedded") or {}
+                    companies_from_simple = embedded_from_simple.get("companies") or []
+                    
+                    # Сохраняем _embedded.companies в полном контакте
+                    if not isinstance(full_contact.get("_embedded"), dict):
+                        full_contact["_embedded"] = {}
+                    if companies_from_simple:
+                        full_contact["_embedded"]["companies"] = companies_from_simple
+                    
+                    updated_out.append(full_contact)
+                    logger.info(f"fetch_contacts_for_companies: заменен упрощенный контакт {contact_id} на полный с custom_fields ({len(full_contact.get('custom_fields_values', []))} полей)")
+                else:
+                    # Если полных данных нет, оставляем как есть (возможно, уже есть custom_fields_values)
+                    updated_out.append(contact)
+            
+            out = updated_out
+            logger.info(f"fetch_contacts_for_companies: обновлено {len(out)} контактов с полными данными")
+        else:
+            logger.info(f"fetch_contacts_for_companies: все контакты уже имеют custom_fields_values, дополнительный запрос не нужен")
+    
     # Если через with=contacts ничего не нашли, пробуем способ 2: filter[company_id] для каждого ID
     if not out:
         logger.info("fetch_contacts_for_companies: через with=contacts контакты не найдены, пробуем filter[company_id] для каждой компании...")
