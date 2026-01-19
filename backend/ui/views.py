@@ -6354,21 +6354,66 @@ def settings_amocrm_callback(request: HttpRequest) -> HttpResponse:
     
     cfg = AmoApiConfig.load()
     
+    # Логируем все параметры для отладки
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(f"AmoCRM OAuth callback: code={'present' if code else 'missing'}, referer={referer}, state={state}, current_domain={cfg.domain}")
+    
     # Если получен referer, обновляем domain (но сохраняем старый, если referer пустой)
     if referer:
         # referer может быть в формате "subdomain.amocrm.ru" или полный URL
         referer_domain = referer.replace("https://", "").replace("http://", "").strip("/")
         if referer_domain and referer_domain != cfg.domain:
+            logger.info(f"Updating domain from {cfg.domain} to {referer_domain} based on referer")
             cfg.domain = referer_domain
             cfg.save(update_fields=["domain", "updated_at"])
+    else:
+        logger.warning(f"No referer parameter received. Using existing domain: {cfg.domain}")
+    
+    # Проверяем наличие обязательных параметров
+    if not cfg.client_id:
+        messages.error(request, "Client ID не настроен. Проверьте настройки AmoCRM.")
+        return redirect("settings_amocrm")
+    
+    if not cfg.client_secret:
+        messages.error(request, "Client Secret не настроен. Проверьте настройки AmoCRM.")
+        return redirect("settings_amocrm")
+    
+    if not cfg.redirect_uri:
+        messages.error(request, "Redirect URI не настроен. Проверьте настройки AmoCRM.")
+        return redirect("settings_amocrm")
     
     try:
+        logger.info(f"Exchanging code for token. Domain: {cfg.domain}, Client ID: {cfg.client_id[:10]}..., Redirect URI: {cfg.redirect_uri}")
         AmoClient(cfg).exchange_code(code)
         messages.success(request, "amoCRM подключен. Токены сохранены.")
     except AmoApiError as e:
+        error_msg = str(e)
+        logger.error(f"AmoCRM token exchange failed: {error_msg}")
+        cfg.last_error = error_msg
+        cfg.save(update_fields=["last_error", "updated_at"])
+        
+        # Более детальное сообщение об ошибке
+        if "403" in error_msg:
+            messages.error(
+                request,
+                f"Ошибка 403 Forbidden при обмене токена. Возможные причины:\n"
+                f"- IP адрес заблокирован AmoCRM\n"
+                f"- Неправильный Client Secret\n"
+                f"- Неправильный Redirect URI (должен точно совпадать с настройками интеграции)\n"
+                f"- Domain: {cfg.domain}\n"
+                f"Ошибка: {error_msg}"
+            )
+        else:
+            messages.error(request, f"Ошибка подключения amoCRM: {error_msg}")
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        logger.error(f"Unexpected error during AmoCRM token exchange: {error_details}")
         cfg.last_error = str(e)
         cfg.save(update_fields=["last_error", "updated_at"])
-        messages.error(request, f"Ошибка подключения amoCRM: {e}")
+        messages.error(request, f"Неожиданная ошибка: {str(e)}. Проверьте логи.")
+    
     return redirect("settings_amocrm")
 
 
