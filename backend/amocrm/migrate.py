@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 import json
 import logging
+import re
 
 from django.db import transaction
 from django.utils import timezone
@@ -1752,34 +1753,81 @@ def migrate_filtered(
                                 logger.debug(f"    [value {v_idx}] val={val[:50]}, is_phone={is_phone}, is_email={is_email}, is_position={is_position}, is_cold_call_date={is_cold_call_date}, is_note={is_note}")
                             
                             if is_phone:
-                                # enum_code подсказывает тип (WORK/MOBILE/OTHER/...)
+                                # Определяем тип телефона:
+                                # 1. По enum_code (WORK/MOBILE/...)
+                                # 2. По названию поля (если содержит "раб" - WORK, "моб" - MOBILE)
                                 t = str(enum_code or "").upper()
-                                if t in ("WORK", "WORKDD", "WORK_DIRECT"):
+                                field_name_lower = field_name.lower()
+                                
+                                if t in ("WORK", "WORKDD", "WORK_DIRECT") or "раб" in field_name_lower:
                                     ptype = ContactPhone.PhoneType.WORK
-                                elif t in ("MOBILE", "CELL"):
+                                elif t in ("MOBILE", "CELL") or "моб" in field_name_lower:
                                     ptype = ContactPhone.PhoneType.MOBILE
-                                elif t == "HOME":
+                                elif t == "HOME" or "дом" in field_name_lower:
                                     ptype = ContactPhone.PhoneType.HOME
-                                elif t == "FAX":
+                                elif t == "FAX" or "факс" in field_name_lower:
                                     ptype = ContactPhone.PhoneType.FAX
                                 else:
                                     ptype = ContactPhone.PhoneType.OTHER
-                                for pv in _split_multi(val):
-                                    phones.append((ptype, pv, str(enum_code or "")))
-                                if debug_count_for_extraction < 3:
-                                    logger.debug(f"      -> Added to phones: {_split_multi(val)}")
+                                
+                                # Парсим значение: может быть многострочным с комментарием
+                                # Формат: "номер\nкомментарий" или "номер\nвремя - комментарий"
+                                val_lines = [line.strip() for line in str(val).split("\n") if line.strip()]
+                                if val_lines:
+                                    # Первая строка - номер телефона
+                                    phone_number = val_lines[0]
+                                    # Остальные строки - комментарий (регион/город)
+                                    phone_comment_parts = []
+                                    for line in val_lines[1:]:
+                                        # Убираем временные метки типа "22:05 - " или "20:05 - "
+                                        line_clean = line
+                                        # Паттерн: "время - текст" -> "текст"
+                                        time_pattern = r'^\d{1,2}:\d{2}\s*-\s*'
+                                        line_clean = re.sub(time_pattern, '', line_clean, flags=re.IGNORECASE)
+                                        if line_clean.strip():
+                                            phone_comment_parts.append(line_clean.strip())
+                                    
+                                    phone_comment = " | ".join(phone_comment_parts) if phone_comment_parts else ""
+                                    
+                                    # Если комментарий пустой, используем enum_code как fallback
+                                    if not phone_comment and enum_code:
+                                        phone_comment = str(enum_code)
+                                    
+                                    # Разбиваем номер на несколько, если есть запятые/точки с запятой
+                                    for pv in _split_multi(phone_number):
+                                        if pv:  # Проверяем, что номер не пустой
+                                            phones.append((ptype, pv, phone_comment))
+                                    
+                                    if debug_count_for_extraction < 3:
+                                        logger.debug(f"      -> Added phone: {phone_number} (type={ptype}, comment='{phone_comment}')")
+                                else:
+                                    # Fallback: если нет строк, используем старое поведение
+                                    for pv in _split_multi(val):
+                                        if pv:
+                                            comment = str(enum_code or "")
+                                            phones.append((ptype, pv, comment))
+                                            if debug_count_for_extraction < 3:
+                                                logger.debug(f"      -> Added phone (fallback): {pv} (type={ptype}, comment='{comment}')")
                             elif is_email:
+                                # Определяем тип email:
+                                # 1. По enum_code (WORK/PRIV/...)
+                                # 2. По названию поля (если содержит "раб" - WORK, "личн" - PERSONAL)
                                 t = str(enum_code or "").upper()
-                                if t in ("WORK",):
+                                field_name_lower = field_name.lower()
+                                
+                                if t in ("WORK",) or "раб" in field_name_lower:
                                     etype = ContactEmail.EmailType.WORK
-                                elif t in ("PRIV", "PERSONAL", "HOME"):
+                                elif t in ("PRIV", "PERSONAL", "HOME") or "личн" in field_name_lower or "персон" in field_name_lower:
                                     etype = ContactEmail.EmailType.PERSONAL
                                 else:
                                     etype = ContactEmail.EmailType.OTHER
+                                
+                                # Email обычно в одной строке, но может быть несколько через запятую
                                 for ev in _split_multi(val):
-                                    emails.append((etype, ev))
-                                if debug_count_for_extraction < 3:
-                                    logger.debug(f"      -> Added to emails: {val}")
+                                    if ev and "@" in ev:  # Проверяем, что это похоже на email
+                                        emails.append((etype, ev))
+                                        if debug_count_for_extraction < 3:
+                                            logger.debug(f"      -> Added email: {ev} (type={etype})")
                             elif is_position:
                                 if not position:
                                     position = val
