@@ -1924,7 +1924,7 @@ def migrate_filtered(
                         if isinstance(ac, dict) and 'custom_fields_values' in ac:
                             cfv = ac.get('custom_fields_values')
                             logger.debug(f"  - custom_fields_values: type={type(cfv)}, length={len(cfv) if isinstance(cfv, list) else 'not_list'}")
-                    
+                        
                         # Проверяем, не импортировали ли уже этот контакт
                         existing_contact = Contact.objects.filter(amocrm_contact_id=amo_contact_id, company=local_company).first()
                     
