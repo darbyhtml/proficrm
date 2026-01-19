@@ -1360,7 +1360,7 @@ def migrate_filtered(
                 for p in extra_phones:
                         v = str(p).strip()[:50]
                         if not v:
-                        continue
+                            continue
                         if not ContactPhone.objects.filter(contact=c, value=v).exists():
                             ContactPhone.objects.create(contact=c, type=ContactPhone.PhoneType.OTHER, value=v)
                 for e in extra_emails:
