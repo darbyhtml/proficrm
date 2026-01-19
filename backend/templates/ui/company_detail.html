@@ -2416,12 +2416,20 @@
         
         try {
           const fd = new FormData(form);
+          // Убеждаемся, что modal=1 всегда в форме
+          if (!fd.has('modal')) {
+            fd.append('modal', '1');
+          }
+          
           const res = await fetch(form.action, {
             method: 'POST',
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             body: fd
           });
+          
           const ct = (res.headers.get('content-type') || '').toLowerCase();
+          
+          // Пробуем сначала как JSON
           if (ct.includes('application/json')) {
             const data = await res.json();
             if (data.ok) {
@@ -2434,11 +2442,29 @@
               body.innerHTML = data.html;
               return;
             }
-            throw new Error('Ошибка сохранения');
+            throw new Error(data.error || 'Ошибка сохранения');
           }
-          // Если вдруг вернули HTML — подменяем тело панели
+          
+          // Если вернули HTML (не должно быть, но на всякий случай)
           const html = await res.text();
+          // Проверяем, не редирект ли это
+          if (res.redirected || res.status === 302 || html.includes('window.location') || html.includes('location.href')) {
+            // Это редирект - просто обновляем страницу
+            closePanel();
+            window.location.reload();
+            return;
+          }
+          
+          // Иначе показываем HTML в панели (ошибка валидации)
           body.innerHTML = html;
+          
+        } catch (error) {
+          console.error('Ошибка при сохранении контакта:', error);
+          if (window.uiToast) {
+            window.uiToast('Ошибка сохранения: ' + error.message, 'error');
+          } else {
+            alert('Ошибка сохранения: ' + error.message);
+          }
         } finally {
           if (submitBtn) {
             submitBtn.disabled = false;
