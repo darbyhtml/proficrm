@@ -1549,18 +1549,27 @@
                       closeCreateModal();
                       location.reload();
                     } else {
-                      // Показываем ошибки валидации, если они есть
-                      let errorMsg = data.error || 'Не удалось создать задачу';
-                      if (data.errors) {
-                        const errorList = Object.entries(data.errors).map(([field, errors]) => {
-                          return `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`;
-                        }).join('\n');
-                        errorMsg += '\n\n' + errorList;
+                      // Мягкая подсветка ошибки вместо страшного алерта
+                      let fieldMessage = '';
+                      if (data.errors && data.errors.type) {
+                        // Конкретная ошибка по полю «Задача»
+                        fieldMessage = Array.isArray(data.errors.type) ? data.errors.type.join(', ') : String(data.errors.type);
                       }
-                      alert('Ошибка: ' + errorMsg);
+
+                      const msg = fieldMessage || data.error || 'Проверьте заполнение формы задачи.';
+
+                      if (window.uiToast) {
+                        window.uiToast(msg, 'error');
+                      } else {
+                        console.warn('Ошибка создания задачи:', msg);
+                      }
                     }
                   } catch (err) {
-                    alert('Ошибка при создании: ' + err.message);
+                    if (window.uiToast) {
+                      window.uiToast('Ошибка при создании задачи: ' + err.message, 'error');
+                    } else {
+                      console.error('Ошибка при создании задачи:', err);
+                    }
                   }
                 }, { once: true });
               }

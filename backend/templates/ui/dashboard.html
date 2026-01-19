@@ -1025,10 +1025,23 @@
                     closeCreateModal();
                     location.reload();
                   } else {
-                    alert('Ошибка: ' + (data.error || 'Не удалось создать задачу'));
+                    let fieldMessage = '';
+                    if (data.errors && data.errors.type) {
+                      fieldMessage = Array.isArray(data.errors.type) ? data.errors.type.join(', ') : String(data.errors.type);
+                    }
+                    const msg = fieldMessage || data.error || 'Проверьте заполнение формы задачи.';
+                    if (window.uiToast) {
+                      window.uiToast(msg, 'error');
+                    } else {
+                      console.warn('Ошибка создания задачи:', msg);
+                    }
                   }
                 } catch (err) {
-                  alert('Ошибка при создании: ' + err.message);
+                  if (window.uiToast) {
+                    window.uiToast('Ошибка при создании задачи: ' + err.message, 'error');
+                  } else {
+                    console.error('Ошибка при создании задачи:', err);
+                  }
                 }
               }, { once: true });
             }
