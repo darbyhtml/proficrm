@@ -1258,6 +1258,8 @@ def migrate_filtered(
         logger.debug(f"Contact import check: import_contacts={import_contacts}, amo_ids={bool(amo_ids)}, len={len(amo_ids) if amo_ids else 0}")
         if import_contacts and amo_ids:
             res._debug_contacts_logged = 0  # счетчик для отладки
+            contacts_processed = 0  # счетчик обработанных контактов
+            contacts_skipped = 0  # счетчик пропущенных контактов
             logger.debug(f"===== STARTING CONTACT IMPORT for {len(amo_ids)} companies =====")
             try:
                 # Создаём set для быстрой проверки: контакты должны быть связаны только с компаниями из текущей пачки
