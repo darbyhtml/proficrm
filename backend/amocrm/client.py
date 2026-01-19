@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 import urllib.parse
 import urllib.request
@@ -10,6 +11,8 @@ from typing import Any
 from django.utils import timezone
 
 from ui.models import AmoApiConfig
+
+logger = logging.getLogger(__name__)
 
 
 class AmoApiError(RuntimeError):
@@ -170,16 +173,34 @@ class AmoClient:
         except Exception as e:
             raise AmoApiError(str(e))
 
-    def get(self, path: str, *, params: dict[str, Any] | None = None) -> Any:
+    def get(self, path: str, *, params: dict[str, Any] | None = None, retry_on_429: bool = True) -> Any:
         url = f"{self.base}{path}"
-        res = self._request("GET", url, params=params, auth=True)
-        if res.status == 401:
-            # один повтор после refresh
-            self.refresh_token()
+        max_retries = 3
+        retry_delay = 2  # начальная задержка в секундах
+        
+        for attempt in range(max_retries):
             res = self._request("GET", url, params=params, auth=True)
-        if res.status >= 400:
-            raise AmoApiError(f"GET {path} failed ({res.status}): {res.data}")
-        return res.data
+            
+            # Обработка 401 - обновляем токен и повторяем
+            if res.status == 401:
+                self.refresh_token()
+                res = self._request("GET", url, params=params, auth=True)
+            
+            # Обработка 429 - Too Many Requests (rate limit)
+            if res.status == 429 and retry_on_429 and attempt < max_retries - 1:
+                # Экспоненциальная задержка: 2, 4, 8 секунд
+                delay = retry_delay * (2 ** attempt)
+                logger.warning(f"Rate limit (429) для {path}, повтор через {delay} сек (попытка {attempt + 1}/{max_retries})")
+                time.sleep(delay)
+                continue
+            
+            if res.status >= 400:
+                raise AmoApiError(f"GET {path} failed ({res.status}): {res.data}")
+            
+            return res.data
+        
+        # Если все попытки исчерпаны
+        raise AmoApiError(f"GET {path} failed (429): Rate limit exceeded after {max_retries} attempts")
 
     def get_all_pages(
         self,
@@ -189,9 +210,11 @@ class AmoClient:
         limit: int = 250,
         max_pages: int = 200,
         embedded_key: str | None = None,
+        delay_between_pages: float = 0.5,  # Задержка между страницами для избежания rate limit
     ) -> list[dict]:
         """
         Возвращает склеенный список элементов из _embedded (v4).
+        Добавлена задержка между запросами для избежания rate limit (429).
         """
         out: list[dict] = []
         page = 1
@@ -201,7 +224,20 @@ class AmoClient:
             p = dict(params or {})
             p["page"] = page
             p["limit"] = limit
-            data = self.get(path, params=p) or {}
+            
+            # Задержка перед запросом (кроме первой страницы)
+            if page > 1 and delay_between_pages > 0:
+                time.sleep(delay_between_pages)
+            
+            try:
+                data = self.get(path, params=p, retry_on_429=True) or {}
+            except AmoApiError as e:
+                # Если получили 429 после всех retry, логируем и прерываем
+                if "429" in str(e) or "Rate limit" in str(e):
+                    logger.warning(f"Rate limit достигнут при получении страницы {page} для {path}. Получено элементов: {len(out)}")
+                    break
+                raise
+            
             embedded = (data.get("_embedded") or {}) if isinstance(data, dict) else {}
             if embedded_key:
                 items = embedded.get(embedded_key) if isinstance(embedded.get(embedded_key), list) else None
