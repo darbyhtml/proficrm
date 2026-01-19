@@ -2769,16 +2769,32 @@ def migrate_filtered(
                     except Exception as e:
                         contacts_errors += 1
                         amo_contact_id_for_error = int(ac.get("id") or 0) if isinstance(ac, dict) else 0
+                        import traceback
+                        error_traceback = traceback.format_exc()
                         logger.error(f"migrate_filtered: ❌ ОШИБКА при обработке контакта {ac_idx + 1}/{len(full_contacts)} (amo_id: {amo_contact_id_for_error}): {e}", exc_info=True)
                         # Добавляем информацию об ошибке в preview
                         if res.contacts_preview is None:
                             res.contacts_preview = []
                         if len(res.contacts_preview) < 100:  # Ограничиваем количество ошибок в preview
+                            # Пытаемся извлечь базовую информацию о контакте для отображения
+                            contact_name_error = ""
+                            if isinstance(ac, dict):
+                                name_str = str(ac.get("name") or "").strip()
+                                first_name_str = str(ac.get("first_name") or "").strip()
+                                last_name_str = str(ac.get("last_name") or "").strip()
+                                if name_str:
+                                    contact_name_error = name_str
+                                elif first_name_str or last_name_str:
+                                    contact_name_error = f"{last_name_str} {first_name_str}".strip()
+                            
                             res.contacts_preview.append({
                                 "status": "ERROR",
                                 "amo_contact_id": amo_contact_id_for_error,
+                                "contact_name": contact_name_error,
                                 "error": str(e),
+                                "error_type": type(e).__name__,
                                 "message": f"Ошибка при обработке контакта: {e}",
+                                "traceback_short": error_traceback.split('\n')[-3:-1] if error_traceback else [],  # Последние 2 строки трейсбека
                             })
                         continue
                     

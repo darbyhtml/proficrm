@@ -61,8 +61,31 @@
           </div>
 
           {% for c in result.contacts_preview %}
-            <div class="border rounded-lg p-4 {% if c.status == 'NO_CONTACTS_FOUND' or c.status == 'SKIPPED_NO_COMPANY_LINK' or c.status == 'SKIPPED_NO_LOCAL_COMPANY' %}bg-red-50{% elif c.status == 'INFO' %}bg-yellow-50{% elif c.status == 'UPDATED' or c.status == 'CREATED' %}bg-green-50{% else %}bg-gray-50{% endif %}">
-              {% if c.status == 'INFO' %}
+            <div class="border rounded-lg p-4 {% if c.status == 'NO_CONTACTS_FOUND' or c.status == 'SKIPPED_NO_COMPANY_LINK' or c.status == 'SKIPPED_NO_LOCAL_COMPANY' or c.status == 'ERROR' %}bg-red-50{% elif c.status == 'INFO' %}bg-yellow-50{% elif c.status == 'UPDATED' or c.status == 'CREATED' %}bg-green-50{% else %}bg-gray-50{% endif %}">
+              {% if c.status == 'ERROR' %}
+                <div class="font-medium mb-2 text-red-600">❌ Ошибка при обработке контакта</div>
+                <div class="space-y-1 text-sm">
+                  {% if c.contact_name %}
+                    <div><b>Контакт:</b> {{ c.contact_name }}</div>
+                  {% endif %}
+                  <div><b>amo id:</b> {{ c.amo_contact_id|default:"—" }}</div>
+                  {% if c.error_type %}
+                    <div><b>Тип ошибки:</b> <code class="text-xs bg-red-100 px-1 py-0.5 rounded">{{ c.error_type }}</code></div>
+                  {% endif %}
+                  {% if c.error %}
+                    <div><b>Ошибка:</b> <code class="text-xs bg-red-100 px-1 py-0.5 rounded break-all">{{ c.error }}</code></div>
+                  {% endif %}
+                  {% if c.message %}
+                    <div class="text-xs muted-2 mt-1">{{ c.message }}</div>
+                  {% endif %}
+                  {% if c.traceback_short %}
+                    <details class="mt-2">
+                      <summary class="text-xs cursor-pointer text-red-700">🔍 Показать детали ошибки</summary>
+                      <pre class="text-xs mt-1 p-2 bg-red-50 rounded overflow-auto max-h-32">{{ c.traceback_short|join:"\n" }}</pre>
+                    </details>
+                  {% endif %}
+                </div>
+              {% elif c.status == 'INFO' %}
                 <div class="font-medium mb-2 text-yellow-700">ℹ️ {{ c.message }}</div>
               {% elif c.status == 'NO_CONTACTS_FOUND' %}
                 <div class="font-medium mb-2 text-red-600">⚠️ Контакты не найдены</div>
