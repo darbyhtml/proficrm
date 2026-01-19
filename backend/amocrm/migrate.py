@@ -30,7 +30,7 @@ def _parse_fio(name_str: str, first_name_str: str = "", last_name_str: str = "")
     Парсит ФИО из строк amoCRM в (last_name, first_name).
     
     Логика:
-    - Если есть и first_name и last_name - используем их как есть
+        - Если есть и first_name и last_name - используем их как есть
     - Если есть только name - парсим "Фамилия Имя Отчество" -> (Фамилия, Имя Отчество)
     - Если есть name и first_name - парсим name как полное ФИО
     - Если есть name и last_name - парсим name как полное ФИО
@@ -180,7 +180,7 @@ def _analyze_contact_completely(contact: dict[str, Any]) -> dict[str, Any]:
     """
     Полный анализ контакта из AmoCRM API.
     Извлекает ВСЕ возможные поля согласно документации:
-    https://www.amocrm.ru/developers/content/crm_platform/api-reference
+        https://www.amocrm.ru/developers/content/crm_platform/api-reference
     
     Возвращает структурированный словарь со всеми найденными данными.
     """
@@ -588,7 +588,7 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
 def _parse_amo_due(ts: Any) -> timezone.datetime | None:
     """
     amo может отдавать дедлайн как:
-    - unix seconds int
+        - unix seconds int
     - unix ms int
     - строка с цифрами
     - ISO datetime string
@@ -799,7 +799,7 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
     """
     Получает контакты компаний из amoCRM.
     Согласно документации AmoCRM API v4:
-    1. Можно использовать filter[company_id]=ID для одного ID (не массив!)
+        1. Можно использовать filter[company_id]=ID для одного ID (не массив!)
     2. Или запрашивать компании с with=contacts и извлекать _embedded.contacts
     
     Используем оба способа для надежности.
@@ -1154,7 +1154,7 @@ def migrate_filtered(
                         comp.legal_name = comp.legal_name.strip()[:255]
                         changed = True
                         if dry_run:
-                        company_updates_diff["legal_name"] = {"old": old_legal, "new": comp.legal_name}
+                            company_updates_diff["legal_name"] = {"old": old_legal, "new": comp.legal_name}
             if extra.get("inn"):
                 new_inn = str(extra["inn"]).strip()[:20]  # сначала strip, потом обрезка до max_length=20
                 old_inn = (comp.inn or "").strip()
@@ -1162,12 +1162,12 @@ def migrate_filtered(
                         comp.inn = new_inn
                         changed = True
                         if dry_run and new_inn:
-                        company_updates_diff["inn"] = {"old": "", "new": new_inn}
+                            company_updates_diff["inn"] = {"old": "", "new": new_inn}
                 elif len(comp.inn) > 20:  # защита: если уже заполнено, но слишком длинное
                         comp.inn = comp.inn.strip()[:20]
                         changed = True
                         if dry_run:
-                        company_updates_diff["inn"] = {"old": old_inn, "new": comp.inn}
+                            company_updates_diff["inn"] = {"old": old_inn, "new": comp.inn}
             if extra.get("kpp"):
                 new_kpp = str(extra["kpp"]).strip()[:20]  # сначала strip, потом обрезка до max_length=20
                 old_kpp = (comp.kpp or "").strip()
@@ -1175,12 +1175,12 @@ def migrate_filtered(
                         comp.kpp = new_kpp
                         changed = True
                         if dry_run and new_kpp:
-                        company_updates_diff["kpp"] = {"old": "", "new": new_kpp}
+                            company_updates_diff["kpp"] = {"old": "", "new": new_kpp}
                 elif len(comp.kpp) > 20:  # защита: если уже заполнено, но слишком длинное
                         comp.kpp = comp.kpp.strip()[:20]
                         changed = True
                         if dry_run:
-                        company_updates_diff["kpp"] = {"old": old_kpp, "new": comp.kpp}
+                            company_updates_diff["kpp"] = {"old": old_kpp, "new": comp.kpp}
             if extra.get("address"):
                 new_addr = str(extra["address"]).strip()[:500]  # сначала strip, потом обрезка до max_length=500
                 old_addr = (comp.address or "").strip()
@@ -1188,12 +1188,12 @@ def migrate_filtered(
                         comp.address = new_addr
                         changed = True
                         if dry_run and new_addr:
-                        company_updates_diff["address"] = {"old": "", "new": new_addr}
+                            company_updates_diff["address"] = {"old": "", "new": new_addr}
                 elif len(comp.address) > 500:  # защита: если уже заполнено, но слишком длинное
                         comp.address = comp.address.strip()[:500]
                         changed = True
                         if dry_run:
-                        company_updates_diff["address"] = {"old": old_addr, "new": comp.address}
+                            company_updates_diff["address"] = {"old": old_addr, "new": comp.address}
             phones = extra.get("phones") or []
             emails = extra.get("emails") or []
             company_note = str(extra.get("note") or "").strip()[:255]
@@ -1224,7 +1224,7 @@ def migrate_filtered(
                         comp.phone_comment = company_note[:255]
                         changed = True
                         if dry_run:
-                        company_updates_diff["phone_comment"] = {"old": "", "new": company_note[:255]}
+                            company_updates_diff["phone_comment"] = {"old": "", "new": company_note[:255]}
             if extra.get("activity_kind") and can_update("activity_kind"):
                 ak = str(extra.get("activity_kind") or "").strip()[:255]
                 old_ak = (comp.activity_kind or "").strip()
@@ -1232,13 +1232,13 @@ def migrate_filtered(
                         comp.activity_kind = ak
                         changed = True
                         if dry_run:
-                        company_updates_diff["activity_kind"] = {"old": old_ak, "new": ak}
+                            company_updates_diff["activity_kind"] = {"old": old_ak, "new": ak}
             if extra.get("employees_count") and can_update("employees_count"):
                 try:
                         ec = int("".join(ch for ch in str(extra.get("employees_count") or "") if ch.isdigit()) or "0")
                         old_ec = comp.employees_count
                         if ec > 0 and comp.employees_count != ec:
-                        comp.employees_count = ec
+                            comp.employees_count = ec
                         changed = True
                         if dry_run:
                             company_updates_diff["employees_count"] = {"old": str(old_ec) if old_ec else "", "new": str(ec)}
@@ -1251,7 +1251,7 @@ def migrate_filtered(
                         comp.work_timezone = tzv
                         changed = True
                         if dry_run:
-                        company_updates_diff["work_timezone"] = {"old": old_tz, "new": tzv}
+                            company_updates_diff["work_timezone"] = {"old": old_tz, "new": tzv}
             if extra.get("worktime"):
                 # поддерживаем форматы: "09:00-18:00", "09:00–18:00", "с 9:00 до 18:00"
                 import re
@@ -1259,7 +1259,7 @@ def migrate_filtered(
                 m = re.search(r"(\d{1,2})[:.](\d{2})\s*-\s*(\d{1,2})[:.](\d{2})", s)
                 if m:
                         try:
-                        h1, m1, h2, m2 = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
+                            h1, m1, h2, m2 = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
                         if 0 <= h1 <= 23 and 0 <= h2 <= 23 and 0 <= m1 <= 59 and 0 <= m2 <= 59:
                             old_start = str(comp.workday_start) if comp.workday_start else ""
                             old_end = str(comp.workday_end) if comp.workday_end else ""
@@ -1362,14 +1362,14 @@ def migrate_filtered(
                         if not v:
                         continue
                         if not ContactPhone.objects.filter(contact=c, value=v).exists():
-                        ContactPhone.objects.create(contact=c, type=ContactPhone.PhoneType.OTHER, value=v)
+                            ContactPhone.objects.create(contact=c, type=ContactPhone.PhoneType.OTHER, value=v)
                 for e in extra_emails:
                         v = str(e).strip()[:254]
                         if not v:
                         continue
                         if not ContactEmail.objects.filter(contact=c, value__iexact=v).exists():
-                        try:
-                            ContactEmail.objects.create(contact=c, type=ContactEmail.EmailType.OTHER, value=v)
+                            try:
+                                ContactEmail.objects.create(contact=c, type=ContactEmail.EmailType.OTHER, value=v)
                         except Exception:
                             pass
             if created:
@@ -1425,22 +1425,22 @@ def migrate_filtered(
                     # апдейтим то, что у вас сейчас выглядит "криво": дедлайн + убрать мусорный id в описании
                         upd = False
                         if title and (existing.title or "").strip() != title:
-                        existing.title = title
+                            existing.title = title
                         upd = True
                         if existing.description and "[Amo task id:" in existing.description:
-                        existing.description = ""
+                            existing.description = ""
                         upd = True
                         if due_at and (existing.due_at is None or existing.due_at != due_at):
-                        existing.due_at = due_at
+                            existing.due_at = due_at
                         upd = True
                         if company and existing.company_id is None:
-                        existing.company = company
+                            existing.company = company
                         upd = True
                         if assigned_to and existing.assigned_to_id != assigned_to.id:
-                        existing.assigned_to = assigned_to
+                            existing.assigned_to = assigned_to
                         upd = True
                         if upd and not dry_run:
-                        existing.save()
+                            existing.save()
                         res.tasks_updated += 1
                         res.tasks_skipped_existing += 1
                         continue
@@ -1487,8 +1487,8 @@ def migrate_filtered(
                         or ""
                         ).strip()
                         if not text:
-                        try:
-                            text = json.dumps(params, ensure_ascii=False)[:1200] if params else ""
+                            try:
+                                text = json.dumps(params, ensure_ascii=False)[:1200] if params else ""
                         except Exception:
                             text = ""
                         if not text:
@@ -1499,20 +1499,20 @@ def migrate_filtered(
                         author_amo_name = ""
                         creator_id = int(n.get("created_by") or n.get("created_by_id") or n.get("responsible_user_id") or 0)
                         if creator_id:
-                        au = amo_user_by_id.get(creator_id) or {}
+                            au = amo_user_by_id.get(creator_id) or {}
                         author_amo_name = str(au.get("name") or "")
                         author = _map_amo_user_to_local(au)
 
                         created_ts = n.get("created_at") or n.get("created_at_ts") or None
                         created_label = ""
                         try:
-                        if created_ts:
-                            ct = int(str(created_ts))
+                            if created_ts:
+                                ct = int(str(created_ts))
                             if ct > 10**12:
                                 ct = int(ct / 1000)
                             created_label = timezone.datetime.fromtimestamp(ct, tz=timezone.utc).strftime("%d.%m.%Y %H:%M")
                         except Exception:
-                        created_label = ""
+                            created_label = ""
 
                         prefix = "Импорт из amo"
                     # amomail_message — это по сути история почты; пропускаем такие заметки
@@ -1558,18 +1558,18 @@ def migrate_filtered(
                         prefix = "Импорт из amo"
                         meta_bits = []
                         if author_amo_name:
-                        meta_bits.append(f"автор: {author_amo_name}")
+                            meta_bits.append(f"автор: {author_amo_name}")
                         if created_label:
-                        meta_bits.append(f"дата: {created_label}")
+                            meta_bits.append(f"дата: {created_label}")
                         if note_type:
-                        meta_bits.append(f"type: {note_type}")
+                            meta_bits.append(f"type: {note_type}")
                         if nid:
-                        meta_bits.append(f"id: {nid}")
+                            meta_bits.append(f"id: {nid}")
                         if meta_bits:
-                        prefix += " (" + ", ".join(meta_bits) + ")"
+                            prefix += " (" + ", ".join(meta_bits) + ")"
                         text_full = prefix + "\n" + text
                         if res.notes_preview is not None and len(res.notes_preview) < 5:
-                        res.notes_preview.append(
+                            res.notes_preview.append(
                             {
                                 "id": nid,
                                 "type": note_type,
@@ -1616,7 +1616,7 @@ def migrate_filtered(
                         external_uid=str(nid) if nid else "",
                         )
                         if not dry_run:
-                        note.save()
+                            note.save()
                         res.notes_created += 1
             except Exception:
                 # Если заметки недоступны в конкретном аккаунте/тарифе/правах — не валим всю миграцию.
@@ -1662,12 +1662,12 @@ def migrate_filtered(
                 
                 for contact in all_contacts:
                         if not isinstance(contact, dict):
-                        contacts_without_company += 1
+                            contacts_without_company += 1
                         continue
                     
                         contact_id = int(contact.get("id") or 0)
                         if not contact_id:
-                        contacts_without_company += 1
+                            contacts_without_company += 1
                         continue
                     
                     # Ищем компанию из текущей пачки, с которой связан контакт
@@ -1677,26 +1677,26 @@ def migrate_filtered(
                         embedded = contact.get("_embedded") or {}
                         companies_in_contact = embedded.get("companies") or []
                         if isinstance(companies_in_contact, list):
-                        for comp_ref in companies_in_contact:
-                            if isinstance(comp_ref, dict):
-                                comp_id = int(comp_ref.get("id") or 0)
+                            for comp_ref in companies_in_contact:
+                                if isinstance(comp_ref, dict):
+                                    comp_id = int(comp_ref.get("id") or 0)
                                 if comp_id in amo_ids_set:
                                     found_company_id = comp_id
                                     break
                     
                     # Если не нашли через _embedded, проверяем company_id напрямую
                         if not found_company_id:
-                        comp_id_direct = int(contact.get("company_id") or 0)
+                            comp_id_direct = int(contact.get("company_id") or 0)
                         if comp_id_direct in amo_ids_set:
                             found_company_id = comp_id_direct
                     
                     # Добавляем контакт ТОЛЬКО если он связан с компанией из текущей пачки
                         if found_company_id:
-                        full_contacts.append(contact)
+                            full_contacts.append(contact)
                         contact_id_to_company_map[contact_id] = found_company_id
                         contacts_with_company += 1
                         else:
-                        contacts_without_company += 1
+                            contacts_without_company += 1
                 
                 res.contacts_seen = len(full_contacts)
                 logger.info(f"migrate_filtered: фильтрация завершена: {res.contacts_seen} контактов принадлежат {len(amo_ids)} компаниям из текущей пачки (пропущено: {contacts_without_company})")
@@ -1705,7 +1705,7 @@ def migrate_filtered(
                 if res.contacts_seen == 0:
                         logger.warning(f"migrate_filtered: ⚠️ КОНТАКТЫ НЕ НАЙДЕНЫ для компаний {list(amo_ids)[:10]}. Всего получено из API: {len(all_contacts)}, отфильтровано: {res.contacts_seen}")
                         if res.contacts_preview is None:
-                        res.contacts_preview = []
+                            res.contacts_preview = []
                         debug_info = {
                         "status": "NO_CONTACTS_FOUND",
                         "companies_checked": len(amo_ids),
@@ -2002,7 +2002,7 @@ def migrate_filtered(
                     
                         # 3. В _embedded.notes (если есть) - это заметки контакта из amoCRM (служебные, не примечания)
                         if isinstance(ac, dict) and "_embedded" in ac:
-                        embedded = ac.get("_embedded") or {}
+                            embedded = ac.get("_embedded") or {}
                         if isinstance(embedded, dict) and "notes" in embedded:
                             notes_list = embedded.get("notes") or []
                             if isinstance(notes_list, list) and notes_list:
@@ -2067,10 +2067,10 @@ def migrate_filtered(
                     
                         # Стандартные поля (если есть)
                         if ac.get("phone"):
-                        for pv in _split_multi(str(ac.get("phone"))):
-                            phones.append((ContactPhone.PhoneType.OTHER, pv, ""))
+                            for pv in _split_multi(str(ac.get("phone"))):
+                                phones.append((ContactPhone.PhoneType.OTHER, pv, ""))
                         if ac.get("email"):
-                        ev = str(ac.get("email")).strip()
+                            ev = str(ac.get("email")).strip()
                         if ev:
                             emails.append((ContactEmail.EmailType.OTHER, ev))
                     
@@ -2094,9 +2094,9 @@ def migrate_filtered(
                             logger.debug(f"  - Already found note_text from direct fields: {note_text[:100]}")
                     
                         for cf_idx, cf in enumerate(custom_fields):
-                        if not isinstance(cf, dict):
-                            if debug_count_for_extraction < 3:
-                                logger.debug(f"  - [field {cf_idx}] Skipped: not a dict, type={type(cf)}")
+                            if not isinstance(cf, dict):
+                                if debug_count_for_extraction < 3:
+                                    logger.debug(f"  - [field {cf_idx}] Skipped: not a dict, type={type(cf)}")
                             continue
                         field_id = int(cf.get("field_id") or 0)
                         # ВАЖНО: в amoCRM используется field_code (не code) и field_name (не name)
@@ -2327,7 +2327,7 @@ def migrate_filtered(
                         dedup_phones: list[tuple[str, str, str]] = []
                         seen_p = set()
                         for pt, pv, pc in phones:
-                        pv2 = str(pv or "").strip()
+                            pv2 = str(pv or "").strip()
                         if not pv2:
                             continue
                         if pv2 in seen_p:
@@ -2338,18 +2338,18 @@ def migrate_filtered(
 
                         # Если есть одно общее примечание, а номеров несколько — пишем его в comment первого номера
                         if note_text and phones:
-                        pt0, pv0, pc0 = phones[0]
+                            pt0, pv0, pc0 = phones[0]
                         if not (pc0 or "").strip():
                             phones[0] = (pt0, pv0, note_text[:255])
                             if debug_count_for_extraction < 3:
                                 logger.debug(f"  -> Applied note_text to first phone: {note_text[:100]}")
                         elif debug_count_for_extraction < 3 and not note_text:
-                        logger.debug(f"  -> ⚠️ No note_text found for contact {amo_contact_id} (checked direct fields and custom_fields)")
+                            logger.debug(f"  -> ⚠️ No note_text found for contact {amo_contact_id} (checked direct fields and custom_fields)")
 
                         dedup_emails: list[tuple[str, str]] = []
                         seen_e = set()
                         for et, ev in emails:
-                        ev2 = str(ev or "").strip().lower()
+                            ev2 = str(ev or "").strip().lower()
                         if not ev2:
                             continue
                         if ev2 in seen_e:
@@ -2455,8 +2455,8 @@ def migrate_filtered(
                         # Обрабатываем данные о холодном звонке из amoCRM (ДО использования в contact_debug)
                         cold_marked_at_dt = None
                         if cold_call_timestamp:
-                        try:
-                            UTC = getattr(timezone, "UTC", dt_timezone.utc)
+                            try:
+                                UTC = getattr(timezone, "UTC", dt_timezone.utc)
                             cold_marked_at_dt = timezone.datetime.fromtimestamp(cold_call_timestamp, tz=UTC)
                         except Exception:
                             cold_marked_at_dt = None
@@ -2483,7 +2483,7 @@ def migrate_filtered(
                         # Используем новую функцию для извлечения ВСЕХ полей
                         debug_count = getattr(res, '_debug_contacts_logged', 0)
                         if res.contacts_preview is None:
-                        res.contacts_preview = []
+                            res.contacts_preview = []
                     
                         # В dry-run показываем ВСЕ контакты (до 1000), чтобы видеть все проблемы
                         preview_limit = 1000 if dry_run else 10
@@ -2591,11 +2591,11 @@ def migrate_filtered(
                             logger.debug(f"  - custom_fields_count: {len(full_analysis.get('custom_fields', []))}")
                             logger.debug(f"  - all_custom_fields: {len(contact_debug.get('all_custom_fields', []))}")
                         else:
-                        logger.info(f"migrate_filtered: ⚠️ контакт {amo_contact_id} НЕ добавлен в preview (превышен лимит: {debug_count} >= {preview_limit})")
+                            logger.info(f"migrate_filtered: ⚠️ контакт {amo_contact_id} НЕ добавлен в preview (превышен лимит: {debug_count} >= {preview_limit})")
                     
                         # Также логируем в консоль для первых контактов
                         if contacts_processed <= 3:
-                        logger.debug(f"Contact {amo_contact_id}:")
+                            logger.debug(f"Contact {amo_contact_id}:")
                         logger.debug(f"  - first_name: {first_name}")
                         logger.debug(f"  - last_name: {last_name}")
                         logger.debug(f"  - phones found: {phones}")
@@ -2614,7 +2614,7 @@ def migrate_filtered(
                         logger.debug(f"  - has email field: {bool(ac.get('email')) if isinstance(ac, dict) else False}")
                     
                         except Exception as e:
-                        contacts_errors += 1
+                            contacts_errors += 1
                         amo_contact_id_for_error = int(ac.get("id") or 0) if isinstance(ac, dict) else 0
                         logger.error(f"migrate_filtered: ❌ ОШИБКА при обработке контакта {ac_idx + 1}/{len(full_contacts)} (amo_id: {amo_contact_id_for_error}): {e}", exc_info=True)
                         # Добавляем информацию об ошибке в preview
@@ -2833,7 +2833,7 @@ def migrate_filtered(
                             """
                             Проверяет, можно ли обновить поле.
                             Поле можно обновить, если:
-                            1. Оно пустое
+                                1. Оно пустое
                             2. Оно было импортировано из AmoCRM (есть в cprev и значение совпадает)
                             """
                             cur = getattr(contact, field)
