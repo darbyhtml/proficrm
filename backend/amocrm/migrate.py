@@ -1868,20 +1868,48 @@ def migrate_filtered(
                     
                     if not local_company:
                         # ОТЛАДКА: контакт не связан с компанией из текущей пачки
+                        # В dry-run показываем ВСЕ такие контакты
                         debug_count = getattr(res, '_debug_contacts_logged', 0)
                         if res.contacts_preview is None:
                             res.contacts_preview = []
-                        preview_limit_skip = 50 if dry_run else 10
+                        preview_limit_skip = 1000 if dry_run else 10
                         if debug_count < preview_limit_skip:
-                            res._debug_contacts_logged = debug_count + 1
+                            # Полный анализ контакта даже если компания не найдена
+                            full_analysis_skipped = _analyze_contact_completely(ac)
+                            name_str = str(ac.get("name") or "").strip()
+                            first_name_raw = str(ac.get("first_name") or "").strip()
+                            last_name_raw = str(ac.get("last_name") or "").strip()
+                            last_name_skipped, first_name_skipped = _parse_fio(name_str, first_name_raw, last_name_raw)
+                            
                             debug_data = {
                                 "status": "SKIPPED_NO_LOCAL_COMPANY",
                                 "amo_contact_id": amo_contact_id,
-                                "last_name": str(ac.get("last_name") or ""),
-                                "first_name": str(ac.get("first_name") or ""),
+                                "last_name": last_name_skipped,
+                                "first_name": first_name_skipped,
                                 "amo_company_id_for_contact": amo_company_id_for_contact,
+                                "standard_fields": full_analysis_skipped.get("standard_fields", {}),
+                                "all_custom_fields": [
+                                    {
+                                        "field_id": cf.get("field_id"),
+                                        "field_name": cf.get("field_name"),
+                                        "field_code": cf.get("field_code"),
+                                        "field_type": cf.get("field_type"),
+                                        "values_count": cf.get("values_count", 0),
+                                        "values": [
+                                            {
+                                                "value": str(v.get("value", "")),
+                                                "enum_code": v.get("enum_code"),
+                                                "enum_id": v.get("enum_id"),
+                                            }
+                                            for v in cf.get("values", [])
+                                        ],
+                                    }
+                                    for cf in full_analysis_skipped.get("custom_fields", [])
+                                ],
+                                "custom_fields_count": len(full_analysis_skipped.get("custom_fields", [])),
                             }
                             res.contacts_preview.append(debug_data)
+                            res._debug_contacts_logged = debug_count + 1
                         continue
                     # Извлекаем данные контакта (делаем это ДО проверки на existing, чтобы всегда было в preview)
                     # Парсим ФИО с помощью функции _parse_fio
@@ -2452,8 +2480,8 @@ def migrate_filtered(
                     if res.contacts_preview is None:
                         res.contacts_preview = []
                     
-                    # В dry-run показываем больше контактов (до 100), чтобы видеть все проблемы
-                    preview_limit = 100 if dry_run else 10
+                    # В dry-run показываем ВСЕ контакты (до 1000), чтобы видеть все проблемы
+                    preview_limit = 1000 if dry_run else 10
                     if debug_count < preview_limit:
                         # Полный анализ контакта
                         full_analysis = _analyze_contact_completely(ac)

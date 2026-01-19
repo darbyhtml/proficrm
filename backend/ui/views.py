@@ -6542,6 +6542,78 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+def settings_amocrm_contacts_dry_run(request: HttpRequest) -> HttpResponse:
+    """
+    Отдельный dry-run для контактов компаний.
+    Показывает все контакты, найденные у компаний из текущей пачки.
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    from amocrm.client import AmoClient, AmoApiError
+
+    cfg = AmoApiConfig.load()
+    if not cfg.domain:
+        messages.error(request, "AmoCRM domain не настроен.")
+        return redirect("settings_amocrm_migrate")
+
+    try:
+        client = AmoClient(cfg)
+    except Exception as e:
+        messages.error(request, f"Ошибка создания клиента AmoCRM: {e}")
+        return redirect("settings_amocrm_migrate")
+
+    # Получаем параметры из GET или POST
+    responsible_user_id = request.GET.get("responsible_user_id") or request.POST.get("responsible_user_id")
+    limit_companies = int(request.GET.get("limit_companies", 250) or request.POST.get("limit_companies", 250))
+    offset = int(request.GET.get("offset", 0) or request.POST.get("offset", 0))
+    
+    if not responsible_user_id:
+        messages.error(request, "Не указан ответственный пользователь.")
+        return redirect("settings_amocrm_migrate")
+
+    try:
+        # Запускаем dry-run только для контактов
+        result = migrate_filtered(
+            client=client,
+            actor=request.user,
+            responsible_user_id=int(responsible_user_id),
+            sphere_field_id=0,
+            sphere_option_id=None,
+            sphere_label=None,
+            limit_companies=limit_companies,
+            offset=offset,
+            dry_run=True,  # Всегда dry-run
+            import_tasks=False,  # Не импортируем задачи
+            import_notes=False,  # Не импортируем заметки
+            import_contacts=True,  # Включаем импорт контактов для получения данных
+            company_fields_meta=None,
+            skip_field_filter=True,  # Берем все компании ответственного
+        )
+
+        return render(
+            request,
+            "ui/settings/amocrm_contacts_dry_run.html",
+            {
+                "result": result,
+                "responsible_user_id": responsible_user_id,
+                "limit_companies": limit_companies,
+                "offset": offset,
+            },
+        )
+
+    except AmoApiError as e:
+        messages.error(request, f"Ошибка AmoCRM API: {e}")
+        return redirect("settings_amocrm_migrate")
+    except Exception as e:
+        import traceback
+        messages.error(request, f"Ошибка: {str(e)}")
+        print(f"AMOCRM_CONTACTS_DRY_RUN_ERROR: {traceback.format_exc()}")
+        return redirect("settings_amocrm_migrate")
+
+
+@login_required
 def settings_amocrm_debug_contacts(request: HttpRequest) -> HttpResponse:
     """
     View для отладки структуры контактов из AmoCRM API.

@@ -1,0 +1,229 @@
+{% extends "ui/base.html" %}
+{% block title %}amoCRM — dry-run контактов{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div>
+      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> / <a class="underline" href="/settings/amocrm/">amoCRM</a> / <a class="underline" href="/settings/amocrm/migrate/">Миграция</a> /</div>
+      <h1 class="text-2xl font-semibold">📇 Dry-run: Контакты компаний</h1>
+      <div class="text-sm text-brand-dark/70 mt-2">
+        Показывает все контакты, найденные у компаний из текущей пачки. Это дополнительные контакты (не основные в карточке компании).
+      </div>
+    </div>
+
+    <div class="card card-pad">
+      <div class="mb-4 flex gap-2">
+        <a class="btn btn-outline" href="/settings/amocrm/migrate/">← Назад к миграции</a>
+        <a class="btn btn-primary" href="?responsible_user_id={{ responsible_user_id }}&limit_companies={{ limit_companies }}&offset={{ offset }}">🔄 Обновить</a>
+      </div>
+
+      <div class="mb-4 p-4 bg-blue-50 rounded border border-blue-200">
+        <div class="text-sm space-y-1">
+          <div><b>Ответственный:</b> ID {{ responsible_user_id }}</div>
+          <div><b>Размер пачки:</b> {{ limit_companies }} компаний</div>
+          <div><b>Смещение:</b> {{ offset }}</div>
+          <div class="mt-2"><b>Статистика:</b></div>
+          <div class="pl-4 space-y-1">
+            <div>Компаний найдено: <b>{{ result.companies_seen|default:0 }}</b></div>
+            <div>Контактов найдено: <b>{{ result.contacts_seen|default:0 }}</b></div>
+            {% if result.contacts_preview %}
+              <div>Контактов в preview: <b>{{ result.contacts_preview|length }}</b></div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      {% if result.contacts_seen == 0 %}
+        <div class="p-4 bg-yellow-50 rounded border border-yellow-200">
+          <div class="text-sm text-yellow-800">
+            ⚠️ Контакты не найдены. Возможные причины:
+            <ul class="list-disc list-inside mt-2 space-y-1">
+              <li>У компаний из текущей пачки нет связанных контактов в AmoCRM</li>
+              <li>Контакты не были загружены (проверьте параметр with=contacts в запросе)</li>
+              <li>Проблема с правами доступа к контактам</li>
+            </ul>
+          </div>
+        </div>
+      {% elif not result.contacts_preview or result.contacts_preview|length == 0 %}
+        <div class="p-4 bg-yellow-50 rounded border border-yellow-200">
+          <div class="text-sm text-yellow-800">
+            ⚠️ Контакты найдены ({{ result.contacts_seen }}), но не отображаются в preview.
+            <div class="mt-2">Возможно, они не связаны с компаниями из текущей пачки или были пропущены.</div>
+          </div>
+        </div>
+      {% else %}
+        <div class="space-y-4">
+          <div class="text-sm text-gray-600">
+            Показано контактов: <b>{{ result.contacts_preview|length }}</b> из {{ result.contacts_seen }}
+            {% if result.contacts_preview|length < result.contacts_seen %}
+              <span class="text-orange-600">(показаны первые {{ result.contacts_preview|length }})</span>
+            {% endif %}
+          </div>
+
+          {% for c in result.contacts_preview %}
+            <div class="border rounded-lg p-4 {% if c.status == 'NO_CONTACTS_FOUND' or c.status == 'SKIPPED_NO_COMPANY_LINK' or c.status == 'SKIPPED_NO_LOCAL_COMPANY' %}bg-red-50{% elif c.status == 'INFO' %}bg-yellow-50{% elif c.status == 'UPDATED' or c.status == 'CREATED' %}bg-green-50{% else %}bg-gray-50{% endif %}">
+              {% if c.status == 'INFO' %}
+                <div class="font-medium mb-2 text-yellow-700">ℹ️ {{ c.message }}</div>
+              {% elif c.status == 'NO_CONTACTS_FOUND' %}
+                <div class="font-medium mb-2 text-red-600">⚠️ Контакты не найдены</div>
+                <div class="space-y-1 text-sm">
+                  <div><b>Проверено компаний:</b> {{ c.companies_checked }}</div>
+                  <div><b>ID компаний:</b> {{ c.company_ids|join:", " }}</div>
+                  <div class="text-xs muted-2 mt-1">{{ c.message }}</div>
+                </div>
+              {% elif c.status == 'SKIPPED_NO_LOCAL_COMPANY' %}
+                <div class="font-medium mb-2 text-orange-600">⚠️ Пропущен: локальная компания не найдена</div>
+                <div class="space-y-2 text-sm">
+                  <div><b>Контакт:</b> {{ c.last_name }} {{ c.first_name }} (amo id: {{ c.amo_contact_id }})</div>
+                  <div><b>amo company_id:</b> {{ c.amo_company_id_for_contact|default:"—" }}</div>
+                  
+                  {% if c.all_custom_fields %}
+                    <div class="border-t pt-2 mt-2">
+                      <div class="font-medium text-xs mb-1">📋 Кастомные поля ({{ c.custom_fields_count|default:0 }}):</div>
+                      <div class="space-y-1 mt-1">
+                        {% for cf in c.all_custom_fields %}
+                          <div class="text-xs p-2 rounded border bg-gray-50">
+                            <div><b>ID:</b> {{ cf.field_id }}, <b>code:</b> {{ cf.field_code|default:"—" }}, <b>name:</b> {{ cf.field_name|default:"—" }}, <b>type:</b> {{ cf.field_type|default:"—" }}</div>
+                            {% if cf.values %}
+                              <div class="mt-1 pl-2">
+                                {% for val in cf.values %}
+                                  <div>• {{ val.value|default:"—" }}{% if val.enum_code %} ({{ val.enum_code }}){% endif %}</div>
+                                {% endfor %}
+                              </div>
+                            {% endif %}
+                          </div>
+                        {% endfor %}
+                      </div>
+                    </div>
+                  {% endif %}
+                </div>
+              {% elif c.status == 'UPDATED' or c.status == 'CREATED' %}
+                <div class="font-medium mb-3 text-lg">
+                  {% if c.status == 'CREATED' %}✅ Создан: новый контакт{% else %}✅ Обновлён: контакт обновлён новыми данными{% endif %}
+                </div>
+                <div class="space-y-3">
+                  <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div><b>Контакт:</b> {{ c.last_name }} {{ c.first_name }}</div>
+                    <div><b>amo id:</b> {{ c.amo_contact_id }}</div>
+                    {% if c.company_name %}
+                      <div class="col-span-2"><b>Компания:</b> {{ c.company_name }}{% if c.company_id %} (ID: {{ c.company_id }}){% endif %}</div>
+                    {% endif %}
+                  </div>
+                  
+                  <div class="border-t pt-2">
+                    <div class="font-medium text-xs mb-1">📞 Извлеченные данные (что будет импортировано):</div>
+                    <div class="space-y-1 text-xs">
+                      <div><b>Телефоны:</b> 
+                        {% if c.extracted_phones %}
+                          {% for p in c.extracted_phones %}
+                            <span class="inline-block bg-blue-100 px-2 py-0.5 rounded mr-1">{{ p.value }} ({{ p.type }}){% if p.comment %} — {{ p.comment }}{% endif %}</span>
+                          {% endfor %}
+                        {% else %}—{% endif %}
+                      </div>
+                      <div><b>Email:</b> 
+                        {% if c.extracted_emails %}
+                          {% for e in c.extracted_emails %}
+                            <span class="inline-block bg-green-100 px-2 py-0.5 rounded mr-1">{{ e.value }} ({{ e.type }})</span>
+                          {% endfor %}
+                        {% else %}—{% endif %}
+                      </div>
+                      <div><b>Должность:</b> {{ c.extracted_position|default:"—" }}</div>
+                      <div><b>Примечание:</b> {{ c.extracted_note_text|default:"—"|truncatewords:30 }}</div>
+                      {% if c.extracted_cold_call %}
+                        <div><b>Холодный звонок:</b> {{ c.extracted_cold_call }}</div>
+                      {% endif %}
+                      {% if c.extracted_birthday %}
+                        <div><b>День рождения:</b> {{ c.extracted_birthday }}</div>
+                      {% endif %}
+                    </div>
+                  </div>
+                  
+                  {% if c.all_custom_fields %}
+                    <div class="border-t pt-2">
+                      <div class="font-medium text-xs mb-1">📋 ВСЕ кастомные поля ({{ c.custom_fields_count|default:0 }}):</div>
+                      <div class="space-y-2 mt-1 max-h-96 overflow-y-auto">
+                        {% for cf in c.all_custom_fields %}
+                          <div class="text-xs p-2 rounded border {% if cf.is_used %}bg-green-50 border-green-300{% else %}bg-gray-50{% endif %}">
+                            <div class="font-medium flex items-center gap-2">
+                              {% if cf.is_used %}<span class="text-green-600">✓</span>{% endif %}
+                              <span><b>ID:</b> {{ cf.field_id|default:"—" }}</span>
+                              <span><b>code:</b> {{ cf.field_code|default:"—" }}</span>
+                              <span><b>type:</b> {{ cf.field_type|default:"—" }}</span>
+                            </div>
+                            <div class="mt-1"><b>Название:</b> {{ cf.field_name|default:"—" }}</div>
+                            <div class="mt-1"><b>Значений:</b> {{ cf.values_count|default:0 }}</div>
+                            {% if cf.values %}
+                              <div class="mt-1 pl-2 border-l-2 space-y-1">
+                                {% for val in cf.values %}
+                                  <div class="text-xs">
+                                    • <b>value:</b> {{ val.value|default:"—"|truncatewords:15 }}
+                                    {% if val.enum_code %}<span class="text-gray-600">(enum_code: {{ val.enum_code }})</span>{% endif %}
+                                    {% if val.enum_id %}<span class="text-gray-600">(enum_id: {{ val.enum_id }})</span>{% endif %}
+                                  </div>
+                                {% endfor %}
+                              </div>
+                            {% endif %}
+                          </div>
+                        {% endfor %}
+                      </div>
+                    </div>
+                  {% endif %}
+                  
+                  {% if c.embedded_tags or c.embedded_companies or c.embedded_leads or c.embedded_customers or c.embedded_notes %}
+                    <div class="border-t pt-2">
+                      <div class="font-medium text-xs mb-1">🔗 Вложенные данные (_embedded):</div>
+                      <div class="space-y-1 text-xs">
+                        {% if c.embedded_tags %}
+                          <div><b>Теги:</b> {% for tag in c.embedded_tags %}{{ tag.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>
+                        {% endif %}
+                        {% if c.embedded_companies %}
+                          <div><b>Компании:</b> {% for comp in c.embedded_companies %}ID: {{ comp.id }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>
+                        {% endif %}
+                        {% if c.embedded_leads %}
+                          <div><b>Сделки:</b> {% for lead in c.embedded_leads %}ID: {{ lead.id }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>
+                        {% endif %}
+                        {% if c.embedded_customers %}
+                          <div><b>Покупатели:</b> {% for cust in c.embedded_customers %}ID: {{ cust.id }}{% if not forloop.last %}, {% endif %}{% endfor %}</div>
+                        {% endif %}
+                        {% if c.embedded_notes %}
+                          <div><b>Заметки:</b> {{ c.embedded_notes_count|default:0 }} шт.
+                            {% for note in c.embedded_notes|slice:":3" %}
+                              <div class="pl-2 text-xs text-gray-600">• type: {{ note.note_type|default:"—" }}, text: {{ note.text|default:"—"|truncatewords:10 }}</div>
+                            {% endfor %}
+                          </div>
+                        {% endif %}
+                      </div>
+                    </div>
+                  {% endif %}
+                  
+                  {% if c.standard_fields %}
+                    <div class="border-t pt-2">
+                      <div class="font-medium text-xs mb-1">📝 Стандартные поля:</div>
+                      <div class="text-xs space-y-0.5">
+                        {% for key, value in c.standard_fields.items %}
+                          <div><b>{{ key }}:</b> {{ value|default:"—" }}</div>
+                        {% endfor %}
+                      </div>
+                    </div>
+                  {% endif %}
+                  
+                  {% if c.full_structure %}
+                    <details class="border-t pt-2">
+                      <summary class="font-medium text-xs cursor-pointer">🔍 Полная JSON-структура контакта</summary>
+                      <pre class="text-xs mt-2 p-2 bg-gray-100 rounded overflow-auto max-h-64">{{ c.full_structure }}</pre>
+                    </details>
+                  {% endif %}
+                </div>
+              {% else %}
+                <div class="font-medium mb-2">{{ c.last_name }} {{ c.first_name }} (amo id: {{ c.amo_contact_id }})</div>
+                <div class="space-y-1 text-sm">
+                  <div><b>Статус:</b> {{ c.status|default:"—" }}</div>
+                </div>
+              {% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+{% endblock %}

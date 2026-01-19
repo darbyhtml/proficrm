@@ -92,6 +92,7 @@ urlpatterns = [
     path("settings/amocrm/callback/", views.settings_amocrm_callback, name="settings_amocrm_callback"),
     path("settings/amocrm/disconnect/", views.settings_amocrm_disconnect, name="settings_amocrm_disconnect"),
     path("settings/amocrm/migrate/", views.settings_amocrm_migrate, name="settings_amocrm_migrate"),
+    path("settings/amocrm/contacts-dry-run/", views.settings_amocrm_contacts_dry_run, name="settings_amocrm_contacts_dry_run"),
     path("settings/amocrm/debug-contacts/", views.settings_amocrm_debug_contacts, name="settings_amocrm_debug_contacts"),
     path("settings/company-columns/", views.settings_company_columns, name="settings_company_columns"),
     path("settings/security/", views.settings_security, name="settings_security"),
