@@ -1552,7 +1552,13 @@
                       // Мягкая подсветка ошибки: показываем сообщение под полем «Задача»
                       let fieldMessage = '';
                       if (data.errors && data.errors.type) {
-                        fieldMessage = Array.isArray(data.errors.type) ? data.errors.type.join(', ') : String(data.errors.type);
+                        if (Array.isArray(data.errors.type)) {
+                          fieldMessage = data.errors.type.join(', ');
+                        } else if (typeof data.errors.type === 'object' && data.errors.type.length) {
+                          fieldMessage = Array.from(data.errors.type).join(', ');
+                        } else {
+                          fieldMessage = String(data.errors.type);
+                        }
                       }
 
                       const msg = fieldMessage || data.error || 'Проверьте заполнение формы задачи.';
@@ -1560,7 +1566,12 @@
                       const errorBox = form.querySelector('[data-task-type-error]');
                       if (errorBox) {
                         errorBox.textContent = fieldMessage || '';
-                        errorBox.classList.toggle('hidden', !fieldMessage);
+                        errorBox.classList.remove('hidden');
+                        if (!fieldMessage) {
+                          errorBox.classList.add('hidden');
+                        }
+                      } else {
+                        console.warn('Элемент [data-task-type-error] не найден в форме');
                       }
 
                       if (!fieldMessage && window.uiToast) {

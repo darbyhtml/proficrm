@@ -4636,7 +4636,13 @@ def task_create(request: HttpRequest) -> HttpResponse:
                 # Собираем ошибки валидации
                 errors = {}
                 for field, field_errors in form.errors.items():
-                    errors[field] = field_errors
+                    # Преобразуем ErrorList в обычный список строк для JSON
+                    if hasattr(field_errors, 'data'):
+                        errors[field] = [str(e) for e in field_errors.data]
+                    elif isinstance(field_errors, list):
+                        errors[field] = [str(e) for e in field_errors]
+                    else:
+                        errors[field] = [str(field_errors)]
                 return JsonResponse({
                     "ok": False,
                     "error": "Ошибки валидации формы.",

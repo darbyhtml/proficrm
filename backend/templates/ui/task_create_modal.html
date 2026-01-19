@@ -14,6 +14,13 @@
     <div>
       <label class="block text-sm text-brand-dark/80 mb-1">Задача</label>
       {{ form.type }}
+      {% if form.type.errors %}
+        <div class="text-xs text-red-600 mt-1" data-task-type-error>
+          {{ form.type.errors|striptags }}
+        </div>
+      {% else %}
+        <div class="text-xs text-red-600 mt-1 hidden" data-task-type-error></div>
+      {% endif %}
     </div>
     
     <div class="mt-3">
