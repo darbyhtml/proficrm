@@ -4328,10 +4328,15 @@ def task_create(request: HttpRequest) -> HttpResponse:
 
     if request.method == "POST":
         is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+        
+        # Получаем выбранного пользователя из POST данных ДО создания формы
+        assigned_to_id = request.POST.get("assigned_to", "").strip()
+        
+        # Создаем форму
         form = TaskForm(request.POST)
         
-        # Устанавливаем queryset для assigned_to ДО валидации, чтобы выбранное значение было валидным
-        _set_assigned_to_queryset(form, user)
+        # Устанавливаем queryset для assigned_to ДО валидации, включая выбранного пользователя
+        _set_assigned_to_queryset(form, user, assigned_to_id=assigned_to_id)
         
         if form.is_valid():
             task: Task = form.save(commit=False)
@@ -4472,7 +4477,8 @@ def task_create(request: HttpRequest) -> HttpResponse:
                 }, status=400)
             # Для не-AJAX запросов продолжаем рендеринг формы с ошибками
             # Устанавливаем queryset для assigned_to, чтобы форма могла быть отрендерена с ошибками
-            _set_assigned_to_queryset(form, user)
+            assigned_to_id_from_post = request.POST.get("assigned_to", "").strip() if request.method == "POST" else None
+            _set_assigned_to_queryset(form, user, assigned_to_id=assigned_to_id_from_post)
     else:
         initial = {"assigned_to": user}
         if company_id:
@@ -4536,31 +4542,37 @@ def task_create(request: HttpRequest) -> HttpResponse:
     return render(request, "ui/task_create.html", {"form": form})
 
 
-def _set_assigned_to_queryset(form: "TaskForm", user: User) -> None:
+def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: str | None = None) -> None:
     """
     Устанавливает queryset для поля assigned_to в зависимости от роли пользователя.
     Также убеждается, что выбранное значение (если есть) включено в queryset.
+    
+    Args:
+        form: Форма TaskForm
+        user: Текущий пользователь
+        assigned_to_id: ID выбранного пользователя (опционально, для POST запросов)
     """
     # Получаем текущее выбранное значение (если есть)
     current_user_id = None
     
-    # Проверяем initial (для GET запросов)
-    if hasattr(form, 'initial') and 'assigned_to' in form.initial:
+    # Если передан assigned_to_id (для POST запросов), используем его
+    if assigned_to_id:
+        current_user_id = assigned_to_id.strip() if assigned_to_id else None
+    
+    # Если не передан, проверяем initial (для GET запросов)
+    if not current_user_id and hasattr(form, 'initial') and 'assigned_to' in form.initial:
         assigned_to_value = form.initial['assigned_to']
         if isinstance(assigned_to_value, User):
-            current_user_id = assigned_to_value.id
+            current_user_id = str(assigned_to_value.id)
         elif assigned_to_value:
-            current_user_id = assigned_to_value
+            current_user_id = str(assigned_to_value).strip()
     
-    # Проверяем data (для POST запросов)
+    # Если все еще нет, проверяем data (для POST запросов как fallback)
     if not current_user_id and hasattr(form, 'data') and form.data:
         assigned_to_value = form.data.get('assigned_to', '')
         if assigned_to_value:
             try:
                 current_user_id = str(assigned_to_value).strip()
-                # Проверяем, что это валидный UUID
-                if current_user_id:
-                    User.objects.filter(id=current_user_id).exists()  # Проверка существования
             except (ValueError, TypeError, AttributeError):
                 pass
     
