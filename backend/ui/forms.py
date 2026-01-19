@@ -699,7 +699,11 @@ class AmoMigrateFilterForm(forms.Form):
     dry_run = forms.BooleanField(label="Только проверить (dry-run)", required=False, initial=True)
     limit_companies = forms.IntegerField(label="Размер пачки компаний", min_value=1, max_value=5000, initial=50, required=False)
     offset = forms.IntegerField(label="Offset", required=False, initial=0)
-    responsible_user_id = forms.IntegerField(label="Ответственный (amo user id)")
+    responsible_user_id = forms.CharField(
+        label="Ответственный (amo user id)",
+        required=True,
+        help_text="Можно выбрать одного или нескольких пользователей. Для множественного выбора используйте Ctrl/Cmd+Click."
+    )
     migrate_all_companies = forms.BooleanField(label="Мигрировать все компании ответственного (без фильтра по полю)", required=False, initial=False)
     custom_field_id = forms.IntegerField(label="Кастомное поле (id)", required=False)
     custom_value_label = forms.CharField(label="Значение (текст)", required=False, initial="Новая CRM")

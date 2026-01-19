@@ -6545,26 +6545,130 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                     migrate_all = bool(form.cleaned_data.get("migrate_all_companies", False))
                     custom_field_id = form.cleaned_data.get("custom_field_id") or 0
                     
-                    result = migrate_filtered(
-                        client=client,
-                        actor=request.user,
-                        responsible_user_id=int(form.cleaned_data["responsible_user_id"]),
-                        sphere_field_id=int(custom_field_id),
-                        sphere_option_id=form.cleaned_data.get("custom_value_enum_id") or None,
-                        sphere_label=form.cleaned_data.get("custom_value_label") or None,
-                        limit_companies=batch_size,
-                        offset=int(form.cleaned_data.get("offset") or 0),
-                        dry_run=bool(form.cleaned_data.get("dry_run")),
-                        import_tasks=bool(form.cleaned_data.get("import_tasks")),
-                        import_notes=bool(form.cleaned_data.get("import_notes")),
-                        import_contacts=bool(form.cleaned_data.get("import_contacts")),
-                        company_fields_meta=fields,
-                        skip_field_filter=migrate_all,
-                    )
-                    if form.cleaned_data.get("dry_run"):
-                        messages.success(request, "Проверка (dry-run) выполнена.")
+                    # Обрабатываем множественный выбор пользователей
+                    # Для select multiple Django передает список через request.POST.getlist()
+                    responsible_user_ids_raw = request.POST.getlist("responsible_user_id")
+                    if not responsible_user_ids_raw:
+                        # Если список пуст, пробуем получить из cleaned_data (может быть строка для обратной совместимости)
+                        responsible_user_ids_str = form.cleaned_data.get("responsible_user_id", "")
+                        if responsible_user_ids_str:
+                            responsible_user_ids = [int(uid.strip()) for uid in str(responsible_user_ids_str).split(',') if uid.strip()]
+                        else:
+                            responsible_user_ids = []
                     else:
-                        messages.success(request, "Импорт выполнен.")
+                        responsible_user_ids = [int(uid) for uid in responsible_user_ids_raw if uid]
+                    
+                    if not responsible_user_ids:
+                        messages.error(request, "Выберите хотя бы одного ответственного пользователя.")
+                    else:
+                        # Если выбран один пользователь - работаем как раньше
+                        if len(responsible_user_ids) == 1:
+                            result = migrate_filtered(
+                                client=client,
+                                actor=request.user,
+                                responsible_user_id=responsible_user_ids[0],
+                                sphere_field_id=int(custom_field_id),
+                                sphere_option_id=form.cleaned_data.get("custom_value_enum_id") or None,
+                                sphere_label=form.cleaned_data.get("custom_value_label") or None,
+                                limit_companies=batch_size,
+                                offset=int(form.cleaned_data.get("offset") or 0),
+                                dry_run=bool(form.cleaned_data.get("dry_run")),
+                                import_tasks=bool(form.cleaned_data.get("import_tasks")),
+                                import_notes=bool(form.cleaned_data.get("import_notes")),
+                                import_contacts=bool(form.cleaned_data.get("import_contacts")),
+                                company_fields_meta=fields,
+                                skip_field_filter=migrate_all,
+                            )
+                        else:
+                            # Если выбрано несколько пользователей - обрабатываем каждого отдельно и объединяем результаты
+                            from amocrm.migrate import AmoMigrateResult
+                            combined_result = AmoMigrateResult(
+                                preview=[],
+                                tasks_preview=[],
+                                notes_preview=[],
+                                contacts_preview=[],
+                                companies_updates_preview=[] if form.cleaned_data.get("dry_run") else None,
+                                contacts_updates_preview=[] if form.cleaned_data.get("dry_run") else None,
+                            )
+                            
+                            for user_id in responsible_user_ids:
+                                user_result = migrate_filtered(
+                                    client=client,
+                                    actor=request.user,
+                                    responsible_user_id=user_id,
+                                    sphere_field_id=int(custom_field_id),
+                                    sphere_option_id=form.cleaned_data.get("custom_value_enum_id") or None,
+                                    sphere_label=form.cleaned_data.get("custom_value_label") or None,
+                                    limit_companies=batch_size,
+                                    offset=int(form.cleaned_data.get("offset") or 0),
+                                    dry_run=bool(form.cleaned_data.get("dry_run")),
+                                    import_tasks=bool(form.cleaned_data.get("import_tasks")),
+                                    import_notes=bool(form.cleaned_data.get("import_notes")),
+                                    import_contacts=bool(form.cleaned_data.get("import_contacts")),
+                                    company_fields_meta=fields,
+                                    skip_field_filter=migrate_all,
+                                )
+                                # Объединяем результаты
+                                combined_result.companies_seen += user_result.companies_seen
+                                combined_result.companies_matched += user_result.companies_matched
+                                combined_result.companies_batch += user_result.companies_batch
+                                combined_result.companies_created += user_result.companies_created
+                                combined_result.companies_updated += user_result.companies_updated
+                                combined_result.tasks_seen += user_result.tasks_seen
+                                combined_result.tasks_created += user_result.tasks_created
+                                combined_result.tasks_skipped_existing += user_result.tasks_skipped_existing
+                                combined_result.tasks_skipped_old += user_result.tasks_skipped_old
+                                combined_result.tasks_updated += user_result.tasks_updated
+                                combined_result.notes_seen += user_result.notes_seen
+                                combined_result.notes_created += user_result.notes_created
+                                combined_result.notes_skipped_existing += user_result.notes_skipped_existing
+                                combined_result.notes_updated += user_result.notes_updated
+                                combined_result.contacts_seen += user_result.contacts_seen
+                                combined_result.contacts_created += user_result.contacts_created
+                                
+                                # Объединяем preview списки
+                                if user_result.preview:
+                                    combined_result.preview.extend(user_result.preview)
+                                if user_result.tasks_preview:
+                                    if combined_result.tasks_preview is None:
+                                        combined_result.tasks_preview = []
+                                    combined_result.tasks_preview.extend(user_result.tasks_preview)
+                                if user_result.notes_preview:
+                                    if combined_result.notes_preview is None:
+                                        combined_result.notes_preview = []
+                                    combined_result.notes_preview.extend(user_result.notes_preview)
+                                if user_result.contacts_preview:
+                                    if combined_result.contacts_preview is None:
+                                        combined_result.contacts_preview = []
+                                    combined_result.contacts_preview.extend(user_result.contacts_preview)
+                                if user_result.companies_updates_preview:
+                                    if combined_result.companies_updates_preview is None:
+                                        combined_result.companies_updates_preview = []
+                                    combined_result.companies_updates_preview.extend(user_result.companies_updates_preview)
+                                if user_result.contacts_updates_preview:
+                                    if combined_result.contacts_updates_preview is None:
+                                        combined_result.contacts_updates_preview = []
+                                    combined_result.contacts_updates_preview.extend(user_result.contacts_updates_preview)
+                                
+                                # Если была ошибка в одном из результатов, сохраняем её
+                                if user_result.error:
+                                    if combined_result.error:
+                                        combined_result.error += f"\n\nПользователь {user_id}: {user_result.error}"
+                                    else:
+                                        combined_result.error = f"Пользователь {user_id}: {user_result.error}"
+                            
+                            result = combined_result
+                            if form.cleaned_data.get("dry_run"):
+                                messages.success(request, f"Проверка (dry-run) выполнена для {len(responsible_user_ids)} пользователей.")
+                            else:
+                                messages.success(request, f"Импорт выполнен для {len(responsible_user_ids)} пользователей.")
+                        
+                        # Для одного пользователя выводим сообщение
+                        if len(responsible_user_ids) == 1:
+                            if form.cleaned_data.get("dry_run"):
+                                messages.success(request, "Проверка (dry-run) выполнена.")
+                            else:
+                                messages.success(request, "Импорт выполнен.")
                 except AmoApiError as e:
                     messages.error(request, f"Ошибка миграции: {e}")
                 except Exception as e:

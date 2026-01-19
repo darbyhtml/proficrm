@@ -39,9 +39,8 @@
         </div>
 
         <div class="md:col-span-2">
-          <label class="block text-sm text-brand-dark/80 mb-1">Ответственный (amo)</label>
-          <select class="select w-full" name="responsible_user_id" required>
-            <option value="">— выберите —</option>
+          <label class="block text-sm text-brand-dark/80 mb-1">Ответственный (amo) - можно выбрать несколько</label>
+          <select class="select w-full" name="responsible_user_id" multiple size="8" required>
             {% regroup users by branch as branches_list %}
             {% for branch_group in branches_list %}
               {% if branch_group.grouper %}
@@ -50,12 +49,20 @@
                 <optgroup label="Филиал: Без филиала">
               {% endif %}
                 {% for u in branch_group.list %}
-                  <option value="{{ u.id }}" {% if form.responsible_user_id.value|stringformat:"s" == u.id|stringformat:"s" %}selected{% endif %}>{{ u.name }} (id={{ u.id }})</option>
+                  {% with user_id_str=u.id|stringformat:"s" %}
+                    <option value="{{ u.id }}" 
+                      {% if request.POST.responsible_user_id %}
+                        {% if user_id_str in request.POST.responsible_user_id %}selected{% endif %}
+                      {% elif form.responsible_user_id.value %}
+                        {% if form.responsible_user_id.value|stringformat:"s" == user_id_str %}selected{% endif %}
+                      {% endif %}
+                    >{{ u.name }} (id={{ u.id }})</option>
+                  {% endwith %}
                 {% endfor %}
               </optgroup>
             {% endfor %}
           </select>
-          <div class="text-xs muted-2 mt-1">Если не нашли человека — уточните имя в amo (в users list).</div>
+          <div class="text-xs muted-2 mt-1">Для выбора нескольких пользователей: удерживайте Ctrl (Windows/Linux) или Cmd (Mac) и кликайте по нужным. Если не нашли человека — уточните имя в amo (в users list).</div>
         </div>
 
         <div class="md:col-span-2">
