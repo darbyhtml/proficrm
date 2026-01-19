@@ -1588,131 +1588,69 @@ def migrate_filtered(
             contacts_skipped = 0  # счетчик пропущенных контактов
             logger.debug(f"===== STARTING CONTACT IMPORT for {len(amo_ids)} companies =====")
             try:
-                # Создаём set для быстрой проверки: контакты должны быть связаны только с компаниями из текущей пачки
-                amo_ids_set = set(amo_ids)
-                
-                # ОПТИМИЗИРОВАННЫЙ ПОДХОД: 
-                # 1. Сначала пытаемся извлечь контакты из _embedded.contacts (если они есть)
-                # 2. Если нет - используем filter[company_id][] (более надежно для больших объемов)
-                amo_contacts: list[dict[str, Any]] = []
-                companies_with_contacts: dict[int, list[dict[str, Any]]] = {}  # amo_id -> список контактов
-                
-                # Собираем контакты из _embedded.contacts компаний из текущей пачки
-                for amo_c in batch:
-                    amo_company_id = int(amo_c.get("id") or 0)
-                    if amo_company_id not in amo_ids_set:
-                        continue  # пропускаем компании не из текущей пачки
-                    
-                    # Извлекаем контакты из _embedded.contacts
-                    embedded = amo_c.get("_embedded") or {}
-                    contacts_in_company = embedded.get("contacts") or []
-                    if isinstance(contacts_in_company, list) and contacts_in_company:
-                        companies_with_contacts[amo_company_id] = contacts_in_company
-                        amo_contacts.extend(contacts_in_company)
-                        logger.debug(f"Company {amo_company_id} has {len(contacts_in_company)} contacts in _embedded.contacts")
-                
-                res.contacts_seen = len(amo_contacts)
-                logger.debug(f"Extracted {res.contacts_seen} contacts from _embedded.contacts of {len(companies_with_contacts)} companies")
-                
-                # Согласно документации: контакты в _embedded.contacts уже ПОЛНЫЕ с custom_fields_values
-                # Но для надежности и избежания 504, используем filter[company_id][] если контактов много
+                # КРИТИЧЕСКИ УПРОЩЕННЫЙ ПОДХОД: 
+                # Компании уже запрошены БЕЗ контактов (with_contacts=False)
+                # Получаем контакты ОТДЕЛЬНО через filter[company_id][] по 1 компании за раз
+                # Это максимально легкий и надежный способ
                 full_contacts: list[dict[str, Any]] = []
-                use_alternative_method = False
+                contact_id_to_company_map: dict[int, int] = {}  # contact_id -> amo_company_id
                 
-                # Если контактов нет в _embedded ИЛИ их слишком много (может быть тяжело) - используем альтернативный метод
-                if res.contacts_seen == 0 or res.contacts_seen > 50:
-                    use_alternative_method = True
-                    logger.debug(f"Using alternative method: contacts_seen={res.contacts_seen} (0 or >50)")
-                elif amo_contacts:
-                    # Проверяем первый контакт - есть ли нужные поля
-                    first_contact = amo_contacts[0] if isinstance(amo_contacts[0], dict) else {}
-                    if "custom_fields_values" not in first_contact:
-                        use_alternative_method = True
-                        logger.debug("Contacts from _embedded don't have custom_fields_values, using alternative method")
+                logger.debug(f"Fetching contacts for {len(amo_ids)} companies via filter[company_id][] (one by one for reliability)")
+                
+                # КРИТИЧЕСКИ: запрашиваем контакты по 1 компании за раз с большими задержками
+                for idx, company_id in enumerate(amo_ids):
+                    # Задержка перед каждым запросом (включая первый)
+                    if idx > 0:
+                        time.sleep(2.0)  # КРИТИЧЕСКИ: 2 сек между запросами
                     else:
-                        # Контакты уже полные, используем их как есть
-                        full_contacts = amo_contacts
-                        logger.debug(f"Contacts from _embedded.contacts are FULL, using them directly. Total: {len(full_contacts)}")
-                
-                # Альтернативный метод: получаем контакты через filter[company_id][] (более надежно)
-                if use_alternative_method:
-                    logger.debug("No contacts found in _embedded.contacts, trying alternative method via filter[company_id][]")
-                    # Альтернативный метод: получаем контакты через filter[company_id][]
-                    # Согласно документации AmoCRM API v4: /api/v4/contacts?filter[company_id][]=1&filter[company_id][]=2
-                    try:
-                        # КРИТИЧЕСКИ: получаем контакты батчами по 3 компании (для избежания 504)
-                        batch_size = 3
-                        for i in range(0, len(amo_ids), batch_size):
-                            # Задержка между батчами (включая первый)
-                            if i > 0:
-                                time.sleep(3.0)  # КРИТИЧЕСКИ: 3 сек между батчами
-                            else:
-                                time.sleep(1.0)  # Задержка перед первым батчем
-                            
-                            company_ids_batch = list(amo_ids)[i : i + batch_size]
-                            logger.debug(f"Trying to fetch contacts via filter[company_id][] for {len(company_ids_batch)} companies... (batch {i//batch_size + 1})")
-                            # НЕ запрашиваем notes - это слишком тяжело, только custom_fields
-                            contacts_alt = client.get_all_pages(
-                                "/api/v4/contacts",
-                                params={
-                                    "filter[company_id][]": company_ids_batch,
-                                    "with": "custom_fields",  # Только custom_fields, БЕЗ notes
-                                },
-                                embedded_key="contacts",
-                                limit=25,  # КРИТИЧЕСКИ уменьшено до 25
-                                max_pages=5,  # Ограничиваем страницы
-                                delay_between_pages=1.0,  # Увеличена задержка до 1 сек
-                            )
-                            if isinstance(contacts_alt, list) and contacts_alt:
-                                logger.debug(f"Found {len(contacts_alt)} contacts via filter[company_id][] method")
-                                amo_contacts.extend(contacts_alt)
-                                # Создаем маппинг контактов к компаниям
-                                for contact in contacts_alt:
-                                    if isinstance(contact, dict):
-                                        contact_id = int(contact.get("id") or 0)
-                                        # Пытаемся найти компанию через _embedded.companies или company_id
-                                        if contact_id:
-                                            # Проверяем _embedded.companies
-                                            embedded = contact.get("_embedded") or {}
-                                            companies_in_contact = embedded.get("companies") or []
-                                            if isinstance(companies_in_contact, list):
-                                                for comp_ref in companies_in_contact:
-                                                    if isinstance(comp_ref, dict):
-                                                        comp_id = int(comp_ref.get("id") or 0)
-                                                        if comp_id in amo_ids_set:
-                                                            contact_id_to_company_map[contact_id] = comp_id
-                                                            break
-                                            # Если не нашли через _embedded, проверяем company_id напрямую
-                                            if contact_id not in contact_id_to_company_map:
-                                                comp_id_direct = int(contact.get("company_id") or 0)
-                                                if comp_id_direct in amo_ids_set:
-                                                    contact_id_to_company_map[contact_id] = comp_id_direct
-                                res.contacts_seen = len(amo_contacts)
-                                # Контакты через filter[company_id][] уже полные с custom_fields
-                                full_contacts = amo_contacts
-                                logger.debug(f"Using {len(full_contacts)} contacts from alternative method (already full data)")
-                                need_additional_fetch = False  # Не нужно дополнительных запросов
-                                break  # Нашли контакты, выходим из цикла
-                    except Exception as e:
-                        logger.debug(f"Error fetching contacts via filter[company_id][]: {e}", exc_info=True)
+                        time.sleep(0.5)  # Небольшая задержка перед первым
                     
-                    # Если все еще не нашли контакты, сохраняем информацию об ошибке
-                    if res.contacts_seen == 0:
-                        if res.contacts_preview is None:
-                            res.contacts_preview = []
-                        debug_info = {
-                            "status": "NO_CONTACTS_FOUND",
-                            "companies_checked": len(amo_ids),
-                            "company_ids": list(amo_ids)[:5],  # первые 5 для отладки
-                            "message": "Контакты не найдены ни в _embedded.contacts компаний, ни через filter[company_id][]. Проверьте, что у компаний есть связанные контакты в AmoCRM.",
-                        }
-                        res.contacts_preview.append(debug_info)
+                    try:
+                        logger.debug(f"Fetching contacts for company {company_id} ({idx + 1}/{len(amo_ids)})...")
+                        # Запрашиваем контакты для ОДНОЙ компании
+                        # Только custom_fields, БЕЗ notes - максимально легкий запрос
+                        contacts_for_company = client.get_all_pages(
+                            "/api/v4/contacts",
+                            params={
+                                "filter[company_id][]": [company_id],  # Только одна компания
+                                "with": "custom_fields",  # Только custom_fields, БЕЗ notes
+                            },
+                            embedded_key="contacts",
+                            limit=10,  # КРИТИЧЕСКИ: только 10 контактов за раз
+                            max_pages=3,  # Максимум 3 страницы (30 контактов на компанию)
+                            delay_between_pages=1.0,  # 1 сек между страницами
+                        )
+                        
+                        if isinstance(contacts_for_company, list) and contacts_for_company:
+                            logger.debug(f"Found {len(contacts_for_company)} contacts for company {company_id}")
+                            full_contacts.extend(contacts_for_company)
+                            # Создаем маппинг контактов к компании
+                            for contact in contacts_for_company:
+                                if isinstance(contact, dict):
+                                    contact_id = int(contact.get("id") or 0)
+                                    if contact_id:
+                                        contact_id_to_company_map[contact_id] = company_id
+                        else:
+                            logger.debug(f"No contacts found for company {company_id}")
+                    except Exception as e:
+                        logger.warning(f"Error fetching contacts for company {company_id}: {e}", exc_info=True)
+                        # Продолжаем для следующих компаний
+                        continue
                 
-                # Согласно документации AmoCRM API v4:
-                # Контакты в _embedded.contacts приходят ПОЛНЫМИ с custom_fields_values
-                # НЕ нужно делать дополнительные запросы по ID, если контакты уже полные!
+                res.contacts_seen = len(full_contacts)
+                logger.debug(f"Total contacts fetched: {res.contacts_seen} from {len(amo_ids)} companies")
                 
-                # Маппинг контактов к компаниям уже создан выше при получении контактов
+                # Если контактов не найдено, сохраняем информацию об ошибке
+                if res.contacts_seen == 0:
+                    if res.contacts_preview is None:
+                        res.contacts_preview = []
+                    debug_info = {
+                        "status": "NO_CONTACTS_FOUND",
+                        "companies_checked": len(amo_ids),
+                        "company_ids": list(amo_ids)[:5],  # первые 5 для отладки
+                        "message": "Контакты не найдены через filter[company_id][]. Проверьте, что у компаний есть связанные контакты в AmoCRM.",
+                    }
+                    res.contacts_preview.append(debug_info)
                 
                 # Заметки контактов: НЕ запрашиваем для dry-run (слишком тяжело)
                 # Заметки нужны только при реальном импорте, и то можно запросить отдельно
