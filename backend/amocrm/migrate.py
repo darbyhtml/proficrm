@@ -833,14 +833,52 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
                     for contact in contacts:
                         if isinstance(contact, dict):
                             # Сохраняем связь с компанией
+                            # ВАЖНО: у контакта может уже быть _embedded.companies, нужно добавить нашу компанию в список
                             if "_embedded" not in contact:
                                 contact["_embedded"] = {}
-                            if "companies" not in contact["_embedded"]:
-                                contact["_embedded"]["companies"] = [{"id": company_id}]
+                            
+                            # Получаем существующий список компаний или создаем новый
+                            existing_companies = contact["_embedded"].get("companies") or []
+                            if not isinstance(existing_companies, list):
+                                existing_companies = []
+                            
+                            # Проверяем, есть ли уже эта компания в списке
+                            company_already_present = False
+                            for comp_ref in existing_companies:
+                                if isinstance(comp_ref, dict) and int(comp_ref.get("id") or 0) == company_id:
+                                    company_already_present = True
+                                    break
+                                elif isinstance(comp_ref, int) and comp_ref == company_id:
+                                    company_already_present = True
+                                    break
+                            
+                            # Добавляем компанию, если её еще нет
+                            if not company_already_present:
+                                existing_companies.append({"id": company_id})
+                            
+                            contact["_embedded"]["companies"] = existing_companies
+                            
+                            # ОТЛАДКА: логируем структуру первого контакта
+                            if method1_contacts_count == 0:
+                                contact_id_debug = contact.get("id")
+                                logger.info(f"fetch_contacts_for_companies: структура первого контакта (id={contact_id_debug}):")
+                                logger.info(f"  - has _embedded: {'_embedded' in contact}")
+                                logger.info(f"  - _embedded.companies: {contact.get('_embedded', {}).get('companies', [])}")
+                                logger.info(f"  - contact keys: {list(contact.keys())[:10]}")
                     out.extend(contacts)
                     method1_contacts_count += len(contacts)
                 else:
                     logger.info(f"fetch_contacts_for_companies: компания {company_id}: контакты не найдены в _embedded.contacts (пустой список или отсутствует)")
+                    # ОТЛАДКА: логируем структуру ответа, если контактов нет
+                    if method1_contacts_count == 0 and isinstance(company_data, dict):
+                        logger.info(f"fetch_contacts_for_companies: структура ответа для компании {company_id}:")
+                        logger.info(f"  - has _embedded: {'_embedded' in company_data}")
+                        if "_embedded" in company_data:
+                            embedded_keys = list(company_data.get("_embedded", {}).keys())
+                            logger.info(f"  - _embedded keys: {embedded_keys}")
+                            if "contacts" in company_data.get("_embedded", {}):
+                                contacts_raw = company_data.get("_embedded", {}).get("contacts")
+                                logger.info(f"  - contacts type: {type(contacts_raw)}, value: {contacts_raw}")
             else:
                 logger.warning(f"fetch_contacts_for_companies: компания {company_id}: неожиданный тип ответа: {type(company_data)}")
         except Exception as e:
@@ -1660,6 +1698,17 @@ def migrate_filtered(
                 contacts_with_company = 0
                 contacts_without_company = 0
                 
+                # ОТЛАДКА: логируем структуру первых контактов
+                for debug_idx, debug_contact in enumerate(all_contacts[:3]):
+                    if isinstance(debug_contact, dict):
+                        contact_id_debug = debug_contact.get("id")
+                        embedded_debug = debug_contact.get("_embedded") or {}
+                        companies_debug = embedded_debug.get("companies") or []
+                        logger.info(f"migrate_filtered: контакт {debug_idx + 1} (id={contact_id_debug}):")
+                        logger.info(f"  - _embedded.companies: {companies_debug}")
+                        logger.info(f"  - company_id (direct): {debug_contact.get('company_id')}")
+                        logger.info(f"  - amo_ids_set: {list(amo_ids_set)[:5]}...")
+                
                 for contact in all_contacts:
                     if not isinstance(contact, dict):
                         contacts_without_company += 1
@@ -1678,17 +1727,24 @@ def migrate_filtered(
                     companies_in_contact = embedded.get("companies") or []
                     if isinstance(companies_in_contact, list):
                         for comp_ref in companies_in_contact:
+                            # comp_ref может быть dict с полем "id" или просто int
+                            comp_id = None
                             if isinstance(comp_ref, dict):
                                 comp_id = int(comp_ref.get("id") or 0)
-                                if comp_id in amo_ids_set:
-                                    found_company_id = comp_id
-                                    break
+                            elif isinstance(comp_ref, int):
+                                comp_id = comp_ref
+                            
+                            if comp_id and comp_id in amo_ids_set:
+                                found_company_id = comp_id
+                                logger.debug(f"migrate_filtered: контакт {contact_id} связан с компанией {comp_id} (найдено через _embedded.companies)")
+                                break
                     
                     # Если не нашли через _embedded, проверяем company_id напрямую
                     if not found_company_id:
                         comp_id_direct = int(contact.get("company_id") or 0)
-                        if comp_id_direct in amo_ids_set:
+                        if comp_id_direct and comp_id_direct in amo_ids_set:
                             found_company_id = comp_id_direct
+                            logger.debug(f"migrate_filtered: контакт {contact_id} связан с компанией {comp_id_direct} (найдено через company_id)")
                     
                     # Добавляем контакт ТОЛЬКО если он связан с компанией из текущей пачки
                     if found_company_id:
@@ -1697,6 +1753,12 @@ def migrate_filtered(
                         contacts_with_company += 1
                     else:
                         contacts_without_company += 1
+                        # ОТЛАДКА: логируем, почему контакт не прошел фильтрацию (только для первых 3)
+                        if contacts_without_company <= 3:
+                            logger.info(f"migrate_filtered: контакт {contact_id} НЕ прошел фильтрацию:")
+                            logger.info(f"  - _embedded.companies: {companies_in_contact}")
+                            logger.info(f"  - company_id (direct): {contact.get('company_id')}")
+                            logger.info(f"  - amo_ids_set содержит: {list(amo_ids_set)[:5]}...")
                 
                 res.contacts_seen = len(full_contacts)
                 logger.info(f"migrate_filtered: фильтрация завершена: {res.contacts_seen} контактов принадлежат {len(amo_ids)} компаниям из текущей пачки (пропущено: {contacts_without_company})")
