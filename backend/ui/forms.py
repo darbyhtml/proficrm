@@ -2,6 +2,7 @@ import mimetypes
 from django import forms
 from django.forms import inlineformset_factory, BaseInlineFormSet, ValidationError
 from django.contrib.auth.password_validation import validate_password
+from django.db.models import Q
 
 from accounts.models import Branch, User
 from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactEmail, ContactPhone
