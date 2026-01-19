@@ -1273,7 +1273,7 @@ def migrate_filtered(
                                 changed = True
                                 if dry_run:
                                     company_updates_diff["workday_end"] = {"old": old_end, "new": str(time(h2, m2))}
-                        except Exception:
+                    except Exception:
                         pass
             # Руководитель (contact_name) — заполняем из amo, если пусто
             if extra.get("director") and not (comp.contact_name or "").strip():
