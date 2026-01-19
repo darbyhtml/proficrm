@@ -96,19 +96,20 @@ class AmoClient:
         self.refresh_token()
 
     def authorize_url(self) -> str:
-        # amo: /oauth?client_id=...&redirect_uri=...&response_type=code
-        # Согласно документации AmoCRM: https://www.amocrm.ru/developers/content/oauth/oauth
-        # Правильный endpoint: /oauth (не /oauth2/authorize)
+        # amo: https://www.amocrm.ru/oauth?client_id=...&state=...&mode=popup
+        # Согласно документации AmoCRM: https://www.amocrm.ru/developers/content/oauth/step-by-step
+        # Правильный endpoint: https://www.amocrm.ru/oauth (не поддомен!)
+        # Параметры: client_id, state, mode (redirect_uri и response_type НЕ нужны в URL)
+        # redirect_uri указывается только при регистрации интеграции и при обмене кода на токен
         qs = urllib.parse.urlencode(
             {
                 "client_id": self.cfg.client_id,
-                "redirect_uri": self.cfg.redirect_uri,
-                "response_type": "code",
-                # state сейчас используем как простую метку (можно усилить до CSRF-проверки при желании)
-                "state": "proficrm_migrate",
+                "state": "proficrm_migrate",  # для CSRF защиты
+                "mode": "popup",  # или "post_message" - контролирует поведение UI
             }
         )
-        return f"{self.base}/oauth?{qs}"
+        # Важно: используем www.amocrm.ru, а не поддомен пользователя
+        return f"https://www.amocrm.ru/oauth?{qs}"
 
     def exchange_code(self, code: str) -> None:
         url = f"{self.base}/oauth2/access_token"

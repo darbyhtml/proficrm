@@ -6347,7 +6347,21 @@ def settings_amocrm_callback(request: HttpRequest) -> HttpResponse:
         messages.error(request, "amoCRM не вернул code (или доступ не разрешён).")
         return redirect("settings_amocrm")
 
+    # AmoCRM возвращает referer с поддоменом пользователя
+    # Нужно использовать этот поддомен для обмена кода на токен
+    referer = (request.GET.get("referer") or "").strip()
+    state = (request.GET.get("state") or "").strip()
+    
     cfg = AmoApiConfig.load()
+    
+    # Если получен referer, обновляем domain (но сохраняем старый, если referer пустой)
+    if referer:
+        # referer может быть в формате "subdomain.amocrm.ru" или полный URL
+        referer_domain = referer.replace("https://", "").replace("http://", "").strip("/")
+        if referer_domain and referer_domain != cfg.domain:
+            cfg.domain = referer_domain
+            cfg.save(update_fields=["domain", "updated_at"])
+    
     try:
         AmoClient(cfg).exchange_code(code)
         messages.success(request, "amoCRM подключен. Токены сохранены.")
