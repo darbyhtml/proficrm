@@ -4470,7 +4470,32 @@ def task_create(request: HttpRequest) -> HttpResponse:
     company_qs = _editable_company_qs(user).order_by("name")
     if is_modal:
         # В модальном окне показываем только первые 200 компаний для быстрой загрузки
-        company_qs = company_qs[:200]
+        # НО: если передана конкретная компания через GET, убедимся, что она в списке
+        if company_id:
+            # Получаем компанию отдельно
+            selected_company = Company.objects.filter(id=company_id).first()
+            if selected_company and _can_edit_company(user, selected_company):
+                # Берем первые 199 компаний, чтобы добавить выбранную компанию
+                limited_qs = company_qs.exclude(id=company_id)[:199]
+                # Объединяем с выбранной компанией и сортируем
+                from django.db.models import Case, When, IntegerField
+                company_qs = (
+                    Company.objects.filter(
+                        Q(id__in=[c.id for c in limited_qs]) | Q(id=company_id)
+                    )
+                    .annotate(
+                        custom_order=Case(
+                            When(id=company_id, then=0),
+                            default=1,
+                            output_field=IntegerField(),
+                        )
+                    )
+                    .order_by("custom_order", "name")
+                )
+            else:
+                company_qs = company_qs[:200]
+        else:
+            company_qs = company_qs[:200]
     form.fields["company"].queryset = company_qs
 
     # Ограничить назначаемых с группировкой по городам филиалов (как при передаче компании)

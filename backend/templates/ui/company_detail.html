@@ -1465,22 +1465,57 @@
                   if (companyId) {
                     const companySelect = createModalContent.querySelector('select[name="company"], select#id_company');
                     if (companySelect) {
-                      companySelect.value = companyId;
-                      // Триггерим событие change для обновления виджета
-                      companySelect.dispatchEvent(new Event('change', { bubbles: true }));
-                      // Обновляем визуальное отображение виджета
-                      const msWidget = companySelect.closest('[data-ms-single="1"]');
-                      if (msWidget) {
-                        const valueEl = msWidget.querySelector('.ms-value');
-                        const selectedOption = companySelect.options[companySelect.selectedIndex];
-                        if (valueEl && selectedOption) {
-                          valueEl.textContent = selectedOption.textContent.trim();
+                      // Проверяем, есть ли опция с нужным значением
+                      const optionExists = Array.from(companySelect.options).some(opt => opt.value === companyId);
+                      if (optionExists) {
+                        companySelect.value = companyId;
+                        // Триггерим событие change для обновления виджета
+                        companySelect.dispatchEvent(new Event('change', { bubbles: true }));
+                        // Обновляем визуальное отображение виджета
+                        const msWidget = companySelect.closest('[data-ms-single="1"]');
+                        if (msWidget) {
+                          const valueEl = msWidget.querySelector('.ms-value');
+                          const selectedOption = companySelect.options[companySelect.selectedIndex];
+                          if (valueEl && selectedOption) {
+                            valueEl.textContent = selectedOption.textContent.trim();
+                          }
                         }
+                      } else {
+                        // Если опции нет в списке, загружаем компанию через AJAX
+                        fetch(`/companies/autocomplete/?q=${encodeURIComponent(companyId)}`, {
+                          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                          if (data.items && data.items.length > 0) {
+                            const company = data.items.find(item => item.id === companyId);
+                            if (company) {
+                              // Добавляем опцию в select
+                              const opt = document.createElement('option');
+                              opt.value = company.id;
+                              opt.textContent = company.name;
+                              if (company.inn) opt.textContent += ` (ИНН: ${company.inn})`;
+                              companySelect.appendChild(opt);
+                              companySelect.value = companyId;
+                              // Триггерим событие change для обновления виджета
+                              companySelect.dispatchEvent(new Event('change', { bubbles: true }));
+                              // Обновляем визуальное отображение виджета
+                              const msWidget = companySelect.closest('[data-ms-single="1"]');
+                              if (msWidget) {
+                                const valueEl = msWidget.querySelector('.ms-value');
+                                if (valueEl) {
+                                  valueEl.textContent = opt.textContent.trim();
+                                }
+                              }
+                            }
+                          }
+                        })
+                        .catch(err => console.error('Ошибка загрузки компании:', err));
                       }
                     }
                   }
                 }
-              }, 100);
+              }, 150);
               
               const form = createModalContent.querySelector('[data-task-create-form]');
               if (form) {
