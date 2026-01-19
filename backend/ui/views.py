@@ -3626,6 +3626,7 @@ def contact_create(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company.id)
 
     contact = Contact(company=company)
+    is_modal = (request.GET.get("modal") == "1") or (request.POST.get("modal") == "1")
 
     if request.method == "POST":
         form = ContactForm(request.POST, instance=contact)
@@ -3646,12 +3647,28 @@ def contact_create(request: HttpRequest, company_id) -> HttpResponse:
                 company_id=company.id,
                 message=f"Добавлен контакт: {contact}",
             )
+            if is_modal:
+                return JsonResponse({"ok": True, "redirect": f"/companies/{company.id}/"})
             return redirect("company_detail", company_id=company.id)
+        if is_modal:
+            from django.template.loader import render_to_string
+            html = render_to_string(
+                "ui/contact_form_modal.html",
+                {"company": company, "form": form, "email_fs": email_fs, "phone_fs": phone_fs, "mode": "create"},
+                request=request,
+            )
+            return JsonResponse({"ok": False, "html": html}, status=400)
     else:
         form = ContactForm(instance=contact)
         email_fs = ContactEmailFormSet(instance=contact, prefix="emails")
         phone_fs = ContactPhoneFormSet(instance=contact, prefix="phones")
 
+    if is_modal:
+        return render(
+            request,
+            "ui/contact_form_modal.html",
+            {"company": company, "form": form, "email_fs": email_fs, "phone_fs": phone_fs, "mode": "create"},
+        )
     return render(
         request,
         "ui/contact_form.html",
@@ -3671,6 +3688,8 @@ def contact_edit(request: HttpRequest, contact_id) -> HttpResponse:
         messages.error(request, "Нет прав на редактирование контактов этой компании.")
         return redirect("company_detail", company_id=company.id)
 
+    is_modal = (request.GET.get("modal") == "1") or (request.POST.get("modal") == "1")
+
     if request.method == "POST":
         form = ContactForm(request.POST, instance=contact)
         email_fs = ContactEmailFormSet(request.POST, instance=contact, prefix="emails")
@@ -3688,12 +3707,28 @@ def contact_edit(request: HttpRequest, contact_id) -> HttpResponse:
                 company_id=company.id,
                 message=f"Обновлён контакт: {contact}",
             )
+            if is_modal:
+                return JsonResponse({"ok": True, "redirect": f"/companies/{company.id}/"})
             return redirect("company_detail", company_id=company.id)
+        if is_modal:
+            from django.template.loader import render_to_string
+            html = render_to_string(
+                "ui/contact_form_modal.html",
+                {"company": company, "contact": contact, "form": form, "email_fs": email_fs, "phone_fs": phone_fs, "mode": "edit"},
+                request=request,
+            )
+            return JsonResponse({"ok": False, "html": html}, status=400)
     else:
         form = ContactForm(instance=contact)
         email_fs = ContactEmailFormSet(instance=contact, prefix="emails")
         phone_fs = ContactPhoneFormSet(instance=contact, prefix="phones")
 
+    if is_modal:
+        return render(
+            request,
+            "ui/contact_form_modal.html",
+            {"company": company, "contact": contact, "form": form, "email_fs": email_fs, "phone_fs": phone_fs, "mode": "edit"},
+        )
     return render(
         request,
         "ui/contact_form.html",

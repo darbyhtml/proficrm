@@ -469,6 +469,13 @@
         </div>
       </div>
 
+      {# Немодальная панель: создать/редактировать контакт (фон НЕ блокируем, чтобы можно было копировать) #}
+      <div id="contactPanel" class="fixed right-4 bottom-4 z-50 hidden" style="width: min(720px, calc(100vw - 2rem));">
+        <div class="bg-white border border-brand-soft rounded-2xl shadow-2xl p-5 max-h-[85vh] overflow-auto">
+          <div id="contactPanelBody"></div>
+        </div>
+      </div>
+
       <section class="card card-pad">
         <div class="font-medium mb-3">Быстро</div>
         {% if can_edit_company %}
@@ -572,7 +579,7 @@
         <div class="flex items-end justify-between gap-3 mb-3">
           <div class="font-medium">Контакты</div>
           {% if can_edit_company %}
-            <a class="btn btn-outline" href="/companies/{{ company.id }}/contacts/new/">+ Добавить контакт</a>
+            <a class="btn btn-outline" href="/companies/{{ company.id }}/contacts/new/?modal=1" data-contact-panel-open>+ Добавить контакт</a>
           {% endif %}
         </div>
         {% if contacts %}
@@ -2327,6 +2334,92 @@
             if (modalContent) modalContent.innerHTML = '<div class="text-center py-8 text-red-600">Ошибка загрузки задачи</div>';
             if (window.uiToast) window.uiToast('Ошибка загрузки задачи', 'error');
           }
+        });
+      });
+    })();
+  </script>
+  <script>
+    // Немодальная панель контакта: открывается поверх, но НЕ блокирует фон (можно копировать данные из карточки)
+    (function() {
+      const panel = document.getElementById('contactPanel');
+      const body = document.getElementById('contactPanelBody');
+      if (!panel || !body) return;
+
+      let currentAbort = null;
+
+      function openPanel() {
+        panel.classList.remove('hidden');
+      }
+      function closePanel() {
+        panel.classList.add('hidden');
+        body.innerHTML = '';
+        if (currentAbort) {
+          try { currentAbort.abort(); } catch (_e) {}
+          currentAbort = null;
+        }
+      }
+
+      async function loadForm(url) {
+        currentAbort = new AbortController();
+        const res = await fetch(url, { signal: currentAbort.signal, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        if (!res.ok) throw new Error('Ошибка загрузки формы');
+        const html = await res.text();
+        body.innerHTML = html;
+        openPanel();
+      }
+
+      async function submitForm(form) {
+        const fd = new FormData(form);
+        const res = await fetch(form.action, {
+          method: 'POST',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+          body: fd
+        });
+        const ct = (res.headers.get('content-type') || '').toLowerCase();
+        if (ct.includes('application/json')) {
+          const data = await res.json();
+          if (data.ok) {
+            window.location.href = data.redirect || window.location.href;
+            return;
+          }
+          if (data.html) {
+            body.innerHTML = data.html;
+            return;
+          }
+          throw new Error('Ошибка сохранения');
+        }
+        // Если вдруг вернули HTML — подменяем тело панели
+        const html = await res.text();
+        body.innerHTML = html;
+      }
+
+      // Открытие панели по кнопке
+      document.addEventListener('click', (e) => {
+        const a = e.target.closest('[data-contact-panel-open]');
+        if (a) {
+          e.preventDefault();
+          const url = a.getAttribute('href');
+          if (!url) return;
+          loadForm(url).catch(() => {
+            if (window.uiToast) window.uiToast('Ошибка загрузки', 'error');
+          });
+          return;
+        }
+        if (e.target.closest('[data-contact-panel-close]')) {
+          e.preventDefault();
+          closePanel();
+          return;
+        }
+      });
+
+      // Submit внутри панели
+      panel.addEventListener('submit', (e) => {
+        const form = e.target;
+        if (!(form instanceof HTMLFormElement)) return;
+        if (!form.matches('[data-contact-panel-form]')) return;
+        e.preventDefault();
+        submitForm(form).catch(() => {
+          if (window.uiToast) window.uiToast('Ошибка сохранения', 'error');
         });
       });
     })();
