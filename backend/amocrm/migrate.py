@@ -1834,15 +1834,40 @@ def migrate_filtered(
                                         note_search_info.append("notes_has_text=False")
                         # Проверяем custom_fields на наличие полей с примечаниями
                         note_fields_in_custom = []
+                        all_custom_field_names = []  # Для отладки - показываем ВСЕ поля
                         for cf in custom_fields:
                             if isinstance(cf, dict):
-                                field_name = str(cf.get("field_name") or "").lower()
-                                field_code = str(cf.get("field_code") or "").upper()
-                                if any(k in field_name for k in ["примеч", "комментар", "коммент", "заметк"]) or \
-                                   any(k in field_code for k in ["NOTE", "COMMENT", "REMARK"]):
+                                field_name = str(cf.get("field_name") or "").strip()
+                                field_code = str(cf.get("field_code") or "").strip()
+                                field_name_lower = field_name.lower()
+                                field_code_upper = field_code.upper()
+                                
+                                # Сохраняем все поля для отладки
+                                all_custom_field_names.append(f"{field_name}({field_code})")
+                                
+                                # Проверяем на примечания (расширенный список ключевых слов)
+                                if any(k in field_name_lower for k in ["примеч", "комментар", "коммент", "заметк", "note", "comment", "remark"]) or \
+                                   any(k in field_code_upper for k in ["NOTE", "COMMENT", "REMARK", "NOTE_TEXT", "COMMENT_TEXT"]):
                                     note_fields_in_custom.append(f"{field_name}({field_code})")
+                                    # Логируем значение этого поля
+                                    values = cf.get("values") or []
+                                    if values and isinstance(values, list) and len(values) > 0:
+                                        first_val = values[0]
+                                        if isinstance(first_val, dict):
+                                            val_text = str(first_val.get("value", ""))[:100]
+                                        else:
+                                            val_text = str(first_val)[:100]
+                                        if val_text:
+                                            note_search_info.append(f"found_note_value:{val_text[:50]}")
+                        
+                        # Добавляем информацию о всех полях для отладки
+                        if all_custom_field_names:
+                            note_search_info.append(f"all_fields:{','.join(all_custom_field_names)}")
                         if note_fields_in_custom:
-                            note_search_info.append(f"custom_fields:{','.join(note_fields_in_custom)}")
+                            note_search_info.append(f"note_fields:{','.join(note_fields_in_custom)}")
+                        elif debug_count_for_extraction < 3:
+                            # Если не нашли поля с примечаниями, логируем все поля
+                            logger.debug(f"  -> ⚠️ No note fields found in custom_fields. All fields: {all_custom_field_names}")
                     
                     debug_data = {
                         "source": "amo_api",
@@ -1917,16 +1942,19 @@ def migrate_filtered(
                             "full_structure": full_contact_structure,  # Полная структура для первых 3 контактов
                         }
                         res.contacts_preview.append(contact_debug)
+                        # Увеличиваем счетчик для ограничения preview (чтобы показывать до 10 контактов)
+                        res._debug_contacts_logged = debug_count + 1
+                        
                         # ОТЛАДКА: логируем, что добавили в preview
                         if preview_count < 3:
-                            logger.debug(f"Added contact {amo_contact_id} to preview:")
+                            logger.debug(f"Added contact {amo_contact_id} to preview (count: {debug_count + 1}):")
                             logger.debug(f"  - phones_found: {phones}")
                             logger.debug(f"  - emails_found: {emails}")
                             logger.debug(f"  - position_found: {position}")
                             logger.debug(f"  - note_text_found: {note_text}")
                             logger.debug(f"  - custom_fields_count: {len(custom_fields)}")
                             logger.debug(f"  - custom_fields_sample length: {len(custom_fields_debug)}")
-                        # Не увеличиваем _debug_contacts_logged здесь, т.к. используем preview_count
+                            logger.debug(f"  - note_search_info: {note_search_info}")
                         
                         # Также логируем в консоль
                         logger.debug(f"Contact {amo_contact_id}:")
