@@ -86,7 +86,11 @@ class AmoClient:
 
     def ensure_token(self) -> None:
         if self.cfg.long_lived_token:
+            if not self.cfg.long_lived_token.strip():
+                raise AmoApiError("Long-lived token пустой. Проверьте настройки AmoCRM в админке.")
             return
+        if not self.cfg.access_token:
+            raise AmoApiError("Access token не настроен. Проверьте настройки AmoCRM в админке или переавторизуйтесь.")
         if self._token_valid():
             return
         self.refresh_token()
@@ -183,8 +187,27 @@ class AmoClient:
             
             # Обработка 401 - обновляем токен и повторяем
             if res.status == 401:
+                logger.warning(f"Unauthorized (401) для {path}, обновляем токен...")
                 self.refresh_token()
                 res = self._request("GET", url, params=params, auth=True)
+            
+            # Обработка 403 - Forbidden (проблемы с правами доступа или токеном)
+            if res.status == 403:
+                error_msg = f"403 Forbidden для {path}"
+                # Проверяем наличие токена
+                has_token = bool(self.cfg.long_lived_token or self.cfg.access_token)
+                if not has_token:
+                    error_msg += ". Токен не настроен. Проверьте настройки AmoCRM в админке."
+                else:
+                    error_msg += ". Возможные причины:\n"
+                    error_msg += "  - Недостаточно прав доступа у пользователя в AmoCRM\n"
+                    error_msg += "  - Токен недействителен или истек (попробуйте переавторизоваться)\n"
+                    error_msg += "  - IP адрес заблокирован\n"
+                    error_msg += "  - Неправильный домен AmoCRM\n"
+                    error_msg += f"  - Домен: {self.cfg.domain}\n"
+                    error_msg += f"  - Используется long_lived_token: {bool(self.cfg.long_lived_token)}"
+                logger.error(error_msg)
+                raise AmoApiError(error_msg)
             
             # Обработка 429 - Too Many Requests (rate limit)
             if res.status == 429 and retry_on_429 and attempt < max_retries - 1:
