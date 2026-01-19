@@ -4542,44 +4542,53 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User) -> None:
     Также убеждается, что выбранное значение (если есть) включено в queryset.
     """
     # Получаем текущее выбранное значение (если есть)
-    current_value = None
+    current_user_id = None
+    
+    # Проверяем initial (для GET запросов)
     if hasattr(form, 'initial') and 'assigned_to' in form.initial:
-        current_value = form.initial['assigned_to']
-    elif hasattr(form, 'data') and 'assigned_to' in form.data:
-        try:
-            current_value = User.objects.filter(id=form.data['assigned_to']).first()
-        except (ValueError, TypeError):
-            pass
+        assigned_to_value = form.initial['assigned_to']
+        if isinstance(assigned_to_value, User):
+            current_user_id = assigned_to_value.id
+        elif assigned_to_value:
+            current_user_id = assigned_to_value
+    
+    # Проверяем data (для POST запросов)
+    if not current_user_id and hasattr(form, 'data') and form.data:
+        assigned_to_value = form.data.get('assigned_to', '')
+        if assigned_to_value:
+            try:
+                current_user_id = str(assigned_to_value).strip()
+                # Проверяем, что это валидный UUID
+                if current_user_id:
+                    User.objects.filter(id=current_user_id).exists()  # Проверка существования
+            except (ValueError, TypeError, AttributeError):
+                pass
     
     # Устанавливаем queryset в зависимости от роли
     if user.role == User.Role.MANAGER:
-        queryset = User.objects.filter(id=user.id).select_related("branch").only("id", "first_name", "last_name", "branch__name")
+        base_queryset = User.objects.filter(id=user.id).select_related("branch").only("id", "first_name", "last_name", "branch__name")
     elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
-        queryset = User.objects.filter(
+        base_queryset = User.objects.filter(
             Q(id=user.id) | Q(branch_id=user.branch_id, role=User.Role.MANAGER)
         ).select_related("branch").only("id", "first_name", "last_name", "branch__name").order_by("branch__name", "last_name", "first_name")
     else:
         # Используем get_transfer_targets для группировки по городам
         from companies.permissions import get_transfer_targets
-        queryset = get_transfer_targets(user)
+        base_queryset = get_transfer_targets(user)
     
     # Если есть выбранное значение и его нет в queryset, добавляем его
-    if current_value:
-        if isinstance(current_value, User):
-            user_id = current_value.id
-        else:
-            user_id = current_value
-        
-        if not queryset.filter(id=user_id).exists():
+    if current_user_id:
+        # Проверяем, есть ли выбранный пользователь в базовом queryset
+        if not base_queryset.filter(id=current_user_id).exists():
             # Добавляем выбранного пользователя в queryset
             from django.db.models import Case, When, IntegerField
             queryset = (
                 User.objects.filter(
-                    Q(id__in=queryset.values_list('id', flat=True)) | Q(id=user_id)
+                    Q(id__in=base_queryset.values_list('id', flat=True)) | Q(id=current_user_id)
                 )
                 .annotate(
                     custom_order=Case(
-                        When(id=user_id, then=0),
+                        When(id=current_user_id, then=0),
                         default=1,
                         output_field=IntegerField(),
                     )
@@ -4587,6 +4596,10 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User) -> None:
                 .order_by("custom_order", "last_name", "first_name")
                 .select_related("branch")
             )
+        else:
+            queryset = base_queryset
+    else:
+        queryset = base_queryset
     
     form.fields["assigned_to"].queryset = queryset
 
