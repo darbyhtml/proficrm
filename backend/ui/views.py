@@ -4344,7 +4344,6 @@ def task_list(request: HttpRequest) -> HttpResponse:
         {
             "now": now,
             "local_now": local_now,
-            "worktime": worktime,
             "page": page,
             "qs": qs_no_page,
             "status": status,
