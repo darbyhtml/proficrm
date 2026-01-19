@@ -1527,6 +1527,24 @@
               
               const form = createModalContent.querySelector('[data-task-create-form]');
               if (form) {
+                const typeSelect = form.querySelector('#id_type');
+                const typeErrorBox = form.querySelector('[data-task-type-error]');
+                const defaultTypeErrorMsg = 'Пожалуйста, выберите тип задачи в поле «Задача».';
+
+                function setTypeError(msg) {
+                  if (!typeErrorBox) return;
+                  const m = (msg || '').trim();
+                  typeErrorBox.textContent = m;
+                  typeErrorBox.classList.toggle('hidden', !m);
+                }
+
+                if (typeSelect) {
+                  typeSelect.addEventListener('change', () => {
+                    const hasValue = Boolean(typeSelect.value && typeSelect.value !== '0');
+                    setTypeError(hasValue ? '' : defaultTypeErrorMsg);
+                  });
+                }
+
                 form.addEventListener('submit', async function(e) {
                   e.preventDefault();
                   const formData = new FormData(form);
@@ -1563,16 +1581,7 @@
 
                       const msg = fieldMessage || data.error || 'Проверьте заполнение формы задачи.';
 
-                      const errorBox = form.querySelector('[data-task-type-error]');
-                      if (errorBox) {
-                        errorBox.textContent = fieldMessage || '';
-                        errorBox.classList.remove('hidden');
-                        if (!fieldMessage) {
-                          errorBox.classList.add('hidden');
-                        }
-                      } else {
-                        console.warn('Элемент [data-task-type-error] не найден в форме');
-                      }
+                      setTypeError(fieldMessage || '');
 
                       if (!fieldMessage && window.uiToast) {
                         window.uiToast(msg, 'error');

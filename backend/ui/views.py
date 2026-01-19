@@ -4633,16 +4633,36 @@ def task_create(request: HttpRequest) -> HttpResponse:
             _set_assigned_to_queryset(form, user, assigned_to_id=assigned_to_id)
             
             if is_ajax:
-                # Собираем ошибки валидации
-                errors = {}
+                # Собираем ошибки валидации (в JSON отдаём ЧИСТЫЕ строки без "['...']").
+                # Django ValidationError при str() даёт "['msg']", поэтому разворачиваем messages.
+                errors: dict[str, list[str]] = {}
                 for field, field_errors in form.errors.items():
-                    # Преобразуем ErrorList в обычный список строк для JSON
-                    if hasattr(field_errors, 'data'):
-                        errors[field] = [str(e) for e in field_errors.data]
-                    elif isinstance(field_errors, list):
-                        errors[field] = [str(e) for e in field_errors]
+                    msgs: list[str] = []
+                    data = getattr(field_errors, "data", None)
+                    if data is not None:
+                        for e in data:
+                            e_msgs = getattr(e, "messages", None)
+                            if e_msgs:
+                                msgs.extend([str(m) for m in e_msgs])
+                            else:
+                                msg = getattr(e, "message", None)
+                                if msg:
+                                    msgs.append(str(msg))
+                                else:
+                                    msgs.append(str(e))
+                    elif isinstance(field_errors, (list, tuple)):
+                        msgs.extend([str(e) for e in field_errors])
                     else:
-                        errors[field] = [str(field_errors)]
+                        msgs.append(str(field_errors))
+
+                    # Финальная зачистка от случайного "['...']"
+                    cleaned: list[str] = []
+                    for m in msgs:
+                        s = str(m).strip()
+                        if s.startswith("['") and s.endswith("']") and len(s) >= 4:
+                            s = s[2:-2]
+                        cleaned.append(s)
+                    errors[field] = cleaned
                 return JsonResponse({
                     "ok": False,
                     "error": "Ошибки валидации формы.",
