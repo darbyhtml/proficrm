@@ -4578,6 +4578,15 @@ def task_create(request: HttpRequest) -> HttpResponse:
             return redirect("task_list")
         else:
             # Форма не валидна
+            # Логирование для отладки
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Form validation failed: {form.errors}, assigned_to_raw={request.POST.get('assigned_to', '')!r}, assigned_to_id={assigned_to_id!r}")
+            
+            # Устанавливаем queryset для assigned_to с учетом выбранного значения
+            # Это нужно для того, чтобы форма могла быть отрендерена с ошибками
+            _set_assigned_to_queryset(form, user, assigned_to_id=assigned_to_id)
+            
             if is_ajax:
                 # Собираем ошибки валидации
                 errors = {}
@@ -4589,9 +4598,6 @@ def task_create(request: HttpRequest) -> HttpResponse:
                     "errors": errors
                 }, status=400)
             # Для не-AJAX запросов продолжаем рендеринг формы с ошибками
-            # Устанавливаем queryset для assigned_to, чтобы форма могла быть отрендерена с ошибками
-            assigned_to_id_from_post = _clean_assigned_to_id(request.POST.get("assigned_to", "")) if request.method == "POST" else None
-            _set_assigned_to_queryset(form, user, assigned_to_id=assigned_to_id_from_post)
     else:
         initial = {"assigned_to": user}
         if company_id:
