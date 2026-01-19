@@ -4414,6 +4414,11 @@ def task_create(request: HttpRequest) -> HttpResponse:
         assigned_to_raw = request.POST.get("assigned_to", "")
         assigned_to_id = _clean_assigned_to_id(assigned_to_raw)
         
+        # Логирование для отладки
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Task creation POST: assigned_to_raw={assigned_to_raw!r}, assigned_to_id={assigned_to_id!r}, user={user.id}, role={user.role}")
+        
         # Создаем форму
         form = TaskForm(request.POST)
         
@@ -4423,6 +4428,20 @@ def task_create(request: HttpRequest) -> HttpResponse:
         # ВАЖНО: Устанавливаем queryset на всех пользователей перед валидацией,
         # чтобы Django мог принять любое значение из POST, даже если оно не в queryset
         form.fields["assigned_to"].queryset = User.objects.filter(is_active=True).select_related("branch")
+        
+        # Если есть выбранное значение, убеждаемся, что оно в queryset
+        if assigned_to_id:
+            try:
+                from uuid import UUID
+                UUID(assigned_to_id)  # Проверяем, что это валидный UUID
+                # Добавляем выбранного пользователя в queryset, если его там нет
+                if not form.fields["assigned_to"].queryset.filter(id=assigned_to_id).exists():
+                    logger.warning(f"Selected user {assigned_to_id} not in queryset, adding it")
+                    form.fields["assigned_to"].queryset = User.objects.filter(
+                        Q(is_active=True) | Q(id=assigned_to_id)
+                    ).select_related("branch")
+            except (ValueError, TypeError) as e:
+                logger.error(f"Invalid assigned_to_id: {assigned_to_id!r}, error: {e}")
         
         # Теперь валидируем форму
         
