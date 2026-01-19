@@ -687,7 +687,23 @@ class AmoMigrateResult:
 
 
 def fetch_amo_users(client: AmoClient) -> list[dict[str, Any]]:
-    return client.get_all_pages("/api/v4/users", embedded_key="users", limit=100, delay_between_pages=0.5)
+    """
+    Получает список пользователей из AmoCRM.
+    Если long-lived token не имеет прав на /api/v4/users (403), возвращает пустой список.
+    """
+    try:
+        return client.get_all_pages("/api/v4/users", embedded_key="users", limit=100, delay_between_pages=0.5)
+    except AmoApiError as e:
+        # Если 403 Forbidden - long-lived token не имеет прав на доступ к пользователям
+        if "403" in str(e) or "Forbidden" in str(e):
+            logger.warning(
+                "Long-lived token не имеет прав на доступ к /api/v4/users. "
+                "Для доступа к списку пользователей используйте OAuth токен. "
+                "Продолжаем без списка пользователей."
+            )
+            return []
+        # Для других ошибок пробрасываем исключение
+        raise
 
 
 def fetch_company_custom_fields(client: AmoClient) -> list[dict[str, Any]]:
@@ -975,7 +991,8 @@ def migrate_filtered(
 
     amo_users = fetch_amo_users(client)
     amo_user_by_id = {int(u.get("id") or 0): u for u in amo_users if int(u.get("id") or 0)}
-    responsible_local = _map_amo_user_to_local(amo_user_by_id.get(int(responsible_user_id)) or {})
+    # Если список пользователей пуст (например, из-за 403), используем пустой словарь
+    responsible_local = _map_amo_user_to_local(amo_user_by_id.get(int(responsible_user_id)) or {}) if amo_user_by_id else None
     field_meta = _build_field_meta(company_fields_meta or [])
 
     # Запрашиваем компании с контактами:

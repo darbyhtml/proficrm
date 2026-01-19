@@ -6395,29 +6395,48 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
     client = None
     users = []
     fields = []
+    users = []  # По умолчанию пустой список
     try:
         client = AmoClient(cfg)
         amo_users_raw = fetch_amo_users(client)
-        # Сопоставляем пользователей AmoCRM с нашими пользователями для определения филиалов
-        from amocrm.migrate import _map_amo_user_to_local
-        users_with_branches = []
-        for amo_user in amo_users_raw:
-            local_user = _map_amo_user_to_local(amo_user)
-            # Добавляем информацию о филиале, если найден локальный пользователь
-            amo_user_copy = dict(amo_user)
-            if local_user and local_user.branch:
-                amo_user_copy['branch'] = local_user.branch
-            else:
-                amo_user_copy['branch'] = None
-            users_with_branches.append(amo_user_copy)
-        users = users_with_branches
+        # Если список пользователей пуст (например, из-за 403), показываем предупреждение
+        if not amo_users_raw:
+            messages.warning(
+                request,
+                "Не удалось получить список пользователей AmoCRM. "
+                "Long-lived token может не иметь прав на доступ к /api/v4/users. "
+                "Для полного доступа используйте OAuth токен (переавторизуйтесь). "
+                "Миграция будет работать, но выбор ответственного пользователя может быть ограничен."
+            )
+        else:
+            # Сопоставляем пользователей AmoCRM с нашими пользователями для определения филиалов
+            from amocrm.migrate import _map_amo_user_to_local
+            users_with_branches = []
+            for amo_user in amo_users_raw:
+                local_user = _map_amo_user_to_local(amo_user)
+                # Добавляем информацию о филиале, если найден локальный пользователь
+                amo_user_copy = dict(amo_user)
+                if local_user and local_user.branch:
+                    amo_user_copy['branch'] = local_user.branch
+                else:
+                    amo_user_copy['branch'] = None
+                users_with_branches.append(amo_user_copy)
+            users = users_with_branches
         fields = fetch_company_custom_fields(client)
         cfg.last_error = ""
         cfg.save(update_fields=["last_error", "updated_at"])
     except AmoApiError as e:
         cfg.last_error = str(e)
         cfg.save(update_fields=["last_error", "updated_at"])
-        messages.error(request, f"Ошибка API amoCRM: {e}")
+        # Если это не 403 для users, показываем ошибку
+        if "403" not in str(e) or "/api/v4/users" not in str(e):
+            messages.error(request, f"Ошибка API amoCRM: {e}")
+        else:
+            messages.warning(
+                request,
+                f"Не удалось получить список пользователей: {e}. "
+                "Миграция будет работать, но выбор ответственного пользователя может быть ограничен."
+            )
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
