@@ -8,9 +8,10 @@ class Migration(migrations.Migration):
     - 0011_rename_mailer_emai_created_7b9a3d_idx_mailer_emai_created_817c96_idx_and_more
     """
 
+    # На проде/сервере у нас уже нет локальной 0011_rename_mailer_emai_created_...,
+    # поэтому оставляем зависимость только от фактической 0011 в репозитории.
     dependencies = [
         ("mailer", "0011_globalmailaccount_per_user_daily_limit"),
-        ("mailer", "0011_rename_mailer_emai_created_7b9a3d_idx_mailer_emai_created_817c96_idx_and_more"),
     ]
 
     operations = [
