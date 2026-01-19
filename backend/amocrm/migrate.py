@@ -1522,7 +1522,11 @@ def migrate_filtered(
                             is_cold_call_date = (field_type == "date" and
                                                 ("холодный" in field_name and "звонок" in field_name))
                             # Примечание/Комментарий (текстовое поле)
-                            is_note = any(k in field_name for k in ["примеч", "комментар", "коммент", "заметк"])
+                            # Проверяем как field_name, так и field_code для большей надежности
+                            is_note = (
+                                any(k in field_name for k in ["примеч", "комментар", "коммент", "заметк"]) or
+                                any(k in str(field_code or "").upper() for k in ["NOTE", "COMMENT", "REMARK"])
+                            )
                             
                             if debug_count_for_extraction < 3:
                                 logger.debug(f"    [value {v_idx}] val={val[:50]}, is_phone={is_phone}, is_email={is_email}, is_position={is_position}, is_cold_call_date={is_cold_call_date}, is_note={is_note}")
@@ -1562,8 +1566,15 @@ def migrate_filtered(
                                     if debug_count_for_extraction < 3:
                                         logger.debug(f"      -> Set position: {val}")
                             elif is_note:
+                                # Берем первое найденное примечание (или объединяем, если их несколько)
                                 if not note_text:
                                     note_text = val[:255]
+                                else:
+                                    # Если уже есть примечание, добавляем через точку с запятой (но не более 255 символов)
+                                    combined = f"{note_text}; {val[:100]}"
+                                    note_text = combined[:255]
+                                if debug_count_for_extraction < 3:
+                                    logger.debug(f"      -> Found note_text: {note_text[:100]}")
                             elif is_cold_call_date:
                                 # Холодный звонок: val - это timestamp (Unix timestamp)
                                 # Сохраняем для последующей обработки (берем первое значение, если их несколько)
@@ -1619,6 +1630,7 @@ def migrate_filtered(
                         "extracted_phones": phones,
                         "extracted_emails": emails,
                         "extracted_position": position,
+                        "extracted_note_text": note_text,  # Добавляем note_text для отладки
                         "custom_fields_count": len(custom_fields),
                         "custom_fields_sample": custom_fields[:3] if custom_fields else [],  # первые 3 для отладки
                         "has_phone_field": bool(ac.get("phone")),
@@ -1672,6 +1684,7 @@ def migrate_filtered(
                             "phones_found": [p[1] for p in phones],
                             "emails_found": [e[1] for e in emails],
                             "position_found": position,
+                            "note_text_found": note_text,  # Добавляем note_text для отладки
                             "custom_fields_count": len(custom_fields),
                             "custom_fields_sample": custom_fields_debug,
                             "raw_contact_keys": list(ac.keys())[:20] if isinstance(ac, dict) else [],
@@ -1686,6 +1699,7 @@ def migrate_filtered(
                             logger.debug(f"  - phones_found: {phones}")
                             logger.debug(f"  - emails_found: {emails}")
                             logger.debug(f"  - position_found: {position}")
+                            logger.debug(f"  - note_text_found: {note_text}")
                             logger.debug(f"  - custom_fields_count: {len(custom_fields)}")
                             logger.debug(f"  - custom_fields_sample length: {len(custom_fields_debug)}")
                         # Не увеличиваем _debug_contacts_logged здесь, т.к. используем preview_count
@@ -1697,6 +1711,7 @@ def migrate_filtered(
                         logger.debug(f"  - phones found: {phones}")
                         logger.debug(f"  - emails found: {emails}")
                         logger.debug(f"  - position found: {position}")
+                        logger.debug(f"  - note_text found: {note_text}")
                         logger.debug(f"  - custom_fields_values count: {len(custom_fields)}")
                         if custom_fields:
                             logger.debug(f"  - custom_fields sample (first 3):")
@@ -1788,17 +1803,28 @@ def migrate_filtered(
                             if ev_db and ev_db not in old_email_values:
                                 planned_emails_add.append({"value": ev_db, "type": str(et)})
 
-                        # Комментарий к первому телефону, если note_text и у первого номера пустой comment
+                        # Комментарий к первому телефону, если note_text
                         if note_text and phones:
                             first_phone_val = str(phones[0][1]).strip()[:50]
+                            first_phone_comment_from_phones = str(phones[0][2] or "").strip()
                             if first_phone_val:
                                 existing_first = None
                                 for p in (old_phones or []):
                                     if p.get("value") == first_phone_val:
                                         existing_first = p
                                         break
+                                
+                                # Если телефон существует и у него пустой комментарий, показываем обновление
                                 if existing_first and not (existing_first.get("comment") or "").strip():
                                     planned_field_changes["first_phone_comment"] = {"old": "", "new": note_text[:255]}
+                                # Если телефон новый и у него есть комментарий из note_text, он уже будет в planned_phones_add
+                                # Но для ясности также показываем отдельно, если note_text не пустой
+                                elif not existing_first and first_phone_comment_from_phones:
+                                    # Комментарий уже будет в planned_phones_add, но для наглядности можно добавить отдельное поле
+                                    # Проверяем, что комментарий действительно из note_text (не из enum_code)
+                                    if first_phone_comment_from_phones == note_text[:255]:
+                                        # Это уже будет видно в planned_phones_add, но можно добавить отдельное поле для ясности
+                                        pass
 
                         if planned_field_changes or planned_phones_add or planned_emails_add:
                             res.contacts_updates_preview.append(
