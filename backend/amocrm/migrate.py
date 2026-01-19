@@ -692,7 +692,7 @@ def fetch_amo_users(client: AmoClient) -> list[dict[str, Any]]:
     Если long-lived token не имеет прав на /api/v4/users (403), возвращает пустой список.
     """
     try:
-        return client.get_all_pages("/api/v4/users", embedded_key="users", limit=100, delay_between_pages=0.5)
+        return client.get_all_pages("/api/v4/users", embedded_key="users", limit=100, delay_between_pages=0.2)
     except AmoApiError as e:
         # Если 403 Forbidden - long-lived token не имеет прав на доступ к пользователям
         if "403" in str(e) or "Forbidden" in str(e):
@@ -781,7 +781,7 @@ def fetch_notes_for_companies(client: AmoClient, company_ids: list[int]) -> list
                     embedded_key="notes",
                     limit=100,  # Уменьшено с 250 до 100 для избежания 504 Gateway Timeout
                     max_pages=50,
-                    delay_between_pages=0.3,
+                    delay_between_pages=0.2,  # Задержка 0.2 сек для заметок
                 )
             )
     return out
@@ -1741,7 +1741,7 @@ def migrate_filtered(
                                     embedded_key="contacts",  # Ключ в _embedded для извлечения контактов
                                     limit=100,  # Уменьшено с 250 до 100 для избежания 504 Gateway Timeout
                                     max_pages=10,  # Ограничиваем количество страниц
-                                    delay_between_pages=1.0,  # Увеличенная задержка для избежания rate limit
+                                    delay_between_pages=0.2,  # Задержка 0.2 сек (безопасно для лимита 7/сек)
                                 )
                                 logger.debug(f"get_all_pages returned: type={type(contacts_batch)}, length={len(contacts_batch) if isinstance(contacts_batch, list) else 'not_list'}")
                                 if isinstance(contacts_batch, list):

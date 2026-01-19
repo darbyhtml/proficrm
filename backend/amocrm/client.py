@@ -260,7 +260,7 @@ class AmoClient:
         limit: int = 100,  # Уменьшено с 250 до 100 для избежания 504 Gateway Timeout
         max_pages: int = 200,
         embedded_key: str | None = None,
-        delay_between_pages: float = 0.5,  # Задержка между страницами для избежания rate limit
+        delay_between_pages: float = 0.2,  # Задержка между страницами (0.2 сек = 5 запросов/сек, безопасно для лимита 7/сек)
     ) -> list[dict]:
         """
         Возвращает склеенный список элементов из _embedded (v4).
