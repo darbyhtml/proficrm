@@ -1950,8 +1950,8 @@ def migrate_filtered(
                         custom_fields = ac.get("custom_fields_values") or []
                         # ОТЛАДКА: логируем структуру custom_fields для первых контактов
                         if debug_count_for_extraction < 3:
-                        logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
-                        logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}")
+                            logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
+                            logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}")
                         logger.debug(f"  - ac.get('custom_fields_values'): {ac.get('custom_fields_values')}")
                         # Логируем ВСЕ поля для отладки (чтобы увидеть, какие поля есть)
                         if isinstance(custom_fields, list):
@@ -2078,8 +2078,8 @@ def migrate_filtered(
                         custom_fields = ac.get("custom_fields_values") or []
                         # ОТЛАДКА: логируем структуру custom_fields для первых контактов
                         if debug_count_for_extraction < 3:
-                        logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
-                        logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}")
+                            logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
+                            logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}")
                         logger.debug(f"  - ac.get('custom_fields_values'): {ac.get('custom_fields_values')}")
                         # Логируем ВСЕ ключи контакта для поиска примечаний
                         if isinstance(ac, dict):
