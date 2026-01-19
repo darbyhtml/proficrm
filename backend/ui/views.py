@@ -400,7 +400,6 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
                 contact_q = contact_q.filter(
                     Q(first_name__icontains=word)
                     | Q(last_name__icontains=word)
-                    | Q(middle_name__icontains=word)
                 )
             
             # Ищем компании, у которых есть такие контакты
@@ -408,21 +407,16 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             # Также ищем по полному запросу в каждом поле (на случай, если ФИО хранится в одном поле)
             fio_filters |= Q(contacts__first_name__icontains=q)
             fio_filters |= Q(contacts__last_name__icontains=q)
-            fio_filters |= Q(contacts__middle_name__icontains=q)
         elif len(words) == 1:
             # Одно слово - ищем в любом поле
             word = words[0]
-            fio_filters = (
-                Q(contacts__first_name__icontains=word)
-                | Q(contacts__last_name__icontains=word)
-                | Q(contacts__middle_name__icontains=word)
+            fio_filters = Q(contacts__first_name__icontains=word) | Q(
+                contacts__last_name__icontains=word
             )
         else:
             # Пустой запрос (не должно быть, но на всякий случай)
-            fio_filters = (
-                Q(contacts__first_name__icontains=q)
-                | Q(contacts__last_name__icontains=q)
-                | Q(contacts__middle_name__icontains=q)
+            fio_filters = Q(contacts__first_name__icontains=q) | Q(
+                contacts__last_name__icontains=q
             )
         
         # Объединяем все фильтры
