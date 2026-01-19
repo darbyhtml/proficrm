@@ -1465,7 +1465,8 @@ def migrate_filtered(
                         debug_count = getattr(res, '_debug_contacts_logged', 0)
                         if res.contacts_preview is None:
                             res.contacts_preview = []
-                        if debug_count < 10:
+                        preview_limit_skip = 50 if dry_run else 10
+                        if debug_count < preview_limit_skip:
                             res._debug_contacts_logged = debug_count + 1
                             res.contacts_preview.append({
                                 "status": "SKIPPED_NO_ID",
@@ -1494,7 +1495,8 @@ def migrate_filtered(
                         debug_count = getattr(res, '_debug_contacts_logged', 0)
                         if res.contacts_preview is None:
                             res.contacts_preview = []
-                        if debug_count < 10:
+                        preview_limit_skip = 50 if dry_run else 10
+                        if debug_count < preview_limit_skip:
                             res._debug_contacts_logged = debug_count + 1
                             debug_data = {
                                 "status": "SKIPPED_NO_LOCAL_COMPANY",
@@ -2004,7 +2006,8 @@ def migrate_filtered(
                             "full_structure": full_contact_structure,  # Полная структура для первых 3 контактов
                         }
                         res.contacts_preview.append(contact_debug)
-                        # Увеличиваем счетчик для ограничения preview (чтобы показывать до 10 контактов)
+                        # Увеличиваем счетчик для ограничения preview
+                        # В dry-run показываем больше контактов (до 50), чтобы видеть все проблемы
                         res._debug_contacts_logged = debug_count + 1
                         
                         # ОТЛАДКА: логируем, что добавили в preview
