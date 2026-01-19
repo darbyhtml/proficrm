@@ -329,6 +329,13 @@
       color: rgba(0, 61, 56, 0.45);
       pointer-events: none;
     }
+    /* В редакторе рассылок не растягиваем картинки */
+    #mailEditor img{
+      max-width: 100% !important;
+      height: auto !important;
+      width: auto;
+      object-fit: contain;
+    }
     .btn-outline svg {
       width: 16px;
       height: 16px;
