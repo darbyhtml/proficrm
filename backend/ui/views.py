@@ -338,6 +338,7 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
         base_filters = (
             Q(name__icontains=q)
             | Q(inn__icontains=q)
+            | Q(kpp__icontains=q)
             | Q(legal_name__icontains=q)
             | Q(address__icontains=q)
             | Q(phone__icontains=q)
@@ -393,11 +394,13 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             # Используем Exists для проверки, что есть контакт компании, где все слова найдены
             # Создаем фильтр для контакта, где все слова найдены
             contact_q = Contact.objects.filter(company_id=OuterRef('pk'))
-            # Для каждого слова создаем условие, что оно найдено в first_name ИЛИ last_name
+            # Для каждого слова создаем условие, что оно найдено в ФИО контакта
             # И все эти условия должны выполняться для одного контакта
             for word in words:
                 contact_q = contact_q.filter(
-                    Q(first_name__icontains=word) | Q(last_name__icontains=word)
+                    Q(first_name__icontains=word)
+                    | Q(last_name__icontains=word)
+                    | Q(middle_name__icontains=word)
                 )
             
             # Ищем компании, у которых есть такие контакты
@@ -405,13 +408,22 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             # Также ищем по полному запросу в каждом поле (на случай, если ФИО хранится в одном поле)
             fio_filters |= Q(contacts__first_name__icontains=q)
             fio_filters |= Q(contacts__last_name__icontains=q)
+            fio_filters |= Q(contacts__middle_name__icontains=q)
         elif len(words) == 1:
             # Одно слово - ищем в любом поле
             word = words[0]
-            fio_filters = Q(contacts__first_name__icontains=word) | Q(contacts__last_name__icontains=word)
+            fio_filters = (
+                Q(contacts__first_name__icontains=word)
+                | Q(contacts__last_name__icontains=word)
+                | Q(contacts__middle_name__icontains=word)
+            )
         else:
             # Пустой запрос (не должно быть, но на всякий случай)
-            fio_filters = Q(contacts__first_name__icontains=q) | Q(contacts__last_name__icontains=q)
+            fio_filters = (
+                Q(contacts__first_name__icontains=q)
+                | Q(contacts__last_name__icontains=q)
+                | Q(contacts__middle_name__icontains=q)
+            )
         
         # Объединяем все фильтры
         qs = qs.filter(
@@ -2231,62 +2243,18 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
     q = (request.GET.get("q") or "").strip()
     if not q or len(q) < 2:
         return JsonResponse({"items": []})
-    
-    # Используем ту же логику поиска, что и в _apply_company_filters
-    base_filters = (
-        Q(name__icontains=q)
-        | Q(inn__icontains=q)
-        | Q(legal_name__icontains=q)
-        | Q(address__icontains=q)
-    )
-    
-    # Поиск по телефонам (с нормализацией)
-    normalized_phone = _normalize_phone_for_search(q)
-    phone_filters = Q()
-    if normalized_phone and normalized_phone != q:
-        # Ищем по нормализованному номеру в основном телефоне компании
-        phone_filters = Q(phone=normalized_phone)
-        # Ищем по нормализованному номеру в дополнительных телефонах компании
-        phone_filters |= Q(phones__value=normalized_phone)
-        # Ищем по нормализованному номеру в телефонах контактов
-        phone_filters |= Q(contacts__phones__value=normalized_phone)
-        # Также ищем по исходному запросу (на случай, если нормализация не сработала)
-        phone_filters |= Q(phone__icontains=q)
-        phone_filters |= Q(phones__value__icontains=q)
-        phone_filters |= Q(contacts__phones__value__icontains=q)
-    else:
-        # Если нормализация не удалась, ищем как есть
-        phone_filters = (
-            Q(phone__icontains=q)
-            | Q(phones__value__icontains=q)
-            | Q(contacts__phones__value__icontains=q)
-        )
-    
-    # Поиск по email (с нормализацией)
-    normalized_email = _normalize_email_for_search(q)
-    email_filters = Q()
-    if normalized_email:
-        # Ищем по нормализованному email в основном email компании
-        email_filters = Q(email__iexact=normalized_email)
-        # Ищем по нормализованному email в email контактов
-        email_filters |= Q(contacts__emails__value__iexact=normalized_email)
-        # Также ищем по частичному совпадению (на случай, если пользователь ввел часть email)
-        email_filters |= Q(email__icontains=q)
-        email_filters |= Q(contacts__emails__value__icontains=q)
-    else:
-        email_filters = Q(email__icontains=q) | Q(contacts__emails__value__icontains=q)
-    
+
+    # Используем ту же логику поиска, что и в списке компаний,
+    # чтобы поведение автодополнения и таблицы было полностью одинаковым
+    base_qs = Company.objects.all()
+    filtered = _apply_company_filters(qs=base_qs, params={"q": q}, default_responsible_id=None)
     qs = (
-        Company.objects.filter(base_filters | phone_filters | email_filters)
+        filtered["qs"]
         .select_related("responsible", "branch", "status")
-        .prefetch_related("phones", "emails")
+        .prefetch_related("phones", "emails", "contacts__phones", "contacts__emails")
         .distinct()
         .order_by("-updated_at")[:10]
     )
-    
-    # Определяем, по какому полю ищем
-    is_phone_search = normalized_phone and normalized_phone != q
-    is_email_search = normalized_email and normalized_email != q.lower()
     
     items = []
     for c in qs:
