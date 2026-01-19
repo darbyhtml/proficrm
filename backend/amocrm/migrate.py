@@ -1764,6 +1764,11 @@ def migrate_filtered(
         
         logger.info(f"migrate_filtered: проверка импорта контактов: import_contacts={import_contacts}, dry_run={dry_run}, should_process_contacts={should_process_contacts}, amo_ids={bool(amo_ids)}, len={len(amo_ids) if amo_ids else 0}")
         if should_process_contacts:
+            # Инициализируем счетчики до блока try, чтобы они были доступны в finally
+            contacts_processed = 0  # счетчик обработанных контактов
+            contacts_skipped = 0  # счетчик пропущенных контактов
+            contacts_errors = 0  # счетчик ошибок при обработке контактов
+            
             # ВАЖНО: в реальном импорте (не dry-run) обрабатываем контакты только если import_contacts=True
             # В dry-run показываем контакты всегда для preview
             if not dry_run and not import_contacts:
@@ -1773,8 +1778,6 @@ def migrate_filtered(
                 res.contacts_created = 0
             else:
                 res._debug_contacts_logged = 0  # счетчик для отладки
-                contacts_processed = 0  # счетчик обработанных контактов
-                contacts_skipped = 0  # счетчик пропущенных контактов
                 logger.info(f"migrate_filtered: ===== НАЧАЛО ИМПОРТА КОНТАКТОВ для {len(amo_ids)} компаний =====")
                 logger.info(f"migrate_filtered: ID компаний для поиска контактов: {amo_ids[:10]}...")
             try:
