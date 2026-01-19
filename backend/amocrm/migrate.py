@@ -1370,8 +1370,8 @@ def migrate_filtered(
                         if not ContactEmail.objects.filter(contact=c, value__iexact=v).exists():
                             try:
                                 ContactEmail.objects.create(contact=c, type=ContactEmail.EmailType.OTHER, value=v)
-                        except Exception:
-                            pass
+                            except Exception:
+                                pass
             if created:
                 res.companies_created += 1
             else:
