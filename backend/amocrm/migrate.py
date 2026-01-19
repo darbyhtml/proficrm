@@ -972,8 +972,11 @@ def migrate_filtered(
     responsible_local = _map_amo_user_to_local(amo_user_by_id.get(int(responsible_user_id)) or {})
     field_meta = _build_field_meta(company_fields_meta or [])
 
-    # Запрашиваем компании с контактами, если включен импорт контактов
-    companies = fetch_companies_by_responsible(client, responsible_user_id, with_contacts=import_contacts)
+    # Запрашиваем компании с контактами:
+    # - В dry-run всегда запрашиваем контакты (чтобы показать, что будет импортировано)
+    # - В реальном импорте только если import_contacts=True
+    should_fetch_contacts = dry_run or import_contacts
+    companies = fetch_companies_by_responsible(client, responsible_user_id, with_contacts=should_fetch_contacts)
     res.companies_seen = len(companies)
     matched_all = []
     if skip_field_filter:
