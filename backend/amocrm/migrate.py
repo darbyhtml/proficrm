@@ -1489,7 +1489,7 @@ def migrate_filtered(
                         if not text:
                             try:
                                 text = json.dumps(params, ensure_ascii=False)[:1200] if params else ""
-                        except Exception:
+                            except Exception:
                             text = ""
                         if not text:
                             text = f"(без текста) note_type={note_type}"
@@ -2458,7 +2458,7 @@ def migrate_filtered(
                             try:
                                 UTC = getattr(timezone, "UTC", dt_timezone.utc)
                             cold_marked_at_dt = timezone.datetime.fromtimestamp(cold_call_timestamp, tz=UTC)
-                        except Exception:
+                            except Exception:
                             cold_marked_at_dt = None
                     
                         debug_data = {
