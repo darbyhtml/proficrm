@@ -4718,8 +4718,8 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: str 
         ).select_related("branch").only("id", "first_name", "last_name", "branch__name").order_by("branch__name", "last_name", "first_name")
     elif user.role in (User.Role.GROUP_MANAGER, User.Role.ADMIN) or user.is_superuser:
         # Управляющий и Администратор могут назначать задачи всем пользователям
-        from companies.permissions import get_users_for_lists
-        base_queryset = get_users_for_lists(user, exclude_admin=False)
+        # НЕ фильтруем по филиалу компании - администратор должен видеть всех
+        base_queryset = User.objects.filter(is_active=True).select_related("branch").order_by("branch__name", "last_name", "first_name")
     else:
         # Для остальных ролей используем get_transfer_targets (только менеджеры, директора, РОП)
         from companies.permissions import get_transfer_targets
