@@ -1007,7 +1007,14 @@ def migrate_filtered(
     # - В dry-run всегда запрашиваем контакты (чтобы показать, что будет импортировано)
     # - В реальном импорте только если import_contacts=True
     should_fetch_contacts = dry_run or import_contacts
-    companies = fetch_companies_by_responsible(client, responsible_user_id, with_contacts=should_fetch_contacts)
+    # КРИТИЧЕСКИ: для dry-run контактов запрашиваем компании БЕЗ контактов, потом получим отдельно
+    # Это предотвращает огромные ответы с вложенными контактами
+    if dry_run and import_contacts and not import_tasks and not import_notes:
+        # Специальный режим: dry-run только контактов - запрашиваем компании без контактов
+        # Контакты получим отдельно через filter[company_id][]
+        companies = fetch_companies_by_responsible(client, responsible_user_id, with_contacts=False)
+    else:
+        companies = fetch_companies_by_responsible(client, responsible_user_id, with_contacts=should_fetch_contacts)
     res.companies_seen = len(companies)
     matched_all = []
     if skip_field_filter:
@@ -1592,9 +1599,9 @@ def migrate_filtered(
                 # Создаём set для быстрой проверки: контакты должны быть связаны только с компаниями из текущей пачки
                 amo_ids_set = set(amo_ids)
                 
-                # ОПТИМИЗИРОВАННЫЙ ПОДХОД: извлекаем контакты из _embedded.contacts каждого объекта компании
-                # Согласно документации AmoCRM: контакты в _embedded.contacts приходят ПОЛНЫМИ, включая custom_fields_values
-                # НЕ нужно делать дополнительные запросы по ID!
+                # ОПТИМИЗИРОВАННЫЙ ПОДХОД: 
+                # 1. Сначала пытаемся извлечь контакты из _embedded.contacts (если они есть)
+                # 2. Если нет - используем filter[company_id][] (более надежно для больших объемов)
                 amo_contacts: list[dict[str, Any]] = []
                 companies_with_contacts: dict[int, list[dict[str, Any]]] = {}  # amo_id -> список контактов
                 
@@ -1616,24 +1623,27 @@ def migrate_filtered(
                 logger.debug(f"Extracted {res.contacts_seen} contacts from _embedded.contacts of {len(companies_with_contacts)} companies")
                 
                 # Согласно документации: контакты в _embedded.contacts уже ПОЛНЫЕ с custom_fields_values
-                # Проверяем это и используем их напрямую, БЕЗ дополнительных запросов
+                # Но для надежности и избежания 504, используем filter[company_id][] если контактов много
                 full_contacts: list[dict[str, Any]] = []
-                need_additional_fetch = False
+                use_alternative_method = False
                 
-                if amo_contacts:
-                    # Проверяем первый контакт - есть ли у него нужные поля
+                # Если контактов нет в _embedded ИЛИ их слишком много (может быть тяжело) - используем альтернативный метод
+                if res.contacts_seen == 0 or res.contacts_seen > 50:
+                    use_alternative_method = True
+                    logger.debug(f"Using alternative method: contacts_seen={res.contacts_seen} (0 or >50)")
+                elif amo_contacts:
+                    # Проверяем первый контакт - есть ли нужные поля
                     first_contact = amo_contacts[0] if isinstance(amo_contacts[0], dict) else {}
-                    if "custom_fields_values" in first_contact:
+                    if "custom_fields_values" not in first_contact:
+                        use_alternative_method = True
+                        logger.debug("Contacts from _embedded don't have custom_fields_values, using alternative method")
+                    else:
                         # Контакты уже полные, используем их как есть
                         full_contacts = amo_contacts
-                        logger.debug(f"Contacts from _embedded.contacts are FULL (have custom_fields_values), using them directly. Total: {len(full_contacts)}")
-                    else:
-                        # Контакты неполные, нужен дополнительный запрос (но это редко)
-                        need_additional_fetch = True
-                        logger.debug("Contacts from _embedded.contacts are incomplete, will fetch full data")
+                        logger.debug(f"Contacts from _embedded.contacts are FULL, using them directly. Total: {len(full_contacts)}")
                 
-                # Альтернативный метод: если контактов нет в _embedded, пробуем через filter[company_id][]
-                if res.contacts_seen == 0:
+                # Альтернативный метод: получаем контакты через filter[company_id][] (более надежно)
+                if use_alternative_method:
                     logger.debug("No contacts found in _embedded.contacts, trying alternative method via filter[company_id][]")
                     # Альтернативный метод: получаем контакты через filter[company_id][]
                     # Согласно документации AmoCRM API v4: /api/v4/contacts?filter[company_id][]=1&filter[company_id][]=2
