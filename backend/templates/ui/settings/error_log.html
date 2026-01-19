@@ -1,0 +1,304 @@
+{% extends "ui/base.html" %}
+{% block title %}Лог ошибок — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div>
+      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> /</div>
+      <h1 class="text-2xl font-semibold">Лог ошибок</h1>
+      <div class="text-sm text-brand-dark/70">Ошибки, исключения и предупреждения, произошедшие на сайте</div>
+    </div>
+
+    {# Статистика #}
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div class="bg-white border border-brand-soft rounded-2xl p-4">
+        <div class="text-sm text-brand-dark/70">Всего ошибок</div>
+        <div class="text-2xl font-semibold text-brand-dark">{{ total_count }}</div>
+      </div>
+      <div class="bg-white border border-brand-soft rounded-2xl p-4">
+        <div class="text-sm text-brand-dark/70">Не исправлено</div>
+        <div class="text-2xl font-semibold text-red-600">{{ unresolved_count }}</div>
+      </div>
+      <div class="bg-white border border-brand-soft rounded-2xl p-4">
+        <div class="text-sm text-brand-dark/70">Ошибки</div>
+        <div class="text-2xl font-semibold text-orange-600">{{ error_count }}</div>
+      </div>
+      <div class="bg-white border border-brand-soft rounded-2xl p-4">
+        <div class="text-sm text-brand-dark/70">Критические</div>
+        <div class="text-2xl font-semibold text-red-700">{{ critical_count }}</div>
+      </div>
+    </div>
+
+    {# Фильтры #}
+    <div class="bg-white border border-brand-soft rounded-2xl p-4">
+      <form method="get" class="space-y-3">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div>
+            <label class="block text-sm text-brand-dark/80 mb-1">Уровень</label>
+            <select name="level" class="select">
+              <option value="">Все</option>
+              {% for level_value, level_label in levels %}
+                <option value="{{ level_value }}" {% if level_filter == level_value %}selected{% endif %}>{{ level_label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-brand-dark/80 mb-1">Исправлено</label>
+            <select name="resolved" class="select">
+              <option value="">Все</option>
+              <option value="0" {% if resolved_filter == "0" %}selected{% endif %}>Не исправлено</option>
+              <option value="1" {% if resolved_filter == "1" %}selected{% endif %}>Исправлено</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm text-brand-dark/80 mb-1">Путь</label>
+            <input type="text" name="path" class="input" value="{{ path_filter }}" placeholder="/companies/...">
+          </div>
+          <div>
+            <label class="block text-sm text-brand-dark/80 mb-1">Поиск</label>
+            <input type="text" name="q" class="input" value="{{ search_query }}" placeholder="Сообщение, тип, путь...">
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button type="submit" class="btn btn-primary">Применить фильтры</button>
+          <a href="/settings/error-log/" class="btn btn-outline">Сброс</a>
+        </div>
+      </form>
+    </div>
+
+    {# Таблица ошибок #}
+    <div class="bg-white border rounded-2xl overflow-hidden">
+      <table class="min-w-full text-sm">
+        <thead class="bg-brand-soft/40 text-brand-dark/80">
+          <tr>
+            <th class="text-left px-4 py-3">Когда</th>
+            <th class="text-left px-4 py-3">Уровень</th>
+            <th class="text-left px-4 py-3">Тип/Сообщение</th>
+            <th class="text-left px-4 py-3">Путь</th>
+            <th class="text-left px-4 py-3">Пользователь</th>
+            <th class="text-left px-4 py-3">Статус</th>
+            <th class="text-left px-4 py-3">Действия</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for error in errors %}
+            <tr class="border-t {% if error.resolved %}opacity-60{% endif %} {% if error.level == 'critical' %}bg-red-50{% elif error.level == 'error' %}bg-orange-50{% elif error.level == 'warning' %}bg-yellow-50{% endif %}">
+              <td class="px-4 py-3 text-brand-dark/70 whitespace-nowrap">{{ error.created_at|date:"d.m.Y H:i:s" }}</td>
+              <td class="px-4 py-3">
+                <span class="badge {% if error.level == 'critical' %}badge-danger{% elif error.level == 'error' %}badge-warn{% elif error.level == 'warning' %}badge-progress{% else %}badge{% endif %}">
+                  {{ error.get_level_display }}
+                </span>
+              </td>
+              <td class="px-4 py-3">
+                <div class="font-mono text-xs text-brand-dark/80">
+                  {% if error.exception_type %}
+                    <div class="font-semibold">{{ error.exception_type }}</div>
+                  {% endif %}
+                  {% if error.message %}
+                    <div class="mt-1 text-brand-dark/70">{{ error.message|truncatewords:20 }}</div>
+                  {% endif %}
+                </div>
+              </td>
+              <td class="px-4 py-3">
+                <div class="font-mono text-xs text-brand-dark/70">{{ error.method }} {{ error.path|truncatechars:40 }}</div>
+              </td>
+              <td class="px-4 py-3">
+                {% if error.user %}
+                  {{ error.user.get_full_name|default:error.user.username }}
+                {% else %}
+                  <span class="text-brand-dark/50">—</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3">
+                {% if error.resolved %}
+                  <span class="badge badge-done">Исправлено</span>
+                  {% if error.resolved_by %}
+                    <div class="text-xs text-brand-dark/60 mt-1">{{ error.resolved_by.get_full_name|default:error.resolved_by.username }}</div>
+                    <div class="text-xs text-brand-dark/50">{{ error.resolved_at|date:"d.m.Y H:i" }}</div>
+                  {% endif %}
+                {% else %}
+                  <span class="badge badge-warn">Не исправлено</span>
+                {% endif %}
+              </td>
+              <td class="px-4 py-3">
+                <div class="flex gap-2">
+                  <button type="button" class="btn btn-outline btn-sm" onclick="showErrorDetails('{{ error.id }}')">Детали</button>
+                  {% if error.resolved %}
+                    <form method="post" action="/settings/error-log/{{ error.id }}/unresolve/" class="inline">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-outline btn-sm">Снять отметку</button>
+                    </form>
+                  {% else %}
+                    <button type="button" class="btn btn-primary btn-sm" onclick="showResolveModal('{{ error.id }}')">Исправлено</button>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td class="px-4 py-6 text-brand-dark/70" colspan="7">Ошибок не найдено.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {# Пагинация #}
+    {% if errors.has_other_pages %}
+      <div class="flex items-center justify-between">
+        <div class="text-sm text-brand-dark/70">
+          Страница {{ errors.number }} из {{ errors.paginator.num_pages }}
+        </div>
+        <div class="flex gap-2">
+          {% if errors.has_previous %}
+            <a href="?page={{ errors.previous_page_number }}{% if level_filter %}&level={{ level_filter }}{% endif %}{% if resolved_filter %}&resolved={{ resolved_filter }}{% endif %}{% if path_filter %}&path={{ path_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}" class="btn btn-outline btn-sm">Назад</a>
+          {% endif %}
+          {% if errors.has_next %}
+            <a href="?page={{ errors.next_page_number }}{% if level_filter %}&level={{ level_filter }}{% endif %}{% if resolved_filter %}&resolved={{ resolved_filter }}{% endif %}{% if path_filter %}&path={{ path_filter }}{% endif %}{% if search_query %}&q={{ search_query }}{% endif %}" class="btn btn-outline btn-sm">Вперед</a>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+  </div>
+
+  {# Модальное окно с деталями ошибки #}
+  <div id="errorDetailsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div class="bg-white rounded-2xl p-6 max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-semibold">Детали ошибки</h2>
+        <button type="button" class="btn btn-outline btn-sm" onclick="closeErrorDetails()">✕</button>
+      </div>
+      <div id="errorDetailsContent" class="space-y-4">
+        {# Контент будет загружен через AJAX #}
+      </div>
+    </div>
+  </div>
+
+  {# Модальное окно для отметки как исправленной #}
+  <div id="resolveModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div class="bg-white rounded-2xl p-6 max-w-2xl w-full mx-4">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xl font-semibold">Отметить как исправленную</h2>
+        <button type="button" class="btn btn-outline btn-sm" onclick="closeResolveModal()">✕</button>
+      </div>
+      <form id="resolveForm" method="post" class="space-y-4">
+        {% csrf_token %}
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Заметки (необязательно)</label>
+          <textarea name="notes" class="textarea" rows="4" placeholder="Опишите, что было исправлено..."></textarea>
+        </div>
+        <div class="flex gap-2 justify-end">
+          <button type="button" class="btn btn-outline" onclick="closeResolveModal()">Отмена</button>
+          <button type="submit" class="btn btn-primary">Отметить как исправленную</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let currentErrorId = null;
+
+    function showErrorDetails(errorId) {
+      currentErrorId = errorId;
+      const modal = document.getElementById('errorDetailsModal');
+      const content = document.getElementById('errorDetailsContent');
+      content.innerHTML = '<div class="text-center py-8"><div class="animate-spin w-8 h-8 border-4 border-brand-teal border-t-transparent rounded-full mx-auto"></div><div class="mt-4 text-brand-dark/70">Загрузка...</div></div>';
+      modal.classList.remove('hidden');
+
+      fetch(`/settings/error-log/${errorId}/details/`)
+        .then(response => response.json())
+        .then(data => {
+          content.innerHTML = `
+            <div class="space-y-4">
+              <div>
+                <div class="text-sm text-brand-dark/70 mb-1">Когда произошло</div>
+                <div class="font-mono text-sm">${data.created_at}</div>
+              </div>
+              <div>
+                <div class="text-sm text-brand-dark/70 mb-1">Уровень</div>
+                <div><span class="badge ${data.level === 'critical' ? 'badge-danger' : data.level === 'error' ? 'badge-warn' : data.level === 'warning' ? 'badge-progress' : 'badge'}">${data.level_display}</span></div>
+              </div>
+              <div>
+                <div class="text-sm text-brand-dark/70 mb-1">Тип исключения</div>
+                <div class="font-mono text-sm">${data.exception_type || '—'}</div>
+              </div>
+              <div>
+                <div class="text-sm text-brand-dark/70 mb-1">Сообщение</div>
+                <div class="bg-brand-soft/20 p-3 rounded-lg font-mono text-xs whitespace-pre-wrap">${escapeHtml(data.message || '—')}</div>
+              </div>
+              <div>
+                <div class="text-sm text-brand-dark/70 mb-1">Трассировка</div>
+                <div class="bg-brand-soft/20 p-3 rounded-lg font-mono text-xs whitespace-pre-wrap overflow-x-auto">${escapeHtml(data.traceback || '—')}</div>
+              </div>
+              <div>
+                <div class="text-sm text-brand-dark/70 mb-1">Запрос</div>
+                <div class="bg-brand-soft/20 p-3 rounded-lg font-mono text-xs">${data.method} ${data.path}</div>
+              </div>
+              <div>
+                <div class="text-sm text-brand-dark/70 mb-1">Пользователь</div>
+                <div>${data.user || '—'}</div>
+              </div>
+              <div>
+                <div class="text-sm text-brand-dark/70 mb-1">IP адрес</div>
+                <div class="font-mono text-xs">${data.ip_address || '—'}</div>
+              </div>
+              <div>
+                <div class="text-sm text-brand-dark/70 mb-1">User-Agent</div>
+                <div class="font-mono text-xs text-brand-dark/70">${data.user_agent || '—'}</div>
+              </div>
+              ${data.request_data ? `
+              <div>
+                <div class="text-sm text-brand-dark/70 mb-1">Данные запроса</div>
+                <div class="bg-brand-soft/20 p-3 rounded-lg font-mono text-xs whitespace-pre-wrap overflow-x-auto">${escapeHtml(JSON.stringify(data.request_data, null, 2))}</div>
+              </div>
+              ` : ''}
+              ${data.notes ? `
+              <div>
+                <div class="text-sm text-brand-dark/70 mb-1">Заметки</div>
+                <div class="bg-brand-soft/20 p-3 rounded-lg">${escapeHtml(data.notes)}</div>
+              </div>
+              ` : ''}
+            </div>
+          `;
+        })
+        .catch(error => {
+          content.innerHTML = `<div class="text-red-600">Ошибка загрузки: ${error.message}</div>`;
+        });
+    }
+
+    function closeErrorDetails() {
+      document.getElementById('errorDetailsModal').classList.add('hidden');
+      currentErrorId = null;
+    }
+
+    function showResolveModal(errorId) {
+      currentErrorId = errorId;
+      const form = document.getElementById('resolveForm');
+      form.action = `/settings/error-log/${errorId}/resolve/`;
+      document.getElementById('resolveModal').classList.remove('hidden');
+    }
+
+    function closeResolveModal() {
+      document.getElementById('resolveModal').classList.add('hidden');
+      document.getElementById('resolveForm').reset();
+      currentErrorId = null;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Закрытие модальных окон по клику вне их
+    document.getElementById('errorDetailsModal').addEventListener('click', function(e) {
+      if (e.target === this) {
+        closeErrorDetails();
+      }
+    });
+
+    document.getElementById('resolveModal').addEventListener('click', function(e) {
+      if (e.target === this) {
+        closeResolveModal();
+      }
+    });
+  </script>
+{% endblock %}

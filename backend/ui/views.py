@@ -5619,6 +5619,143 @@ def settings_activity(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+def settings_error_log(request: HttpRequest) -> HttpResponse:
+    """Страница лога ошибок (аналогично error_log в MODX CMS)."""
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+    
+    from audit.models import ErrorLog
+    from django.db.models import Q
+    
+    # Фильтры
+    level_filter = request.GET.get("level", "")
+    resolved_filter = request.GET.get("resolved", "")
+    path_filter = request.GET.get("path", "")
+    search_query = request.GET.get("q", "")
+    
+    # Базовый queryset
+    errors = ErrorLog.objects.select_related("user", "resolved_by").order_by("-created_at")
+    
+    # Применяем фильтры
+    if level_filter:
+        errors = errors.filter(level=level_filter)
+    
+    if resolved_filter == "1":
+        errors = errors.filter(resolved=True)
+    elif resolved_filter == "0":
+        errors = errors.filter(resolved=False)
+    
+    if path_filter:
+        errors = errors.filter(path__icontains=path_filter)
+    
+    if search_query:
+        errors = errors.filter(
+            Q(message__icontains=search_query) |
+            Q(exception_type__icontains=search_query) |
+            Q(path__icontains=search_query)
+        )
+    
+    # Пагинация
+    from django.core.paginator import Paginator
+    paginator = Paginator(errors, 50)  # 50 ошибок на страницу
+    page_number = request.GET.get("page", 1)
+    page_obj = paginator.get_page(page_number)
+    
+    # Статистика
+    total_count = ErrorLog.objects.count()
+    unresolved_count = ErrorLog.objects.filter(resolved=False).count()
+    error_count = ErrorLog.objects.filter(level=ErrorLog.Level.ERROR).count()
+    critical_count = ErrorLog.objects.filter(level=ErrorLog.Level.CRITICAL).count()
+    
+    context = {
+        "errors": page_obj,
+        "total_count": total_count,
+        "unresolved_count": unresolved_count,
+        "error_count": error_count,
+        "critical_count": critical_count,
+        "level_filter": level_filter,
+        "resolved_filter": resolved_filter,
+        "path_filter": path_filter,
+        "search_query": search_query,
+        "levels": ErrorLog.Level.choices,
+    }
+    
+    return render(request, "ui/settings/error_log.html", context)
+
+
+@login_required
+def settings_error_log_resolve(request: HttpRequest, error_id) -> HttpResponse:
+    """Отметить ошибку как исправленную."""
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+    
+    from audit.models import ErrorLog
+    from django.utils import timezone
+    
+    error = get_object_or_404(ErrorLog, id=error_id)
+    
+    if request.method == "POST":
+        error.resolved = True
+        error.resolved_at = timezone.now()
+        error.resolved_by = request.user
+        error.notes = request.POST.get("notes", "")[:1000]
+        error.save()
+        messages.success(request, "Ошибка отмечена как исправленная.")
+    
+    return redirect("settings_error_log")
+
+
+@login_required
+def settings_error_log_unresolve(request: HttpRequest, error_id) -> HttpResponse:
+    """Снять отметку об исправлении ошибки."""
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+    
+    from audit.models import ErrorLog
+    
+    error = get_object_or_404(ErrorLog, id=error_id)
+    error.resolved = False
+    error.resolved_at = None
+    error.resolved_by = None
+    error.save()
+    messages.success(request, "Отметка об исправлении снята.")
+    
+    return redirect("settings_error_log")
+
+
+@login_required
+def settings_error_log_details(request: HttpRequest, error_id) -> JsonResponse:
+    """AJAX endpoint для получения деталей ошибки."""
+    if not require_admin(request.user):
+        return JsonResponse({"error": "Доступ запрещён."}, status=403)
+    
+    from audit.models import ErrorLog
+    
+    error = get_object_or_404(ErrorLog, id=error_id)
+    
+    data = {
+        "created_at": error.created_at.strftime("%d.%m.%Y %H:%M:%S"),
+        "level": error.level,
+        "level_display": error.get_level_display(),
+        "exception_type": error.exception_type,
+        "message": error.message,
+        "traceback": error.traceback,
+        "method": error.method,
+        "path": error.path,
+        "user": error.user.get_full_name() if error.user else None,
+        "ip_address": str(error.ip_address) if error.ip_address else None,
+        "user_agent": error.user_agent,
+        "request_data": error.request_data,
+        "notes": error.notes,
+    }
+    
+    return JsonResponse(data)
+
+
+@login_required
 def settings_import(request: HttpRequest) -> HttpResponse:
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
