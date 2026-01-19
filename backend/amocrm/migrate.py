@@ -2555,9 +2555,14 @@ def migrate_filtered(
                                     if isinstance(cf, dict):
                                         field_id = cf.get("field_id")  # ВАЖНО: field_id может быть числом (366537)
                                         field_name = str(cf.get("field_name") or "").strip()
-                                        field_code = str(cf.get("field_code") or "").strip()
-                                        field_name_lower = field_name.lower()
-                                        field_code_upper = field_code.upper()
+                                        field_code_raw = cf.get("field_code")
+                                        # Безопасное преобразование field_code - может быть None, строкой или другим типом
+                                        if field_code_raw is None:
+                                            field_code = ""
+                                        else:
+                                            field_code = str(field_code_raw).strip()
+                                        field_name_lower = field_name.lower() if field_name else ""
+                                        field_code_upper = field_code.upper() if field_code else ""
                                 
                                         # Сохраняем все поля для отладки (включая field_id)
                                         all_custom_field_names.append(f"id={field_id} name={field_name} code={field_code}")
@@ -2696,8 +2701,8 @@ def migrate_filtered(
                                                 for v in cf.get("values", [])
                                             ],
                                             "is_used": (
-                                                cf.get("field_code", "").upper() in ["PHONE", "EMAIL", "POSITION"] or
-                                                any(k in (cf.get("field_name") or "").lower() for k in ["телефон", "почта", "email", "должность", "позиция", "примеч", "комментар", "холодный"])
+                                                (str(cf.get("field_code") or "").upper() in ["PHONE", "EMAIL", "POSITION"]) or
+                                                any(k in (str(cf.get("field_name") or "").lower()) for k in ["телефон", "почта", "email", "должность", "позиция", "примеч", "комментар", "холодный"])
                                             ),
                                         }
                                         for cf in full_analysis.get("custom_fields", [])
@@ -2906,9 +2911,13 @@ def migrate_filtered(
                         all_custom_fields_info = []
                         for cf in full_analysis.get("custom_fields", []):
                             field_id = cf.get("field_id")
-                            field_code = cf.get("field_code")
-                            field_name = cf.get("field_name")
+                            field_code_raw = cf.get("field_code")
+                            field_name_raw = cf.get("field_name")
                             field_type = cf.get("field_type")
+                            
+                            # Безопасное преобразование в строки
+                            field_code = str(field_code_raw) if field_code_raw is not None else ""
+                            field_name = str(field_name_raw) if field_name_raw is not None else ""
                             
                             # Собираем все значения в читаемом виде
                             field_values = []
@@ -2924,8 +2933,8 @@ def migrate_filtered(
                             # Определяем, было ли поле использовано (извлечено)
                             is_used = False
                             usage_info = []
-                            field_code_upper = (field_code or "").upper()
-                            field_name_lower = (field_name or "").lower()
+                            field_code_upper = field_code.upper() if field_code else ""
+                            field_name_lower = field_name.lower() if field_name else ""
                             
                             if field_code_upper == "PHONE" or "телефон" in field_name_lower:
                                 is_used = True
