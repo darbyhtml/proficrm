@@ -1454,6 +1454,7 @@ def migrate_filtered(
                     
                     if not amo_contact_id:
                         # ОТЛАДКА: контакт без ID
+                        contacts_skipped += 1
                         debug_count = getattr(res, '_debug_contacts_logged', 0)
                         if res.contacts_preview is None:
                             res.contacts_preview = []
