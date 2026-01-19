@@ -739,9 +739,9 @@ def fetch_companies_by_responsible(client: AmoClient, responsible_user_id: int, 
         "/api/v4/companies",
         params=params,
         embedded_key="companies",
-        limit=10,  # КРИТИЧЕСКИ уменьшено до 10 - даже для 3 компаний может быть много контактов
+        limit=5,  # КРИТИЧЕСКИ: только 5 компаний за раз для избежания 504
         max_pages=limit_pages,
-        delay_between_pages=1.0,  # Увеличена задержка до 1 сек между страницами
+        delay_between_pages=2.0,  # КРИТИЧЕСКИ: 2 сек между страницами
     )
 
 
@@ -1003,18 +1003,10 @@ def migrate_filtered(
     responsible_local = _map_amo_user_to_local(amo_user_by_id.get(int(responsible_user_id)) or {}) if amo_user_by_id else None
     field_meta = _build_field_meta(company_fields_meta or [])
 
-    # Запрашиваем компании с контактами:
-    # - В dry-run всегда запрашиваем контакты (чтобы показать, что будет импортировано)
-    # - В реальном импорте только если import_contacts=True
-    should_fetch_contacts = dry_run or import_contacts
-    # КРИТИЧЕСКИ: для dry-run контактов запрашиваем компании БЕЗ контактов, потом получим отдельно
-    # Это предотвращает огромные ответы с вложенными контактами
-    if dry_run and import_contacts and not import_tasks and not import_notes:
-        # Специальный режим: dry-run только контактов - запрашиваем компании без контактов
-        # Контакты получим отдельно через filter[company_id][]
-        companies = fetch_companies_by_responsible(client, responsible_user_id, with_contacts=False)
-    else:
-        companies = fetch_companies_by_responsible(client, responsible_user_id, with_contacts=should_fetch_contacts)
+    # КРИТИЧЕСКИ: ВСЕГДА запрашиваем компании БЕЗ контактов
+    # Контакты получаем отдельно через filter[company_id][] - это надежнее и легче
+    # Запрос компаний с with=contacts создает огромные ответы и вызывает 504
+    companies = fetch_companies_by_responsible(client, responsible_user_id, with_contacts=False)
     res.companies_seen = len(companies)
     matched_all = []
     if skip_field_filter:
@@ -1720,57 +1712,7 @@ def migrate_filtered(
                 # Контакты в _embedded.contacts приходят ПОЛНЫМИ с custom_fields_values
                 # НЕ нужно делать дополнительные запросы по ID, если контакты уже полные!
                 
-                # Создаем маппинг контактов к компаниям
-                contact_id_to_company_map: dict[int, int] = {}  # contact_id -> amo_company_id
-                for cid, contacts_list in companies_with_contacts.items():
-                    for contact in contacts_list:
-                        if isinstance(contact, dict):
-                            contact_id = int(contact.get("id") or 0)
-                            if contact_id:
-                                contact_id_to_company_map[contact_id] = cid
-                
-                # Дополнительный запрос по ID нужен ТОЛЬКО если контакты неполные (редкий случай)
-                # Это происходит только если use_alternative_method=False, но контакты неполные
-                need_additional_fetch = False
-                if not use_alternative_method and amo_contacts and not full_contacts:
-                    # Проверяем, нужен ли дополнительный запрос
-                    first_contact = amo_contacts[0] if isinstance(amo_contacts[0], dict) else {}
-                    if "custom_fields_values" not in first_contact:
-                        need_additional_fetch = True
-                
-                if need_additional_fetch and amo_contacts:
-                    contact_ids = [int(c.get("id") or 0) for c in amo_contacts if isinstance(c, dict) and c.get("id")]
-                    if contact_ids:
-                        logger.debug(f"Fetching full contact data for {len(contact_ids)} contact IDs (contacts were incomplete)...")
-                        try:
-                            # КРИТИЧЕСКИ: батчи по 5 ID, большие задержки
-                            batch_size = 5
-                            for i in range(0, len(contact_ids), batch_size):
-                                # Задержка между батчами
-                                if i > 0:
-                                    time.sleep(3.0)  # КРИТИЧЕСКИ: 3 сек между батчами
-                                else:
-                                    time.sleep(1.0)
-                                
-                                ids_batch = contact_ids[i : i + batch_size]
-                                logger.debug(f"Requesting contacts with IDs: {ids_batch}... (batch {i//batch_size + 1})")
-                                
-                                contacts_batch = client.get_all_pages(
-                                    "/api/v4/contacts",
-                                    params={
-                                        "filter[id][]": ids_batch,
-                                        "with": "custom_fields",  # Только custom_fields, БЕЗ notes
-                                    },
-                                    embedded_key="contacts",
-                                    limit=25,  # КРИТИЧЕСКИ уменьшено
-                                    max_pages=3,  # Ограничиваем страницы
-                                    delay_between_pages=1.0,  # 1 сек между страницами
-                                )
-                                if isinstance(contacts_batch, list):
-                                    full_contacts.extend(contacts_batch)
-                                    logger.debug(f"Fetched {len(contacts_batch)} full contacts for batch {i//batch_size + 1}")
-                        except Exception as e:
-                            logger.debug(f"Error fetching full contact data: {type(e).__name__}: {e}", exc_info=True)
+                # Маппинг контактов к компаниям уже создан выше при получении контактов
                 
                 # Заметки контактов: НЕ запрашиваем для dry-run (слишком тяжело)
                 # Заметки нужны только при реальном импорте, и то можно запросить отдельно
