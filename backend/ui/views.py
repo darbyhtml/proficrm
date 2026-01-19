@@ -4329,6 +4329,10 @@ def task_create(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
         form = TaskForm(request.POST)
+        
+        # Устанавливаем queryset для assigned_to ДО валидации, чтобы выбранное значение было валидным
+        _set_assigned_to_queryset(form, user)
+        
         if form.is_valid():
             task: Task = form.save(commit=False)
             task.created_by = user
