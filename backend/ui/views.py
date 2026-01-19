@@ -2894,10 +2894,12 @@ def company_cold_call_reset(request: HttpRequest, company_id) -> HttpResponse:
         messages.info(request, "Основной контакт не отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
-    # Откатываем отметку
+    # Откатываем отметку (убираем признак и метаданные, чтобы не показывать бейдж)
     company.primary_contact_is_cold_call = False
-    company.save(update_fields=["primary_contact_is_cold_call", "updated_at"])
-    # НЕ удаляем поля primary_cold_marked_at, primary_cold_marked_by, primary_cold_marked_call для истории
+    company.primary_cold_marked_at = None
+    company.primary_cold_marked_by = None
+    company.primary_cold_marked_call = None
+    company.save(update_fields=["primary_contact_is_cold_call", "primary_cold_marked_at", "primary_cold_marked_by", "primary_cold_marked_call", "updated_at"])
 
     messages.success(request, "Отметка холодного звонка отменена (основной контакт).")
     log_event(
@@ -3066,10 +3068,12 @@ def contact_phone_cold_call_reset(request: HttpRequest, contact_phone_id) -> Htt
         messages.info(request, "Этот номер не отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
-    # Откатываем отметку (но сохраняем историю)
+    # Откатываем отметку (убираем признак и метаданные, чтобы не показывать бейдж)
     contact_phone.is_cold_call = False
-    contact_phone.save(update_fields=["is_cold_call"])
-    # НЕ удаляем поля cold_marked_at, cold_marked_by, cold_marked_call для истории
+    contact_phone.cold_marked_at = None
+    contact_phone.cold_marked_by = None
+    contact_phone.cold_marked_call = None
+    contact_phone.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
 
     messages.success(request, f"Отметка холодного звонка отменена (номер {contact_phone.value}).")
     log_event(
@@ -3189,10 +3193,12 @@ def company_phone_cold_call_reset(request: HttpRequest, company_phone_id) -> Htt
         messages.info(request, "Этот номер не отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
-    # Откатываем отметку (но сохраняем историю)
+    # Откатываем отметку (убираем признак и метаданные, чтобы не показывать бейдж)
     company_phone.is_cold_call = False
-    company_phone.save(update_fields=["is_cold_call"])
-    # НЕ удаляем поля cold_marked_at, cold_marked_by, cold_marked_call для истории
+    company_phone.cold_marked_at = None
+    company_phone.cold_marked_by = None
+    company_phone.cold_marked_call = None
+    company_phone.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
 
     messages.success(request, f"Отметка холодного звонка отменена (номер {company_phone.value}).")
     log_event(

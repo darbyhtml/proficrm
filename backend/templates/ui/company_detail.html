@@ -209,8 +209,8 @@
                         <input type="hidden" name="confirmed" value="1">
                         <button
                           type="submit"
-                          class="btn btn-xs js-cold-mark"
-                          style="background:#003D38;color:#fff;border-color:#003D38;padding:4px 8px;"
+                          class="btn btn-outline btn-xs js-cold-mark"
+                          style="padding:4px 8px;"
                           data-cold-btn="primary"
                           title="Отметить холодный звонок"
                           aria-label="Отметить холодный звонок"
@@ -227,8 +227,8 @@
                         {% csrf_token %}
                         <button
                           type="submit"
-                          class="btn btn-xs"
-                          style="background:#003D38;color:#fff;border-color:#003D38;padding:4px 8px;"
+                          class="btn btn-outline btn-xs"
+                          style="padding:4px 8px;"
                           title="Откатить отметку холодного звонка (только для администраторов)"
                           aria-label="Откатить отметку холодного звонка"
                           onclick="return confirm('Откатить отметку холодного звонка?');"
@@ -243,8 +243,8 @@
                   {% endif %}
                   <button
                     type="button"
-                    class="btn btn-xs js-call-phone"
-                    style="background:#003D38;color:#fff;border-color:#003D38;padding:4px 8px;"
+                    class="btn btn-outline btn-xs js-call-phone"
+                    style="padding:4px 8px;"
                     data-phone="{{ company.phone }}"
                     data-company="{{ company.id }}"
                     data-contact=""
@@ -259,8 +259,8 @@
               {% endif %}
             </div>
             {% if company.primary_contact_is_cold_call or company.primary_cold_marked_at %}
-                <div class="mt-1 inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs text-white" style="background:#003D38;">
-                  <span class="font-medium text-white">Холодный звонок:</span>
+                <div class="mt-1 text-xs text-brand-dark/70">
+                  <span class="font-medium">Холодный звонок:</span>
                   {% if company.primary_cold_marked_at %}
                     <span>{{ company.primary_cold_marked_at|date:"d.m.Y H:i" }}</span>
                   {% endif %}
@@ -311,8 +311,8 @@
                               <input type="hidden" name="confirmed" value="1">
                               <button
                                 type="submit"
-                                class="btn btn-xs"
-                                style="background:#003D38;color:#fff;border-color:#003D38;padding:4px 8px;"
+                                class="btn btn-outline btn-xs"
+                                style="padding:4px 8px;"
                                 title="Отметить холодный звонок"
                                 aria-label="Отметить холодный звонок"
                               >
@@ -328,8 +328,8 @@
                                 {% csrf_token %}
                                 <button
                                   type="submit"
-                                  class="btn btn-xs"
-                                  style="background:#003D38;color:#fff;border-color:#003D38;padding:4px 8px;"
+                                  class="btn btn-outline btn-xs"
+                                  style="padding:4px 8px;"
                                   title="Откатить отметку холодного звонка (только для администраторов)"
                                   aria-label="Откатить отметку холодного звонка"
                                   onclick="return confirm('Откатить отметку холодного звонка?');"
@@ -344,8 +344,8 @@
                         {% endif %}
                         <button
                           type="button"
-                          class="btn btn-xs js-call-phone"
-                          style="background:#003D38;color:#fff;border-color:#003D38;padding:4px 8px;"
+                          class="btn btn-outline btn-xs js-call-phone"
+                          style="padding:4px 8px;"
                           data-phone="{{ phone.value }}"
                           data-company="{{ company.id }}"
                           data-contact=""
