@@ -1763,7 +1763,7 @@ def migrate_filtered(
                     
                     try:
                         # ОТЛАДКА: логируем сырую структуру контакта для первых 3
-                    if structure_logged_count < 3:
+                        if structure_logged_count < 3:
                         logger.debug(f"===== RAW CONTACT STRUCTURE ({structure_logged_count + 1}) [index {ac_idx}] =====")
                         logger.debug(f"  - Type: {type(ac)}")
                         logger.debug(f"  - ac is None: {ac is None}")
@@ -1803,69 +1803,69 @@ def migrate_filtered(
                             logger.debug(f"  - Contact is not a dict: {ac}, type: {type(ac)}")
                         logger.debug(f"===== END RAW STRUCTURE =====")
                         structure_logged_count += 1
-                    
-                    amo_contact_id = int(ac.get("id") or 0) if isinstance(ac, dict) else 0
-                    
-                    # Добавляем заметки из contact_notes_map, если их нет в _embedded
-                    if amo_contact_id and amo_contact_id in contact_notes_map:
-                        notes_from_map = contact_notes_map[amo_contact_id]
-                        if notes_from_map and isinstance(ac, dict):
-                            # Добавляем заметки в _embedded, если их там нет
-                            if "_embedded" not in ac:
-                                ac["_embedded"] = {}
-                            if not isinstance(ac["_embedded"], dict):
-                                ac["_embedded"] = {}
-                            if "notes" not in ac["_embedded"] or not ac["_embedded"]["notes"]:
-                                ac["_embedded"]["notes"] = notes_from_map
-                                if structure_logged_count < 3:
-                                    logger.debug(f"  -> Added {len(notes_from_map)} notes from contact_notes_map to contact {amo_contact_id}")
-                    
-                    if not amo_contact_id:
-                        # ОТЛАДКА: контакт без ID
-                        contacts_skipped += 1
-                        debug_count = getattr(res, '_debug_contacts_logged', 0)
-                        if res.contacts_preview is None:
-                            res.contacts_preview = []
-                        preview_limit_skip = 50 if dry_run else 10
-                        if debug_count < preview_limit_skip:
-                            res._debug_contacts_logged = debug_count + 1
-                            res.contacts_preview.append({
-                                "status": "SKIPPED_NO_ID",
-                                "raw_contact_keys": list(ac.keys())[:10] if isinstance(ac, dict) else "not_dict",
-                            })
-                        continue
-                    
-                    # Находим компанию для этого контакта через contact_id_to_company_map
-                    # ВАЖНО: в dry-run используем local_companies_by_amo_id (компании в памяти)
-                    # В реальном импорте используем БД или local_companies_by_amo_id
-                    local_company = None
-                    amo_company_id_for_contact = None
-                    
-                    contact_id = int(ac.get("id") or 0)
-                    if contact_id in contact_id_to_company_map:
-                        amo_company_id_for_contact = contact_id_to_company_map[contact_id]
-                        # Сначала ищем в словаре (работает и для dry-run, и для реального импорта)
-                        local_company = local_companies_by_amo_id.get(amo_company_id_for_contact)
-                        # Если не нашли в словаре и это не dry-run, ищем в БД
-                        if not local_company and not dry_run:
-                            local_company = Company.objects.filter(amocrm_company_id=amo_company_id_for_contact).first()
-                    
-                    # Fallback: если не нашли через map, пробуем через company_id в самом контакте
-                    if not local_company:
-                        cid = int(ac.get("company_id") or 0)
-                        if cid and cid in amo_ids_set:
-                            # Сначала ищем в словаре
-                            local_company = local_companies_by_amo_id.get(cid)
+                        
+                        amo_contact_id = int(ac.get("id") or 0) if isinstance(ac, dict) else 0
+                        
+                        # Добавляем заметки из contact_notes_map, если их нет в _embedded
+                        if amo_contact_id and amo_contact_id in contact_notes_map:
+                            notes_from_map = contact_notes_map[amo_contact_id]
+                            if notes_from_map and isinstance(ac, dict):
+                                # Добавляем заметки в _embedded, если их там нет
+                                if "_embedded" not in ac:
+                                    ac["_embedded"] = {}
+                                if not isinstance(ac["_embedded"], dict):
+                                    ac["_embedded"] = {}
+                                if "notes" not in ac["_embedded"] or not ac["_embedded"]["notes"]:
+                                    ac["_embedded"]["notes"] = notes_from_map
+                                    if structure_logged_count < 3:
+                                        logger.debug(f"  -> Added {len(notes_from_map)} notes from contact_notes_map to contact {amo_contact_id}")
+                        
+                        if not amo_contact_id:
+                            # ОТЛАДКА: контакт без ID
+                            contacts_skipped += 1
+                            debug_count = getattr(res, '_debug_contacts_logged', 0)
+                            if res.contacts_preview is None:
+                                res.contacts_preview = []
+                            preview_limit_skip = 50 if dry_run else 10
+                            if debug_count < preview_limit_skip:
+                                res._debug_contacts_logged = debug_count + 1
+                                res.contacts_preview.append({
+                                    "status": "SKIPPED_NO_ID",
+                                    "raw_contact_keys": list(ac.keys())[:10] if isinstance(ac, dict) else "not_dict",
+                                })
+                            continue
+                        
+                        # Находим компанию для этого контакта через contact_id_to_company_map
+                        # ВАЖНО: в dry-run используем local_companies_by_amo_id (компании в памяти)
+                        # В реальном импорте используем БД или local_companies_by_amo_id
+                        local_company = None
+                        amo_company_id_for_contact = None
+                        
+                        contact_id = int(ac.get("id") or 0)
+                        if contact_id in contact_id_to_company_map:
+                            amo_company_id_for_contact = contact_id_to_company_map[contact_id]
+                            # Сначала ищем в словаре (работает и для dry-run, и для реального импорта)
+                            local_company = local_companies_by_amo_id.get(amo_company_id_for_contact)
                             # Если не нашли в словаре и это не dry-run, ищем в БД
                             if not local_company and not dry_run:
-                                local_company = Company.objects.filter(amocrm_company_id=cid).first()
-                            if local_company:
-                                amo_company_id_for_contact = cid
-                    
-                    if not local_company:
-                        # ОТЛАДКА: контакт не связан с компанией из текущей пачки
-                        # В dry-run показываем ВСЕ такие контакты
-                        debug_count = getattr(res, '_debug_contacts_logged', 0)
+                                local_company = Company.objects.filter(amocrm_company_id=amo_company_id_for_contact).first()
+                        
+                        # Fallback: если не нашли через map, пробуем через company_id в самом контакте
+                        if not local_company:
+                            cid = int(ac.get("company_id") or 0)
+                            if cid and cid in amo_ids_set:
+                                # Сначала ищем в словаре
+                                local_company = local_companies_by_amo_id.get(cid)
+                                # Если не нашли в словаре и это не dry-run, ищем в БД
+                                if not local_company and not dry_run:
+                                    local_company = Company.objects.filter(amocrm_company_id=cid).first()
+                                if local_company:
+                                    amo_company_id_for_contact = cid
+                        
+                        if not local_company:
+                            # ОТЛАДКА: контакт не связан с компанией из текущей пачки
+                            # В dry-run показываем ВСЕ такие контакты
+                            debug_count = getattr(res, '_debug_contacts_logged', 0)
                         if res.contacts_preview is None:
                             res.contacts_preview = []
                         preview_limit_skip = 1000 if dry_run else 10
@@ -1909,14 +1909,14 @@ def migrate_filtered(
                         continue
                     # Извлекаем данные контакта (делаем это ДО проверки на existing, чтобы всегда было в preview)
                     # Парсим ФИО с помощью функции _parse_fio
-                    name_str = str(ac.get("name") or "").strip()
-                    first_name_raw = str(ac.get("first_name") or "").strip()
-                    last_name_raw = str(ac.get("last_name") or "").strip()
-                    last_name, first_name = _parse_fio(name_str, first_name_raw, last_name_raw)
+                        name_str = str(ac.get("name") or "").strip()
+                        first_name_raw = str(ac.get("first_name") or "").strip()
+                        last_name_raw = str(ac.get("last_name") or "").strip()
+                        last_name, first_name = _parse_fio(name_str, first_name_raw, last_name_raw)
                     
-                    # ОТЛАДКА: логируем начало обработки контакта
-                    preview_count_before = len(res.contacts_preview) if res.contacts_preview else 0
-                    if preview_count_before < 3:
+                        # ОТЛАДКА: логируем начало обработки контакта
+                        preview_count_before = len(res.contacts_preview) if res.contacts_preview else 0
+                        if preview_count_before < 3:
                         logger.debug(f"Processing contact {amo_contact_id} (parsed: last_name={last_name}, first_name={first_name})")
                         logger.debug(f"  - raw: name={name_str}, first_name={first_name_raw}, last_name={last_name_raw}")
                         logger.debug(f"  - local_company: {local_company.id if local_company else None}")
@@ -1926,30 +1926,30 @@ def migrate_filtered(
                             logger.debug(f"  - custom_fields_values: type={type(cfv)}, length={len(cfv) if isinstance(cfv, list) else 'not_list'}")
                     
                     # Проверяем, не импортировали ли уже этот контакт
-                    existing_contact = Contact.objects.filter(amocrm_contact_id=amo_contact_id, company=local_company).first()
+                        existing_contact = Contact.objects.filter(amocrm_contact_id=amo_contact_id, company=local_company).first()
                     
                     # В amoCRM телефоны и email могут быть:
                     # 1. В стандартных полях (phone, email) - если они есть
                     # 2. В custom_fields_values с field_code="PHONE"/"EMAIL" или по field_name
                     # 3. В custom_fields_values по названию поля
                     # phones/emails: сохраняем тип и комментарий (enum_code) для корректного отображения
-                    phones: list[tuple[str, str, str]] = []  # (type, value, comment)
-                    emails: list[tuple[str, str]] = []  # (type, value)
-                    position = ""
-                    cold_call_timestamp = None  # Timestamp холодного звонка из amoCRM
-                    note_text = ""  # "Примечание"/"Комментарий" контакта (одно на все номера)
-                    birthday_timestamp = None  # Timestamp дня рождения из amoCRM (если есть)
+                        phones: list[tuple[str, str, str]] = []  # (type, value, comment)
+                        emails: list[tuple[str, str]] = []  # (type, value)
+                        position = ""
+                        cold_call_timestamp = None  # Timestamp холодного звонка из amoCRM
+                        note_text = ""  # "Примечание"/"Комментарий" контакта (одно на все номера)
+                        birthday_timestamp = None  # Timestamp дня рождения из amoCRM (если есть)
                     
-                    # ОТЛАДКА: определяем счетчик для логирования (ДО использования)
-                    debug_count_for_extraction = len(res.contacts_preview) if res.contacts_preview else 0
+                        # ОТЛАДКА: определяем счетчик для логирования (ДО использования)
+                        debug_count_for_extraction = len(res.contacts_preview) if res.contacts_preview else 0
                     
                     # ВАЖНО: сначала проверяем custom_fields (там хранится поле "Примечание"),
                     # потом заметки (там могут быть служебные заметки типа call_out)
                     
                     # custom_fields_values для телефонов/почт/должности/примечаний
-                    custom_fields = ac.get("custom_fields_values") or []
-                    # ОТЛАДКА: логируем структуру custom_fields для первых контактов
-                    if debug_count_for_extraction < 3:
+                        custom_fields = ac.get("custom_fields_values") or []
+                        # ОТЛАДКА: логируем структуру custom_fields для первых контактов
+                        if debug_count_for_extraction < 3:
                         logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
                         logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}")
                         logger.debug(f"  - ac.get('custom_fields_values'): {ac.get('custom_fields_values')}")
@@ -1975,8 +1975,8 @@ def migrate_filtered(
                     # ПРОВЕРЯЕМ ВСЕ ВОЗМОЖНЫЕ МЕСТА ДЛЯ ПРИМЕЧАНИЙ:
                     # 1. Прямые поля контакта - проверяем ВСЕ возможные варианты
                     # В amoCRM примечание может быть в разных полях
-                    direct_note_keys = ["note", "notes", "comment", "comments", "remark", "remarks", "text", "description", "description_text"]
-                    for note_key in direct_note_keys:
+                        direct_note_keys = ["note", "notes", "comment", "comments", "remark", "remarks", "text", "description", "description_text"]
+                        for note_key in direct_note_keys:
                         note_val_raw = ac.get(note_key)
                         if note_val_raw:
                             # Может быть строка или список
@@ -2001,7 +2001,7 @@ def migrate_filtered(
                     # (обработка будет ниже в цикле по custom_fields)
                     
                     # 3. В _embedded.notes (если есть) - это заметки контакта из amoCRM (служебные, не примечания)
-                    if isinstance(ac, dict) and "_embedded" in ac:
+                        if isinstance(ac, dict) and "_embedded" in ac:
                         embedded = ac.get("_embedded") or {}
                         if isinstance(embedded, dict) and "notes" in embedded:
                             notes_list = embedded.get("notes") or []
@@ -2066,18 +2066,18 @@ def migrate_filtered(
                                             logger.debug(f"  -> Skipped service note type '{note_type_val}' (not a real note)")
                     
                     # Стандартные поля (если есть)
-                    if ac.get("phone"):
+                        if ac.get("phone"):
                         for pv in _split_multi(str(ac.get("phone"))):
                             phones.append((ContactPhone.PhoneType.OTHER, pv, ""))
-                    if ac.get("email"):
+                        if ac.get("email"):
                         ev = str(ac.get("email")).strip()
                         if ev:
                             emails.append((ContactEmail.EmailType.OTHER, ev))
                     
                     # custom_fields_values для телефонов/почт/должности/примечаний
-                    custom_fields = ac.get("custom_fields_values") or []
-                    # ОТЛАДКА: логируем структуру custom_fields для первых контактов
-                    if debug_count_for_extraction < 3:
+                        custom_fields = ac.get("custom_fields_values") or []
+                        # ОТЛАДКА: логируем структуру custom_fields для первых контактов
+                        if debug_count_for_extraction < 3:
                         logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
                         logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}")
                         logger.debug(f"  - ac.get('custom_fields_values'): {ac.get('custom_fields_values')}")
@@ -2093,7 +2093,7 @@ def migrate_filtered(
                         if note_text:
                             logger.debug(f"  - Already found note_text from direct fields: {note_text[:100]}")
                     
-                    for cf_idx, cf in enumerate(custom_fields):
+                        for cf_idx, cf in enumerate(custom_fields):
                         if not isinstance(cf, dict):
                             if debug_count_for_extraction < 3:
                                 logger.debug(f"  - [field {cf_idx}] Skipped: not a dict, type={type(cf)}")
@@ -2324,9 +2324,9 @@ def migrate_filtered(
                     
                     # Убираем дубликаты
                     # Дедуп
-                    dedup_phones: list[tuple[str, str, str]] = []
-                    seen_p = set()
-                    for pt, pv, pc in phones:
+                        dedup_phones: list[tuple[str, str, str]] = []
+                        seen_p = set()
+                        for pt, pv, pc in phones:
                         pv2 = str(pv or "").strip()
                         if not pv2:
                             continue
@@ -2334,21 +2334,21 @@ def migrate_filtered(
                             continue
                         seen_p.add(pv2)
                         dedup_phones.append((pt, pv2, str(pc or "")))
-                    phones = dedup_phones
+                        phones = dedup_phones
 
                     # Если есть одно общее примечание, а номеров несколько — пишем его в comment первого номера
-                    if note_text and phones:
+                        if note_text and phones:
                         pt0, pv0, pc0 = phones[0]
                         if not (pc0 or "").strip():
                             phones[0] = (pt0, pv0, note_text[:255])
                             if debug_count_for_extraction < 3:
                                 logger.debug(f"  -> Applied note_text to first phone: {note_text[:100]}")
-                    elif debug_count_for_extraction < 3 and not note_text:
+                        elif debug_count_for_extraction < 3 and not note_text:
                         logger.debug(f"  -> ⚠️ No note_text found for contact {amo_contact_id} (checked direct fields and custom_fields)")
 
-                    dedup_emails: list[tuple[str, str]] = []
-                    seen_e = set()
-                    for et, ev in emails:
+                        dedup_emails: list[tuple[str, str]] = []
+                        seen_e = set()
+                        for et, ev in emails:
                         ev2 = str(ev or "").strip().lower()
                         if not ev2:
                             continue
@@ -2356,12 +2356,12 @@ def migrate_filtered(
                             continue
                         seen_e.add(ev2)
                         dedup_emails.append((et, ev2))
-                    emails = dedup_emails
+                        emails = dedup_emails
                     
-                    # ОТЛАДКА: сохраняем сырые данные для анализа
+                        # ОТЛАДКА: сохраняем сырые данные для анализа
                     # Собираем информацию о том, где искали примечания
-                    note_search_info = []
-                    if isinstance(ac, dict):
+                        note_search_info = []
+                        if isinstance(ac, dict):
                         # Проверяем прямые поля
                         for note_key in ["note", "notes", "comment", "comments", "remark", "remarks"]:
                             if note_key in ac:
@@ -2453,15 +2453,15 @@ def migrate_filtered(
                             logger.debug(f"  -> ⚠️ No note fields found in custom_fields. All fields: {all_custom_field_names}")
                     
                     # Обрабатываем данные о холодном звонке из amoCRM (ДО использования в contact_debug)
-                    cold_marked_at_dt = None
-                    if cold_call_timestamp:
+                        cold_marked_at_dt = None
+                        if cold_call_timestamp:
                         try:
                             UTC = getattr(timezone, "UTC", dt_timezone.utc)
                             cold_marked_at_dt = timezone.datetime.fromtimestamp(cold_call_timestamp, tz=UTC)
                         except Exception:
                             cold_marked_at_dt = None
                     
-                    debug_data = {
+                        debug_data = {
                         "source": "amo_api",
                         "amo_contact_id": amo_contact_id,
                         "first_name": first_name,
@@ -2477,18 +2477,18 @@ def migrate_filtered(
                         "custom_fields_sample": custom_fields if dry_run else (custom_fields[:3] if custom_fields else []),  # В dry-run показываем все поля
                         "has_phone_field": bool(ac.get("phone")),
                         "has_email_field": bool(ac.get("email")),
-                    }
+                        }
                     
                     # ПОЛНЫЙ АНАЛИЗ КОНТАКТА для dry-run
                     # Используем новую функцию для извлечения ВСЕХ полей
-                    debug_count = getattr(res, '_debug_contacts_logged', 0)
-                    if res.contacts_preview is None:
+                        debug_count = getattr(res, '_debug_contacts_logged', 0)
+                        if res.contacts_preview is None:
                         res.contacts_preview = []
                     
                     # В dry-run показываем ВСЕ контакты (до 1000), чтобы видеть все проблемы
-                    preview_limit = 1000 if dry_run else 10
-                    logger.info(f"migrate_filtered: обработка контакта {amo_contact_id}: debug_count={debug_count}, preview_limit={preview_limit}, local_company={'найдена' if local_company else 'не найдена'}")
-                    if debug_count < preview_limit:
+                        preview_limit = 1000 if dry_run else 10
+                        logger.info(f"migrate_filtered: обработка контакта {amo_contact_id}: debug_count={debug_count}, preview_limit={preview_limit}, local_company={'найдена' if local_company else 'не найдена'}")
+                        if debug_count < preview_limit:
                         # Полный анализ контакта
                         full_analysis = _analyze_contact_completely(ac)
                         
@@ -2590,11 +2590,11 @@ def migrate_filtered(
                             logger.debug(f"  - note_text_found: {note_text}")
                             logger.debug(f"  - custom_fields_count: {len(full_analysis.get('custom_fields', []))}")
                             logger.debug(f"  - all_custom_fields: {len(contact_debug.get('all_custom_fields', []))}")
-                    else:
+                        else:
                         logger.info(f"migrate_filtered: ⚠️ контакт {amo_contact_id} НЕ добавлен в preview (превышен лимит: {debug_count} >= {preview_limit})")
                     
                     # Также логируем в консоль для первых контактов
-                    if contacts_processed <= 3:
+                        if contacts_processed <= 3:
                         logger.debug(f"Contact {amo_contact_id}:")
                         logger.debug(f"  - first_name: {first_name}")
                         logger.debug(f"  - last_name: {last_name}")
@@ -2613,7 +2613,7 @@ def migrate_filtered(
                         logger.debug(f"  - has phone field: {bool(ac.get('phone')) if isinstance(ac, dict) else False}")
                         logger.debug(f"  - has email field: {bool(ac.get('email')) if isinstance(ac, dict) else False}")
                     
-                    except Exception as e:
+                        except Exception as e:
                         contacts_errors += 1
                         amo_contact_id_for_error = int(ac.get("id") or 0) if isinstance(ac, dict) else 0
                         logger.error(f"migrate_filtered: ❌ ОШИБКА при обработке контакта {ac_idx + 1}/{len(full_contacts)} (amo_id: {amo_contact_id_for_error}): {e}", exc_info=True)
