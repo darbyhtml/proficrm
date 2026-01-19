@@ -4661,7 +4661,17 @@ def task_create(request: HttpRequest) -> HttpResponse:
     form.fields["company"].queryset = company_qs
 
     # Ограничить назначаемых с группировкой по городам филиалов (как при передаче компании)
+    # ВАЖНО: вызываем ПОСЛЕ создания формы, чтобы переустановить queryset
     _set_assigned_to_queryset(form, user)
+    
+    # Для администратора проверяем, что queryset содержит всех пользователей
+    if user.role in (User.Role.GROUP_MANAGER, User.Role.ADMIN) or user.is_superuser:
+        assigned_to_qs = form.fields["assigned_to"].queryset
+        total_users = User.objects.filter(is_active=True).count()
+        qs_count = assigned_to_qs.count()
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Admin task_create: assigned_to queryset has {qs_count} users (total active: {total_users})")
 
     # Оптимизация queryset для типа задачи (используем only() для загрузки только необходимых полей)
     form.fields["type"].queryset = TaskType.objects.only("id", "name").order_by("name")
