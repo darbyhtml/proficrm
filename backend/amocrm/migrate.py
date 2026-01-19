@@ -1579,32 +1579,50 @@ def migrate_filtered(
                 # Rate limiting применяется автоматически в AmoClient
                 logger.debug(f"Fetching contacts for {len(amo_ids)} companies via filter[company_id][]")
                 
-                full_contacts = fetch_contacts_for_companies(client, amo_ids)
-                res.contacts_seen = len(full_contacts)
-                logger.debug(f"Total contacts fetched: {res.contacts_seen} from {len(amo_ids)} companies")
+                all_contacts = fetch_contacts_for_companies(client, amo_ids)
+                logger.debug(f"Total contacts fetched from API: {len(all_contacts)}")
                 
-                # Создаем маппинг контактов к компаниям
-                contact_id_to_company_map: dict[int, int] = {}  # contact_id -> amo_company_id
+                # КРИТИЧЕСКИ ВАЖНО: фильтруем контакты - оставляем ТОЛЬКО те, которые связаны с компаниями из текущей пачки
+                # Контакт может быть связан с несколькими компаниями, но нам нужны только те, что связаны с нашими
                 amo_ids_set = set(amo_ids)
-                for contact in full_contacts:
-                    if isinstance(contact, dict):
-                        contact_id = int(contact.get("id") or 0)
-                        if contact_id:
-                            # Пытаемся найти компанию через _embedded.companies или company_id
-                            embedded = contact.get("_embedded") or {}
-                            companies_in_contact = embedded.get("companies") or []
-                            if isinstance(companies_in_contact, list):
-                                for comp_ref in companies_in_contact:
-                                    if isinstance(comp_ref, dict):
-                                        comp_id = int(comp_ref.get("id") or 0)
-                                        if comp_id in amo_ids_set:
-                                            contact_id_to_company_map[contact_id] = comp_id
-                                            break
-                            # Если не нашли через _embedded, проверяем company_id напрямую
-                            if contact_id not in contact_id_to_company_map:
-                                comp_id_direct = int(contact.get("company_id") or 0)
-                                if comp_id_direct in amo_ids_set:
-                                    contact_id_to_company_map[contact_id] = comp_id_direct
+                full_contacts: list[dict[str, Any]] = []
+                contact_id_to_company_map: dict[int, int] = {}  # contact_id -> amo_company_id
+                
+                for contact in all_contacts:
+                    if not isinstance(contact, dict):
+                        continue
+                    
+                    contact_id = int(contact.get("id") or 0)
+                    if not contact_id:
+                        continue
+                    
+                    # Ищем компанию из текущей пачки, с которой связан контакт
+                    found_company_id = None
+                    
+                    # Проверяем _embedded.companies
+                    embedded = contact.get("_embedded") or {}
+                    companies_in_contact = embedded.get("companies") or []
+                    if isinstance(companies_in_contact, list):
+                        for comp_ref in companies_in_contact:
+                            if isinstance(comp_ref, dict):
+                                comp_id = int(comp_ref.get("id") or 0)
+                                if comp_id in amo_ids_set:
+                                    found_company_id = comp_id
+                                    break
+                    
+                    # Если не нашли через _embedded, проверяем company_id напрямую
+                    if not found_company_id:
+                        comp_id_direct = int(contact.get("company_id") or 0)
+                        if comp_id_direct in amo_ids_set:
+                            found_company_id = comp_id_direct
+                    
+                    # Добавляем контакт ТОЛЬКО если он связан с компанией из текущей пачки
+                    if found_company_id:
+                        full_contacts.append(contact)
+                        contact_id_to_company_map[contact_id] = found_company_id
+                
+                res.contacts_seen = len(full_contacts)
+                logger.debug(f"Filtered contacts: {res.contacts_seen} contacts belong to {len(amo_ids)} companies from current batch")
                 
                 # Если контактов не найдено, сохраняем информацию об ошибке
                 if res.contacts_seen == 0:
