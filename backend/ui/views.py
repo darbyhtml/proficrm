@@ -4420,19 +4420,9 @@ def task_create(request: HttpRequest) -> HttpResponse:
         # ВАЖНО: Устанавливаем queryset ДО валидации формы
         # Сначала устанавливаем queryset на всех активных пользователей, чтобы валидация прошла
         # Потом ограничим его для отображения
-        if assigned_to_id:
-            try:
-                # Проверяем, что это валидный UUID
-                # Если есть выбранный пользователь, включаем его в queryset
-                form.fields["assigned_to"].queryset = User.objects.filter(
-                    Q(is_active=True) | Q(id=assigned_to_id)
-                ).select_related("branch")
-            except (ValueError, TypeError):
-                # Если assigned_to_id невалидный, используем всех активных
-                form.fields["assigned_to"].queryset = User.objects.filter(is_active=True).select_related("branch")
-        else:
-            # Если нет выбранного пользователя, используем всех активных
-            form.fields["assigned_to"].queryset = User.objects.filter(is_active=True).select_related("branch")
+        # ВАЖНО: Устанавливаем queryset на всех пользователей перед валидацией,
+        # чтобы Django мог принять любое значение из POST, даже если оно не в queryset
+        form.fields["assigned_to"].queryset = User.objects.filter(is_active=True).select_related("branch")
         
         # Теперь валидируем форму
         
