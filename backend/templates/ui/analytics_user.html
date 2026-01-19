@@ -147,9 +147,9 @@
               <span class="font-mono text-xs text-brand-dark/70">{{ call.created_at|date:"d.m.Y H:i:s" }}</span>
               <span class="font-mono text-sm font-medium">{{ call.phone_raw|format_phone }}</span>
               {% if call.is_cold_call %}
-                <span class="badge badge-warn" style="padding:.2rem .5rem;font-size:.7rem">Холодный</span>
+                <span class="badge badge-warn badge-sm">Холодный</span>
               {% else %}
-                <span class="badge" style="padding:.2rem .5rem;font-size:.7rem">Тёплый</span>
+                <span class="badge badge-sm">Тёплый</span>
               {% endif %}
               {% if call.contact %}
                 <span class="muted-2">· {{ call.contact }}</span>
@@ -236,7 +236,7 @@
           {% for e in events_page %}
             <div class="rounded-lg border p-3 flex flex-wrap items-center gap-2">
               <span class="font-mono text-xs">{{ e.created_at|date:"d.m.Y H:i:s" }}</span>
-              <span class="badge" style="padding:.1rem .35rem;font-size:.65rem">{{ e.get_verb_display }}</span>
+              <span class="badge badge-sm">{{ e.get_verb_display }}</span>
               <span class="muted-2">{{ e.message|default:e.entity_type }}</span>
               {% if e.company_id %}
                 <a class="link" href="/companies/{{ e.company_id }}/">(компания)</a>
