@@ -806,16 +806,19 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
     Rate limiting применяется автоматически в AmoClient.
     """
     if not company_ids:
+        logger.info("fetch_contacts_for_companies: company_ids пуст, возвращаем []")
         return []
     out: list[dict[str, Any]] = []
     
-    logger.debug(f"Fetching contacts for {len(company_ids)} companies: {company_ids[:5]}...")
+    logger.info(f"fetch_contacts_for_companies: начинаем поиск контактов для {len(company_ids)} компаний: {company_ids[:5]}...")
     
     # Способ 1: Запрашиваем каждую компанию с with=contacts
     # Это самый надежный способ согласно документации
+    method1_contacts_count = 0
     for company_id in company_ids:
         try:
             # Получаем компанию с контактами
+            logger.info(f"fetch_contacts_for_companies: запрашиваем компанию {company_id} с with=contacts")
             company_data = client.get(
                 f"/api/v4/companies/{company_id}",
                 params={"with": "custom_fields,contacts"}  # Только custom_fields и contacts, БЕЗ notes
@@ -825,7 +828,7 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
                 embedded = company_data.get("_embedded") or {}
                 contacts = embedded.get("contacts") or []
                 if isinstance(contacts, list) and contacts:
-                    logger.debug(f"Company {company_id}: found {len(contacts)} contacts via with=contacts")
+                    logger.info(f"fetch_contacts_for_companies: компания {company_id}: найдено {len(contacts)} контактов через with=contacts")
                     # Добавляем company_id к каждому контакту для удобства
                     for contact in contacts:
                         if isinstance(contact, dict):
@@ -835,21 +838,26 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
                             if "companies" not in contact["_embedded"]:
                                 contact["_embedded"]["companies"] = [{"id": company_id}]
                     out.extend(contacts)
+                    method1_contacts_count += len(contacts)
                 else:
-                    logger.debug(f"Company {company_id}: no contacts in _embedded.contacts (empty list or missing)")
+                    logger.info(f"fetch_contacts_for_companies: компания {company_id}: контакты не найдены в _embedded.contacts (пустой список или отсутствует)")
             else:
-                logger.warning(f"Company {company_id}: unexpected response type: {type(company_data)}")
+                logger.warning(f"fetch_contacts_for_companies: компания {company_id}: неожиданный тип ответа: {type(company_data)}")
         except Exception as e:
-            logger.warning(f"Error fetching company {company_id} with contacts: {e}", exc_info=True)
+            logger.warning(f"fetch_contacts_for_companies: ошибка при получении компании {company_id} с контактами: {e}", exc_info=True)
             # Продолжаем для следующих компаний
             continue
     
+    logger.info(f"fetch_contacts_for_companies: способ 1 (with=contacts): найдено {method1_contacts_count} контактов из {len(company_ids)} компаний")
+    
     # Если через with=contacts ничего не нашли, пробуем способ 2: filter[company_id] для каждого ID
     if not out:
-        logger.debug("No contacts found via with=contacts, trying filter[company_id] for each company...")
+        logger.info("fetch_contacts_for_companies: через with=contacts контакты не найдены, пробуем filter[company_id] для каждой компании...")
+        method2_contacts_count = 0
         for company_id in company_ids:
             try:
                 # Согласно документации: filter[company_id]=ID (без [])
+                logger.info(f"fetch_contacts_for_companies: запрашиваем контакты через filter[company_id]={company_id}")
                 contacts_data = client.get(
                     "/api/v4/contacts",
                     params={
@@ -862,7 +870,7 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
                     embedded = contacts_data.get("_embedded") or {}
                     contacts = embedded.get("contacts") or []
                     if isinstance(contacts, list) and contacts:
-                        logger.debug(f"Company {company_id}: found {len(contacts)} contacts via filter[company_id]")
+                        logger.info(f"fetch_contacts_for_companies: компания {company_id}: найдено {len(contacts)} контактов через filter[company_id]")
                         # Добавляем company_id к каждому контакту
                         for contact in contacts:
                             if isinstance(contact, dict):
@@ -871,11 +879,18 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
                                 if "companies" not in contact["_embedded"]:
                                     contact["_embedded"]["companies"] = [{"id": company_id}]
                         out.extend(contacts)
+                        method2_contacts_count += len(contacts)
+                    else:
+                        logger.info(f"fetch_contacts_for_companies: компания {company_id}: контакты не найдены через filter[company_id] (пустой список)")
+                else:
+                    logger.warning(f"fetch_contacts_for_companies: компания {company_id}: неожиданный тип ответа через filter[company_id]: {type(contacts_data)}")
             except Exception as e:
-                logger.debug(f"Error fetching contacts via filter[company_id]={company_id}: {e}", exc_info=True)
+                logger.warning(f"fetch_contacts_for_companies: ошибка при получении контактов через filter[company_id]={company_id}: {e}", exc_info=True)
                 continue
+        
+        logger.info(f"fetch_contacts_for_companies: способ 2 (filter[company_id]): найдено {method2_contacts_count} контактов из {len(company_ids)} компаний")
     
-    logger.debug(f"Total contacts fetched: {len(out)} from {len(company_ids)} companies")
+    logger.info(f"fetch_contacts_for_companies: ИТОГО найдено {len(out)} контактов из {len(company_ids)} компаний")
     return out
 
 
@@ -1620,19 +1635,20 @@ def migrate_filtered(
         # В реальном импорте обрабатываем только если import_contacts=True
         should_process_contacts = (dry_run or import_contacts) and amo_ids
         
-        logger.debug(f"Contact import check: import_contacts={import_contacts}, dry_run={dry_run}, should_process_contacts={should_process_contacts}, amo_ids={bool(amo_ids)}, len={len(amo_ids) if amo_ids else 0}")
+        logger.info(f"migrate_filtered: проверка импорта контактов: import_contacts={import_contacts}, dry_run={dry_run}, should_process_contacts={should_process_contacts}, amo_ids={bool(amo_ids)}, len={len(amo_ids) if amo_ids else 0}")
         if should_process_contacts:
             res._debug_contacts_logged = 0  # счетчик для отладки
             contacts_processed = 0  # счетчик обработанных контактов
             contacts_skipped = 0  # счетчик пропущенных контактов
-            logger.debug(f"===== STARTING CONTACT IMPORT for {len(amo_ids)} companies =====")
+            logger.info(f"migrate_filtered: ===== НАЧАЛО ИМПОРТА КОНТАКТОВ для {len(amo_ids)} компаний =====")
+            logger.info(f"migrate_filtered: ID компаний для поиска контактов: {amo_ids[:10]}...")
             try:
                 # Получаем контакты через with=contacts при запросе компаний
                 # Rate limiting применяется автоматически в AmoClient
-                logger.debug(f"Fetching contacts for {len(amo_ids)} companies: {amo_ids[:5]}...")
+                logger.info(f"migrate_filtered: вызываем fetch_contacts_for_companies для {len(amo_ids)} компаний...")
                 
                 all_contacts = fetch_contacts_for_companies(client, amo_ids)
-                logger.debug(f"Total contacts fetched from API: {len(all_contacts)}")
+                logger.info(f"migrate_filtered: получено {len(all_contacts)} контактов из API для {len(amo_ids)} компаний")
                 
                 # КРИТИЧЕСКИ ВАЖНО: фильтруем контакты - оставляем ТОЛЬКО те, которые связаны с компаниями из текущей пачки
                 # Контакт может быть связан с несколькими компаниями, но нам нужны только те, что связаны с нашими
@@ -1640,12 +1656,18 @@ def migrate_filtered(
                 full_contacts: list[dict[str, Any]] = []
                 contact_id_to_company_map: dict[int, int] = {}  # contact_id -> amo_company_id
                 
+                logger.info(f"migrate_filtered: начинаем фильтрацию {len(all_contacts)} контактов по компаниям из пачки: {list(amo_ids_set)[:10]}...")
+                contacts_with_company = 0
+                contacts_without_company = 0
+                
                 for contact in all_contacts:
                     if not isinstance(contact, dict):
+                        contacts_without_company += 1
                         continue
                     
                     contact_id = int(contact.get("id") or 0)
                     if not contact_id:
+                        contacts_without_company += 1
                         continue
                     
                     # Ищем компанию из текущей пачки, с которой связан контакт
@@ -1672,19 +1694,23 @@ def migrate_filtered(
                     if found_company_id:
                         full_contacts.append(contact)
                         contact_id_to_company_map[contact_id] = found_company_id
+                        contacts_with_company += 1
+                    else:
+                        contacts_without_company += 1
                 
                 res.contacts_seen = len(full_contacts)
-                logger.debug(f"Filtered contacts: {res.contacts_seen} contacts belong to {len(amo_ids)} companies from current batch")
+                logger.info(f"migrate_filtered: фильтрация завершена: {res.contacts_seen} контактов принадлежат {len(amo_ids)} компаниям из текущей пачки (пропущено: {contacts_without_company})")
                 
                 # Если контактов не найдено, сохраняем информацию об ошибке
                 if res.contacts_seen == 0:
+                    logger.warning(f"migrate_filtered: ⚠️ КОНТАКТЫ НЕ НАЙДЕНЫ для компаний {list(amo_ids)[:10]}. Всего получено из API: {len(all_contacts)}, отфильтровано: {res.contacts_seen}")
                     if res.contacts_preview is None:
                         res.contacts_preview = []
                     debug_info = {
                         "status": "NO_CONTACTS_FOUND",
                         "companies_checked": len(amo_ids),
                         "company_ids": list(amo_ids)[:5],  # первые 5 для отладки
-                        "message": f"Контакты не найдены для компаний {list(amo_ids)[:5]}. Проверьте, что у компаний есть связанные контакты в AmoCRM. Использовались методы: 1) GET /api/v4/companies/{{id}}?with=contacts, 2) GET /api/v4/contacts?filter[company_id]={{id}}",
+                        "message": f"Контакты не найдены для компаний {list(amo_ids)[:5]}. Проверьте, что у компаний есть связанные контакты в AmoCRM. Использовались методы: 1) GET /api/v4/companies/{{id}}?with=contacts, 2) GET /api/v4/contacts?filter[company_id]={{id}}. Всего получено из API: {len(all_contacts)} контактов, но ни один не связан с компаниями из текущей пачки.",
                     }
                     res.contacts_preview.append(debug_info)
                 
