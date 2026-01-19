@@ -1966,40 +1966,12 @@
           }
         });
 
-        // Логика сворачивания/разворачивания
-        let isExpanded = false;
-        let collapseTimer = null;
-
-        function setExpanded(on) {
-          isExpanded = !!on;
-          if (isExpanded) {
-            widget.classList.remove('is-collapsed');
-            clearTimeout(collapseTimer);
-            collapseTimer = setTimeout(() => setExpanded(false), 5000);
-          } else {
-            widget.classList.add('is-collapsed');
-          }
-        }
-
-        widget.addEventListener('click', function(e){
-          // Переключаем режим просмотра, а переход по ссылке — по Ctrl/Cmd+Click или middle-click
-          if (e.metaKey || e.ctrlKey || e.button === 1) return;
-          e.preventDefault();
-          setExpanded(!isExpanded);
-        });
-
-        widget.addEventListener('mouseenter', () => {
-          if (collapseTimer) clearTimeout(collapseTimer);
-        });
-        widget.addEventListener('mouseleave', () => {
-          if (isExpanded) collapseTimer = setTimeout(() => setExpanded(false), 5000);
-        });
+        // Всегда показываем в компактном режиме; клик ведёт сразу в кампанию
+        widget.classList.add('is-collapsed');
 
         // Первичный запуск + периодический polling
         poll();
         setInterval(poll, 4000);
-        // Всегда стартуем в свернутом виде
-        setExpanded(false);
       })();
     </script>
     <script>
