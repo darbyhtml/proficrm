@@ -1549,18 +1549,23 @@
                       closeCreateModal();
                       location.reload();
                     } else {
-                      // Мягкая подсветка ошибки вместо страшного алерта
+                      // Мягкая подсветка ошибки: показываем сообщение под полем «Задача»
                       let fieldMessage = '';
                       if (data.errors && data.errors.type) {
-                        // Конкретная ошибка по полю «Задача»
                         fieldMessage = Array.isArray(data.errors.type) ? data.errors.type.join(', ') : String(data.errors.type);
                       }
 
                       const msg = fieldMessage || data.error || 'Проверьте заполнение формы задачи.';
 
-                      if (window.uiToast) {
+                      const errorBox = form.querySelector('[data-task-type-error]');
+                      if (errorBox) {
+                        errorBox.textContent = fieldMessage || '';
+                        errorBox.classList.toggle('hidden', !fieldMessage);
+                      }
+
+                      if (!fieldMessage && window.uiToast) {
                         window.uiToast(msg, 'error');
-                      } else {
+                      } else if (!fieldMessage) {
                         console.warn('Ошибка создания задачи:', msg);
                       }
                     }
