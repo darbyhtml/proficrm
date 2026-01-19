@@ -596,7 +596,7 @@
                       </a>
                       <form method="post" action="/contacts/{{ c.id }}/delete/" onsubmit="return confirm('Удалить контакт?');" style="display:inline">
                         {% csrf_token %}
-                        <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem;border-color:rgba(220,38,38,.5);color:#b91c1c;" title="Удалить контакт" aria-label="Удалить контакт">
+                        <button class="btn btn-outline btn-sm btn-danger" title="Удалить контакт" aria-label="Удалить контакт">
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             <path d="M6 7h12M10 11v6M14 11v6M9 7l1-3h4l1 3M19 7l-1 12H6L5 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                           </svg>
@@ -866,7 +866,7 @@
               {{ note_form.text }}
               <div class="flex items-center justify-between gap-2">
                 <input id="noteFile" type="file" name="attachment" class="hidden" />
-                <button type="button" class="btn btn-outline" id="noteAttachBtn" title="Прикрепить файл" style="padding:.35rem .6rem;font-size:.75rem">
+                <button type="button" class="btn btn-outline btn-sm" id="noteAttachBtn" title="Прикрепить файл">
                   <span class="inline-flex items-center gap-1">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                       <path d="M8 12.5l7.1-7.1a3 3 0 014.2 4.2l-8.5 8.5a5 5 0 01-7.1-7.1l8.2-8.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -925,7 +925,7 @@
                     </button>
                     <form method="post" action="/companies/{{ company.id }}/notes/{{ n.id }}/delete/" onsubmit="return confirm('Удалить заметку?');" style="display:inline">
                       {% csrf_token %}
-                      <button type="submit" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem;border-color:rgba(239,68,68,.35);color:#b91c1c;background:rgba(239,68,68,.06)" title="Удалить" aria-label="Удалить">
+                      <button type="submit" class="btn btn-outline btn-sm btn-danger" title="Удалить" aria-label="Удалить">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                           <path d="M3 6h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                           <path d="M8 6V4h8v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -966,8 +966,8 @@
                       </div>
                     </div>
                     <div class="flex flex-wrap gap-2 shrink-0">
-                      <a class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/">Открыть</a>
-                      <a class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/">Скачать</a>
+                      <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/">Открыть</a>
+                      <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/">Скачать</a>
                     </div>
                   </div>
                 </div>
@@ -989,7 +989,7 @@
               <div class="font-medium">Редактировать заметку</div>
               <div class="text-xs muted-2 mt-1">После сохранения появится метка «ред.»</div>
             </div>
-            <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" data-close-noteedit aria-label="Закрыть" title="Закрыть">✕</button>
+            <button type="button" class="btn btn-outline btn-sm" data-close-noteedit aria-label="Закрыть" title="Закрыть">✕</button>
           </div>
           <form method="post" id="noteEditForm" class="mt-3 space-y-2" enctype="multipart/form-data">
             {% csrf_token %}
@@ -1001,7 +1001,7 @@
             <div class="rounded-xl border border-brand-soft bg-brand-soft/10 p-3">
               <div class="flex items-center justify-between gap-2">
                 <div class="text-xs text-brand-dark/70">Файл</div>
-                <label class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem;cursor:pointer">
+                <label class="btn btn-outline btn-sm" style="cursor:pointer">
                   Выбрать файл
                   <input type="file" name="attachment" id="noteEditFile" class="hidden" />
                 </label>
@@ -1038,7 +1038,7 @@
                 <div class="font-medium">Запросить удаление компании</div>
                 <div class="text-xs muted-2 mt-1">Опишите причину — запрос уйдёт РОП и директору филиала.</div>
               </div>
-              <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" data-close-delreq aria-label="Закрыть" title="Закрыть">✕</button>
+              <button type="button" class="btn btn-outline btn-sm" data-close-delreq aria-label="Закрыть" title="Закрыть">✕</button>
             </div>
             <form method="post" action="/companies/{{ company.id }}/delete-request/" class="mt-3 space-y-2">
               {% csrf_token %}
@@ -1070,7 +1070,7 @@
                   Если у компании есть клиентские филиалы — они станут самостоятельными (головными).
                 </div>
               </div>
-              <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" data-close-delcompany aria-label="Закрыть" title="Закрыть">✕</button>
+              <button type="button" class="btn btn-outline btn-sm" data-close-delcompany aria-label="Закрыть" title="Закрыть">✕</button>
             </div>
             <form method="post" action="/companies/{{ company.id }}/delete/" class="mt-3 space-y-2" onsubmit="return confirm('Точно удалить компанию?');">
               {% csrf_token %}
@@ -1098,7 +1098,7 @@
                 <div class="font-medium">Отменить запрос на удаление</div>
                 <div class="text-xs muted-2 mt-1">Менеджеру уйдёт уведомление с причиной.</div>
               </div>
-              <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" data-close-cancelreq aria-label="Закрыть" title="Закрыть">✕</button>
+              <button type="button" class="btn btn-outline btn-sm" data-close-cancelreq aria-label="Закрыть" title="Закрыть">✕</button>
             </div>
             <form method="post" action="/companies/{{ company.id }}/delete-request/{{ delete_req.id }}/cancel/" class="mt-3 space-y-2">
               {% csrf_token %}
@@ -1127,7 +1127,7 @@
                 <div class="font-medium">Изменить договор</div>
                 <div class="text-xs muted-2 mt-1">Меняем только вид договора и срок действия.</div>
               </div>
-              <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" data-close-contract aria-label="Закрыть" title="Закрыть">
+              <button type="button" class="btn btn-outline btn-sm" data-close-contract aria-label="Закрыть" title="Закрыть">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                 </svg>
@@ -1581,7 +1581,7 @@
       <div class="bg-white border rounded-2xl p-4">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-semibold">Удалить задачу?</h2>
-          <button type="button" class="btn btn-outline flex-shrink-0" style="padding:.35rem .5rem;font-size:.875rem" data-close-task-delete-modal aria-label="Закрыть" title="Закрыть">
+          <button type="button" class="btn btn-outline btn-sm flex-shrink-0" data-close-task-delete-modal aria-label="Закрыть" title="Закрыть">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
             </svg>
@@ -1606,7 +1606,7 @@
       <div class="bg-white border rounded-2xl p-4">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-lg font-semibold">Отметить задачу как выполненную?</h2>
-          <button type="button" class="btn btn-outline flex-shrink-0" style="padding:.35rem .5rem;font-size:.875rem" data-close-task-complete-modal aria-label="Закрыть" title="Закрыть">
+          <button type="button" class="btn btn-outline btn-sm flex-shrink-0" data-close-task-complete-modal aria-label="Закрыть" title="Закрыть">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
               <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
             </svg>
@@ -2048,7 +2048,7 @@
                     <div class="flex items-center gap-2 mb-2" id="taskViewBadges"></div>
                     <h2 class="text-xl font-semibold text-brand-dark" id="taskViewTitle">Загрузка...</h2>
                   </div>
-                  <button type="button" class="btn btn-outline flex-shrink-0" style="padding:.35rem .5rem;font-size:.75rem" data-close-task-view aria-label="Закрыть" title="Закрыть">✕</button>
+                  <button type="button" class="btn btn-outline btn-sm flex-shrink-0" data-close-task-view aria-label="Закрыть" title="Закрыть">✕</button>
                 </div>
                 <div id="taskViewContent">
                   <div class="text-center py-8">
