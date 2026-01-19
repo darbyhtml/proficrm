@@ -732,12 +732,13 @@ def fetch_companies_by_responsible(client: AmoClient, responsible_user_id: int, 
     params = {f"filter[responsible_user_id]": responsible_user_id, "with": "custom_fields"}
     if with_contacts:
         # Добавляем contacts в with, чтобы получить контакты в _embedded.contacts
+        # НЕ запрашиваем notes здесь - это слишком тяжело, запросим отдельно если нужно
         params["with"] = "custom_fields,contacts"
     return client.get_all_pages(
         "/api/v4/companies",
         params=params,
         embedded_key="companies",
-        limit=100,  # Уменьшено с 250 до 100 для избежания 504 Gateway Timeout
+        limit=50,  # Уменьшено до 50 для избежания 504 Gateway Timeout
         max_pages=limit_pages,
         delay_between_pages=0.5,  # Задержка между страницами для избежания rate limit
     )
@@ -1626,25 +1627,28 @@ def migrate_filtered(
                     # Альтернативный метод: получаем контакты через filter[company_id][]
                     # Согласно документации AmoCRM API v4: /api/v4/contacts?filter[company_id][]=1&filter[company_id][]=2
                     try:
-                        # Получаем контакты батчами по 30 компаний (уменьшено с 50 для избежания 504 Gateway Timeout)
-                        batch_size = 30
+                        # Получаем контакты батчами по 10 компаний (уменьшено для избежания 504)
+                        batch_size = 10
                         for i in range(0, len(amo_ids), batch_size):
-                            # Задержка между батчами (кроме первого)
+                            # Задержка между батчами (включая первый для безопасности)
                             if i > 0:
-                                time.sleep(1.0)  # Задержка 1 сек между батчами для избежания rate limit
+                                time.sleep(2.0)  # Увеличена задержка до 2 сек между батчами
+                            else:
+                                time.sleep(0.5)  # Небольшая задержка перед первым батчем
                             
                             company_ids_batch = list(amo_ids)[i : i + batch_size]
                             logger.debug(f"Trying to fetch contacts via filter[company_id][] for {len(company_ids_batch)} companies... (batch {i//batch_size + 1})")
+                            # НЕ запрашиваем notes здесь - это слишком тяжело, только custom_fields
                             contacts_alt = client.get_all_pages(
                                 "/api/v4/contacts",
                                 params={
                                     "filter[company_id][]": company_ids_batch,
-                                    "with": "custom_fields,notes",
+                                    "with": "custom_fields",  # Убрали notes - слишком тяжело
                                 },
                                 embedded_key="contacts",
-                                limit=250,
-                                max_pages=50,
-                                delay_between_pages=0.5,
+                                limit=50,  # Уменьшено до 50
+                                max_pages=10,  # Ограничиваем страницы
+                                delay_between_pages=0.5,  # Задержка между страницами
                             )
                             if isinstance(contacts_alt, list) and contacts_alt:
                                 logger.debug(f"Found {len(contacts_alt)} contacts via filter[company_id][] method")
@@ -1712,36 +1716,52 @@ def migrate_filtered(
                                     break
                 
                 # Получаем полные данные контактов по их ID
-                # Согласно документации: /api/v4/contacts?filter[id][]=1&filter[id][]=2&with=custom_fields,notes
+                # Согласно документации: /api/v4/contacts?filter[id][]=1&filter[id][]=2&with=custom_fields
                 # Пропускаем, если контакты уже получены через альтернативный метод
+                # ВАЖНО: Если контакты уже есть в _embedded.contacts с нужными полями, не делаем дополнительный запрос
                 if not contacts_from_alt_method:
-                    if contact_ids:
+                    # Проверяем, есть ли у контактов из _embedded нужные поля
+                    need_full_data = False
+                    if amo_contacts:
+                        first_contact = amo_contacts[0] if isinstance(amo_contacts[0], dict) else {}
+                        # Если нет custom_fields_values, нужен полный запрос
+                        if "custom_fields_values" not in first_contact:
+                            need_full_data = True
+                            logger.debug("Contacts from _embedded don't have custom_fields_values, fetching full data")
+                        else:
+                            logger.debug("Contacts from _embedded already have custom_fields_values, skipping additional request")
+                            # Используем контакты из _embedded как есть
+                            full_contacts = amo_contacts
+                    
+                    if need_full_data and contact_ids:
                         logger.debug(f"Fetching full contact data for {len(contact_ids)} contact IDs...")
                         try:
-                            # Запрашиваем контакты батчами по 30 ID (уменьшено с 50 для избежания 504 Gateway Timeout)
-                            batch_size = 30
+                            # Запрашиваем контакты батчами по 10 ID (уменьшено для избежания 504)
+                            batch_size = 10
                             for i in range(0, len(contact_ids), batch_size):
-                                # Задержка между батчами (кроме первого)
+                                # Задержка между батчами (включая первый)
                                 if i > 0:
-                                    time.sleep(1.0)  # Задержка 1 сек между батчами для избежания rate limit
+                                    time.sleep(2.0)  # Увеличена задержка до 2 сек
+                                else:
+                                    time.sleep(0.5)  # Небольшая задержка перед первым батчем
                                 
                                 ids_batch = contact_ids[i : i + batch_size]
                                 logger.debug(f"Requesting contacts with IDs: {ids_batch[:10]}... (total {len(ids_batch)}, batch {i//batch_size + 1})")
                                 
                                 # Согласно документации AmoCRM API v4:
                                 # - filter[id][] - массив ID контактов
-                                # - with=custom_fields,notes - получить кастомные поля и заметки
-                                # - limit - количество на странице (макс 250)
+                                # - with=custom_fields - получить кастомные поля (БЕЗ notes - слишком тяжело)
+                                # - limit - количество на странице
                                 contacts_batch = client.get_all_pages(
                                     "/api/v4/contacts",
                                     params={
                                         "filter[id][]": ids_batch,  # Массив ID для фильтрации
-                                        "with": "custom_fields,notes",  # Получаем кастомные поля и заметки
+                                        "with": "custom_fields",  # Только custom_fields, БЕЗ notes
                                     },
                                     embedded_key="contacts",  # Ключ в _embedded для извлечения контактов
-                                    limit=100,  # Уменьшено с 250 до 100 для избежания 504 Gateway Timeout
-                                    max_pages=10,  # Ограничиваем количество страниц
-                                    delay_between_pages=0.2,  # Задержка 0.2 сек (безопасно для лимита 7/сек)
+                                    limit=50,  # Уменьшено до 50
+                                    max_pages=5,  # Ограничиваем количество страниц
+                                    delay_between_pages=0.5,  # Задержка 0.5 сек между страницами
                                 )
                                 logger.debug(f"get_all_pages returned: type={type(contacts_batch)}, length={len(contacts_batch) if isinstance(contacts_batch, list) else 'not_list'}")
                                 if isinstance(contacts_batch, list):
