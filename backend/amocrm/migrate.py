@@ -1149,7 +1149,7 @@ def migrate_filtered(
                         comp.legal_name = new_legal
                         changed = True
                         if dry_run and new_legal:
-                        company_updates_diff["legal_name"] = {"old": "", "new": new_legal}
+                            company_updates_diff["legal_name"] = {"old": "", "new": new_legal}
                 elif len(comp.legal_name) > 255:  # защита: если уже заполнено, но слишком длинное
                         comp.legal_name = comp.legal_name.strip()[:255]
                         changed = True
