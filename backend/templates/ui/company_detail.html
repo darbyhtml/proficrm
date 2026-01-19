@@ -652,10 +652,10 @@
                                   </div>
                                   <div class="phone-comment-edit hidden mt-1">
                                     <input type="text" class="input text-xs" value="{{ p.comment|default:'' }}" placeholder="Комментарий к номеру" maxlength="255" data-comment-input style="padding:.35rem .5rem;font-size:.75rem" />
-                                    <div class="flex gap-1 mt-1">
-                                      <button type="button" class="btn btn-primary text-xs" data-save-comment style="padding:.25rem .5rem">Сохранить</button>
-                                      <button type="button" class="btn btn-outline text-xs" data-cancel-comment style="padding:.25rem .5rem">Отмена</button>
-                                    </div>
+                          <div class="flex gap-1 mt-1">
+                            <button type="button" class="btn btn-primary btn-sm" data-save-comment>Сохранить</button>
+                            <button type="button" class="btn btn-outline btn-sm" data-cancel-comment>Отмена</button>
+                          </div>
                                   </div>
                                 </div>
                               {% elif p.comment %}
