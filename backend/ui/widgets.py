@@ -94,6 +94,15 @@ class UserSelectWithBranchWidget(forms.Select):
         """Группируем пользователей по городам филиалов."""
         groups = []
         has_selected = False
+
+        # Django передаёт value как список выбранных значений (даже для single select)
+        if value is None:
+            value_list = []
+        elif isinstance(value, (list, tuple)):
+            value_list = [str(v) for v in value if v not in (None, "")]
+        else:
+            value_list = [str(value)]
+        value_set = set(value_list)
         
         # Группируем choices по branch__name
         # Сначала загружаем всех пользователей одним запросом для оптимизации
@@ -103,8 +112,13 @@ class UserSelectWithBranchWidget(forms.Select):
         user_ids = [str(opt[0]) for opt in self.choices if opt[0] and opt[0] != '']
         users_dict = {}
         if user_ids:
-            # Исключаем администраторов из списка
-            users = User.objects.filter(id__in=user_ids).exclude(role=User.Role.ADMIN).select_related('branch').only('id', 'branch__name', 'role')
+            # ВАЖНО: не исключаем администраторов здесь — список доступных пользователей
+            # должен определяться queryset'ом поля (в форме/view), а не виджетом.
+            users = (
+                User.objects.filter(id__in=user_ids)
+                .select_related('branch')
+                .only('id', 'branch__name', 'role')
+            )
             users_dict = {str(u.id): u for u in users}
         
         grouped = defaultdict(list)
@@ -122,19 +136,28 @@ class UserSelectWithBranchWidget(forms.Select):
             
             grouped[branch_name].append((index, option_value, option_label))
             
-            if str(option_value) == str(value):
+            if str(option_value) in value_set:
                 has_selected = True
         
-        # Формируем optgroups (исключаем "Без филиала" и пустые группы)
+        # Формируем optgroups (не скрываем "Без филиала", иначе часть сотрудников пропадает)
         group_index = 0
-        for branch_name in sorted(grouped.keys()):
-            # Пропускаем группу "Без филиала"
-            if branch_name == "Без филиала":
-                continue
+        # Сортируем филиалы, но "Без филиала" отправляем в конец
+        branch_names = [bn for bn in grouped.keys() if bn != "Без филиала"]
+        branch_names.sort()
+        if "Без филиала" in grouped:
+            branch_names.append("Без филиала")
             
             subgroup = []
             for index, option_value, option_label in grouped[branch_name]:
-                option = self.create_option(name, value, option_label, str(option_value) == str(value), index)
+                # ВАЖНО: value опции должен быть option_value (id пользователя),
+                # иначе у всех опций будет одинаковый value вроде "['1']".
+                option = self.create_option(
+                    name,
+                    option_value,
+                    option_label,
+                    str(option_value) in value_set,
+                    index,
+                )
                 subgroup.append(option)
             
             # Добавляем группу только если в ней есть опции
