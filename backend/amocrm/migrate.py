@@ -1120,79 +1120,79 @@ def migrate_filtered(
             # Сохраняем старые значения для diff (только при dry_run)
             if dry_run:
                 old_values = {
-                    "legal_name": comp.legal_name or "",
-                    "inn": comp.inn or "",
-                    "kpp": comp.kpp or "",
-                    "address": comp.address or "",
-                    "phone": comp.phone or "",
-                    "email": comp.email or "",
-                    "website": comp.website or "",
-                    "contact_name": comp.contact_name or "",
-                    "activity_kind": comp.activity_kind or "",
-                    "employees_count": comp.employees_count,
-                    "workday_start": str(comp.workday_start) if comp.workday_start else "",
-                    "workday_end": str(comp.workday_end) if comp.workday_end else "",
-                    "work_timezone": comp.work_timezone or "",
+                        "legal_name": comp.legal_name or "",
+                        "inn": comp.inn or "",
+                        "kpp": comp.kpp or "",
+                        "address": comp.address or "",
+                        "phone": comp.phone or "",
+                        "email": comp.email or "",
+                        "website": comp.website or "",
+                        "contact_name": comp.contact_name or "",
+                        "activity_kind": comp.activity_kind or "",
+                        "employees_count": comp.employees_count,
+                        "workday_start": str(comp.workday_start) if comp.workday_start else "",
+                        "workday_end": str(comp.workday_end) if comp.workday_end else "",
+                        "work_timezone": comp.work_timezone or "",
                 }
 
             def can_update(field: str) -> bool:
                 cur = getattr(comp, field)
                 if cur in ("", None):
-                    return True
+                        return True
                 if field in prev and prev.get(field) == cur:
-                    return True
+                        return True
                 return False
             if extra.get("legal_name"):
                 new_legal = str(extra["legal_name"]).strip()[:255]  # сначала strip, потом обрезка до max_length=255
                 old_legal = (comp.legal_name or "").strip()
                 if not old_legal:
-                    comp.legal_name = new_legal
-                    changed = True
-                    if dry_run and new_legal:
+                        comp.legal_name = new_legal
+                        changed = True
+                        if dry_run and new_legal:
                         company_updates_diff["legal_name"] = {"old": "", "new": new_legal}
                 elif len(comp.legal_name) > 255:  # защита: если уже заполнено, но слишком длинное
-                    comp.legal_name = comp.legal_name.strip()[:255]
-                    changed = True
-                    if dry_run:
+                        comp.legal_name = comp.legal_name.strip()[:255]
+                        changed = True
+                        if dry_run:
                         company_updates_diff["legal_name"] = {"old": old_legal, "new": comp.legal_name}
             if extra.get("inn"):
                 new_inn = str(extra["inn"]).strip()[:20]  # сначала strip, потом обрезка до max_length=20
                 old_inn = (comp.inn or "").strip()
                 if not old_inn:
-                    comp.inn = new_inn
-                    changed = True
-                    if dry_run and new_inn:
+                        comp.inn = new_inn
+                        changed = True
+                        if dry_run and new_inn:
                         company_updates_diff["inn"] = {"old": "", "new": new_inn}
                 elif len(comp.inn) > 20:  # защита: если уже заполнено, но слишком длинное
-                    comp.inn = comp.inn.strip()[:20]
-                    changed = True
-                    if dry_run:
+                        comp.inn = comp.inn.strip()[:20]
+                        changed = True
+                        if dry_run:
                         company_updates_diff["inn"] = {"old": old_inn, "new": comp.inn}
             if extra.get("kpp"):
                 new_kpp = str(extra["kpp"]).strip()[:20]  # сначала strip, потом обрезка до max_length=20
                 old_kpp = (comp.kpp or "").strip()
                 if not old_kpp:
-                    comp.kpp = new_kpp
-                    changed = True
-                    if dry_run and new_kpp:
+                        comp.kpp = new_kpp
+                        changed = True
+                        if dry_run and new_kpp:
                         company_updates_diff["kpp"] = {"old": "", "new": new_kpp}
                 elif len(comp.kpp) > 20:  # защита: если уже заполнено, но слишком длинное
-                    comp.kpp = comp.kpp.strip()[:20]
-                    changed = True
-                    if dry_run:
+                        comp.kpp = comp.kpp.strip()[:20]
+                        changed = True
+                        if dry_run:
                         company_updates_diff["kpp"] = {"old": old_kpp, "new": comp.kpp}
             if extra.get("address"):
                 new_addr = str(extra["address"]).strip()[:500]  # сначала strip, потом обрезка до max_length=500
                 old_addr = (comp.address or "").strip()
                 if not old_addr:
-                    comp.address = new_addr
-                    changed = True
-                    if dry_run and new_addr:
+                        comp.address = new_addr
+                        changed = True
+                        if dry_run and new_addr:
                         company_updates_diff["address"] = {"old": "", "new": new_addr}
                 elif len(comp.address) > 500:  # защита: если уже заполнено, но слишком длинное
-                    comp.address = comp.address.strip()[:500]
-                    changed = True
-                    if dry_run:
+                        comp.address = comp.address.strip()[:500]
+                        changed = True
+                        if dry_run:
                         company_updates_diff["address"] = {"old": old_addr, "new": comp.address}
             phones = extra.get("phones") or []
             emails = extra.get("emails") or []
@@ -1203,54 +1203,54 @@ def migrate_filtered(
                 comp.phone = new_phone
                 changed = True
                 if dry_run:
-                    company_updates_diff["phone"] = {"old": "", "new": new_phone}
+                        company_updates_diff["phone"] = {"old": "", "new": new_phone}
             if emails and not (comp.email or "").strip():
                 new_email = str(emails[0])[:254]
                 comp.email = new_email
                 changed = True
                 if dry_run:
-                    company_updates_diff["email"] = {"old": "", "new": new_email}
+                        company_updates_diff["email"] = {"old": "", "new": new_email}
             if extra.get("website") and not (comp.website or "").strip():
                 new_website = extra["website"][:255]
                 comp.website = new_website
                 changed = True
                 if dry_run:
-                    company_updates_diff["website"] = {"old": "", "new": new_website}
+                        company_updates_diff["website"] = {"old": "", "new": new_website}
             # Комментарий к основному телефону компании: импортируем "Примечание" из amoCRM
             # Логика: если примечание одно, пишем его к первому телефону (в Company.phone_comment), не затирая ручное.
             if company_note and not (comp.phone_comment or "").strip():
                 # Если основной телефон уже есть/будет — сохраняем комментарий
                 if (comp.phone or "").strip() or (phones and str(phones[0]).strip()):
-                    comp.phone_comment = company_note[:255]
-                    changed = True
-                    if dry_run:
+                        comp.phone_comment = company_note[:255]
+                        changed = True
+                        if dry_run:
                         company_updates_diff["phone_comment"] = {"old": "", "new": company_note[:255]}
             if extra.get("activity_kind") and can_update("activity_kind"):
                 ak = str(extra.get("activity_kind") or "").strip()[:255]
                 old_ak = (comp.activity_kind or "").strip()
                 if ak and comp.activity_kind != ak:
-                    comp.activity_kind = ak
-                    changed = True
-                    if dry_run:
+                        comp.activity_kind = ak
+                        changed = True
+                        if dry_run:
                         company_updates_diff["activity_kind"] = {"old": old_ak, "new": ak}
             if extra.get("employees_count") and can_update("employees_count"):
                 try:
-                    ec = int("".join(ch for ch in str(extra.get("employees_count") or "") if ch.isdigit()) or "0")
-                    old_ec = comp.employees_count
-                    if ec > 0 and comp.employees_count != ec:
+                        ec = int("".join(ch for ch in str(extra.get("employees_count") or "") if ch.isdigit()) or "0")
+                        old_ec = comp.employees_count
+                        if ec > 0 and comp.employees_count != ec:
                         comp.employees_count = ec
                         changed = True
                         if dry_run:
                             company_updates_diff["employees_count"] = {"old": str(old_ec) if old_ec else "", "new": str(ec)}
                 except Exception:
-                    pass
+                        pass
             if extra.get("work_timezone") and can_update("work_timezone"):
                 tzv = str(extra.get("work_timezone") or "").strip()[:64]
                 old_tz = (comp.work_timezone or "").strip()
                 if tzv and comp.work_timezone != tzv:
-                    comp.work_timezone = tzv
-                    changed = True
-                    if dry_run:
+                        comp.work_timezone = tzv
+                        changed = True
+                        if dry_run:
                         company_updates_diff["work_timezone"] = {"old": old_tz, "new": tzv}
             if extra.get("worktime"):
                 # поддерживаем форматы: "09:00-18:00", "09:00–18:00", "с 9:00 до 18:00"
@@ -1258,7 +1258,7 @@ def migrate_filtered(
                 s = str(extra.get("worktime") or "").replace("–", "-").strip()
                 m = re.search(r"(\d{1,2})[:.](\d{2})\s*-\s*(\d{1,2})[:.](\d{2})", s)
                 if m:
-                    try:
+                        try:
                         h1, m1, h2, m2 = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
                         if 0 <= h1 <= 23 and 0 <= h2 <= 23 and 0 <= m1 <= 59 and 0 <= m2 <= 59:
                             old_start = str(comp.workday_start) if comp.workday_start else ""
@@ -1273,7 +1273,7 @@ def migrate_filtered(
                                 changed = True
                                 if dry_run:
                                     company_updates_diff["workday_end"] = {"old": old_end, "new": str(time(h2, m2))}
-                    except Exception:
+                        except Exception:
                         pass
             # Руководитель (contact_name) — заполняем из amo, если пусто
             if extra.get("director") and not (comp.contact_name or "").strip():
@@ -1281,11 +1281,11 @@ def migrate_filtered(
                 comp.contact_name = new_director
                 changed = True
                 if dry_run:
-                    company_updates_diff["contact_name"] = {"old": "", "new": new_director}
+                        company_updates_diff["contact_name"] = {"old": "", "new": new_director}
 
             if changed:
                 prev.update(
-                    {
+                        {
                         "legal_name": comp.legal_name,
                         "inn": comp.inn,
                         "kpp": comp.kpp,
@@ -1299,7 +1299,7 @@ def migrate_filtered(
                         "workday_start": comp.workday_start,
                         "workday_end": comp.workday_end,
                         "work_timezone": comp.work_timezone,
-                    }
+                        }
                 )
                 rf["amo_values"] = prev
                 comp.raw_fields = rf
@@ -1307,23 +1307,23 @@ def migrate_filtered(
             # Сохраняем diff изменений для dry-run
             if dry_run and company_updates_diff:
                 if res.companies_updates_preview is None:
-                    res.companies_updates_preview = []
+                        res.companies_updates_preview = []
                 res.companies_updates_preview.append({
-                    "company_name": comp.name,
-                    "company_id": comp.id if comp.id else None,
-                    "amo_id": comp.amocrm_company_id,
-                    "is_new": created,
-                    "updates": company_updates_diff,
+                        "company_name": comp.name,
+                        "company_id": comp.id if comp.id else None,
+                        "amo_id": comp.amocrm_company_id,
+                        "is_new": created,
+                        "updates": company_updates_diff,
                 })
             
             if changed and not dry_run:
                 try:
-                    comp.save()
+                        comp.save()
                 except Exception as e:
                     # Если ошибка при сохранении - логируем и пропускаем эту компанию
-                    logger.error(f"Failed to save company {comp.name} (amo_id={comp.amocrm_company_id}): {e}", exc_info=True)
+                        logger.error(f"Failed to save company {comp.name} (amo_id={comp.amocrm_company_id}): {e}", exc_info=True)
                     # Пропускаем эту компанию, продолжаем со следующей
-                    continue
+                        continue
 
             # Нормализация уже заполненных значений (часто там "номер1, номер2"):
             # оставляем в "Данные" только первый, остальные переносим в служебный контакт.
@@ -1331,19 +1331,19 @@ def migrate_filtered(
             norm_email_parts = _split_multi(comp.email or "")
             if len(norm_phone_parts) > 1 and not dry_run:
                 try:
-                    comp.phone = norm_phone_parts[0][:50]
-                    comp.save(update_fields=["phone"])
+                        comp.phone = norm_phone_parts[0][:50]
+                        comp.save(update_fields=["phone"])
                     # добавим остальные как контактные телефоны
-                    phones = list(dict.fromkeys([*phones, *norm_phone_parts]))
+                        phones = list(dict.fromkeys([*phones, *norm_phone_parts]))
                 except Exception as e:
-                    logger.error(f"Failed to save phone for company {comp.name}: {e}", exc_info=True)
+                        logger.error(f"Failed to save phone for company {comp.name}: {e}", exc_info=True)
             if len(norm_email_parts) > 1 and not dry_run:
                 try:
-                    comp.email = norm_email_parts[0][:254]
-                    comp.save(update_fields=["email"])
-                    emails = list(dict.fromkeys([*emails, *norm_email_parts]))
+                        comp.email = norm_email_parts[0][:254]
+                        comp.save(update_fields=["email"])
+                        emails = list(dict.fromkeys([*emails, *norm_email_parts]))
                 except Exception as e:
-                    logger.error(f"Failed to save email for company {comp.name}: {e}", exc_info=True)
+                        logger.error(f"Failed to save email for company {comp.name}: {e}", exc_info=True)
 
             # Остальные телефоны/почты — в "Контакты" отдельной записью (stub)
             extra_phones = [p for p in phones[1:] if str(p).strip()]
@@ -1353,21 +1353,21 @@ def migrate_filtered(
                 sentinel = -int(comp.amocrm_company_id or 0) if comp.amocrm_company_id else 0
                 c = None
                 if sentinel:
-                    c = Contact.objects.filter(company=comp, amocrm_contact_id=sentinel).first()
+                        c = Contact.objects.filter(company=comp, amocrm_contact_id=sentinel).first()
                 if c is None:
-                    c = Contact(company=comp, amocrm_contact_id=sentinel or None, raw_fields={"source": "amo_api_company_channels"})
-                    c.save()
+                        c = Contact(company=comp, amocrm_contact_id=sentinel or None, raw_fields={"source": "amo_api_company_channels"})
+                        c.save()
                 for p in extra_phones:
-                    v = str(p).strip()[:50]
-                    if not v:
+                        v = str(p).strip()[:50]
+                        if not v:
                         continue
-                    if not ContactPhone.objects.filter(contact=c, value=v).exists():
+                        if not ContactPhone.objects.filter(contact=c, value=v).exists():
                         ContactPhone.objects.create(contact=c, type=ContactPhone.PhoneType.OTHER, value=v)
                 for e in extra_emails:
-                    v = str(e).strip()[:254]
-                    if not v:
+                        v = str(e).strip()[:254]
+                        if not v:
                         continue
-                    if not ContactEmail.objects.filter(contact=c, value__iexact=v).exists():
+                        if not ContactEmail.objects.filter(contact=c, value__iexact=v).exists():
                         try:
                             ContactEmail.objects.create(contact=c, type=ContactEmail.EmailType.OTHER, value=v)
                         except Exception:
@@ -1398,66 +1398,66 @@ def migrate_filtered(
                 # важно: не используем "or", потому что 0/"" могут скрыть реальные значения
                 ts = t.get("complete_till", None)
                 if ts in (None, "", 0, "0"):
-                    ts = t.get("complete_till_at", None)
+                        ts = t.get("complete_till_at", None)
                 if ts in (None, "", 0, "0"):
-                    ts = t.get("due_at", None)
+                        ts = t.get("due_at", None)
                 due_at = _parse_amo_due(ts)
                 
                 # Фильтрация: импортируем только задачи с дедлайном на 2026 год и позже
                 if due_at and due_at.year < 2026:
-                    res.tasks_skipped_old += 1
-                    continue
+                        res.tasks_skipped_old += 1
+                        continue
                 
                 if res.tasks_preview is not None and len(res.tasks_preview) < 5:
-                    res.tasks_preview.append(
+                        res.tasks_preview.append(
                         {
                             "id": tid,
                             "raw_ts": ts,
                             "parsed_due": str(due_at) if due_at else "",
                             "keys": sorted(list(t.keys()))[:30],
                         }
-                    )
+                        )
                 assigned_to = None
                 rid = int(t.get("responsible_user_id") or 0)
                 if rid:
-                    assigned_to = _map_amo_user_to_local(amo_user_by_id.get(rid) or {})
+                        assigned_to = _map_amo_user_to_local(amo_user_by_id.get(rid) or {})
                 if existing:
                     # апдейтим то, что у вас сейчас выглядит "криво": дедлайн + убрать мусорный id в описании
-                    upd = False
-                    if title and (existing.title or "").strip() != title:
+                        upd = False
+                        if title and (existing.title or "").strip() != title:
                         existing.title = title
                         upd = True
-                    if existing.description and "[Amo task id:" in existing.description:
+                        if existing.description and "[Amo task id:" in existing.description:
                         existing.description = ""
                         upd = True
-                    if due_at and (existing.due_at is None or existing.due_at != due_at):
+                        if due_at and (existing.due_at is None or existing.due_at != due_at):
                         existing.due_at = due_at
                         upd = True
-                    if company and existing.company_id is None:
+                        if company and existing.company_id is None:
                         existing.company = company
                         upd = True
-                    if assigned_to and existing.assigned_to_id != assigned_to.id:
+                        if assigned_to and existing.assigned_to_id != assigned_to.id:
                         existing.assigned_to = assigned_to
                         upd = True
-                    if upd and not dry_run:
+                        if upd and not dry_run:
                         existing.save()
-                    res.tasks_updated += 1
-                    res.tasks_skipped_existing += 1
-                    continue
+                        res.tasks_updated += 1
+                        res.tasks_skipped_existing += 1
+                        continue
 
                 task = Task(
-                    title=title,
-                    description="",
-                    due_at=due_at,
-                    company=company,
-                    created_by=actor,
-                    assigned_to=assigned_to or actor,
-                    external_source="amo_api",
-                    external_uid=str(tid),
-                    status=Task.Status.NEW,
+                        title=title,
+                        description="",
+                        due_at=due_at,
+                        company=company,
+                        created_by=actor,
+                        assigned_to=assigned_to or actor,
+                        external_source="amo_api",
+                        external_uid=str(tid),
+                        status=Task.Status.NEW,
                 )
                 if not dry_run:
-                    task.save()
+                        task.save()
                 res.tasks_created += 1
 
         # Заметки: запрашиваем только если нужно импортировать (не для dry-run без заметок)
@@ -1466,27 +1466,27 @@ def migrate_filtered(
                 notes = fetch_notes_for_companies(client, amo_ids)
                 res.notes_seen = len(notes)
                 for n in notes:
-                    nid = int(n.get("id") or 0)
-                    existing_note = CompanyNote.objects.filter(external_source="amo_api", external_uid=str(nid)).first() if nid else None
+                        nid = int(n.get("id") or 0)
+                        existing_note = CompanyNote.objects.filter(external_source="amo_api", external_uid=str(nid)).first() if nid else None
 
                     # В карточечных notes entity_id часто = id компании в amo
-                    entity_id = int((n.get("entity_id") or 0) or 0)
-                    company = Company.objects.filter(amocrm_company_id=entity_id).first() if entity_id else None
-                    if not company:
+                        entity_id = int((n.get("entity_id") or 0) or 0)
+                        company = Company.objects.filter(amocrm_company_id=entity_id).first() if entity_id else None
+                        if not company:
                         continue
 
                     # В разных типах notes текст может лежать по-разному
-                    params = n.get("params") or {}
-                    note_type = str(n.get("note_type") or n.get("type") or "").strip()
-                    text = str(
+                        params = n.get("params") or {}
+                        note_type = str(n.get("note_type") or n.get("type") or "").strip()
+                        text = str(
                         n.get("text")
                         or params.get("text")
                         or params.get("comment")
                         or params.get("note")
                         or n.get("note")
                         or ""
-                    ).strip()
-                    if not text:
+                        ).strip()
+                        if not text:
                         try:
                             text = json.dumps(params, ensure_ascii=False)[:1200] if params else ""
                         except Exception:
@@ -1495,28 +1495,28 @@ def migrate_filtered(
                             text = f"(без текста) note_type={note_type}"
 
                     # автор заметки (если можем определить)
-                    author = None
-                    author_amo_name = ""
-                    creator_id = int(n.get("created_by") or n.get("created_by_id") or n.get("responsible_user_id") or 0)
-                    if creator_id:
+                        author = None
+                        author_amo_name = ""
+                        creator_id = int(n.get("created_by") or n.get("created_by_id") or n.get("responsible_user_id") or 0)
+                        if creator_id:
                         au = amo_user_by_id.get(creator_id) or {}
                         author_amo_name = str(au.get("name") or "")
                         author = _map_amo_user_to_local(au)
 
-                    created_ts = n.get("created_at") or n.get("created_at_ts") or None
-                    created_label = ""
-                    try:
+                        created_ts = n.get("created_at") or n.get("created_at_ts") or None
+                        created_label = ""
+                        try:
                         if created_ts:
                             ct = int(str(created_ts))
                             if ct > 10**12:
                                 ct = int(ct / 1000)
                             created_label = timezone.datetime.fromtimestamp(ct, tz=timezone.utc).strftime("%d.%m.%Y %H:%M")
-                    except Exception:
+                        except Exception:
                         created_label = ""
 
-                    prefix = "Импорт из amo"
+                        prefix = "Импорт из amo"
                     # amomail_message — это по сути история почты; пропускаем такие заметки
-                    if note_type.lower().startswith("amomail"):
+                        if note_type.lower().startswith("amomail"):
                         # Пропускаем импорт писем из amoCRM
                         continue
                         incoming = bool(params.get("income")) if isinstance(params, dict) else False
@@ -1551,24 +1551,24 @@ def migrate_filtered(
                         author = None
                         text = "\n".join(lines) if lines else "Письмо (amoMail)"
                         prefix = "Импорт из amo"
-                    elif note_type.lower() in ("call_out", "call_in", "call"):
+                        elif note_type.lower() in ("call_out", "call_in", "call"):
                         # звонки — тоже форматируем, иначе будет JSON-каша
                         text = _format_call_note(note_type, params)
                         author = None
                         prefix = "Импорт из amo"
-                    meta_bits = []
-                    if author_amo_name:
+                        meta_bits = []
+                        if author_amo_name:
                         meta_bits.append(f"автор: {author_amo_name}")
-                    if created_label:
+                        if created_label:
                         meta_bits.append(f"дата: {created_label}")
-                    if note_type:
+                        if note_type:
                         meta_bits.append(f"type: {note_type}")
-                    if nid:
+                        if nid:
                         meta_bits.append(f"id: {nid}")
-                    if meta_bits:
+                        if meta_bits:
                         prefix += " (" + ", ".join(meta_bits) + ")"
-                    text_full = prefix + "\n" + text
-                    if res.notes_preview is not None and len(res.notes_preview) < 5:
+                        text_full = prefix + "\n" + text
+                        if res.notes_preview is not None and len(res.notes_preview) < 5:
                         res.notes_preview.append(
                             {
                                 "id": nid,
@@ -1577,7 +1577,7 @@ def migrate_filtered(
                             }
                         )
 
-                    if existing_note:
+                        if existing_note:
                         # если раньше создали "пустышку" — обновим
                         upd = False
                         if existing_note.company_id != company.id:
@@ -1608,16 +1608,16 @@ def migrate_filtered(
                         res.notes_skipped_existing += 1
                         continue
 
-                    note = CompanyNote(
+                        note = CompanyNote(
                         company=company,
                         author=author,  # НЕ actor, чтобы не выглядело "как будто вы писали"
                         text=text_full[:8000],
                         external_source="amo_api",
                         external_uid=str(nid) if nid else "",
-                    )
-                    if not dry_run:
+                        )
+                        if not dry_run:
                         note.save()
-                    res.notes_created += 1
+                        res.notes_created += 1
             except Exception:
                 # Если заметки недоступны в конкретном аккаунте/тарифе/правах — не валим всю миграцию.
                 res.notes_seen = 0
@@ -1661,22 +1661,22 @@ def migrate_filtered(
                 contacts_without_company = 0
                 
                 for contact in all_contacts:
-                    if not isinstance(contact, dict):
+                        if not isinstance(contact, dict):
                         contacts_without_company += 1
                         continue
                     
-                    contact_id = int(contact.get("id") or 0)
-                    if not contact_id:
+                        contact_id = int(contact.get("id") or 0)
+                        if not contact_id:
                         contacts_without_company += 1
                         continue
                     
                     # Ищем компанию из текущей пачки, с которой связан контакт
-                    found_company_id = None
+                        found_company_id = None
                     
                     # Проверяем _embedded.companies
-                    embedded = contact.get("_embedded") or {}
-                    companies_in_contact = embedded.get("companies") or []
-                    if isinstance(companies_in_contact, list):
+                        embedded = contact.get("_embedded") or {}
+                        companies_in_contact = embedded.get("companies") or []
+                        if isinstance(companies_in_contact, list):
                         for comp_ref in companies_in_contact:
                             if isinstance(comp_ref, dict):
                                 comp_id = int(comp_ref.get("id") or 0)
@@ -1685,17 +1685,17 @@ def migrate_filtered(
                                     break
                     
                     # Если не нашли через _embedded, проверяем company_id напрямую
-                    if not found_company_id:
+                        if not found_company_id:
                         comp_id_direct = int(contact.get("company_id") or 0)
                         if comp_id_direct in amo_ids_set:
                             found_company_id = comp_id_direct
                     
                     # Добавляем контакт ТОЛЬКО если он связан с компанией из текущей пачки
-                    if found_company_id:
+                        if found_company_id:
                         full_contacts.append(contact)
                         contact_id_to_company_map[contact_id] = found_company_id
                         contacts_with_company += 1
-                    else:
+                        else:
                         contacts_without_company += 1
                 
                 res.contacts_seen = len(full_contacts)
@@ -1703,24 +1703,24 @@ def migrate_filtered(
                 
                 # Если контактов не найдено, сохраняем информацию об ошибке
                 if res.contacts_seen == 0:
-                    logger.warning(f"migrate_filtered: ⚠️ КОНТАКТЫ НЕ НАЙДЕНЫ для компаний {list(amo_ids)[:10]}. Всего получено из API: {len(all_contacts)}, отфильтровано: {res.contacts_seen}")
-                    if res.contacts_preview is None:
+                        logger.warning(f"migrate_filtered: ⚠️ КОНТАКТЫ НЕ НАЙДЕНЫ для компаний {list(amo_ids)[:10]}. Всего получено из API: {len(all_contacts)}, отфильтровано: {res.contacts_seen}")
+                        if res.contacts_preview is None:
                         res.contacts_preview = []
-                    debug_info = {
+                        debug_info = {
                         "status": "NO_CONTACTS_FOUND",
                         "companies_checked": len(amo_ids),
                         "company_ids": list(amo_ids)[:5],  # первые 5 для отладки
                         "message": f"Контакты не найдены для компаний {list(amo_ids)[:5]}. Проверьте, что у компаний есть связанные контакты в AmoCRM. Использовались методы: 1) GET /api/v4/companies/{{id}}?with=contacts, 2) GET /api/v4/contacts?filter[company_id]={{id}}. Всего получено из API: {len(all_contacts)} контактов, но ни один не связан с компаниями из текущей пачки.",
-                    }
-                    res.contacts_preview.append(debug_info)
+                        }
+                        res.contacts_preview.append(debug_info)
                 
                 # Заметки контактов: НЕ запрашиваем для dry-run (слишком тяжело)
                 # Заметки нужны только при реальном импорте, и то можно запросить отдельно
                 contact_notes_map: dict[int, list[dict[str, Any]]] = {}
                 if not dry_run and full_contacts:
                     # Заметки запрашиваем только при реальном импорте, и то очень аккуратно
-                    contact_ids_for_notes = [int(c.get("id") or 0) for c in full_contacts if isinstance(c, dict) and c.get("id")]
-                    if contact_ids_for_notes and len(contact_ids_for_notes) <= 50:  # Только для небольшого количества
+                        contact_ids_for_notes = [int(c.get("id") or 0) for c in full_contacts if isinstance(c, dict) and c.get("id")]
+                        if contact_ids_for_notes and len(contact_ids_for_notes) <= 50:  # Только для небольшого количества
                         logger.debug(f"Fetching notes for {len(contact_ids_for_notes)} contacts (real import only)...")
                         try:
                             contact_notes_map = fetch_notes_for_contacts(client, contact_ids_for_notes)
