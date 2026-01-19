@@ -64,6 +64,41 @@ class FlexibleUserChoiceField(forms.ModelChoiceField):
         
         # Вызываем стандартный метод to_python с очищенным значением
         return super().to_python(cleaned_value)
+    
+    def clean(self, value):
+        """
+        Переопределяем clean для обработки ошибок валидации.
+        Если стандартная валидация не прошла, пытаемся найти пользователя по очищенному значению.
+        """
+        if value in self.empty_values:
+            if self.required:
+                raise forms.ValidationError(self.error_messages['required'], code='required')
+            return None
+        
+        # Сначала пытаемся стандартную валидацию
+        try:
+            return super().clean(value)
+        except forms.ValidationError as e:
+            # Если валидация не прошла, пытаемся очистить значение и найти пользователя
+            from ui.views import _clean_assigned_to_id
+            cleaned_id = _clean_assigned_to_id(value)
+            if cleaned_id:
+                try:
+                    # Пытаемся найти пользователя по очищенному ID
+                    user_id = int(cleaned_id)
+                    user = User.objects.get(id=user_id, is_active=True)
+                    # Проверяем, что пользователь в queryset (или добавляем его)
+                    if not self.queryset.filter(id=user_id).exists():
+                        # Временно расширяем queryset, чтобы валидация прошла
+                        self.queryset = User.objects.filter(
+                            Q(id__in=self.queryset.values_list('id', flat=True)) | Q(id=user_id)
+                        )
+                    return user
+                except (User.DoesNotExist, ValueError, TypeError):
+                    pass
+            
+            # Если не удалось найти пользователя, пробрасываем оригинальную ошибку
+            raise e
 
 
 class CompanyCreateForm(forms.ModelForm):
