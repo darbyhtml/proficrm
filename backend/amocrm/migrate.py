@@ -1633,9 +1633,16 @@ def migrate_filtered(
                                         
                                         # Берем заметки типа "common"/"text" (это примечания) или любые заметки с текстом, если нет служебных
                                         if note_val and len(note_val) > 5:
-                                            # Если это заметка типа "common" или "text" - это точно примечание
+                                            # ВАЖНО: заметки типа "common" или "text" - это ПРИОРИТЕТНЫЕ примечания
+                                            # Они должны заменять служебные заметки (call_out и т.д.)
                                             if is_note_type:
-                                                if not note_text or is_service_note:
+                                                # Заменяем, если нет примечания ИЛИ если текущее примечание - служебная заметка
+                                                current_is_service = note_text and (
+                                                    "call_" in str(note_text).lower() or 
+                                                    str(note_text).lower() in ["call_out", "call_in", "call", "amomail", "sms", "task"] or
+                                                    len(str(note_text).strip()) < 10
+                                                )
+                                                if not note_text or current_is_service:
                                                     note_text = note_val[:255]
                                                     if debug_count_for_extraction < 3:
                                                         logger.debug(f"  -> ✅ Found note_text in _embedded.notes[{note_idx}] (type={note_type_val}): {note_text[:100]}")
