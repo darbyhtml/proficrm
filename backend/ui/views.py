@@ -4427,6 +4427,12 @@ def task_create(request: HttpRequest) -> HttpResponse:
         # Теперь валидируем форму
         
         if form.is_valid():
+            # После валидации устанавливаем правильный queryset для отображения (если форма будет перерендерена)
+            # Но сначала сохраняем выбранное значение
+            selected_assigned_to_id = None
+            if form.cleaned_data.get("assigned_to"):
+                selected_assigned_to_id = str(form.cleaned_data["assigned_to"].id)
+            _set_assigned_to_queryset(form, user, assigned_to_id=selected_assigned_to_id)
             task: Task = form.save(commit=False)
             task.created_by = user
             apply_to_org = bool(form.cleaned_data.get("apply_to_org_branches"))
@@ -4666,13 +4672,19 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: str 
     
     # Устанавливаем queryset в зависимости от роли
     if user.role == User.Role.MANAGER:
+        # Менеджер может назначать задачи только себе
         base_queryset = User.objects.filter(id=user.id).select_related("branch").only("id", "first_name", "last_name", "branch__name")
     elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+        # РОП и Директор филиала могут назначать задачи себе и менеджерам своего филиала
         base_queryset = User.objects.filter(
             Q(id=user.id) | Q(branch_id=user.branch_id, role=User.Role.MANAGER)
         ).select_related("branch").only("id", "first_name", "last_name", "branch__name").order_by("branch__name", "last_name", "first_name")
+    elif user.role in (User.Role.GROUP_MANAGER, User.Role.ADMIN) or user.is_superuser:
+        # Управляющий и Администратор могут назначать задачи всем пользователям
+        from companies.permissions import get_users_for_lists
+        base_queryset = get_users_for_lists(user, exclude_admin=False)
     else:
-        # Используем get_transfer_targets для группировки по городам
+        # Для остальных ролей используем get_transfer_targets (только менеджеры, директора, РОП)
         from companies.permissions import get_transfer_targets
         base_queryset = get_transfer_targets(user)
     
