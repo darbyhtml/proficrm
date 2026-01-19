@@ -45,14 +45,14 @@ class Command(BaseCommand):
             raise CommandError(f"Ошибка создания клиента AmoCRM: {e}")
 
         self.stdout.write(self.style.SUCCESS(f"Подключение к AmoCRM: {cfg.domain}"))
-        # Ограничиваем максимум 250 (лимит AmoCRM API)
-        limit = min(limit, 250)
+        # Ограничиваем максимум 100 (уменьшено для избежания 504 Gateway Timeout)
+        limit = min(limit, 100)
         self.stdout.write(f"Получаем {limit} контактов...\n")
 
         # Параметры запроса
         params = {
             "with": "custom_fields,notes,leads,customers,catalog_elements",
-            "limit": min(limit, 250),  # Максимум 250 за запрос
+            "limit": min(limit, 100),  # Уменьшено с 250 до 100 для избежания 504 Gateway Timeout
         }
         
         if responsible_user_id:
@@ -65,7 +65,7 @@ class Command(BaseCommand):
                 "/api/v4/contacts",
                 params=params,
                 embedded_key="contacts",
-                limit=250,
+                limit=100,  # Уменьшено с 250 до 100 для избежания 504 Gateway Timeout
                 max_pages=1,  # Только первая страница
             )
 

@@ -687,7 +687,7 @@ class AmoMigrateResult:
 
 
 def fetch_amo_users(client: AmoClient) -> list[dict[str, Any]]:
-    return client.get_all_pages("/api/v4/users", embedded_key="users", limit=250, delay_between_pages=0.5)
+    return client.get_all_pages("/api/v4/users", embedded_key="users", limit=100, delay_between_pages=0.5)
 
 
 def fetch_company_custom_fields(client: AmoClient) -> list[dict[str, Any]]:
@@ -721,7 +721,7 @@ def fetch_companies_by_responsible(client: AmoClient, responsible_user_id: int, 
         "/api/v4/companies",
         params=params,
         embedded_key="companies",
-        limit=250,
+        limit=100,  # Уменьшено с 250 до 100 для избежания 504 Gateway Timeout
         max_pages=limit_pages,
         delay_between_pages=0.5,  # Задержка между страницами для избежания rate limit
     )
@@ -763,7 +763,7 @@ def fetch_notes_for_companies(client: AmoClient, company_ids: list[int]) -> list
                     f"/api/v4/companies/{int(cid)}/notes",
                     params={},
                     embedded_key="notes",
-                    limit=250,
+                    limit=100,  # Уменьшено с 250 до 100 для избежания 504 Gateway Timeout
                     max_pages=50,
                     delay_between_pages=0.3,
                 )
@@ -833,7 +833,7 @@ def fetch_notes_for_contacts(client: AmoClient, contact_ids: list[int]) -> dict[
                 f"/api/v4/contacts/{int(cid)}/notes",
                 params={},
                 embedded_key="notes",
-                limit=250,
+                limit=100,  # Уменьшено с 250 до 100 для избежания 504 Gateway Timeout
                 max_pages=50,
                 delay_between_pages=0.3,
             )
@@ -1609,8 +1609,8 @@ def migrate_filtered(
                     # Альтернативный метод: получаем контакты через filter[company_id][]
                     # Согласно документации AmoCRM API v4: /api/v4/contacts?filter[company_id][]=1&filter[company_id][]=2
                     try:
-                        # Получаем контакты батчами по 50 компаний (лимит AmoCRM)
-                        batch_size = 50
+                        # Получаем контакты батчами по 30 компаний (уменьшено с 50 для избежания 504 Gateway Timeout)
+                        batch_size = 30
                         for i in range(0, len(amo_ids), batch_size):
                             # Задержка между батчами (кроме первого)
                             if i > 0:
@@ -1701,8 +1701,8 @@ def migrate_filtered(
                     if contact_ids:
                         logger.debug(f"Fetching full contact data for {len(contact_ids)} contact IDs...")
                         try:
-                            # Запрашиваем контакты батчами по 50 ID (лимит amoCRM для filter[id][])
-                            batch_size = 50
+                            # Запрашиваем контакты батчами по 30 ID (уменьшено с 50 для избежания 504 Gateway Timeout)
+                            batch_size = 30
                             for i in range(0, len(contact_ids), batch_size):
                                 # Задержка между батчами (кроме первого)
                                 if i > 0:
@@ -1722,7 +1722,7 @@ def migrate_filtered(
                                         "with": "custom_fields,notes",  # Получаем кастомные поля и заметки
                                     },
                                     embedded_key="contacts",  # Ключ в _embedded для извлечения контактов
-                                    limit=250,  # Максимальный лимит согласно документации
+                                    limit=100,  # Уменьшено с 250 до 100 для избежания 504 Gateway Timeout
                                     max_pages=10,  # Ограничиваем количество страниц
                                     delay_between_pages=1.0,  # Увеличенная задержка для избежания rate limit
                                 )

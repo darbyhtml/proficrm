@@ -207,7 +207,7 @@ class AmoClient:
         path: str,
         *,
         params: dict[str, Any] | None = None,
-        limit: int = 250,
+        limit: int = 100,  # Уменьшено с 250 до 100 для избежания 504 Gateway Timeout
         max_pages: int = 200,
         embedded_key: str | None = None,
         delay_between_pages: float = 0.5,  # Задержка между страницами для избежания rate limit
