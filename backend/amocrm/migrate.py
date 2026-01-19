@@ -1772,11 +1772,11 @@ def migrate_filtered(
                 res.contacts_seen = 0
                 res.contacts_created = 0
             else:
-            res._debug_contacts_logged = 0  # счетчик для отладки
-            contacts_processed = 0  # счетчик обработанных контактов
-            contacts_skipped = 0  # счетчик пропущенных контактов
-            logger.info(f"migrate_filtered: ===== НАЧАЛО ИМПОРТА КОНТАКТОВ для {len(amo_ids)} компаний =====")
-            logger.info(f"migrate_filtered: ID компаний для поиска контактов: {amo_ids[:10]}...")
+                res._debug_contacts_logged = 0  # счетчик для отладки
+                contacts_processed = 0  # счетчик обработанных контактов
+                contacts_skipped = 0  # счетчик пропущенных контактов
+                logger.info(f"migrate_filtered: ===== НАЧАЛО ИМПОРТА КОНТАКТОВ для {len(amo_ids)} компаний =====")
+                logger.info(f"migrate_filtered: ID компаний для поиска контактов: {amo_ids[:10]}...")
             try:
                 # Получаем контакты через with=contacts при запросе компаний
                 # Rate limiting применяется автоматически в AmoClient
