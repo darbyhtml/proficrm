@@ -250,10 +250,17 @@ class TaskForm(forms.ModelForm):
             "assigned_to": UserSelectWithBranchWidget(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
     
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Queryset для assigned_to будет установлен в view после создания формы
-        # Здесь мы просто убеждаемся, что поле существует
+    def clean_assigned_to(self):
+        """
+        Переопределяем валидацию assigned_to, чтобы принимать любое значение,
+        если оно было передано в форме. Валидация прав будет выполнена в view.
+        """
+        assigned_to = self.cleaned_data.get('assigned_to')
+        if assigned_to:
+            # Проверяем, что пользователь существует
+            if not User.objects.filter(id=assigned_to.id, is_active=True).exists():
+                raise forms.ValidationError("Выбранный пользователь не найден или неактивен.")
+        return assigned_to
 
 
 class TaskEditForm(forms.ModelForm):
