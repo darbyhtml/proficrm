@@ -120,9 +120,15 @@ class AmoClient:
             "code": code,
             "redirect_uri": self.cfg.redirect_uri,
         }
+        
+        # Логируем запрос (без секретов)
+        logger.info(f"Exchanging OAuth code. URL: {url}, Client ID: {self.cfg.client_id[:10]}..., Redirect URI: {self.cfg.redirect_uri}")
+        
         res = self._request("POST", url, json_body=payload, auth=False)
         if res.status >= 400:
-            raise AmoApiError(f"Token exchange failed ({res.status}): {res.data}")
+            error_details = f"Token exchange failed ({res.status}): {res.data}"
+            logger.error(f"{error_details}. URL: {url}, Redirect URI: {self.cfg.redirect_uri}")
+            raise AmoApiError(error_details)
         data = res.data or {}
         self.cfg.access_token = str(data.get("access_token") or "")
         self.cfg.refresh_token = str(data.get("refresh_token") or "")
@@ -131,6 +137,7 @@ class AmoClient:
         self.cfg.expires_at = timezone.now() + timezone.timedelta(seconds=expires_in) if expires_in else None
         self.cfg.last_error = ""
         self.cfg.save(update_fields=["access_token", "refresh_token", "token_type", "expires_at", "last_error", "updated_at"])
+        logger.info("OAuth token exchange successful")
 
     def _request(self, method: str, url: str, *, params: dict[str, Any] | None = None, json_body: Any | None = None, auth: bool = True) -> AmoResponse:
         if params:
