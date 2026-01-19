@@ -630,7 +630,7 @@
                           <div class="flex-1">
                             <div class="font-mono text-xs">{{ p.value|format_phone }}</div>
                             {% if p.is_cold_call %}
-                              <div class="mt-0.5 text-[10px] text-brand-dark/60">
+                              <div class="mt-0.5 text-xs text-brand-dark/70">
                                 <span class="font-medium">Холодный звонок:</span>
                                 {% if p.cold_marked_at %}
                                   {{ p.cold_marked_at|date:"d.m.Y H:i" }}
@@ -670,14 +670,14 @@
                                   {% csrf_token %}
                                   <input type="hidden" name="confirmed" value="1">
                                   <button
-                                    class="btn btn-outline js-cold-mark"
-                                    class="btn btn-outline btn-sm"
                                     type="submit"
+                                    class="btn btn-xs js-cold-mark"
+                                    style="background:#003D38;color:#fff;border-color:#003D38;padding:4px 8px;"
                                     data-cold-btn="phone-{{ p.id }}"
                                     title="Отметить холодный звонок"
                                     aria-label="Отметить холодный звонок"
                                   >
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                                       <path d="M12 2v20M4 6l16 12M20 6 4 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                       <path d="M6 4l12 16M18 4 6 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".35"/>
                                     </svg>
@@ -689,13 +689,13 @@
                                     {% csrf_token %}
                                     <button
                                       type="submit"
-                                      class="btn btn-outline"
-                                      class="btn btn-outline btn-sm btn-dark"
+                                      class="btn btn-outline btn-xs"
+                                      style="padding:4px 8px;"
                                       title="Откатить отметку холодного звонка (только для администраторов)"
                                       aria-label="Откатить отметку холодного звонка"
                                       onclick="return confirm('Откатить отметку холодного звонка?');"
                                     >
-                                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                                         <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                       </svg>
                                     </button>
@@ -705,15 +705,15 @@
                             {% endif %}
                             <button
                               type="button"
-                              class="btn btn-outline js-call-phone"
-                              class="btn btn-outline btn-sm"
+                              class="btn btn-outline btn-xs js-call-phone"
+                              style="padding:4px 8px;"
                               data-phone="{{ p.value }}"
                               data-company="{{ company.id }}"
                               data-contact="{{ c.id }}"
                               title="Позвонить с телефона"
                               aria-label="Позвонить с телефона"
                             >
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                                 <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                               </svg>
                             </button>
