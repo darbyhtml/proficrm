@@ -4327,6 +4327,7 @@ def task_create(request: HttpRequest) -> HttpResponse:
     company_id = (request.GET.get("company") or "").strip()
 
     if request.method == "POST":
+        is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
         form = TaskForm(request.POST)
         if form.is_valid():
             task: Task = form.save(commit=False)
@@ -4336,6 +4337,8 @@ def task_create(request: HttpRequest) -> HttpResponse:
             if task.company_id:
                 comp = Company.objects.select_related("responsible", "branch", "head_company").filter(id=task.company_id).first()
                 if comp and not _can_edit_company(user, comp):
+                    if is_ajax:
+                        return JsonResponse({"ok": False, "error": "Нет прав на постановку задач по этой компании."}, status=403)
                     messages.error(request, "Нет прав на постановку задач по этой компании.")
                     if comp:
                         return redirect("company_detail", company_id=comp.id)
@@ -4349,6 +4352,8 @@ def task_create(request: HttpRequest) -> HttpResponse:
                     task.assigned_to = user
                 if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
                     if task.assigned_to and task.assigned_to.branch_id and task.assigned_to.branch_id != user.branch_id:
+                        if is_ajax:
+                            return JsonResponse({"ok": False, "error": "Можно назначать задачи только сотрудникам своего филиала."}, status=400)
                         messages.error(request, "Можно назначать задачи только сотрудникам своего филиала.")
                         return redirect("task_create")
 
@@ -4442,13 +4447,26 @@ def task_create(request: HttpRequest) -> HttpResponse:
                     message=f"Создана задача: {task.title}",
                 )
             # Если AJAX запрос - возвращаем JSON
-            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            if is_ajax:
                 return JsonResponse({
                     "ok": True,
                     "task_id": str(task.id),
                     "message": "Задача создана успешно.",
                 })
             return redirect("task_list")
+        else:
+            # Форма не валидна
+            if is_ajax:
+                # Собираем ошибки валидации
+                errors = {}
+                for field, field_errors in form.errors.items():
+                    errors[field] = field_errors
+                return JsonResponse({
+                    "ok": False,
+                    "error": "Ошибки валидации формы.",
+                    "errors": errors
+                }, status=400)
+            # Для не-AJAX запросов возвращаем форму с ошибками (будет отрендерена ниже)
     else:
         initial = {"assigned_to": user}
         if company_id:
