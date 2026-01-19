@@ -1243,7 +1243,7 @@ def migrate_filtered(
                         if dry_run:
                             company_updates_diff["employees_count"] = {"old": str(old_ec) if old_ec else "", "new": str(ec)}
                 except Exception:
-                        pass
+                    pass
             if extra.get("work_timezone") and can_update("work_timezone"):
                 tzv = str(extra.get("work_timezone") or "").strip()[:64]
                 old_tz = (comp.work_timezone or "").strip()
@@ -1366,7 +1366,7 @@ def migrate_filtered(
                 for e in extra_emails:
                         v = str(e).strip()[:254]
                         if not v:
-                        continue
+                            continue
                         if not ContactEmail.objects.filter(contact=c, value__iexact=v).exists():
                             try:
                                 ContactEmail.objects.create(contact=c, type=ContactEmail.EmailType.OTHER, value=v)
@@ -1473,7 +1473,7 @@ def migrate_filtered(
                         entity_id = int((n.get("entity_id") or 0) or 0)
                         company = Company.objects.filter(amocrm_company_id=entity_id).first() if entity_id else None
                         if not company:
-                        continue
+                            continue
 
                     # В разных типах notes текст может лежать по-разному
                         params = n.get("params") or {}
