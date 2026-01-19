@@ -4442,17 +4442,18 @@ def task_create(request: HttpRequest) -> HttpResponse:
         
         # Если есть выбранное значение, убеждаемся, что оно в queryset
         if assigned_to_id:
-            try:
-                from uuid import UUID
-                UUID(assigned_to_id)  # Проверяем, что это валидный UUID
-                # Добавляем выбранного пользователя в queryset, если его там нет
-                if not form.fields["assigned_to"].queryset.filter(id=assigned_to_id).exists():
-                    logger.warning(f"Selected user {assigned_to_id} not in queryset, adding it")
-                    form.fields["assigned_to"].queryset = User.objects.filter(
-                        Q(is_active=True) | Q(id=assigned_to_id)
-                    ).select_related("branch")
-            except (ValueError, TypeError) as e:
-                logger.error(f"Invalid assigned_to_id: {assigned_to_id!r}, error: {e}")
+            # User использует Integer ID, поэтому просто проверяем, что это число или UUID
+            # Добавляем выбранного пользователя в queryset, если его там нет
+            if not form.fields["assigned_to"].queryset.filter(id=assigned_to_id).exists():
+                logger.warning(f"Selected user {assigned_to_id} not in queryset, adding it")
+                # Преобразуем в int, если это число (для User)
+                try:
+                    filter_id = int(assigned_to_id)
+                except (ValueError, TypeError):
+                    filter_id = assigned_to_id
+                form.fields["assigned_to"].queryset = User.objects.filter(
+                    Q(is_active=True) | Q(id=filter_id)
+                ).select_related("branch")
         
         # Теперь валидируем форму
         
