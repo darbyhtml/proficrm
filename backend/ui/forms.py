@@ -10,6 +10,62 @@ from ui.models import UiGlobalConfig
 from ui.widgets import TaskTypeSelectWidget, UserSelectWithBranchWidget
 
 
+class FlexibleUserChoiceField(forms.ModelChoiceField):
+    """
+    Кастомное поле для выбора пользователя, которое правильно обрабатывает значения,
+    приходящие в различных форматах (например, "['1']" вместо "1").
+    """
+    def to_python(self, value):
+        """
+        Преобразует значение в объект User.
+        Обрабатывает случаи, когда значение приходит как строка "['1']" вместо "1".
+        """
+        if value in self.empty_values:
+            return None
+        
+        # Если значение уже является объектом User, возвращаем его
+        if isinstance(value, User):
+            return value
+        
+        # Очищаем значение, если оно пришло в неправильном формате
+        cleaned_value = value
+        if isinstance(value, str):
+            # Импортируем функцию очистки из views
+            from ui.views import _clean_assigned_to_id
+            cleaned_id = _clean_assigned_to_id(value)
+            if cleaned_id:
+                cleaned_value = cleaned_id
+            else:
+                # Если очистка не удалась, пытаемся извлечь значение вручную
+                import ast
+                import json
+                try:
+                    # Пытаемся распарсить как JSON или Python список
+                    if value.startswith('[') and value.endswith(']'):
+                        try:
+                            parsed = json.loads(value)
+                            if isinstance(parsed, list) and parsed:
+                                cleaned_value = str(parsed[0])
+                        except (json.JSONDecodeError, ValueError):
+                            try:
+                                parsed = ast.literal_eval(value)
+                                if isinstance(parsed, list) and parsed:
+                                    cleaned_value = str(parsed[0])
+                            except (ValueError, SyntaxError):
+                                pass
+                except Exception:
+                    pass
+        
+        # Преобразуем в int, если это число (User использует Integer ID)
+        try:
+            cleaned_value = int(cleaned_value)
+        except (ValueError, TypeError):
+            pass
+        
+        # Вызываем стандартный метод to_python с очищенным значением
+        return super().to_python(cleaned_value)
+
+
 class CompanyCreateForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
@@ -249,6 +305,20 @@ class TaskForm(forms.ModelForm):
             "type": TaskTypeSelectWidget(attrs={"class": "w-full rounded-lg border px-3 py-2 task-type-select"}),
             "assigned_to": UserSelectWithBranchWidget(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Заменяем стандартное поле assigned_to на кастомное, которое правильно обрабатывает значения
+        if 'assigned_to' in self.fields:
+            # Сохраняем оригинальные параметры поля
+            original_field = self.fields['assigned_to']
+            self.fields['assigned_to'] = FlexibleUserChoiceField(
+                queryset=User.objects.filter(is_active=True).select_related("branch"),
+                widget=original_field.widget,
+                required=original_field.required,
+                label=original_field.label,
+                help_text=original_field.help_text,
+            )
     
     def clean_assigned_to(self):
         """
