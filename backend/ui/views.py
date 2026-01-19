@@ -4390,13 +4390,24 @@ def _clean_assigned_to_id(value) -> str | None:
             except (ValueError, SyntaxError, TypeError):
                 pass
     
-    # Проверяем, что это валидный UUID
+    # Проверяем, что это валидный UUID или Integer ID
+    # Сначала пытаемся как UUID
     try:
         from uuid import UUID
         UUID(value_str)
         return value_str
     except (ValueError, TypeError):
-        # Если не UUID, возвращаем None
+        # Если не UUID, проверяем, может быть это Integer ID
+        try:
+            # Пытаемся преобразовать в int
+            int_id = int(value_str)
+            # Проверяем, что это положительное число (ID не может быть отрицательным)
+            if int_id > 0:
+                # Возвращаем как строку, чтобы можно было использовать в фильтрах
+                return str(int_id)
+        except (ValueError, TypeError):
+            pass
+        # Если ни UUID, ни Integer - возвращаем None
         return None
 
 
