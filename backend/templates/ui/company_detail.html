@@ -13,9 +13,9 @@
           </h1>
           <div class="flex items-center gap-2 shrink-0">
             {% if can_delete_company %}
-              <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem;border-color:rgba(239,68,68,.35);color:#b91c1c;background:rgba(239,68,68,.06)" id="openDeleteCompanyModal">Удалить</button>
+              <button type="button" class="btn btn-outline btn-sm btn-danger" id="openDeleteCompanyModal">Удалить</button>
             {% elif can_request_delete %}
-              <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem;border-color:rgba(239,68,68,.35);color:#b91c1c;background:rgba(239,68,68,.06)" id="openDeleteRequestModal">
+              <button type="button" class="btn btn-outline btn-sm btn-danger" id="openDeleteRequestModal">
                 {% if delete_req %}Запрос отправлен{% else %}Запросить удаление{% endif %}
               </button>
             {% endif %}
@@ -41,10 +41,10 @@
               </div>
               {% if can_delete_company %}
                 <div class="flex flex-col gap-2 shrink-0">
-                  <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="openCancelDeleteReqModal">Отменить запрос</button>
+                  <button type="button" class="btn btn-outline btn-sm" id="openCancelDeleteReqModal">Отменить запрос</button>
                   <form method="post" action="/companies/{{ company.id }}/delete-request/{{ delete_req.id }}/approve/" onsubmit="return confirm('Подтвердить удаление компании?');">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-primary" style="padding:.35rem .6rem;font-size:.75rem;background:#b91c1c">Подтвердить удаление</button>
+                    <button type="submit" class="btn btn-primary btn-sm btn-danger">Подтвердить удаление</button>
                   </form>
                 </div>
               {% endif %}
@@ -57,7 +57,7 @@
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <div class="flex items-center gap-2">
-                  <span class="badge badge-warn" style="padding:.1rem .35rem;font-size:.65rem">Закреплено</span>
+                  <span class="badge badge-warn badge-sm">Закреплено</span>
                   <div class="text-xs muted-2 truncate">{{ pinned_note.author|default:"—" }} · {{ pinned_note.created_at }}</div>
                 </div>
                 {% if pinned_note.text %}
@@ -89,8 +89,8 @@
                       </div>
                     </div>
                     <div class="flex gap-2 shrink-0">
-                      <a class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/open/">Открыть</a>
-                      <a class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/download/">Скачать</a>
+                      <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/open/">Открыть</a>
+                      <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/download/">Скачать</a>
                     </div>
                   </div>
                 {% endif %}
@@ -192,7 +192,7 @@
                 {% endif %}
               </div>
               {% if can_edit_company %}
-                <button type="button" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" id="openContractModal">Изменить</button>
+                <button type="button" class="btn btn-outline btn-sm" id="openContractModal">Изменить</button>
               {% endif %}
             </div>
           </div>
@@ -406,10 +406,11 @@
             <div class="space-y-1">
               {% if company.email %}
                 <div class="flex items-center gap-2">
-                  <a class="link font-mono text-xs" href="mailto:{{ company.email }}">{{ company.email }}</a>
-                  <button type="button" class="btn btn-outline js-add-email-to-campaign" data-email="{{ company.email }}" data-company-id="{{ company.id }}" title="Добавить в рассылочную кампанию" style="padding:.15rem .4rem;font-size:.7rem">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M22 12h-4l-3 9-6-18-3 9H2"></path>
+                  <a class="link font-mono text-xs js-copy-email" href="#" data-email="{{ company.email }}" onclick="event.preventDefault(); return false;">{{ company.email }}</a>
+                  <button type="button" class="btn btn-outline btn-xs js-add-email-to-campaign" data-email="{{ company.email }}" data-company-id="{{ company.id }}" title="Добавить в рассылочную кампанию">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                      <polyline points="22,6 12,13 2,6"/>
                     </svg>
                   </button>
                   <span class="text-xs text-brand-dark/50 ml-1">(основной)</span>
@@ -417,10 +418,11 @@
               {% endif %}
               {% for email in company.emails.all %}
                 <div class="flex items-center gap-2">
-                  <a class="link font-mono text-xs" href="mailto:{{ email.value }}">{{ email.value }}</a>
-                  <button type="button" class="btn btn-outline js-add-email-to-campaign" data-email="{{ email.value }}" data-company-id="{{ company.id }}" title="Добавить в рассылочную кампанию" style="padding:.15rem .4rem;font-size:.7rem">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M22 12h-4l-3 9-6-18-3 9H2"></path>
+                  <a class="link font-mono text-xs js-copy-email" href="#" data-email="{{ email.value }}" onclick="event.preventDefault(); return false;">{{ email.value }}</a>
+                  <button type="button" class="btn btn-outline btn-xs js-add-email-to-campaign" data-email="{{ email.value }}" data-company-id="{{ company.id }}" title="Добавить в рассылочную кампанию">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                      <polyline points="22,6 12,13 2,6"/>
                     </svg>
                   </button>
                 </div>
@@ -608,10 +610,11 @@
                     <div class="text-brand-dark/50 text-xs">Email</div>
                     {% for e in c.emails.all %}
                       <div class="flex items-center gap-2">
-                        <a class="link font-mono text-xs" href="mailto:{{ e.value }}">{{ e.value }}</a>
-                        <button type="button" class="btn btn-outline js-add-email-to-campaign" data-email="{{ e.value }}" data-company-id="{{ company.id }}" title="Добавить в рассылочную кампанию" style="padding:.15rem .4rem;font-size:.7rem">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 12h-4l-3 9-6-18-3 9H2"></path>
+                        <a class="link font-mono text-xs js-copy-email" href="#" data-email="{{ e.value }}" onclick="event.preventDefault(); return false;">{{ e.value }}</a>
+                        <button type="button" class="btn btn-outline btn-xs js-add-email-to-campaign" data-email="{{ e.value }}" data-company-id="{{ company.id }}" title="Добавить в рассылочную кампанию">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                            <polyline points="22,6 12,13 2,6"/>
                           </svg>
                         </button>
                       </div>
@@ -735,7 +738,7 @@
         {% if tasks %}
           <div class="space-y-2">
             {% for t in tasks %}
-              <div class="rounded-lg border p-3 {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %}">
+              <div class="rounded-lg border p-3 {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %} cursor-pointer hover:bg-brand-soft/20 transition-colors" data-view-task data-task-id="{{ t.id }}" onclick="event.stopPropagation();">
                 <div class="flex items-start justify-between gap-3">
                   <div class="flex-1">
                     <div class="flex items-start gap-2 mb-0.5">
@@ -894,7 +897,7 @@
                   {% if can_edit_company %}
                     <form method="post" action="/companies/{{ company.id }}/notes/{{ n.id }}/pin/" style="display:inline">
                       {% csrf_token %}
-                      <button type="submit" class="btn btn-outline" style="padding:.25rem .5rem;font-size:.75rem" title="{% if n.is_pinned %}Открепить{% else %}Закрепить{% endif %}" aria-label="{% if n.is_pinned %}Открепить{% else %}Закрепить{% endif %}">
+                      <button type="submit" class="btn btn-outline btn-sm" title="{% if n.is_pinned %}Открепить{% else %}Закрепить{% endif %}" aria-label="{% if n.is_pinned %}Открепить{% else %}Закрепить{% endif %}">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                           <path d="M9 3h6l1 7 2 2v2H6v-2l2-2 1-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                           <path d="M12 17v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -1986,6 +1989,275 @@
           }
         });
       })();
+    })();
+  </script>
+
+  <script>
+    // Копирование email при клике
+    (function() {
+      document.querySelectorAll('.js-copy-email').forEach(el => {
+        el.addEventListener('click', async function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          const email = this.dataset.email || this.textContent.trim();
+          if (!email) return;
+          
+          try {
+            await navigator.clipboard.writeText(email);
+            if (window.uiToast) {
+              window.uiToast('Email скопирован: ' + email, 'success');
+            }
+          } catch (err) {
+            // Fallback для старых браузеров
+            const textarea = document.createElement('textarea');
+            textarea.value = email;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+              document.execCommand('copy');
+              if (window.uiToast) {
+                window.uiToast('Email скопирован: ' + email, 'success');
+              }
+            } catch (e) {
+              if (window.uiToast) {
+                window.uiToast('Не удалось скопировать email', 'error');
+              }
+            }
+            document.body.removeChild(textarea);
+          }
+        });
+      });
+    })();
+  </script>
+
+  <script>
+    // Открытие модалки задачи из карточки компании
+    (function() {
+      const modal = document.getElementById('taskViewModal');
+      if (!modal) {
+        // Создаем модалку, если её нет (как на dashboard)
+        const modalHtml = `
+          <div id="taskViewModal" class="fixed inset-0 z-[200] hidden">
+            <div class="fixed inset-0 bg-black/35" data-close-task-view></div>
+            <div class="absolute inset-x-4 top-12 mx-auto max-w-2xl max-h-[90vh] overflow-y-auto">
+              <div class="card card-pad">
+                <div class="flex items-start justify-between gap-3 mb-4">
+                  <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-2" id="taskViewBadges"></div>
+                    <h2 class="text-xl font-semibold text-brand-dark" id="taskViewTitle">Загрузка...</h2>
+                  </div>
+                  <button type="button" class="btn btn-outline flex-shrink-0" style="padding:.35rem .5rem;font-size:.75rem" data-close-task-view aria-label="Закрыть" title="Закрыть">✕</button>
+                </div>
+                <div id="taskViewContent">
+                  <div class="text-center py-8">
+                    <svg class="animate-spin w-6 h-6 text-brand-teal mx-auto mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                    </svg>
+                    <div class="text-sm text-brand-dark/70">Загрузка задачи...</div>
+                  </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 pt-4 mt-4 border-t" id="taskViewActions" style="display:none">
+                  <button type="button" class="btn btn-outline text-sm" id="taskViewEdit" style="display:none">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
+                    </svg>
+                    Редактировать
+                  </button>
+                  <form method="post" action="" id="taskViewInProgressForm" style="display:none" class="inline">
+                    {% csrf_token %}
+                    <button type="submit" name="status" value="in_progress" class="btn btn-secondary text-sm">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z"/>
+                        <path d="M8 2v4"/><path d="M16 2v4"/><path d="M8 10h8"/><path d="M8 14h8"/>
+                      </svg>
+                      В работу
+                    </button>
+                  </form>
+                  <button type="button" class="btn btn-primary text-sm" id="taskViewComplete" style="display:none">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                    Выполнено
+                  </button>
+                  <button type="button" class="btn btn-outline text-sm" id="taskViewDelete" style="display:none;border-color:rgba(239,68,68,.35);color:#b91c1c;background:rgba(239,68,68,.06)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M6 7h12M10 11v6M14 11v6M9 7l1-3h4l1 3M19 7l-1 12H6L5 7"/>
+                    </svg>
+                    Удалить
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+      }
+      
+      const modalContent = document.getElementById('taskViewContent');
+      const modalTitle = document.getElementById('taskViewTitle');
+      const modalBadges = document.getElementById('taskViewBadges');
+      const modalActions = document.getElementById('taskViewActions');
+      const btnEdit = document.getElementById('taskViewEdit');
+      const btnInProgress = document.getElementById('taskViewInProgressForm');
+      const btnComplete = document.getElementById('taskViewComplete');
+      const btnDelete = document.getElementById('taskViewDelete');
+      
+      function closeModal() {
+        if (modal) modal.classList.add('hidden');
+        if (modalContent) modalContent.innerHTML = '<div class="text-center py-8"><svg class="animate-spin w-6 h-6 text-brand-teal mx-auto mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg><div class="text-sm text-brand-dark/70">Загрузка задачи...</div></div>';
+        if (modalTitle) modalTitle.textContent = 'Загрузка...';
+        if (modalBadges) modalBadges.innerHTML = '';
+        if (modalActions) modalActions.style.display = 'none';
+      }
+      
+      function openModal() {
+        if (modal) modal.classList.remove('hidden');
+      }
+      
+      // Закрытие модалки
+      if (modal) {
+        modal.querySelectorAll('[data-close-task-view]').forEach(btn => {
+          btn.addEventListener('click', closeModal);
+        });
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal();
+        });
+        modal.querySelector('.bg-black\\/35')?.addEventListener('click', (e) => {
+          if (e.target === e.currentTarget) closeModal();
+        });
+      }
+      
+      // Открытие задачи в модальном окне
+      document.querySelectorAll('[data-view-task]').forEach(btn => {
+        btn.addEventListener('click', async function(e) {
+          e.stopPropagation();
+          const taskId = this.dataset.taskId;
+          if (!taskId) return;
+          
+          openModal();
+          
+          try {
+            const res = await fetch(`/tasks/${taskId}/`, {
+              headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            if (!res.ok) throw new Error('Ошибка загрузки задачи');
+            const html = await res.text();
+            
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(html, 'text/html');
+            const taskModal = doc.querySelector('#taskViewModal');
+            
+            if (taskModal) {
+              const card = taskModal.querySelector('.card');
+              if (card) {
+                const contentDiv = card.querySelector('.space-y-3');
+                if (contentDiv) {
+                  if (modalContent) modalContent.innerHTML = contentDiv.outerHTML;
+                } else {
+                  const allContent = card.innerHTML;
+                  const titleMatch = allContent.match(/<h2[^>]*>.*?<\/h2>/);
+                  if (modalContent) modalContent.innerHTML = allContent.replace(titleMatch?.[0] || '', '');
+                }
+                
+                const titleEl = taskModal.querySelector('h2');
+                if (titleEl && modalTitle) modalTitle.textContent = titleEl.textContent.trim();
+                
+                const badgeContainer = taskModal.querySelector('.flex.items-center.gap-2');
+                if (badgeContainer && modalBadges) {
+                  const badge = badgeContainer.querySelector('.badge, .inline-flex.items-center.gap-1');
+                  if (badge) modalBadges.innerHTML = badge.outerHTML;
+                }
+                
+                const editLink = taskModal.querySelector('a[href*="/tasks/"][href*="/edit/"]');
+                const editButton = taskModal.querySelector('button[data-edit-task]');
+                const canEdit = editLink || editButton;
+                
+                const statusBadge = taskModal.querySelector('.badge');
+                let status = 'new';
+                if (statusBadge) {
+                  const badgeText = statusBadge.textContent.toLowerCase();
+                  if (badgeText.includes('работа') || badgeText.includes('progress')) status = 'in_progress';
+                  else if (badgeText.includes('выполн') || badgeText.includes('done')) status = 'done';
+                  else if (badgeText.includes('отмен') || badgeText.includes('cancel')) status = 'cancelled';
+                }
+                
+                if (modalActions) {
+                  modalActions.style.display = 'flex';
+                  
+                  if (btnEdit) {
+                    btnEdit.style.display = canEdit ? 'inline-flex' : 'none';
+                    if (canEdit) {
+                      btnEdit.onclick = async () => {
+                        const url = `/tasks/${taskId}/edit/?modal=1`;
+                        try {
+                          const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                          if (!res.ok) throw new Error('Ошибка загрузки формы');
+                          const html = await res.text();
+                          const editModal = document.getElementById('taskEditModal');
+                          const editModalContent = document.getElementById('taskEditModalContent');
+                          if (editModal && editModalContent) {
+                            editModalContent.innerHTML = html;
+                            editModal.classList.remove('hidden');
+                            if (modal) modal.classList.add('hidden');
+                            if (window.initTaskTypeSelects) window.initTaskTypeSelects();
+                            if (window.initMsSingleWidgets) window.initMsSingleWidgets(editModalContent);
+                          }
+                        } catch (err) {
+                          console.error('Error loading edit form:', err);
+                          if (window.uiToast) window.uiToast('Ошибка загрузки формы редактирования', 'error');
+                        }
+                      };
+                    }
+                  }
+                  
+                  if (btnInProgress) {
+                    btnInProgress.style.display = (status === 'new' && canEdit) ? 'inline-block' : 'none';
+                    if (status === 'new' && canEdit) {
+                      btnInProgress.action = `/tasks/${taskId}/status/`;
+                    }
+                  }
+                  
+                  if (btnComplete) {
+                    btnComplete.style.display = (status !== 'done' && status !== 'cancelled' && canEdit) ? 'inline-flex' : 'none';
+                    if (status !== 'done' && status !== 'cancelled' && canEdit) {
+                      btnComplete.onclick = () => {
+                        const completeModal = document.getElementById('taskCompleteModal');
+                        if (completeModal) {
+                          completeModal.classList.remove('hidden');
+                          if (modal) modal.classList.add('hidden');
+                          const form = completeModal.querySelector('form');
+                          if (form) form.action = `/tasks/${taskId}/status/`;
+                        }
+                      };
+                    }
+                  }
+                  
+                  if (btnDelete) {
+                    btnDelete.style.display = canEdit ? 'inline-flex' : 'none';
+                    if (canEdit) {
+                      btnDelete.onclick = () => {
+                        const deleteModal = document.getElementById('taskDeleteModal');
+                        if (deleteModal) {
+                          deleteModal.classList.remove('hidden');
+                          if (modal) modal.classList.add('hidden');
+                          const form = deleteModal.querySelector('form');
+                          if (form) form.action = `/tasks/${taskId}/delete/`;
+                        }
+                      };
+                    }
+                  }
+                }
+              }
+            }
+          } catch (error) {
+            console.error('Error loading task:', error);
+            if (modalContent) modalContent.innerHTML = '<div class="text-center py-8 text-red-600">Ошибка загрузки задачи</div>';
+            if (window.uiToast) window.uiToast('Ошибка загрузки задачи', 'error');
+          }
+        });
+      });
     })();
   </script>
 {% endblock %}

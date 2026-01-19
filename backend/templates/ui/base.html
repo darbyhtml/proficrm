@@ -44,6 +44,20 @@
       .btn-secondary:hover{background:rgba(194,226,222,.55)}
       .btn-outline{background:#fff; border:1px solid rgba(194,226,222,.9); color:var(--brand-dark)}
       .btn-outline:hover{background:rgba(194,226,222,.35)}
+      /* Размеры кнопок */
+      .btn-sm{padding:.25rem .5rem; font-size:.75rem; gap:.35rem}
+      .btn-xs{padding:.15rem .4rem; font-size:.7rem; gap:.25rem}
+      .btn-md{padding:.55rem .9rem; font-size:.875rem}
+      .btn-lg{padding:.65rem 1.1rem; font-size:.9375rem}
+      /* Специальные стили кнопок */
+      .btn-danger{background:rgba(239,68,68,.06); border-color:rgba(239,68,68,.35); color:#b91c1c}
+      .btn-danger:hover{background:rgba(239,68,68,.12); border-color:rgba(239,68,68,.5)}
+      .btn-danger.btn-primary{background:#b91c1c; color:#fff; border-color:#b91c1c}
+      .btn-danger.btn-primary:hover{background:#991b1b}
+      /* Размеры бейджей */
+      .badge-sm{padding:.1rem .35rem; font-size:.65rem}
+      .badge-md{padding:.15rem .55rem; font-size:.75rem}
+      .badge-lg{padding:.2rem .7rem; font-size:.8125rem}
       .input,.select,.textarea{width:100%; border-radius:12px; border:1px solid rgba(194,226,222,.95); padding:.55rem .75rem; background:#fff; color:var(--brand-dark)}
       .textarea{min-height:96px}
       .input:focus,.select:focus,.textarea:focus{outline:none; box-shadow:0 0 0 4px rgba(1,148,142,.14); border-color:rgba(1,148,142,.65)}
@@ -1055,8 +1069,8 @@
                 box.style.borderColor = 'rgba(239,68,68,.30)';
                 box.style.background = 'rgba(239,68,68,.08)';
               }else if(k === 'success'){
-                box.style.borderColor = 'rgba(16,185,129,.30)';
-                box.style.background = 'rgba(16,185,129,.06)';
+                box.style.borderColor = 'rgba(1,148,142,.35)';
+                box.style.background = 'rgba(1,148,142,.08)';
               }else{
                 box.style.borderColor = 'rgba(194,226,222,.95)';
                 box.style.background = '#fff';
@@ -1070,6 +1084,43 @@
 
         // Глобальный toast для остальных страниц (company_detail и т.п.)
         window.uiToast = showToast;
+        
+        // Универсальное копирование email при клике
+        document.addEventListener('click', async function(e) {
+          const emailEl = e.target.closest('.js-copy-email');
+          if (!emailEl) return;
+          
+          e.preventDefault();
+          e.stopPropagation();
+          const email = emailEl.dataset.email || emailEl.textContent.trim();
+          if (!email) return;
+          
+          try {
+            await navigator.clipboard.writeText(email);
+            if (window.uiToast) {
+              window.uiToast('Email скопирован: ' + email, 'success');
+            }
+          } catch (err) {
+            // Fallback для старых браузеров
+            const textarea = document.createElement('textarea');
+            textarea.value = email;
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+              document.execCommand('copy');
+              if (window.uiToast) {
+                window.uiToast('Email скопирован: ' + email, 'success');
+              }
+            } catch (e) {
+              if (window.uiToast) {
+                window.uiToast('Не удалось скопировать email', 'error');
+              }
+            }
+            document.body.removeChild(textarea);
+          }
+        });
 
         function showBrowserNotification(n){
           if(!browserEnabled) return;
