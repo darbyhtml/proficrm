@@ -4371,12 +4371,32 @@ def _clean_assigned_to_id(value) -> str | None:
     # Убираем кавычки, если есть
     value_str = value_str.strip("'\"")
     
+    # Если значение все еще выглядит как список в строке (например, "['1']" или '["uuid"]')
+    # Пытаемся извлечь значение еще раз
+    if (value_str.startswith('[') and value_str.endswith(']')) or (value_str.startswith("['") and value_str.endswith("']")):
+        # Пытаемся найти UUID внутри строки
+        import re
+        uuid_pattern = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+        matches = re.findall(uuid_pattern, value_str, re.IGNORECASE)
+        if matches:
+            value_str = matches[0]
+        else:
+            # Если UUID не найден, пытаемся извлечь значение из списка еще раз
+            try:
+                import ast
+                parsed = ast.literal_eval(value_str)
+                if isinstance(parsed, list) and parsed:
+                    value_str = str(parsed[0]).strip().strip("'\"")
+            except (ValueError, SyntaxError, TypeError):
+                pass
+    
     # Проверяем, что это валидный UUID
     try:
         from uuid import UUID
         UUID(value_str)
         return value_str
     except (ValueError, TypeError):
+        # Если не UUID, возвращаем None
         return None
 
 
