@@ -1764,6 +1764,14 @@ def migrate_filtered(
         
         logger.info(f"migrate_filtered: проверка импорта контактов: import_contacts={import_contacts}, dry_run={dry_run}, should_process_contacts={should_process_contacts}, amo_ids={bool(amo_ids)}, len={len(amo_ids) if amo_ids else 0}")
         if should_process_contacts:
+            # ВАЖНО: в реальном импорте (не dry-run) обрабатываем контакты только если import_contacts=True
+            # В dry-run показываем контакты всегда для preview
+            if not dry_run and not import_contacts:
+                logger.info(f"migrate_filtered: реальный импорт, но import_contacts=False - пропускаем обработку контактов")
+                # Не обрабатываем контакты, но инициализируем счетчики
+                res.contacts_seen = 0
+                res.contacts_created = 0
+            else:
             res._debug_contacts_logged = 0  # счетчик для отладки
             contacts_processed = 0  # счетчик обработанных контактов
             contacts_skipped = 0  # счетчик пропущенных контактов
@@ -3168,9 +3176,9 @@ def migrate_filtered(
                 logger.debug("Contact import error", exc_info=True)
                 pass
             finally:
-                logger.debug(f"===== CONTACT IMPORT FINISHED: created={res.contacts_created}, seen={res.contacts_seen}, processed={contacts_processed}, skipped={contacts_skipped} =====")
+                logger.info(f"migrate_filtered: ===== ИМПОРТ КОНТАКТОВ ЗАВЕРШЕН: created={res.contacts_created}, seen={res.contacts_seen}, processed={contacts_processed}, skipped={contacts_skipped}, errors={contacts_errors} =====")
         else:
-            logger.debug(f"Contact import SKIPPED: import_contacts={import_contacts}, dry_run={dry_run}, amo_ids={bool(amo_ids)}")
+            logger.info(f"migrate_filtered: обработка контактов пропущена: import_contacts={import_contacts}, dry_run={dry_run}, amo_ids={bool(amo_ids)}")
             # В dry-run все равно показываем информацию, что контакты не будут импортированы
             if dry_run and not import_contacts and amo_ids:
                 if res.contacts_preview is None:
