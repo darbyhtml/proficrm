@@ -1730,6 +1730,27 @@ def migrate_filtered(
                 # Отдельный счетчик для логирования структуры (не зависит от preview)
                 structure_logged_count = 0
                 
+                # Создаем словарь для быстрого поиска компаний по amo_id
+                # В dry-run используем local_companies (которые созданы в памяти, но не сохранены в БД)
+                # В реальном импорте используем БД
+                local_companies_by_amo_id: dict[int, Company] = {}
+                if dry_run:
+                    # В dry-run используем компании из local_companies (созданные в памяти)
+                    for comp in local_companies:
+                        if comp.amocrm_company_id:
+                            local_companies_by_amo_id[int(comp.amocrm_company_id)] = comp
+                    logger.info(f"migrate_filtered: создан словарь local_companies_by_amo_id для dry-run: {len(local_companies_by_amo_id)} компаний")
+                else:
+                    # В реальном импорте загружаем из БД
+                    for comp in local_companies:
+                        if comp.amocrm_company_id:
+                            local_companies_by_amo_id[int(comp.amocrm_company_id)] = comp
+                    # Также загружаем существующие компании из БД (на случай, если они уже были импортированы ранее)
+                    existing_companies = Company.objects.filter(amocrm_company_id__in=amo_ids).all()
+                    for comp in existing_companies:
+                        if comp.amocrm_company_id:
+                            local_companies_by_amo_id[int(comp.amocrm_company_id)] = comp
+                
                 # Теперь обрабатываем полные данные контактов
                 logger.debug(f"===== PROCESSING {len(full_contacts)} CONTACTS =====")
                 contacts_processed = 0
@@ -1813,20 +1834,31 @@ def migrate_filtered(
                         continue
                     
                     # Находим компанию для этого контакта через contact_id_to_company_map
+                    # ВАЖНО: в dry-run используем local_companies_by_amo_id (компании в памяти)
+                    # В реальном импорте используем БД или local_companies_by_amo_id
                     local_company = None
                     amo_company_id_for_contact = None
                     
                     contact_id = int(ac.get("id") or 0)
                     if contact_id in contact_id_to_company_map:
                         amo_company_id_for_contact = contact_id_to_company_map[contact_id]
-                        local_company = Company.objects.filter(amocrm_company_id=amo_company_id_for_contact).first()
+                        # Сначала ищем в словаре (работает и для dry-run, и для реального импорта)
+                        local_company = local_companies_by_amo_id.get(amo_company_id_for_contact)
+                        # Если не нашли в словаре и это не dry-run, ищем в БД
+                        if not local_company and not dry_run:
+                            local_company = Company.objects.filter(amocrm_company_id=amo_company_id_for_contact).first()
                     
                     # Fallback: если не нашли через map, пробуем через company_id в самом контакте
                     if not local_company:
                         cid = int(ac.get("company_id") or 0)
                         if cid and cid in amo_ids_set:
-                            local_company = Company.objects.filter(amocrm_company_id=cid).first()
-                            amo_company_id_for_contact = cid
+                            # Сначала ищем в словаре
+                            local_company = local_companies_by_amo_id.get(cid)
+                            # Если не нашли в словаре и это не dry-run, ищем в БД
+                            if not local_company and not dry_run:
+                                local_company = Company.objects.filter(amocrm_company_id=cid).first()
+                            if local_company:
+                                amo_company_id_for_contact = cid
                     
                     if not local_company:
                         # ОТЛАДКА: контакт не связан с компанией из текущей пачки
