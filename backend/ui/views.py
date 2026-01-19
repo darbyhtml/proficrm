@@ -4644,16 +4644,15 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: str 
         if isinstance(assigned_to_value, User):
             current_user_id = str(assigned_to_value.id)
         elif assigned_to_value:
-            current_user_id = str(assigned_to_value).strip()
+            # Очищаем значение через _clean_assigned_to_id
+            current_user_id = _clean_assigned_to_id(assigned_to_value)
     
     # Если все еще нет, проверяем data (для POST запросов как fallback)
     if not current_user_id and hasattr(form, 'data') and form.data:
         assigned_to_value = form.data.get('assigned_to', '')
         if assigned_to_value:
-            try:
-                current_user_id = str(assigned_to_value).strip()
-            except (ValueError, TypeError, AttributeError):
-                pass
+            # Очищаем значение через _clean_assigned_to_id
+            current_user_id = _clean_assigned_to_id(assigned_to_value)
     
     # Устанавливаем queryset в зависимости от роли
     if user.role == User.Role.MANAGER:
@@ -4669,8 +4668,15 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: str 
     
     # Если есть выбранное значение и его нет в queryset, добавляем его
     if current_user_id:
-        # Проверяем, есть ли выбранный пользователь в базовом queryset
-        if not base_queryset.filter(id=current_user_id).exists():
+        # Проверяем, что current_user_id является валидным UUID перед использованием
+        try:
+            from uuid import UUID
+            UUID(current_user_id)
+        except (ValueError, TypeError):
+            # Если не валидный UUID, пропускаем проверку
+            current_user_id = None
+        
+        if current_user_id and not base_queryset.filter(id=current_user_id).exists():
             # Добавляем выбранного пользователя в queryset
             from django.db.models import Case, When, IntegerField
             queryset = (
