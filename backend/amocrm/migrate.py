@@ -1752,15 +1752,17 @@ def migrate_filtered(
                             local_companies_by_amo_id[int(comp.amocrm_company_id)] = comp
                 
                 # Теперь обрабатываем полные данные контактов
-                logger.debug(f"===== PROCESSING {len(full_contacts)} CONTACTS =====")
+                logger.info(f"migrate_filtered: ===== НАЧАЛО ОБРАБОТКИ {len(full_contacts)} КОНТАКТОВ =====")
                 contacts_processed = 0
                 contacts_skipped = 0
+                contacts_errors = 0
                 for ac_idx, ac in enumerate(full_contacts):
                     contacts_processed += 1
                     if ac_idx < 5 or contacts_processed % 10 == 0:
-                        logger.debug(f"Processing contact {ac_idx + 1}/{len(full_contacts)} (processed: {contacts_processed}, skipped: {contacts_skipped})")
+                        logger.info(f"migrate_filtered: обработка контакта {ac_idx + 1}/{len(full_contacts)} (processed: {contacts_processed}, skipped: {contacts_skipped}, errors: {contacts_errors})")
                     
-                    # ОТЛАДКА: логируем сырую структуру контакта для первых 3
+                    try:
+                        # ОТЛАДКА: логируем сырую структуру контакта для первых 3
                     if structure_logged_count < 3:
                         logger.debug(f"===== RAW CONTACT STRUCTURE ({structure_logged_count + 1}) [index {ac_idx}] =====")
                         logger.debug(f"  - Type: {type(ac)}")
@@ -2450,6 +2452,15 @@ def migrate_filtered(
                             # Если не нашли поля с примечаниями, логируем все поля
                             logger.debug(f"  -> ⚠️ No note fields found in custom_fields. All fields: {all_custom_field_names}")
                     
+                    # Обрабатываем данные о холодном звонке из amoCRM (ДО использования в contact_debug)
+                    cold_marked_at_dt = None
+                    if cold_call_timestamp:
+                        try:
+                            UTC = getattr(timezone, "UTC", dt_timezone.utc)
+                            cold_marked_at_dt = timezone.datetime.fromtimestamp(cold_call_timestamp, tz=UTC)
+                        except Exception:
+                            cold_marked_at_dt = None
+                    
                     debug_data = {
                         "source": "amo_api",
                         "amo_contact_id": amo_contact_id,
@@ -2476,6 +2487,7 @@ def migrate_filtered(
                     
                     # В dry-run показываем ВСЕ контакты (до 1000), чтобы видеть все проблемы
                     preview_limit = 1000 if dry_run else 10
+                    logger.info(f"migrate_filtered: обработка контакта {amo_contact_id}: debug_count={debug_count}, preview_limit={preview_limit}, local_company={'найдена' if local_company else 'не найдена'}")
                     if debug_count < preview_limit:
                         # Полный анализ контакта
                         full_analysis = _analyze_contact_completely(ac)
@@ -2567,6 +2579,7 @@ def migrate_filtered(
                         
                         res.contacts_preview.append(contact_debug)
                         res._debug_contacts_logged = debug_count + 1
+                        logger.info(f"migrate_filtered: ✅ контакт {amo_contact_id} добавлен в preview (всего в preview: {len(res.contacts_preview)})")
                         
                         # ОТЛАДКА: логируем, что добавили в preview
                         if preview_count < 3:
@@ -2577,9 +2590,11 @@ def migrate_filtered(
                             logger.debug(f"  - note_text_found: {note_text}")
                             logger.debug(f"  - custom_fields_count: {len(full_analysis.get('custom_fields', []))}")
                             logger.debug(f"  - all_custom_fields: {len(contact_debug.get('all_custom_fields', []))}")
-                            logger.debug(f"  - note_search_info: {note_search_info}")
-                        
-                        # Также логируем в консоль
+                    else:
+                        logger.info(f"migrate_filtered: ⚠️ контакт {amo_contact_id} НЕ добавлен в preview (превышен лимит: {debug_count} >= {preview_limit})")
+                    
+                    # Также логируем в консоль для первых контактов
+                    if contacts_processed <= 3:
                         logger.debug(f"Contact {amo_contact_id}:")
                         logger.debug(f"  - first_name: {first_name}")
                         logger.debug(f"  - last_name: {last_name}")
@@ -2594,9 +2609,25 @@ def migrate_filtered(
                                 logger.debug(f"    [{idx}] field_id={cf.get('field_id')}, code={cf.get('code')}, name={cf.get('name')}, type={cf.get('type')}, values={cf.get('values')}")
                         else:
                             logger.debug(f"  - ⚠️ custom_fields_values пуст или отсутствует")
-                        logger.debug(f"  - raw contact top-level keys: {list(ac.keys())[:15]}")
-                        logger.debug(f"  - has phone field: {bool(ac.get('phone'))}")
-                        logger.debug(f"  - has email field: {bool(ac.get('email'))}")
+                        logger.debug(f"  - raw contact top-level keys: {list(ac.keys())[:15] if isinstance(ac, dict) else 'not_dict'}")
+                        logger.debug(f"  - has phone field: {bool(ac.get('phone')) if isinstance(ac, dict) else False}")
+                        logger.debug(f"  - has email field: {bool(ac.get('email')) if isinstance(ac, dict) else False}")
+                    
+                    except Exception as e:
+                        contacts_errors += 1
+                        amo_contact_id_for_error = int(ac.get("id") or 0) if isinstance(ac, dict) else 0
+                        logger.error(f"migrate_filtered: ❌ ОШИБКА при обработке контакта {ac_idx + 1}/{len(full_contacts)} (amo_id: {amo_contact_id_for_error}): {e}", exc_info=True)
+                        # Добавляем информацию об ошибке в preview
+                        if res.contacts_preview is None:
+                            res.contacts_preview = []
+                        if len(res.contacts_preview) < 100:  # Ограничиваем количество ошибок в preview
+                            res.contacts_preview.append({
+                                "status": "ERROR",
+                                "amo_contact_id": amo_contact_id_for_error,
+                                "error": str(e),
+                                "message": f"Ошибка при обработке контакта: {e}",
+                            })
+                        continue
                     
                     # Обновляем или создаём контакт
                     # DRY-RUN: собираем понятный diff "что будет обновлено" по контакту (поля + что добавится в телефоны/почты)
