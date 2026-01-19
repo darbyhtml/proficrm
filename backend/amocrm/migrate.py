@@ -686,7 +686,7 @@ class AmoMigrateResult:
 
 
 def fetch_amo_users(client: AmoClient) -> list[dict[str, Any]]:
-    return client.get_all_pages("/api/v4/users", embedded_key="users", limit=250)
+    return client.get_all_pages("/api/v4/users", embedded_key="users", limit=250, delay_between_pages=0.5)
 
 
 def fetch_company_custom_fields(client: AmoClient) -> list[dict[str, Any]]:
@@ -722,6 +722,7 @@ def fetch_companies_by_responsible(client: AmoClient, responsible_user_id: int, 
         embedded_key="companies",
         limit=250,
         max_pages=limit_pages,
+        delay_between_pages=0.5,  # Задержка между страницами для избежания rate limit
     )
 
 
@@ -742,6 +743,7 @@ def fetch_tasks_for_companies(client: AmoClient, company_ids: list[int]) -> list
                 embedded_key="tasks",
                 limit=250,
                 max_pages=200,
+                delay_between_pages=0.5,
             )
         )
     return out
@@ -762,6 +764,7 @@ def fetch_notes_for_companies(client: AmoClient, company_ids: list[int]) -> list
                     embedded_key="notes",
                     limit=250,
                     max_pages=50,
+                    delay_between_pages=0.3,
                 )
             )
     return out
@@ -793,6 +796,7 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
                 embedded_key="contacts",
                 limit=250,
                 max_pages=50,  # ограничиваем для безопасности
+                delay_between_pages=0.5,
             )
             out.extend(contacts)
             if i == 0 and len(out) > 0:
@@ -830,6 +834,7 @@ def fetch_notes_for_contacts(client: AmoClient, contact_ids: list[int]) -> dict[
                 embedded_key="notes",
                 limit=250,
                 max_pages=50,
+                delay_between_pages=0.3,
             )
             if notes:
                 out[cid] = notes
@@ -1617,6 +1622,7 @@ def migrate_filtered(
                                 embedded_key="contacts",
                                 limit=250,
                                 max_pages=50,
+                                delay_between_pages=0.5,
                             )
                             if isinstance(contacts_alt, list) and contacts_alt:
                                 logger.debug(f"Found {len(contacts_alt)} contacts via filter[company_id][] method")
@@ -1709,6 +1715,7 @@ def migrate_filtered(
                                     embedded_key="contacts",  # Ключ в _embedded для извлечения контактов
                                     limit=250,  # Максимальный лимит согласно документации
                                     max_pages=10,  # Ограничиваем количество страниц
+                                    delay_between_pages=1.0,  # Увеличенная задержка для избежания rate limit
                                 )
                                 logger.debug(f"get_all_pages returned: type={type(contacts_batch)}, length={len(contacts_batch) if isinstance(contacts_batch, list) else 'not_list'}")
                                 if isinstance(contacts_batch, list):
