@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import time
 import urllib.parse
 import urllib.request
@@ -177,7 +178,23 @@ class AmoClient:
 
         req = urllib.request.Request(url=url, method=method.upper(), headers=headers, data=data_bytes)
         try:
-            with urllib.request.urlopen(req, timeout=15) as resp:  # уменьшили таймаут с 30 до 15 сек
+            # Поддержка прокси для обхода блокировки IP
+            # Можно настроить через переменные окружения: HTTP_PROXY, HTTPS_PROXY
+            # Или через настройки AmoApiConfig (если добавим поле proxy_url)
+            proxy_handler = None
+            proxy_url = getattr(self.cfg, 'proxy_url', None) or None
+            if proxy_url:
+                proxy_handler = urllib.request.ProxyHandler({
+                    'http': proxy_url,
+                    'https': proxy_url,
+                })
+            elif os.getenv('HTTP_PROXY') or os.getenv('HTTPS_PROXY'):
+                # Используем системные переменные окружения
+                proxy_handler = urllib.request.ProxyHandler()
+            
+            opener = urllib.request.build_opener(proxy_handler) if proxy_handler else urllib.request.build_opener()
+            
+            with opener.open(req, timeout=15) as resp:  # уменьшили таймаут с 30 до 15 сек
                 raw = resp.read() or b""
                 data = _json_loads(raw)
                 return AmoResponse(status=int(resp.status), data=data, headers={k.lower(): v for k, v in resp.headers.items()})
