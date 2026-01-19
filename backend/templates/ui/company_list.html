@@ -29,7 +29,7 @@
         <label class="block text-sm text-brand-dark/80 mb-1">Поиск</label>
         <div class="relative">
           <input name="q" value="{{ q }}" id="company-search-input" class="input w-full" placeholder="ИНН / название / адрес" autocomplete="off" />
-          <div id="company-autocomplete-dropdown" class="absolute left-0 right-0 top-full mt-1 bg-white border border-brand-soft rounded-lg shadow-lg z-50 hidden max-h-64 overflow-y-auto"></div>
+          <div id="company-autocomplete-dropdown" class="absolute left-0 right-0 top-full mt-1 bg-white border border-brand-soft rounded-lg shadow-lg z-50 hidden max-h-80 overflow-y-auto"></div>
         </div>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 items-end">
@@ -765,6 +765,12 @@
         if (input.type === 'hidden' || input.type === 'submit' || input.type === 'button') {
           return;
         }
+
+        // Поле общего поиска (с автодополнением) не триггерит автоперезагрузку списка,
+        // чтобы поиск работал только во выпадающем списке.
+        if (input.id === 'company-search-input') {
+          return;
+        }
         
         input.addEventListener('change', () => {
           // Очищаем предыдущий таймер
@@ -778,7 +784,7 @@
           }, 500);
         });
         
-        // Для текстового поля поиска - также на input
+        // Для текстовых полей фильтров (кроме основного поиска) также слушаем input
         if (input.type === 'text') {
           input.addEventListener('input', () => {
             if (filterDebounceTimer) {
@@ -970,6 +976,12 @@
           if (item.email) {
             emailHtml = `<div class="text-xs text-brand-dark/70 mt-0.5">Email: ${highlightMatch(item.email, query)}</div>`;
           }
+
+          // Ответственный
+          let responsibleHtml = '';
+          if (item.responsible) {
+            responsibleHtml = `<div class="text-xs text-brand-dark/70 mt-0.5">Ответственный: ${escapeHtml(item.responsible)}</div>`;
+          }
           
           div.innerHTML = `
             <div class="font-medium text-sm">${nameHtml}</div>
@@ -977,6 +989,7 @@
             ${addressHtml}
             ${phoneHtml}
             ${emailHtml}
+            ${responsibleHtml}
           `;
           div.addEventListener('click', () => {
             window.location.href = item.url;

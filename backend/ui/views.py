@@ -2276,9 +2276,13 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
     else:
         email_filters = Q(email__icontains=q) | Q(contacts__emails__value__icontains=q)
     
-    qs = Company.objects.filter(
-        base_filters | phone_filters | email_filters
-    ).select_related("responsible", "branch", "status").prefetch_related("phones", "emails").distinct().order_by("-updated_at")[:10]
+    qs = (
+        Company.objects.filter(base_filters | phone_filters | email_filters)
+        .select_related("responsible", "branch", "status")
+        .prefetch_related("phones", "emails")
+        .distinct()
+        .order_by("-updated_at")[:10]
+    )
     
     # Определяем, по какому полю ищем
     is_phone_search = normalized_phone and normalized_phone != q
@@ -2327,6 +2331,7 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
             "inn": c.inn or "",
             "address": c.address or "",
             "status": c.status.name if c.status else "",
+            "responsible": str(c.responsible) if c.responsible else "",
             "url": f"/companies/{c.id}/",
             "phone": matched_phone if match_in_phone else None,
             "email": matched_email if match_in_email else None,
