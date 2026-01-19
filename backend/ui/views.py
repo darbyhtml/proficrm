@@ -4330,7 +4330,12 @@ def task_create(request: HttpRequest) -> HttpResponse:
         is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
         
         # Получаем выбранного пользователя из POST данных ДО создания формы
-        assigned_to_id = request.POST.get("assigned_to", "").strip()
+        # assigned_to может прийти как одно значение или как список
+        assigned_to_raw = request.POST.get("assigned_to", "")
+        if isinstance(assigned_to_raw, list):
+            assigned_to_id = assigned_to_raw[0].strip() if assigned_to_raw else ""
+        else:
+            assigned_to_id = assigned_to_raw.strip() if assigned_to_raw else ""
         
         # Создаем форму
         form = TaskForm(request.POST)
@@ -4339,10 +4344,15 @@ def task_create(request: HttpRequest) -> HttpResponse:
         # Сначала устанавливаем queryset на всех активных пользователей, чтобы валидация прошла
         # Потом ограничим его для отображения
         if assigned_to_id:
-            # Если есть выбранный пользователь, включаем его в queryset
-            form.fields["assigned_to"].queryset = User.objects.filter(
-                Q(is_active=True) | Q(id=assigned_to_id)
-            ).select_related("branch")
+            try:
+                # Проверяем, что это валидный UUID
+                # Если есть выбранный пользователь, включаем его в queryset
+                form.fields["assigned_to"].queryset = User.objects.filter(
+                    Q(is_active=True) | Q(id=assigned_to_id)
+                ).select_related("branch")
+            except (ValueError, TypeError):
+                # Если assigned_to_id невалидный, используем всех активных
+                form.fields["assigned_to"].queryset = User.objects.filter(is_active=True).select_related("branch")
         else:
             # Если нет выбранного пользователя, используем всех активных
             form.fields["assigned_to"].queryset = User.objects.filter(is_active=True).select_related("branch")
