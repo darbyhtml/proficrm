@@ -85,16 +85,22 @@
         min-width:0;
       }
       .mail-progress__title,
-      .mail-progress__counts{
+      .mail-progress__counts,
+      .mail-progress__counts-short{
         max-width: 240px;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
+      .mail-progress__counts-short{ display:none; }
+      .mail-progress.is-collapsed .mail-progress__title,
+      .mail-progress.is-collapsed .mail-progress__counts{ display:none; }
+      .mail-progress.is-collapsed .mail-progress__counts-short{ display:block; }
+      .mail-progress.is-collapsed{ padding: 8px 10px; gap: 8px; }
       /* На совсем узких экранах делаем еще компактнее */
       @media (max-width: 480px){
         .mail-progress{ left: 12px; right: 12px; bottom: 12px; max-width:none; }
-        .mail-progress__title, .mail-progress__counts{ max-width: 180px; }
+        .mail-progress__title, .mail-progress__counts, .mail-progress__counts-short{ max-width: 180px; }
       }
       
       /* Глобальные стили скроллбаров (как в календаре) */
@@ -995,7 +1001,7 @@
     </div>
 
     {# Глобальный прогресс рассылки (показывается только если есть активная отправка) #}
-    <a id="mailProgressWidget" href="#" class="hidden fixed bottom-5 left-5 z-50 bg-white border border-brand-soft rounded-2xl shadow-lg px-3 py-2 flex items-center gap-3 hover:bg-brand-soft/20 mail-progress" style="min-width:210px; position:fixed;">
+    <a id="mailProgressWidget" href="#" class="hidden fixed bottom-5 left-5 z-50 bg-white border border-brand-soft rounded-2xl shadow-lg px-3 py-2 flex items-center gap-3 hover:bg-brand-soft/20 mail-progress is-collapsed" style="min-width:210px; position:fixed;">
       <div id="mailProgressCircle" class="w-10 h-10 rounded-full flex items-center justify-center text-xs font-semibold" style="background:conic-gradient(var(--brand-teal) 0deg, rgba(194,226,222,.6) 0deg); color:var(--brand-dark); border:1px solid rgba(194,226,222,.9)">
         <span id="mailProgressPct">0%</span>
       </div>
@@ -1003,6 +1009,7 @@
         <div class="text-xs muted">Рассылка</div>
         <div id="mailProgressText" class="text-sm font-medium mail-progress__title">—</div>
         <div id="mailProgressCounts" class="text-[11px] muted-2 mail-progress__counts">—</div>
+        <div id="mailProgressCountsShort" class="text-[11px] muted-2 mail-progress__counts-short">—</div>
         <button id="mailProgressClose" type="button" class="hidden absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center rounded-full border border-brand-soft bg-white text-brand-dark/60 hover:text-red-500 hover:border-red-400 transition-colors" title="Закрыть">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M18 6L6 18"/>
@@ -1860,8 +1867,9 @@
         const pct = document.getElementById('mailProgressPct');
         const text = document.getElementById('mailProgressText');
         const counts = document.getElementById('mailProgressCounts');
+        const countsShort = document.getElementById('mailProgressCountsShort');
         const closeBtn = document.getElementById('mailProgressClose');
-        if (!widget || !circle || !pct || !text || !counts || !closeBtn) return;
+        if (!widget || !circle || !pct || !text || !counts || !countsShort || !closeBtn) return;
 
         const STORAGE_KEY = 'mail_progress_dismissed_campaign';
         let dismissedForCampaignId = null;
@@ -1903,6 +1911,7 @@
             pct.textContent = `${p}%`;
             text.textContent = a.name || 'Кампания';
             counts.textContent = `Отпр.: ${a.sent} · Ошибки: ${a.failed} · В очереди: ${a.pending}`;
+            countsShort.textContent = `Отпр.: ${a.sent}`;
             circle.style.background = `conic-gradient(var(--brand-teal) ${deg}deg, rgba(194,226,222,.6) ${deg}deg)`;
 
             // Крестик показываем только после завершения (SENT)
@@ -1930,9 +1939,40 @@
           }
         });
 
+        // Логика сворачивания/разворачивания
+        let isExpanded = false;
+        let collapseTimer = null;
+
+        function setExpanded(on) {
+          isExpanded = !!on;
+          if (isExpanded) {
+            widget.classList.remove('is-collapsed');
+            clearTimeout(collapseTimer);
+            collapseTimer = setTimeout(() => setExpanded(false), 5000);
+          } else {
+            widget.classList.add('is-collapsed');
+          }
+        }
+
+        widget.addEventListener('click', function(e){
+          // Переключаем режим просмотра, а переход по ссылке — по Ctrl/Cmd+Click или middle-click
+          if (e.metaKey || e.ctrlKey || e.button === 1) return;
+          e.preventDefault();
+          setExpanded(!isExpanded);
+        });
+
+        widget.addEventListener('mouseenter', () => {
+          if (collapseTimer) clearTimeout(collapseTimer);
+        });
+        widget.addEventListener('mouseleave', () => {
+          if (isExpanded) collapseTimer = setTimeout(() => setExpanded(false), 5000);
+        });
+
         // Первичный запуск + периодический polling
         poll();
         setInterval(poll, 4000);
+        // Всегда стартуем в свернутом виде
+        setExpanded(false);
       })();
     </script>
     <script>
