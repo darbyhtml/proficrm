@@ -1976,17 +1976,33 @@ def migrate_filtered(
                     # Увеличиваем лимит до 50 для dry-run (чтобы видеть больше контактов)
                     preview_limit = 50 if dry_run else 10
                     if debug_count < preview_limit:
-                        # Собираем информацию о custom_fields для отладки (первые 5 полей для лучшей диагностики)
+                        # Собираем информацию о ВСЕХ custom_fields для отладки (в dry-run показываем все поля)
                         custom_fields_debug = []
-                        for cf_idx, cf in enumerate(custom_fields[:5]):  # первые 5 полей
+                        # В dry-run показываем все поля, в обычном режиме - первые 10
+                        fields_to_show = len(custom_fields) if dry_run else min(10, len(custom_fields))
+                        for cf_idx, cf in enumerate(custom_fields[:fields_to_show]):
                             if isinstance(cf, dict):
-                                first_val = ""
-                                if cf.get("values") and len(cf.get("values", [])) > 0:
-                                    v = cf.get("values")[0]
-                                    if isinstance(v, dict):
-                                        first_val = str(v.get("value", ""))[:100]
-                                    else:
-                                        first_val = str(v)[:100]
+                                # Собираем все значения, а не только первое
+                                all_values = []
+                                values_list = cf.get("values") or []
+                                if isinstance(values_list, list):
+                                    for v in values_list:
+                                        if isinstance(v, dict):
+                                            val_str = str(v.get("value", ""))
+                                            enum_code = str(v.get("enum_code") or "")
+                                            if val_str:
+                                                if enum_code:
+                                                    all_values.append(f"{val_str} ({enum_code})")
+                                                else:
+                                                    all_values.append(val_str)
+                                        else:
+                                            val_str = str(v)
+                                            if val_str:
+                                                all_values.append(val_str)
+                                
+                                # Первое значение для обратной совместимости
+                                first_val = all_values[0] if all_values else ""
+                                
                                 custom_fields_debug.append({
                                     "index": cf_idx,
                                     "field_id": cf.get("field_id"),
@@ -1995,6 +2011,7 @@ def migrate_filtered(
                                     "type": cf.get("field_type"),  # ВАЖНО: используем field_type, не type
                                     "values_count": len(cf.get("values") or []),
                                     "first_value": first_val,
+                                    "all_values": all_values,  # Все значения для полного отображения
                                 })
                         
                         # ОТЛАДКА: сохраняем полную структуру контакта для анализа (первые 3)
@@ -2164,7 +2181,63 @@ def migrate_filtered(
                                         # Это уже будет видно в planned_phones_add, но можно добавить отдельное поле для ясности
                                         pass
 
-                        if planned_field_changes or planned_phones_add or planned_emails_add:
+                        # Собираем информацию о всех найденных кастомных полях для отображения
+                        all_custom_fields_info = []
+                        for cf_idx, cf in enumerate(custom_fields):
+                            if isinstance(cf, dict):
+                                field_id = cf.get("field_id")
+                                field_code = cf.get("field_code")
+                                field_name = cf.get("field_name")
+                                field_type = cf.get("field_type")
+                                values_list = cf.get("values") or []
+                                
+                                # Собираем все значения
+                                field_values = []
+                                if isinstance(values_list, list):
+                                    for v in values_list:
+                                        if isinstance(v, dict):
+                                            val_str = str(v.get("value", ""))
+                                            enum_code = str(v.get("enum_code") or "")
+                                            if val_str:
+                                                if enum_code:
+                                                    field_values.append(f"{val_str} ({enum_code})")
+                                                else:
+                                                    field_values.append(val_str)
+                                        else:
+                                            val_str = str(v)
+                                            if val_str:
+                                                field_values.append(val_str)
+                                
+                                # Определяем, было ли поле использовано (извлечено)
+                                is_used = False
+                                usage_info = []
+                                if field_code == "PHONE" or "телефон" in (field_name or "").lower():
+                                    is_used = True
+                                    usage_info.append("Телефон")
+                                elif field_code == "EMAIL" or "email" in (field_name or "").lower() or "почта" in (field_name or "").lower():
+                                    is_used = True
+                                    usage_info.append("Email")
+                                elif field_code == "POSITION" or "должность" in (field_name or "").lower() or "позиция" in (field_name or "").lower():
+                                    is_used = True
+                                    usage_info.append("Должность")
+                                elif any(k in (field_name or "").lower() for k in ["примеч", "комментар", "коммент", "заметк"]):
+                                    is_used = True
+                                    usage_info.append("Примечание")
+                                elif field_type == "date" and "холодный" in (field_name or "").lower() and "звонок" in (field_name or "").lower():
+                                    is_used = True
+                                    usage_info.append("Холодный звонок")
+                                
+                                all_custom_fields_info.append({
+                                    "field_id": field_id,
+                                    "code": field_code,
+                                    "name": field_name,
+                                    "type": field_type,
+                                    "values": field_values,
+                                    "is_used": is_used,
+                                    "usage_info": usage_info,
+                                })
+                        
+                        if planned_field_changes or planned_phones_add or planned_emails_add or all_custom_fields_info:
                             res.contacts_updates_preview.append(
                                 {
                                     "company_name": local_company.name if local_company else "",
@@ -2175,6 +2248,7 @@ def migrate_filtered(
                                     "field_changes": planned_field_changes,
                                     "phones_add": planned_phones_add,
                                     "emails_add": planned_emails_add,
+                                    "all_custom_fields": all_custom_fields_info,  # Все найденные кастомные поля
                                 }
                             )
 
