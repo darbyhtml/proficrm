@@ -4471,6 +4471,8 @@ def task_create(request: HttpRequest) -> HttpResponse:
                     "errors": errors
                 }, status=400)
             # Для не-AJAX запросов продолжаем рендеринг формы с ошибками
+            # Устанавливаем queryset для assigned_to, чтобы форма могла быть отрендерена с ошибками
+            _set_assigned_to_queryset(form, user)
     else:
         initial = {"assigned_to": user}
         if company_id:
@@ -4522,16 +4524,7 @@ def task_create(request: HttpRequest) -> HttpResponse:
     form.fields["company"].queryset = company_qs
 
     # Ограничить назначаемых с группировкой по городам филиалов (как при передаче компании)
-    if user.role == User.Role.MANAGER:
-        form.fields["assigned_to"].queryset = User.objects.filter(id=user.id).select_related("branch").only("id", "first_name", "last_name", "branch__name")
-    elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
-        form.fields["assigned_to"].queryset = User.objects.filter(
-            Q(id=user.id) | Q(branch_id=user.branch_id, role=User.Role.MANAGER)
-        ).select_related("branch").only("id", "first_name", "last_name", "branch__name").order_by("branch__name", "last_name", "first_name")
-    else:
-        # Используем get_transfer_targets для группировки по городам
-        from companies.permissions import get_transfer_targets
-        form.fields["assigned_to"].queryset = get_transfer_targets(user)
+    _set_assigned_to_queryset(form, user)
 
     # Оптимизация queryset для типа задачи (используем only() для загрузки только необходимых полей)
     form.fields["type"].queryset = TaskType.objects.only("id", "name").order_by("name")
@@ -4541,6 +4534,62 @@ def task_create(request: HttpRequest) -> HttpResponse:
         return render(request, "ui/task_create_modal.html", {"form": form})
     
     return render(request, "ui/task_create.html", {"form": form})
+
+
+def _set_assigned_to_queryset(form: "TaskForm", user: User) -> None:
+    """
+    Устанавливает queryset для поля assigned_to в зависимости от роли пользователя.
+    Также убеждается, что выбранное значение (если есть) включено в queryset.
+    """
+    # Получаем текущее выбранное значение (если есть)
+    current_value = None
+    if hasattr(form, 'initial') and 'assigned_to' in form.initial:
+        current_value = form.initial['assigned_to']
+    elif hasattr(form, 'data') and 'assigned_to' in form.data:
+        try:
+            current_value = User.objects.filter(id=form.data['assigned_to']).first()
+        except (ValueError, TypeError):
+            pass
+    
+    # Устанавливаем queryset в зависимости от роли
+    if user.role == User.Role.MANAGER:
+        queryset = User.objects.filter(id=user.id).select_related("branch").only("id", "first_name", "last_name", "branch__name")
+    elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+        queryset = User.objects.filter(
+            Q(id=user.id) | Q(branch_id=user.branch_id, role=User.Role.MANAGER)
+        ).select_related("branch").only("id", "first_name", "last_name", "branch__name").order_by("branch__name", "last_name", "first_name")
+    else:
+        # Используем get_transfer_targets для группировки по городам
+        from companies.permissions import get_transfer_targets
+        queryset = get_transfer_targets(user)
+    
+    # Если есть выбранное значение и его нет в queryset, добавляем его
+    if current_value:
+        if isinstance(current_value, User):
+            user_id = current_value.id
+        else:
+            user_id = current_value
+        
+        if not queryset.filter(id=user_id).exists():
+            # Добавляем выбранного пользователя в queryset
+            from django.db.models import Case, When, IntegerField
+            queryset = (
+                User.objects.filter(
+                    Q(id__in=queryset.values_list('id', flat=True)) | Q(id=user_id)
+                )
+                .annotate(
+                    custom_order=Case(
+                        When(id=user_id, then=0),
+                        default=1,
+                        output_field=IntegerField(),
+                    )
+                )
+                .order_by("custom_order", "last_name", "first_name")
+                .select_related("branch")
+            )
+    
+    form.fields["assigned_to"].queryset = queryset
+
 
 def _can_manage_task_status_ui(user: User, task: Task) -> bool:
     if not user or not user.is_authenticated or not user.is_active:
