@@ -497,9 +497,13 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
         ids_batch = company_ids[i : i + batch]
         try:
             # Используем filter[company_id][] согласно документации
+            # Добавляем with=notes чтобы получить заметки контактов в _embedded
             contacts = client.get_all_pages(
                 "/api/v4/contacts",
-                params={"filter[company_id][]": ids_batch},
+                params={
+                    "filter[company_id][]": ids_batch,
+                    "with": "notes",  # Получаем заметки контактов
+                },
                 embedded_key="contacts",
                 limit=250,
                 max_pages=50,  # ограничиваем для безопасности
@@ -507,9 +511,44 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
             out.extend(contacts)
             if i == 0 and len(out) > 0:
                 logger.debug(f"Fetched {len(contacts)} contacts for first batch of {len(ids_batch)} companies")
+                # Логируем структуру первого контакта для отладки
+                if contacts and isinstance(contacts[0], dict):
+                    first_contact = contacts[0]
+                    logger.debug(f"  - First contact keys: {list(first_contact.keys())[:20]}")
+                    if "_embedded" in first_contact:
+                        embedded_keys = list(first_contact.get("_embedded", {}).keys()) if isinstance(first_contact.get("_embedded"), dict) else []
+                        logger.debug(f"  - First contact _embedded keys: {embedded_keys}")
         except Exception as e:
             logger.debug(f"Error fetching contacts for companies batch: {e}", exc_info=True)
             # Продолжаем для следующих батчей
+            continue
+    return out
+
+
+def fetch_notes_for_contacts(client: AmoClient, contact_ids: list[int]) -> dict[int, list[dict[str, Any]]]:
+    """
+    Получает заметки контактов из amoCRM.
+    Аналогично fetch_notes_for_companies, но для контактов.
+    Возвращает словарь {contact_id: [notes]}.
+    """
+    if not contact_ids:
+        return {}
+    out: dict[int, list[dict[str, Any]]] = {}
+    # В amoCRM заметки контактов берутся из /api/v4/contacts/{id}/notes
+    # Обрабатываем контакты по одному (API не поддерживает батчинг для заметок)
+    for cid in contact_ids:
+        try:
+            notes = client.get_all_pages(
+                f"/api/v4/contacts/{int(cid)}/notes",
+                params={},
+                embedded_key="notes",
+                limit=250,
+                max_pages=50,
+            )
+            if notes:
+                out[cid] = notes
+        except Exception as e:
+            logger.debug(f"Error fetching notes for contact {cid}: {e}", exc_info=True)
             continue
     return out
 
@@ -1297,7 +1336,7 @@ def migrate_filtered(
                             logger.debug(f"Requesting contacts with IDs: {ids_batch[:10]}... (total {len(ids_batch)})")
                             contacts_batch = client.get_all_pages(
                                 "/api/v4/contacts",
-                                params={"filter[id][]": ids_batch, "with": "custom_fields"},
+                                params={"filter[id][]": ids_batch, "with": "custom_fields,notes"},  # Добавляем notes для получения заметок
                                 embedded_key="contacts",
                                 limit=250,
                                 max_pages=10,
@@ -1335,6 +1374,18 @@ def migrate_filtered(
                         logger.debug(f"Error fetching full contact data: {type(e).__name__}: {e}", exc_info=True)
                 
                 logger.debug(f"Total full contacts fetched: {len(full_contacts)}")
+                
+                # Получаем заметки контактов отдельно (если их нет в _embedded)
+                # Это нужно, потому что не все контакты могут иметь заметки в _embedded
+                contact_ids_for_notes = [int(c.get("id") or 0) for c in full_contacts if isinstance(c, dict) and c.get("id")]
+                contact_notes_map: dict[int, list[dict[str, Any]]] = {}
+                if contact_ids_for_notes:
+                    logger.debug(f"Fetching notes for {len(contact_ids_for_notes)} contacts...")
+                    try:
+                        contact_notes_map = fetch_notes_for_contacts(client, contact_ids_for_notes)
+                        logger.debug(f"Fetched notes for {len(contact_notes_map)} contacts (total notes: {sum(len(notes) for notes in contact_notes_map.values())})")
+                    except Exception as e:
+                        logger.debug(f"Error fetching contact notes: {e}", exc_info=True)
                 
                 # Отдельный счетчик для логирования структуры (не зависит от preview)
                 structure_logged_count = 0
@@ -1376,7 +1427,22 @@ def migrate_filtered(
                         logger.debug(f"===== END RAW STRUCTURE =====")
                         structure_logged_count += 1
                     
-                    amo_contact_id = int(ac.get("id") or 0)
+                    amo_contact_id = int(ac.get("id") or 0) if isinstance(ac, dict) else 0
+                    
+                    # Добавляем заметки из contact_notes_map, если их нет в _embedded
+                    if amo_contact_id and amo_contact_id in contact_notes_map:
+                        notes_from_map = contact_notes_map[amo_contact_id]
+                        if notes_from_map and isinstance(ac, dict):
+                            # Добавляем заметки в _embedded, если их там нет
+                            if "_embedded" not in ac:
+                                ac["_embedded"] = {}
+                            if not isinstance(ac["_embedded"], dict):
+                                ac["_embedded"] = {}
+                            if "notes" not in ac["_embedded"] or not ac["_embedded"]["notes"]:
+                                ac["_embedded"]["notes"] = notes_from_map
+                                if structure_logged_count < 3:
+                                    logger.debug(f"  -> Added {len(notes_from_map)} notes from contact_notes_map to contact {amo_contact_id}")
+                    
                     if not amo_contact_id:
                         # ОТЛАДКА: контакт без ID
                         debug_count = getattr(res, '_debug_contacts_logged', 0)
@@ -1467,20 +1533,48 @@ def migrate_filtered(
                                 if debug_count_for_extraction < 3:
                                     logger.debug(f"  -> Found note_text in direct field '{note_key}': {note_text[:100]}")
                     
-                    # 2. В _embedded.notes (если есть)
+                    # 2. В _embedded.notes (если есть) - это заметки контакта из amoCRM
                     if isinstance(ac, dict) and "_embedded" in ac:
                         embedded = ac.get("_embedded") or {}
                         if isinstance(embedded, dict) and "notes" in embedded:
                             notes_list = embedded.get("notes") or []
                             if isinstance(notes_list, list) and notes_list:
-                                # Берем текст из первой заметки
-                                first_note = notes_list[0]
-                                if isinstance(first_note, dict):
-                                    note_val = str(first_note.get("text") or first_note.get("note") or first_note.get("comment") or "").strip()
-                                    if note_val and not note_text:
-                                        note_text = note_val[:255]
-                                        if debug_count_for_extraction < 3:
-                                            logger.debug(f"  -> Found note_text in _embedded.notes: {note_text[:100]}")
+                                if debug_count_for_extraction < 3:
+                                    logger.debug(f"  -> Found {len(notes_list)} notes in _embedded.notes")
+                                # Ищем примечание в заметках (обычно это текстовые заметки)
+                                for note_idx, note_item in enumerate(notes_list):
+                                    if isinstance(note_item, dict):
+                                        # В заметках текст может быть в разных полях
+                                        note_val = (
+                                            str(note_item.get("text") or "").strip() or
+                                            str(note_item.get("note") or "").strip() or
+                                            str(note_item.get("comment") or "").strip() or
+                                            str(note_item.get("note_type") or "").strip()  # иногда тип заметки содержит текст
+                                        )
+                                        # Также проверяем параметры заметки
+                                        if not note_val and "params" in note_item:
+                                            params = note_item.get("params") or {}
+                                            if isinstance(params, dict):
+                                                note_val = (
+                                                    str(params.get("text") or "").strip() or
+                                                    str(params.get("comment") or "").strip() or
+                                                    str(params.get("note") or "").strip()
+                                                )
+                                        
+                                        if note_val and len(note_val) > 5:  # Игнорируем очень короткие значения
+                                            if not note_text:
+                                                note_text = note_val[:255]
+                                                if debug_count_for_extraction < 3:
+                                                    logger.debug(f"  -> Found note_text in _embedded.notes[{note_idx}]: {note_text[:100]}")
+                                            else:
+                                                # Объединяем несколько заметок
+                                                combined = f"{note_text}; {note_val[:100]}"
+                                                note_text = combined[:255]
+                                                if debug_count_for_extraction < 3:
+                                                    logger.debug(f"  -> Appended note_text from _embedded.notes[{note_idx}]: {note_val[:100]}")
+                                            # Берем первые 3 заметки (чтобы не перегружать)
+                                            if note_idx >= 2:
+                                                break
                     
                     # Стандартные поля (если есть)
                     if ac.get("phone"):
@@ -1678,7 +1772,29 @@ def migrate_filtered(
                             embedded = ac.get("_embedded") or {}
                             if isinstance(embedded, dict) and "notes" in embedded:
                                 notes_list = embedded.get("notes") or []
-                                note_search_info.append(f"_embedded.notes={len(notes_list) if isinstance(notes_list, list) else 0}")
+                                notes_count = len(notes_list) if isinstance(notes_list, list) else 0
+                                if notes_count > 0:
+                                    note_search_info.append(f"_embedded.notes={notes_count}")
+                                    # Показываем типы заметок для отладки
+                                    note_types = []
+                                    for note_item in notes_list[:3]:  # первые 3
+                                        if isinstance(note_item, dict):
+                                            note_type = str(note_item.get("note_type") or "").strip()
+                                            if note_type:
+                                                note_types.append(note_type)
+                                    if note_types:
+                                        note_search_info.append(f"note_types:{','.join(note_types)}")
+                                    # Показываем, есть ли текст в заметках
+                                    has_text = False
+                                    for note_item in notes_list[:3]:
+                                        if isinstance(note_item, dict):
+                                            if note_item.get("text") or note_item.get("params", {}).get("text"):
+                                                has_text = True
+                                                break
+                                    if has_text:
+                                        note_search_info.append("notes_has_text=True")
+                                    else:
+                                        note_search_info.append("notes_has_text=False")
                         # Проверяем custom_fields на наличие полей с примечаниями
                         note_fields_in_custom = []
                         for cf in custom_fields:
