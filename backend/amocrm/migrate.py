@@ -798,47 +798,84 @@ def fetch_notes_for_companies(client: AmoClient, company_ids: list[int]) -> list
 def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> list[dict[str, Any]]:
     """
     Получает контакты компаний из amoCRM.
-    Согласно документации AmoCRM API v4, filter[company_id][] НЕ поддерживается для контактов.
-    Правильный способ: запрашивать компании с with=contacts и извлекать _embedded.contacts.
+    Согласно документации AmoCRM API v4:
+    1. Можно использовать filter[company_id]=ID для одного ID (не массив!)
+    2. Или запрашивать компании с with=contacts и извлекать _embedded.contacts
+    
+    Используем оба способа для надежности.
     Rate limiting применяется автоматически в AmoClient.
     """
     if not company_ids:
         return []
     out: list[dict[str, Any]] = []
     
-    # Запрашиваем компании по ID с контактами
-    # Используем батчи по 5 компаний, чтобы избежать 504
-    batch_size = 5
-    for i in range(0, len(company_ids), batch_size):
-        ids_batch = company_ids[i : i + batch_size]
+    logger.debug(f"Fetching contacts for {len(company_ids)} companies: {company_ids[:5]}...")
+    
+    # Способ 1: Запрашиваем каждую компанию с with=contacts
+    # Это самый надежный способ согласно документации
+    for company_id in company_ids:
         try:
-            # Запрашиваем каждую компанию отдельно с with=contacts
-            # Это надежнее, чем пытаться фильтровать по ID (API может не поддерживать)
-            for company_id in ids_batch:
-                try:
-                    # Получаем одну компанию с контактами
-                    company_data = client.get(
-                        f"/api/v4/companies/{company_id}",
-                        params={"with": "custom_fields,contacts"}  # Только custom_fields и contacts, БЕЗ notes
-                    )
-                    
-                    if isinstance(company_data, dict):
-                        embedded = company_data.get("_embedded") or {}
-                        contacts = embedded.get("contacts") or []
-                        if isinstance(contacts, list):
-                            logger.debug(f"Company {company_id}: found {len(contacts)} contacts in _embedded.contacts")
-                            out.extend(contacts)
-                        else:
-                            logger.debug(f"Company {company_id}: no contacts in _embedded")
-                except Exception as e:
-                    logger.warning(f"Error fetching company {company_id} with contacts: {e}", exc_info=True)
-                    # Продолжаем для следующих компаний
-                    continue
+            # Получаем компанию с контактами
+            company_data = client.get(
+                f"/api/v4/companies/{company_id}",
+                params={"with": "custom_fields,contacts"}  # Только custom_fields и contacts, БЕЗ notes
+            )
+            
+            if isinstance(company_data, dict):
+                embedded = company_data.get("_embedded") or {}
+                contacts = embedded.get("contacts") or []
+                if isinstance(contacts, list) and contacts:
+                    logger.debug(f"Company {company_id}: found {len(contacts)} contacts via with=contacts")
+                    # Добавляем company_id к каждому контакту для удобства
+                    for contact in contacts:
+                        if isinstance(contact, dict):
+                            # Сохраняем связь с компанией
+                            if "_embedded" not in contact:
+                                contact["_embedded"] = {}
+                            if "companies" not in contact["_embedded"]:
+                                contact["_embedded"]["companies"] = [{"id": company_id}]
+                    out.extend(contacts)
+                else:
+                    logger.debug(f"Company {company_id}: no contacts in _embedded.contacts (empty list or missing)")
+            else:
+                logger.warning(f"Company {company_id}: unexpected response type: {type(company_data)}")
         except Exception as e:
-            logger.debug(f"Error fetching contacts for companies batch: {e}", exc_info=True)
-            # Продолжаем для следующих батчей
+            logger.warning(f"Error fetching company {company_id} with contacts: {e}", exc_info=True)
+            # Продолжаем для следующих компаний
             continue
     
+    # Если через with=contacts ничего не нашли, пробуем способ 2: filter[company_id] для каждого ID
+    if not out:
+        logger.debug("No contacts found via with=contacts, trying filter[company_id] for each company...")
+        for company_id in company_ids:
+            try:
+                # Согласно документации: filter[company_id]=ID (без [])
+                contacts_data = client.get(
+                    "/api/v4/contacts",
+                    params={
+                        "filter[company_id]": company_id,  # БЕЗ [] - для одного ID
+                        "with": "custom_fields",
+                    }
+                )
+                
+                if isinstance(contacts_data, dict):
+                    embedded = contacts_data.get("_embedded") or {}
+                    contacts = embedded.get("contacts") or []
+                    if isinstance(contacts, list) and contacts:
+                        logger.debug(f"Company {company_id}: found {len(contacts)} contacts via filter[company_id]")
+                        # Добавляем company_id к каждому контакту
+                        for contact in contacts:
+                            if isinstance(contact, dict):
+                                if "_embedded" not in contact:
+                                    contact["_embedded"] = {}
+                                if "companies" not in contact["_embedded"]:
+                                    contact["_embedded"]["companies"] = [{"id": company_id}]
+                        out.extend(contacts)
+            except Exception as e:
+                logger.debug(f"Error fetching contacts via filter[company_id]={company_id}: {e}", exc_info=True)
+                continue
+    
+    logger.debug(f"Total contacts fetched: {len(out)} from {len(company_ids)} companies")
     return out
 
 
@@ -1590,9 +1627,9 @@ def migrate_filtered(
             contacts_skipped = 0  # счетчик пропущенных контактов
             logger.debug(f"===== STARTING CONTACT IMPORT for {len(amo_ids)} companies =====")
             try:
-                # Оптимизированный подход: получаем контакты батчами через filter[company_id][]
+                # Получаем контакты через with=contacts при запросе компаний
                 # Rate limiting применяется автоматически в AmoClient
-                logger.debug(f"Fetching contacts for {len(amo_ids)} companies via filter[company_id][]")
+                logger.debug(f"Fetching contacts for {len(amo_ids)} companies: {amo_ids[:5]}...")
                 
                 all_contacts = fetch_contacts_for_companies(client, amo_ids)
                 logger.debug(f"Total contacts fetched from API: {len(all_contacts)}")
@@ -1647,7 +1684,7 @@ def migrate_filtered(
                         "status": "NO_CONTACTS_FOUND",
                         "companies_checked": len(amo_ids),
                         "company_ids": list(amo_ids)[:5],  # первые 5 для отладки
-                        "message": "Контакты не найдены через filter[company_id][]. Проверьте, что у компаний есть связанные контакты в AmoCRM.",
+                        "message": f"Контакты не найдены для компаний {list(amo_ids)[:5]}. Проверьте, что у компаний есть связанные контакты в AmoCRM. Использовались методы: 1) GET /api/v4/companies/{{id}}?with=contacts, 2) GET /api/v4/contacts?filter[company_id]={{id}}",
                     }
                     res.contacts_preview.append(debug_info)
                 
