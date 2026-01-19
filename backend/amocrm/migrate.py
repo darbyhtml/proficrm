@@ -1523,8 +1523,24 @@ def migrate_filtered(
                     # ОТЛАДКА: определяем счетчик для логирования (ДО использования)
                     debug_count_for_extraction = len(res.contacts_preview) if res.contacts_preview else 0
                     
+                    # ВАЖНО: сначала проверяем custom_fields (там хранится поле "Примечание"),
+                    # потом заметки (там могут быть служебные заметки типа call_out)
+                    
+                    # custom_fields_values для телефонов/почт/должности/примечаний
+                    custom_fields = ac.get("custom_fields_values") or []
+                    # ОТЛАДКА: логируем структуру custom_fields для первых контактов
+                    if debug_count_for_extraction < 3:
+                        logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
+                        logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}")
+                        logger.debug(f"  - ac.get('custom_fields_values'): {ac.get('custom_fields_values')}")
+                        # Логируем ВСЕ поля для отладки
+                        if isinstance(custom_fields, list):
+                            for cf_idx, cf in enumerate(custom_fields):
+                                if isinstance(cf, dict):
+                                    logger.debug(f"  - [field {cf_idx}] field_id={cf.get('field_id')}, field_code={cf.get('field_code')}, field_name={cf.get('field_name')}, field_type={cf.get('field_type')}, values={cf.get('values')}")
+                    
                     # ПРОВЕРЯЕМ ВСЕ ВОЗМОЖНЫЕ МЕСТА ДЛЯ ПРИМЕЧАНИЙ:
-                    # 1. Прямые поля контакта (note, comments, comment)
+                    # 1. Прямые поля контакта (note, comments, comment) - редко используется
                     for note_key in ["note", "notes", "comment", "comments", "remark", "remarks"]:
                         if ac.get(note_key):
                             note_val = str(ac.get(note_key) or "").strip()
@@ -1533,7 +1549,10 @@ def migrate_filtered(
                                 if debug_count_for_extraction < 3:
                                     logger.debug(f"  -> Found note_text in direct field '{note_key}': {note_text[:100]}")
                     
-                    # 2. В _embedded.notes (если есть) - это заметки контакта из amoCRM
+                    # 2. В custom_fields_values - ПРИОРИТЕТ! Здесь хранится поле "Примечание"
+                    # (обработка будет ниже в цикле по custom_fields)
+                    
+                    # 3. В _embedded.notes (если есть) - это заметки контакта из amoCRM (служебные, не примечания)
                     if isinstance(ac, dict) and "_embedded" in ac:
                         embedded = ac.get("_embedded") or {}
                         if isinstance(embedded, dict) and "notes" in embedded:
@@ -1561,11 +1580,16 @@ def migrate_filtered(
                                                     str(params.get("note") or "").strip()
                                                 )
                                         
-                                        if note_val and len(note_val) > 5:  # Игнорируем очень короткие значения
+                                        # ВАЖНО: не берем служебные заметки (call_out, call_in и т.д.) как примечание
+                                        # Они обрабатываются отдельно и не должны попадать в note_text
+                                        note_type_val = str(note_item.get("note_type") or "").strip().lower()
+                                        is_service_note = note_type_val in ["call_out", "call_in", "call", "amomail", "sms", "task"]
+                                        
+                                        if note_val and len(note_val) > 5 and not is_service_note:  # Игнорируем служебные и очень короткие значения
                                             if not note_text:
                                                 note_text = note_val[:255]
                                                 if debug_count_for_extraction < 3:
-                                                    logger.debug(f"  -> Found note_text in _embedded.notes[{note_idx}]: {note_text[:100]}")
+                                                    logger.debug(f"  -> Found note_text in _embedded.notes[{note_idx}] (type={note_type_val}): {note_text[:100]}")
                                             else:
                                                 # Объединяем несколько заметок
                                                 combined = f"{note_text}; {note_val[:100]}"
@@ -1575,6 +1599,8 @@ def migrate_filtered(
                                             # Берем первые 3 заметки (чтобы не перегружать)
                                             if note_idx >= 2:
                                                 break
+                                        elif is_service_note and debug_count_for_extraction < 3:
+                                            logger.debug(f"  -> Skipped service note type '{note_type_val}' (not a real note)")
                     
                     # Стандартные поля (если есть)
                     if ac.get("phone"):
@@ -1698,13 +1724,24 @@ def migrate_filtered(
                                     if debug_count_for_extraction < 3:
                                         logger.debug(f"      -> Set position: {val}")
                             elif is_note:
-                                # Берем первое найденное примечание (или объединяем, если их несколько)
-                                if not note_text:
+                                # ВАЖНО: примечание из custom_fields имеет ПРИОРИТЕТ над заметками
+                                # Если уже есть note_text из заметок - проверяем, не служебная ли это заметка
+                                is_current_note_service = (
+                                    not note_text or 
+                                    "call_" in str(note_text).lower() or 
+                                    note_text.lower() in ["call_out", "call_in", "call", "amomail", "sms", "task"] or
+                                    len(str(note_text).strip()) < 10  # Очень короткие значения тоже подозрительны
+                                )
+                                
+                                if is_current_note_service or not note_text:
+                                    # Заменяем служебные заметки на реальное примечание из custom_fields
                                     note_text = val[:255]
                                     if debug_count_for_extraction < 3:
                                         logger.debug(f"      -> Found note_text in custom_field (field_name='{field_name}', field_code='{field_code}'): {note_text[:100]}")
+                                        if is_current_note_service:
+                                            logger.debug(f"      -> Replaced service note '{note_text[:50]}' with real note from custom_field")
                                 else:
-                                    # Если уже есть примечание, добавляем через точку с запятой (но не более 255 символов)
+                                    # Если уже есть нормальное примечание, добавляем через точку с запятой
                                     combined = f"{note_text}; {val[:100]}"
                                     note_text = combined[:255]
                                     if debug_count_for_extraction < 3:
