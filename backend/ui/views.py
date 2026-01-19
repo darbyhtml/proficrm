@@ -4725,14 +4725,20 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: str 
         base_queryset = get_transfer_targets(user)
     
     # Если есть выбранное значение и его нет в queryset, добавляем его
-    if current_user_id:
-        # Проверяем, что current_user_id является валидным UUID перед использованием
-        try:
-            from uuid import UUID
-            UUID(current_user_id)
-        except (ValueError, TypeError):
-            # Если не валидный UUID, пропускаем проверку
-            current_user_id = None
+        if current_user_id:
+            # Проверяем, что current_user_id является валидным ID (Integer или UUID)
+            # User использует Integer ID, поэтому проверяем оба варианта
+            try:
+                # Пытаемся как int (для User)
+                int(current_user_id)
+            except (ValueError, TypeError):
+                # Если не int, пытаемся как UUID (для других моделей)
+                try:
+                    from uuid import UUID
+                    UUID(current_user_id)
+                except (ValueError, TypeError):
+                    # Если ни int, ни UUID - пропускаем проверку
+                    current_user_id = None
         
         if current_user_id and not base_queryset.filter(id=current_user_id).exists():
             # Добавляем выбранного пользователя в queryset
