@@ -2346,6 +2346,8 @@
       if (!panel || !body) return;
 
       let currentAbort = null;
+      let isDragging = false;
+      let dragOffset = { x: 0, y: 0 };
 
       function openPanel() {
         panel.classList.remove('hidden');
@@ -2359,6 +2361,42 @@
         }
       }
 
+      // Drag & Drop для панели
+      const panelHeader = panel.querySelector('.bg-white');
+      if (panelHeader) {
+        panelHeader.style.cursor = 'move';
+        panelHeader.addEventListener('mousedown', (e) => {
+          if (e.target.closest('button, input, select, textarea, a')) return;
+          isDragging = true;
+          const rect = panel.getBoundingClientRect();
+          dragOffset.x = e.clientX - rect.left;
+          dragOffset.y = e.clientY - rect.top;
+          panel.style.cursor = 'move';
+          e.preventDefault();
+        });
+      }
+
+      document.addEventListener('mousemove', (e) => {
+        if (!isDragging) return;
+        const maxX = window.innerWidth - panel.offsetWidth;
+        const maxY = window.innerHeight - panel.offsetHeight;
+        let x = e.clientX - dragOffset.x;
+        let y = e.clientY - dragOffset.y;
+        x = Math.max(0, Math.min(x, maxX));
+        y = Math.max(0, Math.min(y, maxY));
+        panel.style.left = x + 'px';
+        panel.style.right = 'auto';
+        panel.style.top = y + 'px';
+        panel.style.bottom = 'auto';
+      });
+
+      document.addEventListener('mouseup', () => {
+        if (isDragging) {
+          isDragging = false;
+          panel.style.cursor = '';
+        }
+      });
+
       async function loadForm(url) {
         currentAbort = new AbortController();
         const res = await fetch(url, { signal: currentAbort.signal, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
@@ -2369,28 +2407,44 @@
       }
 
       async function submitForm(form) {
-        const fd = new FormData(form);
-        const res = await fetch(form.action, {
-          method: 'POST',
-          headers: { 'X-Requested-With': 'XMLHttpRequest' },
-          body: fd
-        });
-        const ct = (res.headers.get('content-type') || '').toLowerCase();
-        if (ct.includes('application/json')) {
-          const data = await res.json();
-          if (data.ok) {
-            window.location.href = data.redirect || window.location.href;
-            return;
-          }
-          if (data.html) {
-            body.innerHTML = data.html;
-            return;
-          }
-          throw new Error('Ошибка сохранения');
+        const submitBtn = form.querySelector('button[type="submit"]');
+        const originalText = submitBtn ? submitBtn.textContent : '';
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Сохранение...';
         }
-        // Если вдруг вернули HTML — подменяем тело панели
-        const html = await res.text();
-        body.innerHTML = html;
+        
+        try {
+          const fd = new FormData(form);
+          const res = await fetch(form.action, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: fd
+          });
+          const ct = (res.headers.get('content-type') || '').toLowerCase();
+          if (ct.includes('application/json')) {
+            const data = await res.json();
+            if (data.ok) {
+              // Успешно сохранено: закрываем панель и обновляем страницу
+              closePanel();
+              window.location.reload();
+              return;
+            }
+            if (data.html) {
+              body.innerHTML = data.html;
+              return;
+            }
+            throw new Error('Ошибка сохранения');
+          }
+          // Если вдруг вернули HTML — подменяем тело панели
+          const html = await res.text();
+          body.innerHTML = html;
+        } finally {
+          if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
+          }
+        }
       }
 
       // Открытие панели по кнопке
