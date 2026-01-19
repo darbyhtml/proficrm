@@ -1396,66 +1396,66 @@ def migrate_filtered(
                 if not contacts_from_alt_method:
                     if contact_ids:
                         logger.debug(f"Fetching full contact data for {len(contact_ids)} contact IDs...")
-                    try:
-                        # Запрашиваем контакты батчами по 50 ID (лимит amoCRM для filter[id][])
-                        batch_size = 50
-                        for i in range(0, len(contact_ids), batch_size):
-                            ids_batch = contact_ids[i : i + batch_size]
-                            logger.debug(f"Requesting contacts with IDs: {ids_batch[:10]}... (total {len(ids_batch)})")
-                            
-                            # Согласно документации AmoCRM API v4:
-                            # - filter[id][] - массив ID контактов
-                            # - with=custom_fields,notes - получить кастомные поля и заметки
-                            # - limit - количество на странице (макс 250)
-                            contacts_batch = client.get_all_pages(
-                                "/api/v4/contacts",
-                                params={
-                                    "filter[id][]": ids_batch,  # Массив ID для фильтрации
-                                    "with": "custom_fields,notes",  # Получаем кастомные поля и заметки
-                                },
-                                embedded_key="contacts",  # Ключ в _embedded для извлечения контактов
-                                limit=250,  # Максимальный лимит согласно документации
-                                max_pages=10,  # Ограничиваем количество страниц
-                            )
-                            logger.debug(f"get_all_pages returned: type={type(contacts_batch)}, length={len(contacts_batch) if isinstance(contacts_batch, list) else 'not_list'}")
-                            if isinstance(contacts_batch, list):
-                                full_contacts.extend(contacts_batch)
-                                logger.debug(f"Fetched {len(contacts_batch)} full contacts for batch {i//batch_size + 1}")
-                            else:
-                                logger.debug(f"⚠️ contacts_batch is not a list: {contacts_batch}")
-                                # Если get_all_pages вернул не список, пробуем извлечь из ответа вручную
-                                if isinstance(contacts_batch, dict) and "_embedded" in contacts_batch:
-                                    embedded = contacts_batch.get("_embedded", {})
-                                    if "contacts" in embedded and isinstance(embedded["contacts"], list):
-                                        full_contacts.extend(embedded["contacts"])
-                                        logger.debug(f"Extracted {len(embedded['contacts'])} contacts from _embedded")
-                            
-                            # ОТЛАДКА: детальная структура первого контакта из батча
-                            if i == 0 and contacts_batch:
-                                first_full_contact = contacts_batch[0]
-                                logger.debug(f"===== FIRST FULL CONTACT STRUCTURE =====")
-                                logger.debug(f"  - Type: {type(first_full_contact)}")
-                                if isinstance(first_full_contact, dict):
-                                    logger.debug(f"  - Keys: {list(first_full_contact.keys())}")
-                                    logger.debug(f"  - Has 'id': {'id' in first_full_contact}")
-                                    logger.debug(f"  - Has 'first_name': {'first_name' in first_full_contact}, value: {first_full_contact.get('first_name')}")
-                                    logger.debug(f"  - Has 'last_name': {'last_name' in first_full_contact}, value: {first_full_contact.get('last_name')}")
-                                    logger.debug(f"  - Has 'custom_fields_values': {'custom_fields_values' in first_full_contact}")
-                                    if 'custom_fields_values' in first_full_contact:
-                                        cfv = first_full_contact.get('custom_fields_values')
-                                        logger.debug(f"  - custom_fields_values type: {type(cfv)}, length: {len(cfv) if isinstance(cfv, list) else 'not_list'}")
-                                        if isinstance(cfv, list) and len(cfv) > 0:
-                                            logger.debug(f"  - First custom_field: {cfv[0]}")
-                                    logger.debug(f"  - Has 'phone': {'phone' in first_full_contact}, value: {first_full_contact.get('phone')}")
-                                    logger.debug(f"  - Has 'email': {'email' in first_full_contact}, value: {first_full_contact.get('email')}")
-                                    # Показываем полную структуру (первые 1000 символов)
-                                    import json
-                                    logger.debug(f"  - Full structure (first 1000 chars): {json.dumps(first_full_contact, ensure_ascii=False, indent=2)[:1000]}")
-                                logger.debug(f"===== END FIRST FULL CONTACT =====")
+                        try:
+                            # Запрашиваем контакты батчами по 50 ID (лимит amoCRM для filter[id][])
+                            batch_size = 50
+                            for i in range(0, len(contact_ids), batch_size):
+                                ids_batch = contact_ids[i : i + batch_size]
+                                logger.debug(f"Requesting contacts with IDs: {ids_batch[:10]}... (total {len(ids_batch)})")
+                                
+                                # Согласно документации AmoCRM API v4:
+                                # - filter[id][] - массив ID контактов
+                                # - with=custom_fields,notes - получить кастомные поля и заметки
+                                # - limit - количество на странице (макс 250)
+                                contacts_batch = client.get_all_pages(
+                                    "/api/v4/contacts",
+                                    params={
+                                        "filter[id][]": ids_batch,  # Массив ID для фильтрации
+                                        "with": "custom_fields,notes",  # Получаем кастомные поля и заметки
+                                    },
+                                    embedded_key="contacts",  # Ключ в _embedded для извлечения контактов
+                                    limit=250,  # Максимальный лимит согласно документации
+                                    max_pages=10,  # Ограничиваем количество страниц
+                                )
+                                logger.debug(f"get_all_pages returned: type={type(contacts_batch)}, length={len(contacts_batch) if isinstance(contacts_batch, list) else 'not_list'}")
+                                if isinstance(contacts_batch, list):
+                                    full_contacts.extend(contacts_batch)
+                                    logger.debug(f"Fetched {len(contacts_batch)} full contacts for batch {i//batch_size + 1}")
+                                else:
+                                    logger.debug(f"⚠️ contacts_batch is not a list: {contacts_batch}")
+                                    # Если get_all_pages вернул не список, пробуем извлечь из ответа вручную
+                                    if isinstance(contacts_batch, dict) and "_embedded" in contacts_batch:
+                                        embedded = contacts_batch.get("_embedded", {})
+                                        if "contacts" in embedded and isinstance(embedded["contacts"], list):
+                                            full_contacts.extend(embedded["contacts"])
+                                            logger.debug(f"Extracted {len(embedded['contacts'])} contacts from _embedded")
+                                
+                                # ОТЛАДКА: детальная структура первого контакта из батча
+                                if i == 0 and contacts_batch:
+                                    first_full_contact = contacts_batch[0]
+                                    logger.debug(f"===== FIRST FULL CONTACT STRUCTURE =====")
+                                    logger.debug(f"  - Type: {type(first_full_contact)}")
+                                    if isinstance(first_full_contact, dict):
+                                        logger.debug(f"  - Keys: {list(first_full_contact.keys())}")
+                                        logger.debug(f"  - Has 'id': {'id' in first_full_contact}")
+                                        logger.debug(f"  - Has 'first_name': {'first_name' in first_full_contact}, value: {first_full_contact.get('first_name')}")
+                                        logger.debug(f"  - Has 'last_name': {'last_name' in first_full_contact}, value: {first_full_contact.get('last_name')}")
+                                        logger.debug(f"  - Has 'custom_fields_values': {'custom_fields_values' in first_full_contact}")
+                                        if 'custom_fields_values' in first_full_contact:
+                                            cfv = first_full_contact.get('custom_fields_values')
+                                            logger.debug(f"  - custom_fields_values type: {type(cfv)}, length: {len(cfv) if isinstance(cfv, list) else 'not_list'}")
+                                            if isinstance(cfv, list) and len(cfv) > 0:
+                                                logger.debug(f"  - First custom_field: {cfv[0]}")
+                                        logger.debug(f"  - Has 'phone': {'phone' in first_full_contact}, value: {first_full_contact.get('phone')}")
+                                        logger.debug(f"  - Has 'email': {'email' in first_full_contact}, value: {first_full_contact.get('email')}")
+                                        # Показываем полную структуру (первые 1000 символов)
+                                        import json
+                                        logger.debug(f"  - Full structure (first 1000 chars): {json.dumps(first_full_contact, ensure_ascii=False, indent=2)[:1000]}")
+                                    logger.debug(f"===== END FIRST FULL CONTACT =====")
                         except Exception as e:
                             logger.debug(f"Error fetching full contact data: {type(e).__name__}: {e}", exc_info=True)
-                    
-                    logger.debug(f"Total full contacts fetched: {len(full_contacts)}")
+                        
+                        logger.debug(f"Total full contacts fetched: {len(full_contacts)}")
                 else:
                     # Контакты уже получены через альтернативный метод, они полные
                     logger.debug(f"Using {len(full_contacts)} contacts from alternative method (skip ID fetch)")
