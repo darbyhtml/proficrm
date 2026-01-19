@@ -163,6 +163,69 @@
           </div>
         {% endif %}
 
+        {% if form.dry_run.value and result.companies_updates_preview %}
+          <div class="mt-4 border-t pt-4">
+            <div class="font-medium mb-3">Что будет обновлено</div>
+            <div class="space-y-3 text-sm">
+              {% for update in result.companies_updates_preview %}
+                <div class="rounded-lg border p-4 {% if update.is_new %}bg-green-50 border-green-200{% else %}bg-blue-50 border-blue-200{% endif %}">
+                  <div class="font-medium mb-2 flex items-center gap-2">
+                    {% if update.is_new %}
+                      <span class="text-green-600">🆕</span>
+                      <span>Новая компания: {{ update.company_name }}</span>
+                    {% else %}
+                      <span class="text-blue-600">🔄</span>
+                      <span>{{ update.company_name }}</span>
+                    {% endif %}
+                    {% if update.company_id %}
+                      <span class="text-xs muted-2">(ID: {{ update.company_id }})</span>
+                    {% endif %}
+                    <span class="text-xs muted-2">(amo id: {{ update.amo_id }})</span>
+                  </div>
+                  {% if update.updates %}
+                    <div class="space-y-2 mt-3">
+                      {% for field_name, diff in update.updates.items %}
+                        <div class="bg-white rounded border p-2">
+                          <div class="font-medium text-xs mb-1">
+                            {% if field_name == "legal_name" %}Юридическое название
+                            {% elif field_name == "inn" %}ИНН
+                            {% elif field_name == "kpp" %}КПП
+                            {% elif field_name == "address" %}Адрес
+                            {% elif field_name == "phone" %}Телефон
+                            {% elif field_name == "email" %}Email
+                            {% elif field_name == "website" %}Сайт
+                            {% elif field_name == "contact_name" %}Руководитель
+                            {% elif field_name == "activity_kind" %}Вид деятельности
+                            {% elif field_name == "employees_count" %}Численность сотрудников
+                            {% elif field_name == "workday_start" %}Начало рабочего дня
+                            {% elif field_name == "workday_end" %}Конец рабочего дня
+                            {% elif field_name == "work_timezone" %}Часовой пояс
+                            {% else %}{{ field_name }}{% endif %}
+                          </div>
+                          <div class="flex gap-3 text-xs">
+                            <div class="flex-1">
+                              <div class="text-red-600 font-medium mb-1">Было:</div>
+                              <div class="bg-red-50 p-2 rounded border border-red-200 break-words">
+                                {{ diff.old|default:"—"|truncatewords:30 }}
+                              </div>
+                            </div>
+                            <div class="flex-1">
+                              <div class="text-green-600 font-medium mb-1">Будет:</div>
+                              <div class="bg-green-50 p-2 rounded border border-green-200 break-words">
+                                {{ diff.new|default:"—"|truncatewords:30 }}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+
         {% if form.dry_run.value %}
           <div class="mt-4 border-t pt-4">
             <div class="font-medium mb-2">Debug (dry-run)</div>

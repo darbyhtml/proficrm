@@ -388,6 +388,9 @@ class AmoMigrateResult:
     contacts_created: int = 0
     contacts_preview: list[dict] | None = None  # для dry-run отладки
 
+    companies_updates_preview: list[dict] | None = None  # diff изменений компаний при dry-run
+    contacts_updates_preview: list[dict] | None = None  # diff изменений контактов при dry-run
+
     preview: list[dict] | None = None
     
     error: str | None = None  # ошибка миграции (если была)
@@ -628,7 +631,14 @@ def migrate_filtered(
     company_fields_meta: list[dict[str, Any]] | None = None,
     skip_field_filter: bool = False,  # если True, мигрируем все компании ответственного без фильтра по полю
 ) -> AmoMigrateResult:
-    res = AmoMigrateResult(preview=[], tasks_preview=[], notes_preview=[], contacts_preview=[])
+    res = AmoMigrateResult(
+        preview=[],
+        tasks_preview=[],
+        notes_preview=[],
+        contacts_preview=[],
+        companies_updates_preview=[] if dry_run else None,
+        contacts_updates_preview=[] if dry_run else None,
+    )
 
     amo_users = fetch_amo_users(client)
     amo_user_by_id = {int(u.get("id") or 0): u for u in amo_users if int(u.get("id") or 0)}
@@ -680,6 +690,10 @@ def migrate_filtered(
             # заполнение "Данные" (только если поле пустое, чтобы не затереть уже заполненное вручную)
             # ВАЖНО: всегда обрезаем значения до max_length, даже если поле уже заполнено (защита от длинных значений)
             changed = False
+            
+            # Для dry-run: собираем diff изменений
+            company_updates_diff = {} if dry_run else None
+            
             # Мягкий режим update: если поле уже меняли руками, не перезаписываем.
             try:
                 rf = dict(comp.raw_fields or {})
@@ -688,6 +702,24 @@ def migrate_filtered(
             prev = rf.get("amo_values") or {}
             if not isinstance(prev, dict):
                 prev = {}
+            
+            # Сохраняем старые значения для diff (только при dry_run)
+            if dry_run:
+                old_values = {
+                    "legal_name": comp.legal_name or "",
+                    "inn": comp.inn or "",
+                    "kpp": comp.kpp or "",
+                    "address": comp.address or "",
+                    "phone": comp.phone or "",
+                    "email": comp.email or "",
+                    "website": comp.website or "",
+                    "contact_name": comp.contact_name or "",
+                    "activity_kind": comp.activity_kind or "",
+                    "employees_count": comp.employees_count,
+                    "workday_start": str(comp.workday_start) if comp.workday_start else "",
+                    "workday_end": str(comp.workday_end) if comp.workday_end else "",
+                    "work_timezone": comp.work_timezone or "",
+                }
 
             def can_update(field: str) -> bool:
                 cur = getattr(comp, field)
@@ -698,66 +730,104 @@ def migrate_filtered(
                 return False
             if extra.get("legal_name"):
                 new_legal = str(extra["legal_name"]).strip()[:255]  # сначала strip, потом обрезка до max_length=255
-                if not (comp.legal_name or "").strip():
+                old_legal = (comp.legal_name or "").strip()
+                if not old_legal:
                     comp.legal_name = new_legal
                     changed = True
+                    if dry_run and new_legal:
+                        company_updates_diff["legal_name"] = {"old": "", "new": new_legal}
                 elif len(comp.legal_name) > 255:  # защита: если уже заполнено, но слишком длинное
                     comp.legal_name = comp.legal_name.strip()[:255]
                     changed = True
+                    if dry_run:
+                        company_updates_diff["legal_name"] = {"old": old_legal, "new": comp.legal_name}
             if extra.get("inn"):
                 new_inn = str(extra["inn"]).strip()[:20]  # сначала strip, потом обрезка до max_length=20
-                if not (comp.inn or "").strip():
+                old_inn = (comp.inn or "").strip()
+                if not old_inn:
                     comp.inn = new_inn
                     changed = True
+                    if dry_run and new_inn:
+                        company_updates_diff["inn"] = {"old": "", "new": new_inn}
                 elif len(comp.inn) > 20:  # защита: если уже заполнено, но слишком длинное
                     comp.inn = comp.inn.strip()[:20]
                     changed = True
+                    if dry_run:
+                        company_updates_diff["inn"] = {"old": old_inn, "new": comp.inn}
             if extra.get("kpp"):
                 new_kpp = str(extra["kpp"]).strip()[:20]  # сначала strip, потом обрезка до max_length=20
-                if not (comp.kpp or "").strip():
+                old_kpp = (comp.kpp or "").strip()
+                if not old_kpp:
                     comp.kpp = new_kpp
                     changed = True
+                    if dry_run and new_kpp:
+                        company_updates_diff["kpp"] = {"old": "", "new": new_kpp}
                 elif len(comp.kpp) > 20:  # защита: если уже заполнено, но слишком длинное
                     comp.kpp = comp.kpp.strip()[:20]
                     changed = True
+                    if dry_run:
+                        company_updates_diff["kpp"] = {"old": old_kpp, "new": comp.kpp}
             if extra.get("address"):
                 new_addr = str(extra["address"]).strip()[:500]  # сначала strip, потом обрезка до max_length=500
-                if not (comp.address or "").strip():
+                old_addr = (comp.address or "").strip()
+                if not old_addr:
                     comp.address = new_addr
                     changed = True
+                    if dry_run and new_addr:
+                        company_updates_diff["address"] = {"old": "", "new": new_addr}
                 elif len(comp.address) > 500:  # защита: если уже заполнено, но слишком длинное
                     comp.address = comp.address.strip()[:500]
                     changed = True
+                    if dry_run:
+                        company_updates_diff["address"] = {"old": old_addr, "new": comp.address}
             phones = extra.get("phones") or []
             emails = extra.get("emails") or []
             # основной телефон/почта — в "Данные", остальные — в отдельный контакт (даже без ФИО/должности)
             if phones and not (comp.phone or "").strip():
-                comp.phone = str(phones[0])[:50]
+                new_phone = str(phones[0])[:50]
+                comp.phone = new_phone
                 changed = True
+                if dry_run:
+                    company_updates_diff["phone"] = {"old": "", "new": new_phone}
             if emails and not (comp.email or "").strip():
-                comp.email = str(emails[0])[:254]
+                new_email = str(emails[0])[:254]
+                comp.email = new_email
                 changed = True
+                if dry_run:
+                    company_updates_diff["email"] = {"old": "", "new": new_email}
             if extra.get("website") and not (comp.website or "").strip():
-                comp.website = extra["website"][:255]
+                new_website = extra["website"][:255]
+                comp.website = new_website
                 changed = True
+                if dry_run:
+                    company_updates_diff["website"] = {"old": "", "new": new_website}
             if extra.get("activity_kind") and can_update("activity_kind"):
                 ak = str(extra.get("activity_kind") or "").strip()[:255]
+                old_ak = (comp.activity_kind or "").strip()
                 if ak and comp.activity_kind != ak:
                     comp.activity_kind = ak
                     changed = True
+                    if dry_run:
+                        company_updates_diff["activity_kind"] = {"old": old_ak, "new": ak}
             if extra.get("employees_count") and can_update("employees_count"):
                 try:
                     ec = int("".join(ch for ch in str(extra.get("employees_count") or "") if ch.isdigit()) or "0")
+                    old_ec = comp.employees_count
                     if ec > 0 and comp.employees_count != ec:
                         comp.employees_count = ec
                         changed = True
+                        if dry_run:
+                            company_updates_diff["employees_count"] = {"old": str(old_ec) if old_ec else "", "new": str(ec)}
                 except Exception:
                     pass
             if extra.get("work_timezone") and can_update("work_timezone"):
                 tzv = str(extra.get("work_timezone") or "").strip()[:64]
+                old_tz = (comp.work_timezone or "").strip()
                 if tzv and comp.work_timezone != tzv:
                     comp.work_timezone = tzv
                     changed = True
+                    if dry_run:
+                        company_updates_diff["work_timezone"] = {"old": old_tz, "new": tzv}
             if extra.get("worktime"):
                 # поддерживаем форматы: "09:00-18:00", "09:00–18:00", "с 9:00 до 18:00"
                 import re
@@ -767,18 +837,27 @@ def migrate_filtered(
                     try:
                         h1, m1, h2, m2 = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
                         if 0 <= h1 <= 23 and 0 <= h2 <= 23 and 0 <= m1 <= 59 and 0 <= m2 <= 59:
+                            old_start = str(comp.workday_start) if comp.workday_start else ""
+                            old_end = str(comp.workday_end) if comp.workday_end else ""
                             if can_update("workday_start") and comp.workday_start != time(h1, m1):
                                 comp.workday_start = time(h1, m1)
                                 changed = True
+                                if dry_run:
+                                    company_updates_diff["workday_start"] = {"old": old_start, "new": str(time(h1, m1))}
                             if can_update("workday_end") and comp.workday_end != time(h2, m2):
                                 comp.workday_end = time(h2, m2)
                                 changed = True
+                                if dry_run:
+                                    company_updates_diff["workday_end"] = {"old": old_end, "new": str(time(h2, m2))}
                     except Exception:
                         pass
             # Руководитель (contact_name) — заполняем из amo, если пусто
             if extra.get("director") and not (comp.contact_name or "").strip():
-                comp.contact_name = extra["director"][:255]
+                new_director = extra["director"][:255]
+                comp.contact_name = new_director
                 changed = True
+                if dry_run:
+                    company_updates_diff["contact_name"] = {"old": "", "new": new_director}
 
             if changed:
                 prev.update(
@@ -800,6 +879,19 @@ def migrate_filtered(
                 )
                 rf["amo_values"] = prev
                 comp.raw_fields = rf
+            
+            # Сохраняем diff изменений для dry-run
+            if dry_run and company_updates_diff:
+                if res.companies_updates_preview is None:
+                    res.companies_updates_preview = []
+                res.companies_updates_preview.append({
+                    "company_name": comp.name,
+                    "company_id": comp.id if comp.id else None,
+                    "amo_id": comp.amocrm_company_id,
+                    "is_new": created,
+                    "updates": company_updates_diff,
+                })
+            
             if changed and not dry_run:
                 try:
                     comp.save()
