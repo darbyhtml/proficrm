@@ -77,6 +77,7 @@ class GlobalMailAccountForm(forms.ModelForm):
             "from_name",
             "rate_per_minute",
             "rate_per_day",
+            "per_user_daily_limit",
             "is_enabled",
         ]
         widgets = {
@@ -88,6 +89,7 @@ class GlobalMailAccountForm(forms.ModelForm):
             "from_name": forms.TextInput(attrs={"class": "input"}),
             "rate_per_minute": forms.NumberInput(attrs={"class": "input"}),
             "rate_per_day": forms.NumberInput(attrs={"class": "input"}),
+            "per_user_daily_limit": forms.NumberInput(attrs={"class": "input"}),
         }
 
     def save(self, commit=True):

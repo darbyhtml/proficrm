@@ -62,6 +62,8 @@ class GlobalMailAccount(models.Model):
     rate_per_minute = models.PositiveIntegerField("Лимит писем в минуту", default=1)
     # В тарифе указан общий лимит писем (обычно месячный). Оставляем большим, но можно снизить.
     rate_per_day = models.PositiveIntegerField("Лимит писем в день", default=15000)
+    # Дополнительный лимит: сколько писем в день может отправить ОДИН менеджер
+    per_user_daily_limit = models.PositiveIntegerField("Лимит писем в день на менеджера", default=100)
     updated_at = models.DateTimeField("Обновлено", auto_now=True)
 
     @classmethod

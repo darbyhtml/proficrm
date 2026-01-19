@@ -90,6 +90,14 @@
           </div>
         </div>
 
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-sm muted mb-1">Лимит в день на менеджера</label>
+            {{ form.per_user_daily_limit }}
+            <div class="text-xs muted-2 mt-1">Сколько писем за сутки может отправить один менеджер. Остальные адреса останутся в очереди до следующего дня.</div>
+          </div>
+        </div>
+
         <div class="flex items-center gap-2 text-sm">
           {{ form.is_enabled }} <span class="muted">Включить отправку</span>
         </div>

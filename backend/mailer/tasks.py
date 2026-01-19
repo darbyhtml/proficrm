@@ -14,7 +14,7 @@ from mailer.utils import html_to_text
 
 logger = logging.getLogger(__name__)
 
-PER_USER_DAILY_LIMIT = 100
+from .models import GlobalMailAccount
 
 
 @shared_task(name="mailer.tasks.send_pending_emails", bind=True, max_retries=3)
@@ -53,14 +53,15 @@ def send_pending_emails(self, batch_size: int = 50):
                 created_at__date=now.date()
             ).count()
 
-            # Лимит 100 писем/день на пользователя (создателя кампании)
+            # Лимит писем/день на пользователя (создателя кампании)
             sent_today_user = SendLog.objects.filter(
                 provider="smtp_global",
                 status="sent",
                 campaign__created_by=user,
                 created_at__date=now.date(),
             ).count()
-            if sent_today_user >= PER_USER_DAILY_LIMIT:
+            per_user_daily_limit = smtp_cfg.per_user_daily_limit or 0
+            if per_user_daily_limit and sent_today_user >= per_user_daily_limit:
                 continue
             
             if sent_today >= smtp_cfg.rate_per_day or sent_last_min >= smtp_cfg.rate_per_minute:
@@ -70,7 +71,7 @@ def send_pending_emails(self, batch_size: int = 50):
                 batch_size,
                 smtp_cfg.rate_per_minute - sent_last_min,
                 smtp_cfg.rate_per_day - sent_today,
-                PER_USER_DAILY_LIMIT - sent_today_user,
+                (per_user_daily_limit - sent_today_user) if per_user_daily_limit else batch_size,
             ))
             
             batch = list(camp.recipients.filter(status=CampaignRecipient.Status.PENDING)[:allowed])

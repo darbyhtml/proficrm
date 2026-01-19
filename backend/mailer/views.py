@@ -23,7 +23,7 @@ from mailer.smtp_sender import build_message, send_via_smtp
 from mailer.utils import html_to_text
 from crm.utils import require_admin
 
-PER_USER_DAILY_LIMIT = 100
+PER_USER_DAILY_LIMIT = 100  # значение по умолчанию; может быть переопределено в GlobalMailAccount.per_user_daily_limit
 COOLDOWN_DAYS_DEFAULT = 3
 
 def _can_manage_campaign(user: User, camp: Campaign) -> bool:
@@ -385,6 +385,25 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
     if total > 0:
         percent = int(round((done / total) * 100))
 
+    # Проверяем, не упёрлись ли в дневной лимит
+    from django.utils import timezone as _tz
+
+    now = _tz.now()
+    smtp_cfg = GlobalMailAccount.load()
+    sent_today = SendLog.objects.filter(
+        provider="smtp_global", status="sent", created_at__date=now.date()
+    ).count()
+    sent_today_user = SendLog.objects.filter(
+        provider="smtp_global",
+        status="sent",
+        campaign__created_by=user,
+        created_at__date=now.date(),
+    ).count()
+    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT
+    limit_reached = False
+    if per_user_daily_limit and sent_today_user >= per_user_daily_limit and pending > 0:
+        limit_reached = True
+
     return JsonResponse(
         {
             "ok": True,
@@ -398,6 +417,9 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
                 "total": total,
                 "percent": max(0, min(100, percent)),
                 "url": f"/mail/campaigns/{active.id}/",
+                "limit_reached": limit_reached,
+                "per_user_daily_limit": per_user_daily_limit,
+                "sent_today_user": sent_today_user,
             },
         }
     )
@@ -896,8 +918,9 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
     sent_today = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__date=now.date()).count()
     sent_today_user = SendLog.objects.filter(provider="smtp_global", status="sent", campaign__created_by=user, created_at__date=now.date()).count()
 
-    if sent_today_user >= PER_USER_DAILY_LIMIT:
-        messages.error(request, "Достигнут лимит отправки 100 писем в день для вашего аккаунта.")
+    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT
+    if per_user_daily_limit and sent_today_user >= per_user_daily_limit:
+        messages.error(request, f"Достигнут лимит отправки {per_user_daily_limit} писем в день для вашего аккаунта.")
         return redirect("campaign_detail", campaign_id=camp.id)
     if sent_today >= smtp_cfg.rate_per_day:
         messages.error(request, "Достигнут дневной лимит отправки.")
@@ -907,7 +930,15 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
         return redirect("campaign_detail", campaign_id=camp.id)
 
     # 50 писем за шаг — безопасный MVP, но с учетом лимитов
-    allowed = max(1, min(50, smtp_cfg.rate_per_minute - sent_last_min, smtp_cfg.rate_per_day - sent_today, PER_USER_DAILY_LIMIT - sent_today_user))
+    allowed = max(
+        1,
+        min(
+            50,
+            smtp_cfg.rate_per_minute - sent_last_min,
+            smtp_cfg.rate_per_day - sent_today,
+            (per_user_daily_limit - sent_today_user) if per_user_daily_limit else 50,
+        ),
+    )
     batch = list(camp.recipients.filter(status=CampaignRecipient.Status.PENDING)[:allowed])
     if not batch:
         messages.info(request, "Очередь пуста.")
