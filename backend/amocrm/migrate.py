@@ -1300,20 +1300,83 @@ def migrate_filtered(
                 res.contacts_seen = len(amo_contacts)
                 logger.debug(f"Extracted {res.contacts_seen} contacts from _embedded.contacts of {len(companies_with_contacts)} companies")
                 
-                # ОТЛАДКА: если контактов не найдено, сохраняем информацию о попытке
-                if res.contacts_seen == 0:
-                    if res.contacts_preview is None:
-                        res.contacts_preview = []
-                    debug_info = {
-                        "status": "NO_CONTACTS_FOUND",
-                        "companies_checked": len(amo_ids),
-                        "company_ids": list(amo_ids)[:5],  # первые 5 для отладки
-                        "message": "Контакты не найдены в _embedded.contacts компаний. Убедитесь, что запрашиваете компании с параметром with=contacts.",
-                    }
-                    res.contacts_preview.append(debug_info)
+                # Флаг: были ли контакты получены через альтернативный метод
+                contacts_from_alt_method = False
+                full_contacts: list[dict[str, Any]] = []
                 
-                # ВАЖНО: в _embedded.contacts приходят только ссылки (id), а не полные объекты
-                # Нужно сделать отдельный запрос к /api/v4/contacts для получения полных данных
+                # ОТЛАДКА: если контактов не найдено в _embedded, пробуем альтернативный метод
+                if res.contacts_seen == 0:
+                    logger.debug("No contacts found in _embedded.contacts, trying alternative method via filter[company_id][]")
+                    # Альтернативный метод: получаем контакты через filter[company_id][]
+                    # Согласно документации AmoCRM API v4: /api/v4/contacts?filter[company_id][]=1&filter[company_id][]=2
+                    try:
+                        # Получаем контакты батчами по 50 компаний (лимит AmoCRM)
+                        batch_size = 50
+                        for i in range(0, len(amo_ids), batch_size):
+                            company_ids_batch = list(amo_ids)[i : i + batch_size]
+                            logger.debug(f"Trying to fetch contacts via filter[company_id][] for {len(company_ids_batch)} companies...")
+                            contacts_alt = client.get_all_pages(
+                                "/api/v4/contacts",
+                                params={
+                                    "filter[company_id][]": company_ids_batch,
+                                    "with": "custom_fields,notes",
+                                },
+                                embedded_key="contacts",
+                                limit=250,
+                                max_pages=50,
+                            )
+                            if isinstance(contacts_alt, list) and contacts_alt:
+                                logger.debug(f"Found {len(contacts_alt)} contacts via filter[company_id][] method")
+                                amo_contacts.extend(contacts_alt)
+                                # Создаем маппинг контактов к компаниям
+                                for contact in contacts_alt:
+                                    if isinstance(contact, dict):
+                                        contact_id = int(contact.get("id") or 0)
+                                        # Пытаемся найти компанию через _embedded.companies или company_id
+                                        if contact_id:
+                                            # Проверяем _embedded.companies
+                                            embedded = contact.get("_embedded") or {}
+                                            companies_in_contact = embedded.get("companies") or []
+                                            if isinstance(companies_in_contact, list):
+                                                for comp_ref in companies_in_contact:
+                                                    if isinstance(comp_ref, dict):
+                                                        comp_id = int(comp_ref.get("id") or 0)
+                                                        if comp_id in amo_ids_set:
+                                                            contact_id_to_company_map[contact_id] = comp_id
+                                                            break
+                                            # Если не нашли через _embedded, проверяем company_id напрямую
+                                            if contact_id not in contact_id_to_company_map:
+                                                comp_id_direct = int(contact.get("company_id") or 0)
+                                                if comp_id_direct in amo_ids_set:
+                                                    contact_id_to_company_map[contact_id] = comp_id_direct
+                                res.contacts_seen = len(amo_contacts)
+                                contacts_from_alt_method = True
+                                # Если получили контакты через альтернативный метод, они уже полные
+                                # Не нужно делать дополнительный запрос по ID
+                                full_contacts = amo_contacts
+                                logger.debug(f"Using contacts from alternative method (already full data)")
+                                break  # Нашли контакты, выходим из цикла
+                    except Exception as e:
+                        logger.debug(f"Error fetching contacts via filter[company_id][]: {e}", exc_info=True)
+                    
+                    # Если все еще не нашли контакты, сохраняем информацию об ошибке
+                    if res.contacts_seen == 0:
+                        if res.contacts_preview is None:
+                            res.contacts_preview = []
+                        debug_info = {
+                            "status": "NO_CONTACTS_FOUND",
+                            "companies_checked": len(amo_ids),
+                            "company_ids": list(amo_ids)[:5],  # первые 5 для отладки
+                            "message": "Контакты не найдены ни в _embedded.contacts компаний, ни через filter[company_id][]. Проверьте, что у компаний есть связанные контакты в AmoCRM.",
+                        }
+                        res.contacts_preview.append(debug_info)
+                
+                # Согласно документации AmoCRM API v4:
+                # 1. В _embedded.contacts компаний приходят только ссылки (id)
+                # 2. Для получения полных данных контактов используем filter[company_id][] или filter[id][]
+                # 3. Параметр with=custom_fields,notes для получения кастомных полей и заметок
+                
+                # Собираем ID контактов из _embedded.contacts
                 contact_ids: list[int] = []
                 contact_id_to_company_map: dict[int, int] = {}  # contact_id -> amo_company_id
                 for ac in amo_contacts:
@@ -1328,21 +1391,31 @@ def migrate_filtered(
                                     break
                 
                 # Получаем полные данные контактов по их ID
-                full_contacts: list[dict[str, Any]] = []
-                if contact_ids:
-                    logger.debug(f"Fetching full contact data for {len(contact_ids)} contact IDs...")
+                # Согласно документации: /api/v4/contacts?filter[id][]=1&filter[id][]=2&with=custom_fields,notes
+                # Пропускаем, если контакты уже получены через альтернативный метод
+                if not contacts_from_alt_method:
+                    if contact_ids:
+                        logger.debug(f"Fetching full contact data for {len(contact_ids)} contact IDs...")
                     try:
-                        # Запрашиваем контакты батчами по 50 ID (лимит amoCRM)
+                        # Запрашиваем контакты батчами по 50 ID (лимит amoCRM для filter[id][])
                         batch_size = 50
                         for i in range(0, len(contact_ids), batch_size):
                             ids_batch = contact_ids[i : i + batch_size]
                             logger.debug(f"Requesting contacts with IDs: {ids_batch[:10]}... (total {len(ids_batch)})")
+                            
+                            # Согласно документации AmoCRM API v4:
+                            # - filter[id][] - массив ID контактов
+                            # - with=custom_fields,notes - получить кастомные поля и заметки
+                            # - limit - количество на странице (макс 250)
                             contacts_batch = client.get_all_pages(
                                 "/api/v4/contacts",
-                                params={"filter[id][]": ids_batch, "with": "custom_fields,notes"},  # Добавляем notes для получения заметок
-                                embedded_key="contacts",
-                                limit=250,
-                                max_pages=10,
+                                params={
+                                    "filter[id][]": ids_batch,  # Массив ID для фильтрации
+                                    "with": "custom_fields,notes",  # Получаем кастомные поля и заметки
+                                },
+                                embedded_key="contacts",  # Ключ в _embedded для извлечения контактов
+                                limit=250,  # Максимальный лимит согласно документации
+                                max_pages=10,  # Ограничиваем количество страниц
                             )
                             logger.debug(f"get_all_pages returned: type={type(contacts_batch)}, length={len(contacts_batch) if isinstance(contacts_batch, list) else 'not_list'}")
                             if isinstance(contacts_batch, list):
@@ -1350,6 +1423,12 @@ def migrate_filtered(
                                 logger.debug(f"Fetched {len(contacts_batch)} full contacts for batch {i//batch_size + 1}")
                             else:
                                 logger.debug(f"⚠️ contacts_batch is not a list: {contacts_batch}")
+                                # Если get_all_pages вернул не список, пробуем извлечь из ответа вручную
+                                if isinstance(contacts_batch, dict) and "_embedded" in contacts_batch:
+                                    embedded = contacts_batch.get("_embedded", {})
+                                    if "contacts" in embedded and isinstance(embedded["contacts"], list):
+                                        full_contacts.extend(embedded["contacts"])
+                                        logger.debug(f"Extracted {len(embedded['contacts'])} contacts from _embedded")
                             
                             # ОТЛАДКА: детальная структура первого контакта из батча
                             if i == 0 and contacts_batch:
@@ -1373,10 +1452,13 @@ def migrate_filtered(
                                     import json
                                     logger.debug(f"  - Full structure (first 1000 chars): {json.dumps(first_full_contact, ensure_ascii=False, indent=2)[:1000]}")
                                 logger.debug(f"===== END FIRST FULL CONTACT =====")
-                    except Exception as e:
-                        logger.debug(f"Error fetching full contact data: {type(e).__name__}: {e}", exc_info=True)
-                
-                logger.debug(f"Total full contacts fetched: {len(full_contacts)}")
+                        except Exception as e:
+                            logger.debug(f"Error fetching full contact data: {type(e).__name__}: {e}", exc_info=True)
+                    
+                    logger.debug(f"Total full contacts fetched: {len(full_contacts)}")
+                else:
+                    # Контакты уже получены через альтернативный метод, они полные
+                    logger.debug(f"Using {len(full_contacts)} contacts from alternative method (skip ID fetch)")
                 
                 # Получаем заметки контактов отдельно (если их нет в _embedded)
                 # Это нужно, потому что не все контакты могут иметь заметки в _embedded
@@ -1713,11 +1795,32 @@ def migrate_filtered(
                             logger.debug(f"  - [field {cf_idx}] field_id={field_id}, field_code={field_code}, field_name={field_name}, field_type={field_type}, values_count={len(values)}")
                         
                         for v_idx, v in enumerate(values):
-                            # Значение может быть как dict (с ключом "value"), так и строкой
+                            # Согласно документации AmoCRM API v4:
+                            # Значение может быть dict с полями: value, enum_id, enum_code
+                            # Также может быть поле "enum" (строка) для обратной совместимости
                             if isinstance(v, dict):
-                                val = str(v.get("value") or "").strip()
+                                # value может быть строкой, числом или объектом (для сложных типов)
+                                value_raw = v.get("value")
+                                if value_raw is None:
+                                    continue
+                                # Преобразуем value в строку (для телефонов/email это всегда строка)
+                                if isinstance(value_raw, (str, int, float)):
+                                    val = str(value_raw).strip()
+                                elif isinstance(value_raw, dict):
+                                    # Для сложных типов (например, связь с другими сущностями)
+                                    # Пытаемся извлечь текстовое представление
+                                    val = str(value_raw.get("value") or value_raw.get("name") or str(value_raw)).strip()
+                                else:
+                                    val = str(value_raw).strip()
+                                
+                                # enum_id - числовой идентификатор enum
                                 enum_id = v.get("enum_id")
-                                enum_code = v.get("enum_code")
+                                
+                                # enum_code - строковый код enum (WORK, MOBILE и т.д.)
+                                # Также проверяем поле "enum" для обратной совместимости
+                                enum_code = v.get("enum_code") or v.get("enum")
+                                if enum_code and not isinstance(enum_code, str):
+                                    enum_code = str(enum_code)
                             elif isinstance(v, str):
                                 val = v.strip()
                                 enum_id = None
@@ -1726,6 +1829,7 @@ def migrate_filtered(
                                 val = str(v).strip() if v else ""
                                 enum_id = None
                                 enum_code = None
+                            
                             if not val:
                                 continue
                             

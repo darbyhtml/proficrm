@@ -124,7 +124,26 @@ class AmoClient:
 
     def _request(self, method: str, url: str, *, params: dict[str, Any] | None = None, json_body: Any | None = None, auth: bool = True) -> AmoResponse:
         if params:
-            qs = urllib.parse.urlencode({k: v for k, v in params.items() if v is not None}, doseq=True)
+            # AmoCRM API требует специальный формат для массивов: filter[id][]=1&filter[id][]=2
+            # urllib.parse.urlencode не поддерживает это напрямую, поэтому обрабатываем вручную
+            query_parts = []
+            for key, value in params.items():
+                if value is None:
+                    continue
+                # Если значение - список, формируем параметры для каждого элемента
+                if isinstance(value, list):
+                    for item in value:
+                        if item is not None:
+                            # Экранируем ключ и значение
+                            encoded_key = urllib.parse.quote(str(key), safe='[]=')
+                            encoded_value = urllib.parse.quote(str(item), safe='')
+                            query_parts.append(f"{encoded_key}={encoded_value}")
+                else:
+                    # Обычный параметр
+                    encoded_key = urllib.parse.quote(str(key), safe='[]=')
+                    encoded_value = urllib.parse.quote(str(value), safe='')
+                    query_parts.append(f"{encoded_key}={encoded_value}")
+            qs = "&".join(query_parts)
             url = url + ("&" if "?" in url else "?") + qs
 
         headers: dict[str, str] = {"Accept": "application/json"}
