@@ -4323,6 +4323,8 @@ def task_list(request: HttpRequest) -> HttpResponse:
 @login_required
 def task_create(request: HttpRequest) -> HttpResponse:
     user: User = request.user
+    # Получаем company_id из GET параметров (доступно и для GET, и для POST)
+    company_id = (request.GET.get("company") or "").strip()
 
     if request.method == "POST":
         form = TaskForm(request.POST)
@@ -4449,7 +4451,6 @@ def task_create(request: HttpRequest) -> HttpResponse:
             return redirect("task_list")
     else:
         initial = {"assigned_to": user}
-        company_id = (request.GET.get("company") or "").strip()
         if company_id:
             comp = Company.objects.select_related("responsible", "branch", "head_company").filter(id=company_id).first()
             if comp and _can_edit_company(user, comp):
