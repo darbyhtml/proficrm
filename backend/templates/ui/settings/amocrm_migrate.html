@@ -194,6 +194,7 @@
                             {% elif field_name == "phone" %}Телефон
                             {% elif field_name == "email" %}Email
                             {% elif field_name == "website" %}Сайт
+                            {% elif field_name == "phone_comment" %}Комментарий к телефону (компания)
                             {% elif field_name == "contact_name" %}Руководитель
                             {% elif field_name == "activity_kind" %}Вид деятельности
                             {% elif field_name == "employees_count" %}Численность сотрудников
@@ -218,6 +219,85 @@
                           </div>
                         </div>
                       {% endfor %}
+                    </div>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+
+        {% if form.dry_run.value and result.contacts_updates_preview %}
+          <div class="mt-4 border-t pt-4">
+            <div class="font-medium mb-3">Что будет обновлено — контакты</div>
+            <div class="space-y-3 text-sm">
+              {% for c in result.contacts_updates_preview %}
+                <div class="rounded-lg border p-4 {% if c.is_new %}bg-green-50 border-green-200{% else %}bg-blue-50 border-blue-200{% endif %}">
+                  <div class="font-medium mb-1 flex flex-wrap items-center gap-2">
+                    {% if c.is_new %}
+                      <span class="text-green-600">🆕</span>
+                      <span>Новый контакт: {{ c.contact_name }}</span>
+                    {% else %}
+                      <span class="text-blue-600">🔄</span>
+                      <span>{{ c.contact_name }}</span>
+                    {% endif %}
+                    <span class="text-xs muted-2">(amo id: {{ c.amo_contact_id }})</span>
+                  </div>
+                  <div class="text-xs muted-2 mb-3">
+                    Компания: {{ c.company_name }}{% if c.company_id %} (ID: {{ c.company_id }}){% endif %}
+                  </div>
+
+                  {% if c.field_changes %}
+                    <div class="space-y-2">
+                      {% for field_name, diff in c.field_changes.items %}
+                        <div class="bg-white rounded border p-2">
+                          <div class="font-medium text-xs mb-1">
+                            {% if field_name == "position" %}Должность
+                            {% elif field_name == "cold_call" %}Холодный звонок
+                            {% elif field_name == "first_phone_comment" %}Комментарий к первому телефону
+                            {% else %}{{ field_name }}{% endif %}
+                          </div>
+                          <div class="flex gap-3 text-xs">
+                            <div class="flex-1">
+                              <div class="text-red-600 font-medium mb-1">Было:</div>
+                              <div class="bg-red-50 p-2 rounded border border-red-200 break-words">{{ diff.old|default:"—"|truncatewords:30 }}</div>
+                            </div>
+                            <div class="flex-1">
+                              <div class="text-green-600 font-medium mb-1">Будет:</div>
+                              <div class="bg-green-50 p-2 rounded border border-green-200 break-words">{{ diff.new|default:"—"|truncatewords:30 }}</div>
+                            </div>
+                          </div>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
+
+                  {% if c.phones_add %}
+                    <div class="mt-3">
+                      <div class="font-medium text-xs mb-2">Добавятся телефоны:</div>
+                      <div class="space-y-1 text-xs">
+                        {% for p in c.phones_add %}
+                          <div class="bg-white rounded border px-2 py-1">
+                            <b>{{ p.value }}</b>
+                            <span class="muted-2">({{ p.type }})</span>
+                            {% if p.comment %}<span class="ml-2 text-brand-dark/70">Комментарий: {{ p.comment|truncatewords:20 }}</span>{% endif %}
+                          </div>
+                        {% endfor %}
+                      </div>
+                    </div>
+                  {% endif %}
+
+                  {% if c.emails_add %}
+                    <div class="mt-3">
+                      <div class="font-medium text-xs mb-2">Добавятся email:</div>
+                      <div class="space-y-1 text-xs">
+                        {% for e in c.emails_add %}
+                          <div class="bg-white rounded border px-2 py-1">
+                            <b>{{ e.value }}</b>
+                            <span class="muted-2">({{ e.type }})</span>
+                          </div>
+                        {% endfor %}
+                      </div>
                     </div>
                   {% endif %}
                 </div>

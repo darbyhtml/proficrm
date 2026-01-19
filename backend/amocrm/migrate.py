@@ -1709,6 +1709,111 @@ def migrate_filtered(
                         logger.debug(f"  - has email field: {bool(ac.get('email'))}")
                     
                     # Обновляем или создаём контакт
+                    # DRY-RUN: собираем понятный diff "что будет обновлено" по контакту (поля + что добавится в телефоны/почты)
+                    if dry_run:
+                        if res.contacts_updates_preview is None:
+                            res.contacts_updates_preview = []
+
+                        planned_field_changes: dict[str, dict[str, str]] = {}
+                        planned_phones_add: list[dict[str, str]] = []
+                        planned_emails_add: list[dict[str, str]] = []
+
+                        # Снимок текущих данных контакта (если он уже есть в CRM)
+                        old_position = ""
+                        old_is_cold_call = False
+                        old_phones: list[dict[str, str]] = []
+                        old_emails: list[str] = []
+                        if existing_contact:
+                            old_position = str(existing_contact.position or "")
+                            old_is_cold_call = bool(getattr(existing_contact, "is_cold_call", False))
+                            try:
+                                old_phones = [
+                                    {"value": p.value, "type": str(p.type), "comment": str(p.comment or "")}
+                                    for p in existing_contact.phones.all()
+                                ]
+                            except Exception:
+                                old_phones = []
+                            try:
+                                old_emails = [str(e.value or "") for e in existing_contact.emails.all()]
+                            except Exception:
+                                old_emails = []
+
+                        # Позиция: показываем только если "мягкий режим" позволил бы обновить
+                        if existing_contact:
+                            try:
+                                crf_preview = dict(existing_contact.raw_fields or {})
+                            except Exception:
+                                crf_preview = {}
+                            cprev_preview = crf_preview.get("amo_values") or {}
+                            if not isinstance(cprev_preview, dict):
+                                cprev_preview = {}
+
+                            def _c_can_update_preview(field: str) -> bool:
+                                cur = getattr(existing_contact, field)
+                                if cur in ("", None):
+                                    return True
+                                if field in cprev_preview and cprev_preview.get(field) == cur:
+                                    return True
+                                return False
+
+                            if position and _c_can_update_preview("position") and (existing_contact.position or "") != position[:255]:
+                                planned_field_changes["position"] = {"old": old_position, "new": position[:255]}
+                        else:
+                            if position:
+                                planned_field_changes["position"] = {"old": "", "new": position[:255]}
+
+                        # Холодный звонок
+                        if cold_marked_at_dt:
+                            planned_field_changes["cold_call"] = {
+                                "old": "Да" if old_is_cold_call else "Нет",
+                                "new": "Да",
+                            }
+
+                        # Телефоны/почты: покажем только добавления (мы не удаляем/не затираем)
+                        old_phone_values = set([p.get("value") for p in (old_phones or []) if p.get("value")])
+                        for pt, pv, pc in phones:
+                            pv_db = str(pv).strip()[:50]
+                            if pv_db and pv_db not in old_phone_values:
+                                planned_phones_add.append(
+                                    {
+                                        "value": pv_db,
+                                        "type": str(pt),
+                                        "comment": str(pc or "")[:255],
+                                    }
+                                )
+
+                        old_email_values = set([str(e or "").strip().lower() for e in (old_emails or []) if e])
+                        for et, ev in emails:
+                            ev_db = str(ev).strip()[:254].lower()
+                            if ev_db and ev_db not in old_email_values:
+                                planned_emails_add.append({"value": ev_db, "type": str(et)})
+
+                        # Комментарий к первому телефону, если note_text и у первого номера пустой comment
+                        if note_text and phones:
+                            first_phone_val = str(phones[0][1]).strip()[:50]
+                            if first_phone_val:
+                                existing_first = None
+                                for p in (old_phones or []):
+                                    if p.get("value") == first_phone_val:
+                                        existing_first = p
+                                        break
+                                if existing_first and not (existing_first.get("comment") or "").strip():
+                                    planned_field_changes["first_phone_comment"] = {"old": "", "new": note_text[:255]}
+
+                        if planned_field_changes or planned_phones_add or planned_emails_add:
+                            res.contacts_updates_preview.append(
+                                {
+                                    "company_name": local_company.name if local_company else "",
+                                    "company_id": local_company.id if local_company else None,
+                                    "contact_name": f"{last_name} {first_name}".strip() or "(без имени)",
+                                    "amo_contact_id": amo_contact_id,
+                                    "is_new": existing_contact is None,
+                                    "field_changes": planned_field_changes,
+                                    "phones_add": planned_phones_add,
+                                    "emails_add": planned_emails_add,
+                                }
+                            )
+
                     # Обрабатываем данные о холодном звонке из amoCRM
                     cold_marked_at_dt = None
                     if cold_call_timestamp:
