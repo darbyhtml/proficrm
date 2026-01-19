@@ -371,6 +371,16 @@ class TaskForm(forms.ModelForm):
                 raise forms.ValidationError("Выбранный пользователь не найден или неактивен.")
         return assigned_to
 
+    def clean_type(self):
+        """
+        Тип задачи (поле «Задача») обязателен.
+        Оставлять «Без статуса» / пустое значение больше нельзя.
+        """
+        task_type = self.cleaned_data.get("type")
+        if not task_type:
+            raise forms.ValidationError("Пожалуйста, выберите тип задачи в поле «Задача».")
+        return task_type
+
 
 class TaskEditForm(forms.ModelForm):
     due_at = forms.DateTimeField(
@@ -404,6 +414,15 @@ class TaskEditForm(forms.ModelForm):
             "description": forms.Textarea(attrs={"rows": 4, "class": "w-full rounded-lg border px-3 py-2"}),
             "type": TaskTypeSelectWidget(attrs={"class": "w-full rounded-lg border px-3 py-2 task-type-select"}),
         }
+
+    def clean_type(self):
+        """
+        Тип задачи (поле «Задача») обязателен при редактировании.
+        """
+        task_type = self.cleaned_data.get("type")
+        if not task_type:
+            raise forms.ValidationError("Пожалуйста, выберите тип задачи в поле «Задача».")
+        return task_type
 
 class BranchForm(forms.ModelForm):
     class Meta:
