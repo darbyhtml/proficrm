@@ -4467,19 +4467,6 @@ def task_create(request: HttpRequest) -> HttpResponse:
                     "errors": errors
                 }, status=400)
             # Для не-AJAX запросов продолжаем рендеринг формы с ошибками
-        else:
-            # Форма не валидна
-            if is_ajax:
-                # Собираем ошибки валидации
-                errors = {}
-                for field, field_errors in form.errors.items():
-                    errors[field] = field_errors
-                return JsonResponse({
-                    "ok": False,
-                    "error": "Ошибки валидации формы.",
-                    "errors": errors
-                }, status=400)
-            # Для не-AJAX запросов возвращаем форму с ошибками (будет отрендерена ниже)
     else:
         initial = {"assigned_to": user}
         if company_id:
