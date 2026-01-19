@@ -4741,24 +4741,32 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: str 
                 current_user_id = None
     
     if current_user_id and not base_queryset.filter(id=current_user_id).exists():
-            # Добавляем выбранного пользователя в queryset
-            from django.db.models import Case, When, IntegerField
-            queryset = (
-                User.objects.filter(
-                    Q(id__in=base_queryset.values_list('id', flat=True)) | Q(id=current_user_id)
-                )
-                .annotate(
-                    custom_order=Case(
-                        When(id=current_user_id, then=0),
-                        default=1,
-                        output_field=IntegerField(),
-                    )
-                )
-                .order_by("custom_order", "last_name", "first_name")
-                .select_related("branch")
+        # Добавляем выбранного пользователя в queryset
+        from django.db.models import Case, When, IntegerField
+        # Пытаемся преобразовать current_user_id в правильный тип (int для IntegerField)
+        try:
+            # User использует Integer ID, поэтому преобразуем в int
+            filter_id = int(current_user_id)
+        except (ValueError, TypeError):
+            # Если не int, оставляем как есть (на случай, если это UUID для других моделей)
+            filter_id = current_user_id
+        
+        queryset = (
+            User.objects.filter(
+                Q(id__in=base_queryset.values_list('id', flat=True)) | Q(id=filter_id)
             )
-        else:
-            queryset = base_queryset
+            .annotate(
+                custom_order=Case(
+                    When(id=filter_id, then=0),
+                    default=1,
+                    output_field=IntegerField(),
+                )
+            )
+            .order_by("custom_order", "last_name", "first_name")
+            .select_related("branch")
+        )
+    elif current_user_id:
+        queryset = base_queryset
     else:
         queryset = base_queryset
     
