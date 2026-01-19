@@ -690,9 +690,10 @@ def fetch_amo_users(client: AmoClient) -> list[dict[str, Any]]:
     """
     Получает список пользователей из AmoCRM.
     Если long-lived token не имеет прав на /api/v4/users (403), возвращает пустой список.
+    Rate limiting применяется автоматически в AmoClient.
     """
     try:
-        return client.get_all_pages("/api/v4/users", embedded_key="users", limit=100, delay_between_pages=0.2)
+        return client.get_all_pages("/api/v4/users", embedded_key="users", limit=50, max_pages=20)
     except AmoApiError as e:
         # Если 403 Forbidden - long-lived token не имеет прав на доступ к пользователям
         if "403" in str(e) or "Forbidden" in str(e):
@@ -726,70 +727,65 @@ def _field_options(field: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
-def fetch_companies_by_responsible(client: AmoClient, responsible_user_id: int, *, limit_pages: int = 200, with_contacts: bool = False) -> list[dict[str, Any]]:
-    # amo v4: /api/v4/companies?filter[responsible_user_id]=...
-    # with_contacts: если True, запрашиваем компании с контактами через with=contacts
+def fetch_companies_by_responsible(client: AmoClient, responsible_user_id: int, *, limit_pages: int = 100, with_contacts: bool = False) -> list[dict[str, Any]]:
+    """
+    Получает компании по ответственному пользователю.
+    Rate limiting применяется автоматически в AmoClient.
+    ВСЕГДА запрашиваем БЕЗ контактов (with_contacts=False) - контакты получаем отдельно.
+    """
     params = {f"filter[responsible_user_id]": responsible_user_id, "with": "custom_fields"}
-    if with_contacts:
-        # Добавляем contacts в with, чтобы получить контакты в _embedded.contacts
-        # Согласно документации: контакты в _embedded.contacts приходят ПОЛНЫМИ, включая custom_fields_values
-        # НЕ запрашиваем notes здесь - это слишком тяжело, запросим отдельно если нужно
-        params["with"] = "custom_fields,contacts"
+    # НЕ запрашиваем contacts здесь - это создает огромные ответы и вызывает 504
+    # Контакты получаем отдельно через filter[company_id][]
     return client.get_all_pages(
         "/api/v4/companies",
         params=params,
         embedded_key="companies",
-        limit=5,  # КРИТИЧЕСКИ: только 5 компаний за раз для избежания 504
+        limit=25,  # Оптимальный размер: не слишком большой (504), не слишком маленький
         max_pages=limit_pages,
-        delay_between_pages=2.0,  # КРИТИЧЕСКИ: 2 сек между страницами
     )
 
 
 def fetch_tasks_for_companies(client: AmoClient, company_ids: list[int]) -> list[dict[str, Any]]:
+    """
+    Получает задачи для компаний.
+    Rate limiting применяется автоматически в AmoClient.
+    Используем батчи по 10 компаний для оптимального баланса.
+    """
     if not company_ids:
         return []
-    # amo v4 tasks: /api/v4/tasks?filter[entity_type]=companies&filter[entity_id][]=...
-    # КРИТИЧЕСКИ оптимизировано для избежания 504
     out: list[dict[str, Any]] = []
-    batch = 5  # КРИТИЧЕСКИ уменьшено с 50 до 5
-    for i in range(0, len(company_ids), batch):
-        # Задержка между батчами
-        if i > 0:
-            time.sleep(2.0)  # 2 сек между батчами
-        ids = company_ids[i : i + batch]
+    batch_size = 10  # Оптимальный размер батча
+    for i in range(0, len(company_ids), batch_size):
+        ids = company_ids[i : i + batch_size]
         out.extend(
             client.get_all_pages(
                 "/api/v4/tasks",
                 params={f"filter[entity_type]": "companies", f"filter[entity_id][]": ids},
                 embedded_key="tasks",
-                limit=25,  # КРИТИЧЕСКИ уменьшено с 250 до 25
-                max_pages=10,  # Уменьшено с 200 до 10
-                delay_between_pages=1.0,  # Увеличена задержка до 1 сек
+                limit=50,
+                max_pages=20,
             )
         )
     return out
 
 
 def fetch_notes_for_companies(client: AmoClient, company_ids: list[int]) -> list[dict[str, Any]]:
+    """
+    Получает заметки для компаний.
+    Rate limiting применяется автоматически в AmoClient.
+    API не поддерживает батчинг для заметок, поэтому обрабатываем по одной компании.
+    """
     if not company_ids:
         return []
-    # В amoCRM заметки обычно берутся не общим /notes, а из сущности:
-    # /api/v4/companies/{id}/notes
-    # Обрабатываем компании по одной (API не поддерживает батчинг для заметок)
-    # КРИТИЧЕСКИ оптимизировано для избежания 504
     out: list[dict[str, Any]] = []
-    for idx, cid in enumerate(company_ids):
-        # Задержка между запросами (включая первый)
-        if idx > 0:
-            time.sleep(1.0)  # 1 сек между запросами заметок
+    for cid in company_ids:
         try:
             notes = client.get_all_pages(
                 f"/api/v4/companies/{int(cid)}/notes",
                 params={},
                 embedded_key="notes",
-                limit=25,  # КРИТИЧЕСКИ уменьшено с 100 до 25
-                max_pages=5,  # Уменьшено с 50 до 5
-                delay_between_pages=1.0,  # Увеличена задержка до 1 сек
+                limit=50,
+                max_pages=10,
             )
             out.extend(notes)
         except Exception as e:
@@ -801,36 +797,27 @@ def fetch_notes_for_companies(client: AmoClient, company_ids: list[int]) -> list
 
 def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> list[dict[str, Any]]:
     """
-    Получает контакты компаний из amoCRM.
-    Согласно документации: https://www.amocrm.ru/developers/content/crm_platform/contacts-api
-    Используем filter[company_id][] для получения контактов, связанных с компаниями.
-    КРИТИЧЕСКИ оптимизировано для избежания 504.
+    Получает контакты компаний из amoCRM через filter[company_id][].
+    Rate limiting применяется автоматически в AmoClient.
+    Используем батчи по 10 компаний для оптимального баланса.
     """
     if not company_ids:
         return []
     out: list[dict[str, Any]] = []
-    # КРИТИЧЕСКИ: батчи по 3 компании (уменьшено с 50)
-    batch = 3
-    for i in range(0, len(company_ids), batch):
-        # Задержка между батчами
-        if i > 0:
-            time.sleep(3.0)  # КРИТИЧЕСКИ: 3 сек между батчами
-        else:
-            time.sleep(1.0)  # Задержка перед первым батчем
-        
-        ids_batch = company_ids[i : i + batch]
+    batch_size = 10  # Оптимальный размер батча
+    for i in range(0, len(company_ids), batch_size):
+        ids_batch = company_ids[i : i + batch_size]
         try:
-            # НЕ запрашиваем notes - это слишком тяжело, только custom_fields
+            # Только custom_fields, БЕЗ notes - это слишком тяжело
             contacts = client.get_all_pages(
                 "/api/v4/contacts",
                 params={
                     "filter[company_id][]": ids_batch,
-                    "with": "custom_fields",  # Только custom_fields, БЕЗ notes
+                    "with": "custom_fields",
                 },
                 embedded_key="contacts",
-                limit=25,  # КРИТИЧЕСКИ уменьшено с 250 до 25
-                max_pages=5,  # Уменьшено с 50 до 5
-                delay_between_pages=1.0,  # Увеличена задержка до 1 сек
+                limit=50,
+                max_pages=20,
             )
             out.extend(contacts)
         except Exception as e:
@@ -843,7 +830,8 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
 def fetch_notes_for_contacts(client: AmoClient, contact_ids: list[int]) -> dict[int, list[dict[str, Any]]]:
     """
     Получает заметки контактов из amoCRM.
-    Аналогично fetch_notes_for_companies, но для контактов.
+    Rate limiting применяется автоматически в AmoClient.
+    API не поддерживает батчинг для заметок, поэтому обрабатываем по одному контакту.
     Возвращает словарь {contact_id: [notes]}.
     """
     if not contact_ids:
@@ -857,9 +845,8 @@ def fetch_notes_for_contacts(client: AmoClient, contact_ids: list[int]) -> dict[
                 f"/api/v4/contacts/{int(cid)}/notes",
                 params={},
                 embedded_key="notes",
-                limit=100,  # Уменьшено с 250 до 100 для избежания 504 Gateway Timeout
-                max_pages=50,
-                delay_between_pages=0.3,
+                limit=50,
+                max_pages=10,
             )
             if notes:
                 out[cid] = notes
@@ -1588,57 +1575,36 @@ def migrate_filtered(
             contacts_skipped = 0  # счетчик пропущенных контактов
             logger.debug(f"===== STARTING CONTACT IMPORT for {len(amo_ids)} companies =====")
             try:
-                # КРИТИЧЕСКИ УПРОЩЕННЫЙ ПОДХОД: 
-                # Компании уже запрошены БЕЗ контактов (with_contacts=False)
-                # Получаем контакты ОТДЕЛЬНО через filter[company_id][] по 1 компании за раз
-                # Это максимально легкий и надежный способ
-                full_contacts: list[dict[str, Any]] = []
-                contact_id_to_company_map: dict[int, int] = {}  # contact_id -> amo_company_id
+                # Оптимизированный подход: получаем контакты батчами через filter[company_id][]
+                # Rate limiting применяется автоматически в AmoClient
+                logger.debug(f"Fetching contacts for {len(amo_ids)} companies via filter[company_id][]")
                 
-                logger.debug(f"Fetching contacts for {len(amo_ids)} companies via filter[company_id][] (one by one for reliability)")
-                
-                # КРИТИЧЕСКИ: запрашиваем контакты по 1 компании за раз с большими задержками
-                for idx, company_id in enumerate(amo_ids):
-                    # Задержка перед каждым запросом (включая первый)
-                    if idx > 0:
-                        time.sleep(2.0)  # КРИТИЧЕСКИ: 2 сек между запросами
-                    else:
-                        time.sleep(0.5)  # Небольшая задержка перед первым
-                    
-                    try:
-                        logger.debug(f"Fetching contacts for company {company_id} ({idx + 1}/{len(amo_ids)})...")
-                        # Запрашиваем контакты для ОДНОЙ компании
-                        # Только custom_fields, БЕЗ notes - максимально легкий запрос
-                        contacts_for_company = client.get_all_pages(
-                            "/api/v4/contacts",
-                            params={
-                                "filter[company_id][]": [company_id],  # Только одна компания
-                                "with": "custom_fields",  # Только custom_fields, БЕЗ notes
-                            },
-                            embedded_key="contacts",
-                            limit=10,  # КРИТИЧЕСКИ: только 10 контактов за раз
-                            max_pages=3,  # Максимум 3 страницы (30 контактов на компанию)
-                            delay_between_pages=1.0,  # 1 сек между страницами
-                        )
-                        
-                        if isinstance(contacts_for_company, list) and contacts_for_company:
-                            logger.debug(f"Found {len(contacts_for_company)} contacts for company {company_id}")
-                            full_contacts.extend(contacts_for_company)
-                            # Создаем маппинг контактов к компании
-                            for contact in contacts_for_company:
-                                if isinstance(contact, dict):
-                                    contact_id = int(contact.get("id") or 0)
-                                    if contact_id:
-                                        contact_id_to_company_map[contact_id] = company_id
-                        else:
-                            logger.debug(f"No contacts found for company {company_id}")
-                    except Exception as e:
-                        logger.warning(f"Error fetching contacts for company {company_id}: {e}", exc_info=True)
-                        # Продолжаем для следующих компаний
-                        continue
-                
+                full_contacts = fetch_contacts_for_companies(client, amo_ids)
                 res.contacts_seen = len(full_contacts)
                 logger.debug(f"Total contacts fetched: {res.contacts_seen} from {len(amo_ids)} companies")
+                
+                # Создаем маппинг контактов к компаниям
+                contact_id_to_company_map: dict[int, int] = {}  # contact_id -> amo_company_id
+                amo_ids_set = set(amo_ids)
+                for contact in full_contacts:
+                    if isinstance(contact, dict):
+                        contact_id = int(contact.get("id") or 0)
+                        if contact_id:
+                            # Пытаемся найти компанию через _embedded.companies или company_id
+                            embedded = contact.get("_embedded") or {}
+                            companies_in_contact = embedded.get("companies") or []
+                            if isinstance(companies_in_contact, list):
+                                for comp_ref in companies_in_contact:
+                                    if isinstance(comp_ref, dict):
+                                        comp_id = int(comp_ref.get("id") or 0)
+                                        if comp_id in amo_ids_set:
+                                            contact_id_to_company_map[contact_id] = comp_id
+                                            break
+                            # Если не нашли через _embedded, проверяем company_id напрямую
+                            if contact_id not in contact_id_to_company_map:
+                                comp_id_direct = int(contact.get("company_id") or 0)
+                                if comp_id_direct in amo_ids_set:
+                                    contact_id_to_company_map[contact_id] = comp_id_direct
                 
                 # Если контактов не найдено, сохраняем информацию об ошибке
                 if res.contacts_seen == 0:

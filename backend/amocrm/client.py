@@ -39,8 +39,13 @@ class AmoResponse:
 
 
 class AmoClient:
+    # Rate limiting: максимум 6 запросов в секунду (0.2 сек между запросами)
+    # Используем 0.2 сек для надежности (теоретически можно 0.167, но лучше с запасом)
+    MIN_REQUEST_INTERVAL = 0.2  # секунды между запросами
+    
     def __init__(self, cfg: AmoApiConfig):
         self.cfg = cfg
+        self._last_request_time: float = 0.0  # время последнего запроса
 
     @property
     def base(self) -> str:
@@ -257,14 +262,13 @@ class AmoClient:
         path: str,
         *,
         params: dict[str, Any] | None = None,
-        limit: int = 100,  # Уменьшено с 250 до 100 для избежания 504 Gateway Timeout
-        max_pages: int = 200,
+        limit: int = 50,  # Оптимальный размер страницы: не слишком большой (504), не слишком маленький (много запросов)
+        max_pages: int = 100,
         embedded_key: str | None = None,
-        delay_between_pages: float = 0.2,  # Задержка между страницами (0.2 сек = 5 запросов/сек, безопасно для лимита 7/сек)
     ) -> list[dict]:
         """
         Возвращает склеенный список элементов из _embedded (v4).
-        Добавлена задержка между запросами для избежания rate limit (429).
+        Rate limiting применяется автоматически через _rate_limit() в _request().
         """
         out: list[dict] = []
         page = 1
@@ -275,11 +279,8 @@ class AmoClient:
             p["page"] = page
             p["limit"] = limit
             
-            # Задержка перед запросом (кроме первой страницы)
-            if page > 1 and delay_between_pages > 0:
-                time.sleep(delay_between_pages)
-            
             try:
+                # Rate limiting применяется автоматически в self.get() -> self._request() -> self._rate_limit()
                 data = self.get(path, params=p, retry_on_429=True) or {}
             except AmoApiError as e:
                 # Если получили 429 после всех retry, логируем и прерываем
