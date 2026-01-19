@@ -76,6 +76,26 @@
       .company-row-cold{background:rgba(253,173,58,.08)!important; border-left:3px solid rgba(253,173,58,.45)}
       .company-row-cold:hover{background:rgba(253,173,58,.15)!important}
       .wrap-anywhere{overflow-wrap:anywhere; word-break:break-word}
+
+      /* Прогресс рассылки: компактный, не перекрывает кнопки */
+      .mail-progress{
+        max-width:min(360px, calc(100vw - 32px));
+      }
+      .mail-progress__body{
+        min-width:0;
+      }
+      .mail-progress__title,
+      .mail-progress__counts{
+        max-width: 240px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      /* На совсем узких экранах делаем еще компактнее */
+      @media (max-width: 480px){
+        .mail-progress{ left: 12px; right: 12px; bottom: 12px; max-width:none; }
+        .mail-progress__title, .mail-progress__counts{ max-width: 180px; }
+      }
       
       /* Глобальные стили скроллбаров (как в календаре) */
       * {
@@ -975,14 +995,14 @@
     </div>
 
     {# Глобальный прогресс рассылки (показывается только если есть активная отправка) #}
-    <a id="mailProgressWidget" href="#" class="hidden fixed bottom-5 left-5 z-50 bg-white border border-brand-soft rounded-2xl shadow-lg px-3 py-2 flex items-center gap-3 hover:bg-brand-soft/20" style="min-width:210px; position:fixed;">
+    <a id="mailProgressWidget" href="#" class="hidden fixed bottom-5 left-5 z-50 bg-white border border-brand-soft rounded-2xl shadow-lg px-3 py-2 flex items-center gap-3 hover:bg-brand-soft/20 mail-progress" style="min-width:210px; position:fixed;">
       <div id="mailProgressCircle" class="w-10 h-10 rounded-full flex items-center justify-center text-xs font-semibold" style="background:conic-gradient(var(--brand-teal) 0deg, rgba(194,226,222,.6) 0deg); color:var(--brand-dark); border:1px solid rgba(194,226,222,.9)">
         <span id="mailProgressPct">0%</span>
       </div>
-      <div class="leading-tight relative pr-5">
+      <div class="leading-tight relative pr-5 mail-progress__body">
         <div class="text-xs muted">Рассылка</div>
-        <div id="mailProgressText" class="text-sm font-medium">—</div>
-        <div id="mailProgressCounts" class="text-[11px] muted-2">—</div>
+        <div id="mailProgressText" class="text-sm font-medium mail-progress__title">—</div>
+        <div id="mailProgressCounts" class="text-[11px] muted-2 mail-progress__counts">—</div>
         <button id="mailProgressClose" type="button" class="hidden absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center rounded-full border border-brand-soft bg-white text-brand-dark/60 hover:text-red-500 hover:border-red-400 transition-colors" title="Закрыть">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M18 6L6 18"/>
