@@ -9,10 +9,13 @@
           <h1 class="text-2xl font-semibold">Компании</h1>
             <div class="text-sm text-brand-dark/70 flex flex-wrap items-center gap-2">
               <span>Поиск по названию, ИНН, адресу</span>
-              <span class="badge">Всего: <b class="ml-1">{{ companies_total }}</b></span>
-              {% if filter_active and companies_filtered != companies_total %}
-                <span class="badge badge-warn">По фильтру: <b class="ml-1">{{ companies_filtered }}</b></span>
-              {% endif %}
+              <span class="badge" id="companiesTotalBadge">Всего: <b class="ml-1">{{ companies_total }}</b></span>
+              <span
+                class="badge badge-warn {% if not filter_active or companies_filtered == companies_total %}hidden{% endif %}"
+                id="companiesFilteredBadge"
+              >
+                По фильтру: <b class="ml-1">{{ companies_filtered }}</b>
+              </span>
             </div>
         </div>
         <div class="flex gap-2">
@@ -679,15 +682,21 @@
           }
           
           // Обновляем счетчики
-          const totalEl = document.querySelector('.badge b');
+          const totalBadge = document.getElementById('companiesTotalBadge');
+          const filteredBadge = document.getElementById('companiesFilteredBadge');
+          const totalEl = totalBadge ? totalBadge.querySelector('b') : null;
+          const filteredEl = filteredBadge ? filteredBadge.querySelector('b') : null;
+
           if (totalEl && data.total !== undefined) {
             totalEl.textContent = data.total;
           }
-          
-          if (data.filtered !== data.total) {
-            const filteredEl = document.querySelector('.badge-warn b');
-            if (filteredEl && data.filtered !== undefined) {
-              filteredEl.textContent = data.filtered;
+
+          if (filteredBadge && filteredEl && data.filtered !== undefined && data.total !== undefined) {
+            filteredEl.textContent = data.filtered;
+            if (data.filtered !== data.total) {
+              filteredBadge.classList.remove('hidden');
+            } else {
+              filteredBadge.classList.add('hidden');
             }
           }
           
