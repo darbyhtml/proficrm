@@ -16,7 +16,7 @@
     </button>
   </div>
 
-  <form method="post" class="space-y-4" data-contact-panel-form>
+  <form method="post" action="{{ action_url }}" class="space-y-4" data-contact-panel-form>
     {% csrf_token %}
     <input type="hidden" name="modal" value="1" />
 

@@ -3669,17 +3669,17 @@ def contact_create(request: HttpRequest, company_id) -> HttpResponse:
         email_fs = ContactEmailFormSet(instance=contact, prefix="emails")
         phone_fs = ContactPhoneFormSet(instance=contact, prefix="phones")
 
+    context = {
+        "company": company,
+        "form": form,
+        "email_fs": email_fs,
+        "phone_fs": phone_fs,
+        "mode": "create",
+        "action_url": f"/companies/{company.id}/contacts/new/",
+    }
     if is_modal:
-        return render(
-            request,
-            "ui/contact_form_modal.html",
-            {"company": company, "form": form, "email_fs": email_fs, "phone_fs": phone_fs, "mode": "create"},
-        )
-    return render(
-        request,
-        "ui/contact_form.html",
-        {"company": company, "form": form, "email_fs": email_fs, "phone_fs": phone_fs, "mode": "create"},
-    )
+        return render(request, "ui/contact_form_modal.html", context)
+    return render(request, "ui/contact_form.html", context)
 
 
 @login_required
@@ -3735,17 +3735,18 @@ def contact_edit(request: HttpRequest, contact_id) -> HttpResponse:
         email_fs = ContactEmailFormSet(instance=contact, prefix="emails")
         phone_fs = ContactPhoneFormSet(instance=contact, prefix="phones")
 
+    context = {
+        "company": company,
+        "contact": contact,
+        "form": form,
+        "email_fs": email_fs,
+        "phone_fs": phone_fs,
+        "mode": "edit",
+        "action_url": f"/contacts/{contact.id}/edit/",
+    }
     if is_modal:
-        return render(
-            request,
-            "ui/contact_form_modal.html",
-            {"company": company, "contact": contact, "form": form, "email_fs": email_fs, "phone_fs": phone_fs, "mode": "edit"},
-        )
-    return render(
-        request,
-        "ui/contact_form.html",
-        {"company": company, "contact": contact, "form": form, "email_fs": email_fs, "phone_fs": phone_fs, "mode": "edit"},
-    )
+        return render(request, "ui/contact_form_modal.html", context)
+    return render(request, "ui/contact_form.html", context)
 
 
 @login_required
