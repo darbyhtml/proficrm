@@ -1343,16 +1343,20 @@ def migrate_filtered(
                     # 1. В стандартных полях (phone, email) - если они есть
                     # 2. В custom_fields_values с field_code="PHONE"/"EMAIL" или по field_name
                     # 3. В custom_fields_values по названию поля
-                    phones = []
-                    emails = []
+                    # phones/emails: сохраняем тип и комментарий (enum_code) для корректного отображения
+                    phones: list[tuple[str, str, str]] = []  # (type, value, comment)
+                    emails: list[tuple[str, str]] = []  # (type, value)
                     position = ""
                     cold_call_timestamp = None  # Timestamp холодного звонка из amoCRM
                     
                     # Стандартные поля (если есть)
                     if ac.get("phone"):
-                        phones.extend(_split_multi(str(ac.get("phone"))))
+                        for pv in _split_multi(str(ac.get("phone"))):
+                            phones.append((ContactPhone.PhoneType.OTHER, pv, ""))
                     if ac.get("email"):
-                        emails.append(str(ac.get("email")).strip())
+                        ev = str(ac.get("email")).strip()
+                        if ev:
+                            emails.append((ContactEmail.EmailType.OTHER, ev))
                     
                     # custom_fields_values для телефонов/почт/должности
                     custom_fields = ac.get("custom_fields_values") or []
@@ -1417,11 +1421,32 @@ def migrate_filtered(
                                 logger.debug(f"    [value {v_idx}] val={val[:50]}, is_phone={is_phone}, is_email={is_email}, is_position={is_position}, is_cold_call_date={is_cold_call_date}")
                             
                             if is_phone:
-                                phones.extend(_split_multi(val))
+                                # enum_code подсказывает тип (WORK/MOBILE/OTHER/...)
+                                t = str(enum_code or "").upper()
+                                if t in ("WORK", "WORKDD", "WORK_DIRECT"):
+                                    ptype = ContactPhone.PhoneType.WORK
+                                elif t in ("MOBILE", "CELL"):
+                                    ptype = ContactPhone.PhoneType.MOBILE
+                                elif t == "HOME":
+                                    ptype = ContactPhone.PhoneType.HOME
+                                elif t == "FAX":
+                                    ptype = ContactPhone.PhoneType.FAX
+                                else:
+                                    ptype = ContactPhone.PhoneType.OTHER
+                                for pv in _split_multi(val):
+                                    phones.append((ptype, pv, str(enum_code or "")))
                                 if debug_count_for_extraction < 3:
                                     logger.debug(f"      -> Added to phones: {_split_multi(val)}")
                             elif is_email:
-                                emails.append(val)
+                                t = str(enum_code or "").upper()
+                                if t in ("WORK",):
+                                    etype = ContactEmail.EmailType.WORK
+                                elif t in ("PRIV", "PERSONAL", "HOME"):
+                                    etype = ContactEmail.EmailType.PERSONAL
+                                else:
+                                    etype = ContactEmail.EmailType.OTHER
+                                for ev in _split_multi(val):
+                                    emails.append((etype, ev))
                                 if debug_count_for_extraction < 3:
                                     logger.debug(f"      -> Added to emails: {val}")
                             elif is_position:
@@ -1444,8 +1469,30 @@ def migrate_filtered(
                                         cold_call_timestamp = None
                     
                     # Убираем дубликаты
-                    phones = list(dict.fromkeys(phones))  # сохраняет порядок
-                    emails = list(dict.fromkeys(emails))
+                    # Дедуп
+                    dedup_phones: list[tuple[str, str, str]] = []
+                    seen_p = set()
+                    for pt, pv, pc in phones:
+                        pv2 = str(pv or "").strip()
+                        if not pv2:
+                            continue
+                        if pv2 in seen_p:
+                            continue
+                        seen_p.add(pv2)
+                        dedup_phones.append((pt, pv2, str(pc or "")))
+                    phones = dedup_phones
+
+                    dedup_emails: list[tuple[str, str]] = []
+                    seen_e = set()
+                    for et, ev in emails:
+                        ev2 = str(ev or "").strip().lower()
+                        if not ev2:
+                            continue
+                        if ev2 in seen_e:
+                            continue
+                        seen_e.add(ev2)
+                        dedup_emails.append((et, ev2))
+                    emails = dedup_emails
                     
                     # ОТЛАДКА: сохраняем сырые данные для анализа
                     debug_data = {
@@ -1567,7 +1614,24 @@ def migrate_filtered(
                         contact = existing_contact
                         contact.first_name = first_name[:120]
                         contact.last_name = last_name[:120]
-                        if position:
+                        # Мягкий апдейт должности: не затираем вручную
+                        try:
+                            crf = dict(contact.raw_fields or {})
+                        except Exception:
+                            crf = {}
+                        cprev = crf.get("amo_values") or {}
+                        if not isinstance(cprev, dict):
+                            cprev = {}
+
+                        def c_can_update(field: str) -> bool:
+                            cur = getattr(contact, field)
+                            if cur in ("", None):
+                                return True
+                            if field in cprev and cprev.get(field) == cur:
+                                return True
+                            return False
+
+                        if position and c_can_update("position"):
                             contact.position = position[:255]
                         # Обновляем данные о холодном звонке из amoCRM
                         if cold_marked_at_dt:
@@ -1575,35 +1639,46 @@ def migrate_filtered(
                             contact.cold_marked_at = cold_marked_at_dt
                             contact.cold_marked_by = cold_marked_by_user
                             # cold_marked_call оставляем NULL, т.к. в amoCRM нет связи с CallRequest
-                        # Обновляем raw_fields
-                        try:
-                            rf = dict(contact.raw_fields or {})
-                        except Exception:
-                            rf = {}
-                        rf.update(debug_data)
-                        contact.raw_fields = rf
+                        # Обновляем raw_fields + снимок импортированных значений
+                        crf.update(debug_data)
+                        cprev.update({"position": contact.position})
+                        crf["amo_values"] = cprev
+                        contact.raw_fields = crf
                         
                         if not dry_run:
                             contact.save()
                             res.contacts_created += 1  # Используем тот же счётчик для обновлённых
                             
-                            # Обновляем телефоны: удаляем старые, добавляем новые
-                            ContactPhone.objects.filter(contact=contact).delete()
+                            # Телефоны: мягкий upsert (не удаляем вручную добавленные)
                             phones_added = 0
-                            for p in phones:
-                                pv = str(p).strip()[:50]
-                                if pv:
-                                    ContactPhone.objects.create(contact=contact, type=ContactPhone.PhoneType.WORK, value=pv)
+                            for pt, pv, pc in phones:
+                                pv_db = str(pv).strip()[:50]
+                                if not pv_db:
+                                    continue
+                                obj = ContactPhone.objects.filter(contact=contact, value=pv_db).first()
+                                if obj is None:
+                                    ContactPhone.objects.create(contact=contact, type=pt, value=pv_db, comment=str(pc or "")[:255])
                                     phones_added += 1
+                                else:
+                                    upd = False
+                                    if not obj.comment and pc:
+                                        obj.comment = str(pc)[:255]
+                                        upd = True
+                                    if obj.type != pt and (not obj.comment or obj.comment == str(pc or "")[:255]):
+                                        obj.type = pt
+                                        upd = True
+                                    if upd:
+                                        obj.save(update_fields=["type", "comment"])
                             
-                            # Обновляем email: удаляем старые, добавляем новые
-                            ContactEmail.objects.filter(contact=contact).delete()
+                            # Email: мягкий upsert
                             emails_added = 0
-                            for e in emails:
-                                ev = str(e).strip()[:254]
-                                if ev:
+                            for et, ev in emails:
+                                ev_db = str(ev).strip()[:254]
+                                if not ev_db:
+                                    continue
+                                if not ContactEmail.objects.filter(contact=contact, value__iexact=ev_db).exists():
                                     try:
-                                        ContactEmail.objects.create(contact=contact, type=ContactEmail.EmailType.WORK, value=ev)
+                                        ContactEmail.objects.create(contact=contact, type=et, value=ev_db)
                                         emails_added += 1
                                     except Exception:
                                         pass
@@ -1635,17 +1710,17 @@ def migrate_filtered(
                             res.contacts_created += 1
                             # Добавляем телефоны и почты
                             phones_added = 0
-                            for p in phones:
-                                pv = str(p).strip()[:50]
-                                if pv and not ContactPhone.objects.filter(contact=contact, value=pv).exists():
-                                    ContactPhone.objects.create(contact=contact, type=ContactPhone.PhoneType.WORK, value=pv)
+                            for pt, pv, pc in phones:
+                                pv_db = str(pv).strip()[:50]
+                                if pv_db and not ContactPhone.objects.filter(contact=contact, value=pv_db).exists():
+                                    ContactPhone.objects.create(contact=contact, type=pt, value=pv_db, comment=str(pc or "")[:255])
                                     phones_added += 1
                             emails_added = 0
-                            for e in emails:
-                                ev = str(e).strip()[:254]
-                                if ev and not ContactEmail.objects.filter(contact=contact, value__iexact=ev).exists():
+                            for et, ev in emails:
+                                ev_db = str(ev).strip()[:254]
+                                if ev_db and not ContactEmail.objects.filter(contact=contact, value__iexact=ev_db).exists():
                                     try:
-                                        ContactEmail.objects.create(contact=contact, type=ContactEmail.EmailType.WORK, value=ev)
+                                        ContactEmail.objects.create(contact=contact, type=et, value=ev_db)
                                         emails_added += 1
                                     except Exception:
                                         pass
