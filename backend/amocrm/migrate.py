@@ -1906,6 +1906,7 @@ def migrate_filtered(
                     position = ""
                     cold_call_timestamp = None  # Timestamp холодного звонка из amoCRM
                     note_text = ""  # "Примечание"/"Комментарий" контакта (одно на все номера)
+                    birthday_timestamp = None  # Timestamp дня рождения из amoCRM (если есть)
                     
                     # ОТЛАДКА: определяем счетчик для логирования (ДО использования)
                     debug_count_for_extraction = len(res.contacts_preview) if res.contacts_preview else 0
@@ -2128,18 +2129,27 @@ def migrate_filtered(
                             # Должность: проверяем field_code="POSITION" или field_name содержит "должность"/"позиция"
                             is_position = (field_code == "POSITION" or
                                           "должность" in field_name or "позиция" in field_name)
-                            # Холодный звонок: проверяем field_name содержит "холодный звонок" и field_type="date"
-                            is_cold_call_date = (field_type == "date" and
-                                                ("холодный" in field_name and "звонок" in field_name))
+                            # Холодный звонок: проверяем field_id=448321 (из примера), field_name и field_type="date"
+                            is_cold_call_date = (
+                                field_id == 448321 or  # Известный ID поля "Холодный звонок" из примера
+                                (field_type == "date" and ("холодный" in field_name and "звонок" in field_name))
+                            )
+                            # День рождения: проверяем field_type="birthday" или field_name содержит "день рождения"/"birthday"
+                            is_birthday = (
+                                field_type == "birthday" or
+                                ("день" in field_name and "рождени" in field_name) or
+                                "birthday" in field_name.lower()
+                            )
                             # Примечание/Комментарий (текстовое поле)
-                            # Проверяем как field_name, так и field_code для большей надежности
+                            # Проверяем field_id=366537 (из примера), field_name, и field_code для большей надежности
                             is_note = (
+                                field_id == 366537 or  # Известный ID поля "Примечание" из примера
                                 any(k in field_name for k in ["примеч", "комментар", "коммент", "заметк"]) or
                                 any(k in str(field_code or "").upper() for k in ["NOTE", "COMMENT", "REMARK"])
                             )
                             
                             if debug_count_for_extraction < 3:
-                                logger.debug(f"    [value {v_idx}] val={val[:50]}, is_phone={is_phone}, is_email={is_email}, is_position={is_position}, is_cold_call_date={is_cold_call_date}, is_note={is_note}")
+                                logger.debug(f"    [value {v_idx}] val={val[:50]}, is_phone={is_phone}, is_email={is_email}, is_position={is_position}, is_cold_call_date={is_cold_call_date}, is_birthday={is_birthday}, is_note={is_note}")
                             
                             if is_phone:
                                 # Определяем тип телефона:
@@ -2246,18 +2256,39 @@ def migrate_filtered(
                                     if debug_count_for_extraction < 3:
                                         logger.debug(f"      -> Appended note_text from custom_field: {val[:100]}")
                             elif is_cold_call_date:
-                                # Холодный звонок: val - это timestamp (Unix timestamp)
+                                # Холодный звонок: val может быть timestamp (Unix timestamp) или числом
                                 # Сохраняем для последующей обработки (берем первое значение, если их несколько)
                                 if cold_call_timestamp is None:
                                     try:
-                                        cold_call_timestamp = int(float(val))
+                                        # Если val - это строка, пытаемся преобразовать в число
+                                        if isinstance(val, str):
+                                            cold_call_timestamp = int(float(val))
+                                        else:
+                                            cold_call_timestamp = int(float(val))
                                         # Будем использовать это значение при создании/обновлении контакта
                                         if debug_count_for_extraction < 3:
-                                            logger.debug(f"      -> Found cold call date: {cold_call_timestamp}")
+                                            logger.debug(f"      -> Found cold call date: {cold_call_timestamp} (from field_id={field_id})")
                                     except (ValueError, TypeError):
                                         if debug_count_for_extraction < 3:
                                             logger.debug(f"      -> Invalid cold call timestamp: {val}")
                                         cold_call_timestamp = None
+                            elif is_birthday:
+                                # День рождения: val может быть timestamp (Unix timestamp) или числом
+                                # Сохраняем для последующей обработки (берем первое значение, если их несколько)
+                                if birthday_timestamp is None:
+                                    try:
+                                        # Если val - это строка, пытаемся преобразовать в число
+                                        if isinstance(val, str):
+                                            birthday_timestamp = int(float(val))
+                                        else:
+                                            birthday_timestamp = int(float(val))
+                                        # Сохраняем в raw_fields (пока нет поля в модели)
+                                        if debug_count_for_extraction < 3:
+                                            logger.debug(f"      -> Found birthday: {birthday_timestamp} (from field_id={field_id})")
+                                    except (ValueError, TypeError):
+                                        if debug_count_for_extraction < 3:
+                                            logger.debug(f"      -> Invalid birthday timestamp: {val}")
+                                        birthday_timestamp = None
                     
                     # Убираем дубликаты
                     # Дедуп
@@ -2398,6 +2429,8 @@ def migrate_filtered(
                         "extracted_emails": emails,
                         "extracted_position": position,
                         "extracted_note_text": note_text,  # Добавляем note_text для отладки
+                        "extracted_cold_call_timestamp": cold_call_timestamp,  # Timestamp холодного звонка
+                        "extracted_birthday_timestamp": birthday_timestamp,  # Timestamp дня рождения
                         "note_search_info": note_search_info,  # Где искали примечания
                         "custom_fields_count": len(custom_fields),
                         "custom_fields_sample": custom_fields if dry_run else (custom_fields[:3] if custom_fields else []),  # В dry-run показываем все поля
@@ -2448,6 +2481,7 @@ def migrate_filtered(
                             "extracted_position": position,
                             "extracted_note_text": note_text,
                             "extracted_cold_call": cold_marked_at_dt.isoformat() if cold_marked_at_dt else None,
+                            "extracted_birthday": birthday_timestamp,  # Timestamp дня рождения (если есть)
                             
                             # ВСЕ кастомные поля (полная информация)
                             "all_custom_fields": [
@@ -2722,11 +2756,10 @@ def migrate_filtered(
                         cold_marked_by_user = actor
                     
                     if existing_contact:
-                        # ОБНОВЛЯЕМ существующий контакт
+                        # ОБНОВЛЯЕМ существующий контакт с мягким обновлением
                         contact = existing_contact
-                        contact.first_name = first_name[:120]
-                        contact.last_name = last_name[:120]
-                        # Мягкий апдейт должности: не затираем вручную
+                        
+                        # Мягкий апдейт: не затираем данные, измененные вручную
                         try:
                             crf = dict(contact.raw_fields or {})
                         except Exception:
@@ -2736,6 +2769,12 @@ def migrate_filtered(
                             cprev = {}
 
                         def c_can_update(field: str) -> bool:
+                            """
+                            Проверяет, можно ли обновить поле.
+                            Поле можно обновить, если:
+                            1. Оно пустое
+                            2. Оно было импортировано из AmoCRM (есть в cprev и значение совпадает)
+                            """
                             cur = getattr(contact, field)
                             if cur in ("", None):
                                 return True
@@ -2743,6 +2782,13 @@ def migrate_filtered(
                                 return True
                             return False
 
+                        # Обновляем ФИО только если можно
+                        if first_name and c_can_update("first_name"):
+                            contact.first_name = first_name[:120]
+                        if last_name and c_can_update("last_name"):
+                            contact.last_name = last_name[:120]
+                        
+                        # Обновляем должность только если можно
                         if position and c_can_update("position"):
                             contact.position = position[:255]
                         # Обновляем данные о холодном звонке из amoCRM
@@ -2753,7 +2799,15 @@ def migrate_filtered(
                             # cold_marked_call оставляем NULL, т.к. в amoCRM нет связи с CallRequest
                         # Обновляем raw_fields + снимок импортированных значений
                         crf.update(debug_data)
-                        cprev.update({"position": contact.position})
+                        # Сохраняем день рождения в raw_fields (пока нет поля в модели)
+                        if birthday_timestamp:
+                            crf["birthday_timestamp"] = birthday_timestamp
+                        # Сохраняем снимок импортированных значений для мягкого обновления
+                        cprev.update({
+                            "first_name": contact.first_name,
+                            "last_name": contact.last_name,
+                            "position": contact.position,
+                        })
                         crf["amo_values"] = cprev
                         contact.raw_fields = crf
                         
@@ -2762,25 +2816,43 @@ def migrate_filtered(
                             res.contacts_created += 1  # Используем тот же счётчик для обновлённых
                             
                             # Телефоны: мягкий upsert (не удаляем вручную добавленные)
+                            # Примечание добавляется в comment первого телефона
                             phones_added = 0
-                            for pt, pv, pc in phones:
+                            phones_updated = 0
+                            for idx, (pt, pv, pc) in enumerate(phones):
                                 pv_db = str(pv).strip()[:50]
                                 if not pv_db:
                                     continue
+                                
+                                # Для первого телефона добавляем примечание в comment, если его нет
+                                phone_comment = str(pc or "").strip()
+                                if idx == 0 and note_text and not phone_comment:
+                                    phone_comment = note_text[:255]
+                                
                                 obj = ContactPhone.objects.filter(contact=contact, value=pv_db).first()
                                 if obj is None:
-                                    ContactPhone.objects.create(contact=contact, type=pt, value=pv_db, comment=str(pc or "")[:255])
+                                    # Создаем новый телефон
+                                    ContactPhone.objects.create(
+                                        contact=contact,
+                                        type=pt,
+                                        value=pv_db,
+                                        comment=phone_comment[:255]
+                                    )
                                     phones_added += 1
                                 else:
+                                    # Обновляем существующий телефон (мягко)
                                     upd = False
-                                    if not obj.comment and pc:
-                                        obj.comment = str(pc)[:255]
+                                    # Обновляем comment только если он пустой или совпадает с импортированным
+                                    if not obj.comment and phone_comment:
+                                        obj.comment = phone_comment[:255]
                                         upd = True
-                                    if obj.type != pt and (not obj.comment or obj.comment == str(pc or "")[:255]):
+                                    # Обновляем type только если comment пустой или совпадает
+                                    if obj.type != pt and (not obj.comment or obj.comment == phone_comment[:255]):
                                         obj.type = pt
                                         upd = True
                                     if upd:
                                         obj.save(update_fields=["type", "comment"])
+                                        phones_updated += 1
                             
                             # Email: мягкий upsert
                             emails_added = 0
@@ -2803,6 +2875,10 @@ def migrate_filtered(
                             res.contacts_created += 1
                     else:
                         # СОЗДАЁМ новый контакт
+                        # Сохраняем день рождения в raw_fields (пока нет поля в модели)
+                        if birthday_timestamp:
+                            debug_data["birthday_timestamp"] = birthday_timestamp
+                        
                         contact = Contact(
                             company=local_company,
                             first_name=first_name[:120],
@@ -2822,10 +2898,14 @@ def migrate_filtered(
                             res.contacts_created += 1
                             # Добавляем телефоны и почты
                             phones_added = 0
-                            for pt, pv, pc in phones:
+                            for idx, (pt, pv, pc) in enumerate(phones):
                                 pv_db = str(pv).strip()[:50]
                                 if pv_db and not ContactPhone.objects.filter(contact=contact, value=pv_db).exists():
-                                    ContactPhone.objects.create(contact=contact, type=pt, value=pv_db, comment=str(pc or "")[:255])
+                                    # Если это первый телефон и есть примечание - добавляем в comment
+                                    phone_comment = str(pc or "").strip()
+                                    if idx == 0 and note_text and not phone_comment:
+                                        phone_comment = note_text[:255]
+                                    ContactPhone.objects.create(contact=contact, type=pt, value=pv_db, comment=phone_comment[:255])
                                     phones_added += 1
                             emails_added = 0
                             for et, ev in emails:
