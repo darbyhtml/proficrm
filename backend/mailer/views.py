@@ -299,8 +299,38 @@ def campaigns(request: HttpRequest) -> HttpResponse:
             "max_per_hour": max_per_hour,
         }
     
-    # Информация о квоте smtp.bz (для всех пользователей)
-    quota = SmtpBzQuota.load()
+    # Информация о квоте smtp.bz (только для администраторов)
+    quota = SmtpBzQuota.load() if is_admin else None
+    
+    # Информация о лимите пользователя (для всех)
+    from django.utils import timezone as _tz
+    now = _tz.now()
+    today = now.date()
+    sent_today_user = SendLog.objects.filter(
+        provider="smtp_global",
+        status="sent",
+        campaign__created_by=user,
+        created_at__date=today
+    ).count()
+    
+    smtp_cfg = GlobalMailAccount.load()
+    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT
+    
+    # Количество кампаний пользователя
+    user_campaigns_count = Campaign.objects.filter(created_by=user).count()
+    user_active_campaigns = Campaign.objects.filter(
+        created_by=user,
+        status__in=[Campaign.Status.READY, Campaign.Status.SENDING]
+    ).count()
+    
+    user_limit_info = {
+        "sent_today": sent_today_user,
+        "limit": per_user_daily_limit,
+        "remaining": max(0, per_user_daily_limit - sent_today_user) if per_user_daily_limit else None,
+        "is_limit_reached": per_user_daily_limit and sent_today_user >= per_user_daily_limit,
+        "campaigns_count": user_campaigns_count,
+        "active_campaigns": user_active_campaigns,
+    }
     
     return render(
         request,
@@ -310,6 +340,7 @@ def campaigns(request: HttpRequest) -> HttpResponse:
             "is_admin": is_admin,
             "analytics": analytics,
             "quota": quota,
+            "user_limit_info": user_limit_info,
         }
     )
 
@@ -577,6 +608,9 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "sent_today": sent_today,
             "rate_per_day": global_limit,
             "rate_per_hour": max_per_hour,
+            "user_campaigns_count": user_campaigns_count,
+            "user_active_campaigns": user_active_campaigns,
+            "is_admin": is_admin,
             "emails_available": emails_available,
             "counts": counts,
             "recent": recent,
@@ -1194,7 +1228,7 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
     sent_today = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__date=now.date()).count()
     sent_today_user = SendLog.objects.filter(provider="smtp_global", status="sent", campaign__created_by=user, created_at__date=now.date()).count()
 
-    per_user_daily_limit = 100  # Фиксированный лимит на пользователя
+    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT
     if per_user_daily_limit and sent_today_user >= per_user_daily_limit:
         messages.error(request, f"Достигнут лимит отправки {per_user_daily_limit} писем в день для вашего аккаунта.")
         return redirect("campaign_detail", campaign_id=camp.id)

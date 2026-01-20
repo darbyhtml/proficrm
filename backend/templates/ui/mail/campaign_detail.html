@@ -413,8 +413,8 @@
           </div>
         </div>
         
-        {# Информация о тарифе smtp.bz #}
-        {% if quota and quota.emails_limit > 0 %}
+        {# Информация о тарифе smtp.bz - только для администраторов #}
+        {% if is_admin and quota and quota.emails_limit > 0 %}
           <div class="card card-pad mb-4">
             <div class="font-medium mb-2">Тариф smtp.bz</div>
             <div class="grid grid-cols-2 gap-3 text-sm">
@@ -451,6 +451,41 @@
             {% endif %}
           </div>
         {% endif %}
+        
+        {# Лимит пользователя - для всех #}
+        <div class="card card-pad mb-4">
+          <div class="font-medium mb-2">Ваш лимит отправки</div>
+          <div class="grid grid-cols-2 gap-3 text-sm">
+            <div>
+              <div class="text-brand-dark/70 mb-1">Отправлено сегодня:</div>
+              <div class="font-medium {% if per_user_daily_limit and sent_today_user >= per_user_daily_limit %}text-red-600{% elif per_user_daily_limit and per_user_daily_limit|add:"-"|add:sent_today_user < 20 %}text-orange-600{% else %}text-green-600{% endif %}">
+                {{ sent_today_user }} / {{ per_user_daily_limit }}
+              </div>
+              {% if per_user_daily_limit %}
+                {% with remaining=per_user_daily_limit|add:"-"|add:sent_today_user %}
+                  {% if remaining > 0 %}
+                    <div class="text-xs text-brand-dark/60 mt-1">
+                      Осталось: {{ remaining }} писем
+                    </div>
+                  {% else %}
+                    <div class="text-xs text-red-600 mt-1">
+                      Лимит достигнут
+                    </div>
+                  {% endif %}
+                {% endwith %}
+              {% endif %}
+            </div>
+            <div>
+              <div class="text-brand-dark/70 mb-1">Ваши кампании:</div>
+              <div class="font-medium">
+                Всего: {{ user_campaigns_count|default:0 }}
+              </div>
+              <div class="text-xs text-brand-dark/60 mt-1">
+                Активных: <span class="{% if user_active_campaigns > 0 %}text-green-600{% endif %}">{{ user_active_campaigns|default:0 }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {# Информация об очереди #}
         {% if queue_entry %}
