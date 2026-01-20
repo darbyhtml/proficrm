@@ -811,13 +811,15 @@
             }
             
             // Устанавливаем новый таймер (300ms задержка для лайв-поиска)
-            searchDebounceTimer = setTimeout(() => {
-              loadCompanies(true).finally(() => {
+            searchDebounceTimer = setTimeout(async () => {
+              try {
+                await loadCompanies(true);
+              } finally {
                 // Скрываем индикатор загрузки после завершения
                 if (loadingIndicator) {
                   loadingIndicator.classList.add('hidden');
                 }
-              });
+              }
             }, 300);
           });
           return;
