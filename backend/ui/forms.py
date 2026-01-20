@@ -120,6 +120,9 @@ class CompanyCreateForm(forms.ModelForm):
         # Оптимизация queryset для status и spheres: используем only() для загрузки только необходимых полей
         self.fields["status"].queryset = CompanyStatus.objects.only("id", "name").order_by("name")
         self.fields["spheres"].queryset = CompanySphere.objects.only("id", "name").order_by("name")
+        
+        # Поле email необязательное (бывают ситуации, когда email еще неизвестен)
+        self.fields["email"].required = False
     
     class Meta:
         model = Company
@@ -185,6 +188,11 @@ class CompanyEditForm(forms.ModelForm):
     Полное редактирование данных компании (без смены ответственного/филиала).
     Статус/сферы здесь тоже доступны, чтобы редактирование было "в одном месте".
     """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Поле email необязательное (бывают ситуации, когда email еще неизвестен)
+        self.fields["email"].required = False
+    
     class Meta:
         model = Company
         fields = [
