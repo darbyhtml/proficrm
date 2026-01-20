@@ -542,6 +542,10 @@
                   {% if not user.branch or b.id != user.branch.id %}
                     <option value="{{ b.id }}">{{ b.name }}</option>
                   {% endif %}
+                {% empty %}
+                  {% if not user.branch %}
+                    <option value="">Нет доступных филиалов</option>
+                  {% endif %}
                 {% endfor %}
               </select>
             </div>
