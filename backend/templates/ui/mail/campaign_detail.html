@@ -413,6 +413,7 @@
           </div>
         </div>
         
+        {# Лимиты и статистика - показываем только менеджеру его лимиты, админу - все #}
         <div class="card card-pad">
           <div class="font-medium mb-2">Лимиты и статистика</div>
           <div class="space-y-2 text-sm">
@@ -429,38 +430,42 @@
                 {% endif %}
               </span>
             </div>
-            <div class="flex justify-between">
-              <span class="text-brand-dark/70">Лимит в день (общий для всех):</span>
-              <span class="font-medium">
-                {{ sent_today }}/{{ rate_per_day }}
-                {% if sent_today >= rate_per_day %}
-                  <span class="text-red-600">(достигнут)</span>
-                {% else %}
-                  {% with remaining=rate_per_day|add:"-"|add:sent_today %}
-                    <span class="text-green-600">(осталось: {{ remaining }})</span>
-                  {% endwith %}
-                {% endif %}
-              </span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-brand-dark/70">Лимит в минуту (общий):</span>
-              <span class="font-medium">
-                {{ send_stats.sent_last_min }}/{{ rate_per_minute }}
-              </span>
-            </div>
-            <div class="pt-2 border-t">
+            {% if is_admin %}
               <div class="flex justify-between">
-                <span class="text-brand-dark/70">Ошибок сегодня (всего):</span>
-                <span class="font-medium {% if send_stats.failed_today > 0 %}text-red-600{% endif %}">
-                  {{ send_stats.failed_today }}
+                <span class="text-brand-dark/70">Лимит в день (общий для всех):</span>
+                <span class="font-medium">
+                  {{ sent_today }}/{{ rate_per_day }}
+                  {% if sent_today >= rate_per_day %}
+                    <span class="text-red-600">(достигнут)</span>
+                  {% else %}
+                    {% with remaining=rate_per_day|add:"-"|add:sent_today %}
+                      <span class="text-green-600">(осталось: {{ remaining }})</span>
+                    {% endwith %}
+                  {% endif %}
                 </span>
               </div>
+              <div class="flex justify-between">
+                <span class="text-brand-dark/70">Лимит в минуту (общий):</span>
+                <span class="font-medium">
+                  {{ send_stats.sent_last_min }}/{{ rate_per_minute }}
+                </span>
+              </div>
+            {% endif %}
+            <div class="pt-2 border-t">
               <div class="flex justify-between">
                 <span class="text-brand-dark/70">Ошибок сегодня (эта кампания):</span>
                 <span class="font-medium {% if send_stats.failed_today_campaign > 0 %}text-red-600{% endif %}">
                   {{ send_stats.failed_today_campaign }}
                 </span>
               </div>
+              {% if is_admin %}
+                <div class="flex justify-between">
+                  <span class="text-brand-dark/70">Ошибок сегодня (всего):</span>
+                  <span class="font-medium {% if send_stats.failed_today > 0 %}text-red-600{% endif %}">
+                    {{ send_stats.failed_today }}
+                  </span>
+                </div>
+              {% endif %}
             </div>
           </div>
         </div>
@@ -472,7 +477,8 @@
           <div class="card card-pad"><div class="muted text-sm">Ошибки</div><div class="text-2xl font-semibold {% if counts.failed > 0 %}text-red-600{% endif %}">{{ counts.failed }}</div></div>
         </div>
         
-        {% if error_types %}
+        {# Детальная статистика ошибок - только для администратора #}
+        {% if is_admin and error_types %}
           <div class="card card-pad">
             <div class="font-medium mb-2">Статистика ошибок отправки</div>
             <div class="space-y-3 text-sm">
