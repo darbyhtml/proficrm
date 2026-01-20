@@ -291,21 +291,21 @@
               <button class="btn btn-outline" type="submit">Тест себе</button>
             </form>
             
-            {% if campaign.status == 'draft' or campaign.status == 'paused' or campaign.status == 'stopped' %}
-              {% if counts.pending > 0 %}
-                <form method="post" action="/mail/campaigns/{{ campaign.id }}/start/">
-                  {% csrf_token %}
-                  <button class="btn btn-primary" type="submit">
-                    <span class="inline-flex items-center gap-2">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                      </svg>
-                      Старт
-                    </span>
-                  </button>
-                </form>
-              {% endif %}
+            {% if campaign.status == 'paused' and counts.pending > 0 %}
+              {# Кнопка "Продолжить" для кампаний на паузе #}
+              <form method="post" action="/mail/campaigns/{{ campaign.id }}/resume/">
+                {% csrf_token %}
+                <button class="btn btn-primary" type="submit">
+                  <span class="inline-flex items-center gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                    Продолжить
+                  </span>
+                </button>
+              </form>
             {% elif campaign.status == 'sending' or campaign.status == 'ready' %}
+              {# Кнопка "Пауза" для активных кампаний #}
               <form method="post" action="/mail/campaigns/{{ campaign.id }}/pause/">
                 {% csrf_token %}
                 <button class="btn btn-warning" type="submit">
@@ -318,17 +318,16 @@
                   </span>
                 </button>
               </form>
-            {% endif %}
-            
-            {% if campaign.status == 'paused' and counts.pending > 0 %}
-              <form method="post" action="/mail/campaigns/{{ campaign.id }}/resume/">
+            {% elif (campaign.status == 'draft' or campaign.status == 'stopped') and counts.pending > 0 %}
+              {# Кнопка "Старт" для черновиков и остановленных кампаний #}
+              <form method="post" action="/mail/campaigns/{{ campaign.id }}/start/">
                 {% csrf_token %}
                 <button class="btn btn-primary" type="submit">
                   <span class="inline-flex items-center gap-2">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <polygon points="5 3 19 12 5 21 5 3"></polygon>
                     </svg>
-                    Продолжить
+                    Старт
                   </span>
                 </button>
               </form>
@@ -405,29 +404,33 @@
           <div class="font-medium mb-2">Лимиты и статистика</div>
           <div class="space-y-2 text-sm">
             <div class="flex justify-between">
-              <span class="text-brand-dark/70">Лимит в день (ваш):</span>
+              <span class="text-brand-dark/70">Лимит в день (на вас):</span>
               <span class="font-medium">
                 {{ sent_today_user }}/{{ per_user_daily_limit }}
                 {% if per_user_daily_limit and sent_today_user >= per_user_daily_limit %}
                   <span class="text-red-600">(достигнут)</span>
                 {% else %}
-                  <span class="text-green-600">(осталось: {{ per_user_daily_limit|add:"-"|add:sent_today_user }})</span>
+                  {% with remaining=per_user_daily_limit|add:"-"|add:sent_today_user %}
+                    <span class="text-green-600">(осталось: {{ remaining }})</span>
+                  {% endwith %}
                 {% endif %}
               </span>
             </div>
             <div class="flex justify-between">
-              <span class="text-brand-dark/70">Лимит в день (глобальный):</span>
+              <span class="text-brand-dark/70">Лимит в день (общий для всех):</span>
               <span class="font-medium">
                 {{ sent_today }}/{{ rate_per_day }}
                 {% if sent_today >= rate_per_day %}
                   <span class="text-red-600">(достигнут)</span>
                 {% else %}
-                  <span class="text-green-600">(осталось: {{ rate_per_day|add:"-"|add:sent_today }})</span>
+                  {% with remaining=rate_per_day|add:"-"|add:sent_today %}
+                    <span class="text-green-600">(осталось: {{ remaining }})</span>
+                  {% endwith %}
                 {% endif %}
               </span>
             </div>
             <div class="flex justify-between">
-              <span class="text-brand-dark/70">Лимит в минуту:</span>
+              <span class="text-brand-dark/70">Лимит в минуту (общий):</span>
               <span class="font-medium">
                 {{ send_stats.sent_last_min }}/{{ rate_per_minute }}
               </span>
