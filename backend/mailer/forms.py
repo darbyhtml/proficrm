@@ -73,6 +73,15 @@ class GlobalMailAccountForm(forms.ModelForm):
         help_text="API ключ для получения информации о тарифе и квоте. Можно получить в личном кабинете smtp.bz.",
     )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Если пароль уже сохранен, делаем поле необязательным и добавляем подсказку
+        if self.instance and self.instance.pk and self.instance.smtp_password_enc:
+            self.fields["smtp_password"].help_text = "Оставьте пустым, чтобы не менять сохраненный пароль. " + (self.fields["smtp_password"].help_text or "")
+        # Если API ключ уже сохранен, показываем подсказку
+        if self.instance and self.instance.pk and self.instance.smtp_bz_api_key:
+            self.fields["smtp_bz_api_key"].help_text = "Оставьте пустым, чтобы не менять сохраненный ключ. " + (self.fields["smtp_bz_api_key"].help_text or "")
+
     class Meta:
         model = GlobalMailAccount
         fields = [
@@ -103,6 +112,19 @@ class GlobalMailAccountForm(forms.ModelForm):
         # Если API ключ уже сохранен, показываем подсказку
         if self.instance and self.instance.pk and self.instance.smtp_bz_api_key:
             self.fields["smtp_bz_api_key"].help_text = "Оставьте пустым, чтобы не менять сохраненный ключ. " + (self.fields["smtp_bz_api_key"].help_text or "")
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        # Проверяем, что либо пароль указан, либо он уже сохранен
+        password = (cleaned_data.get("smtp_password") or "").strip()
+        if not password and self.instance and self.instance.pk:
+            # Пароль не указан, но это редактирование - проверяем, есть ли сохраненный пароль
+            if not self.instance.smtp_password_enc:
+                # Пароль не был сохранен ранее - требуем его указать
+                raise forms.ValidationError({
+                    "smtp_password": "Пароль SMTP обязателен для настройки отправки писем. API ключ используется только для получения информации о квоте."
+                })
+        return cleaned_data
     
     def save(self, commit=True):
         obj: GlobalMailAccount = super().save(commit=False)
