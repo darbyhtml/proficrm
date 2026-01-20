@@ -301,6 +301,36 @@ def campaigns(request: HttpRequest) -> HttpResponse:
             global_limit = smtp_cfg.rate_per_day
             max_per_hour = 100
         
+        # Получаем информацию об очереди
+        from mailer.tasks import _is_working_hours
+        from zoneinfo import ZoneInfo
+        queue_list = []
+        queue_entries_all = list(CampaignQueue.objects.filter(
+            status__in=[CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING]
+        ).select_related("campaign", "campaign__created_by").order_by("-priority", "queued_at"))
+        
+        # Определяем время начала следующего рабочего дня, если сейчас не рабочее время
+        msk_tz = ZoneInfo("Europe/Moscow")
+        msk_now = now.astimezone(msk_tz)
+        is_working = _is_working_hours(now)
+        next_working_time = None
+        if not is_working:
+            # Если сейчас не рабочее время, вычисляем когда начнется следующее рабочее время
+            if msk_now.hour >= 18:  # После 18:00 - следующий день в 9:00
+                next_working_time = msk_now.replace(hour=9, minute=0, second=0, microsecond=0) + _tz.timedelta(days=1)
+            else:  # До 9:00 - сегодня в 9:00
+                next_working_time = msk_now.replace(hour=9, minute=0, second=0, microsecond=0)
+        
+        for idx, queue_entry in enumerate(queue_entries_all, 1):
+            queue_list.append({
+                "position": idx,
+                "campaign": queue_entry.campaign,
+                "status": queue_entry.status,
+                "queued_at": queue_entry.queued_at,
+                "started_at": queue_entry.started_at,
+                "next_working_time": next_working_time,
+            })
+        
         analytics = {
             "user_stats": user_stats,
             "total_sent_today": total_sent_today,
@@ -314,6 +344,9 @@ def campaigns(request: HttpRequest) -> HttpResponse:
                 created_at__gte=now - _tz.timedelta(hours=1)
             ).count(),
             "max_per_hour": max_per_hour,
+            "queue_list": queue_list,
+            "is_working_time": is_working,
+            "current_time_msk": msk_now.strftime("%H:%M"),
         }
     
     # Информация о квоте smtp.bz (для всех пользователей)
