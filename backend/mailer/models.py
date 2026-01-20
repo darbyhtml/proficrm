@@ -64,6 +64,9 @@ class GlobalMailAccount(models.Model):
     rate_per_day = models.PositiveIntegerField("Лимит писем в день", default=15000)
     # Дополнительный лимит: сколько писем в день может отправить ОДИН менеджер
     per_user_daily_limit = models.PositiveIntegerField("Лимит писем в день на менеджера", default=100)
+    
+    # API smtp.bz для получения информации о тарифе и квоте
+    smtp_bz_api_key = models.CharField("API ключ smtp.bz", max_length=255, blank=True, default="", help_text="API ключ для получения информации о тарифе и квоте")
     updated_at = models.DateTimeField("Обновлено", auto_now=True)
 
     @classmethod
@@ -195,5 +198,76 @@ class EmailCooldown(models.Model):
 
     def __str__(self) -> str:
         return f"{self.email} until {self.until_at}"
+
+
+class SmtpBzQuota(models.Model):
+    """
+    Информация о тарифе и квоте smtp.bz, полученная через API.
+    Обновляется периодически через Celery задачу.
+    """
+    # Singleton: только одна запись
+    id = models.IntegerField(primary_key=True, default=1, editable=False)
+    
+    # Информация о тарифе
+    tariff_name = models.CharField("Название тарифа", max_length=50, blank=True, default="")
+    tariff_renewal_date = models.DateField("Дата продления тарифа", null=True, blank=True)
+    
+    # Квота
+    emails_available = models.PositiveIntegerField("Доступно писем", default=0)
+    emails_limit = models.PositiveIntegerField("Лимит писем", default=0)
+    
+    # Лимиты по времени
+    sent_per_hour = models.PositiveIntegerField("Отправлено за час", default=0)
+    max_per_hour = models.PositiveIntegerField("Максимум в час", default=100)
+    
+    # Метаданные
+    last_synced_at = models.DateTimeField("Последняя синхронизация", null=True, blank=True)
+    sync_error = models.TextField("Ошибка синхронизации", blank=True, default="")
+    
+    created_at = models.DateTimeField("Создано", auto_now_add=True)
+    updated_at = models.DateTimeField("Обновлено", auto_now=True)
+    
+    class Meta:
+        verbose_name = "Квота smtp.bz"
+        verbose_name_plural = "Квота smtp.bz"
+    
+    @classmethod
+    def load(cls) -> "SmtpBzQuota":
+        obj, _ = cls.objects.get_or_create(id=1)
+        return obj
+    
+    def __str__(self) -> str:
+        return f"smtp.bz: {self.emails_available}/{self.emails_limit} писем"
+
+
+class CampaignQueue(models.Model):
+    """
+    Очередь рассылок. Кампании выполняются последовательно, чтобы не превышать лимиты.
+    """
+    class Status(models.TextChoices):
+        PENDING = "pending", "В очереди"
+        PROCESSING = "processing", "Обрабатывается"
+        COMPLETED = "completed", "Завершена"
+        CANCELLED = "cancelled", "Отменена"
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    campaign = models.OneToOneField(Campaign, on_delete=models.CASCADE, related_name="queue_entry", verbose_name="Кампания")
+    
+    status = models.CharField("Статус", max_length=16, choices=Status.choices, default=Status.PENDING)
+    priority = models.IntegerField("Приоритет", default=0, help_text="Чем выше число, тем выше приоритет")
+    
+    # Время постановки в очередь и начала обработки
+    queued_at = models.DateTimeField("Поставлено в очередь", auto_now_add=True)
+    started_at = models.DateTimeField("Начало обработки", null=True, blank=True)
+    completed_at = models.DateTimeField("Завершено", null=True, blank=True)
+    
+    class Meta:
+        ordering = ["-priority", "queued_at"]
+        indexes = [
+            models.Index(fields=["status", "priority", "queued_at"]),
+        ]
+    
+    def __str__(self) -> str:
+        return f"{self.campaign.name} ({self.get_status_display()})"
 
 # Create your models here.

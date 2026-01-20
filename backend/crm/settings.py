@@ -411,6 +411,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "mailer.tasks.send_pending_emails",
         "schedule": 60.0,  # Каждую минуту
     },
+    "sync-smtp-bz-quota": {
+        "task": "mailer.tasks.sync_smtp_bz_quota",
+        "schedule": 1800.0,  # Каждые 30 минут
+    },
     "clean-old-call-requests": {
         "task": "phonebridge.tasks.clean_old_call_requests",
         "schedule": 3600.0,  # Каждый час

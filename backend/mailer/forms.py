@@ -66,6 +66,13 @@ class GlobalMailAccountForm(forms.ModelForm):
         help_text="smtp.bz: логин/пароль берутся из кабинета smtp.bz. Яндекс: пароль приложения.",
     )
 
+    smtp_bz_api_key = forms.CharField(
+        label="API ключ smtp.bz",
+        required=False,
+        widget=forms.TextInput(attrs={"class": "input", "type": "password", "autocomplete": "off"}),
+        help_text="API ключ для получения информации о тарифе и квоте. Можно получить в личном кабинете smtp.bz.",
+    )
+
     class Meta:
         model = GlobalMailAccount
         fields = [
@@ -78,6 +85,7 @@ class GlobalMailAccountForm(forms.ModelForm):
             "rate_per_minute",
             "rate_per_day",
             "per_user_daily_limit",
+            "smtp_bz_api_key",
             "is_enabled",
         ]
         widgets = {
@@ -90,6 +98,7 @@ class GlobalMailAccountForm(forms.ModelForm):
             "rate_per_minute": forms.NumberInput(attrs={"class": "input"}),
             "rate_per_day": forms.NumberInput(attrs={"class": "input"}),
             "per_user_daily_limit": forms.NumberInput(attrs={"class": "input"}),
+            "smtp_bz_api_key": forms.TextInput(attrs={"class": "input", "type": "password", "autocomplete": "off"}),
         }
 
     def save(self, commit=True):
@@ -97,6 +106,10 @@ class GlobalMailAccountForm(forms.ModelForm):
         p = (self.cleaned_data.get("smtp_password") or "").strip()
         if p:
             obj.set_password(p)
+        # Сохраняем API ключ, если он был указан
+        api_key = (self.cleaned_data.get("smtp_bz_api_key") or "").strip()
+        if api_key:
+            obj.smtp_bz_api_key = api_key
         if commit:
             obj.save()
         return obj

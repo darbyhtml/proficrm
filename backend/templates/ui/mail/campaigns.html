@@ -21,6 +21,46 @@
       </div>
     </div>
 
+    {# Информация о тарифе и квоте smtp.bz #}
+    {% if quota and quota.emails_limit > 0 %}
+      <div class="card card-pad">
+        <div class="font-medium mb-3">Тариф smtp.bz</div>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div>
+            <div class="text-brand-dark/70 mb-1">Тариф:</div>
+            <div class="font-medium">{{ quota.tariff_name|default:"—" }}</div>
+            {% if quota.tariff_renewal_date %}
+              <div class="text-xs text-brand-dark/60 mt-1">
+                Продление: {{ quota.tariff_renewal_date|date:"d.m.Y" }}
+              </div>
+            {% endif %}
+          </div>
+          <div>
+            <div class="text-brand-dark/70 mb-1">Доступно писем:</div>
+            <div class="font-medium {% if quota.emails_available < quota.emails_limit|add:'-'|add:'100' %}text-orange-600{% elif quota.emails_available == 0 %}text-red-600{% else %}text-green-600{% endif %}">
+              {{ quota.emails_available }} / {{ quota.emails_limit }}
+            </div>
+            {% if quota.last_synced_at %}
+              <div class="text-xs text-brand-dark/60 mt-1">
+                Обновлено: {{ quota.last_synced_at|date:"d.m.Y H:i" }}
+              </div>
+            {% endif %}
+          </div>
+          <div>
+            <div class="text-brand-dark/70 mb-1">Лимит в час:</div>
+            <div class="font-medium">
+              {{ quota.sent_per_hour }} / {{ quota.max_per_hour }}
+            </div>
+            {% if quota.sync_error %}
+              <div class="text-xs text-red-600 mt-1">
+                Ошибка синхронизации
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
     {% if is_admin and analytics %}
       {# Аналитика для администратора #}
       <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">

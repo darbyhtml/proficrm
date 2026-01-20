@@ -9,9 +9,10 @@ from django.db.models import Q
 from django.utils import timezone
 from zoneinfo import ZoneInfo
 
-from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe
+from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, SmtpBzQuota, CampaignQueue
 from mailer.smtp_sender import build_message, send_via_smtp
 from mailer.utils import html_to_text
+from mailer.smtp_bz_api import get_quota_info
 
 logger = logging.getLogger(__name__)
 
@@ -202,4 +203,50 @@ def send_pending_emails(self, batch_size: int = 50):
         logger.error(f"Error in send_pending_emails task: {exc}", exc_info=True)
         # Повторяем задачу при ошибке
         raise self.retry(exc=exc, countdown=60)
+
+
+@shared_task(name="mailer.tasks.sync_smtp_bz_quota")
+def sync_smtp_bz_quota():
+    """
+    Синхронизация информации о тарифе и квоте smtp.bz через API.
+    Выполняется периодически (например, каждые 30 минут).
+    """
+    try:
+        smtp_cfg = GlobalMailAccount.load()
+        if not smtp_cfg.smtp_bz_api_key:
+            logger.debug("smtp.bz API key not configured, skipping quota sync")
+            return {"status": "skipped", "reason": "no_api_key"}
+        
+        quota_info = get_quota_info(smtp_cfg.smtp_bz_api_key)
+        if not quota_info:
+            quota = SmtpBzQuota.load()
+            quota.sync_error = "Не удалось получить данные через API"
+            quota.save(update_fields=["sync_error", "updated_at"])
+            logger.warning("Failed to fetch smtp.bz quota info")
+            return {"status": "error", "reason": "api_failed"}
+        
+        # Обновляем информацию о квоте
+        quota = SmtpBzQuota.load()
+        quota.tariff_name = quota_info.get("tariff_name", "")
+        quota.tariff_renewal_date = quota_info.get("tariff_renewal_date")
+        quota.emails_available = quota_info.get("emails_available", 0)
+        quota.emails_limit = quota_info.get("emails_limit", 0)
+        quota.sent_per_hour = quota_info.get("sent_per_hour", 0)
+        quota.max_per_hour = quota_info.get("max_per_hour", 100)
+        quota.last_synced_at = timezone.now()
+        quota.sync_error = ""
+        quota.save()
+        
+        logger.info(f"smtp.bz quota synced: {quota.emails_available}/{quota.emails_limit} emails available")
+        return {
+            "status": "success",
+            "emails_available": quota.emails_available,
+            "emails_limit": quota.emails_limit,
+        }
+    except Exception as e:
+        logger.error(f"Error syncing smtp.bz quota: {e}", exc_info=True)
+        quota = SmtpBzQuota.load()
+        quota.sync_error = str(e)
+        quota.save(update_fields=["sync_error", "updated_at"])
+        return {"status": "error", "error": str(e)}
 

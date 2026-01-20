@@ -18,7 +18,7 @@ from companies.permissions import get_users_for_lists
 from accounts.models import Branch
 from companies.models import CompanySphere, CompanyStatus, ContactEmail, Contact
 from mailer.forms import CampaignForm, CampaignGenerateRecipientsForm, CampaignRecipientAddForm, MailAccountForm, GlobalMailAccountForm, EmailSignatureForm
-from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, UnsubscribeToken, EmailCooldown
+from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, UnsubscribeToken, EmailCooldown, SmtpBzQuota, CampaignQueue
 from mailer.smtp_sender import build_message, send_via_smtp
 from mailer.utils import html_to_text
 from crm.utils import require_admin
@@ -254,6 +254,9 @@ def campaigns(request: HttpRequest) -> HttpResponse:
             "rate_per_minute": smtp_cfg.rate_per_minute,
         }
     
+    # Информация о квоте smtp.bz (для всех пользователей)
+    quota = SmtpBzQuota.load()
+    
     return render(
         request,
         "ui/mail/campaigns.html",
@@ -261,6 +264,7 @@ def campaigns(request: HttpRequest) -> HttpResponse:
             "campaigns": qs,
             "is_admin": is_admin,
             "analytics": analytics,
+            "quota": quota,
         }
     )
 
@@ -534,6 +538,8 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "view": view,
             "recent_errors": recent_errors,
             "error_types": error_types,
+            "quota": SmtpBzQuota.load(),
+            "queue_entry": getattr(camp, "queue_entry", None),
         },
     )
 
@@ -1233,6 +1239,20 @@ def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
     if camp.status in (Campaign.Status.DRAFT, Campaign.Status.PAUSED, Campaign.Status.STOPPED):
         camp.status = Campaign.Status.READY if pending_count > 0 else Campaign.Status.SENT
         camp.save(update_fields=["status", "updated_at"])
+        
+        # Создаем или обновляем запись в очереди
+        queue_entry, created = CampaignQueue.objects.get_or_create(
+            campaign=camp,
+            defaults={
+                "status": CampaignQueue.Status.PENDING,
+                "priority": 0,
+            }
+        )
+        if not created and queue_entry.status == CampaignQueue.Status.CANCELLED:
+            queue_entry.status = CampaignQueue.Status.PENDING
+            queue_entry.queued_at = timezone.now()
+            queue_entry.save(update_fields=["status", "queued_at"])
+        
         messages.success(request, "Рассылка запущена. Отправка будет происходить автоматически в рабочее время (9:00-18:00 МСК).")
         log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Запущена автоматическая рассылка")
     
