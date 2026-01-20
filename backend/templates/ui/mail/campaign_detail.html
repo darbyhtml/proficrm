@@ -238,11 +238,11 @@
               <span>Получатели ({{ counts.total }} всего)</span>
             </div>
             <div class="flex items-center gap-2 flex-wrap">
-              <a class="btn btn-outline {% if view == 'pending' %}bg-brand-soft/50 font-medium{% endif %}" style="padding:.25rem .6rem;font-size:.75rem" href="?view=pending{% if qs %}&{{ qs }}{% endif %}">В очереди ({{ counts.pending }})</a>
-              <a class="btn btn-outline {% if view == 'sent' %}bg-brand-soft/50 font-medium{% endif %}" style="padding:.25rem .6rem;font-size:.75rem" href="?view=sent{% if qs %}&{{ qs }}{% endif %}">Отправлено ({{ counts.sent }})</a>
-              <a class="btn btn-outline {% if view == 'failed' %}bg-brand-soft/50 font-medium{% endif %}" style="padding:.25rem .6rem;font-size:.75rem" href="?view=failed{% if qs %}&{{ qs }}{% endif %}">Ошибки ({{ counts.failed }})</a>
-              <a class="btn btn-outline {% if view == 'unsub' %}bg-brand-soft/50 font-medium{% endif %}" style="padding:.25rem .6rem;font-size:.75rem" href="?view=unsub{% if qs %}&{{ qs }}{% endif %}">Отписки ({{ counts.unsub }})</a>
-              <a class="btn btn-outline {% if view == 'all' %}bg-brand-soft/50 font-medium{% endif %}" style="padding:.25rem .6rem;font-size:.75rem" href="?view=all{% if qs %}&{{ qs }}{% endif %}">Все ({{ counts.total }})</a>
+              <a class="btn btn-outline {% if view == 'pending' %}bg-brand-soft/50 font-medium{% endif %}" style="padding:.25rem .6rem;font-size:.75rem" href="?view=pending">В очереди ({{ counts.pending }})</a>
+              <a class="btn btn-outline {% if view == 'sent' %}bg-brand-soft/50 font-medium{% endif %}" style="padding:.25rem .6rem;font-size:.75rem" href="?view=sent">Отправлено ({{ counts.sent }})</a>
+              <a class="btn btn-outline {% if view == 'failed' %}bg-brand-soft/50 font-medium{% endif %}" style="padding:.25rem .6rem;font-size:.75rem" href="?view=failed">Ошибки ({{ counts.failed }})</a>
+              <a class="btn btn-outline {% if view == 'unsub' %}bg-brand-soft/50 font-medium{% endif %}" style="padding:.25rem .6rem;font-size:.75rem" href="?view=unsub">Отписки ({{ counts.unsub }})</a>
+              <a class="btn btn-outline {% if view == 'all' %}bg-brand-soft/50 font-medium{% endif %}" style="padding:.25rem .6rem;font-size:.75rem" href="?view=all">Все ({{ counts.total }})</a>
             </div>
             {% if page and recipients_by_company %}
               <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/bulk-delete/" id="bulkDeleteForm" onsubmit="return confirm('Удалить выбранных получателей?');" style="display:none;">
