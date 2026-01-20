@@ -321,52 +321,51 @@
                   </div>
                 </div>
               {% endif %}
-            </div>
-            
-            {# Пагинация всегда показывается, даже если нет получателей #}
-            <div class="border-t border-brand-soft mt-4 pt-4">
-              {% if page.has_other_pages %}
-                <div class="flex items-center justify-between gap-4 flex-wrap">
-                  <div class="flex items-center gap-2">
-                    <form method="get" class="flex items-center gap-2" id="perPageForm">
-                      <label class="text-sm text-brand-dark/80 whitespace-nowrap">На странице:</label>
-                      <select name="per_page" class="select" onchange="this.form.submit()" style="padding:.25rem .5rem;font-size:.875rem;min-width:auto">
-                        <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
-                        <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
-                        <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
-                        <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
-                      </select>
-                      {% if view %}<input type="hidden" name="view" value="{{ view }}" />{% endif %}
-                    </form>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    {% if page.has_previous %}
-                      <a href="?page={{ page.previous_page_number }}{% if view %}&view={{ view }}{% endif %}{% if qs %}&{{ qs }}{% endif %}" class="btn btn-outline" style="padding:.35rem .75rem;font-size:.875rem">← Назад</a>
-                    {% endif %}
-                    <span class="text-sm text-brand-dark/80">
-                      Страница {{ page.number }} из {{ page.paginator.num_pages }}
-                    </span>
-                    {% if page.has_next %}
-                      <a href="?page={{ page.next_page_number }}{% if view %}&view={{ view }}{% endif %}{% if qs %}&{{ qs }}{% endif %}" class="btn btn-outline" style="padding:.35rem .75rem;font-size:.875rem">Вперёд →</a>
-                    {% endif %}
-                  </div>
+          </div>
+          
+          {# Пагинация всегда показывается, даже если нет получателей #}
+          <div class="border-t border-brand-soft mt-4 pt-4">
+            {% if page.has_other_pages %}
+              <div class="flex items-center justify-between gap-4 flex-wrap">
+                <div class="flex items-center gap-2">
+                  <form method="get" class="flex items-center gap-2" id="perPageForm">
+                    <label class="text-sm text-brand-dark/80 whitespace-nowrap">На странице:</label>
+                    <select name="per_page" class="select" onchange="this.form.submit()" style="padding:.25rem .5rem;font-size:.875rem;min-width:auto">
+                      <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+                      <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                      <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                      <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
+                    </select>
+                    {% if view %}<input type="hidden" name="view" value="{{ view }}" />{% endif %}
+                  </form>
                 </div>
-              {% else %}
-                <form method="get" class="flex items-center gap-2" id="perPageForm">
-                  <label class="text-sm text-brand-dark/80 whitespace-nowrap">На странице:</label>
-                  <select name="per_page" class="select" onchange="this.form.submit()" style="padding:.25rem .5rem;font-size:.875rem;min-width:auto">
-                    <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
-                    <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
-                    <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
-                    <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
-                  </select>
-                  {% if view %}<input type="hidden" name="view" value="{{ view }}" />{% endif %}
-                  {% if qs %}
-                    <input type="hidden" name="qs" value="{{ qs }}" />
+                <div class="flex items-center gap-2">
+                  {% if page.has_previous %}
+                    <a href="?page={{ page.previous_page_number }}{% if view %}&view={{ view }}{% endif %}{% if qs %}&{{ qs }}{% endif %}" class="btn btn-outline" style="padding:.35rem .75rem;font-size:.875rem">← Назад</a>
                   {% endif %}
-                </form>
-              {% endif %}
-            </div>
+                  <span class="text-sm text-brand-dark/80">
+                    Страница {{ page.number }} из {{ page.paginator.num_pages }}
+                  </span>
+                  {% if page.has_next %}
+                    <a href="?page={{ page.next_page_number }}{% if view %}&view={{ view }}{% endif %}{% if qs %}&{{ qs }}{% endif %}" class="btn btn-outline" style="padding:.35rem .75rem;font-size:.875rem">Вперёд →</a>
+                  {% endif %}
+                </div>
+              </div>
+            {% else %}
+              <form method="get" class="flex items-center gap-2" id="perPageForm">
+                <label class="text-sm text-brand-dark/80 whitespace-nowrap">На странице:</label>
+                <select name="per_page" class="select" onchange="this.form.submit()" style="padding:.25rem .5rem;font-size:.875rem;min-width:auto">
+                  <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
+                  <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+                  <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                  <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
+                </select>
+                {% if view %}<input type="hidden" name="view" value="{{ view }}" />{% endif %}
+                {% if qs %}
+                  <input type="hidden" name="qs" value="{{ qs }}" />
+                {% endif %}
+              </form>
+            {% endif %}
           </div>
         </div>
         
