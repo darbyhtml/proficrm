@@ -503,9 +503,10 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
     from mailer.tasks import _is_working_hours
     from zoneinfo import ZoneInfo
     
-    # Получаем лимиты из API
-    quota = SmtpBzQuota.load()
-    if quota.last_synced_at and not quota.sync_error and quota.emails_limit > 0:
+    # Получаем лимиты из API (только для администраторов)
+    is_admin = (user.role == User.Role.ADMIN)
+    quota = SmtpBzQuota.load() if is_admin else None
+    if is_admin and quota and quota.last_synced_at and not quota.sync_error and quota.emails_limit > 0:
         global_limit = quota.emails_limit
         max_per_hour = quota.max_per_hour or 100
         emails_available = quota.emails_available or 0
@@ -546,7 +547,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
     send_stats = {
         "sent_today": sent_today,
         "sent_today_user": sent_today_user,
-        "sent_last_min": sent_last_min,
+        "sent_last_hour": sent_last_hour,
         "failed_today": SendLog.objects.filter(provider="smtp_global", status="failed", created_at__date=now.date()).count(),
         "failed_today_campaign": SendLog.objects.filter(campaign=camp, provider="smtp_global", status="failed", created_at__date=now.date()).count(),
     }
