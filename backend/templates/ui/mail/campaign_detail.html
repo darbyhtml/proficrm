@@ -284,6 +284,7 @@
       <div class="lg:col-span-4 space-y-4">
         <div class="card card-pad">
           <div class="font-medium mb-2">Управление рассылкой</div>
+          <div class="text-xs text-brand-dark/50 mb-2">Статус кампании: <b>{{ campaign.status }}</b> ({{ campaign.get_status_display }})</div>
           <div class="flex flex-wrap gap-2">
             <a class="btn btn-outline" href="/mail/campaigns/{{ campaign.id }}/edit/">Редактировать</a>
             <form method="post" action="/mail/campaigns/{{ campaign.id }}/test-send/">
