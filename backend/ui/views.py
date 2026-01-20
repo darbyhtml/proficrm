@@ -306,6 +306,20 @@ def _normalize_phone_for_search(phone: str) -> str:
     return normalized
 
 
+def _normalize_for_search(text: str) -> str:
+    """
+    Нормализует текст для поиска: убирает тире, пробелы и другие разделители.
+    Используется для поиска по названию, ИНН, адресу - чтобы находить совпадения
+    даже если пользователь не помнит точное написание (например, с тире или без).
+    """
+    if not text:
+        return ""
+    # Убираем тире, дефисы, пробелы и другие разделители
+    normalized = text.replace("-", "").replace("—", "").replace("–", "").replace(" ", "").replace("_", "")
+    # Приводим к нижнему регистру для регистронезависимого поиска
+    return normalized.lower().strip()
+
+
 def _normalize_email_for_search(email: str) -> str:
     """
     Нормализует email для поиска: убирает пробелы, приводит к нижнему регистру.
@@ -334,7 +348,10 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
     
     q = _get_str_param("q")
     if q:
-        # Базовые фильтры по полям компании
+        # Нормализуем запрос для поиска (убираем тире, пробелы и т.д.)
+        normalized_q = _normalize_for_search(q)
+        
+        # Базовые фильтры по полям компании (обычный поиск)
         base_filters = (
             Q(name__icontains=q)
             | Q(inn__icontains=q)
@@ -347,6 +364,44 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             | Q(contact_position__icontains=q)
             | Q(branch__name__icontains=q)
         )
+        
+        # Дополнительный поиск с нормализацией для названия, ИНН, адреса
+        # Это позволяет находить совпадения даже если в запросе нет тире, а в базе есть (и наоборот)
+        # Используем regex для поиска с игнорированием тире и пробелов
+        if normalized_q and len(normalized_q) >= 2:  # Минимум 2 символа для нормализованного поиска
+            # Создаем regex-паттерн, который игнорирует тире, пробелы и другие разделители
+            # Например, "авто-рес" или "авторес" найдет "АВТО-РЕСУРС"
+            # Экранируем специальные символы regex в нормализованном запросе
+            import re
+            escaped_q = re.escape(normalized_q)
+            # Создаем паттерн, который допускает тире, пробелы и другие разделители между символами
+            # Например, "авторес" -> "авто[-\\s_]*рес" (найдет "авто-рес", "авто_рес", "авто рес" и т.д.)
+            pattern_parts = []
+            for i, char in enumerate(normalized_q):
+                if i > 0:
+                    # Между символами допускаем тире, пробелы, подчеркивания
+                    pattern_parts.append("[-\\s_]*")
+                pattern_parts.append(re.escape(char))
+            flexible_pattern = "".join(pattern_parts)
+            
+            # Добавляем поиск по нормализованному паттерну для названия, ИНН, адреса
+            normalized_filters = (
+                Q(name__iregex=flexible_pattern)
+                | Q(legal_name__iregex=flexible_pattern)
+                | Q(inn__iregex=flexible_pattern)
+                | Q(address__iregex=flexible_pattern)
+            )
+            
+            # Также ищем по нормализованному запросу напрямую (без разделителей)
+            if normalized_q != q.lower():
+                normalized_filters |= (
+                    Q(name__icontains=normalized_q)
+                    | Q(legal_name__icontains=normalized_q)
+                    | Q(inn__icontains=normalized_q)
+                    | Q(address__icontains=normalized_q)
+                )
+            
+            base_filters |= normalized_filters
         
         # Поиск по телефонам (с нормализацией)
         normalized_phone = _normalize_phone_for_search(q)
