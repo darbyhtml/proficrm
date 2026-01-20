@@ -60,12 +60,8 @@ def send_pending_emails(self, batch_size: int = 50):
         # Проверка рабочего времени (9:00-18:00 МСК)
         if not _is_working_hours():
             logger.debug("Outside working hours (9:00-18:00 MSK), skipping email sending")
-            # Автоматически ставим на паузу кампании, которые пытаются отправиться вне рабочего времени
-            for camp in camps:
-                if camp.status == Campaign.Status.SENDING:
-                    camp.status = Campaign.Status.PAUSED
-                    camp.save(update_fields=["status", "updated_at"])
-                    logger.info(f"Campaign {camp.id} paused due to outside working hours")
+            # НЕ ставим на паузу автоматически - пользователь может запустить вручную,
+            # а автоматическая отправка просто не будет происходить вне рабочего времени
             return {"processed": False, "campaigns": 0, "reason": "outside_working_hours"}
         
         for camp in camps:
@@ -118,10 +114,16 @@ def send_pending_emails(self, batch_size: int = 50):
             if not batch:
                 continue
 
-            # Помечаем кампанию как отправляемую
+            # Помечаем кампанию как отправляемую (если была READY)
             if camp.status == Campaign.Status.READY:
                 camp.status = Campaign.Status.SENDING
                 camp.save(update_fields=["status", "updated_at"])
+            
+            # Если кампания была на паузе, но есть pending - автоматически возобновляем
+            if camp.status == Campaign.Status.PAUSED and batch:
+                camp.status = Campaign.Status.SENDING
+                camp.save(update_fields=["status", "updated_at"])
+                logger.info(f"Campaign {camp.id} auto-resumed from PAUSED status")
 
             did_work = True
             for r in batch:
