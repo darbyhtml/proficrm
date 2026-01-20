@@ -350,11 +350,74 @@ def campaigns(request: HttpRequest) -> HttpResponse:
     # Определяем, показывать ли колонку "Создатель" в таблице
     show_creator_column = (is_admin or is_group_manager or is_branch_director or is_sales_head)
     
+    # Добавляем информацию о паузе и рабочем времени для каждой кампании
+    from mailer.tasks import _is_working_hours
+    from zoneinfo import ZoneInfo
+    
+    campaigns_list = list(qs)
+    is_working_time = _is_working_hours(now)
+    msk_tz = ZoneInfo("Europe/Moscow")
+    msk_now = now.astimezone(msk_tz)
+    current_time_msk = msk_now.strftime("%H:%M")
+    
+    # Получаем лимиты для проверки паузы
+    if quota and quota.last_synced_at and not quota.sync_error and quota.emails_limit > 0:
+        global_limit = quota.emails_limit
+        max_per_hour = quota.max_per_hour or 100
+        emails_available = quota.emails_available or 0
+    else:
+        global_limit = smtp_cfg.rate_per_day
+        max_per_hour = 100
+        emails_available = global_limit
+    
+    sent_today = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__date=today).count()
+    sent_last_hour = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__gte=now - _tz.timedelta(hours=1)).count()
+    
+    # Для каждой кампании определяем причины паузы и информацию об очереди
+    # Оптимизация: предзагружаем queue_entry одним запросом
+    campaign_ids = [c.id for c in campaigns_list]
+    queue_entries = {str(q.campaign_id): q for q in CampaignQueue.objects.filter(campaign_id__in=campaign_ids).select_related("campaign")}
+    
+    for camp in campaigns_list:
+        camp_pause_reasons = []
+        
+        # Проверяем только для активных кампаний
+        if camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
+            if not is_working_time:
+                camp_pause_reasons.append(f"Вне рабочего времени (текущее время МСК: {current_time_msk}, рабочие часы: 9:00-18:00 МСК)")
+            
+            # Проверяем лимит пользователя (для создателя кампании)
+            camp_sent_today = SendLog.objects.filter(
+                provider="smtp_global",
+                status="sent",
+                campaign__created_by=camp.created_by,
+                created_at__date=today
+            ).count() if camp.created_by else 0
+            
+            if per_user_daily_limit and camp_sent_today >= per_user_daily_limit:
+                camp_pause_reasons.append(f"Достигнут лимит отправки для аккаунта: {camp_sent_today}/{per_user_daily_limit} писем в день")
+            
+            if emails_available <= 0:
+                camp_pause_reasons.append(f"Квота исчерпана: доступно {emails_available} из {global_limit} писем")
+            elif sent_today >= global_limit:
+                camp_pause_reasons.append(f"Достигнут глобальный дневной лимит: {sent_today}/{global_limit} писем")
+            
+            if sent_last_hour >= max_per_hour:
+                camp_pause_reasons.append(f"Достигнут лимит в час: {sent_last_hour}/{max_per_hour} писем")
+            
+            if not smtp_cfg.is_enabled:
+                camp_pause_reasons.append("SMTP не включен администратором")
+        
+        camp.pause_reasons = camp_pause_reasons  # type: ignore[attr-defined]
+        camp.is_working_time = is_working_time  # type: ignore[attr-defined]
+        camp.current_time_msk = current_time_msk  # type: ignore[attr-defined]
+        camp.queue_entry = queue_entries.get(str(camp.id))  # type: ignore[attr-defined]
+    
     return render(
         request,
         "ui/mail/campaigns.html",
         {
-            "campaigns": qs,
+            "campaigns": campaigns_list,
             "is_admin": is_admin,
             "is_group_manager": is_group_manager,
             "is_branch_director": is_branch_director,
@@ -363,6 +426,8 @@ def campaigns(request: HttpRequest) -> HttpResponse:
             "quota": quota,
             "user_limit_info": user_limit_info,
             "show_creator_column": show_creator_column,
+            "is_working_time": is_working_time,
+            "current_time_msk": current_time_msk,
         }
     )
 
