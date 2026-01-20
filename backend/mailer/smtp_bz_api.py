@@ -177,11 +177,41 @@ def _parse_quota_response(data: Dict[str, Any]) -> Dict[str, Any]:
             except (ValueError, TypeError):
                 pass
     
-    if "emails_available" in data or "available" in data or "balance" in data or "remaining" in data:
-        result["emails_available"] = int(data.get("emails_available") or data.get("available") or data.get("balance") or data.get("remaining", 0))
+    # Доступно писем (остаток квоты)
+    if "emails_available" in data:
+        result["emails_available"] = int(data.get("emails_available", 0))
+    elif "available" in data:
+        result["emails_available"] = int(data.get("available", 0))
+    elif "balance" in data:
+        result["emails_available"] = int(data.get("balance", 0))
+    elif "remaining" in data:
+        result["emails_available"] = int(data.get("remaining", 0))
+    elif "left" in data:
+        result["emails_available"] = int(data.get("left", 0))
     
-    if "emails_limit" in data or "limit" in data or "quota" in data or "total" in data:
-        result["emails_limit"] = int(data.get("emails_limit") or data.get("limit") or data.get("quota") or data.get("total", 0))
+    # Лимит писем (общая квота)
+    if "emails_limit" in data:
+        result["emails_limit"] = int(data.get("emails_limit", 0))
+    elif "limit" in data:
+        result["emails_limit"] = int(data.get("limit", 0))
+    elif "quota" in data:
+        # quota может быть числом (лимит) или объектом
+        quota_val = data.get("quota")
+        if isinstance(quota_val, (int, float)):
+            result["emails_limit"] = int(quota_val)
+        elif isinstance(quota_val, dict):
+            result["emails_limit"] = int(quota_val.get("limit", quota_val.get("total", 0)))
+    elif "total" in data:
+        result["emails_limit"] = int(data.get("total", 0))
+    elif "monthly_limit" in data:
+        result["emails_limit"] = int(data.get("monthly_limit", 0))
+    
+    # Если нашли limit, но не нашли available, вычисляем как разницу
+    if result["emails_limit"] > 0 and result["emails_available"] == 0:
+        # Может быть, available = limit - sent
+        if "sent" in data or "sent_today" in data or "sent_month" in data:
+            sent = int(data.get("sent") or data.get("sent_today") or data.get("sent_month", 0))
+            result["emails_available"] = max(0, result["emails_limit"] - sent)
     
     if "sent_per_hour" in data or "sentPerHour" in data or "sent_hour" in data:
         result["sent_per_hour"] = int(data.get("sent_per_hour") or data.get("sentPerHour") or data.get("sent_hour", 0))
