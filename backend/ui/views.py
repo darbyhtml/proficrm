@@ -409,7 +409,6 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             phone_filters |= Q(phone__icontains=q)
             
             # Дополнительные телефоны компании - используем Exists вместо JOIN (быстрее)
-            from companies.models import CompanyPhone
             phone_filters |= Exists(
                 CompanyPhone.objects.filter(
                     company_id=OuterRef('pk'),
@@ -424,7 +423,6 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             )
             
             # Телефоны контактов - используем Exists вместо JOIN (быстрее)
-            from companies.models import ContactPhone
             phone_filters |= Exists(
                 ContactPhone.objects.filter(
                     contact__company_id=OuterRef('pk'),
@@ -441,7 +439,6 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             # Если нормализация не удалась, ищем как есть
             phone_filters = Q(phone__icontains=q)
             # Используем Exists для связанных таблиц
-            from companies.models import CompanyPhone, ContactPhone
             phone_filters |= Exists(
                 CompanyPhone.objects.filter(
                     company_id=OuterRef('pk'),
@@ -465,7 +462,6 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             email_filters |= Q(email__icontains=q)
             
             # Email контактов - используем Exists вместо JOIN (быстрее)
-            from companies.models import ContactEmail
             email_filters |= Exists(
                 ContactEmail.objects.filter(
                     contact__company_id=OuterRef('pk'),
@@ -480,7 +476,6 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             )
             
             # Дополнительные email компании - используем Exists
-            from companies.models import CompanyEmail
             email_filters |= Exists(
                 CompanyEmail.objects.filter(
                     company_id=OuterRef('pk'),
@@ -496,7 +491,6 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
         else:
             email_filters = Q(email__icontains=q)
             # Используем Exists для связанных таблиц
-            from companies.models import ContactEmail, CompanyEmail
             email_filters |= Exists(
                 ContactEmail.objects.filter(
                     contact__company_id=OuterRef('pk'),
