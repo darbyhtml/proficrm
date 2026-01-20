@@ -39,27 +39,14 @@ def get_quota_info(api_key: str) -> Optional[Dict[str, Any]]:
         return None
     
     try:
-        # Пробуем разные возможные эндпоинты API
-        # Согласно документации: базовый URL https://api.smtp.bz/v1
-        # Нужно проверить Swagger UI для точных эндпоинтов
+        # Эндпоинты API согласно Swagger UI документации
+        # Базовый URL: https://api.smtp.bz/v1
+        # Доступные эндпоинты:
+        # - GET /user - Данные о пользователе (может содержать информацию о квоте)
+        # - GET /user/stats - Статистика по рассылкам (может содержать лимиты)
         endpoints_to_try = [
-            # Стандартные варианты
-            "/account",
-            "/account/info",
-            "/account/balance",
-            "/account/quota",
-            "/account/stats",
-            "/quota",
-            "/balance",
-            "/stats",
-            "/info",
-            "/limits",
-            # Альтернативные варианты
-            "/user",
-            "/user/info",
-            "/user/quota",
-            "/profile",
-            "/profile/quota",
+            "/user",           # Данные о пользователе
+            "/user/stats",     # Статистика по рассылкам
         ]
         
         # Разные варианты аутентификации
@@ -155,7 +142,7 @@ def _parse_quota_response(data: Dict[str, Any]) -> Dict[str, Any]:
     Парсит ответ API smtp.bz в стандартизированный формат.
     
     Args:
-        data: Сырой ответ от API
+        data: Сырой ответ от API (может быть от /user или /user/stats)
         
     Returns:
         Стандартизированный словарь с информацией о квоте
@@ -169,49 +156,69 @@ def _parse_quota_response(data: Dict[str, Any]) -> Dict[str, Any]:
         "max_per_hour": 100,
     }
     
-    # Пробуем разные варианты структуры ответа
-    # Вариант 1: прямые поля
-    if "tariff" in data or "tariff_name" in data:
-        result["tariff_name"] = data.get("tariff") or data.get("tariff_name", "")
+    logger.debug(f"smtp.bz API: парсинг ответа, ключи: {list(data.keys())}")
     
-    if "renewal_date" in data or "renewalDate" in data:
-        renewal_str = data.get("renewal_date") or data.get("renewalDate")
+    # Пробуем разные варианты структуры ответа
+    # Вариант 1: прямые поля в корне ответа
+    if "tariff" in data or "tariff_name" in data or "plan" in data:
+        result["tariff_name"] = data.get("tariff") or data.get("tariff_name") or data.get("plan", "")
+    
+    if "renewal_date" in data or "renewalDate" in data or "expires_at" in data:
+        renewal_str = data.get("renewal_date") or data.get("renewalDate") or data.get("expires_at")
         if renewal_str:
             try:
-                result["tariff_renewal_date"] = datetime.strptime(renewal_str, "%Y-%m-%d").date()
+                # Пробуем разные форматы даты
+                for fmt in ["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"]:
+                    try:
+                        result["tariff_renewal_date"] = datetime.strptime(str(renewal_str)[:10], "%Y-%m-%d").date()
+                        break
+                    except ValueError:
+                        continue
             except (ValueError, TypeError):
                 pass
     
-    if "emails_available" in data or "available" in data:
-        result["emails_available"] = int(data.get("emails_available") or data.get("available", 0))
+    if "emails_available" in data or "available" in data or "balance" in data or "remaining" in data:
+        result["emails_available"] = int(data.get("emails_available") or data.get("available") or data.get("balance") or data.get("remaining", 0))
     
-    if "emails_limit" in data or "limit" in data:
-        result["emails_limit"] = int(data.get("emails_limit") or data.get("limit", 0))
+    if "emails_limit" in data or "limit" in data or "quota" in data or "total" in data:
+        result["emails_limit"] = int(data.get("emails_limit") or data.get("limit") or data.get("quota") or data.get("total", 0))
     
-    if "sent_per_hour" in data or "sentPerHour" in data:
-        result["sent_per_hour"] = int(data.get("sent_per_hour") or data.get("sentPerHour", 0))
+    if "sent_per_hour" in data or "sentPerHour" in data or "sent_hour" in data:
+        result["sent_per_hour"] = int(data.get("sent_per_hour") or data.get("sentPerHour") or data.get("sent_hour", 0))
     
-    if "max_per_hour" in data or "maxPerHour" in data:
-        result["max_per_hour"] = int(data.get("max_per_hour") or data.get("maxPerHour", 100))
+    if "max_per_hour" in data or "maxPerHour" in data or "hourly_limit" in data or "rate_limit" in data:
+        result["max_per_hour"] = int(data.get("max_per_hour") or data.get("maxPerHour") or data.get("hourly_limit") or data.get("rate_limit", 100))
     
     # Вариант 2: вложенные объекты
-    if "quota" in data:
+    if "quota" in data and isinstance(data["quota"], dict):
         quota = data["quota"]
-        result["emails_available"] = int(quota.get("available", result["emails_available"]))
-        result["emails_limit"] = int(quota.get("limit", result["emails_limit"]))
+        result["emails_available"] = int(quota.get("available", quota.get("remaining", result["emails_available"])))
+        result["emails_limit"] = int(quota.get("limit", quota.get("total", result["emails_limit"])))
     
-    if "limits" in data:
+    if "limits" in data and isinstance(data["limits"], dict):
         limits = data["limits"]
-        result["sent_per_hour"] = int(limits.get("sent_per_hour", result["sent_per_hour"]))
-        result["max_per_hour"] = int(limits.get("max_per_hour", result["max_per_hour"]))
+        result["sent_per_hour"] = int(limits.get("sent_per_hour", limits.get("sent_hour", result["sent_per_hour"])))
+        result["max_per_hour"] = int(limits.get("max_per_hour", limits.get("hourly_limit", limits.get("rate_limit", result["max_per_hour"]))))
     
-    if "account" in data:
+    if "account" in data and isinstance(data["account"], dict):
         account = data["account"]
-        result["tariff_name"] = account.get("tariff", result["tariff_name"])
-        if "renewal_date" in account:
-            try:
-                result["tariff_renewal_date"] = datetime.strptime(account["renewal_date"], "%Y-%m-%d").date()
-            except (ValueError, TypeError):
-                pass
+        result["tariff_name"] = account.get("tariff", account.get("plan", result["tariff_name"]))
+        if "renewal_date" in account or "expires_at" in account:
+            renewal_str = account.get("renewal_date") or account.get("expires_at")
+            if renewal_str:
+                try:
+                    result["tariff_renewal_date"] = datetime.strptime(str(renewal_str)[:10], "%Y-%m-%d").date()
+                except (ValueError, TypeError):
+                    pass
     
+    # Вариант 3: данные в /user/stats могут быть в другом формате
+    if "stats" in data and isinstance(data["stats"], dict):
+        stats = data["stats"]
+        # Можем попытаться извлечь информацию из статистики
+        if "quota" in stats:
+            result["emails_limit"] = int(stats.get("quota", result["emails_limit"]))
+        if "remaining" in stats:
+            result["emails_available"] = int(stats.get("remaining", result["emails_available"]))
+    
+    logger.debug(f"smtp.bz API: распарсенные данные: {result}")
     return result
