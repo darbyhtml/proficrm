@@ -67,7 +67,10 @@ def get_quota_info(api_key: str) -> Optional[Dict[str, Any]]:
         ]
         
         # Разные варианты аутентификации
+        # Согласно документации: Authorization: API-KEY (где API-KEY - это сам ключ)
         auth_variants = [
+            {"Authorization": api_key},  # Правильный формат согласно документации
+            {"Authorization": f"API-KEY {api_key}"},  # Альтернативный вариант
             {"Authorization": f"Bearer {api_key}"},
             {"X-API-Key": api_key},
             {"Authorization": f"Token {api_key}"},
@@ -82,13 +85,10 @@ def get_quota_info(api_key: str) -> Optional[Dict[str, Any]]:
         
         for endpoint in endpoints_to_try:
             # Пробуем разные варианты URL
+            # Согласно документации: базовый URL https://api.smtp.bz/v1/
             url_variants = [
-                f"{SMTP_BZ_API_BASE}{endpoint}",
-                f"https://api.smtp.bz{endpoint}",
-                f"https://smtp.bz{endpoint}",
-                f"https://smtp.bz/api{endpoint}",
-                f"https://api.smtp.bz/v1{endpoint}",
-                f"https://smtp.bz/api/v1{endpoint}",
+                f"{SMTP_BZ_API_BASE}{endpoint}",  # https://api.smtp.bz/v1/endpoint
+                f"https://api.smtp.bz{endpoint}",  # https://api.smtp.bz/endpoint
             ]
             
             for url in url_variants:
