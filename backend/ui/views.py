@@ -1732,15 +1732,15 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
     ui_cfg = UiGlobalConfig.load()
     columns = ui_cfg.company_list_columns or ["name"]
     
-        # Определяем, где найдено совпадение для каждой компании (если есть поисковый запрос)
-        q = (request.GET.get("q") or "").strip()
-        if q:
-            normalized_q = _normalize_for_search(q)
-            normalized_phone = _normalize_phone_for_search(q)
-            normalized_email = _normalize_email_for_search(q)
-            
-            # Используем уже предзагруженные данные через prefetch_related (не делаем дополнительные запросы)
-            # Данные уже загружены в page.object_list через prefetch_related выше
+    # Определяем, где найдено совпадение для каждой компании (если есть поисковый запрос)
+    q = (request.GET.get("q") or "").strip()
+    if q:
+        normalized_q = _normalize_for_search(q)
+        normalized_phone = _normalize_phone_for_search(q)
+        normalized_email = _normalize_email_for_search(q)
+        
+        # Используем уже предзагруженные данные через prefetch_related (не делаем дополнительные запросы)
+        # Данные уже загружены в page.object_list через prefetch_related выше
         
         for company in page.object_list:
             match_info = []
