@@ -32,8 +32,11 @@
         <label class="block text-sm text-brand-dark/80 mb-1">Поиск</label>
         <div class="relative">
           <input name="q" value="{{ q }}" id="company-search-input" class="input w-full" placeholder="ИНН / название / адрес" autocomplete="off" />
-          <div id="company-autocomplete-dropdown" class="absolute left-0 right-0 top-full mt-1 bg-white border border-brand-soft rounded-lg shadow-lg z-50 hidden max-h-80 overflow-y-auto"></div>
+          <div id="company-search-loading" class="hidden absolute right-3 top-1/2 -translate-y-1/2">
+            <div class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-brand-teal border-t-transparent"></div>
+          </div>
         </div>
+        <div class="text-xs text-brand-dark/60 mt-1">Результаты поиска отображаются в таблице ниже</div>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 items-end">
         <div>
@@ -656,6 +659,20 @@
           // Обновляем тело таблицы (всегда заменяем, не добавляем)
           if (companyListBody) {
             companyListBody.innerHTML = data.html;
+            
+            // Применяем подсветку совпадений после вставки HTML
+            if (typeof window.highlightMatch === 'function') {
+              const searchInput = document.getElementById('company-search-input');
+              const query = searchInput ? searchInput.value.trim() : '';
+              
+              if (query) {
+                companyListBody.querySelectorAll('[data-highlight]').forEach(el => {
+                  const text = el.getAttribute('data-highlight') || '';
+                  const highlighted = window.highlightMatch(text, query);
+                  el.innerHTML = highlighted;
+                });
+              }
+            }
           }
           
           // Обновляем пагинацию
@@ -775,9 +792,34 @@
           return;
         }
 
-        // Поле общего поиска (с автодополнением) не триггерит автоперезагрузку списка,
-        // чтобы поиск работал только во выпадающем списке.
+        // Поле общего поиска теперь триггерит обновление таблицы
         if (input.id === 'company-search-input') {
+          // Обработчик для лайв-поиска в таблице
+          let searchDebounceTimer = null;
+          input.addEventListener('input', () => {
+            const query = input.value.trim();
+            const loadingIndicator = document.getElementById('company-search-loading');
+            
+            // Показываем индикатор загрузки
+            if (loadingIndicator) {
+              loadingIndicator.classList.remove('hidden');
+            }
+            
+            // Очищаем предыдущий таймер
+            if (searchDebounceTimer) {
+              clearTimeout(searchDebounceTimer);
+            }
+            
+            // Устанавливаем новый таймер (300ms задержка для лайв-поиска)
+            searchDebounceTimer = setTimeout(() => {
+              loadCompanies(true).finally(() => {
+                // Скрываем индикатор загрузки после завершения
+                if (loadingIndicator) {
+                  loadingIndicator.classList.add('hidden');
+                }
+              });
+            }, 300);
+          });
           return;
         }
         
@@ -810,11 +852,72 @@
   </script>
 
   <script>
-    // Автодополнение для поля поиска
+    // Функция подсветки совпадений (используется в таблице)
+    (function() {
+      window.highlightMatch = function(text, query) {
+        if (!query || !text) return text;
+        
+        // Экранируем HTML
+        const escapeHtml = (str) => {
+          const div = document.createElement('div');
+          div.textContent = str;
+          return div.innerHTML;
+        };
+        
+        const escapedText = escapeHtml(text);
+        const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        
+        // Нормализуем для поиска: убираем тире, пробелы и т.д.
+        const normalize = (str) => {
+          return str.replace(/[-—–\s_]/g, '').toLowerCase();
+        };
+        
+        const normalizedQuery = normalize(query);
+        const normalizedText = normalize(escapedText);
+        
+        // Сначала пробуем найти точное совпадение в оригинальном тексте
+        let regex = new RegExp(`(${escapedQuery})`, 'gi');
+        let result = escapedText.replace(regex, '<span style="font-weight: bold !important; color: #f97316 !important; background-color: #fff7ed !important;">$1</span>');
+        
+        // Если не нашли, пробуем найти через нормализованные варианты
+        if (!result.includes('<span')) {
+          // Создаем паттерн, который допускает тире, пробелы между символами
+          const patternParts = [];
+          for (let i = 0; i < normalizedQuery.length; i++) {
+            if (i > 0) {
+              patternParts.push("[-\\s_]*");
+            }
+            patternParts.push(normalizedQuery[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+          }
+          const flexiblePattern = patternParts.join('');
+          
+          // Ищем совпадения в нормализованном тексте
+          const flexibleRegex = new RegExp(flexiblePattern, 'i');
+          if (flexibleRegex.test(normalizedText)) {
+            // Находим позиции в оригинальном тексте
+            let highlightedText = escapedText;
+            const matches = [...escapedText.matchAll(new RegExp(escapedQuery.replace(/[-—–\s_]/g, '[-—–\\s_]*'), 'gi'))];
+            
+            for (let i = matches.length - 1; i >= 0; i--) {
+              const match = matches[i];
+              const before = highlightedText.substring(0, match.index);
+              const matchText = highlightedText.substring(match.index, match.index + match[0].length);
+              const after = highlightedText.substring(match.index + match[0].length);
+              highlightedText = before + '<span style="font-weight: bold !important; color: #f97316 !important; background-color: #fff7ed !important;">' + matchText + '</span>' + after;
+            }
+            
+            result = highlightedText;
+          }
+        }
+        
+        return result;
+      };
+    })();
+    
+    // Старый код автодополнения (отключен, но оставлен для совместимости)
     (function() {
       const searchInput = document.getElementById('company-search-input');
-      const dropdown = document.getElementById('company-autocomplete-dropdown');
-      if (!searchInput || !dropdown) return;
+      if (!searchInput) return;
 
       let debounceTimer = null;
       let abortController = null;

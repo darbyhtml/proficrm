@@ -1745,11 +1745,13 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
     
     # Рендерим HTML строк таблицы
     from django.template.loader import render_to_string
+    q = (request.GET.get("q") or "").strip()  # Получаем запрос для подсветки
     rows_html = render_to_string(
         "ui/company_list_rows.html",
         {
             "companies": page.object_list,
             "company_list_columns": columns,
+            "search_query": q,  # Передаем запрос для подсветки совпадений
         },
         request=request,
     )
