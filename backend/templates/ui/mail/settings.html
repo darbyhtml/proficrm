@@ -87,23 +87,30 @@
             <div class="text-xs muted-2 mt-1">{{ form.smtp_bz_api_key.help_text }}</div>
           </div>
           
-          {% if quota %}
-            <div class="mt-3 p-3 rounded-lg border {% if api_connected %}border-green-300 bg-green-50{% else %}border-orange-300 bg-orange-50{% endif %}">
-              <div class="text-sm font-medium {% if api_connected %}text-green-900{% else %}text-orange-900{% endif %} mb-2">
+          {% if has_api_key %}
+            <div class="mt-3 p-3 rounded-lg border {% if api_connected %}border-green-300 bg-green-50{% elif api_pending %}border-yellow-300 bg-yellow-50{% else %}border-orange-300 bg-orange-50{% endif %}">
+              <div class="text-sm font-medium {% if api_connected %}text-green-900{% elif api_pending %}text-yellow-900{% else %}text-orange-900{% endif %} mb-2">
                 {% if api_connected %}
                   ✅ Подключение к API активно
+                {% elif api_pending %}
+                  ⏳ Ожидание синхронизации...
                 {% else %}
-                  ⚠️ Подключение к API не установлено
+                  ⚠️ Ошибка подключения к API
                 {% endif %}
               </div>
               {% if quota.last_synced_at %}
-                <div class="text-xs {% if api_connected %}text-green-800{% else %}text-orange-800{% endif %}">
+                <div class="text-xs {% if api_connected %}text-green-800{% elif api_pending %}text-yellow-800{% else %}text-orange-800{% endif %}">
                   Последняя синхронизация: {{ quota.last_synced_at|date:"d.m.Y H:i" }}
+                </div>
+              {% elif api_pending %}
+                <div class="text-xs text-yellow-800">
+                  Синхронизация запущена, ожидайте обновления данных...
                 </div>
               {% endif %}
               {% if quota.sync_error %}
                 <div class="text-xs text-red-600 mt-1">
-                  Ошибка: {{ quota.sync_error|truncatechars:200 }}
+                  <b>Ошибка:</b> {{ quota.sync_error|truncatechars:200 }}
+                  <div class="mt-1 text-xs">Проверьте правильность API ключа в личном кабинете smtp.bz</div>
                 </div>
               {% endif %}
               {% if api_connected and quota.emails_limit > 0 %}
@@ -113,6 +120,15 @@
                   Лимит в час: <b>{{ quota.max_per_hour }}</b>
                 </div>
               {% endif %}
+            </div>
+          {% else %}
+            <div class="mt-3 p-3 rounded-lg border border-gray-300 bg-gray-50">
+              <div class="text-sm font-medium text-gray-700 mb-2">
+                ℹ️ API ключ не указан
+              </div>
+              <div class="text-xs text-gray-600">
+                Введите API ключ для автоматической синхронизации квоты и лимитов
+              </div>
             </div>
           {% endif %}
         </div>

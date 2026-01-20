@@ -23,6 +23,8 @@ from mailer.smtp_sender import build_message, send_via_smtp
 from mailer.utils import html_to_text
 from crm.utils import require_admin
 
+logger = logging.getLogger(__name__)
+
 PER_USER_DAILY_LIMIT = 100  # значение по умолчанию; может быть переопределено в GlobalMailAccount.per_user_daily_limit
 COOLDOWN_DAYS_DEFAULT = 3
 
@@ -105,7 +107,24 @@ def mail_settings(request: HttpRequest) -> HttpResponse:
                 if not getattr(settings, "MAILER_FERNET_KEY", ""):
                     messages.error(request, "MAILER_FERNET_KEY не задан. Нельзя сохранить пароль.")
                     return redirect("mail_settings")
+            # Сохраняем форму и проверяем, был ли изменен API ключ
+            old_api_key = cfg.smtp_bz_api_key if cfg.pk else None
             form.save()
+            # Обновляем объект из БД, чтобы получить новый API ключ
+            cfg.refresh_from_db()
+            new_api_key = cfg.smtp_bz_api_key
+            
+            # Если API ключ был добавлен или изменен, запускаем синхронизацию немедленно
+            if new_api_key and new_api_key != old_api_key:
+                from mailer.tasks import sync_smtp_bz_quota
+                try:
+                    # Запускаем синхронизацию синхронно для немедленной проверки
+                    sync_smtp_bz_quota.delay()
+                    messages.info(request, "API ключ сохранен. Запущена синхронизация квоты...")
+                except Exception as e:
+                    logger.error(f"Ошибка при запуске синхронизации квоты: {e}", exc_info=True)
+                    messages.warning(request, "API ключ сохранен, но не удалось запустить синхронизацию. Попробуйте обновить страницу через несколько секунд.")
+            
             if "test_send" in request.POST:
                 # тестовое письмо администратору (на email профиля)
                 to_email = (user.email or "").strip()
@@ -143,7 +162,13 @@ def mail_settings(request: HttpRequest) -> HttpResponse:
     
     # Информация о квоте для проверки подключения
     quota = SmtpBzQuota.load()
-    api_connected = bool(cfg.smtp_bz_api_key and quota.last_synced_at and not quota.sync_error)
+    # Подключение считается установленным, если:
+    # 1. API ключ есть
+    # 2. Синхронизация прошла успешно (есть last_synced_at и нет ошибки)
+    # ИЛИ синхронизация еще не выполнялась, но ключ есть (показываем как "ожидание")
+    has_api_key = bool(cfg.smtp_bz_api_key)
+    api_connected = bool(has_api_key and quota.last_synced_at and not quota.sync_error)
+    api_pending = bool(has_api_key and not quota.last_synced_at and not quota.sync_error)
     
     return render(
         request,
@@ -151,6 +176,8 @@ def mail_settings(request: HttpRequest) -> HttpResponse:
         {
             "quota": quota,
             "api_connected": api_connected,
+            "api_pending": api_pending,
+            "has_api_key": has_api_key,
             "form": form,
             "account": cfg,
             "key_missing": key_missing,

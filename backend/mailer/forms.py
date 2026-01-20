@@ -103,15 +103,6 @@ class GlobalMailAccountForm(forms.ModelForm):
             "from_name": forms.TextInput(attrs={"class": "input"}),
             "smtp_bz_api_key": forms.TextInput(attrs={"class": "input", "type": "password", "autocomplete": "off"}),
         }
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Если пароль уже сохранен, делаем поле необязательным
-        if self.instance and self.instance.pk and self.instance.smtp_password_enc:
-            self.fields["smtp_password"].help_text = "Оставьте пустым, чтобы не менять сохраненный пароль. " + (self.fields["smtp_password"].help_text or "")
-        # Если API ключ уже сохранен, показываем подсказку
-        if self.instance and self.instance.pk and self.instance.smtp_bz_api_key:
-            self.fields["smtp_bz_api_key"].help_text = "Оставьте пустым, чтобы не менять сохраненный ключ. " + (self.fields["smtp_bz_api_key"].help_text or "")
     
     def clean(self):
         cleaned_data = super().clean()
