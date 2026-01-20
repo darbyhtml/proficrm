@@ -155,10 +155,114 @@ def mail_settings(request: HttpRequest) -> HttpResponse:
 @login_required
 def campaigns(request: HttpRequest) -> HttpResponse:
     user: User = request.user
+    is_admin = (user.role == User.Role.ADMIN)
+    
     qs = Campaign.objects.all().order_by("-created_at")
     if user.role == User.Role.MANAGER:
         qs = qs.filter(created_by=user)
-    return render(request, "ui/mail/campaigns.html", {"campaigns": qs, "is_admin": (user.role == User.Role.ADMIN)})
+    
+    # Аналитика для администратора
+    analytics = None
+    if is_admin:
+        from django.utils import timezone as _tz
+        from django.db.models import Count, Q
+        now = _tz.now()
+        today = now.date()
+        
+        smtp_cfg = GlobalMailAccount.load()
+        per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT
+        
+        # Статистика по пользователям: кто сколько писем отправил сегодня
+        user_stats = []
+        all_users = User.objects.filter(role__in=[User.Role.MANAGER, User.Role.ADMIN, User.Role.DIRECTOR, User.Role.ROP, User.Role.MANAGING]).select_related("branch")
+        
+        for u in all_users:
+            sent_today = SendLog.objects.filter(
+                provider="smtp_global",
+                status="sent",
+                campaign__created_by=u,
+                created_at__date=today
+            ).count()
+            
+            # Количество активных кампаний пользователя
+            active_campaigns = Campaign.objects.filter(
+                created_by=u,
+                status__in=[Campaign.Status.READY, Campaign.Status.SENDING]
+            ).count()
+            
+            # Количество ошибок сегодня
+            failed_today = SendLog.objects.filter(
+                provider="smtp_global",
+                status="failed",
+                campaign__created_by=u,
+                created_at__date=today
+            ).count()
+            
+            # Количество кампаний пользователя
+            campaigns_count = Campaign.objects.filter(created_by=u).count()
+            
+            # Остаток лимита
+            remaining = max(0, per_user_daily_limit - sent_today) if per_user_daily_limit else None
+            
+            user_stats.append({
+                "user": u,
+                "sent_today": sent_today,
+                "failed_today": failed_today,
+                "remaining": remaining,
+                "limit": per_user_daily_limit,
+                "campaigns_count": campaigns_count,
+                "active_campaigns": active_campaigns,
+                "is_limit_reached": per_user_daily_limit and sent_today >= per_user_daily_limit,
+            })
+        
+        # Сортируем по количеству отправленных писем (по убыванию)
+        user_stats.sort(key=lambda x: x["sent_today"], reverse=True)
+        
+        # Общая статистика
+        total_sent_today = SendLog.objects.filter(
+            provider="smtp_global",
+            status="sent",
+            created_at__date=today
+        ).count()
+        
+        total_failed_today = SendLog.objects.filter(
+            provider="smtp_global",
+            status="failed",
+            created_at__date=today
+        ).count()
+        
+        # Статистика по кампаниям
+        campaigns_stats = Campaign.objects.aggregate(
+            total=Count("id"),
+            active=Count("id", filter=Q(status__in=[Campaign.Status.READY, Campaign.Status.SENDING])),
+            paused=Count("id", filter=Q(status=Campaign.Status.PAUSED)),
+            sent=Count("id", filter=Q(status=Campaign.Status.SENT)),
+        )
+        
+        analytics = {
+            "user_stats": user_stats,
+            "total_sent_today": total_sent_today,
+            "total_failed_today": total_failed_today,
+            "global_limit": smtp_cfg.rate_per_day,
+            "per_user_limit": per_user_daily_limit,
+            "campaigns_stats": campaigns_stats,
+            "sent_last_min": SendLog.objects.filter(
+                provider="smtp_global",
+                status="sent",
+                created_at__gte=now - _tz.timedelta(minutes=1)
+            ).count(),
+            "rate_per_minute": smtp_cfg.rate_per_minute,
+        }
+    
+    return render(
+        request,
+        "ui/mail/campaigns.html",
+        {
+            "campaigns": qs,
+            "is_admin": is_admin,
+            "analytics": analytics,
+        }
+    )
 
 
 @login_required
