@@ -1054,8 +1054,16 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
     company_qs = Company.objects.all()
     
     # Филиал: по умолчанию филиал пользователя, если не указан
+    # Для менеджеров/РОП/директора филиала - только их филиал
     branch = (request.POST.get("branch") or "").strip()
     if not branch and user.branch_id:
+        branch = str(user.branch_id)
+    
+    # Проверка прав: менеджеры/РОП/директора филиала могут выбирать только свой филиал
+    if user.role in (User.Role.MANAGER, User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR) and user.branch_id:
+        if branch and branch != str(user.branch_id):
+            messages.error(request, "Вы можете выбрать только свой филиал.")
+            return redirect("campaign_detail", campaign_id=camp.id)
         branch = str(user.branch_id)
     
     # Ответственный: по умолчанию текущий пользователь, если не указан

@@ -689,7 +689,11 @@
     // Ограничение выбора филиала для менеджеров/РОП/директора филиала
     {% if user.role == 'MANAGER' or user.role == 'SALES_HEAD' or user.role == 'BRANCH_DIRECTOR' %}
       {% if user.branch %}
-        document.getElementById('branchSelect').disabled = true;
+        const branchSelect = document.getElementById('branchSelect');
+        if (branchSelect) {
+          branchSelect.disabled = true;
+          branchSelect.title = 'Доступен только ваш филиал';
+        }
       {% endif %}
     {% endif %}
   </script>
