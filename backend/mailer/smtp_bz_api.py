@@ -107,6 +107,10 @@ def get_quota_info(api_key: str) -> Optional[Dict[str, Any]]:
                         
                         logger.info(f"smtp.bz API: запрос {url} (auth: {auth_method}), статус: {response.status_code}")
                         
+                        # Логируем первые 200 символов ответа для диагностики
+                        if response.status_code != 200:
+                            logger.debug(f"smtp.bz API: ответ {url}: {response.text[:200]}")
+                        
                         if response.status_code == 200:
                             try:
                                 data = response.json()
