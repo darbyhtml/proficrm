@@ -319,19 +319,21 @@
                   </span>
                 </button>
               </form>
-            {% elif (campaign.status == 'draft' or campaign.status == 'stopped') and counts.pending > 0 %}
-              {# Кнопка "Старт" для черновиков и остановленных кампаний #}
-              <form method="post" action="/mail/campaigns/{{ campaign.id }}/start/">
-                {% csrf_token %}
-                <button class="btn btn-primary" type="submit">
-                  <span class="inline-flex items-center gap-2">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                    </svg>
-                    Старт
-                  </span>
-                </button>
-              </form>
+            {% elif campaign.status == 'draft' or campaign.status == 'stopped' %}
+              {% if counts.pending > 0 %}
+                {# Кнопка "Старт" для черновиков и остановленных кампаний #}
+                <form method="post" action="/mail/campaigns/{{ campaign.id }}/start/">
+                  {% csrf_token %}
+                  <button class="btn btn-primary" type="submit">
+                    <span class="inline-flex items-center gap-2">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                      </svg>
+                      Старт
+                    </span>
+                  </button>
+                </form>
+              {% endif %}
             {% endif %}
             
             {% if counts.pending == 0 and counts.total > 0 %}
