@@ -568,8 +568,10 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "view": view,
             "recent_errors": recent_errors,
             "error_types": error_types,
-            "quota": SmtpBzQuota.load(),
+            "quota": quota,
             "queue_entry": getattr(camp, "queue_entry", None),
+            "emails_available": emails_available,
+            "rate_per_hour": max_per_hour,
         },
     )
 
@@ -1145,22 +1147,33 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
         messages.error(request, "Подтвердите отправку (кнопка отправки должна быть нажата осознанно).")
         return redirect("campaign_detail", campaign_id=camp.id)
 
-    # Rate limit (MVP): глобальные лимиты
+    # Получаем лимиты из API
+    quota = SmtpBzQuota.load()
+    if quota.last_synced_at and not quota.sync_error and quota.emails_limit > 0:
+        max_per_hour = quota.max_per_hour or 100
+        emails_available = quota.emails_available or 0
+        emails_limit = quota.emails_limit or 15000
+    else:
+        max_per_hour = 100
+        emails_available = 15000
+        emails_limit = 15000
+    
+    # Rate limit: глобальные лимиты из API
     from django.utils import timezone as _tz
     now = _tz.now()
-    sent_last_min = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__gte=now - _tz.timedelta(minutes=1)).count()
+    sent_last_hour = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__gte=now - _tz.timedelta(hours=1)).count()
     sent_today = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__date=now.date()).count()
     sent_today_user = SendLog.objects.filter(provider="smtp_global", status="sent", campaign__created_by=user, created_at__date=now.date()).count()
 
-    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT
+    per_user_daily_limit = 100  # Фиксированный лимит на пользователя
     if per_user_daily_limit and sent_today_user >= per_user_daily_limit:
         messages.error(request, f"Достигнут лимит отправки {per_user_daily_limit} писем в день для вашего аккаунта.")
         return redirect("campaign_detail", campaign_id=camp.id)
-    if sent_today >= smtp_cfg.rate_per_day:
-        messages.error(request, "Достигнут дневной лимит отправки.")
+    if emails_available <= 0:
+        messages.error(request, f"Квота исчерпана: доступно {emails_available} из {emails_limit} писем.")
         return redirect("campaign_detail", campaign_id=camp.id)
-    if sent_last_min >= smtp_cfg.rate_per_minute:
-        messages.error(request, "Слишком часто. Подожди минуту (лимит в минуту).")
+    if sent_last_hour >= max_per_hour:
+        messages.error(request, f"Слишком часто. Подожди час (лимит в час: {max_per_hour}).")
         return redirect("campaign_detail", campaign_id=camp.id)
 
     # 50 писем за шаг — безопасный MVP, но с учетом лимитов
@@ -1168,8 +1181,8 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
         1,
         min(
             50,
-            smtp_cfg.rate_per_minute - sent_last_min,
-            smtp_cfg.rate_per_day - sent_today,
+            max_per_hour - sent_last_hour,
+            emails_available,
             (per_user_daily_limit - sent_today_user) if per_user_daily_limit else 50,
         ),
     )
