@@ -97,9 +97,24 @@ def send_pending_emails(self, batch_size: int = 50):
             ).count()
             per_user_daily_limit = smtp_cfg.per_user_daily_limit or 0
             if per_user_daily_limit and sent_today_user >= per_user_daily_limit:
+                # Лимит пользователя достигнут - ставим на паузу
+                if camp.status == Campaign.Status.SENDING:
+                    camp.status = Campaign.Status.PAUSED
+                    camp.save(update_fields=["status", "updated_at"])
+                    logger.info(f"Campaign {camp.id} paused: user daily limit reached ({sent_today_user}/{per_user_daily_limit})")
                 continue
             
-            if sent_today >= smtp_cfg.rate_per_day or sent_last_min >= smtp_cfg.rate_per_minute:
+            if sent_today >= smtp_cfg.rate_per_day:
+                # Глобальный дневной лимит достигнут - ставим на паузу
+                if camp.status == Campaign.Status.SENDING:
+                    camp.status = Campaign.Status.PAUSED
+                    camp.save(update_fields=["status", "updated_at"])
+                    logger.info(f"Campaign {camp.id} paused: global daily limit reached ({sent_today}/{smtp_cfg.rate_per_day})")
+                continue
+            
+            if sent_last_min >= smtp_cfg.rate_per_minute:
+                # Лимит в минуту достигнут - пропускаем эту итерацию, но не ставим на паузу
+                # (лимит в минуту восстанавливается быстро)
                 continue
 
             allowed = max(1, min(
