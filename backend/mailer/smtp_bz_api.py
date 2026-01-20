@@ -90,18 +90,28 @@ def get_quota_info(api_key: str) -> Optional[Dict[str, Any]]:
                             try:
                                 data = response.json()
                                 logger.info(f"smtp.bz API: успешно получены данные с {url} (auth: {list(auth_header.keys())[0]})")
-                                return _parse_quota_response(data)
-                            except ValueError:
+                                parsed = _parse_quota_response(data)
+                                if parsed.get("emails_limit", 0) > 0 or parsed.get("tariff_name"):
+                                    # Если получили хоть какие-то данные - считаем успехом
+                                    return parsed
+                                else:
+                                    logger.debug(f"smtp.bz API: получен пустой ответ с {url}")
+                            except ValueError as e:
                                 # Не JSON ответ
-                                logger.debug(f"smtp.bz API: ответ не JSON с {url}")
+                                logger.debug(f"smtp.bz API: ответ не JSON с {url}: {e}")
+                                logger.debug(f"smtp.bz API: тело ответа: {response.text[:200]}")
                         elif response.status_code == 401:
                             logger.debug(f"smtp.bz API: неавторизован с {url} (auth: {list(auth_header.keys())[0]})")
+                            logger.debug(f"smtp.bz API: тело ответа: {response.text[:200]}")
+                        elif response.status_code == 404:
+                            logger.debug(f"smtp.bz API: эндпоинт не найден: {url}")
                         else:
                             logger.debug(f"smtp.bz API: статус {response.status_code} с {url}")
+                            logger.debug(f"smtp.bz API: тело ответа: {response.text[:200]}")
                     except requests.exceptions.RequestException as e:
                         logger.debug(f"smtp.bz API: ошибка при запросе {url}: {e}")
         
-        logger.warning("smtp.bz API: не удалось получить данные ни с одного эндпоинта")
+        logger.warning("smtp.bz API: не удалось получить данные ни с одного эндпоинта. Проверьте правильность API ключа в личном кабинете smtp.bz")
         return None
         
     except Exception as e:

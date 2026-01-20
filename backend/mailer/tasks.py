@@ -269,9 +269,9 @@ def sync_smtp_bz_quota():
         quota_info = get_quota_info(smtp_cfg.smtp_bz_api_key)
         if not quota_info:
             quota = SmtpBzQuota.load()
-            quota.sync_error = "Не удалось получить данные через API"
+            quota.sync_error = "Не удалось получить данные через API. Проверьте правильность API ключа в личном кабинете smtp.bz и убедитесь, что API включен для вашего аккаунта."
             quota.save(update_fields=["sync_error", "updated_at"])
-            logger.warning("Failed to fetch smtp.bz quota info")
+            logger.warning("Failed to fetch smtp.bz quota info - check API key and account settings")
             return {"status": "error", "reason": "api_failed"}
         
         # Обновляем информацию о квоте
