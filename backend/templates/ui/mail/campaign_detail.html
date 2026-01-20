@@ -70,35 +70,38 @@
             </button>
           </form>
           
-          {% if campaign.status == 'paused' and counts.pending > 0 %}
-            <form method="post" action="/mail/campaigns/{{ campaign.id }}/resume/" class="inline">
-              {% csrf_token %}
-              <button class="btn-icon btn btn-primary" type="submit" title="Продолжить рассылку" style="padding:0.375rem 0.75rem;font-size:0.875rem">
-                <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 0 1 0 1.971l-11.54 6.347a1.125 1.125 0 0 1-1.667-.985V5.653Z" />
-                </svg>
-              </button>
-            </form>
-          {% elif campaign.status == 'sending' or campaign.status == 'ready' %}
-            <form method="post" action="/mail/campaigns/{{ campaign.id }}/pause/" class="inline">
-              {% csrf_token %}
-              <button class="btn-icon btn btn-warning" type="submit" title="Поставить на паузу" style="padding:0.375rem 0.75rem;font-size:0.875rem">
-                <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
-                </svg>
-              </button>
-            </form>
-          {% elif campaign.status == 'draft' or campaign.status == 'stopped' %}
+          {# Кнопка "Старт" - показываем когда статус DRAFT или STOPPED и есть получатели #}
+          {% if campaign.status == 'draft' or campaign.status == 'stopped' %}
             {% if counts.pending > 0 %}
               <form method="post" action="/mail/campaigns/{{ campaign.id }}/start/" class="inline">
                 {% csrf_token %}
-                <button class="btn-icon btn btn-primary" type="submit" title="Запустить рассылку" style="padding:0.375rem 0.75rem;font-size:0.875rem">
+                <button class="btn-icon btn" type="submit" title="Запустить рассылку" style="background:#10b981;color:#fff;padding:0.375rem 0.75rem;font-size:0.875rem">
                   <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 0 1 0 1.971l-11.54 6.347a1.125 1.125 0 0 1-1.667-.985V5.653Z" />
                   </svg>
                 </button>
               </form>
             {% endif %}
+          {# Кнопка "Пауза" - показываем когда статус SENDING или READY #}
+          {% elif campaign.status == 'sending' or campaign.status == 'ready' %}
+            <form method="post" action="/mail/campaigns/{{ campaign.id }}/pause/" class="inline">
+              {% csrf_token %}
+              <button class="btn-icon btn" type="submit" title="Поставить на паузу" style="background:#10b981;color:#fff;padding:0.375rem 0.75rem;font-size:0.875rem">
+                <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
+                </svg>
+              </button>
+            </form>
+          {# Кнопка "Продолжить" - показываем когда статус PAUSED и есть получатели #}
+          {% elif campaign.status == 'paused' and counts.pending > 0 %}
+            <form method="post" action="/mail/campaigns/{{ campaign.id }}/resume/" class="inline">
+              {% csrf_token %}
+              <button class="btn-icon btn" type="submit" title="Продолжить рассылку" style="background:#10b981;color:#fff;padding:0.375rem 0.75rem;font-size:0.875rem">
+                <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 0 1 0 1.971l-11.54 6.347a1.125 1.125 0 0 1-1.667-.985V5.653Z" />
+                </svg>
+              </button>
+            </form>
           {% endif %}
           
           <button class="btn-icon btn" type="button" onclick="document.getElementById('generateModal').classList.remove('hidden')" title="Сгенерировать получателей" style="background:#f97316;color:#fff;padding:0.375rem 0.75rem;font-size:0.875rem">

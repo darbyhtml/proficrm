@@ -1216,7 +1216,8 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
             if was_created:
                 created += 1
 
-    camp.status = Campaign.Status.READY
+    # НЕ меняем статус автоматически - пользователь должен нажать "Старт" вручную
+    # camp.status остается DRAFT (или текущий статус)
     camp.filter_meta = {
         "branch": branch,
         "responsible": responsible,
@@ -1227,7 +1228,7 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
         "include_contact_emails": include_contact_emails,
         "contact_email_types": contact_email_types,
     }
-    camp.save(update_fields=["status", "filter_meta", "updated_at"])
+    camp.save(update_fields=["filter_meta", "updated_at"])
 
     msg = f"Получатели сгенерированы: +{created}"
     if skipped_cooldown:
@@ -1462,15 +1463,20 @@ def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
         messages.error(request, "Нет писем в очереди для отправки.")
         return redirect("campaign_detail", campaign_id=camp.id)
     
-    # Проверка рабочего времени
-    from mailer.tasks import _is_working_hours
-    if not _is_working_hours():
-        messages.warning(request, "Рассылка возможна только в рабочее время (9:00-18:00 МСК). Кампания будет запущена, но отправка начнется автоматически в рабочее время.")
-    
-    # Устанавливаем статус READY или SENDING в зависимости от наличия pending
+    # Устанавливаем статус READY
     if camp.status in (Campaign.Status.DRAFT, Campaign.Status.PAUSED, Campaign.Status.STOPPED):
-        camp.status = Campaign.Status.READY if pending_count > 0 else Campaign.Status.SENT
+        camp.status = Campaign.Status.READY
         camp.save(update_fields=["status", "updated_at"])
+        
+        # Проверяем, можно ли начать сразу (нет других активных кампаний)
+        from mailer.tasks import _is_working_hours
+        is_working = _is_working_hours()
+        
+        # Проверяем, есть ли другие кампании в обработке или в очереди
+        active_queues = CampaignQueue.objects.filter(
+            status__in=(CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING),
+            campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING)
+        ).exclude(campaign=camp).count()
         
         # Создаем или обновляем запись в очереди
         queue_entry, created = CampaignQueue.objects.get_or_create(
@@ -1480,12 +1486,46 @@ def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
                 "priority": 0,
             }
         )
-        if not created and queue_entry.status == CampaignQueue.Status.CANCELLED:
-            queue_entry.status = CampaignQueue.Status.PENDING
-            queue_entry.queued_at = timezone.now()
-            queue_entry.save(update_fields=["status", "queued_at"])
+        if not created:
+            if queue_entry.status == CampaignQueue.Status.CANCELLED:
+                queue_entry.status = CampaignQueue.Status.PENDING
+                queue_entry.queued_at = timezone.now()
+                queue_entry.save(update_fields=["status", "queued_at"])
         
-        messages.success(request, "Рассылка запущена. Отправка будет происходить автоматически в рабочее время (9:00-18:00 МСК).")
+        # Определяем позицию в очереди
+        queue_position = None
+        if queue_entry.status == CampaignQueue.Status.PENDING:
+            queue_list = list(CampaignQueue.objects.filter(
+                status=CampaignQueue.Status.PENDING,
+                campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING)
+            ).order_by("-priority", "queued_at").values_list("campaign_id", flat=True))
+            if camp.id in queue_list:
+                queue_position = queue_list.index(camp.id) + 1
+        
+        if active_queues == 0 and is_working:
+            # Можно начать сразу
+            messages.success(request, "Рассылка началась. Письма отправляются.")
+            notify(
+                user=user,
+                kind=Notification.Kind.SYSTEM,
+                title="Рассылка началась",
+                body=f"Кампания '{camp.name}' начала отправку писем.",
+                url=f"/mail/campaigns/{camp.id}/"
+            )
+        else:
+            # Ставим в очередь
+            if queue_position:
+                messages.success(request, f"Рассылка поставлена в очередь. Ваша позиция: {queue_position}. Вы получите уведомление, когда начнется отправка.")
+            else:
+                messages.success(request, "Рассылка поставлена в очередь. Вы получите уведомление, когда начнется отправка.")
+            notify(
+                user=user,
+                kind=Notification.Kind.SYSTEM,
+                title="Рассылка в очереди",
+                body=f"Кампания '{camp.name}' поставлена в очередь" + (f" (позиция: {queue_position})" if queue_position else "") + ". Вы получите уведомление, когда начнется отправка.",
+                url=f"/mail/campaigns/{camp.id}/"
+            )
+        
         log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Запущена автоматическая рассылка")
     
     return redirect("campaign_detail", campaign_id=camp.id)
@@ -1533,7 +1573,65 @@ def campaign_resume(request: HttpRequest, campaign_id) -> HttpResponse:
         if pending_count > 0:
             camp.status = Campaign.Status.READY
             camp.save(update_fields=["status", "updated_at"])
-            messages.success(request, "Рассылка возобновлена. Отправка будет происходить автоматически в рабочее время (9:00-18:00 МСК).")
+            
+            # Проверяем, можно ли начать сразу
+            from mailer.tasks import _is_working_hours
+            is_working = _is_working_hours()
+            
+            # Проверяем, есть ли другие кампании в обработке или в очереди
+            active_queues = CampaignQueue.objects.filter(
+                status__in=(CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING),
+                campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING)
+            ).exclude(campaign=camp).count()
+            
+            # Создаем или обновляем запись в очереди
+            queue_entry, created = CampaignQueue.objects.get_or_create(
+                campaign=camp,
+                defaults={
+                    "status": CampaignQueue.Status.PENDING,
+                    "priority": 0,
+                }
+            )
+            if not created:
+                if queue_entry.status == CampaignQueue.Status.CANCELLED:
+                    queue_entry.status = CampaignQueue.Status.PENDING
+                    queue_entry.queued_at = timezone.now()
+                    queue_entry.save(update_fields=["status", "queued_at"])
+            
+            # Определяем позицию в очереди
+            queue_position = None
+            if queue_entry.status == CampaignQueue.Status.PENDING:
+                queue_list = list(CampaignQueue.objects.filter(
+                    status=CampaignQueue.Status.PENDING,
+                    campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING)
+                ).order_by("-priority", "queued_at").values_list("campaign_id", flat=True))
+                if camp.id in queue_list:
+                    queue_position = queue_list.index(camp.id) + 1
+            
+            if active_queues == 0 and is_working:
+                # Можно начать сразу
+                messages.success(request, "Рассылка возобновлена. Письма отправляются.")
+                notify(
+                    user=user,
+                    kind=Notification.Kind.SYSTEM,
+                    title="Рассылка возобновлена",
+                    body=f"Кампания '{camp.name}' продолжила отправку писем.",
+                    url=f"/mail/campaigns/{camp.id}/"
+                )
+            else:
+                # Ставим в очередь
+                if queue_position:
+                    messages.success(request, f"Рассылка поставлена в очередь. Ваша позиция: {queue_position}. Вы получите уведомление, когда начнется отправка.")
+                else:
+                    messages.success(request, "Рассылка поставлена в очередь. Вы получите уведомление, когда начнется отправка.")
+                notify(
+                    user=user,
+                    kind=Notification.Kind.SYSTEM,
+                    title="Рассылка в очереди",
+                    body=f"Кампания '{camp.name}' поставлена в очередь" + (f" (позиция: {queue_position})" if queue_position else "") + ". Вы получите уведомление, когда начнется отправка.",
+                    url=f"/mail/campaigns/{camp.id}/"
+                )
+            
             log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Рассылка возобновлена")
         else:
             camp.status = Campaign.Status.SENT

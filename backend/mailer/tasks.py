@@ -74,6 +74,18 @@ def send_pending_emails(self, batch_size: int = 50):
                 next_queue.started_at = timezone.now()
                 next_queue.save(update_fields=["status", "started_at"])
                 camps = [next_queue.campaign]
+                
+                # Отправляем уведомление создателю кампании о начале рассылки
+                if next_queue.campaign.created_by:
+                    from notifications.service import notify
+                    from notifications.models import Notification
+                    notify(
+                        user=next_queue.campaign.created_by,
+                        kind=Notification.Kind.SYSTEM,
+                        title="Рассылка началась",
+                        body=f"Кампания '{next_queue.campaign.name}' начала отправку писем.",
+                        url=f"/mail/campaigns/{next_queue.campaign.id}/"
+                    )
             else:
                 # Если очереди нет, работаем со старым способом (для обратной совместимости)
                 camps = Campaign.objects.filter(
