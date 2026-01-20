@@ -2430,6 +2430,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     
     # Проверка прав администратора для отката
     is_admin = require_admin(user)
+    is_group_manager = user.role == User.Role.GROUP_MANAGER
     pinned_note = (
         CompanyNote.objects.filter(company=company, is_pinned=True)
         .select_related("author", "pinned_by")
@@ -2526,6 +2527,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "contacts": contacts,
             "primary_cold_available": primary_cold_available,
             "is_admin": is_admin,
+            "is_group_manager": is_group_manager,
             "notes": notes,
             "pinned_note": pinned_note,
             "note_form": note_form,
@@ -3867,11 +3869,18 @@ def company_note_edit(request: HttpRequest, company_id, note_id: int) -> HttpRes
 
     # Редактировать заметки:
     # - админ/суперпользователь/управляющий: любые
-    # - остальные: только свои
+    # - остальные: только свои ИЛИ заметки без автора (author=None), если пользователь - ответственный за компанию
     if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
         note = get_object_or_404(CompanyNote.objects.select_related("author"), id=note_id, company_id=company.id)
     else:
-        note = get_object_or_404(CompanyNote.objects.select_related("author"), id=note_id, company_id=company.id, author_id=user.id)
+        # Обычные пользователи могут редактировать свои заметки или заметки без автора, если они ответственные за компанию
+        note_qs = CompanyNote.objects.select_related("author").filter(id=note_id, company_id=company.id)
+        if company.responsible_id == user.id:
+            # Ответственный может редактировать свои заметки и заметки без автора
+            note = get_object_or_404(note_qs.filter(Q(author_id=user.id) | Q(author__isnull=True)))
+        else:
+            # Остальные могут редактировать только свои заметки
+            note = get_object_or_404(note_qs, author_id=user.id)
 
     text = (request.POST.get("text") or "").strip()
     remove_attachment = (request.POST.get("remove_attachment") or "").strip() == "1"
@@ -3939,11 +3948,18 @@ def company_note_delete(request: HttpRequest, company_id, note_id: int) -> HttpR
 
     # Удалять заметки:
     # - админ/суперпользователь/управляющий: любые
-    # - остальные: только свои
+    # - остальные: только свои ИЛИ заметки без автора (author=None), если пользователь - ответственный за компанию
     if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
         note = get_object_or_404(CompanyNote.objects.select_related("author"), id=note_id, company_id=company.id)
     else:
-        note = get_object_or_404(CompanyNote.objects.select_related("author"), id=note_id, company_id=company.id, author_id=user.id)
+        # Обычные пользователи могут удалять свои заметки или заметки без автора, если они ответственные за компанию
+        note_qs = CompanyNote.objects.select_related("author").filter(id=note_id, company_id=company.id)
+        if company.responsible_id == user.id:
+            # Ответственный может удалять свои заметки и заметки без автора
+            note = get_object_or_404(note_qs.filter(Q(author_id=user.id) | Q(author__isnull=True)))
+        else:
+            # Остальные могут удалять только свои заметки
+            note = get_object_or_404(note_qs, author_id=user.id)
     # Удаляем вложенный файл из storage, затем запись
     try:
         if note.attachment:

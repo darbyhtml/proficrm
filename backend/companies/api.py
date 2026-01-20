@@ -209,17 +209,24 @@ class CompanyNoteViewSet(viewsets.ModelViewSet):
         obj: CompanyNote = self.get_object()
         if not can_edit_company(user, obj.company):
             raise PermissionDenied("Нет прав на редактирование заметок этой компании.")
-        # правило: обычный пользователь может править только свои заметки
-        if not (user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER)) and obj.author_id != user.id:
-            raise PermissionDenied("Можно редактировать только свои заметки.")
+        # правило: обычный пользователь может править только свои заметки ИЛИ заметки без автора, если он ответственный за компанию
+        if not (user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER)):
+            if obj.author_id != user.id:
+                # Проверяем, может ли пользователь редактировать заметку без автора (если он ответственный)
+                if obj.author_id is not None or obj.company.responsible_id != user.id:
+                    raise PermissionDenied("Можно редактировать только свои заметки или заметки без автора (если вы ответственный за компанию).")
         serializer.save()
 
     def perform_destroy(self, instance):
         user: User = self.request.user
         if not can_edit_company(user, instance.company):
             raise PermissionDenied("Нет прав на удаление заметок этой компании.")
-        if not (user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER)) and instance.author_id != user.id:
-            raise PermissionDenied("Можно удалять только свои заметки.")
+        # правило: обычный пользователь может удалять только свои заметки ИЛИ заметки без автора, если он ответственный за компанию
+        if not (user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER)):
+            if instance.author_id != user.id:
+                # Проверяем, может ли пользователь удалять заметку без автора (если он ответственный)
+                if instance.author_id is not None or instance.company.responsible_id != user.id:
+                    raise PermissionDenied("Можно удалять только свои заметки или заметки без автора (если вы ответственный за компанию).")
         instance.delete()
 
 
