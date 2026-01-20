@@ -8,6 +8,7 @@ from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Exists, OuterRef, Q, F
 from django.db.models import Count, Max, Prefetch, Avg
+from django.db import models
 from django.http import HttpRequest, HttpResponse
 from django.http import StreamingHttpResponse
 from django.http import JsonResponse
@@ -367,9 +368,9 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
         
         # Оптимизированный поиск с нормализацией для названия, ИНН, адреса
         # Используем простой icontains вместо regex для производительности
-        # Regex применяем только если простой поиск не дал результатов (fallback)
+        # Ограничиваем количество вариантов для ускорения запроса
         if normalized_q and len(normalized_q) >= 2:  # Минимум 2 символа для нормализованного поиска
-            # Сначала пробуем простой поиск по нормализованному запросу (быстрее)
+            # Основной поиск по нормализованному запросу (самый быстрый)
             normalized_simple_filters = (
                 Q(name__icontains=normalized_q)
                 | Q(legal_name__icontains=normalized_q)
@@ -377,55 +378,137 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
                 | Q(address__icontains=normalized_q)
             )
             
-            # Также ищем по исходному запросу с заменой тире на пробелы и наоборот
-            # Это покрывает большинство случаев без использования медленного regex
-            q_variants = [q, q.replace("-", " "), q.replace(" ", "-"), normalized_q]
-            for variant in q_variants:
-                if variant and variant != q:
+            # Добавляем только самые важные варианты (не все, чтобы не замедлять)
+            # Если запрос содержит тире, пробуем без него и наоборот
+            if "-" in q:
+                variant_no_dash = q.replace("-", " ")
+                if variant_no_dash != q:
                     normalized_simple_filters |= (
-                        Q(name__icontains=variant)
-                        | Q(legal_name__icontains=variant)
-                        | Q(inn__icontains=variant)
-                        | Q(address__icontains=variant)
+                        Q(name__icontains=variant_no_dash)
+                        | Q(legal_name__icontains=variant_no_dash)
+                        | Q(address__icontains=variant_no_dash)
+                    )
+            elif " " in q:
+                variant_with_dash = q.replace(" ", "-")
+                if variant_with_dash != q:
+                    normalized_simple_filters |= (
+                        Q(name__icontains=variant_with_dash)
+                        | Q(legal_name__icontains=variant_with_dash)
+                        | Q(address__icontains=variant_with_dash)
                     )
             
             base_filters |= normalized_simple_filters
         
-        # Поиск по телефонам (с нормализацией)
+        # Поиск по телефонам (с нормализацией) - оптимизировано с использованием Exists
         normalized_phone = _normalize_phone_for_search(q)
         phone_filters = Q()
         if normalized_phone and normalized_phone != q:
-            # Ищем по нормализованному номеру в основном телефоне компании
+            # Основной телефон компании (точное совпадение быстрее)
             phone_filters = Q(phone=normalized_phone)
-            # Ищем по нормализованному номеру в дополнительных телефонах компании
-            phone_filters |= Q(phones__value=normalized_phone)
-            # Ищем по нормализованному номеру в телефонах контактов
-            phone_filters |= Q(contacts__phones__value=normalized_phone)
-            # Также ищем по исходному запросу (на случай, если нормализация не сработала)
+            # Также ищем по исходному запросу в основном телефоне
             phone_filters |= Q(phone__icontains=q)
-            phone_filters |= Q(phones__value__icontains=q)
-            phone_filters |= Q(contacts__phones__value__icontains=q)
+            
+            # Дополнительные телефоны компании - используем Exists вместо JOIN (быстрее)
+            from companies.models import CompanyPhone
+            phone_filters |= Exists(
+                CompanyPhone.objects.filter(
+                    company_id=OuterRef('pk'),
+                    value=normalized_phone
+                )
+            )
+            phone_filters |= Exists(
+                CompanyPhone.objects.filter(
+                    company_id=OuterRef('pk'),
+                    value__icontains=q
+                )
+            )
+            
+            # Телефоны контактов - используем Exists вместо JOIN (быстрее)
+            from companies.models import ContactPhone
+            phone_filters |= Exists(
+                ContactPhone.objects.filter(
+                    contact__company_id=OuterRef('pk'),
+                    value=normalized_phone
+                )
+            )
+            phone_filters |= Exists(
+                ContactPhone.objects.filter(
+                    contact__company_id=OuterRef('pk'),
+                    value__icontains=q
+                )
+            )
         else:
             # Если нормализация не удалась, ищем как есть
-            phone_filters = (
-                Q(phone__icontains=q)
-                | Q(phones__value__icontains=q)
-                | Q(contacts__phones__value__icontains=q)
+            phone_filters = Q(phone__icontains=q)
+            # Используем Exists для связанных таблиц
+            from companies.models import CompanyPhone, ContactPhone
+            phone_filters |= Exists(
+                CompanyPhone.objects.filter(
+                    company_id=OuterRef('pk'),
+                    value__icontains=q
+                )
+            )
+            phone_filters |= Exists(
+                ContactPhone.objects.filter(
+                    contact__company_id=OuterRef('pk'),
+                    value__icontains=q
+                )
             )
         
-        # Поиск по email (с нормализацией)
+        # Поиск по email (с нормализацией) - оптимизировано с использованием Exists
         normalized_email = _normalize_email_for_search(q)
         email_filters = Q()
         if normalized_email:
-            # Ищем по нормализованному email в основном email компании
+            # Основной email компании (точное совпадение быстрее)
             email_filters = Q(email__iexact=normalized_email)
-            # Ищем по нормализованному email в email контактов
-            email_filters |= Q(contacts__emails__value__iexact=normalized_email)
-            # Также ищем по частичному совпадению (на случай, если пользователь ввел часть email)
+            # Также ищем по частичному совпадению в основном email
             email_filters |= Q(email__icontains=q)
-            email_filters |= Q(contacts__emails__value__icontains=q)
+            
+            # Email контактов - используем Exists вместо JOIN (быстрее)
+            from companies.models import ContactEmail
+            email_filters |= Exists(
+                ContactEmail.objects.filter(
+                    contact__company_id=OuterRef('pk'),
+                    value__iexact=normalized_email
+                )
+            )
+            email_filters |= Exists(
+                ContactEmail.objects.filter(
+                    contact__company_id=OuterRef('pk'),
+                    value__icontains=q
+                )
+            )
+            
+            # Дополнительные email компании - используем Exists
+            from companies.models import CompanyEmail
+            email_filters |= Exists(
+                CompanyEmail.objects.filter(
+                    company_id=OuterRef('pk'),
+                    value__iexact=normalized_email
+                )
+            )
+            email_filters |= Exists(
+                CompanyEmail.objects.filter(
+                    company_id=OuterRef('pk'),
+                    value__icontains=q
+                )
+            )
         else:
-            email_filters = Q(email__icontains=q) | Q(contacts__emails__value__icontains=q)
+            email_filters = Q(email__icontains=q)
+            # Используем Exists для связанных таблиц
+            from companies.models import ContactEmail, CompanyEmail
+            email_filters |= Exists(
+                ContactEmail.objects.filter(
+                    contact__company_id=OuterRef('pk'),
+                    value__icontains=q
+                )
+            )
+            email_filters |= Exists(
+                CompanyEmail.objects.filter(
+                    company_id=OuterRef('pk'),
+                    value__icontains=q
+                )
+            )
         
         # Поиск по ФИО в контактах
         # Разбиваем запрос на слова для более гибкого поиска
@@ -451,16 +534,22 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             fio_filters |= Q(contacts__first_name__icontains=q)
             fio_filters |= Q(contacts__last_name__icontains=q)
         elif len(words) == 1:
-            # Одно слово - ищем в любом поле
+            # Одно слово - используем Exists для оптимизации
             word = words[0]
-            fio_filters = Q(contacts__first_name__icontains=word) | Q(
-                contacts__last_name__icontains=word
+            contact_q = Contact.objects.filter(
+                company_id=OuterRef('pk')
+            ).filter(
+                Q(first_name__icontains=word) | Q(last_name__icontains=word)
             )
+            fio_filters = Exists(contact_q)
         else:
-            # Пустой запрос (не должно быть, но на всякий случай)
-            fio_filters = Q(contacts__first_name__icontains=q) | Q(
-                contacts__last_name__icontains=q
+            # Пустой запрос (не должно быть, но на всякий случай) - используем Exists
+            contact_q = Contact.objects.filter(
+                company_id=OuterRef('pk')
+            ).filter(
+                Q(first_name__icontains=q) | Q(last_name__icontains=q)
             )
+            fio_filters = Exists(contact_q)
         
         # Объединяем все фильтры
         qs = qs.filter(
@@ -1541,6 +1630,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
     if companies_total is None:
         companies_total = Company.objects.all().order_by().count()
         cache.set(cache_key_total, companies_total, 600)  # 10 минут
+    # Оптимизация: предзагружаем только необходимые связанные объекты
     qs = (
         _companies_with_overdue_flag(now=now)
         .select_related("responsible", "branch", "status")
@@ -1678,11 +1768,25 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
         companies_total = Company.objects.all().order_by().count()
         cache.set(cache_key_total, companies_total, 600)
     
-    # Оптимизация: предзагружаем связанные объекты для поиска
+    # Оптимизация: предзагружаем только необходимые связанные объекты
+    # Используем only() для уменьшения объема загружаемых данных
     qs = (
         _companies_with_overdue_flag(now=now)
         .select_related("responsible", "branch", "status")
-        .prefetch_related("spheres", "phones", "emails", "contacts", "contacts__phones", "contacts__emails")
+        .prefetch_related(
+            "spheres",
+            # Предзагружаем только value для телефонов и email (не все поля)
+            models.Prefetch("phones", queryset=CompanyPhone.objects.only("id", "company_id", "value")),
+            models.Prefetch("emails", queryset=CompanyEmail.objects.only("id", "company_id", "value")),
+            models.Prefetch(
+                "contacts",
+                queryset=Contact.objects.only("id", "company_id", "first_name", "last_name")
+                .prefetch_related(
+                    models.Prefetch("phones", queryset=ContactPhone.objects.only("id", "contact_id", "value")),
+                    models.Prefetch("emails", queryset=ContactEmail.objects.only("id", "contact_id", "value")),
+                )
+            ),
+        )
     )
     
     filter_params = dict(request.GET)

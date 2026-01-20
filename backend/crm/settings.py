@@ -138,6 +138,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.postgres',  # Для PostgreSQL-специфичных функций (pg_trgm, full-text search)
 
     # Third-party
     'rest_framework',
