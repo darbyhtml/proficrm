@@ -89,6 +89,12 @@
         </div>
       </div>
 
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Режим работы</label>
+        {{ form.work_schedule }}
+        <div class="text-xs text-brand-dark/60 mt-1">Можно копировать с сайта компании или вводить вручную. Время автоматически форматируется в формат HH:MM при вводе.</div>
+      </div>
+
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label class="block text-sm text-brand-dark/80 mb-1">Вид договора</label>
@@ -364,6 +370,48 @@
             } else if (row) {
               row.querySelector('input').value = '';
             }
+          }
+        });
+      }
+
+      // Автоматическое форматирование времени в поле "Режим работы"
+      const workScheduleField = document.querySelector('textarea[name="work_schedule"]');
+      if (workScheduleField) {
+        // Функция для форматирования времени в формат HH:MM
+        function formatTimeInText(text) {
+          // Регулярное выражение для поиска времени в различных форматах:
+          // - 9:00, 9-00, 9.00, 09:00, 09-00, 09.00
+          // - 9:00-18:00, 9-00-18-00, 9.00.18.00
+          // - 9:00:00 (с секундами)
+          // Паттерн: одна или две цифры, затем : или - или ., затем две цифры (опционально еще : или - или . и еще время)
+          return text.replace(/\b(\d{1,2})[:.\-](\d{2})(?::\d{2})?\b/g, function(match, hours, minutes) {
+            // Форматируем часы: добавляем ведущий ноль, если нужно
+            const formattedHours = hours.padStart(2, '0');
+            // Возвращаем в формате HH:MM
+            return formattedHours + ':' + minutes;
+          });
+        }
+
+        // Обработчик события input (при вводе)
+        workScheduleField.addEventListener('input', function(e) {
+          const cursorPosition = e.target.selectionStart;
+          const originalValue = e.target.value;
+          const formattedValue = formatTimeInText(originalValue);
+          
+          if (formattedValue !== originalValue) {
+            // Вычисляем новую позицию курсора
+            const diff = formattedValue.length - originalValue.length;
+            e.target.value = formattedValue;
+            // Восстанавливаем позицию курсора с учетом изменений
+            e.target.setSelectionRange(cursorPosition + diff, cursorPosition + diff);
+          }
+        });
+
+        // Обработчик события blur (при потере фокуса) - финальное форматирование
+        workScheduleField.addEventListener('blur', function(e) {
+          const formattedValue = formatTimeInText(e.target.value);
+          if (formattedValue !== e.target.value) {
+            e.target.value = formattedValue;
           }
         });
       }

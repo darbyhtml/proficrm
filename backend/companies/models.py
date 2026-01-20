@@ -56,6 +56,7 @@ class Company(models.Model):
     workday_start = models.TimeField("Рабочее время: с", null=True, blank=True)
     workday_end = models.TimeField("Рабочее время: до", null=True, blank=True)
     work_timezone = models.CharField("Часовой пояс", max_length=64, blank=True, default="")
+    work_schedule = models.TextField("Режим работы", blank=True, default="", help_text="Можно копировать с сайта, вводить вручную. Время автоматически форматируется в формат HH:MM.")
     # Устаревшее: раньше отметка была на всю компанию. Оставляем поле для обратной совместимости/данных,
     # но в UI/логике используем отметки на контактах.
     is_cold_call = models.BooleanField("Холодный звонок (устар.)", default=False, db_index=True)
@@ -177,6 +178,9 @@ class Company(models.Model):
                 self.phone = phone[:50]
         if self.email:
             self.email = str(self.email).strip()[:254]
+        if self.work_schedule:
+            # TextField не имеет ограничения по длине в БД, но обрезаем до разумного лимита (5000 символов)
+            self.work_schedule = str(self.work_schedule).strip()[:5000]
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:

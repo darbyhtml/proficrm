@@ -190,6 +190,12 @@
               {% endif %}
             </div>
           </div>
+          {% if company.work_schedule %}
+          <div>
+            <div class="text-brand-dark/50">Режим работы</div>
+            <div class="whitespace-pre-line font-mono text-sm">{{ company.work_schedule }}</div>
+          </div>
+          {% endif %}
           <div>
             <div class="text-brand-dark/50">Руководитель</div>
             <div>{{ company.contact_name|default:"—" }}</div>
