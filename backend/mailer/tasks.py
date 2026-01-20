@@ -50,11 +50,10 @@ def send_pending_emails(self, batch_size: int = 50):
     """
     try:
         did_work = False
-        # Берём кампании с pending получателями, исключая на паузе и остановленные
+        # Берём кампании с pending получателями в статусе READY или SENDING (исключаем на паузе и остановленные)
         camps = Campaign.objects.filter(
-            recipients__status=CampaignRecipient.Status.PENDING
-        ).exclude(
-            status__in=(Campaign.Status.PAUSED, Campaign.Status.STOPPED, Campaign.Status.SENT, Campaign.Status.DRAFT)
+            recipients__status=CampaignRecipient.Status.PENDING,
+            status__in=(Campaign.Status.READY, Campaign.Status.SENDING)
         ).distinct().order_by("created_at")[:20]
         
         # Проверка рабочего времени (9:00-18:00 МСК)
@@ -118,12 +117,6 @@ def send_pending_emails(self, batch_size: int = 50):
             if camp.status == Campaign.Status.READY:
                 camp.status = Campaign.Status.SENDING
                 camp.save(update_fields=["status", "updated_at"])
-            
-            # Если кампания была на паузе, но есть pending - автоматически возобновляем
-            if camp.status == Campaign.Status.PAUSED and batch:
-                camp.status = Campaign.Status.SENDING
-                camp.save(update_fields=["status", "updated_at"])
-                logger.info(f"Campaign {camp.id} auto-resumed from PAUSED status")
 
             did_work = True
             for r in batch:
