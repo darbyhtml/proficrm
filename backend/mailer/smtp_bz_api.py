@@ -47,41 +47,59 @@ def get_quota_info(api_key: str) -> Optional[Dict[str, Any]]:
             "/limits",
             "/info",
             "/account/quota",
+            "/v1/account",
+            "/v1/quota",
+            "/v1/account/info",
         ]
         
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
+        # Разные варианты аутентификации
+        auth_variants = [
+            {"Authorization": f"Bearer {api_key}"},
+            {"X-API-Key": api_key},
+            {"Authorization": f"Token {api_key}"},
+            {"X-Auth-Token": api_key},
+            {"api_key": api_key},  # как query параметр
+        ]
         
-        # Также пробуем с X-API-Key заголовком
-        headers_alt = {
-            "X-API-Key": api_key,
+        headers_base = {
             "Content-Type": "application/json",
+            "Accept": "application/json",
         }
         
         for endpoint in endpoints_to_try:
-            url = f"{SMTP_BZ_API_BASE}{endpoint}"
+            # Пробуем разные варианты URL
+            url_variants = [
+                f"{SMTP_BZ_API_BASE}{endpoint}",
+                f"https://api.smtp.bz{endpoint}",
+                f"https://smtp.bz/api{endpoint}",
+            ]
             
-            # Пробуем с Bearer токеном
-            try:
-                response = requests.get(url, headers=headers, timeout=10)
-                if response.status_code == 200:
-                    data = response.json()
-                    logger.info(f"smtp.bz API: успешно получены данные с {endpoint}")
-                    return _parse_quota_response(data)
-            except requests.exceptions.RequestException as e:
-                logger.debug(f"smtp.bz API: ошибка при запросе {endpoint} с Bearer: {e}")
-            
-            # Пробуем с X-API-Key
-            try:
-                response = requests.get(url, headers=headers_alt, timeout=10)
-                if response.status_code == 200:
-                    data = response.json()
-                    logger.info(f"smtp.bz API: успешно получены данные с {endpoint} (X-API-Key)")
-                    return _parse_quota_response(data)
-            except requests.exceptions.RequestException as e:
-                logger.debug(f"smtp.bz API: ошибка при запросе {endpoint} с X-API-Key: {e}")
+            for url in url_variants:
+                # Пробуем разные варианты аутентификации
+                for auth_header in auth_variants:
+                    headers = {**headers_base, **auth_header}
+                    
+                    try:
+                        # Если api_key в auth_header, используем как query параметр
+                        if "api_key" in auth_header:
+                            response = requests.get(url, params={"api_key": api_key}, headers=headers_base, timeout=10)
+                        else:
+                            response = requests.get(url, headers=headers, timeout=10)
+                        
+                        if response.status_code == 200:
+                            try:
+                                data = response.json()
+                                logger.info(f"smtp.bz API: успешно получены данные с {url} (auth: {list(auth_header.keys())[0]})")
+                                return _parse_quota_response(data)
+                            except ValueError:
+                                # Не JSON ответ
+                                logger.debug(f"smtp.bz API: ответ не JSON с {url}")
+                        elif response.status_code == 401:
+                            logger.debug(f"smtp.bz API: неавторизован с {url} (auth: {list(auth_header.keys())[0]})")
+                        else:
+                            logger.debug(f"smtp.bz API: статус {response.status_code} с {url}")
+                    except requests.exceptions.RequestException as e:
+                        logger.debug(f"smtp.bz API: ошибка при запросе {url}: {e}")
         
         logger.warning("smtp.bz API: не удалось получить данные ни с одного эндпоинта")
         return None

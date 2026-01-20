@@ -98,8 +98,9 @@ def mail_settings(request: HttpRequest) -> HttpResponse:
             return redirect("mail_settings")
         form = GlobalMailAccountForm(request.POST, instance=cfg)
         if form.is_valid():
-            # Проверка на наличие ключа шифрования, если вводят пароль
-            if (form.cleaned_data.get("smtp_password") or "").strip():
+            # Проверка на наличие ключа шифрования, если вводят новый пароль
+            password = (form.cleaned_data.get("smtp_password") or "").strip()
+            if password:
                 from django.conf import settings
                 if not getattr(settings, "MAILER_FERNET_KEY", ""):
                     messages.error(request, "MAILER_FERNET_KEY не задан. Нельзя сохранить пароль.")

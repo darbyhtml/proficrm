@@ -82,9 +82,6 @@ class GlobalMailAccountForm(forms.ModelForm):
             "smtp_username",
             "from_email",
             "from_name",
-            "rate_per_minute",
-            "rate_per_day",
-            "per_user_daily_limit",
             "smtp_bz_api_key",
             "is_enabled",
         ]
@@ -95,18 +92,24 @@ class GlobalMailAccountForm(forms.ModelForm):
             "smtp_username": forms.TextInput(attrs={"class": "input"}),
             "from_email": forms.EmailInput(attrs={"class": "input"}),
             "from_name": forms.TextInput(attrs={"class": "input"}),
-            "rate_per_minute": forms.NumberInput(attrs={"class": "input"}),
-            "rate_per_day": forms.NumberInput(attrs={"class": "input"}),
-            "per_user_daily_limit": forms.NumberInput(attrs={"class": "input"}),
             "smtp_bz_api_key": forms.TextInput(attrs={"class": "input", "type": "password", "autocomplete": "off"}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Если пароль уже сохранен, делаем поле необязательным
+        if self.instance and self.instance.pk and self.instance.smtp_password_enc:
+            self.fields["smtp_password"].help_text = "Оставьте пустым, чтобы не менять сохраненный пароль. " + (self.fields["smtp_password"].help_text or "")
+        # Если API ключ уже сохранен, показываем подсказку
+        if self.instance and self.instance.pk and self.instance.smtp_bz_api_key:
+            self.fields["smtp_bz_api_key"].help_text = "Оставьте пустым, чтобы не менять сохраненный ключ. " + (self.fields["smtp_bz_api_key"].help_text or "")
+    
     def save(self, commit=True):
         obj: GlobalMailAccount = super().save(commit=False)
         p = (self.cleaned_data.get("smtp_password") or "").strip()
         if p:
             obj.set_password(p)
-        # Сохраняем API ключ, если он был указан
+        # Сохраняем API ключ, если он был указан (если пусто - не меняем существующий)
         api_key = (self.cleaned_data.get("smtp_bz_api_key") or "").strip()
         if api_key:
             obj.smtp_bz_api_key = api_key
