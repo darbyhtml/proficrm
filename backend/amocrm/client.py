@@ -156,6 +156,10 @@ class AmoClient:
             time.sleep(sleep_time)
         self._last_request_time = time.time()
         
+        # Увеличиваем счетчик запросов (только для авторизованных запросов к API)
+        if auth:
+            self._request_count += 1
+        
         if params:
             # AmoCRM API требует специальный формат для массивов: filter[id][]=1&filter[id][]=2
             # urllib.parse.urlencode не поддерживает это напрямую, поэтому обрабатываем вручную
