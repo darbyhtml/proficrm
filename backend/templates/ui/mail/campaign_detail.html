@@ -283,18 +283,57 @@
 
       <div class="lg:col-span-4 space-y-4">
         <div class="card card-pad">
-          <div class="font-medium mb-2">Действия</div>
+          <div class="font-medium mb-2">Управление рассылкой</div>
           <div class="flex flex-wrap gap-2">
             <a class="btn btn-outline" href="/mail/campaigns/{{ campaign.id }}/edit/">Редактировать</a>
             <form method="post" action="/mail/campaigns/{{ campaign.id }}/test-send/">
               {% csrf_token %}
               <button class="btn btn-outline" type="submit">Тест себе</button>
             </form>
-            <form method="post" action="/mail/campaigns/{{ campaign.id }}/send-step/">
-              {% csrf_token %}
-              <input type="hidden" name="confirm_send" value="1" />
-              <button class="btn btn-primary" type="submit">Отправить (до 50)</button>
-            </form>
+            
+            {% if campaign.status == 'draft' or campaign.status == 'paused' or campaign.status == 'stopped' %}
+              {% if counts.pending > 0 %}
+                <form method="post" action="/mail/campaigns/{{ campaign.id }}/start/">
+                  {% csrf_token %}
+                  <button class="btn btn-primary" type="submit">
+                    <span class="inline-flex items-center gap-2">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                      </svg>
+                      Старт
+                    </span>
+                  </button>
+                </form>
+              {% endif %}
+            {% elif campaign.status == 'sending' or campaign.status == 'ready' %}
+              <form method="post" action="/mail/campaigns/{{ campaign.id }}/pause/">
+                {% csrf_token %}
+                <button class="btn btn-warning" type="submit">
+                  <span class="inline-flex items-center gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="6" y="4" width="4" height="16"></rect>
+                      <rect x="14" y="4" width="4" height="16"></rect>
+                    </svg>
+                    Пауза
+                  </span>
+                </button>
+              </form>
+            {% endif %}
+            
+            {% if campaign.status == 'paused' and counts.pending > 0 %}
+              <form method="post" action="/mail/campaigns/{{ campaign.id }}/resume/">
+                {% csrf_token %}
+                <button class="btn btn-primary" type="submit">
+                  <span class="inline-flex items-center gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                    </svg>
+                    Продолжить
+                  </span>
+                </button>
+              </form>
+            {% endif %}
+            
             {% if counts.pending == 0 and counts.total > 0 %}
               <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/reset/" onsubmit="return confirm('Вернуть отправленные/ошибочные email в очередь для повторной рассылки?');">
                 {% csrf_token %}
@@ -323,15 +362,105 @@
               </form>
             {% endif %}
           </div>
-          <div class="text-xs muted-2 mt-2">Отправка идёт батчами и учитывает лимиты SMTP.</div>
+          
+          {% if pause_reasons %}
+            <div class="mt-3 p-3 rounded-lg border border-orange-300 bg-orange-50">
+              <div class="text-sm font-medium text-orange-900 mb-2">⚠️ Рассылка приостановлена:</div>
+              <ul class="text-xs text-orange-800 space-y-1">
+                {% for reason in pause_reasons %}
+                  <li>• {{ reason }}</li>
+                {% endfor %}
+              </ul>
+            </div>
+          {% elif campaign.status == 'sending' or campaign.status == 'ready' %}
+            <div class="mt-3 p-3 rounded-lg border border-green-300 bg-green-50">
+              <div class="text-sm font-medium text-green-900">
+                ✅ Рассылка активна
+                {% if not is_working_time %}
+                  (ожидание рабочего времени: 9:00-18:00 МСК, текущее время МСК: {{ current_time_msk }})
+                {% endif %}
+              </div>
+            </div>
+          {% endif %}
+          
+          <div class="text-xs muted-2 mt-2">
+            <div>Рассылка происходит автоматически в рабочее время (9:00-18:00 МСК) с учетом лимитов SMTP.</div>
+            <div class="mt-1">Текущее время МСК: <b>{{ current_time_msk }}</b></div>
+          </div>
+        </div>
+        
+        <div class="card card-pad">
+          <div class="font-medium mb-2">Лимиты и статистика</div>
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between">
+              <span class="text-brand-dark/70">Лимит в день (ваш):</span>
+              <span class="font-medium">
+                {{ sent_today_user }}/{{ per_user_daily_limit }}
+                {% if per_user_daily_limit and sent_today_user >= per_user_daily_limit %}
+                  <span class="text-red-600">(достигнут)</span>
+                {% else %}
+                  <span class="text-green-600">(осталось: {{ per_user_daily_limit|add:"-"|add:sent_today_user }})</span>
+                {% endif %}
+              </span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-brand-dark/70">Лимит в день (глобальный):</span>
+              <span class="font-medium">
+                {{ sent_today }}/{{ rate_per_day }}
+                {% if sent_today >= rate_per_day %}
+                  <span class="text-red-600">(достигнут)</span>
+                {% else %}
+                  <span class="text-green-600">(осталось: {{ rate_per_day|add:"-"|add:sent_today }})</span>
+                {% endif %}
+              </span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-brand-dark/70">Лимит в минуту:</span>
+              <span class="font-medium">
+                {{ send_stats.sent_last_min }}/{{ rate_per_minute }}
+              </span>
+            </div>
+            <div class="pt-2 border-t">
+              <div class="flex justify-between">
+                <span class="text-brand-dark/70">Ошибок сегодня (всего):</span>
+                <span class="font-medium {% if send_stats.failed_today > 0 %}text-red-600{% endif %}">
+                  {{ send_stats.failed_today }}
+                </span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-brand-dark/70">Ошибок сегодня (эта кампания):</span>
+                <span class="font-medium {% if send_stats.failed_today_campaign > 0 %}text-red-600{% endif %}">
+                  {{ send_stats.failed_today_campaign }}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div class="grid grid-cols-2 gap-3">
           <div class="card card-pad"><div class="muted text-sm">Всего</div><div class="text-2xl font-semibold">{{ counts.total }}</div></div>
           <div class="card card-pad"><div class="muted text-sm">В очереди</div><div class="text-2xl font-semibold">{{ counts.pending }}</div></div>
           <div class="card card-pad"><div class="muted text-sm">Отправлено</div><div class="text-2xl font-semibold">{{ counts.sent }}</div></div>
-          <div class="card card-pad"><div class="muted text-sm">Ошибки</div><div class="text-2xl font-semibold">{{ counts.failed }}</div></div>
+          <div class="card card-pad"><div class="muted text-sm">Ошибки</div><div class="text-2xl font-semibold {% if counts.failed > 0 %}text-red-600{% endif %}">{{ counts.failed }}</div></div>
         </div>
+        
+        {% if recent_errors %}
+          <div class="card card-pad">
+            <div class="font-medium mb-2">Последние ошибки отправки</div>
+            <div class="space-y-2 text-xs max-h-64 overflow-y-auto">
+              {% for error_log in recent_errors %}
+                <div class="p-2 rounded border border-red-200 bg-red-50">
+                  <div class="font-medium text-red-900">{{ error_log.recipient.email|default:"—" }}</div>
+                  <div class="text-red-700 mt-1">{{ error_log.error|truncatechars:150|default:"Ошибка отправки" }}</div>
+                  <div class="text-red-600 mt-1">{{ error_log.created_at|date:"d.m.Y H:i" }}</div>
+                </div>
+              {% endfor %}
+            </div>
+            {% if counts.failed > 10 %}
+              <div class="text-xs muted-2 mt-2">Показаны последние 10 ошибок из {{ counts.failed }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
 
         <form method="post" action="/mail/campaigns/{{ campaign.id }}/generate/" class="card card-pad space-y-3">
           {% csrf_token %}

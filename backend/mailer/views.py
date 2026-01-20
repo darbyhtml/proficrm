@@ -313,12 +313,62 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
     
     # Для обратной совместимости (таблица)
     recent = page_recipients
+    
+    # Статистика лимитов и рабочего времени
+    from django.utils import timezone as _tz
+    from mailer.tasks import _is_working_hours
+    from zoneinfo import ZoneInfo
+    
+    now = _tz.now()
+    sent_last_min = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__gte=now - _tz.timedelta(minutes=1)).count()
+    sent_today = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__date=now.date()).count()
+    sent_today_user = SendLog.objects.filter(provider="smtp_global", status="sent", campaign__created_by=user, created_at__date=now.date()).count()
+    
+    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT
+    is_working_time = _is_working_hours(now)
+    
+    # Текущее московское время для отображения
+    msk_tz = ZoneInfo("Europe/Moscow")
+    msk_now = now.astimezone(msk_tz)
+    current_time_msk = msk_now.strftime("%H:%M")
+    
+    # Причины паузы/блокировки
+    pause_reasons = []
+    if not is_working_time:
+        pause_reasons.append(f"Вне рабочего времени (текущее время МСК: {current_time_msk}, рабочие часы: 9:00-18:00 МСК)")
+    if per_user_daily_limit and sent_today_user >= per_user_daily_limit:
+        pause_reasons.append(f"Достигнут лимит отправки для вашего аккаунта: {sent_today_user}/{per_user_daily_limit} писем в день")
+    if sent_today >= smtp_cfg.rate_per_day:
+        pause_reasons.append(f"Достигнут глобальный дневной лимит: {sent_today}/{smtp_cfg.rate_per_day} писем")
+    if sent_last_min >= smtp_cfg.rate_per_minute:
+        pause_reasons.append(f"Достигнут лимит в минуту: {sent_last_min}/{smtp_cfg.rate_per_minute} писем")
+    if not smtp_cfg.is_enabled:
+        pause_reasons.append("SMTP не включен администратором")
+    
+    # Статистика отправки (из SendLog)
+    send_stats = {
+        "sent_today": sent_today,
+        "sent_today_user": sent_today_user,
+        "sent_last_min": sent_last_min,
+        "failed_today": SendLog.objects.filter(provider="smtp_global", status="failed", created_at__date=now.date()).count(),
+        "failed_today_campaign": SendLog.objects.filter(campaign=camp, provider="smtp_global", status="failed", created_at__date=now.date()).count(),
+    }
 
     return render(
         request,
         "ui/mail/campaign_detail.html",
         {
             "campaign": camp,
+            "smtp_cfg": smtp_cfg,
+            "is_working_time": is_working_time,
+            "current_time_msk": current_time_msk,
+            "pause_reasons": pause_reasons,
+            "send_stats": send_stats,
+            "per_user_daily_limit": per_user_daily_limit,
+            "sent_today_user": sent_today_user,
+            "sent_today": sent_today,
+            "rate_per_day": smtp_cfg.rate_per_day,
+            "rate_per_minute": smtp_cfg.rate_per_minute,
             "counts": counts,
             "recent": recent,
             "smtp_from_email": (smtp_cfg.from_email or smtp_cfg.smtp_username or "").strip(),
@@ -336,6 +386,17 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "can_delete_campaign": _can_manage_campaign(user, camp),
             "is_admin": (user.role == User.Role.ADMIN),
             "view": view,
+            "smtp_cfg": smtp_cfg,
+            "is_working_time": is_working_time,
+            "current_time_msk": current_time_msk,
+            "pause_reasons": pause_reasons,
+            "send_stats": send_stats,
+            "per_user_daily_limit": per_user_daily_limit,
+            "sent_today_user": sent_today_user,
+            "sent_today": sent_today,
+            "rate_per_day": smtp_cfg.rate_per_day,
+            "rate_per_minute": smtp_cfg.rate_per_minute,
+            "recent_errors": recent_errors,
         },
     )
 
@@ -998,6 +1059,97 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
     if pending_count == 0 and camp.status == Campaign.Status.SENDING:
         camp.status = Campaign.Status.SENT
         camp.save(update_fields=["status", "updated_at"])
+
+    return redirect("campaign_detail", campaign_id=camp.id)
+
+
+@login_required
+def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
+    """
+    Запуск автоматической рассылки кампании.
+    """
+    if request.method != "POST":
+        return redirect("campaign_detail", campaign_id=campaign_id)
+    
+    user: User = request.user
+    camp = get_object_or_404(Campaign, id=campaign_id)
+    if not _can_manage_campaign(user, camp):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("campaigns")
+    
+    smtp_cfg = GlobalMailAccount.load()
+    if not smtp_cfg.is_enabled:
+        messages.error(request, "SMTP не настроен администратором (Почта → Настройки).")
+        return redirect("campaign_detail", campaign_id=camp.id)
+    
+    pending_count = camp.recipients.filter(status=CampaignRecipient.Status.PENDING).count()
+    if pending_count == 0:
+        messages.error(request, "Нет писем в очереди для отправки.")
+        return redirect("campaign_detail", campaign_id=camp.id)
+    
+    # Проверка рабочего времени
+    from mailer.tasks import _is_working_hours
+    if not _is_working_hours():
+        messages.warning(request, "Рассылка возможна только в рабочее время (9:00-18:00 МСК). Кампания будет запущена, но отправка начнется автоматически в рабочее время.")
+    
+    # Устанавливаем статус READY или SENDING в зависимости от наличия pending
+    if camp.status in (Campaign.Status.DRAFT, Campaign.Status.PAUSED, Campaign.Status.STOPPED):
+        camp.status = Campaign.Status.READY if pending_count > 0 else Campaign.Status.SENT
+        camp.save(update_fields=["status", "updated_at"])
+        messages.success(request, "Рассылка запущена. Отправка будет происходить автоматически в рабочее время (9:00-18:00 МСК).")
+        log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Запущена автоматическая рассылка")
+    
+    return redirect("campaign_detail", campaign_id=camp.id)
+
+
+@login_required
+def campaign_pause(request: HttpRequest, campaign_id) -> HttpResponse:
+    """
+    Постановка кампании на паузу.
+    """
+    if request.method != "POST":
+        return redirect("campaign_detail", campaign_id=campaign_id)
+    
+    user: User = request.user
+    camp = get_object_or_404(Campaign, id=campaign_id)
+    if not _can_manage_campaign(user, camp):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("campaigns")
+    
+    if camp.status in (Campaign.Status.SENDING, Campaign.Status.READY):
+        camp.status = Campaign.Status.PAUSED
+        camp.save(update_fields=["status", "updated_at"])
+        messages.success(request, "Рассылка поставлена на паузу.")
+        log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Рассылка поставлена на паузу")
+    
+    return redirect("campaign_detail", campaign_id=camp.id)
+
+
+@login_required
+def campaign_resume(request: HttpRequest, campaign_id) -> HttpResponse:
+    """
+    Продолжение рассылки кампании после паузы.
+    """
+    if request.method != "POST":
+        return redirect("campaign_detail", campaign_id=campaign_id)
+    
+    user: User = request.user
+    camp = get_object_or_404(Campaign, id=campaign_id)
+    if not _can_manage_campaign(user, camp):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("campaigns")
+    
+    if camp.status == Campaign.Status.PAUSED:
+        pending_count = camp.recipients.filter(status=CampaignRecipient.Status.PENDING).count()
+        if pending_count > 0:
+            camp.status = Campaign.Status.READY
+            camp.save(update_fields=["status", "updated_at"])
+            messages.success(request, "Рассылка возобновлена. Отправка будет происходить автоматически в рабочее время (9:00-18:00 МСК).")
+            log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Рассылка возобновлена")
+        else:
+            camp.status = Campaign.Status.SENT
+            camp.save(update_fields=["status", "updated_at"])
+            messages.info(request, "Нет писем в очереди. Кампания завершена.")
     
     return redirect("campaign_detail", campaign_id=camp.id)
 

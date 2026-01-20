@@ -7,6 +7,7 @@ import logging
 from celery import shared_task
 from django.db.models import Q
 from django.utils import timezone
+from zoneinfo import ZoneInfo
 
 from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe
 from mailer.smtp_sender import build_message, send_via_smtp
@@ -15,6 +16,28 @@ from mailer.utils import html_to_text
 logger = logging.getLogger(__name__)
 
 from .models import GlobalMailAccount
+
+
+def _is_working_hours(now=None) -> bool:
+    """
+    Проверка, находится ли текущее время в рабочем времени (9:00-18:00 МСК).
+    
+    Args:
+        now: datetime для проверки (по умолчанию timezone.now())
+    
+    Returns:
+        True если время в рабочем диапазоне, False иначе
+    """
+    if now is None:
+        now = timezone.now()
+    
+    # Конвертируем в московское время
+    msk_tz = ZoneInfo("Europe/Moscow")
+    msk_now = now.astimezone(msk_tz)
+    current_hour = msk_now.hour
+    
+    # Рабочее время: 9:00-18:00 МСК
+    return 9 <= current_hour < 18
 
 
 @shared_task(name="mailer.tasks.send_pending_emails", bind=True, max_retries=3)
@@ -27,14 +50,23 @@ def send_pending_emails(self, batch_size: int = 50):
     """
     try:
         did_work = False
-        # Берём кампании с pending получателями
+        # Берём кампании с pending получателями, исключая на паузе
         camps = Campaign.objects.filter(
             recipients__status=CampaignRecipient.Status.PENDING
-        ).distinct().order_by("created_at")[:20]
+        ).exclude(status=Campaign.Status.PAUSED).distinct().order_by("created_at")[:20]
+        
+        # Проверка рабочего времени (9:00-18:00 МСК)
+        if not _is_working_hours():
+            logger.debug("Outside working hours (9:00-18:00 MSK), skipping email sending")
+            return {"processed": False, "campaigns": 0, "reason": "outside_working_hours"}
         
         for camp in camps:
             user = camp.created_by
             if not user:
+                continue
+            
+            # Пропускаем кампании на паузе
+            if camp.status == Campaign.Status.PAUSED:
                 continue
                 
             smtp_cfg = GlobalMailAccount.load()

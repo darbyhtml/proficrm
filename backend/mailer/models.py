@@ -108,6 +108,7 @@ class Campaign(models.Model):
         DRAFT = "draft", "Черновик"
         READY = "ready", "Готово к отправке"
         SENDING = "sending", "Отправляется"
+        PAUSED = "paused", "На паузе"
         SENT = "sent", "Отправлено"
         STOPPED = "stopped", "Остановлено"
 

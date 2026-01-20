@@ -21,6 +21,9 @@ urlpatterns = [
     path("mail/campaigns/<uuid:campaign_id>/recipients/<uuid:recipient_id>/delete/", views.campaign_recipient_delete, name="campaign_recipient_delete"),
     path("mail/campaigns/<uuid:campaign_id>/test-send/", views.campaign_test_send, name="campaign_test_send"),
     path("mail/campaigns/<uuid:campaign_id>/send-step/", views.campaign_send_step, name="campaign_send_step"),
+    path("mail/campaigns/<uuid:campaign_id>/start/", views.campaign_start, name="campaign_start"),
+    path("mail/campaigns/<uuid:campaign_id>/pause/", views.campaign_pause, name="campaign_pause"),
+    path("mail/campaigns/<uuid:campaign_id>/resume/", views.campaign_resume, name="campaign_resume"),
     path("unsubscribe/<str:token>/", views.unsubscribe, name="unsubscribe"),
 ]
 
