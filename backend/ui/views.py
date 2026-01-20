@@ -1711,6 +1711,32 @@ def company_list(request: HttpRequest) -> HttpResponse:
     # Проверяем наличие компаний без ответственного
     has_companies_without_responsible = Company.objects.filter(responsible__isnull=True).exists()
 
+    # Информация о лимитах отправки для всех сотрудников
+    from mailer.models import SmtpBzQuota, GlobalMailAccount, SendLog, Campaign
+    from mailer.views import PER_USER_DAILY_LIMIT
+    
+    is_admin = require_admin(user)
+    quota = SmtpBzQuota.load()
+    
+    # Информация о лимите пользователя (для всех)
+    today = now.date()
+    sent_today_user = SendLog.objects.filter(
+        provider="smtp_global",
+        status="sent",
+        campaign__created_by=user,
+        created_at__date=today
+    ).count()
+    
+    smtp_cfg = GlobalMailAccount.load()
+    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT
+    
+    user_limit_info = {
+        "sent_today": sent_today_user,
+        "limit": per_user_daily_limit,
+        "remaining": max(0, per_user_daily_limit - sent_today_user) if per_user_daily_limit else None,
+        "is_limit_reached": per_user_daily_limit and sent_today_user >= per_user_daily_limit,
+    }
+
     return render(
         request,
         "ui/company_list.html",
@@ -1739,8 +1765,10 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "company_list_columns": columns,
             "transfer_targets": get_transfer_targets(user),
             "per_page": per_page,
-            "is_admin": require_admin(user),
+            "is_admin": is_admin,
             "has_companies_without_responsible": has_companies_without_responsible,
+            "quota": quota,
+            "user_limit_info": user_limit_info,
         },
     )
 
