@@ -1678,10 +1678,11 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
         companies_total = Company.objects.all().order_by().count()
         cache.set(cache_key_total, companies_total, 600)
     
+    # Оптимизация: предзагружаем связанные объекты для поиска
     qs = (
         _companies_with_overdue_flag(now=now)
         .select_related("responsible", "branch", "status")
-        .prefetch_related("spheres")
+        .prefetch_related("spheres", "phones", "emails", "contacts", "contacts__phones", "contacts__emails")
     )
     
     filter_params = dict(request.GET)
@@ -1731,24 +1732,15 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
     ui_cfg = UiGlobalConfig.load()
     columns = ui_cfg.company_list_columns or ["name"]
     
-    # Определяем, где найдено совпадение для каждой компании (если есть поисковый запрос)
-    q = (request.GET.get("q") or "").strip()
-    if q:
-        normalized_q = _normalize_for_search(q)
-        normalized_phone = _normalize_phone_for_search(q)
-        normalized_email = _normalize_email_for_search(q)
-        
-        # Предзагружаем телефоны и email для оптимизации
-        from companies.models import CompanyPhone, CompanyEmail, ContactPhone, ContactEmail
-        companies_with_phones = {c.id: list(c.phones.all()) for c in page.object_list}
-        companies_with_emails = {c.id: list(c.emails.all()) for c in page.object_list}
-        
-        # Предзагружаем контакты с телефонами и email
-        from django.db.models import Prefetch
-        companies_with_contacts = {
-            c.id: list(c.contacts.prefetch_related('phones', 'emails').all())
-            for c in page.object_list
-        }
+        # Определяем, где найдено совпадение для каждой компании (если есть поисковый запрос)
+        q = (request.GET.get("q") or "").strip()
+        if q:
+            normalized_q = _normalize_for_search(q)
+            normalized_phone = _normalize_phone_for_search(q)
+            normalized_email = _normalize_email_for_search(q)
+            
+            # Используем уже предзагруженные данные через prefetch_related (не делаем дополнительные запросы)
+            # Данные уже загружены в page.object_list через prefetch_related выше
         
         for company in page.object_list:
             match_info = []
@@ -1767,13 +1759,13 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
                 # Основной телефон компании
                 if company.phone and (q in company.phone or (normalized_phone and normalized_phone in company.phone)):
                     match_info.append(f"телефон: {company.phone}")
-                # Дополнительные телефоны
-                for phone_obj in companies_with_phones.get(company.id, []):
+                # Дополнительные телефоны (уже предзагружены через prefetch_related)
+                for phone_obj in company.phones.all():
                     if q in phone_obj.value or (normalized_phone and normalized_phone in phone_obj.value):
                         match_info.append(f"телефон: {phone_obj.value}")
                         break
-                # Телефоны контактов
-                for contact in companies_with_contacts.get(company.id, []):
+                # Телефоны контактов (уже предзагружены через prefetch_related)
+                for contact in company.contacts.all():
                     for phone_obj in contact.phones.all():
                         if q in phone_obj.value or (normalized_phone and normalized_phone in phone_obj.value):
                             match_info.append(f"телефон контакта: {phone_obj.value}")
@@ -1786,13 +1778,13 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
                 # Основной email компании
                 if company.email and (q.lower() in company.email.lower() or (normalized_email and normalized_email == company.email.lower())):
                     match_info.append(f"email: {company.email}")
-                # Дополнительные email
-                for email_obj in companies_with_emails.get(company.id, []):
+                # Дополнительные email (уже предзагружены через prefetch_related)
+                for email_obj in company.emails.all():
                     if q.lower() in email_obj.value.lower() or (normalized_email and normalized_email == email_obj.value.lower()):
                         match_info.append(f"email: {email_obj.value}")
                         break
-                # Email контактов
-                for contact in companies_with_contacts.get(company.id, []):
+                # Email контактов (уже предзагружены через prefetch_related)
+                for contact in company.contacts.all():
                     for email_obj in contact.emails.all():
                         if q.lower() in email_obj.value.lower() or (normalized_email and normalized_email == email_obj.value.lower()):
                             match_info.append(f"email контакта: {email_obj.value}")
@@ -1800,9 +1792,9 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
                     if match_info and "email контакта" in match_info[-1]:
                         break
             
-            # Проверяем контакты (ФИО)
+            # Проверяем контакты (ФИО) (уже предзагружены через prefetch_related)
             if q:
-                for contact in companies_with_contacts.get(company.id, []):
+                for contact in company.contacts.all():
                     full_name = f"{contact.first_name or ''} {contact.last_name or ''}".strip()
                     if q.lower() in full_name.lower():
                         match_info.append(f"контакт: {full_name}")
