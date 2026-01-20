@@ -353,6 +353,48 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
         "failed_today": SendLog.objects.filter(provider="smtp_global", status="failed", created_at__date=now.date()).count(),
         "failed_today_campaign": SendLog.objects.filter(campaign=camp, provider="smtp_global", status="failed", created_at__date=now.date()).count(),
     }
+    
+    # Последние ошибки отправки для этой кампании (для отображения)
+    recent_errors = SendLog.objects.filter(
+        campaign=camp,
+        provider="smtp_global",
+        status="failed"
+    ).select_related("recipient").order_by("-created_at")[:10]
+    
+    # Детальная статистика отправки для этой кампании (аналогично smtp.bz админке)
+    # Группировка ошибок по типам
+    error_types = {}
+    for error_log in SendLog.objects.filter(campaign=camp, provider="smtp_global", status="failed").order_by("-created_at")[:100]:
+        error_msg = (error_log.error or "").strip()
+        if not error_msg:
+            error_msg = "Неизвестная ошибка"
+        # Упрощаем сообщение об ошибке для группировки
+        if "Connection timed out" in error_msg or "timeout" in error_msg.lower():
+            error_key = "Connection timeout"
+        elif "DNS error" in error_msg or "Domain name not found" in error_msg:
+            error_key = "DNS error"
+        elif "No route to host" in error_msg:
+            error_key = "No route to host"
+        elif "blocked" in error_msg.lower() or "security" in error_msg.lower():
+            error_key = "Blocked by security"
+        elif "invalid mailbox" in error_msg.lower() or "user not found" in error_msg.lower():
+            error_key = "Invalid mailbox / User not found"
+        elif "out of storage" in error_msg.lower() or "OverQuota" in error_msg:
+            error_key = "Mailbox full"
+        elif "Unrouteable address" in error_msg:
+            error_key = "Unrouteable address"
+        else:
+            error_key = "Other errors"
+        
+        if error_key not in error_types:
+            error_types[error_key] = {"count": 0, "examples": []}
+        error_types[error_key]["count"] += 1
+        if len(error_types[error_key]["examples"]) < 3:
+            error_types[error_key]["examples"].append({
+                "email": error_log.recipient.email if error_log.recipient else "—",
+                "error": error_msg[:200],
+                "time": error_log.created_at,
+            })
 
     return render(
         request,
@@ -386,16 +428,6 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "can_delete_campaign": _can_manage_campaign(user, camp),
             "is_admin": (user.role == User.Role.ADMIN),
             "view": view,
-            "smtp_cfg": smtp_cfg,
-            "is_working_time": is_working_time,
-            "current_time_msk": current_time_msk,
-            "pause_reasons": pause_reasons,
-            "send_stats": send_stats,
-            "per_user_daily_limit": per_user_daily_limit,
-            "sent_today_user": sent_today_user,
-            "sent_today": sent_today,
-            "rate_per_day": smtp_cfg.rate_per_day,
-            "rate_per_minute": smtp_cfg.rate_per_minute,
             "recent_errors": recent_errors,
             "error_types": error_types,
         },
