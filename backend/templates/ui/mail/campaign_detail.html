@@ -92,8 +92,8 @@
                 </svg>
               </button>
             </form>
-          {# Кнопка "Продолжить" - показываем когда статус PAUSED и есть получатели #}
-          {% elif campaign.status == 'paused' and counts.pending > 0 %}
+          {# Кнопка "Продолжить" - показываем когда статус PAUSED #}
+          {% elif campaign.status == 'paused' %}
             <form method="post" action="/mail/campaigns/{{ campaign.id }}/resume/" class="inline">
               {% csrf_token %}
               <button class="btn-icon btn" type="submit" title="Продолжить рассылку" style="background:#10b981;color:#fff;padding:0.375rem 0.75rem;font-size:0.875rem">
