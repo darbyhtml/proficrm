@@ -736,6 +736,8 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "queue_entry": getattr(camp, "queue_entry", None),
             "emails_available": emails_available,
             "rate_per_hour": max_per_hour,
+            "attachment_ext": (camp.attachment.name.split(".")[-1].upper() if camp.attachment and "." in camp.attachment.name else "") if camp.attachment else "",
+            "attachment_filename": camp.attachment.name.split("/")[-1] if camp.attachment and camp.attachment.name else "",
         },
     )
 
