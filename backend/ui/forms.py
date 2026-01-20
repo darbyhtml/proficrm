@@ -774,18 +774,14 @@ class _BaseEmailFormSet(BaseInlineFormSet):
                 continue
             values.append(v)
 
-        # Дубли в рамках формы
+        # Дубли в рамках формы (внутри одного контакта нельзя иметь одинаковые email)
         if len(values) != len(set(values)):
             raise ValidationError("Есть повторяющиеся email в форме.")
 
-        # Дубли в БД (глобально, чтобы не плодить)
-        contact_id = getattr(self.instance, "id", None)
-        for v in set(values):
-            qs = ContactEmail.objects.filter(value__iexact=v)
-            if contact_id:
-                qs = qs.exclude(contact_id=contact_id)
-            if qs.exists():
-                raise ValidationError(f"Email {v} уже используется в другом контакте.")
+        # ПРИМЕЧАНИЕ: Убрана проверка на дубликаты между разными контактами.
+        # Один email может использоваться несколькими контактами (например, общий email отдела
+        # или человек работает в разных компаниях).
+        # Дедупликация email адресов выполняется в разделе "Почта" при составлении списка рассылки.
 
 
 def _normalize_phone(phone: str) -> str:
