@@ -101,13 +101,18 @@ def get_quota_info(api_key: str) -> Optional[Dict[str, Any]]:
                             try:
                                 data = response.json()
                                 logger.info(f"smtp.bz API: успешно получены данные с {url} (auth: {auth_method})")
-                                logger.debug(f"smtp.bz API: ответ: {data}")
+                                logger.info(f"smtp.bz API: полный ответ API: {data}")  # Логируем на INFO для диагностики
+                                
                                 parsed = _parse_quota_response(data)
-                                if parsed.get("emails_limit", 0) > 0 or parsed.get("tariff_name"):
-                                    # Если получили хоть какие-то данные - считаем успехом
+                                logger.info(f"smtp.bz API: распарсенные данные: {parsed}")
+                                
+                                # Если получили хоть какие-то данные - считаем успехом
+                                if parsed.get("emails_limit", 0) > 0 or parsed.get("tariff_name") or parsed.get("emails_available", 0) > 0:
                                     return parsed
                                 else:
-                                    logger.debug(f"smtp.bz API: получен пустой ответ с {url}")
+                                    logger.warning(f"smtp.bz API: получен ответ, но нет данных о квоте. Структура: {list(data.keys())}")
+                                    # Возвращаем хотя бы частично распарсенные данные
+                                    return parsed
                             except ValueError as e:
                                 # Не JSON ответ
                                 logger.warning(f"smtp.bz API: ответ не JSON с {url}: {e}")
