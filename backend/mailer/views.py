@@ -314,8 +314,8 @@ def campaigns(request: HttpRequest) -> HttpResponse:
             "max_per_hour": max_per_hour,
         }
     
-    # Информация о квоте smtp.bz (только для администраторов)
-    quota = SmtpBzQuota.load() if is_admin else None
+    # Информация о квоте smtp.bz (для всех пользователей)
+    quota = SmtpBzQuota.load()
     
     # Информация о лимите пользователя (для всех)
     from django.utils import timezone as _tz
