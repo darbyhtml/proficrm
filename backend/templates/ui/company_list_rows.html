@@ -6,16 +6,16 @@
     {% if "name" in company_list_columns %}
       <td>
         <a class="link" href="/companies/{{ c.id }}/" onclick="event.stopPropagation()">
-          {% if search_query and window.highlightMatch %}
-            <span data-highlight="{{ c.name }}" data-query="{{ search_query }}"></span>
+          {% if search_query %}
+            <span class="highlight-target" data-text="{{ c.name }}" data-query="{{ search_query }}">{{ c.name }}</span>
           {% else %}
             {{ c.name }}
           {% endif %}
         </a>
         {% if "address" in company_list_columns %}
           <div class="text-xs text-brand-dark/70">
-            {% if search_query and window.highlightMatch %}
-              <span data-highlight="{{ c.address }}" data-query="{{ search_query }}"></span>
+            {% if search_query %}
+              <span class="highlight-target" data-text="{{ c.address }}" data-query="{{ search_query }}">{{ c.address }}</span>
             {% else %}
               {{ c.address }}
             {% endif %}
@@ -34,8 +34,8 @@
     {% endif %}
     {% if "inn" in company_list_columns %}
       <td>
-        {% if search_query and window.highlightMatch %}
-          <span data-highlight="{{ c.inn }}" data-query="{{ search_query }}"></span>
+        {% if search_query %}
+          <span class="highlight-target" data-text="{{ c.inn }}" data-query="{{ search_query }}">{{ c.inn }}</span>
         {% else %}
           {{ c.inn }}
         {% endif %}

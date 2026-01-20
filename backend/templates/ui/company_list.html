@@ -666,8 +666,8 @@
               const query = searchInput ? searchInput.value.trim() : '';
               
               if (query) {
-                companyListBody.querySelectorAll('[data-highlight]').forEach(el => {
-                  const text = el.getAttribute('data-highlight') || '';
+                companyListBody.querySelectorAll('.highlight-target').forEach(el => {
+                  const text = el.getAttribute('data-text') || el.textContent || '';
                   const highlighted = window.highlightMatch(text, query);
                   el.innerHTML = highlighted;
                 });
