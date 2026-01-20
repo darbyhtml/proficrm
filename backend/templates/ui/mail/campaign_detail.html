@@ -413,6 +413,72 @@
           </div>
         </div>
         
+        {# Информация о тарифе smtp.bz #}
+        {% if quota and quota.emails_limit > 0 %}
+          <div class="card card-pad mb-4">
+            <div class="font-medium mb-2">Тариф smtp.bz</div>
+            <div class="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <div class="text-brand-dark/70 mb-1">Тариф:</div>
+                <div class="font-medium">{{ quota.tariff_name|default:"—" }}</div>
+                {% if quota.tariff_renewal_date %}
+                  <div class="text-xs text-brand-dark/60 mt-1">
+                    Продление: {{ quota.tariff_renewal_date|date:"d.m.Y" }}
+                  </div>
+                {% endif %}
+              </div>
+              <div>
+                <div class="text-brand-dark/70 mb-1">Доступно писем:</div>
+                <div class="font-medium {% if quota.emails_available < quota.emails_limit|add:'-'|add:'100' %}text-orange-600{% elif quota.emails_available == 0 %}text-red-600{% else %}text-green-600{% endif %}">
+                  {{ quota.emails_available }} / {{ quota.emails_limit }}
+                </div>
+              </div>
+              <div>
+                <div class="text-brand-dark/70 mb-1">Отправлено за час:</div>
+                <div class="font-medium">{{ quota.sent_per_hour }} / {{ quota.max_per_hour }}</div>
+              </div>
+              {% if quota.last_synced_at %}
+                <div>
+                  <div class="text-brand-dark/70 mb-1">Обновлено:</div>
+                  <div class="text-xs text-brand-dark/60">{{ quota.last_synced_at|date:"d.m.Y H:i" }}</div>
+                </div>
+              {% endif %}
+            </div>
+            {% if quota.sync_error %}
+              <div class="mt-2 text-xs text-red-600">
+                ⚠️ Ошибка синхронизации: {{ quota.sync_error|truncatechars:100 }}
+              </div>
+            {% endif %}
+          </div>
+        {% endif %}
+
+        {# Информация об очереди #}
+        {% if queue_entry %}
+          <div class="card card-pad mb-4">
+            <div class="font-medium mb-2">Очередь рассылок</div>
+            <div class="text-sm">
+              <div class="flex items-center gap-2">
+                <span class="text-brand-dark/70">Статус в очереди:</span>
+                <span class="badge">{{ queue_entry.get_status_display }}</span>
+              </div>
+              {% if queue_entry.queued_at %}
+                <div class="mt-2 text-xs text-brand-dark/60">
+                  Поставлено в очередь: {{ queue_entry.queued_at|date:"d.m.Y H:i" }}
+                </div>
+              {% endif %}
+              {% if queue_entry.status == 'pending' %}
+                <div class="mt-2 text-xs text-brand-dark/60">
+                  ⏳ Кампания ожидает своей очереди. Рассылки выполняются последовательно.
+                </div>
+              {% elif queue_entry.status == 'processing' %}
+                <div class="mt-2 text-xs text-green-600">
+                  ✅ Кампания обрабатывается
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
+
         {# Лимиты и статистика - показываем только менеджеру его лимиты, админу - все #}
         <div class="card card-pad">
           <div class="font-medium mb-2">Лимиты и статистика</div>

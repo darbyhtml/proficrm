@@ -193,6 +193,13 @@ def send_pending_emails(self, batch_size: int = 50):
                 if camp.status == Campaign.Status.SENDING:
                     camp.status = Campaign.Status.SENT
                     camp.save(update_fields=["status", "updated_at"])
+                
+                # Обновляем статус в очереди
+                queue_entry = getattr(camp, "queue_entry", None)
+                if queue_entry and queue_entry.status == CampaignQueue.Status.PROCESSING:
+                    queue_entry.status = CampaignQueue.Status.COMPLETED
+                    queue_entry.completed_at = timezone.now()
+                    queue_entry.save(update_fields=["status", "completed_at"])
 
         if did_work:
             logger.debug(f"Processed emails batch (campaigns: {len(camps)})")
