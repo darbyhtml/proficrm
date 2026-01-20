@@ -240,6 +240,13 @@
   </div>
 
   <script>
+    // Инициализация виджета выбора головной компании
+    document.addEventListener('DOMContentLoaded', function() {
+      if (window.initMsSingleWidgets) {
+        window.initMsSingleWidgets();
+      }
+    });
+
     (function(){
       // Дубликаты не блокируют создание: только подсказка.
 

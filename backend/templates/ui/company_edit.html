@@ -233,6 +233,12 @@
   </div>
 
   <script>
+    // Инициализация виджета выбора головной компании
+    document.addEventListener('DOMContentLoaded', function() {
+      if (window.initMsSingleWidgets) {
+        window.initMsSingleWidgets();
+      }
+    });
     document.addEventListener('DOMContentLoaded', function() {
       // EMAILS
       const emailsContainer = document.getElementById('company-emails-container');
