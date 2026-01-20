@@ -614,6 +614,17 @@
                     <div class="text-xs text-brand-dark/70">
                       {{ c.position }}
                     </div>
+                    {% if c.is_cold_call or c.cold_marked_at %}
+                      <div class="mt-1 text-xs text-brand-dark/70">
+                        <span class="font-medium">Холодный звонок:</span>
+                        {% if c.cold_marked_at %}
+                          <span>{{ c.cold_marked_at|date:"d.m.Y H:i" }}</span>
+                        {% endif %}
+                        {% if c.cold_marked_by %}
+                          <span>({{ c.cold_marked_by.first_name }} {{ c.cold_marked_by.last_name|default:"" }})</span>
+                        {% endif %}
+                      </div>
+                    {% endif %}
                   </div>
                   {% if can_edit_company %}
                     <div class="flex items-center gap-2">

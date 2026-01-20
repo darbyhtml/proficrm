@@ -2649,9 +2649,18 @@ def migrate_filtered(
                             phones = dedup_phones
 
                             # Если есть одно общее примечание, а номеров несколько — пишем его в comment первого номера
+                            # ИСПРАВЛЕНИЕ: всегда добавляем примечание в comment первого телефона (объединяем с существующим, если есть)
                             if note_text and phones:
                                 pt0, pv0, pc0 = phones[0]
-                                if not (pc0 or "").strip():
+                                existing_comment = str(pc0 or "").strip()
+                                if existing_comment:
+                                    # Если уже есть комментарий, объединяем через точку с запятой
+                                    combined_comment = f"{existing_comment}; {note_text[:200]}"
+                                    phones[0] = (pt0, pv0, combined_comment[:255])
+                                    if debug_count_for_extraction < 3:
+                                        logger.debug(f"  -> Merged note_text with existing comment in first phone: {combined_comment[:100]}")
+                                else:
+                                    # Если комментария нет, просто добавляем примечание
                                     phones[0] = (pt0, pv0, note_text[:255])
                                     if debug_count_for_extraction < 3:
                                         logger.debug(f"  -> Applied note_text to first phone: {note_text[:100]}")
@@ -3226,10 +3235,16 @@ def migrate_filtered(
                                 if not pv_db:
                                     continue
                                 
-                                # Для первого телефона добавляем примечание в comment, если его нет
+                                # Для первого телефона добавляем примечание в comment (объединяем с существующим, если есть)
                                 phone_comment = str(pc or "").strip()
-                                if idx == 0 and note_text and not phone_comment:
-                                    phone_comment = note_text[:255]
+                                if idx == 0 and note_text:
+                                    if phone_comment:
+                                        # Если уже есть комментарий, объединяем через точку с запятой
+                                        phone_comment = f"{phone_comment}; {note_text[:200]}"
+                                        phone_comment = phone_comment[:255]
+                                    else:
+                                        # Если комментария нет, просто добавляем примечание
+                                        phone_comment = note_text[:255]
                                 
                                 # ОПТИМИЗАЦИЯ: проверяем в предзагруженной карте
                                 phone_key = (contact.id, pv_db.lower().strip())
@@ -3342,10 +3357,16 @@ def migrate_filtered(
                                 if not pv_db:
                                     continue
                                 
-                                # Если это первый телефон и есть примечание - добавляем в comment
+                                # Если это первый телефон и есть примечание - добавляем в comment (объединяем с существующим, если есть)
                                 phone_comment = str(pc or "").strip()
-                                if idx == 0 and note_text and not phone_comment:
-                                    phone_comment = note_text[:255]
+                                if idx == 0 and note_text:
+                                    if phone_comment:
+                                        # Если уже есть комментарий, объединяем через точку с запятой
+                                        phone_comment = f"{phone_comment}; {note_text[:200]}"
+                                        phone_comment = phone_comment[:255]
+                                    else:
+                                        # Если комментария нет, просто добавляем примечание
+                                        phone_comment = note_text[:255]
                                 
                                 phones_to_create_new.append(ContactPhone(
                                     contact=contact,
