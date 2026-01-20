@@ -498,22 +498,18 @@
             </div>
             {% if is_admin %}
               <div class="flex justify-between">
-                <span class="text-brand-dark/70">Лимит в день (общий для всех):</span>
+                <span class="text-brand-dark/70">Доступно писем (квота):</span>
                 <span class="font-medium">
-                  {{ sent_today }}/{{ rate_per_day }}
-                  {% if sent_today >= rate_per_day %}
-                    <span class="text-red-600">(достигнут)</span>
-                  {% else %}
-                    {% with remaining=rate_per_day|add:"-"|add:sent_today %}
-                      <span class="text-green-600">(осталось: {{ remaining }})</span>
-                    {% endwith %}
+                  {{ emails_available|default:"—" }} / {{ rate_per_day|default:"—" }}
+                  {% if emails_available <= 0 %}
+                    <span class="text-red-600">(исчерпана)</span>
                   {% endif %}
                 </span>
               </div>
               <div class="flex justify-between">
-                <span class="text-brand-dark/70">Лимит в минуту (общий):</span>
+                <span class="text-brand-dark/70">Отправлено за час:</span>
                 <span class="font-medium">
-                  {{ send_stats.sent_last_min }}/{{ rate_per_minute }}
+                  {{ send_stats.sent_last_hour|default:0 }} / {{ rate_per_hour|default:100 }}
                 </span>
               </div>
             {% endif %}

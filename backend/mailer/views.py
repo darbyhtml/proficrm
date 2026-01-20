@@ -246,19 +246,28 @@ def campaigns(request: HttpRequest) -> HttpResponse:
             sent=Count("id", filter=Q(status=Campaign.Status.SENT)),
         )
         
+        # Получаем лимиты из API
+        quota = SmtpBzQuota.load()
+        if quota.last_synced_at and not quota.sync_error and quota.emails_limit > 0:
+            global_limit = quota.emails_limit
+            max_per_hour = quota.max_per_hour or 100
+        else:
+            global_limit = smtp_cfg.rate_per_day
+            max_per_hour = 100
+        
         analytics = {
             "user_stats": user_stats,
             "total_sent_today": total_sent_today,
             "total_failed_today": total_failed_today,
-            "global_limit": smtp_cfg.rate_per_day,
+            "global_limit": global_limit,
             "per_user_limit": per_user_daily_limit,
             "campaigns_stats": campaigns_stats,
-            "sent_last_min": SendLog.objects.filter(
+            "sent_last_hour": SendLog.objects.filter(
                 provider="smtp_global",
                 status="sent",
-                created_at__gte=now - _tz.timedelta(minutes=1)
+                created_at__gte=now - _tz.timedelta(hours=1)
             ).count(),
-            "rate_per_minute": smtp_cfg.rate_per_minute,
+            "max_per_hour": max_per_hour,
         }
     
     # Информация о квоте smtp.bz (для всех пользователей)
@@ -434,12 +443,23 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
     from mailer.tasks import _is_working_hours
     from zoneinfo import ZoneInfo
     
+    # Получаем лимиты из API
+    quota = SmtpBzQuota.load()
+    if quota.last_synced_at and not quota.sync_error and quota.emails_limit > 0:
+        global_limit = quota.emails_limit
+        max_per_hour = quota.max_per_hour or 100
+        emails_available = quota.emails_available or 0
+    else:
+        global_limit = smtp_cfg.rate_per_day
+        max_per_hour = 100
+        emails_available = global_limit
+    
     now = _tz.now()
-    sent_last_min = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__gte=now - _tz.timedelta(minutes=1)).count()
+    sent_last_hour = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__gte=now - _tz.timedelta(hours=1)).count()
     sent_today = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__date=now.date()).count()
     sent_today_user = SendLog.objects.filter(provider="smtp_global", status="sent", campaign__created_by=user, created_at__date=now.date()).count()
     
-    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT
+    per_user_daily_limit = 100  # Фиксированный лимит на пользователя
     is_working_time = _is_working_hours(now)
     
     # Текущее московское время для отображения
@@ -453,10 +473,12 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
         pause_reasons.append(f"Вне рабочего времени (текущее время МСК: {current_time_msk}, рабочие часы: 9:00-18:00 МСК)")
     if per_user_daily_limit and sent_today_user >= per_user_daily_limit:
         pause_reasons.append(f"Достигнут лимит отправки для вашего аккаунта: {sent_today_user}/{per_user_daily_limit} писем в день")
-    if sent_today >= smtp_cfg.rate_per_day:
-        pause_reasons.append(f"Достигнут глобальный дневной лимит: {sent_today}/{smtp_cfg.rate_per_day} писем")
-    if sent_last_min >= smtp_cfg.rate_per_minute:
-        pause_reasons.append(f"Достигнут лимит в минуту: {sent_last_min}/{smtp_cfg.rate_per_minute} писем")
+    if emails_available <= 0:
+        pause_reasons.append(f"Квота исчерпана: доступно {emails_available} из {global_limit} писем")
+    elif sent_today >= global_limit:
+        pause_reasons.append(f"Достигнут глобальный дневной лимит: {sent_today}/{global_limit} писем")
+    if sent_last_hour >= max_per_hour:
+        pause_reasons.append(f"Достигнут лимит в час: {sent_last_hour}/{max_per_hour} писем")
     if not smtp_cfg.is_enabled:
         pause_reasons.append("SMTP не включен администратором")
     
@@ -524,8 +546,9 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "per_user_daily_limit": per_user_daily_limit,
             "sent_today_user": sent_today_user,
             "sent_today": sent_today,
-            "rate_per_day": smtp_cfg.rate_per_day,
-            "rate_per_minute": smtp_cfg.rate_per_minute,
+            "rate_per_day": global_limit,
+            "rate_per_hour": max_per_hour,
+            "emails_available": emails_available,
             "counts": counts,
             "recent": recent,
             "smtp_from_email": (smtp_cfg.from_email or smtp_cfg.smtp_username or "").strip(),
