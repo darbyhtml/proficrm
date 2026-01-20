@@ -40,42 +40,35 @@ def get_quota_info(api_key: str) -> Optional[Dict[str, Any]]:
     
     try:
         # Пробуем разные возможные эндпоинты API
-        # Обычно это /account, /quota, /limits или /info
+        # Согласно документации: базовый URL https://api.smtp.bz/v1
+        # Нужно проверить Swagger UI для точных эндпоинтов
         endpoints_to_try = [
+            # Стандартные варианты
             "/account",
-            "/quota",
-            "/limits",
-            "/info",
+            "/account/info",
+            "/account/balance",
             "/account/quota",
-            "/api/account",
-            "/api/quota",
-            "/api/limits",
-            "/api/info",
-            "/api/v1/account",
-            "/api/v1/quota",
-            "/api/v1/limits",
-            "/api/v1/info",
-            "/api/account/quota",
-            "/api/account/info",
-            "/api/account/limits",
-            "/stats",
-            "/api/stats",
-            "/api/v1/stats",
+            "/account/stats",
+            "/quota",
             "/balance",
-            "/api/balance",
-            "/api/v1/balance",
+            "/stats",
+            "/info",
+            "/limits",
+            # Альтернативные варианты
+            "/user",
+            "/user/info",
+            "/user/quota",
+            "/profile",
+            "/profile/quota",
         ]
         
         # Разные варианты аутентификации
-        # Согласно документации: Authorization: API-KEY (где API-KEY - это сам ключ)
+        # Согласно документации: ключ API передается в заголовке Authorization
+        # Формат может быть: Authorization: <api_key> или Authorization: API-KEY <api_key>
         auth_variants = [
-            {"Authorization": api_key},  # Правильный формат согласно документации
-            {"Authorization": f"API-KEY {api_key}"},  # Альтернативный вариант
-            {"Authorization": f"Bearer {api_key}"},
-            {"X-API-Key": api_key},
-            {"Authorization": f"Token {api_key}"},
-            {"X-Auth-Token": api_key},
-            {"api_key": api_key},  # как query параметр
+            {"Authorization": api_key},  # Просто ключ в заголовке
+            {"Authorization": f"API-KEY {api_key}"},  # С префиксом API-KEY
+            {"Authorization": f"Bearer {api_key}"},  # Bearer токен
         ]
         
         headers_base = {
@@ -112,13 +105,9 @@ def get_quota_info(api_key: str) -> Optional[Dict[str, Any]]:
                     headers = {**headers_base, **auth_header}
                     
                     try:
-                        # Если api_key в auth_header, используем как query параметр
-                        if "api_key" in auth_header:
-                            response = requests.get(url, params={"api_key": api_key}, headers=headers_base, timeout=5)
-                            auth_method = "query_param"
-                        else:
-                            response = requests.get(url, headers=headers, timeout=5)
-                            auth_method = list(auth_header.keys())[0]
+                        # Всегда используем заголовок Authorization
+                        response = requests.get(url, headers=headers, timeout=5)
+                        auth_method = list(auth_header.keys())[0]
                         
                         # Логируем только важные статусы
                         if response.status_code == 200:
