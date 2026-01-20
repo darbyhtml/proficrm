@@ -95,7 +95,8 @@ def send_pending_emails(self, batch_size: int = 50):
                 campaign__created_by=user,
                 created_at__date=now.date(),
             ).count()
-            per_user_daily_limit = smtp_cfg.per_user_daily_limit or 0
+            # Лимит на человека: используем значение из настроек или 100 по умолчанию
+            per_user_daily_limit = smtp_cfg.per_user_daily_limit if smtp_cfg.per_user_daily_limit else PER_USER_DAILY_LIMIT
             if per_user_daily_limit and sent_today_user >= per_user_daily_limit:
                 # Лимит пользователя достигнут - ставим на паузу
                 if camp.status == Campaign.Status.SENDING:
