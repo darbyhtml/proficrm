@@ -50,11 +50,36 @@ def send_pending_emails(self, batch_size: int = 50):
     """
     try:
         did_work = False
-        # Берём кампании с pending получателями в статусе READY или SENDING (исключаем на паузе и остановленные)
-        camps = Campaign.objects.filter(
-            recipients__status=CampaignRecipient.Status.PENDING,
-            status__in=(Campaign.Status.READY, Campaign.Status.SENDING)
-        ).distinct().order_by("created_at")[:20]
+        
+        # Работа с очередью: берем только одну кампанию из очереди за раз
+        # Сначала ищем кампанию, которая уже обрабатывается
+        processing_queue = CampaignQueue.objects.filter(
+            status=CampaignQueue.Status.PROCESSING
+        ).select_related("campaign").first()
+        
+        if processing_queue:
+            # Продолжаем обработку текущей кампании
+            camps = [processing_queue.campaign]
+        else:
+            # Берем следующую кампанию из очереди
+            next_queue = CampaignQueue.objects.filter(
+                status=CampaignQueue.Status.PENDING,
+                campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING),
+                campaign__recipients__status=CampaignRecipient.Status.PENDING
+            ).select_related("campaign").order_by("-priority", "queued_at").first()
+            
+            if next_queue:
+                # Помечаем как обрабатываемую
+                next_queue.status = CampaignQueue.Status.PROCESSING
+                next_queue.started_at = timezone.now()
+                next_queue.save(update_fields=["status", "started_at"])
+                camps = [next_queue.campaign]
+            else:
+                # Если очереди нет, работаем со старым способом (для обратной совместимости)
+                camps = Campaign.objects.filter(
+                    recipients__status=CampaignRecipient.Status.PENDING,
+                    status__in=(Campaign.Status.READY, Campaign.Status.SENDING)
+                ).distinct().order_by("created_at")[:1]
         
         # Проверка рабочего времени (9:00-18:00 МСК)
         if not _is_working_hours():
@@ -210,20 +235,6 @@ def send_pending_emails(self, batch_size: int = 50):
                 if camp.status == Campaign.Status.SENDING:
                     camp.status = Campaign.Status.SENT
                     camp.save(update_fields=["status", "updated_at"])
-                
-                # Обновляем статус в очереди
-                queue_entry = getattr(camp, "queue_entry", None)
-                if queue_entry and queue_entry.status == CampaignQueue.Status.PROCESSING:
-                    queue_entry.status = CampaignQueue.Status.COMPLETED
-                    queue_entry.completed_at = timezone.now()
-                    queue_entry.save(update_fields=["status", "completed_at"])
-                
-                # Обновляем статус в очереди
-                queue_entry = getattr(camp, "queue_entry", None)
-                if queue_entry and queue_entry.status == CampaignQueue.Status.PROCESSING:
-                    queue_entry.status = CampaignQueue.Status.COMPLETED
-                    queue_entry.completed_at = timezone.now()
-                    queue_entry.save(update_fields=["status", "completed_at"])
                 
                 # Обновляем статус в очереди
                 queue_entry = getattr(camp, "queue_entry", None)
