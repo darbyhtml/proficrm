@@ -2,29 +2,131 @@
 {% block title %}{{ campaign.name }} — CRM ПРОФИ{% endblock %}
 
 {% block content %}
+  <style>
+    .btn-icon { transition: all 0.2s ease; }
+    .btn-icon:hover { transform: translateY(-1px); }
+    .stat-card { transition: all 0.2s ease; }
+    .stat-card:hover { transform: scale(1.02); }
+    .card { transition: box-shadow 0.2s ease; }
+    .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+    details summary { transition: color 0.2s ease; }
+    details[open] summary { margin-bottom: 0.5rem; }
+    tr { transition: background-color 0.15s ease; }
+    iframe { transition: opacity 0.2s ease; }
+  </style>
+  
   <div class="space-y-4">
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
-      <div class="flex-1">
-        <div class="text-sm muted mb-1"><a class="link" href="/mail/campaigns/">Почта</a> /</div>
-        <div class="flex items-center gap-3 flex-wrap">
-          <h1 class="text-2xl font-semibold">{{ campaign.name }}</h1>
-          <span class="badge {% if campaign.status == 'sending' %}bg-green-100 text-green-800{% elif campaign.status == 'paused' %}bg-orange-100 text-orange-800{% elif campaign.status == 'sent' %}bg-blue-100 text-blue-800{% else %}bg-gray-100 text-gray-800{% endif %}">
-            {{ campaign.get_status_display }}
-          </span>
+    {# Верхняя панель: кнопки управления и статистика #}
+    <div class="card card-pad">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {# Заголовок и статус #}
+        <div class="flex-1 min-w-0">
+          <div class="text-sm muted mb-1"><a class="link" href="/mail/campaigns/">Почта</a> /</div>
+          <div class="flex items-center gap-3 flex-wrap">
+            <h1 class="text-xl font-semibold truncate">{{ campaign.name }}</h1>
+            <span class="badge {% if campaign.status == 'sending' %}bg-green-100 text-green-800{% elif campaign.status == 'paused' %}bg-orange-100 text-orange-800{% elif campaign.status == 'sent' %}bg-blue-100 text-blue-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+              {{ campaign.get_status_display }}
+            </span>
+          </div>
         </div>
-        <div class="text-sm text-brand-dark/70 mt-1">
+        
+        {# Компактная статистика #}
+        <div class="flex items-center gap-3 flex-wrap">
+          <div class="flex items-center gap-1 text-sm">
+            <span class="text-brand-dark/60">Всего:</span>
+            <span class="font-medium">{{ counts.total }}</span>
+          </div>
+          <div class="flex items-center gap-1 text-sm">
+            <span class="text-brand-dark/60">Очередь:</span>
+            <span class="font-medium {% if counts.pending > 0 %}text-orange-600{% endif %}">{{ counts.pending }}</span>
+          </div>
+          <div class="flex items-center gap-1 text-sm">
+            <span class="text-brand-dark/60">Отправлено:</span>
+            <span class="font-medium {% if counts.sent > 0 %}text-green-600{% endif %}">{{ counts.sent }}</span>
+          </div>
+          {% if counts.failed > 0 %}
+            <div class="flex items-center gap-1 text-sm">
+              <span class="text-brand-dark/60">Ошибки:</span>
+              <span class="font-medium text-red-600">{{ counts.failed }}</span>
+            </div>
+          {% endif %}
+        </div>
+        
+        {# Кнопки управления #}
+        <div class="flex items-center gap-2 flex-wrap">
+          <a class="btn-icon btn btn-outline" href="/mail/campaigns/{{ campaign.id }}/edit/" title="Редактировать" style="padding:0.375rem 0.75rem;font-size:0.875rem">
+            <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+            </svg>
+          </a>
+          <form method="post" action="/mail/campaigns/{{ campaign.id }}/test-send/" class="inline">
+            {% csrf_token %}
+            <button class="btn-icon btn btn-outline" type="submit" title="Отправить тест себе" style="padding:0.375rem 0.75rem;font-size:0.875rem">
+              <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
+              </svg>
+            </button>
+          </form>
+          
+          {% if campaign.status == 'paused' and counts.pending > 0 %}
+            <form method="post" action="/mail/campaigns/{{ campaign.id }}/resume/" class="inline">
+              {% csrf_token %}
+              <button class="btn-icon btn btn-primary" type="submit" title="Продолжить рассылку" style="padding:0.375rem 0.75rem;font-size:0.875rem">
+                <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 0 1 0 1.971l-11.54 6.347a1.125 1.125 0 0 1-1.667-.985V5.653Z" />
+                </svg>
+              </button>
+            </form>
+          {% elif campaign.status == 'sending' or campaign.status == 'ready' %}
+            <form method="post" action="/mail/campaigns/{{ campaign.id }}/pause/" class="inline">
+              {% csrf_token %}
+              <button class="btn-icon btn btn-warning" type="submit" title="Поставить на паузу" style="padding:0.375rem 0.75rem;font-size:0.875rem">
+                <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
+                </svg>
+              </button>
+            </form>
+          {% elif campaign.status == 'draft' or campaign.status == 'stopped' %}
+            {% if counts.pending > 0 %}
+              <form method="post" action="/mail/campaigns/{{ campaign.id }}/start/" class="inline">
+                {% csrf_token %}
+                <button class="btn-icon btn btn-primary" type="submit" title="Запустить рассылку" style="padding:0.375rem 0.75rem;font-size:0.875rem">
+                  <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 0 1 0 1.971l-11.54 6.347a1.125 1.125 0 0 1-1.667-.985V5.653Z" />
+                  </svg>
+                </button>
+              </form>
+            {% endif %}
+          {% endif %}
+          
+          {% if can_delete_campaign %}
+            <form method="post" action="/mail/campaigns/{{ campaign.id }}/delete/" onsubmit="return confirm('Удалить кампанию?');" class="inline">
+              {% csrf_token %}
+              <button class="btn-icon btn" type="submit" title="Удалить кампанию" style="background:#dc2626;color:#fff;padding:0.375rem 0.75rem;font-size:0.875rem">
+                <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                </svg>
+              </button>
+            </form>
+          {% endif %}
+        </div>
+      </div>
+      
+      {# Дополнительная информация #}
+      <div class="mt-3 pt-3 border-t border-brand-soft">
+        <div class="text-sm text-brand-dark/70">
           <span>Тема: <b>{{ campaign.subject }}</b></span>
           {% if campaign.attachment %}
             <span class="ml-3 inline-flex items-center gap-1 text-blue-600">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
               </svg>
               <span>Вложение ({{ campaign.attachment.size|filesizeformat }})</span>
             </span>
           {% endif %}
         </div>
         <details class="mt-2">
-          <summary class="text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70">Технические детали</summary>
+          <summary class="text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors">Технические детали</summary>
           <div class="text-xs text-brand-dark/60 mt-1 space-y-1">
             <div>From: {{ smtp_from_email|default:"—" }}</div>
             <div>Имя отправителя: {{ campaign.sender_name|default:smtp_from_name_default }}</div>
@@ -37,7 +139,12 @@
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
       <div class="lg:col-span-8 space-y-4">
         <details class="card card-pad">
-          <summary class="cursor-pointer font-medium">📧 Предпросмотр письма</summary>
+          <summary class="cursor-pointer font-medium flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
+            </svg>
+            Предпросмотр письма
+          </summary>
           <div class="mt-3">
             {% if campaign.body_html %}
               {# Используем sandbox для безопасности, но разрешаем загрузку изображений #}
@@ -48,7 +155,12 @@
                 sandbox="allow-same-origin"
               ></iframe>
               <details class="mt-2">
-                <summary class="text-xs text-brand-dark/50 cursor-pointer">⚠️ Проблемы с изображениями?</summary>
+                <summary class="text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors flex items-center gap-1">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                  </svg>
+                  Проблемы с изображениями?
+                </summary>
                 <div class="text-xs muted-2 mt-1">
                   Если изображения не отображаются, возможно они используют внешние ссылки, которые блокируются браузером. 
                   Для корректного отображения в письмах рекомендуется встраивать изображения как base64 (data:image/...) или загружать их на ваш сервер.
@@ -63,7 +175,12 @@
         <div class="card card-pad">
           <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
-              <div class="font-medium">👥 Получатели ({{ counts.total }})</div>
+              <div class="font-medium flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+                </svg>
+                Получатели ({{ counts.total }})
+              </div>
               <div class="text-sm muted mt-1">Добавьте email вручную или сгенерируйте по фильтрам</div>
             </div>
             <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/add/" class="flex gap-2 items-end">
@@ -293,202 +410,41 @@
       </div>
 
       <div class="lg:col-span-4 space-y-4">
-        <div class="card card-pad">
-          <div class="font-medium mb-3">Управление</div>
-          <div class="flex flex-wrap gap-2">
-            <a class="btn btn-outline" href="/mail/campaigns/{{ campaign.id }}/edit/">Редактировать</a>
-            <form method="post" action="/mail/campaigns/{{ campaign.id }}/test-send/">
-              {% csrf_token %}
-              <button class="btn btn-outline" type="submit">Тест себе</button>
-            </form>
-            
-            {% if campaign.status == 'paused' and counts.pending > 0 %}
-              {# Кнопка "Продолжить" для кампаний на паузе #}
-              <form method="post" action="/mail/campaigns/{{ campaign.id }}/resume/">
-                {% csrf_token %}
-                <button class="btn btn-primary" type="submit">
-                  <span class="inline-flex items-center gap-2">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                    </svg>
-                    Продолжить
-                  </span>
-                </button>
-              </form>
-            {% elif campaign.status == 'sending' or campaign.status == 'ready' %}
-              {# Кнопка "Пауза" для активных кампаний #}
-              <form method="post" action="/mail/campaigns/{{ campaign.id }}/pause/">
-                {% csrf_token %}
-                <button class="btn btn-warning" type="submit">
-                  <span class="inline-flex items-center gap-2">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <rect x="6" y="4" width="4" height="16"></rect>
-                      <rect x="14" y="4" width="4" height="16"></rect>
-                    </svg>
-                    Пауза
-                  </span>
-                </button>
-              </form>
-            {% elif campaign.status == 'draft' or campaign.status == 'stopped' %}
-              {% if counts.pending > 0 %}
-                {# Кнопка "Старт" для черновиков и остановленных кампаний #}
-                <form method="post" action="/mail/campaigns/{{ campaign.id }}/start/">
-                  {% csrf_token %}
-                  <button class="btn btn-primary" type="submit">
-                    <span class="inline-flex items-center gap-2">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                      </svg>
-                      Старт
-                    </span>
-                  </button>
-                </form>
-              {% endif %}
-            {% endif %}
-            
-            {% if counts.pending == 0 and counts.total > 0 %}
-              <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/reset/" onsubmit="return confirm('Вернуть отправленные/ошибочные email в очередь для повторной рассылки?');">
-                {% csrf_token %}
-                <button class="btn btn-outline" type="submit">Вернуть в очередь</button>
-              </form>
-              <form method="post" action="/mail/campaigns/{{ campaign.id }}/clear/" onsubmit="return confirm('Очистить кампанию и удалить всех получателей? Будет пауза на повторное использование email.');">
-                {% csrf_token %}
-                <button class="btn btn-outline" type="submit">Очистить кампанию</button>
-              </form>
-            {% endif %}
-            {% if can_delete_campaign %}
-              <form method="post" action="/mail/campaigns/{{ campaign.id }}/delete/" onsubmit="return confirm('Удалить кампанию «{{ campaign.name }}»? Это действие необратимо.');">
-                {% csrf_token %}
-                <button class="btn" type="submit" title="Удалить кампанию" style="background:#dc2626;color:#fff">
-                  <span class="inline-flex items-center gap-2">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M3 6h18"></path>
-                      <path d="M8 6V4h8v2"></path>
-                      <path d="M6 6l1 16h10l1-16"></path>
-                      <path d="M10 11v6"></path>
-                      <path d="M14 11v6"></path>
-                    </svg>
-                    Удалить
-                  </span>
-                </button>
-              </form>
-            {% endif %}
-          </div>
-          
-          {% if pause_reasons %}
-            <div class="mt-3 p-3 rounded-lg border border-orange-300 bg-orange-50">
-              <div class="text-sm font-medium text-orange-900 mb-2">⚠️ Рассылка приостановлена:</div>
-              <ul class="text-xs text-orange-800 space-y-1">
-                {% for reason in pause_reasons %}
-                  <li>• {{ reason }}</li>
-                {% endfor %}
-              </ul>
-            </div>
-          {% elif campaign.status == 'sending' or campaign.status == 'ready' %}
-            <div class="mt-3 p-3 rounded-lg border border-green-300 bg-green-50">
-              <div class="text-sm font-medium text-green-900">
-                ✅ Рассылка активна
-                {% if not is_working_time %}
-                  <div class="text-xs text-green-800 mt-1">
-                    Ожидание рабочего времени: 9:00-18:00 МСК (текущее время МСК: {{ current_time_msk }})
-                  </div>
-                {% else %}
-                  <div class="text-xs text-green-800 mt-1">
-                    Отправка происходит автоматически в рабочее время
-                  </div>
-                {% endif %}
-              </div>
-            </div>
-          {% endif %}
-          
-          <div class="text-xs muted-2 mt-2">
-            <div><b>Как работает рассылка:</b></div>
-            <ul class="list-disc list-inside mt-1 space-y-0.5">
-              <li>Рассылка происходит автоматически в рабочее время (9:00-18:00 МСК)</li>
-              <li>С учетом лимитов SMTP (в минуту, в день, на менеджера)</li>
-              <li>При достижении лимитов рассылка автоматически приостанавливается</li>
-              <li>Вне рабочего времени рассылка не происходит, но кампания остается активной</li>
-            </ul>
-            <div class="mt-2">Текущее время МСК: <b>{{ current_time_msk }}</b></div>
-          </div>
-        </div>
-        
-
-        {# Информация об очереди #}
-        {% if queue_entry %}
-          <div class="card card-pad mb-4">
-            <div class="font-medium mb-2">Очередь рассылок</div>
-            <div class="text-sm">
-              <div class="flex items-center gap-2">
-                <span class="text-brand-dark/70">Статус в очереди:</span>
-                <span class="badge">{{ queue_entry.get_status_display }}</span>
-              </div>
-              {% if queue_entry.queued_at %}
-                <div class="mt-2 text-xs text-brand-dark/60">
-                  Поставлено в очередь: {{ queue_entry.queued_at|date:"d.m.Y H:i" }}
-                </div>
-              {% endif %}
-              {% if queue_entry.status == 'pending' %}
-                <div class="mt-2 text-xs text-brand-dark/60">
-                  ⏳ Кампания ожидает своей очереди. Рассылки выполняются последовательно.
-                </div>
-              {% elif queue_entry.status == 'processing' %}
-                <div class="mt-2 text-xs text-green-600">
-                  ✅ Кампания обрабатывается
-                </div>
-              {% endif %}
-            </div>
-          </div>
-        {% endif %}
-
-        {# Статистика ошибок - только для администратора #}
-        {% if is_admin %}
+        {# Дополнительные действия #}
+        {% if counts.pending == 0 and counts.total > 0 %}
           <div class="card card-pad">
-            <div class="font-medium mb-2">Статистика отправки</div>
-            <div class="space-y-2 text-sm">
-              <div class="flex justify-between">
-                <span class="text-brand-dark/70">Ошибок сегодня (эта кампания):</span>
-                <span class="font-medium {% if send_stats.failed_today_campaign > 0 %}text-red-600{% endif %}">
-                  {{ send_stats.failed_today_campaign }}
-                </span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-brand-dark/70">Ошибок сегодня (всего):</span>
-                <span class="font-medium {% if send_stats.failed_today > 0 %}text-red-600{% endif %}">
-                  {{ send_stats.failed_today }}
-                </span>
-              </div>
+            <div class="font-medium mb-2 text-sm">Дополнительные действия</div>
+            <div class="flex flex-wrap gap-2">
+              <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/reset/" onsubmit="return confirm('Вернуть отправленные/ошибочные email в очередь?');" class="inline">
+                {% csrf_token %}
+                <button class="btn-icon btn btn-outline" type="submit" title="Вернуть в очередь" style="padding:0.375rem 0.75rem;font-size:0.875rem">
+                  <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                  </svg>
+                </button>
+              </form>
+              <form method="post" action="/mail/campaigns/{{ campaign.id }}/clear/" onsubmit="return confirm('Очистить кампанию?');" class="inline">
+                {% csrf_token %}
+                <button class="btn-icon btn btn-outline" type="submit" title="Очистить кампанию" style="padding:0.375rem 0.75rem;font-size:0.875rem">
+                  <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                  </svg>
+                </button>
+              </form>
             </div>
           </div>
         {% endif %}
-
-        <div class="card card-pad">
-          <div class="font-medium mb-3">📊 Статистика</div>
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div class="text-center p-3 rounded-lg bg-gray-50">
-              <div class="text-xs text-brand-dark/60 mb-1">Всего</div>
-              <div class="text-2xl font-semibold">{{ counts.total }}</div>
-            </div>
-            <div class="text-center p-3 rounded-lg {% if counts.pending > 0 %}bg-orange-50{% else %}bg-gray-50{% endif %}">
-              <div class="text-xs text-brand-dark/60 mb-1">В очереди</div>
-              <div class="text-2xl font-semibold {% if counts.pending > 0 %}text-orange-600{% endif %}">{{ counts.pending }}</div>
-            </div>
-            <div class="text-center p-3 rounded-lg {% if counts.sent > 0 %}bg-green-50{% else %}bg-gray-50{% endif %}">
-              <div class="text-xs text-brand-dark/60 mb-1">Отправлено</div>
-              <div class="text-2xl font-semibold {% if counts.sent > 0 %}text-green-600{% endif %}">{{ counts.sent }}</div>
-            </div>
-            <div class="text-center p-3 rounded-lg {% if counts.failed > 0 %}bg-red-50{% else %}bg-gray-50{% endif %}">
-              <div class="text-xs text-brand-dark/60 mb-1">Ошибки</div>
-              <div class="text-2xl font-semibold {% if counts.failed > 0 %}text-red-600{% endif %}">{{ counts.failed }}</div>
-            </div>
-          </div>
-        </div>
         
         {# Детальная статистика ошибок - только для администратора #}
         {% if is_admin and error_types %}
-          <div class="card card-pad">
-            <div class="font-medium mb-2">Статистика ошибок отправки</div>
-            <div class="space-y-3 text-sm">
+          <details class="card card-pad">
+            <summary class="cursor-pointer font-medium text-sm flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+              </svg>
+              Статистика ошибок
+            </summary>
+            <div class="mt-3 space-y-3 text-sm">
               {% for error_type, data in error_types.items %}
                 <div class="p-3 rounded border border-red-200 bg-red-50">
                   <div class="font-medium text-red-900 mb-1">
@@ -508,108 +464,112 @@
                   {% endif %}
                 </div>
               {% endfor %}
+              {% if counts.failed > 0 %}
+                <div class="text-xs muted-2">
+                  Всего ошибок: <b>{{ counts.failed }}</b>
+                  {% if counts.failed > 100 %} (показано 100) {% endif %}
+                </div>
+              {% endif %}
             </div>
-            {% if counts.failed > 0 %}
-              <div class="text-xs muted-2 mt-3">
-                Всего ошибок в кампании: <b>{{ counts.failed }}</b>
-                {% if counts.failed > 100 %}
-                  (показана статистика по последним 100)
-                {% endif %}
-              </div>
-            {% endif %}
-          </div>
+          </details>
         {% endif %}
 
-        <form method="post" action="/mail/campaigns/{{ campaign.id }}/generate/" class="card card-pad space-y-3">
-          {% csrf_token %}
-          <div class="font-medium">Сгенерировать получателей</div>
-          
-          <div class="space-y-3 border-t border-brand-soft pt-3">
-            <div class="text-sm font-medium">Фильтры по компаниям</div>
-            <div class="grid grid-cols-1 gap-2">
-              <div>
-                <label class="block text-xs muted mb-1">Лимит</label>
-                <input class="input" type="number" name="limit" value="{{ generate_form.limit.value|default:200 }}" min="1" max="5000" />
-              </div>
-              <div>
-                <label class="block text-xs muted mb-1">Филиал</label>
-                <select class="select" name="branch">
-                  <option value="">Любой</option>
-                  {% for b in branches %}
-                    <option value="{{ b.id }}">{{ b.name }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div>
-                <label class="block text-xs muted mb-1">Ответственный</label>
-                <select class="select" name="responsible">
-                  <option value="">Любой</option>
-                  {% regroup responsibles by branch as branches_list %}
-                  {% for branch_group in branches_list %}
-                    <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
-                      {% for u in branch_group.list %}
-                        <option value="{{ u.id }}">{{ u }}</option>
-                      {% endfor %}
-                    </optgroup>
-                  {% endfor %}
-                </select>
-              </div>
-              <div>
-                <label class="block text-xs muted mb-1">Статус</label>
-                <select class="select" name="status">
-                  <option value="">Любой</option>
-                  {% for s in statuses %}
-                    <option value="{{ s.id }}">{{ s.name }}</option>
-                  {% endfor %}
-                </select>
-              </div>
-              <div>
-                <label class="block text-xs muted mb-1">Сфера</label>
-                <select class="select" name="sphere">
-                  <option value="">Любая</option>
-                  {% for s in spheres %}
-                    <option value="{{ s.id }}">{{ s.name }}</option>
-                  {% endfor %}
-                </select>
+        <details class="card card-pad">
+          <summary class="cursor-pointer font-medium flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Сгенерировать получателей
+          </summary>
+          <form method="post" action="/mail/campaigns/{{ campaign.id }}/generate/" class="mt-3 space-y-3">
+            {% csrf_token %}
+            
+            <div class="space-y-3">
+              <div class="text-sm font-medium">Фильтры по компаниям</div>
+              <div class="grid grid-cols-1 gap-2">
+                <div>
+                  <label class="block text-xs muted mb-1">Лимит</label>
+                  <input class="input" type="number" name="limit" value="{{ generate_form.limit.value|default:200 }}" min="1" max="5000" />
+                </div>
+                <div>
+                  <label class="block text-xs muted mb-1">Филиал</label>
+                  <select class="select" name="branch">
+                    <option value="">Любой</option>
+                    {% for b in branches %}
+                      <option value="{{ b.id }}">{{ b.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs muted mb-1">Ответственный</label>
+                  <select class="select" name="responsible">
+                    <option value="">Любой</option>
+                    {% regroup responsibles by branch as branches_list %}
+                    {% for branch_group in branches_list %}
+                      <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
+                        {% for u in branch_group.list %}
+                          <option value="{{ u.id }}">{{ u }}</option>
+                        {% endfor %}
+                      </optgroup>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs muted mb-1">Статус</label>
+                  <select class="select" name="status">
+                    <option value="">Любой</option>
+                    {% for s in statuses %}
+                      <option value="{{ s.id }}">{{ s.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs muted mb-1">Сфера</label>
+                  <select class="select" name="sphere">
+                    <option value="">Любая</option>
+                    {% for s in spheres %}
+                      <option value="{{ s.id }}">{{ s.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div class="space-y-3 border-t border-brand-soft pt-3">
-            <div class="text-sm font-medium">Выбор email адресов</div>
-            <div class="space-y-2">
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" name="include_company_email" value="1" {% if generate_form.include_company_email.value %}checked{% endif %} class="rounded" />
-                <span class="text-sm">Включить основной email компании</span>
-              </label>
-              <div class="text-xs muted-2 ml-6">Email из поля "Email (основной)" в карточке компании</div>
-              
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" name="include_contact_emails" value="1" {% if generate_form.include_contact_emails.value %}checked{% endif %} class="rounded" id="include_contact_emails" />
-                <span class="text-sm">Включить email'ы контактов</span>
-              </label>
-              <div class="text-xs muted-2 ml-6">Email'ы из контактов компании</div>
-              
-              <div class="ml-6 space-y-1 border-l-2 border-brand-soft pl-3" id="contact_email_types_container">
-                <div class="text-xs muted mb-1">Типы email'ов:</div>
-                {% for choice in generate_form.contact_email_types.field.choices %}
-                  <label class="flex items-center gap-2 cursor-pointer">
-                    <input type="checkbox" name="contact_email_types" value="{{ choice.0 }}" {% if choice.0 in generate_form.contact_email_types.value %}checked{% endif %} class="rounded" />
-                    <span class="text-xs">{{ choice.1 }}</span>
-                  </label>
-                {% endfor %}
+            <div class="space-y-3 border-t border-brand-soft pt-3">
+              <div class="text-sm font-medium">Выбор email адресов</div>
+              <div class="space-y-2">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" name="include_company_email" value="1" {% if generate_form.include_company_email.value %}checked{% endif %} class="rounded" />
+                  <span class="text-sm">Включить основной email компании</span>
+                </label>
+                <div class="text-xs muted-2 ml-6">Email из поля "Email (основной)" в карточке компании</div>
+                
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" name="include_contact_emails" value="1" {% if generate_form.include_contact_emails.value %}checked{% endif %} class="rounded" id="include_contact_emails" />
+                  <span class="text-sm">Включить email'ы контактов</span>
+                </label>
+                <div class="text-xs muted-2 ml-6">Email'ы из контактов компании</div>
+                
+                <div class="ml-6 space-y-1 border-l-2 border-brand-soft pl-3" id="contact_email_types_container">
+                  <div class="text-xs muted mb-1">Типы email'ов:</div>
+                  {% for choice in generate_form.contact_email_types.field.choices %}
+                    <label class="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" name="contact_email_types" value="{{ choice.0 }}" {% if choice.0 in generate_form.contact_email_types.value %}checked{% endif %} class="rounded" />
+                      <span class="text-xs">{{ choice.1 }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
               </div>
             </div>
-          </div>
-          
+            
             <button class="btn btn-primary w-full" type="submit">Сгенерировать получателей</button>
           </form>
           
           <script>
-          // Показываем/скрываем выбор типов email'ов в зависимости от чекбокса
-          document.getElementById('include_contact_emails').addEventListener('change', function() {
-            document.getElementById('contact_email_types_container').style.display = this.checked ? 'block' : 'none';
-          });
+            // Показываем/скрываем выбор типов email'ов в зависимости от чекбокса
+            document.getElementById('include_contact_emails').addEventListener('change', function() {
+              document.getElementById('contact_email_types_container').style.display = this.checked ? 'block' : 'none';
+            });
             // Инициализация при загрузке
             document.getElementById('contact_email_types_container').style.display = 
               document.getElementById('include_contact_emails').checked ? 'block' : 'none';
