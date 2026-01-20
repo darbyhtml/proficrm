@@ -22,7 +22,7 @@
     </div>
 
     {# Информация о тарифе и квоте smtp.bz #}
-    {% if quota and quota.emails_limit > 0 %}
+    {% if quota %}
       <div class="card card-pad">
         <div class="font-medium mb-3">Тариф smtp.bz</div>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
