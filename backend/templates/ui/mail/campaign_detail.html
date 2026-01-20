@@ -253,57 +253,75 @@
               {% endif %}
             </div>
             <div class="space-y-4">
-              {% for company_id, data in recipients_by_company.items %}
-                <div class="border border-brand-soft rounded-lg p-4">
-                  <div class="font-medium mb-3 flex items-center gap-2">
-                    <input type="checkbox" class="company-select-all" data-company-id="{{ company_id }}" title="Выделить все в этой компании" />
-                    {% if data.company %}
-                      <a href="/companies/{{ data.company.id }}/" class="text-brand-teal hover:underline text-lg">{{ data.company.name }}</a>
-                    {% else %}
-                      <span class="muted text-lg">Без компании</span>
-                    {% endif %}
-                    <span class="badge">{{ data.recipients|length }} email{{ data.recipients|length|pluralize:",ов" }}</span>
-                  </div>
-                  <div class="space-y-2">
-                    {% for r in data.recipients %}
-                      <div class="flex items-start justify-between gap-3 p-2 border border-brand-soft/50 rounded hover:bg-brand-soft/20">
-                        <div class="flex-1">
-                          <div class="flex items-center gap-2 mb-1">
-                            <input type="checkbox" name="recipient_ids" value="{{ r.id }}" class="recipient-checkbox company-{{ company_id }}-checkbox" />
-                            <span class="font-mono text-sm font-medium">{{ r.email }}</span>
-                            <span class="badge {% if r.status == 'failed' %}badge-warn{% elif r.status == 'sent' %}bg-green-100 text-green-800{% elif r.status == 'unsubscribed' %}bg-gray-100 text-gray-800{% endif %} text-xs">{{ r.get_status_display }}</span>
+              {% if recipients_by_company %}
+                {% for company_id, data in recipients_by_company.items %}
+                  <div class="border border-brand-soft rounded-lg p-4">
+                    <div class="font-medium mb-3 flex items-center gap-2">
+                      <input type="checkbox" class="company-select-all" data-company-id="{{ company_id }}" title="Выделить все в этой компании" />
+                      {% if data.company %}
+                        <a href="/companies/{{ data.company.id }}/" class="text-brand-teal hover:underline text-lg">{{ data.company.name }}</a>
+                      {% else %}
+                        <span class="muted text-lg">Без компании</span>
+                      {% endif %}
+                      <span class="badge">{{ data.recipients|length }} email{{ data.recipients|length|pluralize:",ов" }}</span>
+                    </div>
+                    <div class="space-y-2">
+                      {% for r in data.recipients %}
+                        <div class="flex items-start justify-between gap-3 p-2 border border-brand-soft/50 rounded hover:bg-brand-soft/20">
+                          <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-1">
+                              <input type="checkbox" name="recipient_ids" value="{{ r.id }}" class="recipient-checkbox company-{{ company_id }}-checkbox" />
+                              <span class="font-mono text-sm font-medium">{{ r.email }}</span>
+                              <span class="badge {% if r.status == 'failed' %}badge-warn{% elif r.status == 'sent' %}bg-green-100 text-green-800{% elif r.status == 'unsubscribed' %}bg-gray-100 text-gray-800{% endif %} text-xs">{{ r.get_status_display }}</span>
+                            </div>
+                            {% if r.contact_id and r.contact %}
+                              <div class="text-sm text-brand-dark/80">
+                                <span class="font-medium">{{ r.contact.last_name }} {{ r.contact.first_name }}</span>
+                                {% if r.contact.position %}
+                                  <span class="muted"> · {{ r.contact.position }}</span>
+                                {% endif %}
+                              </div>
+                              <div class="text-xs muted-2 mt-0.5">из контакта</div>
+                            {% elif data.company and data.company.contact_name %}
+                              <div class="text-sm text-brand-dark/80">
+                                <span class="font-medium">{{ data.company.contact_name }}</span>
+                                {% if data.company.contact_position %}
+                                  <span class="muted"> · {{ data.company.contact_position }}</span>
+                                {% endif %}
+                              </div>
+                              <div class="text-xs muted-2 mt-0.5">основной email компании</div>
+                            {% else %}
+                              <div class="text-xs muted-2">основной email компании</div>
+                            {% endif %}
                           </div>
-                          {% if r.contact_id and r.contact %}
-                            <div class="text-sm text-brand-dark/80">
-                              <span class="font-medium">{{ r.contact.last_name }} {{ r.contact.first_name }}</span>
-                              {% if r.contact.position %}
-                                <span class="muted"> · {{ r.contact.position }}</span>
-                              {% endif %}
-                            </div>
-                            <div class="text-xs muted-2 mt-0.5">из контакта</div>
-                          {% elif data.company and data.company.contact_name %}
-                            <div class="text-sm text-brand-dark/80">
-                              <span class="font-medium">{{ data.company.contact_name }}</span>
-                              {% if data.company.contact_position %}
-                                <span class="muted"> · {{ data.company.contact_position }}</span>
-                              {% endif %}
-                            </div>
-                            <div class="text-xs muted-2 mt-0.5">основной email компании</div>
-                          {% else %}
-                            <div class="text-xs muted-2">основной email компании</div>
-                          {% endif %}
+                          <div class="flex items-center gap-2">
+                            <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/{{ r.id }}/delete/" onsubmit="return confirm('Удалить получателя {{ r.email }}?');" style="display:inline;">
+                              {% csrf_token %}
+                              <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.7rem" type="submit" title="Удалить">×</button>
+                            </form>
+                          </div>
                         </div>
-                        <div class="flex items-center gap-2">
-                          <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/{{ r.id }}/delete/" onsubmit="return confirm('Удалить получателя {{ r.email }}?');" style="display:inline;">
-                            {% csrf_token %}
-                            <button class="btn btn-outline" style="padding:.25rem .5rem;font-size:.7rem" type="submit" title="Удалить">×</button>
-                          </form>
-                        </div>
-                      </div>
-                    {% endfor %}
+                      {% endfor %}
+                    </div>
+                  </div>
+                {% endfor %}
+              {% else %}
+                <div class="border border-brand-soft rounded-lg p-6 text-center">
+                  <div class="text-brand-dark/60 text-sm">
+                    {% if view == 'pending' %}
+                      Нет получателей в очереди
+                    {% elif view == 'sent' %}
+                      Нет отправленных писем
+                    {% elif view == 'failed' %}
+                      Нет ошибок отправки
+                    {% elif view == 'unsub' %}
+                      Нет отписок
+                    {% else %}
+                      Нет получателей
+                    {% endif %}
                   </div>
                 </div>
-              {% endfor %}
+              {% endif %}
             </div>
             
             {% if page.has_other_pages %}
