@@ -39,13 +39,15 @@ class AmoResponse:
 
 
 class AmoClient:
-    # Rate limiting: максимум 6 запросов в секунду (0.2 сек между запросами)
-    # Используем 0.2 сек для надежности (теоретически можно 0.167, но лучше с запасом)
-    MIN_REQUEST_INTERVAL = 0.2  # секунды между запросами
+    # Rate limiting: максимум 7 запросов в секунду (0.143 сек между запросами)
+    # Используем 0.143 сек для максимальной скорости при соблюдении лимита
+    MIN_REQUEST_INTERVAL = 1.0 / 7.0  # ~0.143 секунды между запросами (7 запросов/сек)
     
     def __init__(self, cfg: AmoApiConfig):
         self.cfg = cfg
         self._last_request_time: float = 0.0  # время последнего запроса
+        self._request_count: int = 0  # счетчик API-запросов
+        self._start_time: float = time.time()  # время создания клиента для метрик
 
     @property
     def base(self) -> str:
@@ -146,6 +148,14 @@ class AmoClient:
         logger.info("OAuth token exchange successful")
 
     def _request(self, method: str, url: str, *, params: dict[str, Any] | None = None, json_body: Any | None = None, auth: bool = True) -> AmoResponse:
+        # Rate limiting: соблюдаем интервал между запросами
+        current_time = time.time()
+        time_since_last = current_time - self._last_request_time
+        if time_since_last < self.MIN_REQUEST_INTERVAL:
+            sleep_time = self.MIN_REQUEST_INTERVAL - time_since_last
+            time.sleep(sleep_time)
+        self._last_request_time = time.time()
+        
         if params:
             # AmoCRM API требует специальный формат для массивов: filter[id][]=1&filter[id][]=2
             # urllib.parse.urlencode не поддерживает это напрямую, поэтому обрабатываем вручную
@@ -312,5 +322,25 @@ class AmoClient:
                 break
             page += 1
         return out
+    
+    def get_metrics(self) -> dict[str, Any]:
+        """
+        Возвращает метрики использования клиента:
+        - request_count: количество API-запросов
+        - elapsed_time: время работы клиента в секундах
+        - avg_rps: средний RPS (запросов в секунду)
+        """
+        elapsed = time.time() - self._start_time
+        avg_rps = self._request_count / elapsed if elapsed > 0 else 0.0
+        return {
+            "request_count": self._request_count,
+            "elapsed_time": elapsed,
+            "avg_rps": avg_rps,
+        }
+    
+    def reset_metrics(self) -> None:
+        """Сбрасывает счетчики метрик (для нового этапа импорта)"""
+        self._request_count = 0
+        self._start_time = time.time()
 
 

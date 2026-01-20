@@ -6,6 +6,7 @@ import json
 import logging
 import re
 import time
+from uuid import UUID
 
 from django.db import transaction
 from django.utils import timezone
@@ -749,12 +750,12 @@ def fetch_tasks_for_companies(client: AmoClient, company_ids: list[int]) -> list
     """
     Получает задачи для компаний.
     Rate limiting применяется автоматически в AmoClient.
-    Используем батчи по 10 компаний для оптимального баланса.
+    ОПТИМИЗАЦИЯ: увеличен размер батча до 20 для уменьшения количества запросов.
     """
     if not company_ids:
         return []
     out: list[dict[str, Any]] = []
-    batch_size = 10  # Оптимальный размер батча
+    batch_size = 20  # ОПТИМИЗАЦИЯ: увеличен с 10 до 20 для ускорения (меньше запросов)
     for i in range(0, len(company_ids), batch_size):
         ids = company_ids[i : i + batch_size]
         out.extend(
@@ -814,11 +815,14 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
     
     # Способ 1: Запрашиваем каждую компанию с with=contacts
     # Это самый надежный способ согласно документации
+    # ОПТИМИЗАЦИЯ: уменьшаем логирование для ускорения
     method1_contacts_count = 0
-    for company_id in company_ids:
+    for idx, company_id in enumerate(company_ids):
         try:
             # Получаем компанию с контактами
-            logger.info(f"fetch_contacts_for_companies: запрашиваем компанию {company_id} с with=contacts")
+            # Логируем только каждую 10-ю компанию для ускорения
+            if idx % 10 == 0 or idx == len(company_ids) - 1:
+                logger.info(f"fetch_contacts_for_companies: запрашиваем компанию {company_id} с with=contacts ({idx + 1}/{len(company_ids)})")
             company_data = client.get(
                 f"/api/v4/companies/{company_id}",
                 params={"with": "custom_fields,contacts"}  # Только custom_fields и contacts, БЕЗ notes
@@ -828,7 +832,9 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
                 embedded = company_data.get("_embedded") or {}
                 contacts = embedded.get("contacts") or []
                 if isinstance(contacts, list) and contacts:
-                    logger.info(f"fetch_contacts_for_companies: компания {company_id}: найдено {len(contacts)} контактов через with=contacts")
+                    # ОПТИМИЗАЦИЯ: логируем только при необходимости
+                    if idx % 10 == 0 or len(contacts) > 0:
+                        logger.debug(f"fetch_contacts_for_companies: компания {company_id}: найдено {len(contacts)} контактов через with=contacts")
                     # Добавляем company_id к каждому контакту для удобства
                     for contact in contacts:
                         if isinstance(contact, dict):
@@ -868,17 +874,8 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
                     out.extend(contacts)
                     method1_contacts_count += len(contacts)
                 else:
-                    logger.info(f"fetch_contacts_for_companies: компания {company_id}: контакты не найдены в _embedded.contacts (пустой список или отсутствует)")
-                    # ОТЛАДКА: логируем структуру ответа, если контактов нет
-                    if method1_contacts_count == 0 and isinstance(company_data, dict):
-                        logger.info(f"fetch_contacts_for_companies: структура ответа для компании {company_id}:")
-                        logger.info(f"  - has _embedded: {'_embedded' in company_data}")
-                        if "_embedded" in company_data:
-                            embedded_keys = list(company_data.get("_embedded", {}).keys())
-                            logger.info(f"  - _embedded keys: {embedded_keys}")
-                            if "contacts" in company_data.get("_embedded", {}):
-                                contacts_raw = company_data.get("_embedded", {}).get("contacts")
-                                logger.info(f"  - contacts type: {type(contacts_raw)}, value: {contacts_raw}")
+                    # ОПТИМИЗАЦИЯ: убрано избыточное логирование структуры ответа
+                    pass
             else:
                 logger.warning(f"fetch_contacts_for_companies: компания {company_id}: неожиданный тип ответа: {type(company_data)}")
         except Exception as e:
@@ -918,7 +915,7 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
         if contact_ids:
             logger.info(f"fetch_contacts_for_companies: запрашиваем полные данные для {len(contact_ids)} контактов без custom_fields_values...")
             full_contacts_map: dict[int, dict[str, Any]] = {}
-            batch_size = 50  # Лимит AmoCRM API
+            batch_size = 50  # Лимит AmoCRM API (максимальный размер батча)
             for i in range(0, len(contact_ids), batch_size):
                 batch_ids = contact_ids[i:i + batch_size]
                 try:
@@ -941,9 +938,8 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
                                     full_contact_id = int(full_contact.get("id") or 0)
                                     if full_contact_id:
                                         full_contacts_map[full_contact_id] = full_contact
-                                        custom_fields = full_contact.get('custom_fields_values') or []
-                                        custom_fields_count = len(custom_fields) if isinstance(custom_fields, list) else 0
-                                        logger.debug(f"fetch_contacts_for_companies: получены полные данные для контакта {full_contact_id} (custom_fields: {custom_fields_count} полей)")
+                                        # ОПТИМИЗАЦИЯ: убираем избыточное логирование для каждого контакта
+                                        pass  # Логирование убрано для ускорения
                     
                 except Exception as e:
                     logger.warning(f"fetch_contacts_for_companies: ошибка при получении полных данных контактов (batch {i//batch_size + 1}): {e}", exc_info=True)
@@ -971,9 +967,8 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
                         full_contact["_embedded"]["companies"] = companies_from_simple
                     
                     updated_out.append(full_contact)
-                    custom_fields = full_contact.get('custom_fields_values') or []
-                    custom_fields_count = len(custom_fields) if isinstance(custom_fields, list) else 0
-                    logger.info(f"fetch_contacts_for_companies: заменен упрощенный контакт {contact_id} на полный с custom_fields ({custom_fields_count} полей)")
+                    # ОПТИМИЗАЦИЯ: убираем избыточное логирование для каждого контакта
+                    # Логируем только итоговую статистику
                 else:
                     # Если полных данных нет, оставляем как есть (возможно, уже есть custom_fields_values)
                     updated_out.append(contact)
@@ -987,10 +982,12 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
     if not out:
         logger.info("fetch_contacts_for_companies: через with=contacts контакты не найдены, пробуем filter[company_id] для каждой компании...")
         method2_contacts_count = 0
-        for company_id in company_ids:
+        for idx, company_id in enumerate(company_ids):
             try:
                 # Согласно документации: filter[company_id]=ID (без [])
-                logger.info(f"fetch_contacts_for_companies: запрашиваем контакты через filter[company_id]={company_id}")
+                # ОПТИМИЗАЦИЯ: логируем только каждую 10-ю компанию
+                if idx % 10 == 0:
+                    logger.info(f"fetch_contacts_for_companies: запрашиваем контакты через filter[company_id]={company_id} ({idx + 1}/{len(company_ids)})")
                 contacts_data = client.get(
                     "/api/v4/contacts",
                     params={
@@ -1003,7 +1000,8 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
                     embedded = contacts_data.get("_embedded") or {}
                     contacts = embedded.get("contacts") or []
                     if isinstance(contacts, list) and contacts:
-                        logger.info(f"fetch_contacts_for_companies: компания {company_id}: найдено {len(contacts)} контактов через filter[company_id]")
+                        # ОПТИМИЗАЦИЯ: убираем избыточное логирование
+                        logger.debug(f"fetch_contacts_for_companies: компания {company_id}: найдено {len(contacts)} контактов через filter[company_id]")
                         # Добавляем company_id к каждому контакту
                         for contact in contacts:
                             if isinstance(contact, dict):
@@ -1027,32 +1025,197 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
     return out
 
 
+def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list[dict[str, Any]], dict[int, int]]:
+    """
+    ОПТИМИЗИРОВАННАЯ версия получения контактов компаний через bulk-запросы.
+    
+    Получает все контакты через пагинацию /api/v4/contacts с фильтром по компаниям,
+    затем фильтрует по принадлежности к компаниям из списка.
+    
+    Args:
+        client: AmoClient для запросов
+        company_ids: список ID компаний, для которых нужны контакты
+        
+    Returns:
+        tuple[list[dict], dict[int, int]]: 
+            - список контактов с полными данными (custom_fields, _embedded.companies)
+            - словарь contact_id -> company_id для маппинга
+    """
+    if not company_ids:
+        logger.info("fetch_contacts_bulk: company_ids пуст, возвращаем []")
+        return [], {}
+    
+    company_ids_set = set(company_ids)
+    all_contacts: list[dict[str, Any]] = []
+    contact_id_to_company_map: dict[int, int] = {}
+    
+    logger.info(f"fetch_contacts_bulk: начинаем bulk-получение контактов для {len(company_ids)} компаний")
+    
+    # Получаем все контакты через пагинацию с максимальным limit
+    # Используем filter[company_id][] для фильтрации по компаниям (если API поддерживает)
+    # Если нет - получаем все и фильтруем локально
+    
+    # Способ 1: Пробуем получить контакты через filter[company_id][] (массив)
+    # AmoCRM API v4 может поддерживать filter[company_id][]=id1&filter[company_id][]=id2
+    try:
+        # Разбиваем на батчи по 50 компаний (лимит API)
+        batch_size = 50
+        for i in range(0, len(company_ids), batch_size):
+            batch_company_ids = company_ids[i:i + batch_size]
+            logger.info(f"fetch_contacts_bulk: запрашиваем контакты для батча компаний {i//batch_size + 1} ({len(batch_company_ids)} компаний)")
+            
+            # Пробуем использовать filter[company_id][] с массивом
+            contacts_batch = client.get_all_pages(
+                "/api/v4/contacts",
+                params={
+                    "filter[company_id]": batch_company_ids,  # Массив - AmoClient обработает как filter[company_id][]=...
+                    "with": "custom_fields",  # Получаем custom_fields сразу
+                },
+                embedded_key="contacts",
+                limit=250,  # Максимальный limit для уменьшения числа запросов
+                max_pages=100,
+            )
+            
+            if contacts_batch:
+                logger.info(f"fetch_contacts_bulk: получено {len(contacts_batch)} контактов для батча компаний")
+                all_contacts.extend(contacts_batch)
+    except Exception as e:
+        logger.warning(f"fetch_contacts_bulk: ошибка при bulk-запросе контактов: {e}, пробуем альтернативный способ")
+        # Fallback: получаем все контакты и фильтруем локально
+        try:
+            all_contacts = client.get_all_pages(
+                "/api/v4/contacts",
+                params={
+                    "with": "custom_fields",
+                },
+                embedded_key="contacts",
+                limit=250,
+                max_pages=200,  # Увеличиваем для больших объемов
+            )
+            logger.info(f"fetch_contacts_bulk: получено {len(all_contacts)} контактов (без фильтра), фильтруем локально")
+        except Exception as e2:
+            logger.error(f"fetch_contacts_bulk: критическая ошибка при получении контактов: {e2}")
+            return [], {}
+    
+    # Фильтруем контакты по принадлежности к компаниям из списка
+    filtered_contacts: list[dict[str, Any]] = []
+    for contact in all_contacts:
+        if not isinstance(contact, dict):
+            continue
+        
+        contact_id = int(contact.get("id") or 0)
+        if not contact_id:
+            continue
+        
+        # Проверяем связь с компаниями через _embedded.companies
+        found_company_id = None
+        embedded = contact.get("_embedded") or {}
+        companies_in_contact = embedded.get("companies") or []
+        
+        if isinstance(companies_in_contact, list):
+            for comp_ref in companies_in_contact:
+                comp_id = None
+                if isinstance(comp_ref, dict):
+                    comp_id = int(comp_ref.get("id") or 0)
+                elif isinstance(comp_ref, int):
+                    comp_id = comp_ref
+                
+                if comp_id and comp_id in company_ids_set:
+                    found_company_id = comp_id
+                    break
+        
+        # Fallback: проверяем company_id напрямую
+        if not found_company_id:
+            comp_id_direct = int(contact.get("company_id") or 0)
+            if comp_id_direct and comp_id_direct in company_ids_set:
+                found_company_id = comp_id_direct
+        
+        # Добавляем контакт только если он связан с одной из наших компаний
+        if found_company_id:
+            # Убеждаемся, что _embedded.companies заполнен
+            if "_embedded" not in contact:
+                contact["_embedded"] = {}
+            if "companies" not in contact["_embedded"] or not contact["_embedded"]["companies"]:
+                contact["_embedded"]["companies"] = [{"id": found_company_id}]
+            
+            filtered_contacts.append(contact)
+            contact_id_to_company_map[contact_id] = found_company_id
+    
+    logger.info(f"fetch_contacts_bulk: отфильтровано {len(filtered_contacts)} контактов из {len(all_contacts)} полученных для {len(company_ids)} компаний")
+    return filtered_contacts, contact_id_to_company_map
+
+
 def fetch_notes_for_contacts(client: AmoClient, contact_ids: list[int]) -> dict[int, list[dict[str, Any]]]:
     """
-    Получает заметки контактов из amoCRM.
-    Rate limiting применяется автоматически в AmoClient.
-    API не поддерживает батчинг для заметок, поэтому обрабатываем по одному контакту.
-    Возвращает словарь {contact_id: [notes]}.
+    Получает заметки контактов из amoCRM (старая версия - по одному контакту).
+    Оставлена для обратной совместимости.
+    Используйте fetch_notes_for_contacts_bulk для оптимизированного получения.
+    """
+    return fetch_notes_for_contacts_bulk(client, contact_ids)
+
+
+def fetch_notes_for_contacts_bulk(client: AmoClient, contact_ids: list[int], *, batch_size: int = 200) -> dict[int, list[dict[str, Any]]]:
+    """
+    ОПТИМИЗИРОВАННАЯ версия получения заметок контактов через bulk-запросы.
+    
+    Получает заметки через /api/v4/notes с фильтром по entity_type=contacts и entity_id[].
+    Использует батчинг для уменьшения числа запросов.
+    
+    Args:
+        client: AmoClient для запросов
+        contact_ids: список ID контактов
+        batch_size: размер батча для фильтрации (по умолчанию 200)
+        
+    Returns:
+        dict[int, list[dict]]: словарь contact_id -> список заметок
     """
     if not contact_ids:
         return {}
+    
     out: dict[int, list[dict[str, Any]]] = {}
-    # В amoCRM заметки контактов берутся из /api/v4/contacts/{id}/notes
-    # Обрабатываем контакты по одному (API не поддерживает батчинг для заметок)
-    for cid in contact_ids:
+    
+    logger.info(f"fetch_notes_for_contacts_bulk: начинаем bulk-получение заметок для {len(contact_ids)} контактов")
+    
+    # Разбиваем на батчи для избежания слишком длинных URL
+    for i in range(0, len(contact_ids), batch_size):
+        batch_ids = contact_ids[i:i + batch_size]
+        batch_num = i // batch_size + 1
+        total_batches = (len(contact_ids) + batch_size - 1) // batch_size
+        
+        logger.info(f"fetch_notes_for_contacts_bulk: обрабатываем батч {batch_num}/{total_batches} ({len(batch_ids)} контактов)")
+        
         try:
+            # Получаем заметки через /api/v4/notes с фильтром по entity_type и entity_id[]
             notes = client.get_all_pages(
-                f"/api/v4/contacts/{int(cid)}/notes",
-                params={},
+                "/api/v4/notes",
+                params={
+                    "filter[entity_type]": "contacts",
+                    "filter[entity_id]": batch_ids,  # Массив - AmoClient обработает как filter[entity_id][]=...
+                },
                 embedded_key="notes",
-                limit=50,
-                max_pages=10,
+                limit=250,  # Максимальный limit
+                max_pages=100,
             )
-            if notes:
-                out[cid] = notes
+            
+            # Группируем заметки по contact_id (entity_id в заметке)
+            for note in notes:
+                if not isinstance(note, dict):
+                    continue
+                
+                entity_id = int(note.get("entity_id") or 0)
+                if entity_id and entity_id in batch_ids:
+                    if entity_id not in out:
+                        out[entity_id] = []
+                    out[entity_id].append(note)
+            
+            logger.info(f"fetch_notes_for_contacts_bulk: получено {len(notes)} заметок для батча {batch_num}")
+            
         except Exception as e:
-            logger.debug(f"Error fetching notes for contact {cid}: {e}", exc_info=True)
+            logger.warning(f"fetch_notes_for_contacts_bulk: ошибка при получении заметок для батча {batch_num}: {e}", exc_info=True)
+            # Продолжаем для следующих батчей
             continue
+    
+    logger.info(f"fetch_notes_for_contacts_bulk: ИТОГО получено заметок для {len(out)} контактов из {len(contact_ids)} запрошенных")
     return out
 
 
@@ -1175,6 +1338,12 @@ def migrate_filtered(
     company_fields_meta: list[dict[str, Any]] | None = None,
     skip_field_filter: bool = False,  # если True, мигрируем все компании ответственного без фильтра по полю
 ) -> AmoMigrateResult:
+    import time
+    start_time = time.time()
+    
+    # Сбрасываем метрики клиента для нового этапа импорта
+    client.reset_metrics()
+    
     res = AmoMigrateResult(
         preview=[],
         tasks_preview=[],
@@ -1787,113 +1956,42 @@ def migrate_filtered(
                 logger.info(f"migrate_filtered: ===== НАЧАЛО ИМПОРТА КОНТАКТОВ для {len(amo_ids)} компаний =====")
                 logger.info(f"migrate_filtered: ID компаний для поиска контактов: {amo_ids[:10]}...")
             try:
-                # Получаем контакты через with=contacts при запросе компаний
+                # ОПТИМИЗАЦИЯ: используем bulk-получение контактов вместо запроса для каждой компании
                 # Rate limiting применяется автоматически в AmoClient
-                logger.info(f"migrate_filtered: вызываем fetch_contacts_for_companies для {len(amo_ids)} компаний...")
+                logger.info(f"migrate_filtered: вызываем fetch_contacts_bulk для {len(amo_ids)} компаний...")
                 
-                all_contacts = fetch_contacts_for_companies(client, amo_ids)
-                logger.info(f"migrate_filtered: получено {len(all_contacts)} контактов из API для {len(amo_ids)} компаний")
-                
-                # КРИТИЧЕСКИ ВАЖНО: фильтруем контакты - оставляем ТОЛЬКО те, которые связаны с компаниями из текущей пачки
-                # Контакт может быть связан с несколькими компаниями, но нам нужны только те, что связаны с нашими
-                amo_ids_set = set(amo_ids)
-                full_contacts: list[dict[str, Any]] = []
-                contact_id_to_company_map: dict[int, int] = {}  # contact_id -> amo_company_id
-                
-                logger.info(f"migrate_filtered: начинаем фильтрацию {len(all_contacts)} контактов по компаниям из пачки: {list(amo_ids_set)[:10]}...")
-                contacts_with_company = 0
-                contacts_without_company = 0
-                
-                # ОТЛАДКА: логируем структуру первых контактов
-                for debug_idx, debug_contact in enumerate(all_contacts[:3]):
-                    if isinstance(debug_contact, dict):
-                        contact_id_debug = debug_contact.get("id")
-                        embedded_debug = debug_contact.get("_embedded") or {}
-                        companies_debug = embedded_debug.get("companies") or []
-                        logger.info(f"migrate_filtered: контакт {debug_idx + 1} (id={contact_id_debug}):")
-                        logger.info(f"  - _embedded.companies: {companies_debug}")
-                        logger.info(f"  - company_id (direct): {debug_contact.get('company_id')}")
-                        logger.info(f"  - amo_ids_set: {list(amo_ids_set)[:5]}...")
-                
-                for contact in all_contacts:
-                    if not isinstance(contact, dict):
-                        contacts_without_company += 1
-                        continue
-                    
-                    contact_id = int(contact.get("id") or 0)
-                    if not contact_id:
-                        contacts_without_company += 1
-                        continue
-                    
-                    # Ищем компанию из текущей пачки, с которой связан контакт
-                    found_company_id = None
-                    
-                    # Проверяем _embedded.companies
-                    embedded = contact.get("_embedded") or {}
-                    companies_in_contact = embedded.get("companies") or []
-                    if isinstance(companies_in_contact, list):
-                        for comp_ref in companies_in_contact:
-                            # comp_ref может быть dict с полем "id" или просто int
-                            comp_id = None
-                            if isinstance(comp_ref, dict):
-                                comp_id = int(comp_ref.get("id") or 0)
-                            elif isinstance(comp_ref, int):
-                                comp_id = comp_ref
-                            
-                            if comp_id and comp_id in amo_ids_set:
-                                found_company_id = comp_id
-                                logger.debug(f"migrate_filtered: контакт {contact_id} связан с компанией {comp_id} (найдено через _embedded.companies)")
-                                break
-                    
-                    # Если не нашли через _embedded, проверяем company_id напрямую
-                    if not found_company_id:
-                        comp_id_direct = int(contact.get("company_id") or 0)
-                        if comp_id_direct and comp_id_direct in amo_ids_set:
-                            found_company_id = comp_id_direct
-                            logger.debug(f"migrate_filtered: контакт {contact_id} связан с компанией {comp_id_direct} (найдено через company_id)")
-                    
-                    # Добавляем контакт ТОЛЬКО если он связан с компанией из текущей пачки
-                    if found_company_id:
-                        full_contacts.append(contact)
-                        contact_id_to_company_map[contact_id] = found_company_id
-                        contacts_with_company += 1
-                    else:
-                        contacts_without_company += 1
-                        # ОТЛАДКА: логируем, почему контакт не прошел фильтрацию (только для первых 3)
-                        if contacts_without_company <= 3:
-                            logger.info(f"migrate_filtered: контакт {contact_id} НЕ прошел фильтрацию:")
-                            logger.info(f"  - _embedded.companies: {companies_in_contact}")
-                            logger.info(f"  - company_id (direct): {contact.get('company_id')}")
-                            logger.info(f"  - amo_ids_set содержит: {list(amo_ids_set)[:5]}...")
-                
+                # fetch_contacts_bulk уже фильтрует контакты по компаниям и возвращает маппинг
+                full_contacts, contact_id_to_company_map = fetch_contacts_bulk(client, amo_ids)
                 res.contacts_seen = len(full_contacts)
-                logger.info(f"migrate_filtered: фильтрация завершена: {res.contacts_seen} контактов принадлежат {len(amo_ids)} компаниям из текущей пачки (пропущено: {contacts_without_company})")
+                logger.info(f"migrate_filtered: получено {res.contacts_seen} контактов из API для {len(amo_ids)} компаний (bulk-метод)")
                 
                 # Если контактов не найдено, сохраняем информацию об ошибке
                 if res.contacts_seen == 0:
-                    logger.warning(f"migrate_filtered: ⚠️ КОНТАКТЫ НЕ НАЙДЕНЫ для компаний {list(amo_ids)[:10]}. Всего получено из API: {len(all_contacts)}, отфильтровано: {res.contacts_seen}")
+                    logger.warning(f"migrate_filtered: ⚠️ КОНТАКТЫ НЕ НАЙДЕНЫ для компаний {list(amo_ids)[:10]}. Отфильтровано: {res.contacts_seen}")
                     if res.contacts_preview is None:
                         res.contacts_preview = []
                     debug_info = {
                         "status": "NO_CONTACTS_FOUND",
                         "companies_checked": len(amo_ids),
                         "company_ids": list(amo_ids)[:5],  # первые 5 для отладки
-                        "message": f"Контакты не найдены для компаний {list(amo_ids)[:5]}. Проверьте, что у компаний есть связанные контакты в AmoCRM. Использовались методы: 1) GET /api/v4/companies/{{id}}?with=contacts, 2) GET /api/v4/contacts?filter[company_id]={{id}}. Всего получено из API: {len(all_contacts)} контактов, но ни один не связан с компаниями из текущей пачки.",
+                        "message": f"Контакты не найдены для компаний {list(amo_ids)[:5]}. Проверьте, что у компаний есть связанные контакты в AmoCRM. Использовался bulk-метод GET /api/v4/contacts?filter[company_id][]=...",
                     }
                     res.contacts_preview.append(debug_info)
                 
                 # Заметки контактов: НЕ запрашиваем для dry-run (слишком тяжело)
                 # Заметки нужны только при реальном импорте, и то можно запросить отдельно
+                # ОПТИМИЗАЦИЯ: используем bulk-метод для получения заметок
                 contact_notes_map: dict[int, list[dict[str, Any]]] = {}
                 if not dry_run and full_contacts:
-                    # Заметки запрашиваем только при реальном импорте, и то очень аккуратно
+                    # Заметки запрашиваем только при реальном импорте через bulk-метод
                     contact_ids_for_notes = [int(c.get("id") or 0) for c in full_contacts if isinstance(c, dict) and c.get("id")]
-                    if contact_ids_for_notes and len(contact_ids_for_notes) <= 50:  # Только для небольшого количества
-                        logger.debug(f"Fetching notes for {len(contact_ids_for_notes)} contacts (real import only)...")
+                    if contact_ids_for_notes:
+                        logger.info(f"migrate_filtered: запрашиваем заметки для {len(contact_ids_for_notes)} контактов (bulk-метод)...")
                         try:
-                            contact_notes_map = fetch_notes_for_contacts(client, contact_ids_for_notes)
+                            contact_notes_map = fetch_notes_for_contacts_bulk(client, contact_ids_for_notes)
+                            logger.info(f"migrate_filtered: получено заметок для {len(contact_notes_map)} контактов")
                         except Exception as e:
-                            logger.debug(f"Error fetching contact notes: {e}", exc_info=True)
+                            logger.warning(f"migrate_filtered: ошибка при получении заметок контактов: {e}", exc_info=True)
                 
                 # Отдельный счетчик для логирования структуры (не зависит от preview)
                 structure_logged_count = 0
@@ -1925,6 +2023,43 @@ def migrate_filtered(
                 contacts_processed = 0  # Сброс перед обработкой контактов
                 contacts_skipped = 0  # Сброс перед обработкой контактов
                 contacts_errors = 0  # Сброс перед обработкой контактов
+                
+                # ОПТИМИЗАЦИЯ: предзагружаем существующие контакты, телефоны и почты для всей пачки
+                # Это убирает N+1 запросы в цикле
+                if not dry_run and full_contacts:
+                    amo_contact_ids = [int(c.get("id") or 0) for c in full_contacts if isinstance(c, dict) and c.get("id")]
+                    if amo_contact_ids:
+                        # Предзагружаем существующие контакты
+                        existing_contacts_map = {
+                            (c.amocrm_contact_id, c.company_id): c
+                            for c in Contact.objects.filter(amocrm_contact_id__in=amo_contact_ids).select_related('company')
+                        }
+                        
+                        # Предзагружаем телефоны для всех контактов
+                        contact_ids_for_phones = [c.id for c in existing_contacts_map.values()]
+                        existing_phones_map: dict[tuple[UUID, str], ContactPhone] = {}
+                        if contact_ids_for_phones:
+                            for phone in ContactPhone.objects.filter(contact_id__in=contact_ids_for_phones).select_related('contact'):
+                                key = (phone.contact_id, phone.value.lower().strip())
+                                existing_phones_map[key] = phone
+                        
+                        # Предзагружаем почты для всех контактов
+                        existing_emails_map: dict[tuple[UUID, str], ContactEmail] = {}
+                        if contact_ids_for_phones:
+                            for email in ContactEmail.objects.filter(contact_id__in=contact_ids_for_phones).select_related('contact'):
+                                key = (email.contact_id, email.value.lower().strip())
+                                existing_emails_map[key] = email
+                        
+                        logger.debug(f"migrate_filtered: предзагружено {len(existing_contacts_map)} контактов, {len(existing_phones_map)} телефонов, {len(existing_emails_map)} почт")
+                    else:
+                        existing_contacts_map = {}
+                        existing_phones_map = {}
+                        existing_emails_map = {}
+                else:
+                    existing_contacts_map = {}
+                    existing_phones_map = {}
+                    existing_emails_map = {}
+                
                 for ac_idx, ac in enumerate(full_contacts):
                     contacts_processed += 1
                     if ac_idx < 5 or contacts_processed % 10 == 0:
@@ -2097,7 +2232,13 @@ def migrate_filtered(
                                 logger.debug(f"  - custom_fields_values: type={type(cfv)}, length={len(cfv) if isinstance(cfv, list) else 'not_list'}")
                     
                             # Проверяем, не импортировали ли уже этот контакт
-                            existing_contact = Contact.objects.filter(amocrm_contact_id=amo_contact_id, company=local_company).first()
+                            # ОПТИМИЗАЦИЯ: используем предзагруженную карту вместо запроса к БД
+                            if not dry_run:
+                                company_id_for_key = local_company.id if local_company else None
+                                existing_contact = existing_contacts_map.get((amo_contact_id, company_id_for_key))
+                            else:
+                                # В dry-run все равно делаем запрос (компании могут быть в памяти)
+                                existing_contact = Contact.objects.filter(amocrm_contact_id=amo_contact_id, company=local_company).first()
                     
                             # В amoCRM телефоны и email могут быть:
                             # 1. В стандартных полях (phone, email) - если они есть
@@ -3074,8 +3215,12 @@ def migrate_filtered(
                             
                             # Телефоны: мягкий upsert (не удаляем вручную добавленные)
                             # Примечание добавляется в comment первого телефона
+                            # ОПТИМИЗАЦИЯ: используем предзагруженные данные вместо запросов к БД
                             phones_added = 0
                             phones_updated = 0
+                            phones_to_create: list[ContactPhone] = []
+                            phones_to_update: list[ContactPhone] = []
+                            
                             for idx, (pt, pv, pc) in enumerate(phones):
                                 pv_db = str(pv).strip()[:50]
                                 if not pv_db:
@@ -3086,15 +3231,18 @@ def migrate_filtered(
                                 if idx == 0 and note_text and not phone_comment:
                                     phone_comment = note_text[:255]
                                 
-                                obj = ContactPhone.objects.filter(contact=contact, value=pv_db).first()
+                                # ОПТИМИЗАЦИЯ: проверяем в предзагруженной карте
+                                phone_key = (contact.id, pv_db.lower().strip())
+                                obj = existing_phones_map.get(phone_key)
+                                
                                 if obj is None:
-                                    # Создаем новый телефон
-                                    ContactPhone.objects.create(
+                                    # Создаем новый телефон (добавим через bulk_create позже)
+                                    phones_to_create.append(ContactPhone(
                                         contact=contact,
                                         type=pt,
                                         value=pv_db,
                                         comment=phone_comment[:255]
-                                    )
+                                    ))
                                     phones_added += 1
                                 else:
                                     # Обновляем существующий телефон (мягко)
@@ -3108,21 +3256,48 @@ def migrate_filtered(
                                         obj.type = pt
                                         upd = True
                                     if upd:
-                                        obj.save(update_fields=["type", "comment"])
+                                        phones_to_update.append(obj)
                                         phones_updated += 1
                             
+                            # Bulk-создание телефонов
+                            if phones_to_create:
+                                ContactPhone.objects.bulk_create(phones_to_create, ignore_conflicts=True)
+                            
+                            # Bulk-обновление телефонов
+                            if phones_to_update:
+                                ContactPhone.objects.bulk_update(phones_to_update, ["type", "comment"])
+                            
                             # Email: мягкий upsert
+                            # ОПТИМИЗАЦИЯ: используем предзагруженные данные
                             emails_added = 0
+                            emails_to_create: list[ContactEmail] = []
+                            
                             for et, ev in emails:
                                 ev_db = str(ev).strip()[:254]
                                 if not ev_db:
                                     continue
-                                if not ContactEmail.objects.filter(contact=contact, value__iexact=ev_db).exists():
-                                    try:
-                                        ContactEmail.objects.create(contact=contact, type=et, value=ev_db)
-                                        emails_added += 1
-                                    except Exception:
-                                        pass
+                                
+                                # ОПТИМИЗАЦИЯ: проверяем в предзагруженной карте
+                                email_key = (contact.id, ev_db.lower().strip())
+                                if email_key not in existing_emails_map:
+                                    emails_to_create.append(ContactEmail(
+                                        contact=contact,
+                                        type=et,
+                                        value=ev_db
+                                    ))
+                                    emails_added += 1
+                            
+                            # Bulk-создание почт
+                            if emails_to_create:
+                                try:
+                                    ContactEmail.objects.bulk_create(emails_to_create, ignore_conflicts=True)
+                                except Exception:
+                                    # Fallback: создаем по одному при ошибке
+                                    for email_obj in emails_to_create:
+                                        try:
+                                            email_obj.save()
+                                        except Exception:
+                                            pass
                             
                             # Логируем результат обновления
                             debug_count_after = getattr(res, '_debug_contacts_logged', 0)
@@ -3153,26 +3328,61 @@ def migrate_filtered(
                         if not dry_run:
                             contact.save()
                             res.contacts_created += 1
-                            # Добавляем телефоны и почты
+                            
+                            # ОПТИМИЗАЦИЯ: обновляем предзагруженные карты после сохранения контакта
+                            company_id_for_key = contact.company_id if contact.company else None
+                            existing_contacts_map[(amo_contact_id, company_id_for_key)] = contact
+                            
+                            # ОПТИМИЗАЦИЯ: используем bulk_create для телефонов и почт новых контактов
                             phones_added = 0
+                            phones_to_create_new: list[ContactPhone] = []
+                            
                             for idx, (pt, pv, pc) in enumerate(phones):
                                 pv_db = str(pv).strip()[:50]
-                                if pv_db and not ContactPhone.objects.filter(contact=contact, value=pv_db).exists():
-                                    # Если это первый телефон и есть примечание - добавляем в comment
-                                    phone_comment = str(pc or "").strip()
-                                    if idx == 0 and note_text and not phone_comment:
-                                        phone_comment = note_text[:255]
-                                    ContactPhone.objects.create(contact=contact, type=pt, value=pv_db, comment=phone_comment[:255])
-                                    phones_added += 1
+                                if not pv_db:
+                                    continue
+                                
+                                # Если это первый телефон и есть примечание - добавляем в comment
+                                phone_comment = str(pc or "").strip()
+                                if idx == 0 and note_text and not phone_comment:
+                                    phone_comment = note_text[:255]
+                                
+                                phones_to_create_new.append(ContactPhone(
+                                    contact=contact,
+                                    type=pt,
+                                    value=pv_db,
+                                    comment=phone_comment[:255]
+                                ))
+                                phones_added += 1
+                            
+                            # Bulk-создание телефонов для нового контакта
+                            if phones_to_create_new:
+                                ContactPhone.objects.bulk_create(phones_to_create_new, ignore_conflicts=True)
+                            
                             emails_added = 0
+                            emails_to_create_new: list[ContactEmail] = []
+                            
                             for et, ev in emails:
                                 ev_db = str(ev).strip()[:254]
-                                if ev_db and not ContactEmail.objects.filter(contact=contact, value__iexact=ev_db).exists():
-                                    try:
-                                        ContactEmail.objects.create(contact=contact, type=et, value=ev_db)
-                                        emails_added += 1
-                                    except Exception:
-                                        pass
+                                if ev_db:
+                                    emails_to_create_new.append(ContactEmail(
+                                        contact=contact,
+                                        type=et,
+                                        value=ev_db
+                                    ))
+                                    emails_added += 1
+                            
+                            # Bulk-создание почт для нового контакта
+                            if emails_to_create_new:
+                                try:
+                                    ContactEmail.objects.bulk_create(emails_to_create_new, ignore_conflicts=True)
+                                except Exception:
+                                    # Fallback: создаем по одному при ошибке
+                                    for email_obj in emails_to_create_new:
+                                        try:
+                                            email_obj.save()
+                                        except Exception:
+                                            pass
                             # Логируем результат сохранения
                             debug_count_after = getattr(res, '_debug_contacts_logged', 0)
                             if debug_count_after < 10:
@@ -3214,4 +3424,18 @@ def migrate_filtered(
         # Устанавливаем флаг ошибки в результате
         res.error = str(e)
         res.error_traceback = error_details
+    
+    # Логируем метрики импорта
+    elapsed_time = time.time() - start_time
+    metrics = client.get_metrics()
+    logger.info(f"migrate_filtered: ===== МЕТРИКИ ИМПОРТА =====")
+    logger.info(f"  Время выполнения: {elapsed_time:.2f} сек")
+    logger.info(f"  API-запросов: {metrics['request_count']}")
+    logger.info(f"  Средний RPS: {metrics['avg_rps']:.2f}")
+    logger.info(f"  Компаний: seen={res.companies_seen}, matched={res.companies_matched}, batch={res.companies_batch}, created={res.companies_created}, updated={res.companies_updated}")
+    logger.info(f"  Задач: seen={res.tasks_seen}, created={res.tasks_created}, updated={res.tasks_updated}")
+    logger.info(f"  Заметок: seen={res.notes_seen}, created={res.notes_created}, updated={res.notes_updated}")
+    logger.info(f"  Контактов: seen={res.contacts_seen}, created={res.contacts_created}")
+    logger.info(f"migrate_filtered: ===== КОНЕЦ МЕТРИК =====")
+    
     return res
