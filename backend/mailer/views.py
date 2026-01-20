@@ -174,7 +174,7 @@ def campaigns(request: HttpRequest) -> HttpResponse:
         
         # Статистика по пользователям: кто сколько писем отправил сегодня
         user_stats = []
-        all_users = User.objects.filter(role__in=[User.Role.MANAGER, User.Role.ADMIN, User.Role.DIRECTOR, User.Role.ROP, User.Role.MANAGING]).select_related("branch")
+        all_users = User.objects.filter(role__in=[User.Role.MANAGER, User.Role.ADMIN, User.Role.BRANCH_DIRECTOR, User.Role.GROUP_MANAGER]).select_related("branch")
         
         for u in all_users:
             sent_today = SendLog.objects.filter(
