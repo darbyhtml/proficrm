@@ -713,10 +713,11 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "smtp_from_name_default": (smtp_cfg.from_name or "CRM ПРОФИ").strip(),
             "recipient_add_form": CampaignRecipientAddForm(),
             "generate_form": CampaignGenerateRecipientsForm(),
-            "branches": Branch.objects.order_by("name"),
+            "branches": Branch.objects.order_by("name") if (user.role == User.Role.ADMIN or user.role == User.Role.GROUP_MANAGER) else (Branch.objects.filter(id=user.branch_id) if user.branch_id else Branch.objects.none()),
             "responsibles": get_users_for_lists(request.user),
             "statuses": CompanyStatus.objects.order_by("name"),
             "spheres": CompanySphere.objects.order_by("name"),
+            "user": user,
             "recipients_by_company": recipients_by_company,
             "page": page,
             "qs": qs_no_page,
@@ -1051,18 +1052,33 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
 
     # Компании (вся база видна всем пользователям) + простая сегментация (MVP)
     company_qs = Company.objects.all()
+    
+    # Филиал: по умолчанию филиал пользователя, если не указан
     branch = (request.POST.get("branch") or "").strip()
+    if not branch and user.branch_id:
+        branch = str(user.branch_id)
+    
+    # Ответственный: по умолчанию текущий пользователь, если не указан
     responsible = (request.POST.get("responsible") or "").strip()
-    status = (request.POST.get("status") or "").strip()
-    sphere = (request.POST.get("sphere") or "").strip()
+    if not responsible:
+        responsible = str(user.id)
+    
+    # Статус: множественный выбор
+    statuses = request.POST.getlist("status")
+    
+    # Сфера: множественный выбор
+    spheres = request.POST.getlist("sphere")
+    
+    # Применяем фильтры
     if branch:
         company_qs = company_qs.filter(branch_id=branch)
     if responsible:
         company_qs = company_qs.filter(responsible_id=responsible)
-    if status:
-        company_qs = company_qs.filter(status_id=status)
-    if sphere:
-        company_qs = company_qs.filter(spheres__id=sphere)
+    if statuses:
+        company_qs = company_qs.filter(status_id__in=statuses)
+    if spheres:
+        company_qs = company_qs.filter(spheres__id__in=spheres)
+    
     # Важно: при фильтрации по m2m (spheres) будут дубли без distinct()
     # Преобразуем QuerySet в список для использования в __in
     company_ids = list(company_qs.order_by().values_list("id", flat=True).distinct())
@@ -1189,8 +1205,8 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
     camp.filter_meta = {
         "branch": branch,
         "responsible": responsible,
-        "status": status,
-        "sphere": sphere,
+        "status": statuses,
+        "sphere": spheres,
         "limit": limit,
         "include_company_email": include_company_email,
         "include_contact_emails": include_contact_emails,

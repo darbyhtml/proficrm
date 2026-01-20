@@ -19,14 +19,19 @@
     {# Верхняя панель: кнопки управления и статистика #}
     <div class="card card-pad">
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        {# Заголовок и статус #}
+        {# Заголовок #}
         <div class="flex-1 min-w-0">
-          <div class="text-sm muted mb-1"><a class="link" href="/mail/campaigns/">Почта</a> /</div>
-          <div class="flex items-center gap-3 flex-wrap">
-            <h1 class="text-xl font-semibold truncate">{{ campaign.name }}</h1>
-            <span class="badge {% if campaign.status == 'sending' %}bg-green-100 text-green-800{% elif campaign.status == 'paused' %}bg-orange-100 text-orange-800{% elif campaign.status == 'sent' %}bg-blue-100 text-blue-800{% else %}bg-gray-100 text-gray-800{% endif %}">
-              {{ campaign.get_status_display }}
-            </span>
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex-1 min-w-0">
+              <div class="text-sm muted mb-1"><a class="link" href="/mail/campaigns/">Почта</a> /</div>
+              <h1 class="text-xl font-semibold truncate">{{ campaign.name }}</h1>
+            </div>
+            {# Статус в правом верхнем углу #}
+            <div class="flex-shrink-0">
+              <span class="badge {% if campaign.status == 'sending' %}bg-green-100 text-green-800{% elif campaign.status == 'paused' %}bg-orange-100 text-orange-800{% elif campaign.status == 'sent' %}bg-blue-100 text-blue-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                {{ campaign.get_status_display }}
+              </span>
+            </div>
           </div>
         </div>
         
@@ -475,111 +480,219 @@
           </details>
         {% endif %}
 
-        <details class="card card-pad">
-          <summary class="cursor-pointer font-medium flex items-center gap-2">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-            </svg>
-            Сгенерировать получателей
-          </summary>
-          <form method="post" action="/mail/campaigns/{{ campaign.id }}/generate/" class="mt-3 space-y-3">
-            {% csrf_token %}
-            
-            <div class="space-y-3">
-              <div class="text-sm font-medium">Фильтры по компаниям</div>
-              <div class="grid grid-cols-1 gap-2">
-                <div>
-                  <label class="block text-xs muted mb-1">Лимит</label>
-                  <input class="input" type="number" name="limit" value="{{ generate_form.limit.value|default:200 }}" min="1" max="5000" />
-                </div>
-                <div>
-                  <label class="block text-xs muted mb-1">Филиал</label>
-                  <select class="select" name="branch">
-                    <option value="">Любой</option>
-                    {% for b in branches %}
-                      <option value="{{ b.id }}">{{ b.name }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-xs muted mb-1">Ответственный</label>
-                  <select class="select" name="responsible">
-                    <option value="">Любой</option>
-                    {% regroup responsibles by branch as branches_list %}
-                    {% for branch_group in branches_list %}
-                      <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
-                        {% for u in branch_group.list %}
-                          <option value="{{ u.id }}">{{ u }}</option>
-                        {% endfor %}
-                      </optgroup>
-                    {% endfor %}
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-xs muted mb-1">Статус</label>
-                  <select class="select" name="status">
-                    <option value="">Любой</option>
-                    {% for s in statuses %}
-                      <option value="{{ s.id }}">{{ s.name }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-                <div>
-                  <label class="block text-xs muted mb-1">Сфера</label>
-                  <select class="select" name="sphere">
-                    <option value="">Любая</option>
-                    {% for s in spheres %}
-                      <option value="{{ s.id }}">{{ s.name }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-              </div>
-            </div>
+      </div>
+    </div>
 
-            <div class="space-y-3 border-t border-brand-soft pt-3">
-              <div class="text-sm font-medium">Выбор email адресов</div>
-              <div class="space-y-2">
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" name="include_company_email" value="1" {% if generate_form.include_company_email.value %}checked{% endif %} class="rounded" />
-                  <span class="text-sm">Включить основной email компании</span>
+  </div>
+
+  {# Модальное окно генерации получателей #}
+  <div id="generateModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm transition-opacity">
+    <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
+      <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+        <h2 class="text-xl font-semibold flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          Сгенерировать получателей
+        </h2>
+        <button type="button" onclick="document.getElementById('generateModal').classList.add('hidden')" class="text-gray-400 hover:text-gray-600 transition-colors">
+          <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      
+      <form method="post" action="/mail/campaigns/{{ campaign.id }}/generate/" class="p-6 space-y-6">
+        {% csrf_token %}
+        
+        {# Лимит #}
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-2">
+            <span class="flex items-center gap-2">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+              </svg>
+              Лимит получателей
+            </span>
+          </label>
+          <input class="input w-full" type="number" name="limit" value="{{ generate_form.limit.value|default:200 }}" min="1" max="5000" required />
+          <p class="text-xs text-gray-500 mt-1">Максимум 5000 получателей за раз</p>
+        </div>
+
+        {# Фильтры по компаниям #}
+        <div class="space-y-4 border-t border-gray-200 pt-4">
+          <h3 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 0 1-.659 1.591l-5.432 5.432a2.25 2.25 0 0 0-.659 1.591v2.927a2.25 2.25 0 0 1-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 0 0-.659-1.591L3.659 7.409A2.25 2.25 0 0 1 3 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0 1 12 3Z" />
+            </svg>
+            Фильтры по компаниям
+          </h3>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {# Филиал #}
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Филиал</label>
+              <select class="select w-full" name="branch" id="branchSelect">
+                {% if user.branch %}
+                  <option value="{{ user.branch.id }}" selected>{{ user.branch.name }}</option>
+                {% else %}
+                  <option value="">Любой</option>
+                {% endif %}
+                {% for b in branches %}
+                  {% if not user.branch or b.id != user.branch.id %}
+                    <option value="{{ b.id }}">{{ b.name }}</option>
+                  {% endif %}
+                {% endfor %}
+              </select>
+            </div>
+            
+            {# Ответственный #}
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Ответственный</label>
+              <select class="select w-full" name="responsible" id="responsibleSelect">
+                <option value="{{ user.id }}" selected>{{ user.get_full_name|default:user.username }}</option>
+                {% regroup responsibles by branch as branches_list %}
+                {% for branch_group in branches_list %}
+                  <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
+                    {% for u in branch_group.list %}
+                      {% if u.id != user.id %}
+                        <option value="{{ u.id }}">{{ u }}</option>
+                      {% endif %}
+                    {% endfor %}
+                  </optgroup>
+                {% endfor %}
+              </select>
+            </div>
+            
+            {# Статус (множественный выбор) #}
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Статус</label>
+              <div class="border border-gray-300 rounded-lg p-2 max-h-32 overflow-y-auto bg-white">
+                <label class="flex items-center gap-2 p-1 hover:bg-gray-50 rounded cursor-pointer">
+                  <input type="checkbox" name="status_all" id="statusAll" class="rounded" onchange="toggleAllStatuses(this)" />
+                  <span class="text-sm">Все статусы</span>
                 </label>
-                <div class="text-xs muted-2 ml-6">Email из поля "Email (основной)" в карточке компании</div>
-                
-                <label class="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" name="include_contact_emails" value="1" {% if generate_form.include_contact_emails.value %}checked{% endif %} class="rounded" id="include_contact_emails" />
-                  <span class="text-sm">Включить email'ы контактов</span>
-                </label>
-                <div class="text-xs muted-2 ml-6">Email'ы из контактов компании</div>
-                
-                <div class="ml-6 space-y-1 border-l-2 border-brand-soft pl-3" id="contact_email_types_container">
-                  <div class="text-xs muted mb-1">Типы email'ов:</div>
-                  {% for choice in generate_form.contact_email_types.field.choices %}
-                    <label class="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" name="contact_email_types" value="{{ choice.0 }}" {% if choice.0 in generate_form.contact_email_types.value %}checked{% endif %} class="rounded" />
-                      <span class="text-xs">{{ choice.1 }}</span>
+                <div class="border-t border-gray-200 mt-1 pt-1 space-y-1" id="statusContainer">
+                  {% for s in statuses %}
+                    <label class="flex items-center gap-2 p-1 hover:bg-gray-50 rounded cursor-pointer">
+                      <input type="checkbox" name="status" value="{{ s.id }}" class="status-checkbox rounded" />
+                      <span class="text-sm">{{ s.name }}</span>
                     </label>
                   {% endfor %}
                 </div>
               </div>
             </div>
             
-            <button class="btn btn-primary w-full" type="submit">Сгенерировать получателей</button>
-          </form>
-          
-          <script>
-            // Показываем/скрываем выбор типов email'ов в зависимости от чекбокса
-            document.getElementById('include_contact_emails').addEventListener('change', function() {
-              document.getElementById('contact_email_types_container').style.display = this.checked ? 'block' : 'none';
-            });
-            // Инициализация при загрузке
-            document.getElementById('contact_email_types_container').style.display = 
-              document.getElementById('include_contact_emails').checked ? 'block' : 'none';
-          </script>
-        </details>
-      </div>
-    </div>
+            {# Сфера (множественный выбор) #}
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Сфера</label>
+              <div class="border border-gray-300 rounded-lg p-2 max-h-32 overflow-y-auto bg-white">
+                <label class="flex items-center gap-2 p-1 hover:bg-gray-50 rounded cursor-pointer">
+                  <input type="checkbox" name="sphere_all" id="sphereAll" class="rounded" onchange="toggleAllSpheres(this)" />
+                  <span class="text-sm">Все сферы</span>
+                </label>
+                <div class="border-t border-gray-200 mt-1 pt-1 space-y-1" id="sphereContainer">
+                  {% for s in spheres %}
+                    <label class="flex items-center gap-2 p-1 hover:bg-gray-50 rounded cursor-pointer">
+                      <input type="checkbox" name="sphere" value="{{ s.id }}" class="sphere-checkbox rounded" />
+                      <span class="text-sm">{{ s.name }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
+        {# Выбор email адресов #}
+        <div class="space-y-4 border-t border-gray-200 pt-4">
+          <h3 class="text-sm font-semibold text-gray-900 flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" />
+            </svg>
+            Выбор email адресов
+          </h3>
+          
+          <div class="space-y-3">
+            <label class="flex items-start gap-3 p-3 border border-gray-200 rounded-lg hover:border-brand-500 hover:bg-brand-50/50 cursor-pointer transition-colors">
+              <input type="checkbox" name="include_company_email" value="1" {% if generate_form.include_company_email.value %}checked{% endif %} class="mt-0.5 rounded" />
+              <div class="flex-1">
+                <div class="font-medium text-sm">Включить основной email компании</div>
+                <div class="text-xs text-gray-500 mt-0.5">Email из поля "Email (основной)" в карточке компании</div>
+              </div>
+            </label>
+            
+            <label class="flex items-start gap-3 p-3 border border-gray-200 rounded-lg hover:border-brand-500 hover:bg-brand-50/50 cursor-pointer transition-colors" for="include_contact_emails">
+              <input type="checkbox" name="include_contact_emails" value="1" {% if generate_form.include_contact_emails.value %}checked{% endif %} class="mt-0.5 rounded" id="include_contact_emails" />
+              <div class="flex-1">
+                <div class="font-medium text-sm">Включить email'ы контактов</div>
+                <div class="text-xs text-gray-500 mt-0.5">Email'ы из контактов компании</div>
+              </div>
+            </label>
+            
+            <div class="ml-9 p-3 bg-gray-50 rounded-lg border border-gray-200" id="contact_email_types_container">
+              <div class="text-xs font-medium text-gray-700 mb-2">Типы email'ов:</div>
+              <div class="grid grid-cols-2 gap-2">
+                {% for choice in generate_form.contact_email_types.field.choices %}
+                  <label class="flex items-center gap-2 text-xs cursor-pointer">
+                    <input type="checkbox" name="contact_email_types" value="{{ choice.0 }}" {% if choice.0 in generate_form.contact_email_types.value %}checked{% endif %} class="rounded" />
+                    <span>{{ choice.1 }}</span>
+                  </label>
+                {% endfor %}
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {# Кнопки #}
+        <div class="flex items-center justify-end gap-3 border-t border-gray-200 pt-4">
+          <button type="button" onclick="document.getElementById('generateModal').classList.add('hidden')" class="btn btn-outline">
+            Отмена
+          </button>
+          <button type="submit" class="btn btn-primary">
+            <svg class="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 0 1 0 1.971l-11.54 6.347a1.125 1.125 0 0 1-1.667-.985V5.653Z" />
+            </svg>
+            Сгенерировать
+          </button>
+        </div>
+      </form>
+    </div>
   </div>
+
+  <script>
+    // Закрытие модального окна по клику вне его
+    document.getElementById('generateModal').addEventListener('click', function(e) {
+      if (e.target === this) {
+        this.classList.add('hidden');
+      }
+    });
+
+    // Показываем/скрываем выбор типов email'ов
+    document.getElementById('include_contact_emails').addEventListener('change', function() {
+      document.getElementById('contact_email_types_container').style.display = this.checked ? 'block' : 'none';
+    });
+    document.getElementById('contact_email_types_container').style.display = 
+      document.getElementById('include_contact_emails').checked ? 'block' : 'none';
+
+    // Функции для множественного выбора статусов и сфер
+    function toggleAllStatuses(checkbox) {
+      const statusCheckboxes = document.querySelectorAll('.status-checkbox');
+      statusCheckboxes.forEach(cb => cb.checked = checkbox.checked);
+    }
+    
+    function toggleAllSpheres(checkbox) {
+      const sphereCheckboxes = document.querySelectorAll('.sphere-checkbox');
+      sphereCheckboxes.forEach(cb => cb.checked = checkbox.checked);
+    }
+
+    // Ограничение выбора филиала для менеджеров/РОП/директора филиала
+    {% if user.role == 'MANAGER' or user.role == 'SALES_HEAD' or user.role == 'BRANCH_DIRECTOR' %}
+      {% if user.branch %}
+        document.getElementById('branchSelect').disabled = true;
+      {% endif %}
+    {% endif %}
+  </script>
 {% endblock %}
 
 
