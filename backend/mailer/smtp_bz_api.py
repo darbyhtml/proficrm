@@ -47,9 +47,23 @@ def get_quota_info(api_key: str) -> Optional[Dict[str, Any]]:
             "/limits",
             "/info",
             "/account/quota",
-            "/v1/account",
-            "/v1/quota",
-            "/v1/account/info",
+            "/api/account",
+            "/api/quota",
+            "/api/limits",
+            "/api/info",
+            "/api/v1/account",
+            "/api/v1/quota",
+            "/api/v1/limits",
+            "/api/v1/info",
+            "/api/account/quota",
+            "/api/account/info",
+            "/api/account/limits",
+            "/stats",
+            "/api/stats",
+            "/api/v1/stats",
+            "/balance",
+            "/api/balance",
+            "/api/v1/balance",
         ]
         
         # Разные варианты аутентификации
@@ -71,7 +85,10 @@ def get_quota_info(api_key: str) -> Optional[Dict[str, Any]]:
             url_variants = [
                 f"{SMTP_BZ_API_BASE}{endpoint}",
                 f"https://api.smtp.bz{endpoint}",
+                f"https://smtp.bz{endpoint}",
                 f"https://smtp.bz/api{endpoint}",
+                f"https://api.smtp.bz/v1{endpoint}",
+                f"https://smtp.bz/api/v1{endpoint}",
             ]
             
             for url in url_variants:
