@@ -9,7 +9,7 @@ from django.db.models import Q
 from django.utils import timezone
 from zoneinfo import ZoneInfo
 
-from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, SmtpBzQuota, CampaignQueue
+from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, SmtpBzQuota, CampaignQueue, UserDailyLimitStatus
 from mailer.smtp_sender import build_message, send_via_smtp
 from mailer.utils import html_to_text
 from mailer.smtp_bz_api import get_quota_info
@@ -150,22 +150,42 @@ def send_pending_emails(self, batch_size: int = 50):
                 created_at__date=now.date(),
             ).count()
             
-            # Проверка лимитов
+            # Отслеживание лимита для уведомлений
+            today_date = now.date()
+            limit_status, _ = UserDailyLimitStatus.objects.get_or_create(user=user)
+            
+            # Если лимит достигнут сегодня, сохраняем дату
             if per_user_daily_limit and sent_today_user >= per_user_daily_limit:
-                # Лимит пользователя достигнут - ставим на паузу
-                if camp.status == Campaign.Status.SENDING:
-                    camp.status = Campaign.Status.PAUSED
-                    camp.save(update_fields=["status", "updated_at"])
-                    logger.info(f"Campaign {camp.id} paused: user daily limit reached ({sent_today_user}/{per_user_daily_limit})")
+                if limit_status.last_limit_reached_date != today_date:
+                    limit_status.last_limit_reached_date = today_date
+                    limit_status.save(update_fields=["last_limit_reached_date"])
+            # Если лимит НЕ достигнут, но ранее был достигнут в другой день - отправляем уведомление
+            elif limit_status.last_limit_reached_date and limit_status.last_limit_reached_date < today_date:
+                # Лимит снова доступен (новый день) - отправляем уведомление, если еще не отправляли сегодня
+                if not limit_status.last_notified_date or limit_status.last_notified_date < today_date:
+                    from notifications.service import notify
+                    from notifications.models import Notification
+                    notify(
+                        user=user,
+                        kind=Notification.Kind.SYSTEM,
+                        title="Лимит отправки обновлен",
+                        body=f"Дневной лимит отправки ({per_user_daily_limit} писем) снова доступен. Вы можете продолжить рассылку.",
+                        url="/mail/campaigns/"
+                    )
+                    limit_status.last_notified_date = today_date
+                    limit_status.last_limit_reached_date = None  # Сбрасываем, так как лимит снова доступен
+                    limit_status.save(update_fields=["last_notified_date", "last_limit_reached_date"])
+            
+            # Проверка лимитов
+            # НЕ ставим на паузу автоматически - просто пропускаем отправку, кампания остается в очереди
+            if per_user_daily_limit and sent_today_user >= per_user_daily_limit:
+                logger.info(f"Campaign {camp.id} skipped: user daily limit reached ({sent_today_user}/{per_user_daily_limit}), staying in queue")
                 continue
             
             # Проверка доступных писем из квоты
+            # НЕ ставим на паузу автоматически - просто пропускаем отправку, кампания остается в очереди
             if emails_available <= 0:
-                # Квота исчерпана - ставим на паузу
-                if camp.status == Campaign.Status.SENDING:
-                    camp.status = Campaign.Status.PAUSED
-                    camp.save(update_fields=["status", "updated_at"])
-                    logger.info(f"Campaign {camp.id} paused: quota exhausted ({emails_available}/{emails_limit})")
+                logger.info(f"Campaign {camp.id} skipped: quota exhausted ({emails_available}/{emails_limit}), staying in queue")
                 continue
             
             if sent_last_hour >= max_per_hour:

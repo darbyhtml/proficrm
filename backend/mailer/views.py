@@ -1583,8 +1583,22 @@ def campaign_pause(request: HttpRequest, campaign_id) -> HttpResponse:
     if camp.status in (Campaign.Status.SENDING, Campaign.Status.READY):
         camp.status = Campaign.Status.PAUSED
         camp.save(update_fields=["status", "updated_at"])
-        messages.success(request, "Рассылка поставлена на паузу.")
-        log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Рассылка поставлена на паузу")
+        
+        # Отменяем запись в очереди только при РУЧНОЙ паузе (когда пользователь нажал кнопку)
+        # Это позволяет очереди перейти на следующего
+        queue_entry = getattr(camp, "queue_entry", None)
+        if queue_entry:
+            if queue_entry.status == CampaignQueue.Status.PROCESSING:
+                # Если обрабатывается, отменяем и очередь перейдет на следующего
+                queue_entry.status = CampaignQueue.Status.CANCELLED
+                queue_entry.save(update_fields=["status"])
+            elif queue_entry.status == CampaignQueue.Status.PENDING:
+                # Если в очереди, просто отменяем
+                queue_entry.status = CampaignQueue.Status.CANCELLED
+                queue_entry.save(update_fields=["status"])
+        
+        messages.success(request, "Рассылка поставлена на паузу. Очередь перешла на следующую кампанию.")
+        log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Рассылка поставлена на паузу вручную")
     
     return redirect("campaign_detail", campaign_id=camp.id)
 

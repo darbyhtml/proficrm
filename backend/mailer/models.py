@@ -270,4 +270,23 @@ class CampaignQueue(models.Model):
     def __str__(self) -> str:
         return f"{self.campaign.name} ({self.get_status_display()})"
 
-# Create your models here.
+
+class UserDailyLimitStatus(models.Model):
+    """
+    Отслеживание статуса дневного лимита пользователя для уведомлений.
+    """
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="daily_limit_status", verbose_name="Пользователь")
+    last_limit_reached_date = models.DateField("Дата последнего достижения лимита", null=True, blank=True, help_text="Дата, когда пользователь в последний раз достиг дневного лимита")
+    last_notified_date = models.DateField("Дата последнего уведомления", null=True, blank=True, help_text="Дата, когда было отправлено последнее уведомление об обновлении лимита")
+    
+    updated_at = models.DateTimeField("Обновлено", auto_now=True)
+    
+    class Meta:
+        verbose_name = "Статус дневного лимита пользователя"
+        verbose_name_plural = "Статусы дневных лимитов пользователей"
+        indexes = [
+            models.Index(fields=["user", "last_limit_reached_date"]),
+        ]
+    
+    def __str__(self) -> str:
+        return f"{self.user} (лимит достигнут: {self.last_limit_reached_date or 'никогда'})"
