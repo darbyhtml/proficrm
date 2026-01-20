@@ -526,10 +526,14 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
     view = (request.GET.get("view") or "").strip().lower()
     allowed_views = {"pending", "sent", "failed", "unsub", "all"}
     if view not in allowed_views:
+        # По умолчанию показываем "pending", если есть, иначе "all"
         view = "pending" if counts["pending"] > 0 else "all"
 
     # Получаем всех получателей для группировки и пагинации
-    all_recipients_qs = camp.recipients.order_by("company_id", "-updated_at")
+    # Важно: используем .all() для получения всех получателей, затем фильтруем
+    all_recipients_qs = camp.recipients.all().order_by("company_id", "-updated_at")
+    
+    # Применяем фильтр по статусу (если не "all")
     if view == "pending":
         all_recipients_qs = all_recipients_qs.filter(status=CampaignRecipient.Status.PENDING)
     elif view == "sent":
@@ -538,6 +542,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
         all_recipients_qs = all_recipients_qs.filter(status=CampaignRecipient.Status.FAILED)
     elif view == "unsub":
         all_recipients_qs = all_recipients_qs.filter(status=CampaignRecipient.Status.UNSUBSCRIBED)
+    # Если view == "all" - не применяем фильтр, показываем всех
     
     # Пагинация для таблицы
     paginator = Paginator(all_recipients_qs, per_page)
