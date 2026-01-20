@@ -413,79 +413,6 @@
           </div>
         </div>
         
-        {# Информация о тарифе smtp.bz - только для администраторов #}
-        {% if is_admin and quota and quota.emails_limit > 0 %}
-          <div class="card card-pad mb-4">
-            <div class="font-medium mb-2">Тариф smtp.bz</div>
-            <div class="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <div class="text-brand-dark/70 mb-1">Тариф:</div>
-                <div class="font-medium">{{ quota.tariff_name|default:"—" }}</div>
-                {% if quota.tariff_renewal_date %}
-                  <div class="text-xs text-brand-dark/60 mt-1">
-                    Продление: {{ quota.tariff_renewal_date|date:"d.m.Y" }}
-                  </div>
-                {% endif %}
-              </div>
-              <div>
-                <div class="text-brand-dark/70 mb-1">Доступно писем:</div>
-                <div class="font-medium {% if quota.emails_available < quota.emails_limit|add:'-'|add:'100' %}text-orange-600{% elif quota.emails_available == 0 %}text-red-600{% else %}text-green-600{% endif %}">
-                  {{ quota.emails_available }} / {{ quota.emails_limit }}
-                </div>
-              </div>
-              <div>
-                <div class="text-brand-dark/70 mb-1">Отправлено за час:</div>
-                <div class="font-medium">{{ quota.sent_per_hour }} / {{ quota.max_per_hour }}</div>
-              </div>
-              {% if quota.last_synced_at %}
-                <div>
-                  <div class="text-brand-dark/70 mb-1">Обновлено:</div>
-                  <div class="text-xs text-brand-dark/60">{{ quota.last_synced_at|date:"d.m.Y H:i" }}</div>
-                </div>
-              {% endif %}
-            </div>
-            {% if quota.sync_error %}
-              <div class="mt-2 text-xs text-red-600">
-                ⚠️ Ошибка синхронизации: {{ quota.sync_error|truncatechars:100 }}
-              </div>
-            {% endif %}
-          </div>
-        {% endif %}
-        
-        {# Лимит пользователя - для всех #}
-        <div class="card card-pad mb-4">
-          <div class="font-medium mb-2">Ваш лимит отправки</div>
-          <div class="grid grid-cols-2 gap-3 text-sm">
-            <div>
-              <div class="text-brand-dark/70 mb-1">Отправлено сегодня:</div>
-              <div class="font-medium {% if per_user_daily_limit and sent_today_user >= per_user_daily_limit %}text-red-600{% elif per_user_daily_limit and per_user_daily_limit|add:"-"|add:sent_today_user < 20 %}text-orange-600{% else %}text-green-600{% endif %}">
-                {{ sent_today_user }} / {{ per_user_daily_limit }}
-              </div>
-              {% if per_user_daily_limit %}
-                {% with remaining=per_user_daily_limit|add:"-"|add:sent_today_user %}
-                  {% if remaining > 0 %}
-                    <div class="text-xs text-brand-dark/60 mt-1">
-                      Осталось: {{ remaining }} писем
-                    </div>
-                  {% else %}
-                    <div class="text-xs text-red-600 mt-1">
-                      Лимит достигнут
-                    </div>
-                  {% endif %}
-                {% endwith %}
-              {% endif %}
-            </div>
-            <div>
-              <div class="text-brand-dark/70 mb-1">Ваши кампании:</div>
-              <div class="font-medium">
-                Всего: {{ user_campaigns_count|default:0 }}
-              </div>
-              <div class="text-xs text-brand-dark/60 mt-1">
-                Активных: <span class="{% if user_active_campaigns > 0 %}text-green-600{% endif %}">{{ user_active_campaigns|default:0 }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
 
         {# Информация об очереди #}
         {% if queue_entry %}
@@ -514,58 +441,26 @@
           </div>
         {% endif %}
 
-        {# Лимиты и статистика - показываем только менеджеру его лимиты, админу - все #}
-        <div class="card card-pad">
-          <div class="font-medium mb-2">Лимиты и статистика</div>
-          <div class="space-y-2 text-sm">
-            <div class="flex justify-between">
-              <span class="text-brand-dark/70">Лимит в день (на вас):</span>
-              <span class="font-medium">
-                {{ sent_today_user }}/{{ per_user_daily_limit }}
-                {% if per_user_daily_limit and sent_today_user >= per_user_daily_limit %}
-                  <span class="text-red-600">(достигнут)</span>
-                {% else %}
-                  {% with remaining=per_user_daily_limit|add:"-"|add:sent_today_user %}
-                    <span class="text-green-600">(осталось: {{ remaining }})</span>
-                  {% endwith %}
-                {% endif %}
-              </span>
-            </div>
-            {% if is_admin %}
-              <div class="flex justify-between">
-                <span class="text-brand-dark/70">Доступно писем (квота):</span>
-                <span class="font-medium">
-                  {{ emails_available|default:"—" }} / {{ rate_per_day|default:"—" }}
-                  {% if emails_available <= 0 %}
-                    <span class="text-red-600">(исчерпана)</span>
-                  {% endif %}
-                </span>
-              </div>
-              <div class="flex justify-between">
-                <span class="text-brand-dark/70">Отправлено за час:</span>
-                <span class="font-medium">
-                  {{ send_stats.sent_last_hour|default:0 }} / {{ rate_per_hour|default:100 }}
-                </span>
-              </div>
-            {% endif %}
-            <div class="pt-2 border-t">
+        {# Статистика ошибок - только для администратора #}
+        {% if is_admin %}
+          <div class="card card-pad">
+            <div class="font-medium mb-2">Статистика отправки</div>
+            <div class="space-y-2 text-sm">
               <div class="flex justify-between">
                 <span class="text-brand-dark/70">Ошибок сегодня (эта кампания):</span>
                 <span class="font-medium {% if send_stats.failed_today_campaign > 0 %}text-red-600{% endif %}">
                   {{ send_stats.failed_today_campaign }}
                 </span>
               </div>
-              {% if is_admin %}
-                <div class="flex justify-between">
-                  <span class="text-brand-dark/70">Ошибок сегодня (всего):</span>
-                  <span class="font-medium {% if send_stats.failed_today > 0 %}text-red-600{% endif %}">
-                    {{ send_stats.failed_today }}
-                  </span>
-                </div>
-              {% endif %}
+              <div class="flex justify-between">
+                <span class="text-brand-dark/70">Ошибок сегодня (всего):</span>
+                <span class="font-medium {% if send_stats.failed_today > 0 %}text-red-600{% endif %}">
+                  {{ send_stats.failed_today }}
+                </span>
+              </div>
             </div>
           </div>
-        </div>
+        {% endif %}
 
         <div class="grid grid-cols-2 gap-3">
           <div class="card card-pad"><div class="muted text-sm">Всего</div><div class="text-2xl font-semibold">{{ counts.total }}</div></div>
