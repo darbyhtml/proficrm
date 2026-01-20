@@ -444,20 +444,37 @@
           <div class="card card-pad"><div class="muted text-sm">Ошибки</div><div class="text-2xl font-semibold {% if counts.failed > 0 %}text-red-600{% endif %}">{{ counts.failed }}</div></div>
         </div>
         
-        {% if recent_errors %}
+        {% if error_types %}
           <div class="card card-pad">
-            <div class="font-medium mb-2">Последние ошибки отправки</div>
-            <div class="space-y-2 text-xs max-h-64 overflow-y-auto">
-              {% for error_log in recent_errors %}
-                <div class="p-2 rounded border border-red-200 bg-red-50">
-                  <div class="font-medium text-red-900">{{ error_log.recipient.email|default:"—" }}</div>
-                  <div class="text-red-700 mt-1">{{ error_log.error|truncatechars:150|default:"Ошибка отправки" }}</div>
-                  <div class="text-red-600 mt-1">{{ error_log.created_at|date:"d.m.Y H:i" }}</div>
+            <div class="font-medium mb-2">Статистика ошибок отправки</div>
+            <div class="space-y-3 text-sm">
+              {% for error_type, data in error_types.items %}
+                <div class="p-3 rounded border border-red-200 bg-red-50">
+                  <div class="font-medium text-red-900 mb-1">
+                    {{ error_type }}: <span class="text-red-700">{{ data.count }}</span>
+                  </div>
+                  {% if data.examples %}
+                    <div class="text-xs text-red-800 mt-2 space-y-1">
+                      <div class="font-medium">Примеры:</div>
+                      {% for example in data.examples %}
+                        <div class="pl-2 border-l-2 border-red-300">
+                          <div class="font-mono text-xs">{{ example.email }}</div>
+                          <div class="text-red-700 mt-0.5">{{ example.error|truncatechars:120 }}</div>
+                          <div class="text-red-600 text-xs mt-0.5">{{ example.time|date:"d.m.Y H:i" }}</div>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  {% endif %}
                 </div>
               {% endfor %}
             </div>
-            {% if counts.failed > 10 %}
-              <div class="text-xs muted-2 mt-2">Показаны последние 10 ошибок из {{ counts.failed }}</div>
+            {% if counts.failed > 0 %}
+              <div class="text-xs muted-2 mt-3">
+                Всего ошибок в кампании: <b>{{ counts.failed }}</b>
+                {% if counts.failed > 100 %}
+                  (показана статистика по последним 100)
+                {% endif %}
+              </div>
             {% endif %}
           </div>
         {% endif %}

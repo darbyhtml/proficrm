@@ -397,6 +397,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "rate_per_day": smtp_cfg.rate_per_day,
             "rate_per_minute": smtp_cfg.rate_per_minute,
             "recent_errors": recent_errors,
+            "error_types": error_types,
         },
     )
 

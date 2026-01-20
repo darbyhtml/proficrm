@@ -50,14 +50,22 @@ def send_pending_emails(self, batch_size: int = 50):
     """
     try:
         did_work = False
-        # Берём кампании с pending получателями, исключая на паузе
+        # Берём кампании с pending получателями, исключая на паузе и остановленные
         camps = Campaign.objects.filter(
             recipients__status=CampaignRecipient.Status.PENDING
-        ).exclude(status=Campaign.Status.PAUSED).distinct().order_by("created_at")[:20]
+        ).exclude(
+            status__in=(Campaign.Status.PAUSED, Campaign.Status.STOPPED, Campaign.Status.SENT, Campaign.Status.DRAFT)
+        ).distinct().order_by("created_at")[:20]
         
         # Проверка рабочего времени (9:00-18:00 МСК)
         if not _is_working_hours():
             logger.debug("Outside working hours (9:00-18:00 MSK), skipping email sending")
+            # Автоматически ставим на паузу кампании, которые пытаются отправиться вне рабочего времени
+            for camp in camps:
+                if camp.status == Campaign.Status.SENDING:
+                    camp.status = Campaign.Status.PAUSED
+                    camp.save(update_fields=["status", "updated_at"])
+                    logger.info(f"Campaign {camp.id} paused due to outside working hours")
             return {"processed": False, "campaigns": 0, "reason": "outside_working_hours"}
         
         for camp in camps:
@@ -65,7 +73,7 @@ def send_pending_emails(self, batch_size: int = 50):
             if not user:
                 continue
             
-            # Пропускаем кампании на паузе
+            # Пропускаем кампании на паузе (дополнительная проверка)
             if camp.status == Campaign.Status.PAUSED:
                 continue
                 
