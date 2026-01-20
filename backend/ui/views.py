@@ -365,43 +365,31 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             | Q(branch__name__icontains=q)
         )
         
-        # Дополнительный поиск с нормализацией для названия, ИНН, адреса
-        # Это позволяет находить совпадения даже если в запросе нет тире, а в базе есть (и наоборот)
-        # Используем regex для поиска с игнорированием тире и пробелов
+        # Оптимизированный поиск с нормализацией для названия, ИНН, адреса
+        # Используем простой icontains вместо regex для производительности
+        # Regex применяем только если простой поиск не дал результатов (fallback)
         if normalized_q and len(normalized_q) >= 2:  # Минимум 2 символа для нормализованного поиска
-            # Создаем regex-паттерн, который игнорирует тире, пробелы и другие разделители
-            # Например, "авто-рес" или "авторес" найдет "АВТО-РЕСУРС"
-            # Экранируем специальные символы regex в нормализованном запросе
-            import re
-            escaped_q = re.escape(normalized_q)
-            # Создаем паттерн, который допускает тире, пробелы и другие разделители между символами
-            # Например, "авторес" -> "авто[-\\s_]*рес" (найдет "авто-рес", "авто_рес", "авто рес" и т.д.)
-            pattern_parts = []
-            for i, char in enumerate(normalized_q):
-                if i > 0:
-                    # Между символами допускаем тире, пробелы, подчеркивания
-                    pattern_parts.append("[-\\s_]*")
-                pattern_parts.append(re.escape(char))
-            flexible_pattern = "".join(pattern_parts)
-            
-            # Добавляем поиск по нормализованному паттерну для названия, ИНН, адреса
-            normalized_filters = (
-                Q(name__iregex=flexible_pattern)
-                | Q(legal_name__iregex=flexible_pattern)
-                | Q(inn__iregex=flexible_pattern)
-                | Q(address__iregex=flexible_pattern)
+            # Сначала пробуем простой поиск по нормализованному запросу (быстрее)
+            normalized_simple_filters = (
+                Q(name__icontains=normalized_q)
+                | Q(legal_name__icontains=normalized_q)
+                | Q(inn__icontains=normalized_q)
+                | Q(address__icontains=normalized_q)
             )
             
-            # Также ищем по нормализованному запросу напрямую (без разделителей)
-            if normalized_q != q.lower():
-                normalized_filters |= (
-                    Q(name__icontains=normalized_q)
-                    | Q(legal_name__icontains=normalized_q)
-                    | Q(inn__icontains=normalized_q)
-                    | Q(address__icontains=normalized_q)
-                )
+            # Также ищем по исходному запросу с заменой тире на пробелы и наоборот
+            # Это покрывает большинство случаев без использования медленного regex
+            q_variants = [q, q.replace("-", " "), q.replace(" ", "-"), normalized_q]
+            for variant in q_variants:
+                if variant and variant != q:
+                    normalized_simple_filters |= (
+                        Q(name__icontains=variant)
+                        | Q(legal_name__icontains=variant)
+                        | Q(inn__icontains=variant)
+                        | Q(address__icontains=variant)
+                    )
             
-            base_filters |= normalized_filters
+            base_filters |= normalized_simple_filters
         
         # Поиск по телефонам (с нормализацией)
         normalized_phone = _normalize_phone_for_search(q)
@@ -1743,9 +1731,88 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
     ui_cfg = UiGlobalConfig.load()
     columns = ui_cfg.company_list_columns or ["name"]
     
+    # Определяем, где найдено совпадение для каждой компании (если есть поисковый запрос)
+    q = (request.GET.get("q") or "").strip()
+    if q:
+        normalized_q = _normalize_for_search(q)
+        normalized_phone = _normalize_phone_for_search(q)
+        normalized_email = _normalize_email_for_search(q)
+        
+        # Предзагружаем телефоны и email для оптимизации
+        from companies.models import CompanyPhone, CompanyEmail, ContactPhone, ContactEmail
+        companies_with_phones = {c.id: list(c.phones.all()) for c in page.object_list}
+        companies_with_emails = {c.id: list(c.emails.all()) for c in page.object_list}
+        
+        # Предзагружаем контакты с телефонами и email
+        from django.db.models import Prefetch
+        companies_with_contacts = {
+            c.id: list(c.contacts.prefetch_related('phones', 'emails').all())
+            for c in page.object_list
+        }
+        
+        for company in page.object_list:
+            match_info = []
+            
+            # Проверяем основные поля (которые видны в таблице)
+            if normalized_q:
+                if normalized_q in _normalize_for_search(company.name or ""):
+                    match_info.append("название")
+                if normalized_q in _normalize_for_search(company.inn or ""):
+                    match_info.append("ИНН")
+                if normalized_q in _normalize_for_search(company.address or ""):
+                    match_info.append("адрес")
+            
+            # Проверяем телефон (если не в основных полях)
+            if normalized_phone or q:
+                # Основной телефон компании
+                if company.phone and (q in company.phone or (normalized_phone and normalized_phone in company.phone)):
+                    match_info.append(f"телефон: {company.phone}")
+                # Дополнительные телефоны
+                for phone_obj in companies_with_phones.get(company.id, []):
+                    if q in phone_obj.value or (normalized_phone and normalized_phone in phone_obj.value):
+                        match_info.append(f"телефон: {phone_obj.value}")
+                        break
+                # Телефоны контактов
+                for contact in companies_with_contacts.get(company.id, []):
+                    for phone_obj in contact.phones.all():
+                        if q in phone_obj.value or (normalized_phone and normalized_phone in phone_obj.value):
+                            match_info.append(f"телефон контакта: {phone_obj.value}")
+                            break
+                    if match_info and "телефон контакта" in match_info[-1]:
+                        break
+            
+            # Проверяем email (если не в основных полях)
+            if normalized_email or q:
+                # Основной email компании
+                if company.email and (q.lower() in company.email.lower() or (normalized_email and normalized_email == company.email.lower())):
+                    match_info.append(f"email: {company.email}")
+                # Дополнительные email
+                for email_obj in companies_with_emails.get(company.id, []):
+                    if q.lower() in email_obj.value.lower() or (normalized_email and normalized_email == email_obj.value.lower()):
+                        match_info.append(f"email: {email_obj.value}")
+                        break
+                # Email контактов
+                for contact in companies_with_contacts.get(company.id, []):
+                    for email_obj in contact.emails.all():
+                        if q.lower() in email_obj.value.lower() or (normalized_email and normalized_email == email_obj.value.lower()):
+                            match_info.append(f"email контакта: {email_obj.value}")
+                            break
+                    if match_info and "email контакта" in match_info[-1]:
+                        break
+            
+            # Проверяем контакты (ФИО)
+            if q:
+                for contact in companies_with_contacts.get(company.id, []):
+                    full_name = f"{contact.first_name or ''} {contact.last_name or ''}".strip()
+                    if q.lower() in full_name.lower():
+                        match_info.append(f"контакт: {full_name}")
+                        break
+            
+            # Сохраняем информацию о совпадении
+            company.search_match_info = match_info[0] if match_info else None  # type: ignore[attr-defined]
+    
     # Рендерим HTML строк таблицы
     from django.template.loader import render_to_string
-    q = (request.GET.get("q") or "").strip()  # Получаем запрос для подсветки
     rows_html = render_to_string(
         "ui/company_list_rows.html",
         {

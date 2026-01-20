@@ -21,6 +21,13 @@
             {% endif %}
           </div>
         {% endif %}
+        {% if search_query and c.search_match_info %}
+          {% if "название" not in c.search_match_info and "ИНН" not in c.search_match_info and "адрес" not in c.search_match_info %}
+            <div class="text-xs mt-1" style="color: #f97316; font-weight: 500;">
+              Найдено: {{ c.search_match_info }}
+            </div>
+          {% endif %}
+        {% endif %}
       </td>
     {% endif %}
     {% if "overdue" in company_list_columns %}
