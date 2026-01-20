@@ -462,56 +462,6 @@ def _analyze_contact_completely(contact: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def _is_internal_phone_comment(value: str) -> bool:
-    """
-    Проверяет, является ли значение внутренним номером/комментарием, а не реальным телефоном.
-    
-    Внутренние номера обычно:
-    - Начинаются с "внутр.", "вн.", "внутренний"
-    - Имеют формат "XX-XXX" или "XX-XX-XX" (короткие номера)
-    - Не содержат признаков реального телефона (+, скобки, длинные последовательности цифр)
-    """
-    if not value or not isinstance(value, str):
-        return False
-    
-    val = str(value).strip()
-    if not val:
-        return False
-    
-    val_lower = val.lower()
-    
-    # Проверяем явные признаки внутреннего номера
-    if (val_lower.startswith("внутр.") or 
-        val_lower.startswith("вн.") or
-        val_lower.startswith("внутренний") or
-        val_lower.startswith("вн ") or
-        val_lower.startswith("внутр ")):
-        return True
-    
-    # Проверяем паттерн внутреннего номера: короткое значение с дефисом (например, "22-067", "123-45")
-    # Но не слишком короткое (минимум 3 символа) и не слишком длинное (максимум 15)
-    if 3 <= len(val) <= 15:
-        # Паттерн: цифры и дефисы, возможно с префиксом "внутр." или "вн."
-        internal_pattern = r'^(внутр\.?|вн\.?)?\s*\d{1,4}[-]\d{1,4}([-]\d{1,4})?$'
-        if re.match(internal_pattern, val_lower):
-            return True
-        
-        # Если значение очень короткое (меньше 8 символов) и не содержит признаков телефона
-        if len(val) < 8:
-            # Проверяем, что нет признаков реального телефона
-            has_phone_signs = bool(re.search(r'[+\d\(\)\s-]{8,}', val))  # Длинная последовательность цифр/символов
-            has_country_code = bool(re.search(r'\+?\d{1,3}[\s\(]', val))  # Код страны
-            has_brackets = '(' in val and ')' in val  # Скобки (признак формата телефона)
-            
-            if not has_phone_signs and not has_country_code and not has_brackets:
-                # Может быть внутренним номером, но нужно дополнительная проверка
-                # Если содержит только цифры и дефисы - вероятно внутренний номер
-                if re.match(r'^[\d\s-]+$', val) and '-' in val:
-                    return True
-    
-    return False
-
-
 def _build_field_meta(fields: list[dict[str, Any]]) -> dict[int, dict[str, Any]]:
     out: dict[int, dict[str, Any]] = {}
     for f in fields or []:
@@ -533,6 +483,29 @@ def _custom_values_text(company: dict[str, Any], field_id: int) -> list[str]:
         if s:
             out.append(s)
     return out
+
+
+def _looks_like_phone(value: str) -> bool:
+    """
+    Проверяет, похоже ли значение на номер телефона.
+    Телефон должен содержать достаточно цифр (минимум 7-10 цифр).
+    """
+    if not value or not isinstance(value, str):
+        return False
+    # Извлекаем только цифры
+    digits = ''.join(c for c in value if c.isdigit())
+    # Телефон должен содержать минимум 7 цифр (короткие номера) или больше
+    # Но не слишком много (максимум 15 цифр для международных номеров)
+    if len(digits) < 7 or len(digits) > 15:
+        return False
+    # Если значение содержит только буквы и пробелы - это не телефон
+    if not any(c.isdigit() for c in value):
+        return False
+    # Если значение начинается с букв и содержит мало цифр - вероятно, это не телефон
+    # Например, "внутр. 22-067" содержит только 5 цифр - это примечание, а не телефон
+    if len(digits) < 7:
+        return False
+    return True
 
 
 def _split_multi(s: str) -> list[str]:
@@ -2429,16 +2402,17 @@ def migrate_filtered(
                     
                             # Стандартные поля (если есть)
                             if ac.get("phone"):
-                                phone_str = str(ac.get("phone")).strip()
-                                # ИСПРАВЛЕНИЕ: проверяем, не является ли это внутренним номером
-                                is_internal_comment = _is_internal_phone_comment(phone_str)
-                                
-                                if not is_internal_comment:
-                                    # Это реальный телефон
-                                    for pv in _split_multi(phone_str):
-                                        if pv:
+                                for pv in _split_multi(str(ac.get("phone"))):
+                                    if pv:
+                                        if _looks_like_phone(pv):  # ИСПРАВЛЕНИЕ: проверяем, что это телефон
                                             phones.append((ContactPhone.PhoneType.OTHER, pv, ""))
-                                # Если это внутренний номер, пропускаем (он будет обработан в custom_fields)
+                                        else:
+                                            # Если значение не похоже на телефон, добавляем в примечание
+                                            if not note_text:
+                                                note_text = pv[:255]
+                                            elif pv not in note_text:
+                                                combined = f"{note_text}; {pv[:200]}"
+                                                note_text = combined[:255]
                             if ac.get("email"):
                                 ev = str(ac.get("email")).strip()
                                 if ev:
@@ -2575,49 +2549,34 @@ def migrate_filtered(
                                         # Формат: "номер\nкомментарий" или "номер\nвремя - комментарий"
                                         val_lines = [line.strip() for line in str(val).split("\n") if line.strip()]
                                         if val_lines:
-                                            # Первая строка - номер телефона или комментарий
+                                            # Первая строка - номер телефона
                                             phone_number = val_lines[0]
                                             
-                                            # ИСПРАВЛЕНИЕ: проверяем, является ли первая строка внутренним номером/комментарием
-                                            is_internal_comment = _is_internal_phone_comment(phone_number)
-                                            
-                                            if is_internal_comment:
-                                                # Это комментарий/внутренний номер - добавляем к предыдущему телефону
-                                                if phones:
-                                                    # Берем последний телефон и обновляем его комментарий
-                                                    last_pt, last_pv, last_pc = phones[-1]
-                                                    existing_comment = str(last_pc or "").strip()
-                                                    if existing_comment:
-                                                        # Объединяем с существующим комментарием
-                                                        new_comment = f"{existing_comment}; {phone_number}"
-                                                    else:
-                                                        new_comment = phone_number
-                                                    phones[-1] = (last_pt, last_pv, new_comment[:255])
-                                                    if debug_count_for_extraction < 3:
-                                                        logger.debug(f"      -> Added internal number as comment to last phone: {phone_number}")
-                                                else:
-                                                    # Если нет предыдущего телефона, пропускаем или добавляем как телефон с пустым значением
-                                                    # Но лучше пропустить, т.к. это не реальный телефон
-                                                    if debug_count_for_extraction < 3:
-                                                        logger.debug(f"      -> Skipped internal number (no previous phone): {phone_number}")
-                                                # Обрабатываем остальные строки как комментарий к последнему телефону
-                                                if len(val_lines) > 1 and phones:
-                                                    last_pt, last_pv, last_pc = phones[-1]
-                                                    phone_comment_parts = []
-                                                    for line in val_lines[1:]:
-                                                        line_clean = line
-                                                        time_pattern = r'^\d{1,2}:\d{2}\s*-\s*'
-                                                        line_clean = re.sub(time_pattern, '', line_clean, flags=re.IGNORECASE)
-                                                        if line_clean.strip():
-                                                            phone_comment_parts.append(line_clean.strip())
-                                                    if phone_comment_parts:
-                                                        existing_comment = str(last_pc or "").strip()
-                                                        additional_comment = " | ".join(phone_comment_parts)
-                                                        if existing_comment:
-                                                            new_comment = f"{existing_comment}; {additional_comment}"
-                                                        else:
-                                                            new_comment = additional_comment
-                                                        phones[-1] = (last_pt, last_pv, new_comment[:255])
+                                            # ИСПРАВЛЕНИЕ: проверяем, что первая строка действительно похожа на телефон
+                                            if not _looks_like_phone(phone_number):
+                                                # Если первая строка не похожа на телефон, это примечание
+                                                # Добавляем все строки в примечание, а не в телефоны
+                                                note_parts = []
+                                                for line in val_lines:
+                                                    # Убираем временные метки типа "22:05 - " или "20:05 - "
+                                                    line_clean = line
+                                                    time_pattern = r'^\d{1,2}:\d{2}\s*-\s*'
+                                                    line_clean = re.sub(time_pattern, '', line_clean, flags=re.IGNORECASE)
+                                                    if line_clean.strip():
+                                                        note_parts.append(line_clean.strip())
+                                                
+                                                if note_parts:
+                                                    note_text_from_phone_field = " | ".join(note_parts)
+                                                    # Если примечание еще не найдено, используем это
+                                                    if not note_text:
+                                                        note_text = note_text_from_phone_field[:255]
+                                                    elif note_text_from_phone_field not in note_text:
+                                                        # Объединяем с существующим
+                                                        combined = f"{note_text}; {note_text_from_phone_field[:200]}"
+                                                        note_text = combined[:255]
+                                                
+                                                if debug_count_for_extraction < 3:
+                                                    logger.debug(f"      -> Skipped non-phone value as note: {phone_number[:50]}")
                                                 continue
                                             
                                             # Остальные строки - комментарий (регион/город)
@@ -2639,38 +2598,38 @@ def migrate_filtered(
                                     
                                             # Разбиваем номер на несколько, если есть запятые/точки с запятой
                                             for pv in _split_multi(phone_number):
-                                                if pv:  # Проверяем, что номер не пустой
+                                                if pv and _looks_like_phone(pv):  # ИСПРАВЛЕНИЕ: проверяем, что это телефон
                                                     phones.append((ptype, pv, phone_comment))
+                                                elif pv:
+                                                    # Если значение не похоже на телефон, добавляем в примечание
+                                                    if not note_text:
+                                                        note_text = pv[:255]
+                                                    elif pv not in note_text:
+                                                        combined = f"{note_text}; {pv[:200]}"
+                                                        note_text = combined[:255]
+                                                    if debug_count_for_extraction < 3:
+                                                        logger.debug(f"      -> Skipped non-phone value as note: {pv[:50]}")
                                     
                                             if debug_count_for_extraction < 3:
                                                 logger.debug(f"      -> Added phone: {phone_number} (type={ptype}, comment='{phone_comment}')")
                                         else:
-                                            # Fallback: если нет строк, проверяем, не является ли значение комментарием
-                                            is_internal_comment = _is_internal_phone_comment(str(val))
-                                            
-                                            if is_internal_comment:
-                                                # Это комментарий - добавляем к предыдущему телефону
-                                                if phones:
-                                                    last_pt, last_pv, last_pc = phones[-1]
-                                                    existing_comment = str(last_pc or "").strip()
-                                                    if existing_comment:
-                                                        new_comment = f"{existing_comment}; {val_str}"
-                                                    else:
-                                                        new_comment = val_str
-                                                    phones[-1] = (last_pt, last_pv, new_comment[:255])
-                                                    if debug_count_for_extraction < 3:
-                                                        logger.debug(f"      -> Added internal number as comment to last phone (fallback): {val_str}")
-                                                else:
-                                                    if debug_count_for_extraction < 3:
-                                                        logger.debug(f"      -> Skipped internal number (no previous phone, fallback): {val_str}")
-                                            else:
-                                                # Обычный телефон
-                                                for pv in _split_multi(val):
-                                                    if pv:
+                                            # Fallback: если нет строк, используем старое поведение
+                                            for pv in _split_multi(val):
+                                                if pv:
+                                                    if _looks_like_phone(pv):  # ИСПРАВЛЕНИЕ: проверяем, что это телефон
                                                         comment = str(enum_code or "")
                                                         phones.append((ptype, pv, comment))
                                                         if debug_count_for_extraction < 3:
                                                             logger.debug(f"      -> Added phone (fallback): {pv} (type={ptype}, comment='{comment}')")
+                                                    else:
+                                                        # Если значение не похоже на телефон, добавляем в примечание
+                                                        if not note_text:
+                                                            note_text = pv[:255]
+                                                        elif pv not in note_text:
+                                                            combined = f"{note_text}; {pv[:200]}"
+                                                            note_text = combined[:255]
+                                                        if debug_count_for_extraction < 3:
+                                                            logger.debug(f"      -> Skipped non-phone value as note (fallback): {pv[:50]}")
                                     elif is_email:
                                         # Определяем тип email:
                                         # 1. По enum_code (WORK/PRIV/...)

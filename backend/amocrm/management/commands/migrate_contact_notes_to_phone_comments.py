@@ -3,13 +3,36 @@ Django management command для переноса примечаний из raw_
 
 Находит все контакты, у которых в raw_fields есть extracted_note_text,
 и переносит это примечание в comment первого телефона (если его там еще нет).
+
+Также находит "ложные" телефоны (значения, которые не похожи на телефоны, например "внутр. 22-067")
+и переносит их в комментарии к существующим телефонам.
 """
 
 from django.core.management.base import BaseCommand, CommandError
 from companies.models import Contact, ContactPhone
 import logging
+import re
 
 logger = logging.getLogger(__name__)
+
+
+def _looks_like_phone(value: str) -> bool:
+    """
+    Проверяет, похоже ли значение на номер телефона.
+    Телефон должен содержать достаточно цифр (минимум 7-10 цифр).
+    """
+    if not value or not isinstance(value, str):
+        return False
+    # Извлекаем только цифры
+    digits = ''.join(c for c in value if c.isdigit())
+    # Телефон должен содержать минимум 7 цифр (короткие номера) или больше
+    # Но не слишком много (максимум 15 цифр для международных номеров)
+    if len(digits) < 7 or len(digits) > 15:
+        return False
+    # Если значение содержит только буквы и пробелы - это не телефон
+    if not any(c.isdigit() for c in value):
+        return False
+    return True
 
 
 class Command(BaseCommand):
@@ -57,8 +80,76 @@ class Command(BaseCommand):
         updated = 0
         skipped_no_phones = 0
         skipped_has_comment = 0
+        fake_phones_fixed = 0  # Счетчик исправленных "ложных" телефонов
         errors = 0
 
+        # Сначала обрабатываем "ложные" телефоны (значения, которые не похожи на телефоны)
+        self.stdout.write("Шаг 1: Поиск и исправление 'ложных' телефонов...\n")
+        all_contacts_with_phones = Contact.objects.filter(phones__isnull=False).distinct()
+        if limit:
+            all_contacts_with_phones = all_contacts_with_phones[:limit]
+        
+        for contact in all_contacts_with_phones:
+            try:
+                # Проверяем все телефоны контакта
+                phones_list = list(contact.phones.all())
+                if not phones_list:
+                    continue
+                
+                # Находим "ложные" телефоны (не похожие на телефоны)
+                fake_phones = []
+                real_phones = []
+                
+                for phone in phones_list:
+                    if _looks_like_phone(phone.value):
+                        real_phones.append(phone)
+                    else:
+                        fake_phones.append(phone)
+                
+                if fake_phones:
+                    # Если есть реальные телефоны, переносим "ложные" в комментарии
+                    if real_phones:
+                        first_real_phone = real_phones[0]
+                        fake_texts = [p.value for p in fake_phones]
+                        combined_fake_text = " | ".join(fake_texts)
+                        
+                        existing_comment = (first_real_phone.comment or "").strip()
+                        if existing_comment:
+                            new_comment = f"{existing_comment}; {combined_fake_text[:200]}"
+                            new_comment = new_comment[:255]
+                        else:
+                            new_comment = combined_fake_text[:255]
+                        
+                        if not dry_run:
+                            first_real_phone.comment = new_comment
+                            first_real_phone.save(update_fields=["comment"])
+                            # Удаляем "ложные" телефоны
+                            for fake_phone in fake_phones:
+                                fake_phone.delete()
+                        
+                        fake_phones_fixed += len(fake_phones)
+                        if processed < 10:
+                            self.stdout.write(
+                                f"  Контакт {contact.id}: перенесено {len(fake_phones)} 'ложных' телефонов в комментарий"
+                            )
+                    else:
+                        # Если нет реальных телефонов, оставляем как есть (или можно удалить)
+                        if processed < 10:
+                            self.stdout.write(
+                                self.style.WARNING(
+                                    f"  Контакт {contact.id}: все телефоны 'ложные', но нет реальных телефонов для переноса"
+                                )
+                            )
+                
+            except Exception as e:
+                errors += 1
+                logger.error(f"Ошибка при обработке контакта {contact.id}: {e}", exc_info=True)
+        
+        self.stdout.write(f"\nИсправлено 'ложных' телефонов: {fake_phones_fixed}\n")
+        
+        # Теперь обрабатываем примечания из raw_fields
+        self.stdout.write("Шаг 2: Перенос примечаний из raw_fields в комментарии телефонов...\n")
+        
         for contact in contacts:
             try:
                 processed += 1
