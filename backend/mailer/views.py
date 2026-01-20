@@ -520,8 +520,15 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
     sent_today = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__date=now.date()).count()
     sent_today_user = SendLog.objects.filter(provider="smtp_global", status="sent", campaign__created_by=user, created_at__date=now.date()).count()
     
-    per_user_daily_limit = 100  # Фиксированный лимит на пользователя
+    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT
     is_working_time = _is_working_hours(now)
+    
+    # Количество кампаний пользователя
+    user_campaigns_count = Campaign.objects.filter(created_by=user).count()
+    user_active_campaigns = Campaign.objects.filter(
+        created_by=user,
+        status__in=[Campaign.Status.READY, Campaign.Status.SENDING]
+    ).count()
     
     # Текущее московское время для отображения
     msk_tz = ZoneInfo("Europe/Moscow")
