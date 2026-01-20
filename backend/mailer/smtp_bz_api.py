@@ -164,11 +164,24 @@ def _parse_quota_response(data: Dict[str, Any]) -> Dict[str, Any]:
     logger.debug(f"smtp.bz API: парсинг ответа, ключи: {list(data.keys())}")
     
     # Пробуем разные варианты структуры ответа
-    # Вариант 1: прямые поля в корне ответа
-    if "tariff" in data or "tariff_name" in data or "plan" in data:
+    # Вариант 1: прямые поля в корне ответа (формат smtp.bz API)
+    # Согласно реальному ответу API: tarif, expires_quota, quota, tarif_quota, hsent, hlimit
+    
+    # Тариф
+    if "tarif" in data:
+        result["tariff_name"] = str(data.get("tarif", "")).upper()  # 'free' -> 'FREE'
+    elif "tariff" in data or "tariff_name" in data or "plan" in data:
         result["tariff_name"] = data.get("tariff") or data.get("tariff_name") or data.get("plan", "")
     
-    if "renewal_date" in data or "renewalDate" in data or "expires_at" in data:
+    # Дата окончания квоты
+    if "expires_quota" in data:
+        renewal_str = data.get("expires_quota")
+        if renewal_str:
+            try:
+                result["tariff_renewal_date"] = datetime.strptime(str(renewal_str)[:10], "%Y-%m-%d").date()
+            except (ValueError, TypeError):
+                pass
+    elif "renewal_date" in data or "renewalDate" in data or "expires_at" in data:
         renewal_str = data.get("renewal_date") or data.get("renewalDate") or data.get("expires_at")
         if renewal_str:
             try:
@@ -183,45 +196,59 @@ def _parse_quota_response(data: Dict[str, Any]) -> Dict[str, Any]:
                 pass
     
     # Доступно писем (остаток квоты)
-    if "emails_available" in data:
+    # Согласно реальному ответу: quota = 14794 (доступно)
+    if "quota" in data:
+        quota_val = data.get("quota")
+        if isinstance(quota_val, (int, float)):
+            result["emails_available"] = int(quota_val)
+        elif isinstance(quota_val, dict):
+            result["emails_available"] = int(quota_val.get("available", quota_val.get("remaining", 0)))
+    elif "emails_available" in data:
         result["emails_available"] = int(data.get("emails_available", 0))
     elif "available" in data:
         result["emails_available"] = int(data.get("available", 0))
-    elif "balance" in data:
-        result["emails_available"] = int(data.get("balance", 0))
     elif "remaining" in data:
         result["emails_available"] = int(data.get("remaining", 0))
     elif "left" in data:
         result["emails_available"] = int(data.get("left", 0))
+    elif "balance" in data:
+        result["emails_available"] = int(data.get("balance", 0))
     
     # Лимит писем (общая квота)
-    if "emails_limit" in data:
+    # Согласно реальному ответу: tarif_quota = 15000 (общий лимит)
+    if "tarif_quota" in data:
+        result["emails_limit"] = int(data.get("tarif_quota", 0))
+    elif "emails_limit" in data:
         result["emails_limit"] = int(data.get("emails_limit", 0))
     elif "limit" in data:
         result["emails_limit"] = int(data.get("limit", 0))
-    elif "quota" in data:
-        # quota может быть числом (лимит) или объектом
-        quota_val = data.get("quota")
-        if isinstance(quota_val, (int, float)):
-            result["emails_limit"] = int(quota_val)
-        elif isinstance(quota_val, dict):
-            result["emails_limit"] = int(quota_val.get("limit", quota_val.get("total", 0)))
     elif "total" in data:
         result["emails_limit"] = int(data.get("total", 0))
     elif "monthly_limit" in data:
         result["emails_limit"] = int(data.get("monthly_limit", 0))
+    elif "quota" in data and isinstance(data["quota"], dict):
+        quota = data["quota"]
+        result["emails_limit"] = int(quota.get("limit", quota.get("total", 0)))
     
     # Если нашли limit, но не нашли available, вычисляем как разницу
     if result["emails_limit"] > 0 and result["emails_available"] == 0:
         # Может быть, available = limit - sent
-        if "sent" in data or "sent_today" in data or "sent_month" in data:
-            sent = int(data.get("sent") or data.get("sent_today") or data.get("sent_month", 0))
+        if "sent" in data or "sent_today" in data or "sent_month" in data or "dsent" in data:
+            sent = int(data.get("sent") or data.get("sent_today") or data.get("sent_month") or data.get("dsent", 0))
             result["emails_available"] = max(0, result["emails_limit"] - sent)
     
-    if "sent_per_hour" in data or "sentPerHour" in data or "sent_hour" in data:
+    # Отправлено за час
+    # Согласно реальному ответу: hsent = 6
+    if "hsent" in data:
+        result["sent_per_hour"] = int(data.get("hsent", 0))
+    elif "sent_per_hour" in data or "sentPerHour" in data or "sent_hour" in data:
         result["sent_per_hour"] = int(data.get("sent_per_hour") or data.get("sentPerHour") or data.get("sent_hour", 0))
     
-    if "max_per_hour" in data or "maxPerHour" in data or "hourly_limit" in data or "rate_limit" in data:
+    # Лимит в час
+    # Согласно реальному ответу: hlimit = 100
+    if "hlimit" in data:
+        result["max_per_hour"] = int(data.get("hlimit", 100))
+    elif "max_per_hour" in data or "maxPerHour" in data or "hourly_limit" in data or "rate_limit" in data:
         result["max_per_hour"] = int(data.get("max_per_hour") or data.get("maxPerHour") or data.get("hourly_limit") or data.get("rate_limit", 100))
     
     # Вариант 2: вложенные объекты
