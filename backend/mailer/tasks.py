@@ -13,10 +13,9 @@ from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAc
 from mailer.smtp_sender import build_message, send_via_smtp
 from mailer.utils import html_to_text
 from mailer.smtp_bz_api import get_quota_info
+from mailer.views import PER_USER_DAILY_LIMIT
 
 logger = logging.getLogger(__name__)
-
-from .models import GlobalMailAccount
 
 
 def _is_working_hours(now=None) -> bool:
