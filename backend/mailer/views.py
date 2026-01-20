@@ -139,10 +139,17 @@ def mail_settings(request: HttpRequest) -> HttpResponse:
 
     from django.conf import settings
     key_missing = not bool(getattr(settings, "MAILER_FERNET_KEY", "") or "")
+    
+    # Информация о квоте для проверки подключения
+    quota = SmtpBzQuota.load()
+    api_connected = bool(cfg.smtp_bz_api_key and quota.last_synced_at and not quota.sync_error)
+    
     return render(
         request,
         "ui/mail/settings.html",
         {
+            "quota": quota,
+            "api_connected": api_connected,
             "form": form,
             "account": cfg,
             "key_missing": key_missing,

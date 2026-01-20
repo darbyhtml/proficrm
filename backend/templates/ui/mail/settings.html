@@ -25,7 +25,7 @@
       <div class="mt-3 text-sm muted space-y-2">
         <div>1) В кабинете smtp.bz создайте <b>логин/пароль SMTP</b> (мы их сохраним в БД в зашифрованном виде).</div>
         <div>2) Заполните SMTP: <span class="font-mono">connect.smtp.bz</span>, порт <span class="font-mono">587</span>, включите <b>STARTTLS</b> (альтернатива: порт <span class="font-mono">2525</span>).</div>
-        <div>3) Лимиты FREE: <b>100 писем/час</b>, всего доступно <b>15000</b>. В CRM поставьте лимит в минуту <b>1</b>, чтобы не упираться в ограничения.</div>
+        <div>3) Получите <b>API ключ</b> в личном кабинете smtp.bz и введите его в поле ниже. Лимиты и квота будут синхронизироваться автоматически.</div>
         <div>4) Нажмите <b>Проверить отправку</b> — CRM отправит тестовое письмо на ваш email (из профиля).</div>
       </div>
     </details>
@@ -79,23 +79,42 @@
           <div class="text-xs muted-2 mt-1">Если у пользователя задано ФИО — оно будет использоваться, иначе это значение.</div>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="border-t border-brand-soft pt-3">
+          <div class="font-medium mb-2">Интеграция с API smtp.bz</div>
           <div>
-            <label class="block text-sm muted mb-1">Лимит в минуту</label>
-            {{ form.rate_per_minute }}
+            <label class="block text-sm muted mb-1">API ключ smtp.bz</label>
+            {{ form.smtp_bz_api_key }}
+            <div class="text-xs muted-2 mt-1">{{ form.smtp_bz_api_key.help_text }}</div>
           </div>
-          <div>
-            <label class="block text-sm muted mb-1">Лимит в день</label>
-            {{ form.rate_per_day }}
-          </div>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div>
-            <label class="block text-sm muted mb-1">Лимит в день на менеджера</label>
-            {{ form.per_user_daily_limit }}
-            <div class="text-xs muted-2 mt-1">Сколько писем за сутки может отправить один менеджер. Остальные адреса останутся в очереди до следующего дня.</div>
-          </div>
+          
+          {% if quota %}
+            <div class="mt-3 p-3 rounded-lg border {% if api_connected %}border-green-300 bg-green-50{% else %}border-orange-300 bg-orange-50{% endif %}">
+              <div class="text-sm font-medium {% if api_connected %}text-green-900{% else %}text-orange-900{% endif %} mb-2">
+                {% if api_connected %}
+                  ✅ Подключение к API активно
+                {% else %}
+                  ⚠️ Подключение к API не установлено
+                {% endif %}
+              </div>
+              {% if quota.last_synced_at %}
+                <div class="text-xs {% if api_connected %}text-green-800{% else %}text-orange-800{% endif %}">
+                  Последняя синхронизация: {{ quota.last_synced_at|date:"d.m.Y H:i" }}
+                </div>
+              {% endif %}
+              {% if quota.sync_error %}
+                <div class="text-xs text-red-600 mt-1">
+                  Ошибка: {{ quota.sync_error|truncatechars:200 }}
+                </div>
+              {% endif %}
+              {% if api_connected and quota.emails_limit > 0 %}
+                <div class="text-xs {% if api_connected %}text-green-800{% else %}text-orange-800{% endif %} mt-2">
+                  Тариф: <b>{{ quota.tariff_name|default:"—" }}</b> | 
+                  Доступно: <b>{{ quota.emails_available }} / {{ quota.emails_limit }}</b> | 
+                  Лимит в час: <b>{{ quota.max_per_hour }}</b>
+                </div>
+              {% endif %}
+            </div>
+          {% endif %}
         </div>
 
         <div class="flex items-center gap-2 text-sm">

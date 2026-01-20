@@ -76,11 +76,28 @@ def send_pending_emails(self, batch_size: int = 50):
             if not smtp_cfg.is_enabled:
                 continue
 
+            # Получаем лимиты из API smtp.bz
+            quota = SmtpBzQuota.load()
+            
+            # Если квота не синхронизирована, используем дефолтные значения
+            if quota.last_synced_at and not quota.sync_error:
+                # Лимиты из API
+                max_per_hour = quota.max_per_hour or 100
+                emails_available = quota.emails_available or 0
+                emails_limit = quota.emails_limit or 15000
+                per_user_daily_limit = 100  # По умолчанию 100 на пользователя
+            else:
+                # Дефолтные значения, если API не подключено
+                max_per_hour = 100
+                emails_available = 15000
+                emails_limit = 15000
+                per_user_daily_limit = 100
+
             now = timezone.now()
-            sent_last_min = SendLog.objects.filter(
+            sent_last_hour = SendLog.objects.filter(
                 provider="smtp_global",
                 status="sent",
-                created_at__gte=now - timezone.timedelta(minutes=1)
+                created_at__gte=now - timezone.timedelta(hours=1)
             ).count()
             sent_today = SendLog.objects.filter(
                 provider="smtp_global",
@@ -95,8 +112,8 @@ def send_pending_emails(self, batch_size: int = 50):
                 campaign__created_by=user,
                 created_at__date=now.date(),
             ).count()
-            # Лимит на человека: используем значение из настроек или 100 по умолчанию
-            per_user_daily_limit = smtp_cfg.per_user_daily_limit if smtp_cfg.per_user_daily_limit else PER_USER_DAILY_LIMIT
+            
+            # Проверка лимитов
             if per_user_daily_limit and sent_today_user >= per_user_daily_limit:
                 # Лимит пользователя достигнут - ставим на паузу
                 if camp.status == Campaign.Status.SENDING:
@@ -105,23 +122,24 @@ def send_pending_emails(self, batch_size: int = 50):
                     logger.info(f"Campaign {camp.id} paused: user daily limit reached ({sent_today_user}/{per_user_daily_limit})")
                 continue
             
-            if sent_today >= smtp_cfg.rate_per_day:
-                # Глобальный дневной лимит достигнут - ставим на паузу
+            # Проверка доступных писем из квоты
+            if emails_available <= 0:
+                # Квота исчерпана - ставим на паузу
                 if camp.status == Campaign.Status.SENDING:
                     camp.status = Campaign.Status.PAUSED
                     camp.save(update_fields=["status", "updated_at"])
-                    logger.info(f"Campaign {camp.id} paused: global daily limit reached ({sent_today}/{smtp_cfg.rate_per_day})")
+                    logger.info(f"Campaign {camp.id} paused: quota exhausted ({emails_available}/{emails_limit})")
                 continue
             
-            if sent_last_min >= smtp_cfg.rate_per_minute:
-                # Лимит в минуту достигнут - пропускаем эту итерацию, но не ставим на паузу
-                # (лимит в минуту восстанавливается быстро)
+            if sent_last_hour >= max_per_hour:
+                # Лимит в час достигнут - пропускаем эту итерацию
                 continue
 
+            # Вычисляем, сколько писем можно отправить
             allowed = max(1, min(
                 batch_size,
-                smtp_cfg.rate_per_minute - sent_last_min,
-                smtp_cfg.rate_per_day - sent_today,
+                max_per_hour - sent_last_hour,
+                emails_available,
                 (per_user_daily_limit - sent_today_user) if per_user_daily_limit else batch_size,
             ))
             
