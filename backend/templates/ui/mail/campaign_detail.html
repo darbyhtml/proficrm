@@ -33,7 +33,17 @@
           <div class="mt-3">
             <div class="text-sm muted mb-2">Тема: <b>{{ campaign.subject }}</b></div>
             {% if campaign.body_html %}
-              <iframe class="w-full" style="height:280px;border:1px solid rgba(194,226,222,.95);border-radius:12px;background:#fff" srcdoc='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial; padding:14px; color:#003D38} a{color:#01948E}</style></head><body>{{ campaign.body_html|escape }}</body></html>'></iframe>
+              {# Используем sandbox для безопасности, но разрешаем загрузку изображений #}
+              <iframe 
+                class="w-full" 
+                style="height:280px;border:1px solid rgba(194,226,222,.95);border-radius:12px;background:#fff" 
+                srcdoc='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial; padding:14px; color:#003D38} a{color:#01948E} img{max-width:100%;height:auto}</style></head><body>{{ campaign.body_html|safe }}</body></html>'
+                sandbox="allow-same-origin"
+              ></iframe>
+              <div class="text-xs muted-2 mt-2">
+                ⚠️ Если изображения не отображаются, возможно они используют внешние ссылки, которые блокируются браузером. 
+                Для корректного отображения в письмах рекомендуется встраивать изображения как base64 (data:image/...) или загружать их на ваш сервер.
+              </div>
             {% else %}
               <div class="text-sm" style="white-space:pre-wrap">{{ campaign.body_text }}</div>
             {% endif %}
