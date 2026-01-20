@@ -1224,8 +1224,49 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
         .order_by("created_at")
         .distinct()
     )
+    
+    # Дополнительные метрики для ежедневного отчета менеджеров
+    # 1. Общее количество входящих звонков
+    incoming_calls_count = (
+        CallRequest.objects.filter(
+            created_by=user,
+            created_at__gte=day_start,
+            created_at__lt=day_end,
+            direction=CallRequest.CallDirection.INCOMING
+        )
+        .exclude(status=CallRequest.Status.CANCELLED)
+        .count()
+    )
+    
+    # 2. Количество новых компаний
+    new_companies_count = Company.objects.filter(
+        created_by=user,
+        created_at__gte=day_start,
+        created_at__lt=day_end
+    ).count()
+    
+    # 3. Количество новых контактов (в компаниях, где пользователь ответственный)
+    new_contacts_count = Contact.objects.filter(
+        company__responsible=user,
+        created_at__gte=day_start,
+        created_at__lt=day_end
+    ).count()
+    
     items = []
-    lines = [f"Отчёт: холодные звонки за {day_label}", f"Всего: {qs.count()}", ""]
+    lines = [
+        f"Отчёт: ежедневная статистика за {day_label}",
+        "",
+        "Холодные звонки:",
+        f"  Всего: {qs.count()}",
+        "",
+        "Общая статистика:",
+        f"  Общее количество звонков (входящие), шт: {incoming_calls_count}",
+        f"  Количество новых компаний, шт: {new_companies_count}",
+        f"  Количество новых контактов, шт: {new_contacts_count}",
+        "",
+        "Детализация холодных звонков:",
+        ""
+    ]
     i = 0
     # Дедупликация: если пользователь несколько раз подряд кликает "позвонить" на один и тот же номер/контакт,
     # скрываем повторы в отчёте.
@@ -1251,7 +1292,20 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
         items.append({"time": t, "phone": phone, "contact": who, "company": company_name})
         lines.append(f"{i}) {t} — {who2} — {phone}")
 
-    return JsonResponse({"ok": True, "range": "day", "date": day_label, "count": len(items), "items": items, "text": "\n".join(lines)})
+    return JsonResponse({
+        "ok": True,
+        "range": "day",
+        "date": day_label,
+        "count": len(items),
+        "items": items,
+        "text": "\n".join(lines),
+        "stats": {
+            "cold_calls": qs.count(),
+            "incoming_calls": incoming_calls_count,
+            "new_companies": new_companies_count,
+            "new_contacts": new_contacts_count,
+        },
+    })
 
 
 @login_required
@@ -1300,9 +1354,52 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
         .order_by("created_at")
         .distinct()
     )
+    
+    # Дополнительные метрики для месячного отчета менеджеров
+    month_start_aware = timezone.make_aware(datetime.combine(selected, datetime.min.time()))
+    month_end_aware = timezone.make_aware(datetime.combine(month_end, datetime.min.time()))
+    
+    # 1. Общее количество входящих звонков
+    incoming_calls_count = (
+        CallRequest.objects.filter(
+            created_by=user,
+            created_at__gte=month_start_aware,
+            created_at__lt=month_end_aware,
+            direction=CallRequest.CallDirection.INCOMING
+        )
+        .exclude(status=CallRequest.Status.CANCELLED)
+        .count()
+    )
+    
+    # 2. Количество новых компаний
+    new_companies_count = Company.objects.filter(
+        created_by=user,
+        created_at__gte=month_start_aware,
+        created_at__lt=month_end_aware
+    ).count()
+    
+    # 3. Количество новых контактов (в компаниях, где пользователь ответственный)
+    new_contacts_count = Contact.objects.filter(
+        company__responsible=user,
+        created_at__gte=month_start_aware,
+        created_at__lt=month_end_aware
+    ).count()
 
     items = []
-    lines = [f"Отчёт: холодные звонки за {_month_label(selected)}", f"Всего: {qs.count()}", ""]
+    lines = [
+        f"Отчёт: месячная статистика за {_month_label(selected)}",
+        "",
+        "Холодные звонки:",
+        f"  Всего: {qs.count()}",
+        "",
+        "Общая статистика:",
+        f"  Общее количество звонков (входящие), шт: {incoming_calls_count}",
+        f"  Количество новых компаний, шт: {new_companies_count}",
+        f"  Количество новых контактов, шт: {new_contacts_count}",
+        "",
+        "Детализация холодных звонков:",
+        ""
+    ]
     i = 0
     dedupe_window_s = 60
     last_seen = {}  # (phone, company_id, contact_id) -> created_at
@@ -1338,6 +1435,12 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
             "count": len(items),
             "items": items,
             "text": "\n".join(lines),
+            "stats": {
+                "cold_calls": qs.count(),
+                "incoming_calls": incoming_calls_count,
+                "new_companies": new_companies_count,
+                "new_contacts": new_contacts_count,
+            },
         }
     )
 
