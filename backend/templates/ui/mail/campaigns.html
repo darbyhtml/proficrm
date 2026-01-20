@@ -149,7 +149,7 @@
               <th>Название</th>
               <th>Тема</th>
               <th>Статус</th>
-              {% if is_admin %}
+              {% if show_creator_column %}
                 <th>Создатель</th>
               {% endif %}
               <th>Создано</th>
@@ -184,7 +184,7 @@
                 </td>
               </tr>
             {% empty %}
-              <tr><td class="muted" colspan="{% if is_admin %}6{% else %}5{% endif %}" style="padding:1.25rem 1rem">Кампаний нет.</td></tr>
+              <tr><td class="muted" colspan="{% if show_creator_column %}6{% else %}5{% endif %}" style="padding:1.25rem 1rem">Кампаний нет.</td></tr>
             {% endfor %}
           </tbody>
         </table>

@@ -192,10 +192,25 @@ def mail_settings(request: HttpRequest) -> HttpResponse:
 def campaigns(request: HttpRequest) -> HttpResponse:
     user: User = request.user
     is_admin = (user.role == User.Role.ADMIN)
+    is_group_manager = (user.role == User.Role.GROUP_MANAGER)
+    is_branch_director = (user.role == User.Role.BRANCH_DIRECTOR)
+    is_sales_head = (user.role == User.Role.SALES_HEAD)
     
+    # Фильтрация кампаний по ролям:
+    # - Менеджер: только свои
+    # - Администратор и управляющий: все
+    # - Директор филиала и РОП: все своего филиала
     qs = Campaign.objects.all().order_by("-created_at")
     if user.role == User.Role.MANAGER:
         qs = qs.filter(created_by=user)
+    elif is_branch_director or is_sales_head:
+        # Директор филиала и РОП видят кампании всех пользователей своего филиала
+        if user.branch:
+            qs = qs.filter(created_by__branch=user.branch)
+        else:
+            # Если у пользователя нет филиала, показываем только свои
+            qs = qs.filter(created_by=user)
+    # Для админа и управляющего - все кампании (без фильтрации)
     
     # Аналитика для администратора
     analytics = None
@@ -332,15 +347,22 @@ def campaigns(request: HttpRequest) -> HttpResponse:
         "active_campaigns": user_active_campaigns,
     }
     
+    # Определяем, показывать ли колонку "Создатель" в таблице
+    show_creator_column = (is_admin or is_group_manager or is_branch_director or is_sales_head)
+    
     return render(
         request,
         "ui/mail/campaigns.html",
         {
             "campaigns": qs,
             "is_admin": is_admin,
+            "is_group_manager": is_group_manager,
+            "is_branch_director": is_branch_director,
+            "is_sales_head": is_sales_head,
             "analytics": analytics,
             "quota": quota,
             "user_limit_info": user_limit_info,
+            "show_creator_column": show_creator_column,
         }
     )
 
