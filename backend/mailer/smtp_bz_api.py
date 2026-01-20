@@ -83,13 +83,18 @@ def get_quota_info(api_key: str) -> Optional[Dict[str, Any]]:
                         # Если api_key в auth_header, используем как query параметр
                         if "api_key" in auth_header:
                             response = requests.get(url, params={"api_key": api_key}, headers=headers_base, timeout=10)
+                            auth_method = "query_param"
                         else:
                             response = requests.get(url, headers=headers, timeout=10)
+                            auth_method = list(auth_header.keys())[0]
+                        
+                        logger.info(f"smtp.bz API: запрос {url} (auth: {auth_method}), статус: {response.status_code}")
                         
                         if response.status_code == 200:
                             try:
                                 data = response.json()
-                                logger.info(f"smtp.bz API: успешно получены данные с {url} (auth: {list(auth_header.keys())[0]})")
+                                logger.info(f"smtp.bz API: успешно получены данные с {url} (auth: {auth_method})")
+                                logger.debug(f"smtp.bz API: ответ: {data}")
                                 parsed = _parse_quota_response(data)
                                 if parsed.get("emails_limit", 0) > 0 or parsed.get("tariff_name"):
                                     # Если получили хоть какие-то данные - считаем успехом
@@ -98,18 +103,22 @@ def get_quota_info(api_key: str) -> Optional[Dict[str, Any]]:
                                     logger.debug(f"smtp.bz API: получен пустой ответ с {url}")
                             except ValueError as e:
                                 # Не JSON ответ
-                                logger.debug(f"smtp.bz API: ответ не JSON с {url}: {e}")
-                                logger.debug(f"smtp.bz API: тело ответа: {response.text[:200]}")
+                                logger.warning(f"smtp.bz API: ответ не JSON с {url}: {e}")
+                                logger.warning(f"smtp.bz API: тело ответа: {response.text[:500]}")
                         elif response.status_code == 401:
-                            logger.debug(f"smtp.bz API: неавторизован с {url} (auth: {list(auth_header.keys())[0]})")
-                            logger.debug(f"smtp.bz API: тело ответа: {response.text[:200]}")
+                            logger.warning(f"smtp.bz API: неавторизован с {url} (auth: {auth_method})")
+                            logger.warning(f"smtp.bz API: тело ответа: {response.text[:500]}")
                         elif response.status_code == 404:
                             logger.debug(f"smtp.bz API: эндпоинт не найден: {url}")
                         else:
-                            logger.debug(f"smtp.bz API: статус {response.status_code} с {url}")
-                            logger.debug(f"smtp.bz API: тело ответа: {response.text[:200]}")
+                            logger.warning(f"smtp.bz API: статус {response.status_code} с {url} (auth: {auth_method})")
+                            logger.warning(f"smtp.bz API: тело ответа: {response.text[:500]}")
+                    except requests.exceptions.Timeout:
+                        logger.warning(f"smtp.bz API: таймаут при запросе {url}")
+                    except requests.exceptions.ConnectionError as e:
+                        logger.warning(f"smtp.bz API: ошибка подключения к {url}: {e}")
                     except requests.exceptions.RequestException as e:
-                        logger.debug(f"smtp.bz API: ошибка при запросе {url}: {e}")
+                        logger.warning(f"smtp.bz API: ошибка при запросе {url}: {e}")
         
         logger.warning("smtp.bz API: не удалось получить данные ни с одного эндпоинта. Проверьте правильность API ключа в личном кабинете smtp.bz")
         return None
