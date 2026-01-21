@@ -240,6 +240,8 @@ class Command(BaseCommand):
 
         through = Company.spheres.through
         company_fk, sphere_fk = _m2m_field_names(through)
+        company_fk_id = f"{company_fk}_id"
+        sphere_fk_id = f"{sphere_fk}_id"
 
         with transaction.atomic():
             total_links_moved = 0
@@ -248,7 +250,7 @@ class Command(BaseCommand):
             # Удаления (мусорные/служебные)
             for s in deletes:
                 # Удаляем связи m2m
-                deleted_links, _ = through.objects.filter(**{sphere_fk: s.id}).delete()
+                deleted_links, _ = through.objects.filter(**{sphere_fk_id: s.id}).delete()
                 total_links_moved += int(deleted_links or 0)
                 # Чистим filter_meta у кампаний
                 try:
@@ -270,14 +272,16 @@ class Command(BaseCommand):
                     continue
                 # компании, где есть src
                 company_ids = list(
-                    through.objects.filter(**{sphere_fk: src.id}).values_list(company_fk, flat=True)
+                    through.objects.filter(**{sphere_fk_id: src.id}).values_list(company_fk_id, flat=True)
                 )
                 if company_ids:
                     # добавляем связь на dst (ignore_conflicts, чтобы не падать на уникальности)
-                    to_create = [through(**{company_fk: cid, sphere_fk: dst.id}) for cid in company_ids]
+                    to_create = [through(**{company_fk_id: cid, sphere_fk_id: dst.id}) for cid in company_ids]
                     through.objects.bulk_create(to_create, ignore_conflicts=True)
                     # удаляем связи на src
-                    deleted_links, _ = through.objects.filter(**{company_fk + "__in": company_ids, sphere_fk: src.id}).delete()
+                    deleted_links, _ = through.objects.filter(
+                        **{company_fk_id + "__in": company_ids, sphere_fk_id: src.id}
+                    ).delete()
                     total_links_moved += int(deleted_links or 0)
 
                 # обновляем фильтры кампаний mailer (snapshot filter_meta) — чтобы старые id не висели
