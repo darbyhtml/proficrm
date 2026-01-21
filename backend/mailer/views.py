@@ -1130,6 +1130,14 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
     
     # Сфера: множественный выбор
     spheres = request.POST.getlist("sphere")
+    # Преобразуем в список целых чисел, фильтруя пустые значения
+    sphere_ids = []
+    for s in spheres:
+        if s and s.strip():
+            try:
+                sphere_ids.append(int(s.strip()))
+            except (ValueError, TypeError):
+                pass
     
     # Применяем фильтры
     if branch:
@@ -1138,11 +1146,14 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
         company_qs = company_qs.filter(responsible_id=responsible)
     if statuses:
         company_qs = company_qs.filter(status_id__in=statuses)
-    if spheres:
-        company_qs = company_qs.filter(spheres__id__in=spheres)
+    if sphere_ids:
+        # Фильтруем по сферам: компания попадает, если имеет хотя бы одну из выбранных сфер (OR-логика)
+        # Это означает, что компании с несколькими сферами будут обработаны, если хотя бы одна из их сфер выбрана
+        # Используем distinct() для исключения дублей при фильтрации по M2M
+        company_qs = company_qs.filter(spheres__id__in=sphere_ids).distinct()
     
-    # Важно: при фильтрации по m2m (spheres) будут дубли без distinct()
     # Преобразуем QuerySet в список для использования в __in
+    # distinct() уже применен выше, если были сферы
     company_ids = list(company_qs.order_by().values_list("id", flat=True).distinct())
 
     created = 0
@@ -1160,6 +1171,8 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
         if not company_ids:
             messages.info(request, "Нет компаний, соответствующих фильтрам.")
         else:
+            # company_ids уже содержит только компании с выбранными сферами (если сферы были выбраны)
+            # Фильтр spheres__id__in работает как OR: компания попадает, если имеет хотя бы одну из выбранных сфер
             emails_qs = (
                 ContactEmail.objects.filter(contact__company_id__in=company_ids)
                 .select_related("contact", "contact__company")
@@ -1198,6 +1211,7 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
 
     # 2) Добавляем основной email компании (если включено и лимит не достигнут)
     if include_company_email and created < limit and company_ids:
+        # company_ids уже содержит только компании с выбранными сферами (если сферы были выбраны)
         for c in Company.objects.filter(id__in=company_ids).only("id", "email").iterator():
             if created >= limit:
                 break
@@ -1230,6 +1244,7 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
     # 3) Добавляем дополнительные email адреса компании из CompanyEmail (если включено и лимит не достигнут)
     if include_company_email and created < limit and company_ids:
         from companies.models import CompanyEmail
+        # company_ids уже содержит только компании с выбранными сферами (если сферы были выбраны)
         company_emails_qs = (
             CompanyEmail.objects.filter(company_id__in=company_ids)
             .select_related("company")
@@ -1237,31 +1252,31 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
         )
         
         for ce in company_emails_qs.iterator():
-            if created >= limit:
-                break
-            email = (ce.value or "").strip().lower()
-            if not email:
-                continue
-            if email in cooldown_emails:
-                skipped_cooldown += 1
-                continue
-            # Пропускаем, если этот email уже добавлен из контактов или основного email компании
-            if CampaignRecipient.objects.filter(campaign=camp, email__iexact=email).exists():
-                continue
-            if Unsubscribe.objects.filter(email__iexact=email).exists():
-                CampaignRecipient.objects.get_or_create(
+                if created >= limit:
+                    break
+                email = (ce.value or "").strip().lower()
+                if not email:
+                    continue
+                if email in cooldown_emails:
+                    skipped_cooldown += 1
+                    continue
+                # Пропускаем, если этот email уже добавлен из контактов или основного email компании
+                if CampaignRecipient.objects.filter(campaign=camp, email__iexact=email).exists():
+                    continue
+                if Unsubscribe.objects.filter(email__iexact=email).exists():
+                    CampaignRecipient.objects.get_or_create(
+                        campaign=camp,
+                        email=email,
+                        defaults={"status": CampaignRecipient.Status.UNSUBSCRIBED, "contact_id": None, "company_id": ce.company_id},
+                    )
+                    continue
+                _, was_created = CampaignRecipient.objects.get_or_create(
                     campaign=camp,
                     email=email,
-                    defaults={"status": CampaignRecipient.Status.UNSUBSCRIBED, "contact_id": None, "company_id": ce.company_id},
+                    defaults={"contact_id": None, "company_id": ce.company_id},
                 )
-                continue
-            _, was_created = CampaignRecipient.objects.get_or_create(
-                campaign=camp,
-                email=email,
-                defaults={"contact_id": None, "company_id": ce.company_id},
-            )
-            if was_created:
-                created += 1
+                if was_created:
+                    created += 1
 
     # НЕ меняем статус автоматически - пользователь должен нажать "Старт" вручную
     # camp.status остается DRAFT (или текущий статус)
@@ -1269,7 +1284,7 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
         "branch": branch,
         "responsible": responsible,
         "status": statuses,
-        "sphere": spheres,
+        "sphere": sphere_ids,  # Сохраняем уже отфильтрованные ID сфер
         "limit": limit,
         "include_company_email": include_company_email,
         "include_contact_emails": include_contact_emails,
