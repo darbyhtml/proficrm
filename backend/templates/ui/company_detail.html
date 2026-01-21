@@ -303,13 +303,7 @@
             <div class="mt-1">
               {% if can_edit_company %}
                 <div class="phone-comment-wrapper" data-phone-type="main" data-company-id="{{ company.id }}">
-                  <div class="phone-comment-display text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors" data-edit-comment style="white-space: pre-wrap;">
-                    {% if company.phone_comment %}
-                      {{ company.phone_comment }}
-                    {% else %}
-                      Комментарий
-                    {% endif %}
-                  </div>
+                  <div class="phone-comment-display text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors" data-edit-comment style="white-space: pre-wrap;">{% if company.phone_comment %}{{ company.phone_comment }}{% else %}Комментарий{% endif %}</div>
                   <div class="phone-comment-edit hidden mt-1">
                     <textarea class="input text-xs" placeholder="Комментарий к номеру" maxlength="255" data-comment-input rows="2" style="padding:.35rem .5rem;font-size:.75rem;min-height:3.25rem;resize:vertical">{{ company.phone_comment|default:'' }}</textarea>
                     <div class="flex gap-1 mt-1">
@@ -404,13 +398,7 @@
                   <div class="mt-1">
                     {% if can_edit_company %}
                       <div class="phone-comment-wrapper" data-phone-type="company" data-phone-id="{{ phone.id }}">
-                        <div class="phone-comment-display text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors" data-edit-comment style="white-space: pre-wrap;">
-                          {% if phone.comment %}
-                            {{ phone.comment }}
-                          {% else %}
-                            Комментарий
-                          {% endif %}
-                        </div>
+                        <div class="phone-comment-display text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors" data-edit-comment style="white-space: pre-wrap;">{% if phone.comment %}{{ phone.comment }}{% else %}Комментарий{% endif %}</div>
                         <div class="phone-comment-edit hidden mt-1">
                           <textarea class="input text-xs" placeholder="Комментарий к номеру" maxlength="255" data-comment-input rows="2" style="padding:.35rem .5rem;font-size:.75rem;min-height:3.25rem;resize:vertical">{{ phone.comment|default:'' }}</textarea>
                           <div class="flex gap-1 mt-1">
@@ -691,23 +679,17 @@
                             <div class="mt-1">
                               {% if can_edit_company %}
                                 <div class="phone-comment-wrapper" data-phone-type="contact" data-phone-id="{{ p.id }}">
-                                  <div class="phone-comment-display text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors" data-edit-comment style="white-space: pre-wrap;">
-                                    {% if p.comment %}
-                                      {{ p.comment }}
-                                    {% else %}
-                                      Комментарий
-                                    {% endif %}
-                                  </div>
+                                  <div class="phone-comment-display text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors" data-edit-comment style="white-space: pre-wrap;">{% if p.comment %}{{ p.comment }}{% else %}Комментарий{% endif %}</div>
                                   <div class="phone-comment-edit hidden mt-1">
                                     <textarea class="input text-xs" placeholder="Комментарий к номеру" maxlength="255" data-comment-input rows="2" style="padding:.35rem .5rem;font-size:.75rem;min-height:3.25rem;resize:vertical">{{ p.comment|default:'' }}</textarea>
-                          <div class="flex gap-1 mt-1">
-                            <button type="button" class="btn btn-primary btn-sm" data-save-comment>Сохранить</button>
-                            <button type="button" class="btn btn-outline btn-sm" data-cancel-comment>Отмена</button>
-                          </div>
+                                    <div class="flex gap-1 mt-1">
+                                      <button type="button" class="btn btn-primary btn-sm" data-save-comment>Сохранить</button>
+                                      <button type="button" class="btn btn-outline btn-sm" data-cancel-comment>Отмена</button>
+                                    </div>
                                   </div>
                                 </div>
                               {% elif p.comment %}
-                                <div class="text-xs text-brand-dark/50 mt-1">{{ p.comment }}</div>
+                                <div class="text-xs text-brand-dark/50 mt-1" style="white-space: pre-wrap;">{{ p.comment }}</div>
                               {% endif %}
                             </div>
                           </div>
