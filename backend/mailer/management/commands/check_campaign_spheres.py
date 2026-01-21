@@ -35,6 +35,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         dry_run = options.get("dry_run", False)
         campaign_id = options.get("campaign_id")
+        fix_meta = options.get("fix_meta", False)
 
         self.stdout.write("🔍 Проверка получателей кампаний по сферам деятельности...")
         if dry_run:
