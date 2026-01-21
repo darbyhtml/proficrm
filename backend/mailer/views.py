@@ -92,14 +92,34 @@ def _smtp_bz_today_stats_cached(*, api_key: str, today_str: str) -> dict:
         return {}
 
 def _can_manage_campaign(user: User, camp: Campaign) -> bool:
-    # Админ — всегда
-    if user.role == User.Role.ADMIN:
+    # ТЗ:
+    # - менеджер: только свои кампании
+    # - директор филиала/РОП: кампании филиала создателя
+    # - управляющий/админ: все кампании
+    if not user or not user.is_authenticated or not user.is_active:
+        return False
+    if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
         return True
-    # Менеджер — только свои кампании
     if user.role == User.Role.MANAGER:
-        return camp.created_by_id == user.id
-    # Остальные роли (директор филиала/роп/управляющий) — пока разрешаем, как и просмотр кампаний.
-    return True
+        return bool(camp.created_by_id and camp.created_by_id == user.id)
+    if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD):
+        # если у пользователя нет филиала — можем управлять только своими
+        if not user.branch_id:
+            return bool(camp.created_by_id and camp.created_by_id == user.id)
+        # если у кампании нет создателя — запрещаем
+        if not camp.created_by_id:
+            return False
+        # проверяем филиал создателя
+        try:
+            creator = getattr(camp, "created_by", None)
+            creator_branch_id = getattr(creator, "branch_id", None) if creator else None
+            if creator_branch_id is None:
+                # если у создателя нет филиала — считаем, что это "не филиальная" кампания; директор/РОП управлять не должны
+                return False
+            return bool(creator_branch_id == user.branch_id)
+        except Exception:
+            return False
+    return False
 
 def _contains_links(value: str) -> bool:
     v = (value or "").lower()
@@ -1104,6 +1124,11 @@ def campaign_pick(request: HttpRequest) -> JsonResponse:
     qs = Campaign.objects.all().order_by("-created_at")
     if user.role == User.Role.MANAGER:
         qs = qs.filter(created_by=user)
+    elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+        qs = qs.filter(created_by__branch_id=user.branch_id)
+    elif user.role not in (User.Role.ADMIN, User.Role.GROUP_MANAGER) and not user.is_superuser:
+        # на всякий случай: если роль неожиданная — только свои
+        qs = qs.filter(created_by=user)
 
     items = []
     for c in qs[:200]:
@@ -1174,7 +1199,7 @@ def campaign_add_email(request: HttpRequest) -> JsonResponse:
 def campaign_recipient_add(request: HttpRequest, campaign_id) -> HttpResponse:
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
-    if user.role == User.Role.MANAGER and camp.created_by_id != user.id:
+    if not _can_manage_campaign(user, camp):
         messages.error(request, "Доступ запрещён.")
         return redirect("campaigns")
     if request.method != "POST":
@@ -1231,7 +1256,7 @@ def campaign_recipient_add(request: HttpRequest, campaign_id) -> HttpResponse:
 def campaign_recipient_delete(request: HttpRequest, campaign_id, recipient_id) -> HttpResponse:
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
-    if user.role == User.Role.MANAGER and camp.created_by_id != user.id:
+    if not _can_manage_campaign(user, camp):
         messages.error(request, "Доступ запрещён.")
         return redirect("campaigns")
     if request.method != "POST":
@@ -1249,7 +1274,7 @@ def campaign_recipients_bulk_delete(request: HttpRequest, campaign_id) -> HttpRe
     """Массовое удаление получателей."""
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
-    if user.role == User.Role.MANAGER and camp.created_by_id != user.id:
+    if not _can_manage_campaign(user, camp):
         messages.error(request, "Доступ запрещён.")
         return redirect("campaigns")
     if request.method != "POST":
@@ -1293,7 +1318,7 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
     """
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
-    if user.role == User.Role.MANAGER and camp.created_by_id != user.id:
+    if not _can_manage_campaign(user, camp):
         messages.error(request, "Доступ запрещён.")
         return redirect("campaigns")
 
@@ -1632,7 +1657,7 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
 
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
-    if user.role == User.Role.MANAGER and camp.created_by_id != user.id:
+    if not _can_manage_campaign(user, camp):
         messages.error(request, "Доступ запрещён.")
         return redirect("campaigns")
 
@@ -1641,8 +1666,15 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
         messages.error(request, "SMTP не настроен администратором (Почта → Настройки).")
         return redirect("campaign_detail", campaign_id=camp.id)
 
-    if not (user.email or "").strip():
-        messages.error(request, "В вашем профиле не задан email (Reply-To). Укажите email в профиле и повторите попытку.")
+    # Отправка идет от создателя кампании (Reply-To/подпись). Управлять кампанией могут директор/РОП/админ,
+    # поэтому проверяем email создателя кампании, а не текущего пользователя.
+    creator = getattr(camp, "created_by", None)
+    creator_email = ((creator.email if creator else "") or "").strip()
+    if not creator_email:
+        messages.error(
+            request,
+            "У создателя кампании не задан email (Reply-To). Укажите email в профиле создателя кампании и повторите попытку.",
+        )
         return redirect("campaign_detail", campaign_id=camp.id)
 
     # Ограничение по рабочему времени (9:00-18:00 МСК) — чтобы письма не уходили ночью
@@ -1944,13 +1976,22 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
     """
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
-    if user.role == User.Role.MANAGER and camp.created_by_id != user.id:
+    if not _can_manage_campaign(user, camp):
         messages.error(request, "Доступ запрещён.")
         return redirect("campaigns")
 
     smtp_cfg = GlobalMailAccount.load()
     if not smtp_cfg.is_enabled:
         messages.error(request, "SMTP не настроен администратором (Почта → Настройки).")
+        return redirect("campaign_detail", campaign_id=camp.id)
+
+    creator = getattr(camp, "created_by", None)
+    creator_email = ((creator.email if creator else "") or "").strip()
+    if not creator or not creator_email:
+        messages.error(
+            request,
+            "У создателя кампании не задан email (Reply-To) или не найден создатель. Укажите email в профиле создателя и повторите попытку.",
+        )
         return redirect("campaign_detail", campaign_id=camp.id)
 
     to_email = (user.email or "").strip()
@@ -1962,8 +2003,10 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
     # (хотя в этой функции мы их не трогаем, это дополнительная защита)
     recipients_before = list(camp.recipients.values_list("id", "status"))
 
+    # Тест должен максимально совпадать с реальной рассылкой: подпись/Reply-To от создателя кампании,
+    # при этом письмо отправляем на текущего пользователя.
     base_html, base_text = apply_signature(
-        user=user,
+        user=creator,
         body_html=(camp.body_html or ""),
         body_text=(html_to_text(camp.body_html or "") or camp.body_text or ""),
     )
@@ -1976,14 +2019,14 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
         base_html, base_text = append_unsubscribe_footer(body_html=base_html, body_text=base_text, unsubscribe_url=unsub_url)
 
     msg = build_message(
-        account=MailAccount.objects.get_or_create(user=user)[0],
+        account=MailAccount.objects.get_or_create(user=creator)[0],
         to_email=to_email,
         subject=f"[ТЕСТ] {camp.subject}",
         body_text=(base_text or ""),
         body_html=(base_html or ""),
         from_email=((smtp_cfg.from_email or "").strip() or (smtp_cfg.smtp_username or "").strip()),
         from_name=((camp.sender_name or "").strip() or (smtp_cfg.from_name or "CRM ПРОФИ").strip()),
-        reply_to=(user.email or "").strip(),
+        reply_to=creator_email,
         attachment=camp.attachment if camp.attachment else None,
     )
     if unsub_url:

@@ -4416,10 +4416,15 @@ def task_list(request: HttpRequest) -> HttpResponse:
     # - Админ / управляющий: все задачи
     # - Директор филиала / РОП: задачи своего филиала
     # - Остальные: фильтрация дальше по assigned_to (см. mine)
-    if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+    if user.role == User.Role.MANAGER:
+        # По ТЗ: менеджер видит только свои задачи (исполнитель).
+        qs = qs.filter(assigned_to=user)
+    elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+        # По ТЗ: директор/РОП видят задачи своего филиала + свои задачи.
         qs = qs.filter(
-            Q(company__branch_id=user.branch_id)
-            | Q(assigned_to__branch_id=user.branch_id)
+            Q(assigned_to__branch_id=user.branch_id)
+            | Q(company__branch_id=user.branch_id)
+            | Q(assigned_to=user)
         )
 
     qs = qs.distinct()
@@ -4428,13 +4433,17 @@ def task_list(request: HttpRequest) -> HttpResponse:
     # - админ / управляющий: все сотрудники
     # - остальные: только сотрудники своего филиала (если филиал задан)
     # Используем get_users_for_lists для исключения администраторов и группировки по филиалам
-    if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+    if user.role == User.Role.MANAGER:
+        assignees = [user]
+    elif user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
         assignees_qs = get_users_for_lists(user)
+        assignees = list(assignees_qs)
     elif user.branch_id:
         assignees_qs = get_users_for_lists(user).filter(branch_id=user.branch_id)
+        assignees = list(assignees_qs)
     else:
         assignees_qs = get_users_for_lists(user)
-    assignees = list(assignees_qs)
+        assignees = list(assignees_qs)
 
     status = (request.GET.get("status") or "").strip()
     show_done = (request.GET.get("show_done") or "").strip()
@@ -4458,6 +4467,9 @@ def task_list(request: HttpRequest) -> HttpResponse:
     #     * админ/управляющий: показываем все (без mine)
     #     * директор/РОП: показываем все своего филиала (фильтр филиала уже выше)
     #     * остальные: по умолчанию только свои
+    if user.role == User.Role.MANAGER:
+        # Для менеджера mine/0 не должен расширять видимость.
+        mine = "1"
     if mine == "1":
         qs = qs.filter(assigned_to=user)
     elif mine == "0":
@@ -4475,7 +4487,12 @@ def task_list(request: HttpRequest) -> HttpResponse:
     if assigned_to_param:
         try:
             assigned_to_id = int(assigned_to_param)
-            qs = qs.filter(assigned_to_id=assigned_to_id)
+            # Менеджер не должен смотреть задачи других сотрудников
+            if user.role == User.Role.MANAGER and assigned_to_id != user.id:
+                assigned_to_param = str(user.id)
+                qs = qs.filter(assigned_to=user)
+            else:
+                qs = qs.filter(assigned_to_id=assigned_to_id)
         except (ValueError, TypeError):
             assigned_to_param = ""
 
@@ -5221,6 +5238,9 @@ def _can_manage_task_status_ui(user: User, task: Task) -> bool:
         return False
     if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
         return True
+    # По ТЗ: менеджер управляет статусом только своих задач (исполнитель).
+    if user.role == User.Role.MANAGER:
+        return bool(task.assigned_to_id and task.assigned_to_id == user.id)
     if task.assigned_to_id and task.assigned_to_id == user.id:
         return True
     if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
@@ -5242,6 +5262,9 @@ def _can_edit_task_ui(user: User, task: Task) -> bool:
     - Ответственный за карточку компании (company.responsible)
     - Директор филиала / РОП — задачи своего филиала
     """
+    # По ТЗ: менеджер работает только со своими задачами (исполнитель).
+    if user.role == User.Role.MANAGER:
+        return bool(task.assigned_to_id and task.assigned_to_id == user.id)
     # Создатель всегда может редактировать свою задачу
     if task.created_by_id and task.created_by_id == user.id:
         return True
@@ -5280,6 +5303,9 @@ def _can_delete_task_ui(user: User, task: Task) -> bool:
         return False
     if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
         return True
+    # По ТЗ: менеджер удаляет только свои задачи (исполнитель).
+    if user.role == User.Role.MANAGER:
+        return bool(task.assigned_to_id and task.assigned_to_id == user.id)
     # Ответственный за компанию
     if task.company_id and getattr(task, "company", None):
         try:
@@ -5656,17 +5682,22 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
         id=task_id
     )
     
-    # Проверяем права на просмотр
+    # Проверяем права на просмотр (ТЗ):
+    # - менеджер: только свои (assigned_to)
+    # - РОП/директор: свои + задачи филиала
+    # - админ/управляющий: все
     can_view = False
     if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
         can_view = True
+    elif user.role == User.Role.MANAGER:
+        can_view = bool(task.assigned_to_id and task.assigned_to_id == user.id)
     elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
-        if task.company_id and getattr(task.company, "branch_id", None) == user.branch_id:
+        if task.assigned_to_id == user.id:
+            can_view = True
+        elif task.company_id and getattr(task.company, "branch_id", None) == user.branch_id:
             can_view = True
         elif task.assigned_to_id and getattr(task.assigned_to, "branch_id", None) == user.branch_id:
             can_view = True
-    elif task.assigned_to_id == user.id or task.created_by_id == user.id:
-        can_view = True
     
     if not can_view:
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
