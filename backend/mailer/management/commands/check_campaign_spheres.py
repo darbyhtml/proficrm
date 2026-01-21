@@ -26,6 +26,11 @@ class Command(BaseCommand):
             type=str,
             help="ID конкретной кампании для проверки (если не указан, проверяются все)",
         )
+        parser.add_argument(
+            "--fix-meta",
+            action="store_true",
+            help="Исправить некорректные данные в filter_meta (нормализовать формат сфер)",
+        )
 
     def handle(self, *args, **options):
         dry_run = options.get("dry_run", False)
@@ -62,28 +67,72 @@ class Command(BaseCommand):
             
             # Получаем выбранные сферы из filter_meta
             filter_meta = campaign.filter_meta or {}
-            sphere_ids = filter_meta.get("sphere", [])
+            sphere_ids_raw = filter_meta.get("sphere", [])
             
-            if not sphere_ids:
+            if not sphere_ids_raw:
                 self.stdout.write(self.style.WARNING(f"   ⚠️  Нет выбранных сфер в filter_meta, пропускаем"))
                 self.stdout.write("")
                 continue
 
-            # Преобразуем в список целых чисел
+            # Нормализуем: обрабатываем разные форматы (список, строка, число)
+            sphere_ids = []
             try:
-                sphere_ids = [int(s) for s in sphere_ids if s]
+                # Если это строка (например, "1,8" или "18")
+                if isinstance(sphere_ids_raw, str):
+                    # Пробуем разбить по запятой
+                    if "," in sphere_ids_raw:
+                        parts = sphere_ids_raw.split(",")
+                        for part in parts:
+                            part = part.strip()
+                            if part:
+                                sphere_ids.append(int(part))
+                    else:
+                        # Одна строка - преобразуем в число
+                        sphere_ids.append(int(sphere_ids_raw.strip()))
+                # Если это число (не список)
+                elif isinstance(sphere_ids_raw, (int, float)):
+                    sphere_ids.append(int(sphere_ids_raw))
+                # Если это список
+                elif isinstance(sphere_ids_raw, list):
+                    for s in sphere_ids_raw:
+                        if s is not None:
+                            try:
+                                sphere_ids.append(int(s))
+                            except (ValueError, TypeError):
+                                # Пропускаем невалидные значения
+                                pass
+                else:
+                    self.stdout.write(self.style.ERROR(f"   ❌ Неожиданный тип данных для сфер: {type(sphere_ids_raw)}"))
+                    total_errors += 1
+                    self.stdout.write("")
+                    continue
             except (ValueError, TypeError) as e:
-                self.stdout.write(self.style.ERROR(f"   ❌ Ошибка при обработке ID сфер: {e}"))
+                self.stdout.write(self.style.ERROR(f"   ❌ Ошибка при обработке ID сфер: {e}, raw: {sphere_ids_raw}"))
                 total_errors += 1
                 self.stdout.write("")
                 continue
 
             if not sphere_ids:
-                self.stdout.write(self.style.WARNING(f"   ⚠️  Нет валидных ID сфер, пропускаем"))
+                self.stdout.write(self.style.WARNING(f"   ⚠️  Нет валидных ID сфер после нормализации, пропускаем"))
+                self.stdout.write(f"   Исходные данные: {sphere_ids_raw} (тип: {type(sphere_ids_raw)})")
                 self.stdout.write("")
                 continue
 
             self.stdout.write(f"   🎯 Выбранные сферы: {sphere_ids}")
+            # Дополнительная информация для отладки
+            if sphere_ids_raw != sphere_ids:
+                self.stdout.write(self.style.WARNING(f"   ⚠️  Исходные данные были нормализованы: {sphere_ids_raw} -> {sphere_ids}"))
+            
+            # Если включен режим исправления и данные были нормализованы
+            if fix_meta and sphere_ids_raw != sphere_ids:
+                if not dry_run:
+                    # Обновляем filter_meta с нормализованными данными
+                    filter_meta["sphere"] = sphere_ids
+                    campaign.filter_meta = filter_meta
+                    campaign.save(update_fields=["filter_meta", "updated_at"])
+                    self.stdout.write(self.style.SUCCESS(f"   ✅ filter_meta обновлен с нормализованными сферами"))
+                else:
+                    self.stdout.write(f"   (dry-run) filter_meta будет обновлен: {sphere_ids_raw} -> {sphere_ids}")
 
             # Получаем всех получателей кампании с компаниями
             recipients = CampaignRecipient.objects.filter(

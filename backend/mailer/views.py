@@ -1280,11 +1280,21 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
 
     # НЕ меняем статус автоматически - пользователь должен нажать "Старт" вручную
     # camp.status остается DRAFT (или текущий статус)
+    # Убеждаемся, что sphere_ids - это список целых чисел (не строки, не одно число)
+    normalized_sphere_ids = []
+    if sphere_ids:
+        for sid in sphere_ids:
+            try:
+                normalized_sphere_ids.append(int(sid))
+            except (ValueError, TypeError):
+                # Пропускаем невалидные значения
+                pass
+    
     camp.filter_meta = {
         "branch": branch,
         "responsible": responsible,
         "status": statuses,
-        "sphere": sphere_ids,  # Сохраняем уже отфильтрованные ID сфер
+        "sphere": normalized_sphere_ids,  # Сохраняем список целых чисел
         "limit": limit,
         "include_company_email": include_company_email,
         "include_contact_emails": include_contact_emails,
