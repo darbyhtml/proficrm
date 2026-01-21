@@ -101,15 +101,18 @@ class Command(BaseCommand):
             # Получаем ID всех компаний получателей
             company_ids = list(recipients.values_list("company_id", flat=True).distinct())
             
-            # Получаем компании с их сферами
+            # Получаем компании с их сферами (используем prefetch_related для оптимизации)
             companies_with_spheres = Company.objects.filter(
                 id__in=company_ids
             ).prefetch_related("spheres")
 
-            # Создаем словарь: company_id -> список ID сфер компании
+            # Создаем словарь: company_id -> список ID сфер компании (как целые числа)
             company_spheres_map = {}
             for company in companies_with_spheres:
-                company_spheres_map[str(company.id)] = list(company.spheres.values_list("id", flat=True))
+                # Получаем ID сфер как целые числа для корректного сравнения
+                sphere_ids_list = list(company.spheres.values_list("id", flat=True))
+                # Преобразуем UUID компании в строку для использования как ключ
+                company_spheres_map[str(company.id)] = [int(sid) for sid in sphere_ids_list]
 
             # Проверяем каждого получателя
             recipients_to_remove = []
@@ -119,15 +122,34 @@ class Command(BaseCommand):
                 checked_count += 1
                 company_id_str = str(recipient.company_id) if recipient.company_id else None
                 
-                if not company_id_str or company_id_str not in company_spheres_map:
-                    # Компания не найдена или не имеет сфер - удаляем
+                if not company_id_str:
+                    # Получатель без компании - удаляем
                     recipients_to_remove.append(recipient)
                     continue
+                
+                if company_id_str not in company_spheres_map:
+                    # Компания не найдена в результатах запроса - возможно, была удалена
+                    # Или компания не имеет сфер (пустой список)
+                    # Проверяем, есть ли компания в БД
+                    try:
+                        company = Company.objects.get(id=recipient.company_id)
+                        company_sphere_ids = list(company.spheres.values_list("id", flat=True))
+                        if not company_sphere_ids:
+                            # Компания существует, но не имеет сфер - удаляем получателя
+                            recipients_to_remove.append(recipient)
+                            continue
+                        # Если сферы есть, но их нет в map - обновляем map
+                        company_spheres_map[company_id_str] = [int(sid) for sid in company_sphere_ids]
+                    except Company.DoesNotExist:
+                        # Компания удалена - удаляем получателя
+                        recipients_to_remove.append(recipient)
+                        continue
 
                 company_sphere_ids = company_spheres_map[company_id_str]
                 
                 # Проверяем, есть ли хотя бы одна общая сфера (OR-логика)
-                has_matching_sphere = any(sphere_id in company_sphere_ids for sphere_id in sphere_ids)
+                # Сравниваем как целые числа для надежности
+                has_matching_sphere = any(int(sphere_id) in company_sphere_ids for sphere_id in sphere_ids)
                 
                 if not has_matching_sphere:
                     recipients_to_remove.append(recipient)
@@ -140,8 +162,13 @@ class Command(BaseCommand):
                 if dry_run:
                     # В режиме dry-run показываем примеры
                     for i, recipient in enumerate(recipients_to_remove[:5]):
-                        company_sphere_ids = company_spheres_map.get(str(recipient.company_id), [])
-                        self.stdout.write(f"      - {recipient.email} (компания: {recipient.company_id}, сферы компании: {company_sphere_ids})")
+                        company_id_str = str(recipient.company_id) if recipient.company_id else None
+                        company_sphere_ids = company_spheres_map.get(company_id_str, [])
+                        # Показываем также выбранные сферы для сравнения
+                        self.stdout.write(f"      - {recipient.email}")
+                        self.stdout.write(f"        Компания: {recipient.company_id}")
+                        self.stdout.write(f"        Сферы компании: {company_sphere_ids}")
+                        self.stdout.write(f"        Выбранные сферы: {sphere_ids}")
                     if len(recipients_to_remove) > 5:
                         self.stdout.write(f"      ... и еще {len(recipients_to_remove) - 5} получателей")
                 else:
