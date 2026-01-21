@@ -284,3 +284,157 @@ def _parse_quota_response(data: Dict[str, Any]) -> Dict[str, Any]:
     
     logger.debug(f"smtp.bz API: распарсенные данные: {result}")
     return result
+
+
+def get_message_info(api_key: str, message_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Получает информацию о письме по его ID через API smtp.bz.
+    
+    Args:
+        api_key: API ключ для аутентификации
+        message_id: ID письма (Message-ID)
+        
+    Returns:
+        Словарь с информацией о письме, или None в случае ошибки
+        
+    Пример ответа:
+    {
+        "status": "sent",  # sent, resent, return, bounce, cancel
+        "error": "...",
+        "bounce_reason": "...",
+        ...
+    }
+    """
+    if not api_key or not message_id:
+        return None
+    
+    try:
+        # Эндпоинт согласно документации: GET /log/message/{messageid}
+        endpoint = f"/log/message/{message_id}"
+        url = f"{SMTP_BZ_API_BASE}{endpoint}"
+        
+        # Варианты аутентификации
+        auth_variants = [
+            {"Authorization": api_key},
+            {"Authorization": f"API-KEY {api_key}"},
+            {"Authorization": f"Bearer {api_key}"},
+        ]
+        
+        headers_base = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        
+        for auth_header in auth_variants:
+            headers = {**headers_base, **auth_header}
+            try:
+                response = requests.get(url, headers=headers, timeout=5)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    logger.debug(f"smtp.bz API: получена информация о письме {message_id}: {data}")
+                    return data
+                elif response.status_code == 400:
+                    logger.debug(f"smtp.bz API: MessageId указан не корректно: {message_id}")
+                    return None
+                elif response.status_code == 401:
+                    logger.debug(f"smtp.bz API: неавторизован для получения информации о письме")
+                    continue  # Пробуем следующий вариант аутентификации
+                elif response.status_code == 404:
+                    logger.debug(f"smtp.bz API: письмо {message_id} не найдено")
+                    return None
+            except requests.exceptions.RequestException as e:
+                logger.debug(f"smtp.bz API: ошибка при запросе информации о письме: {e}")
+                continue
+        
+        return None
+    except Exception as e:
+        logger.error(f"smtp.bz API: неожиданная ошибка при получении информации о письме: {e}", exc_info=True)
+        return None
+
+
+def get_message_logs(
+    api_key: str,
+    to_email: Optional[str] = None,
+    from_email: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 100,
+    offset: int = 0,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    Получает список писем через API smtp.bz с фильтрацией.
+    
+    Args:
+        api_key: API ключ для аутентификации
+        to_email: Email получателя (фильтр)
+        from_email: Email отправителя (фильтр)
+        status: Статус письма (sent, resent, return, bounce, cancel)
+        limit: Количество строк возврата
+        offset: Шаг (пагинация)
+        start_date: Дата от (формат 2020-01-01)
+        end_date: Дата до (формат 2020-01-01)
+        
+    Returns:
+        Словарь с данными о письмах, или None в случае ошибки
+    """
+    if not api_key:
+        return None
+    
+    try:
+        # Эндпоинт согласно документации: GET /log/message
+        endpoint = "/log/message"
+        url = f"{SMTP_BZ_API_BASE}{endpoint}"
+        
+        # Параметры запроса
+        params = {
+            "limit": limit,
+            "offset": offset,
+        }
+        if to_email:
+            params["to"] = to_email
+        if from_email:
+            params["from"] = from_email
+        if status:
+            params["status"] = status
+        if start_date:
+            params["startDate"] = start_date
+        if end_date:
+            params["endDate"] = end_date
+        
+        # Варианты аутентификации
+        auth_variants = [
+            {"Authorization": api_key},
+            {"Authorization": f"API-KEY {api_key}"},
+            {"Authorization": f"Bearer {api_key}"},
+        ]
+        
+        headers_base = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        
+        for auth_header in auth_variants:
+            headers = {**headers_base, **auth_header}
+            try:
+                response = requests.get(url, headers=headers, params=params, timeout=10)
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    logger.debug(f"smtp.bz API: получены логи писем: {len(data.get('data', [])) if isinstance(data, dict) else len(data) if isinstance(data, list) else 0} записей")
+                    return data
+                elif response.status_code == 401:
+                    logger.debug(f"smtp.bz API: неавторизован для получения логов")
+                    continue
+                elif response.status_code == 404:
+                    logger.debug(f"smtp.bz API: письма не найдены")
+                    return {"data": [], "total": 0}
+            except requests.exceptions.RequestException as e:
+                logger.debug(f"smtp.bz API: ошибка при запросе логов: {e}")
+                continue
+        
+        return None
+    except Exception as e:
+        logger.error(f"smtp.bz API: неожиданная ошибка при получении логов: {e}", exc_info=True)
+        return None

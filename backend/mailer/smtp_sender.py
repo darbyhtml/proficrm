@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import smtplib
 import ssl
+import re
 from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
 
@@ -77,24 +78,115 @@ def build_message(
     return msg
 
 
+def format_smtp_error(error: Exception, account: _SmtpAccountLike) -> str:
+    """
+    Форматирует SMTP ошибку в понятное сообщение для пользователя.
+    
+    Args:
+        error: Исключение, возникшее при отправке
+        account: SMTP аккаунт
+        
+    Returns:
+        Понятное сообщение об ошибке
+    """
+    error_str = str(error)
+    error_type = type(error).__name__
+    
+    # Ошибки аутентификации
+    if "authentication failed" in error_str.lower() or "535" in error_str or "535-" in error_str:
+        return "Ошибка аутентификации: неверный логин или пароль SMTP. Проверьте настройки в Почта → Настройки."
+    
+    # Ошибки подключения
+    if isinstance(error, (smtplib.SMTPConnectError, ConnectionError, OSError)):
+        if "Connection refused" in error_str or "Connection refused" in str(error):
+            return f"Не удалось подключиться к SMTP серверу {account.smtp_host}:{account.smtp_port}. Проверьте настройки подключения."
+        if "timeout" in error_str.lower() or "timed out" in error_str.lower():
+            return f"Таймаут подключения к SMTP серверу {account.smtp_host}:{account.smtp_port}. Сервер не отвечает."
+        if "Name or service not known" in error_str or "getaddrinfo failed" in error_str:
+            return f"Не удалось найти SMTP сервер {account.smtp_host}. Проверьте правильность адреса сервера."
+        return f"Ошибка подключения к SMTP серверу: {error_str[:200]}"
+    
+    # Ошибки STARTTLS
+    if "STARTTLS" in error_str or "starttls" in error_str.lower():
+        return f"Ошибка установки защищенного соединения (STARTTLS) с {account.smtp_host}:{account.smtp_port}. Попробуйте отключить STARTTLS или проверьте настройки."
+    
+    # Ошибки отправки
+    if isinstance(error, smtplib.SMTPRecipientsRefused):
+        return f"Получатель отклонен сервером: {error_str[:200]}"
+    
+    if isinstance(error, smtplib.SMTPSenderRefused):
+        return f"Отправитель отклонен сервером: {error_str[:200]}"
+    
+    if isinstance(error, smtplib.SMTPDataError):
+        return f"Ошибка данных письма: {error_str[:200]}"
+    
+    if isinstance(error, smtplib.SMTPException):
+        # Парсим код ошибки SMTP (например, "550 5.1.1 User unknown")
+        code_match = re.search(r'(\d{3})\s+([\d\.]+)?\s*(.+)', error_str)
+        if code_match:
+            code = code_match.group(1)
+            message = code_match.group(3) if code_match.group(3) else error_str
+            
+            # Известные коды ошибок
+            error_codes = {
+                "550": "Почтовый ящик не существует или недоступен",
+                "551": "Пользователь не найден",
+                "552": "Превышен лимит размера почтового ящика",
+                "553": "Недопустимый адрес получателя",
+                "554": "Транзакция не удалась",
+                "421": "Сервис недоступен, попробуйте позже",
+                "450": "Почтовый ящик временно недоступен",
+                "451": "Ошибка обработки, попробуйте позже",
+                "452": "Недостаточно места на сервере",
+            }
+            
+            if code in error_codes:
+                return f"{error_codes[code]} (код {code}): {message[:150]}"
+            else:
+                return f"Ошибка SMTP (код {code}): {message[:150]}"
+        
+        return f"Ошибка SMTP: {error_str[:200]}"
+    
+    # Общие ошибки
+    if "RuntimeError" in error_type:
+        return error_str  # RuntimeError уже содержит понятное сообщение
+    
+    # Если не удалось определить тип ошибки, возвращаем исходное сообщение
+    return f"Ошибка отправки: {error_str[:200]}"
+
+
 def send_via_smtp(account: _SmtpAccountLike, msg: EmailMessage) -> None:
+    """
+    Отправляет письмо через SMTP с улучшенной обработкой ошибок.
+    
+    Raises:
+        RuntimeError: С понятным сообщением об ошибке
+    """
     password = account.get_password()
     if not account.is_enabled:
         raise RuntimeError("Почтовый аккаунт отключён.")
     if not account.smtp_username or not password:
         raise RuntimeError("Не заполнены SMTP логин/пароль.")
 
-    if account.use_starttls:
-        context = ssl.create_default_context()
-        with smtplib.SMTP(account.smtp_host, account.smtp_port, timeout=30) as smtp:
-            smtp.ehlo()
-            smtp.starttls(context=context)
-            smtp.ehlo()
-            smtp.login(account.smtp_username, password)
-            smtp.send_message(msg)
-    else:
-        with smtplib.SMTP(account.smtp_host, account.smtp_port, timeout=30) as smtp:
-            smtp.login(account.smtp_username, password)
-            smtp.send_message(msg)
+    try:
+        if account.use_starttls:
+            context = ssl.create_default_context()
+            with smtplib.SMTP(account.smtp_host, account.smtp_port, timeout=30) as smtp:
+                smtp.ehlo()
+                smtp.starttls(context=context)
+                smtp.ehlo()
+                smtp.login(account.smtp_username, password)
+                smtp.send_message(msg)
+        else:
+            with smtplib.SMTP(account.smtp_host, account.smtp_port, timeout=30) as smtp:
+                smtp.login(account.smtp_username, password)
+                smtp.send_message(msg)
+    except Exception as e:
+        # Форматируем ошибку в понятное сообщение
+        formatted_error = format_smtp_error(e, account)
+        # Сохраняем оригинальную ошибку в атрибуте для логирования
+        formatted_error_obj = RuntimeError(formatted_error)
+        formatted_error_obj.original_error = e
+        raise formatted_error_obj from e
 
 
