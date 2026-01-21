@@ -58,9 +58,23 @@ def send_pending_emails(self, batch_size: int = 50):
         ).select_related("campaign").first()
         
         if processing_queue:
-            # Продолжаем обработку текущей кампании
-            camps = [processing_queue.campaign]
-        else:
+            # Продолжаем обработку текущей кампании,
+            # но если pending уже нет (например, письма ушли другим воркером) — закрываем очередь.
+            camp = processing_queue.campaign
+            if not camp.recipients.filter(status=CampaignRecipient.Status.PENDING).exists():
+                # Ставим статус кампании SENT (если была в процессе/готова) и закрываем очередь
+                if camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
+                    camp.status = Campaign.Status.SENT
+                    camp.save(update_fields=["status", "updated_at"])
+                processing_queue.status = CampaignQueue.Status.COMPLETED
+                processing_queue.completed_at = timezone.now()
+                processing_queue.save(update_fields=["status", "completed_at"])
+                processing_queue = None
+                camps = []
+            else:
+                camps = [camp]
+
+        if not processing_queue:
             # Берем следующую кампанию из очереди
             next_queue = CampaignQueue.objects.filter(
                 status=CampaignQueue.Status.PENDING,
@@ -202,6 +216,18 @@ def send_pending_emails(self, batch_size: int = 50):
             
             batch = list(camp.recipients.filter(status=CampaignRecipient.Status.PENDING)[:allowed])
             if not batch:
+                # Если pending нет — закрываем кампанию и очередь (важно для случаев,
+                # когда письма могли быть отправлены не этим воркером).
+                if not camp.recipients.filter(status=CampaignRecipient.Status.PENDING).exists():
+                    if camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
+                        camp.status = Campaign.Status.SENT
+                        camp.save(update_fields=["status", "updated_at"])
+
+                    queue_entry = getattr(camp, "queue_entry", None)
+                    if queue_entry and queue_entry.status in (CampaignQueue.Status.PROCESSING, CampaignQueue.Status.PENDING):
+                        queue_entry.status = CampaignQueue.Status.COMPLETED
+                        queue_entry.completed_at = timezone.now()
+                        queue_entry.save(update_fields=["status", "completed_at"])
                 continue
 
             # Помечаем кампанию как отправляемую (если была READY)

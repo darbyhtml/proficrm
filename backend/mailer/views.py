@@ -1428,6 +1428,18 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
         messages.error(request, "SMTP не настроен администратором (Почта → Настройки).")
         return redirect("campaign_detail", campaign_id=camp.id)
 
+    # Ограничение по рабочему времени (9:00-18:00 МСК) — чтобы письма не уходили ночью
+    from mailer.tasks import _is_working_hours
+    from zoneinfo import ZoneInfo
+    now = timezone.now()
+    if not _is_working_hours(now):
+        msk_now = now.astimezone(ZoneInfo("Europe/Moscow"))
+        messages.error(
+            request,
+            f"Сейчас вне рабочего времени. Текущее время МСК: {msk_now.strftime('%H:%M')}. Отправка возможна с 09:00 до 18:00 МСК.",
+        )
+        return redirect("campaign_detail", campaign_id=camp.id)
+
     # Защита от случайной массовой отправки:
     # - Требуем явный флаг подтверждения из формы (UI ставит его автоматически),
     #   но это защитит от случайных POST из другого места.
@@ -1482,6 +1494,12 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
             if camp.status == Campaign.Status.SENDING:
                 camp.status = Campaign.Status.SENT
                 camp.save(update_fields=["status", "updated_at"])
+            # И закрываем запись в очереди, если она есть
+            queue_entry = getattr(camp, "queue_entry", None)
+            if queue_entry and queue_entry.status in (CampaignQueue.Status.PROCESSING, CampaignQueue.Status.PENDING):
+                queue_entry.status = CampaignQueue.Status.COMPLETED
+                queue_entry.completed_at = timezone.now()
+                queue_entry.save(update_fields=["status", "completed_at"])
         return redirect("campaign_detail", campaign_id=camp.id)
 
     # Обновляем статус кампании на SENDING при начале отправки
@@ -1604,6 +1622,12 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
     if pending_count == 0 and camp.status == Campaign.Status.SENDING:
         camp.status = Campaign.Status.SENT
         camp.save(update_fields=["status", "updated_at"])
+        # Закрываем очередь, если кампания была в очереди
+        queue_entry = getattr(camp, "queue_entry", None)
+        if queue_entry and queue_entry.status in (CampaignQueue.Status.PROCESSING, CampaignQueue.Status.PENDING):
+            queue_entry.status = CampaignQueue.Status.COMPLETED
+            queue_entry.completed_at = timezone.now()
+            queue_entry.save(update_fields=["status", "completed_at"])
 
     return redirect("campaign_detail", campaign_id=camp.id)
 

@@ -1,14 +1,17 @@
 from __future__ import annotations
 
+import logging
 import time
 
 from django.core.management.base import BaseCommand
 from django.db.models import Q
 from django.utils import timezone
 
-from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe
+from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, CampaignQueue
 from mailer.smtp_sender import build_message, send_via_smtp
 from mailer.utils import html_to_text
+
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -27,14 +30,49 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("mailer_worker started"))
         while True:
             did_work = False
-            # берём кампании с pending
-            camps = Campaign.objects.filter(recipients__status=CampaignRecipient.Status.PENDING).distinct().order_by("created_at")[:20]
+            # Рабочее время (9:00-18:00 МСК) — чтобы письма не уходили ночью
+            from mailer.tasks import _is_working_hours
+            if not _is_working_hours():
+                if once:
+                    break
+                time.sleep(max(5.0, sleep_s))
+                continue
+
+            # Если используется очередь CampaignQueue — обрабатываем строго по ней (1 кампания за раз)
+            processing_queue = CampaignQueue.objects.filter(
+                status=CampaignQueue.Status.PROCESSING
+            ).select_related("campaign").first()
+
+            if processing_queue:
+                camps = [processing_queue.campaign]
+            else:
+                next_queue = CampaignQueue.objects.filter(
+                    status=CampaignQueue.Status.PENDING,
+                    campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING),
+                    campaign__recipients__status=CampaignRecipient.Status.PENDING,
+                ).select_related("campaign").order_by("-priority", "queued_at").first()
+
+                if next_queue:
+                    next_queue.status = CampaignQueue.Status.PROCESSING
+                    next_queue.started_at = timezone.now()
+                    next_queue.save(update_fields=["status", "started_at"])
+                    camps = [next_queue.campaign]
+                else:
+                    # fallback: старый режим без очереди
+                    camps = Campaign.objects.filter(
+                        recipients__status=CampaignRecipient.Status.PENDING
+                    ).distinct().order_by("created_at")[:20]
+
             for camp in camps:
                 user = camp.created_by
                 if not user:
                     continue
                 smtp_cfg = GlobalMailAccount.load()
                 if not smtp_cfg.is_enabled:
+                    continue
+
+                # Пропускаем кампании на паузе
+                if camp.status == Campaign.Status.PAUSED:
                     continue
 
                 now = timezone.now()
@@ -46,7 +84,22 @@ class Command(BaseCommand):
                 allowed = max(1, min(batch_size, smtp_cfg.rate_per_minute - sent_last_min, smtp_cfg.rate_per_day - sent_today))
                 batch = list(camp.recipients.filter(status=CampaignRecipient.Status.PENDING)[:allowed])
                 if not batch:
+                    # Если pending пусто — закрываем кампанию и очередь (могли быть отправлены другим воркером)
+                    if not camp.recipients.filter(status=CampaignRecipient.Status.PENDING).exists():
+                        if camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
+                            camp.status = Campaign.Status.SENT
+                            camp.save(update_fields=["status", "updated_at"])
+                        queue_entry = getattr(camp, "queue_entry", None)
+                        if queue_entry and queue_entry.status in (CampaignQueue.Status.PROCESSING, CampaignQueue.Status.PENDING):
+                            queue_entry.status = CampaignQueue.Status.COMPLETED
+                            queue_entry.completed_at = timezone.now()
+                            queue_entry.save(update_fields=["status", "completed_at"])
                     continue
+
+                # Помечаем кампанию как отправляемую (если была READY)
+                if camp.status == Campaign.Status.READY:
+                    camp.status = Campaign.Status.SENDING
+                    camp.save(update_fields=["status", "updated_at"])
 
                 did_work = True
                 for r in batch:
@@ -151,6 +204,17 @@ class Command(BaseCommand):
                         r.last_error = detailed_error[:255]
                         r.save(update_fields=["status", "last_error", "updated_at"])
                         SendLog.objects.create(campaign=camp, recipient=r, account=None, provider="smtp_global", status="failed", error=detailed_error[:500])
+
+                # Если все отправлено — закрываем кампанию и очередь
+                if not camp.recipients.filter(status=CampaignRecipient.Status.PENDING).exists():
+                    if camp.status == Campaign.Status.SENDING:
+                        camp.status = Campaign.Status.SENT
+                        camp.save(update_fields=["status", "updated_at"])
+                    queue_entry = getattr(camp, "queue_entry", None)
+                    if queue_entry and queue_entry.status == CampaignQueue.Status.PROCESSING:
+                        queue_entry.status = CampaignQueue.Status.COMPLETED
+                        queue_entry.completed_at = timezone.now()
+                        queue_entry.save(update_fields=["status", "completed_at"])
 
             if once:
                 break
