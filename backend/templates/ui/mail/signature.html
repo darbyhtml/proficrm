@@ -146,6 +146,8 @@
           </div>
           <div class="text-xs muted-2 mt-2">
             Можно форматировать текст, добавлять списки и ссылки. Подпись будет добавляться в конец письма как есть.
+            <br>
+            <strong>Совет:</strong> Вы можете скопировать подпись из Yandex (или другого почтового клиента) и вставить её сюда — изображения и форматирование сохранятся.
           </div>
         </div>
       </div>
@@ -174,7 +176,21 @@
       if (!form || !editor || !htmlField || !btnVisual || !btnHtml) return;
 
       // Инициализация: подставляем существующую подпись
-      editor.innerHTML = htmlField.value || "";
+      function loadSignature() {
+        const html = htmlField.value || "";
+        editor.innerHTML = html;
+        // Убеждаемся, что изображения правильно отображаются
+        const images = editor.querySelectorAll("img");
+        images.forEach((img) => {
+          if (!img.style.maxWidth) {
+            img.style.maxWidth = "100%";
+          }
+          if (!img.style.height) {
+            img.style.height = "auto";
+          }
+        });
+      }
+      loadSignature();
 
       function setActive(btnOn, btnOff) {
         btnOn.classList.add("bg-brand-soft/40");
@@ -182,7 +198,11 @@
       }
 
       function syncToTextarea() {
-        htmlField.value = editor.innerHTML || "";
+        // Сохраняем HTML с сохранением всех атрибутов и стилей
+        let html = editor.innerHTML || "";
+        // Убеждаемся, что base64 изображения сохраняются полностью
+        // (они уже должны быть в innerHTML, но на всякий случай проверяем)
+        htmlField.value = html;
       }
 
       // toolbar commands
@@ -237,11 +257,131 @@
 
       editor.addEventListener("input", syncToTextarea);
 
+      // Обработка вставки из буфера обмена (например, из Yandex)
+      editor.addEventListener("paste", (e) => {
+        e.preventDefault();
+        
+        // Получаем данные из буфера обмена
+        const clipboardData = e.clipboardData || window.clipboardData;
+        const htmlData = clipboardData.getData("text/html");
+        const textData = clipboardData.getData("text/plain");
+        const items = Array.from(clipboardData.items || []);
+
+        // Проверяем, есть ли изображения в буфере обмена (файлы)
+        const imageItem = items.find(item => item.type.indexOf("image") !== -1);
+        
+        if (imageItem) {
+          // Вставка изображения из буфера обмена
+          const file = imageItem.getAsFile();
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              const img = document.createElement("img");
+              img.src = event.target.result; // base64
+              img.style.maxWidth = "100%";
+              img.style.height = "auto";
+              
+              const selection = window.getSelection();
+              if (selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                range.deleteContents();
+                range.insertNode(img);
+                range.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(range);
+              } else {
+                editor.appendChild(img);
+              }
+              syncToTextarea();
+            };
+            reader.readAsDataURL(file);
+            return;
+          }
+        }
+
+        // Если есть HTML, вставляем его
+        if (htmlData) {
+          // Создаем временный контейнер для обработки HTML
+          const tempDiv = document.createElement("div");
+          tempDiv.innerHTML = htmlData;
+
+          // Обрабатываем изображения: сохраняем base64 и внешние ссылки
+          const images = tempDiv.querySelectorAll("img");
+          images.forEach((img) => {
+            const src = img.getAttribute("src");
+            if (src) {
+              // Если это base64, оставляем как есть
+              if (src.startsWith("data:image/")) {
+                // Убеждаемся, что атрибуты стиля сохранены
+                if (!img.style.maxWidth) {
+                  img.style.maxWidth = "100%";
+                }
+                if (!img.style.height) {
+                  img.style.height = "auto";
+                }
+              } else if (src.startsWith("http://") || src.startsWith("https://")) {
+                // Внешние ссылки оставляем как есть (могут не работать в некоторых почтовиках)
+                // Можно было бы конвертировать в base64, но это требует загрузки изображения
+                img.style.maxWidth = "100%";
+                img.style.height = "auto";
+              }
+            }
+          });
+
+          // Сохраняем все стили и атрибуты элементов
+          const allElements = tempDiv.querySelectorAll("*");
+          allElements.forEach((el) => {
+            // Сохраняем inline стили
+            if (el.style && el.style.cssText) {
+              el.setAttribute("style", el.style.cssText);
+            }
+          });
+
+          // Вставляем обработанный HTML
+          const selection = window.getSelection();
+          if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            range.deleteContents();
+            
+            // Создаем фрагмент из обработанного HTML
+            const fragment = document.createDocumentFragment();
+            while (tempDiv.firstChild) {
+              fragment.appendChild(tempDiv.firstChild);
+            }
+            range.insertNode(fragment);
+            
+            // Перемещаем курсор в конец вставленного контента
+            range.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(range);
+          } else {
+            // Если нет выделения, просто добавляем в конец
+            while (tempDiv.firstChild) {
+              editor.appendChild(tempDiv.firstChild);
+            }
+          }
+        } else if (textData) {
+          // Если только текст, вставляем как обычный текст
+          const selection = window.getSelection();
+          if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            range.deleteContents();
+            const textNode = document.createTextNode(textData);
+            range.insertNode(textNode);
+            range.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(range);
+          }
+        }
+
+        syncToTextarea();
+      });
+
       function showVisual() {
         htmlWrap.classList.add("hidden");
         visualWrap.classList.remove("hidden");
         setActive(btnVisual, btnHtml);
-        editor.innerHTML = htmlField.value || "";
+        loadSignature();
       }
 
       function showHtml() {
@@ -274,6 +414,17 @@
       height: auto !important;
       width: auto;
       object-fit: contain;
+      display: inline-block;
+      vertical-align: middle;
+    }
+    /* Сохраняем стили таблиц и других элементов из вставленного HTML */
+    #sigEditor table {
+      border-collapse: collapse;
+      max-width: 100%;
+    }
+    #sigEditor td, #sigEditor th {
+      padding: 4px 8px;
+      border: 1px solid #ddd;
     }
     .btn-outline svg {
       width: 16px;
