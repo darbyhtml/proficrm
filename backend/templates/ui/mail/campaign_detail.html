@@ -149,15 +149,19 @@
             Предпросмотр письма
           </summary>
           <div class="mt-3">
-            {% if campaign.body_html %}
+            {% if preview_html %}
               {# Используем sandbox для безопасности, но разрешаем загрузку изображений #}
+              {# preview_html уже содержит подпись пользователя #}
               <iframe 
                 class="w-full" 
-                style="height:300px;border:1px solid rgba(194,226,222,.95);border-radius:8px;background:#fff" 
-                srcdoc='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial; padding:14px; color:#003D38} a{color:#01948E} img{max-width:100%;height:auto}</style></head><body>{{ campaign.body_html|safe }}</body></html>'
+                style="height:400px;border:1px solid rgba(194,226,222,.95);border-radius:8px;background:#fff" 
+                srcdoc='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial; padding:14px; color:#003D38} a{color:#01948E} img{max-width:100%;height:auto}</style></head><body>{{ preview_html|safe }}</body></html>'
                 sandbox="allow-same-origin"
                 loading="lazy"
               ></iframe>
+              <div class="text-xs muted-2 mt-2">
+                <strong>Примечание:</strong> В предпросмотре автоматически добавлена ваша подпись из настроек. Так получатели увидят письмо.
+              </div>
               <details class="mt-2">
                 <summary class="text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors flex items-center gap-1">
                   <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
@@ -170,6 +174,15 @@
                   Для корректного отображения в письмах рекомендуется встраивать изображения как base64 (data:image/...) или загружать их на ваш сервер.
                 </div>
               </details>
+            {% elif campaign.body_html %}
+              {# Fallback на случай, если preview_html не передан #}
+              <iframe 
+                class="w-full" 
+                style="height:300px;border:1px solid rgba(194,226,222,.95);border-radius:8px;background:#fff" 
+                srcdoc='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial; padding:14px; color:#003D38} a{color:#01948E} img{max-width:100%;height:auto}</style></head><body>{{ campaign.body_html|safe }}</body></html>'
+                sandbox="allow-same-origin"
+                loading="lazy"
+              ></iframe>
             {% else %}
               <div class="text-sm p-3 bg-gray-50 rounded border" style="white-space:pre-wrap">{{ campaign.body_text }}</div>
             {% endif %}

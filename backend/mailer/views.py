@@ -729,6 +729,16 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
                 "time": error_log.created_at,
             })
 
+    # Подготовка HTML для предпросмотра с подписью
+    preview_html = camp.body_html or ""
+    if preview_html:
+        auto_plain = html_to_text(preview_html)
+        preview_html, _ = _apply_signature(
+            user=user,
+            body_html=preview_html,
+            body_text=auto_plain or camp.body_text or ""
+        )
+
     return render(
         request,
         "ui/mail/campaign_detail.html",
@@ -747,6 +757,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "user_campaigns_count": user_campaigns_count,
             "user_active_campaigns": user_active_campaigns,
             "is_admin": is_admin,
+            "preview_html": preview_html,  # HTML с подписью для предпросмотра
             "emails_available": emails_available,
             "counts": counts,
             "recent": recent,
