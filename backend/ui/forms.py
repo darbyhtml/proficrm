@@ -371,7 +371,15 @@ class CompanyInlineEditForm(forms.ModelForm):
 
     class Meta:
         model = Company
-        fields = list(ALLOWED_FIELDS)
+        fields = [
+            "name",
+            "legal_name",
+            "inn",
+            "kpp",
+            "address",
+            "website",
+            "activity_kind",
+        ]
 
 
 class CompanyContractForm(forms.ModelForm):
