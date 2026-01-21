@@ -125,12 +125,13 @@ class Company(models.Model):
             models.Index(fields=["inn"]),
             models.Index(fields=["name"]),
             # Trigram GIN indexes for fast case-insensitive search (see migration 0033_add_search_indexes).
-            GinIndex(OpClass(Upper("name"), name="gin_trgm_ops"), name="company_name_upper_trgm_gin_idx"),
-            GinIndex(OpClass(Upper("legal_name"), name="gin_trgm_ops"), name="company_legal_name_upper_trgm_gin_idx"),
-            GinIndex(OpClass(Upper("address"), name="gin_trgm_ops"), name="company_address_upper_trgm_gin_idx"),
-            GinIndex(OpClass(Upper("inn"), name="gin_trgm_ops"), name="company_inn_upper_trgm_gin_idx"),
-            GinIndex(OpClass(Upper("phone"), name="gin_trgm_ops"), name="company_phone_upper_trgm_gin_idx"),
-            GinIndex(OpClass(Upper("email"), name="gin_trgm_ops"), name="company_email_upper_trgm_gin_idx"),
+            # NOTE: keep index names <= 30 chars (Django system check).
+            GinIndex(OpClass(Upper("name"), name="gin_trgm_ops"), name="cmp_name_trgm_gin_idx"),
+            GinIndex(OpClass(Upper("legal_name"), name="gin_trgm_ops"), name="cmp_legal_trgm_gin_idx"),
+            GinIndex(OpClass(Upper("address"), name="gin_trgm_ops"), name="cmp_addr_trgm_gin_idx"),
+            GinIndex(OpClass(Upper("inn"), name="gin_trgm_ops"), name="cmp_inn_trgm_gin_idx"),
+            GinIndex(OpClass(Upper("phone"), name="gin_trgm_ops"), name="cmp_phone_trgm_gin_idx"),
+            GinIndex(OpClass(Upper("email"), name="gin_trgm_ops"), name="cmp_email_trgm_gin_idx"),
         ]
 
     def save(self, *args, **kwargs):
@@ -275,8 +276,8 @@ class Contact(models.Model):
     class Meta:
         # Trigram GIN indexes for fast case-insensitive search (see migration 0033_add_search_indexes).
         indexes = [
-            GinIndex(OpClass(Upper("first_name"), name="gin_trgm_ops"), name="contact_first_name_upper_trgm_gin_idx"),
-            GinIndex(OpClass(Upper("last_name"), name="gin_trgm_ops"), name="contact_last_name_upper_trgm_gin_idx"),
+            GinIndex(OpClass(Upper("first_name"), name="gin_trgm_ops"), name="ct_first_trgm_gin_idx"),
+            GinIndex(OpClass(Upper("last_name"), name="gin_trgm_ops"), name="ct_last_trgm_gin_idx"),
         ]
 
     def __str__(self) -> str:
@@ -293,7 +294,7 @@ class CompanyEmail(models.Model):
         indexes = [
             models.Index(fields=["value"]),
             models.Index(fields=["company", "order"]),
-            GinIndex(OpClass(Upper("value"), name="gin_trgm_ops"), name="companyemail_value_upper_trgm_gin_idx"),
+            GinIndex(OpClass(Upper("value"), name="gin_trgm_ops"), name="cmp_emailval_trgm_gin_idx"),
         ]
         ordering = ["order", "value"]
 
@@ -333,7 +334,7 @@ class CompanyPhone(models.Model):
         indexes = [
             models.Index(fields=["value"]),
             models.Index(fields=["company", "order"]),
-            GinIndex(OpClass(Upper("value"), name="gin_trgm_ops"), name="companyphone_value_upper_trgm_gin_idx"),
+            GinIndex(OpClass(Upper("value"), name="gin_trgm_ops"), name="cmp_phoneval_trgm_gin_idx"),
         ]
         ordering = ["order", "value"]
 
@@ -354,7 +355,7 @@ class ContactEmail(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["value"]),
-            GinIndex(OpClass(Upper("value"), name="gin_trgm_ops"), name="contactemail_value_upper_trgm_gin_idx"),
+            GinIndex(OpClass(Upper("value"), name="gin_trgm_ops"), name="ct_emailval_trgm_gin_idx"),
         ]
 
     def __str__(self) -> str:
@@ -398,7 +399,7 @@ class ContactPhone(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=["value"]),
-            GinIndex(OpClass(Upper("value"), name="gin_trgm_ops"), name="contactphone_value_upper_trgm_gin_idx"),
+            GinIndex(OpClass(Upper("value"), name="gin_trgm_ops"), name="ct_phoneval_trgm_gin_idx"),
         ]
 
     def save(self, *args, **kwargs):
