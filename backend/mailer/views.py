@@ -7,6 +7,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.paginator import Paginator
+from django.db.models import Count, Q
 from django.http import HttpRequest, HttpResponse
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -308,7 +309,6 @@ def campaigns(request: HttpRequest) -> HttpResponse:
     analytics = None
     if is_admin:
         from django.utils import timezone as _tz
-        from django.db.models import Count, Q
         now = _tz.now()
         start_day_utc, end_day_utc, msk_now = msk_day_bounds(now)
         today = msk_now.date()
