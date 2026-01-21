@@ -1508,7 +1508,11 @@
         function initAll(){
           document.querySelectorAll('[data-ms="1"]').forEach(initOne);
         }
-        document.addEventListener('DOMContentLoaded', initAll);
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', initAll);
+        } else {
+          initAll();
+        }
       })();
     </script>
     <script>
@@ -1742,7 +1746,11 @@
         function initAll(){
           document.querySelectorAll('[data-ms-single="1"]').forEach(initOne);
         }
-        document.addEventListener('DOMContentLoaded', initAll);
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', initAll);
+        } else {
+          initAll();
+        }
         
         // Экспортируем функцию для инициализации виджетов в динамически загруженном контенте
         window.initMsSingleWidgets = function(container) {
