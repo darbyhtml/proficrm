@@ -47,8 +47,10 @@ def msk_day_bounds(now: datetime | None = None) -> tuple[datetime, datetime, dat
 
 
 _RE_SCRIPT_TAG = re.compile(r"<\s*script\b[^>]*>[\s\S]*?<\s*/\s*script\s*>", re.IGNORECASE)
-_RE_ON_ATTR_DQ = re.compile(r"""\son\w+\s*=\s*"[^"]*" """, re.IGNORECASE)
-_RE_ON_ATTR_SQ = re.compile(r"""\son\w+\s*=\s*'[^']*' """, re.IGNORECASE)
+_RE_ON_ATTR_DQ = re.compile(r'\son\w+\s*=\s*"[^"]*"',
+                            re.IGNORECASE)
+_RE_ON_ATTR_SQ = re.compile(r"\son\w+\s*=\s*'[^']*'",
+                            re.IGNORECASE)
 _RE_JS_PROTO = re.compile(r"""(\b(?:href|src)\s*=\s*["']?)\s*javascript:[^"'>\s]+""", re.IGNORECASE)
 
 

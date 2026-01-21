@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 
 from django.test import TestCase
+from django.test.utils import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
@@ -12,6 +13,7 @@ from mailer.models import Campaign, CampaignQueue, CampaignRecipient, Unsubscrib
 from mailer.utils import sanitize_email_html
 
 
+@override_settings(SECURE_SSL_REDIRECT=False)
 class MailerSafetyAndUnsubTests(TestCase):
     def test_sanitize_email_html_removes_scripts_and_js_protocol(self):
         raw = '<div onclick="alert(1)"><script>alert(2)</script><a href="javascript:alert(3)">x</a></div>'
@@ -53,6 +55,7 @@ class MailerSafetyAndUnsubTests(TestCase):
         self.assertIsNotNone(u.last_seen_at)
 
 
+@override_settings(SECURE_SSL_REDIRECT=False)
 class MailerQueueConsistencyTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="m", password="pass", role=User.Role.MANAGER, email="m@example.com")
