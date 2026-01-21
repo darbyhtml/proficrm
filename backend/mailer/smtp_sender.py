@@ -211,13 +211,29 @@ def send_via_smtp(account: _SmtpAccountLike, msg: EmailMessage, *, smtp: Optiona
     """
     try:
         if smtp is not None:
-            smtp.send_message(msg)
+            refused = smtp.send_message(msg)
+            # smtplib.send_message может вернуть dict отказанных получателей без исключения
+            if refused:
+                # формат: {email: (code, resp)} или {email: resp}
+                first_email = next(iter(refused.keys()))
+                detail = refused.get(first_email)
+                if isinstance(detail, tuple) and len(detail) >= 2:
+                    code, resp = detail[0], detail[1]
+                    raise RuntimeError(f"Получатель отклонён сервером: {first_email} ({code}) {str(resp)[:200]}")
+                raise RuntimeError(f"Получатель отклонён сервером: {first_email}")
             return
 
         # Одиночная отправка (открыть/закрыть соединение внутри)
         smtp_local = open_smtp_connection(account)
         try:
-            smtp_local.send_message(msg)
+            refused = smtp_local.send_message(msg)
+            if refused:
+                first_email = next(iter(refused.keys()))
+                detail = refused.get(first_email)
+                if isinstance(detail, tuple) and len(detail) >= 2:
+                    code, resp = detail[0], detail[1]
+                    raise RuntimeError(f"Получатель отклонён сервером: {first_email} ({code}) {str(resp)[:200]}")
+                raise RuntimeError(f"Получатель отклонён сервером: {first_email}")
         finally:
             try:
                 smtp_local.quit()

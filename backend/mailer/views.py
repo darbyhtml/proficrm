@@ -317,68 +317,76 @@ def campaigns(request: HttpRequest) -> HttpResponse:
         smtp_cfg = GlobalMailAccount.load()
         per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT_DEFAULT
         
-        # Статистика по пользователям: кто сколько писем отправил сегодня
+        # Статистика по пользователям без N+1: агрегируем одним запросом
+        all_users = list(
+            User.objects.filter(role__in=[User.Role.MANAGER, User.Role.ADMIN, User.Role.BRANCH_DIRECTOR, User.Role.GROUP_MANAGER]).select_related("branch")
+        )
+        user_ids = [u.id for u in all_users]
+
+        send_agg = (
+            SendLog.objects.filter(
+                provider="smtp_global",
+                created_at__gte=start_day_utc,
+                created_at__lt=end_day_utc,
+                campaign__created_by_id__in=user_ids,
+            )
+            .values("campaign__created_by_id")
+            .annotate(
+                sent_today=Count("id", filter=Q(status="sent")),
+                failed_today=Count("id", filter=Q(status="failed")),
+            )
+        )
+        send_map = {row["campaign__created_by_id"]: row for row in send_agg}
+
+        camp_agg = (
+            Campaign.objects.filter(created_by_id__in=user_ids)
+            .values("created_by_id")
+            .annotate(
+                campaigns_count=Count("id"),
+                active_campaigns=Count("id", filter=Q(status__in=[Campaign.Status.READY, Campaign.Status.SENDING])),
+            )
+        )
+        camp_map = {row["created_by_id"]: row for row in camp_agg}
+
         user_stats = []
-        all_users = User.objects.filter(role__in=[User.Role.MANAGER, User.Role.ADMIN, User.Role.BRANCH_DIRECTOR, User.Role.GROUP_MANAGER]).select_related("branch")
-        
         for u in all_users:
-            sent_today = SendLog.objects.filter(
-                provider="smtp_global",
-                status="sent",
-                campaign__created_by=u,
-                created_at__gte=start_day_utc,
-                created_at__lt=end_day_utc,
-            ).count()
-            
-            # Количество активных кампаний пользователя
-            active_campaigns = Campaign.objects.filter(
-                created_by=u,
-                status__in=[Campaign.Status.READY, Campaign.Status.SENDING]
-            ).count()
-            
-            # Количество ошибок сегодня
-            failed_today = SendLog.objects.filter(
-                provider="smtp_global",
-                status="failed",
-                campaign__created_by=u,
-                created_at__gte=start_day_utc,
-                created_at__lt=end_day_utc,
-            ).count()
-            
-            # Количество кампаний пользователя
-            campaigns_count = Campaign.objects.filter(created_by=u).count()
-            
-            # Остаток лимита
+            s = send_map.get(u.id, {})
+            c = camp_map.get(u.id, {})
+            sent_today = int(s.get("sent_today") or 0)
+            failed_today = int(s.get("failed_today") or 0)
+            campaigns_count = int(c.get("campaigns_count") or 0)
+            active_campaigns = int(c.get("active_campaigns") or 0)
             remaining = max(0, per_user_daily_limit - sent_today) if per_user_daily_limit else None
-            
-            user_stats.append({
-                "user": u,
-                "sent_today": sent_today,
-                "failed_today": failed_today,
-                "remaining": remaining,
-                "limit": per_user_daily_limit,
-                "campaigns_count": campaigns_count,
-                "active_campaigns": active_campaigns,
-                "is_limit_reached": per_user_daily_limit and sent_today >= per_user_daily_limit,
-            })
+
+            user_stats.append(
+                {
+                    "user": u,
+                    "sent_today": sent_today,
+                    "failed_today": failed_today,
+                    "remaining": remaining,
+                    "limit": per_user_daily_limit,
+                    "campaigns_count": campaigns_count,
+                    "active_campaigns": active_campaigns,
+                    "is_limit_reached": per_user_daily_limit and sent_today >= per_user_daily_limit,
+                }
+            )
         
         # Сортируем по количеству отправленных писем (по убыванию)
         user_stats.sort(key=lambda x: x["sent_today"], reverse=True)
         
-        # Общая статистика
-        total_sent_today = SendLog.objects.filter(
-            provider="smtp_global",
-            status="sent",
-            created_at__gte=start_day_utc,
-            created_at__lt=end_day_utc,
-        ).count()
-        
-        total_failed_today = SendLog.objects.filter(
-            provider="smtp_global",
-            status="failed",
-            created_at__gte=start_day_utc,
-            created_at__lt=end_day_utc,
-        ).count()
+        totals = (
+            SendLog.objects.filter(
+                provider="smtp_global",
+                created_at__gte=start_day_utc,
+                created_at__lt=end_day_utc,
+            )
+            .aggregate(
+                total_sent_today=Count("id", filter=Q(status="sent")),
+                total_failed_today=Count("id", filter=Q(status="failed")),
+            )
+        )
+        total_sent_today = int(totals.get("total_sent_today") or 0)
+        total_failed_today = int(totals.get("total_failed_today") or 0)
         
         # Статистика по кампаниям
         campaigns_stats = Campaign.objects.aggregate(
@@ -509,6 +517,26 @@ def campaigns(request: HttpRequest) -> HttpResponse:
     # Оптимизация: предзагружаем queue_entry одним запросом
     campaign_ids = [c.id for c in campaigns_list]
     queue_entries = {str(q.campaign_id): q for q in CampaignQueue.objects.filter(campaign_id__in=campaign_ids).select_related("campaign")}
+
+    # Оптимизация: сколько отправлено "сегодня" по каждому создателю (для pause reasons) одним запросом
+    creator_ids = [c.created_by_id for c in campaigns_list if getattr(c, "created_by_id", None)]
+    creator_ids = list(dict.fromkeys([cid for cid in creator_ids if cid]))  # unique
+    creator_sent_map = {}
+    if creator_ids:
+        creator_sent_map = {
+            row["campaign__created_by_id"]: int(row["sent_today"] or 0)
+            for row in (
+                SendLog.objects.filter(
+                    provider="smtp_global",
+                    status="sent",
+                    created_at__gte=start_day_utc,
+                    created_at__lt=end_day_utc,
+                    campaign__created_by_id__in=creator_ids,
+                )
+                .values("campaign__created_by_id")
+                .annotate(sent_today=Count("id"))
+            )
+        }
     
     for camp in campaigns_list:
         camp_pause_reasons = []
@@ -519,13 +547,7 @@ def campaigns(request: HttpRequest) -> HttpResponse:
                 camp_pause_reasons.append(f"Вне рабочего времени (текущее время МСК: {current_time_msk}, рабочие часы: 9:00-18:00 МСК)")
             
             # Проверяем лимит пользователя (для создателя кампании)
-            camp_sent_today = SendLog.objects.filter(
-                provider="smtp_global",
-                status="sent",
-                campaign__created_by=camp.created_by,
-                created_at__gte=start_day_utc,
-                created_at__lt=end_day_utc,
-            ).count() if camp.created_by else 0
+            camp_sent_today = creator_sent_map.get(camp.created_by_id, 0) if camp.created_by_id else 0
             
             if per_user_daily_limit and camp_sent_today >= per_user_daily_limit:
                 camp_pause_reasons.append(f"Достигнут лимит отправки для аккаунта: {camp_sent_today}/{per_user_daily_limit} писем в день")
@@ -1420,21 +1442,18 @@ def campaign_recipients_reset(request: HttpRequest, campaign_id) -> HttpResponse
 
     qs = camp.recipients.filter(status__in=[CampaignRecipient.Status.SENT, CampaignRecipient.Status.FAILED])
     updated = qs.update(status=CampaignRecipient.Status.PENDING, last_error="")
-    messages.success(request, f"Возвращено в очередь: {updated}.")
+    messages.success(request, f"Возвращено в очередь: {updated}. Нажмите «Старт», чтобы снова запустить рассылку.")
     log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Сброс статусов получателей", meta={"reset": updated})
-    # Кампания снова готова к отправке
-    camp.status = Campaign.Status.READY
+
+    # ВАЖНО: «Вернуть в очередь» не должно автоматически стартовать отправку.
+    # Переводим кампанию в DRAFT и отменяем запись в очереди (если была).
+    camp.status = Campaign.Status.DRAFT
     camp.save(update_fields=["status", "updated_at"])
-    # Гарантируем присутствие в очереди (Celery-only)
-    queue_entry, _ = CampaignQueue.objects.get_or_create(
-        campaign=camp,
-        defaults={"status": CampaignQueue.Status.PENDING, "priority": 0},
-    )
-    queue_entry.status = CampaignQueue.Status.PENDING
-    queue_entry.queued_at = timezone.now()
-    queue_entry.started_at = None
-    queue_entry.completed_at = None
-    queue_entry.save(update_fields=["status", "queued_at", "started_at", "completed_at"])
+    queue_entry = getattr(camp, "queue_entry", None)
+    if queue_entry and queue_entry.status in (CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING):
+        queue_entry.status = CampaignQueue.Status.CANCELLED
+        queue_entry.completed_at = timezone.now()
+        queue_entry.save(update_fields=["status", "completed_at"])
     return redirect("campaign_detail", campaign_id=camp.id)
 
 
