@@ -1713,7 +1713,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
 
     # Информация о лимитах отправки для всех сотрудников
     from mailer.models import SmtpBzQuota, GlobalMailAccount, SendLog, Campaign
-    from mailer.views import PER_USER_DAILY_LIMIT
+    from mailer.constants import PER_USER_DAILY_LIMIT_DEFAULT
     
     is_admin = require_admin(user)
     quota = SmtpBzQuota.load()
@@ -1728,7 +1728,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
     ).count()
     
     smtp_cfg = GlobalMailAccount.load()
-    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT
+    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT_DEFAULT
     
     user_limit_info = {
         "sent_today": sent_today_user,
