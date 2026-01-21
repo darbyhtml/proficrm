@@ -303,7 +303,7 @@
             <div class="mt-1">
               {% if can_edit_company %}
                 <div class="phone-comment-wrapper" data-phone-type="main" data-company-id="{{ company.id }}">
-                  <div class="phone-comment-display text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors" data-edit-comment>
+                  <div class="phone-comment-display text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors" data-edit-comment style="white-space: pre-wrap;">
                     {% if company.phone_comment %}
                       {{ company.phone_comment }}
                     {% else %}
@@ -311,7 +311,7 @@
                     {% endif %}
                   </div>
                   <div class="phone-comment-edit hidden mt-1">
-                    <input type="text" class="input text-xs" value="{{ company.phone_comment|default:'' }}" placeholder="Комментарий к номеру" maxlength="255" data-comment-input style="padding:.35rem .5rem;font-size:.75rem" />
+                    <textarea class="input text-xs" placeholder="Комментарий к номеру" maxlength="255" data-comment-input rows="2" style="padding:.35rem .5rem;font-size:.75rem;min-height:3.25rem;resize:vertical">{{ company.phone_comment|default:'' }}</textarea>
                     <div class="flex gap-1 mt-1">
                       <button type="button" class="btn btn-primary btn-sm" data-save-comment>Сохранить</button>
                       <button type="button" class="btn btn-outline btn-sm" data-cancel-comment>Отмена</button>
@@ -319,7 +319,7 @@
                   </div>
                 </div>
               {% elif company.phone_comment %}
-                <div class="text-xs text-brand-dark/50 mt-1">{{ company.phone_comment }}</div>
+                <div class="text-xs text-brand-dark/50 mt-1" style="white-space: pre-wrap;">{{ company.phone_comment }}</div>
               {% endif %}
             </div>
           </div>
@@ -404,7 +404,7 @@
                   <div class="mt-1">
                     {% if can_edit_company %}
                       <div class="phone-comment-wrapper" data-phone-type="company" data-phone-id="{{ phone.id }}">
-                        <div class="phone-comment-display text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors" data-edit-comment>
+                        <div class="phone-comment-display text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors" data-edit-comment style="white-space: pre-wrap;">
                           {% if phone.comment %}
                             {{ phone.comment }}
                           {% else %}
@@ -412,7 +412,7 @@
                           {% endif %}
                         </div>
                         <div class="phone-comment-edit hidden mt-1">
-                          <input type="text" class="input text-xs" value="{{ phone.comment|default:'' }}" placeholder="Комментарий к номеру" maxlength="255" data-comment-input style="padding:.35rem .5rem;font-size:.75rem" />
+                          <textarea class="input text-xs" placeholder="Комментарий к номеру" maxlength="255" data-comment-input rows="2" style="padding:.35rem .5rem;font-size:.75rem;min-height:3.25rem;resize:vertical">{{ phone.comment|default:'' }}</textarea>
                           <div class="flex gap-1 mt-1">
                             <button type="button" class="btn btn-primary btn-sm" data-save-comment>Сохранить</button>
                             <button type="button" class="btn btn-outline btn-sm" data-cancel-comment>Отмена</button>
@@ -420,7 +420,7 @@
                         </div>
                       </div>
                     {% elif phone.comment %}
-                      <div class="text-xs text-brand-dark/50 mt-1">{{ phone.comment }}</div>
+                      <div class="text-xs text-brand-dark/50 mt-1" style="white-space: pre-wrap;">{{ phone.comment }}</div>
                     {% endif %}
                   </div>
                 </div>
@@ -691,7 +691,7 @@
                             <div class="mt-1">
                               {% if can_edit_company %}
                                 <div class="phone-comment-wrapper" data-phone-type="contact" data-phone-id="{{ p.id }}">
-                                  <div class="phone-comment-display text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors" data-edit-comment>
+                                  <div class="phone-comment-display text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors" data-edit-comment style="white-space: pre-wrap;">
                                     {% if p.comment %}
                                       {{ p.comment }}
                                     {% else %}
@@ -699,7 +699,7 @@
                                     {% endif %}
                                   </div>
                                   <div class="phone-comment-edit hidden mt-1">
-                                    <input type="text" class="input text-xs" value="{{ p.comment|default:'' }}" placeholder="Комментарий к номеру" maxlength="255" data-comment-input style="padding:.35rem .5rem;font-size:.75rem" />
+                                    <textarea class="input text-xs" placeholder="Комментарий к номеру" maxlength="255" data-comment-input rows="2" style="padding:.35rem .5rem;font-size:.75rem;min-height:3.25rem;resize:vertical">{{ p.comment|default:'' }}</textarea>
                           <div class="flex gap-1 mt-1">
                             <button type="button" class="btn btn-primary btn-sm" data-save-comment>Сохранить</button>
                             <button type="button" class="btn btn-outline btn-sm" data-cancel-comment>Отмена</button>
@@ -2043,7 +2043,9 @@
         const wrapper = input.closest('.phone-comment-wrapper');
         if (!wrapper) return;
         
-        if (e.key === 'Enter') {
+        // В textarea Enter/Shift+Enter должны вставлять перенос строки.
+        // Быстрое сохранение: Ctrl+Enter / Cmd+Enter.
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
           e.preventDefault();
           const saveBtn = wrapper.querySelector('[data-save-comment]');
           if (saveBtn) saveBtn.click();
