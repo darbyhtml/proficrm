@@ -1421,6 +1421,7 @@
       // Checkbox multiselect over <select multiple>
       (function(){
         function initOne(root){
+          if (!root || (root.dataset && root.dataset.msInitDone === '1')) return;
           const select = root.querySelector('select[multiple]');
           if(!select) return;
           // hide original select but keep in DOM for submit
@@ -1503,6 +1504,7 @@
 
           // initial
           renderValue();
+          root.dataset.msInitDone = '1';
         }
 
         function initAll(){
@@ -1513,6 +1515,12 @@
         } else {
           initAll();
         }
+
+        // Экспортируем функцию для инициализации мультиселектов в динамическом контенте
+        window.initMsMultiWidgets = function(container) {
+          const widgets = container ? container.querySelectorAll('[data-ms="1"]') : document.querySelectorAll('[data-ms="1"]');
+          widgets.forEach(initOne);
+        };
       })();
     </script>
     <script>
@@ -1521,6 +1529,7 @@
         const MAX_RENDER = 200;
 
         function initOne(root){
+          if (!root || (root.dataset && root.dataset.msInitDone === '1')) return;
           const select = root.querySelector('select:not([multiple])');
           if(!select) return;
           // hide original select but keep in DOM for submit
@@ -1741,6 +1750,7 @@
 
           // initial
           renderValue();
+          root.dataset.msInitDone = '1';
         }
 
         function initAll(){
@@ -1757,6 +1767,35 @@
           const widgets = container ? container.querySelectorAll('[data-ms-single="1"]') : document.querySelectorAll('[data-ms-single="1"]');
           widgets.forEach(initOne);
         };
+      })();
+    </script>
+    <script>
+      // Failsafe: если пользователь кликает по .ms-btn, но виджет не успел инициализироваться,
+      // инициализируем "на лету" и открываем панель.
+      (function(){
+        document.addEventListener('click', function(e){
+          const btn = e.target.closest && e.target.closest('.ms-btn');
+          if(!btn) return;
+          const root = btn.closest && btn.closest('[data-ms-single="1"],[data-ms="1"]');
+          if(!root) return;
+          if(root.dataset && root.dataset.msInitDone === '1') return;
+
+          // Инициализируем подходящий тип виджета
+          if(root.matches && root.matches('[data-ms-single="1"]') && window.initMsSingleWidgets) {
+            window.initMsSingleWidgets(root);
+          } else if(root.matches && root.matches('[data-ms="1"]') && window.initMsMultiWidgets) {
+            window.initMsMultiWidgets(root);
+          }
+
+          // Открываем панель сразу
+          const panel = root.querySelector && root.querySelector('.ms-panel');
+          if(panel) panel.classList.remove('hidden');
+          const search = root.querySelector && root.querySelector('.ms-search');
+          if(search) search.focus();
+
+          e.preventDefault();
+          e.stopPropagation();
+        }, true);
       })();
     </script>
     <script>
