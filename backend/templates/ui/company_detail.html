@@ -8,9 +8,25 @@
       <div>
         <div class="text-sm text-brand-dark/70"><a class="underline" href="/companies/">Компании</a> /</div>
         <div class="flex items-start justify-between gap-3">
-          <h1 class="text-2xl font-semibold">
-            {{ company.name }}
-          </h1>
+          {% if can_edit_company %}
+            <div class="inline-field-wrapper" data-inline-field="name" data-company-id="{{ company.id }}">
+              <h1 class="text-2xl font-semibold inline-field-display cursor-pointer hover:text-brand-dark/80 transition-colors" data-inline-edit>
+                {{ company.name }}
+              </h1>
+              <div class="inline-field-edit hidden mt-2">
+                <input class="input w-full" data-inline-input maxlength="255" value="{{ company.name|default:'' }}" />
+                <div class="flex gap-1 mt-2">
+                  <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
+                  <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
+                </div>
+                <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
+              </div>
+            </div>
+          {% else %}
+            <h1 class="text-2xl font-semibold">
+              {{ company.name }}
+            </h1>
+          {% endif %}
           <div class="flex items-center gap-2 shrink-0">
             {% if can_delete_company %}
               <button type="button" class="btn btn-outline btn-sm btn-danger" id="openDeleteCompanyModal">Удалить</button>
@@ -22,8 +38,37 @@
           </div>
         </div>
         <div class="text-sm text-brand-dark/80">
-          {% if company.inn %}ИНН: <span class="font-mono">{{ company.inn }}</span>{% endif %}
-          {% if company.kpp %} · КПП: <span class="font-mono">{{ company.kpp }}</span>{% endif %}
+          {% if can_edit_company %}
+            <span>ИНН:</span>
+            <span class="inline-field-wrapper" data-inline-field="inn" data-company-id="{{ company.id }}">
+              <span class="font-mono inline-field-display cursor-pointer hover:text-brand-dark/80 transition-colors" data-inline-edit>
+                {{ company.inn|default:"—" }}
+              </span>
+              <span class="inline-field-edit hidden ml-2 align-middle">
+                <input class="input" data-inline-input maxlength="20" value="{{ company.inn|default:'' }}" style="width:220px" />
+                <button type="button" class="btn btn-primary btn-xs ml-1" data-inline-save>Сохранить</button>
+                <button type="button" class="btn btn-outline btn-xs ml-1" data-inline-cancel>Отмена</button>
+                <span class="text-xs text-red-600 ml-2 hidden" data-inline-error></span>
+              </span>
+            </span>
+
+            <span class="mx-1">·</span>
+            <span>КПП:</span>
+            <span class="inline-field-wrapper" data-inline-field="kpp" data-company-id="{{ company.id }}">
+              <span class="font-mono inline-field-display cursor-pointer hover:text-brand-dark/80 transition-colors" data-inline-edit>
+                {{ company.kpp|default:"—" }}
+              </span>
+              <span class="inline-field-edit hidden ml-2 align-middle">
+                <input class="input" data-inline-input maxlength="20" value="{{ company.kpp|default:'' }}" style="width:220px" />
+                <button type="button" class="btn btn-primary btn-xs ml-1" data-inline-save>Сохранить</button>
+                <button type="button" class="btn btn-outline btn-xs ml-1" data-inline-cancel>Отмена</button>
+                <span class="text-xs text-red-600 ml-2 hidden" data-inline-error></span>
+              </span>
+            </span>
+          {% else %}
+            {% if company.inn %}ИНН: <span class="font-mono">{{ company.inn }}</span>{% endif %}
+            {% if company.kpp %} · КПП: <span class="font-mono">{{ company.kpp }}</span>{% endif %}
+          {% endif %}
         </div>
 
         {% if delete_req %}
@@ -146,27 +191,86 @@
           </div>
           <div>
             <div class="text-brand-dark/50">Юр. название</div>
-            <div>{{ company.legal_name|default:"—" }}</div>
+            {% if can_edit_company %}
+              <div class="inline-field-wrapper" data-inline-field="legal_name" data-company-id="{{ company.id }}">
+                <div class="inline-field-display cursor-pointer hover:text-brand-dark/80 transition-colors" data-inline-edit>
+                  {{ company.legal_name|default:"—" }}
+                </div>
+                <div class="inline-field-edit hidden mt-1">
+                  <input class="input w-full" data-inline-input maxlength="255" value="{{ company.legal_name|default:'' }}" />
+                  <div class="flex gap-1 mt-1">
+                    <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
+                    <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
+                  </div>
+                  <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
+                </div>
+              </div>
+            {% else %}
+              <div>{{ company.legal_name|default:"—" }}</div>
+            {% endif %}
           </div>
           <div>
             <div class="text-brand-dark/50">Сайт</div>
-            <div class="max-w-full">
-              {% if company.website %}
-                {% if "://" in company.website %}
-                  <a class="link break-all" href="{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
-                {% elif company.website|slice:":2" == "//" %}
-                  <a class="link break-all" href="https:{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
+            {% if can_edit_company %}
+              <div class="inline-field-wrapper" data-inline-field="website" data-company-id="{{ company.id }}" data-inline-display-kind="website">
+                <div class="inline-field-display flex items-center gap-2" data-inline-display>
+                  {% if company.website %}
+                    {% if "://" in company.website %}
+                      <a class="link break-all" data-inline-website-link href="{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
+                    {% elif company.website|slice:":2" == "//" %}
+                      <a class="link break-all" data-inline-website-link href="https:{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
+                    {% else %}
+                      <a class="link break-all" data-inline-website-link href="https://{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-brand-dark/70" data-inline-website-empty>—</span>
+                  {% endif %}
+                  <button type="button" class="btn btn-outline btn-xs" data-inline-edit title="Редактировать сайт">Изменить</button>
+                </div>
+                <div class="inline-field-edit hidden mt-1">
+                  <input class="input w-full" data-inline-input maxlength="255" value="{{ company.website|default:'' }}" placeholder="https://example.com" />
+                  <div class="flex gap-1 mt-1">
+                    <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
+                    <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
+                  </div>
+                  <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
+                </div>
+              </div>
+            {% else %}
+              <div class="max-w-full">
+                {% if company.website %}
+                  {% if "://" in company.website %}
+                    <a class="link break-all" href="{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
+                  {% elif company.website|slice:":2" == "//" %}
+                    <a class="link break-all" href="https:{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
+                  {% else %}
+                    <a class="link break-all" href="https://{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
+                  {% endif %}
                 {% else %}
-                  <a class="link break-all" href="https://{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
+                  —
                 {% endif %}
-              {% else %}
-                —
-              {% endif %}
-            </div>
+              </div>
+            {% endif %}
           </div>
           <div>
             <div class="text-brand-dark/50">Вид деятельности</div>
-            <div class="whitespace-pre-line">{{ company.activity_kind|default:"—" }}</div>
+            {% if can_edit_company %}
+              <div class="inline-field-wrapper" data-inline-field="activity_kind" data-company-id="{{ company.id }}" data-inline-display-kind="multiline">
+                <div class="inline-field-display whitespace-pre-line cursor-pointer hover:text-brand-dark/80 transition-colors" data-inline-edit>
+                  {{ company.activity_kind|default:"—" }}
+                </div>
+                <div class="inline-field-edit hidden mt-1">
+                  <textarea class="input w-full" data-inline-input rows="3" maxlength="255" style="min-height:88px;resize:vertical">{{ company.activity_kind|default:'' }}</textarea>
+                  <div class="flex gap-1 mt-1">
+                    <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
+                    <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
+                  </div>
+                  <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
+                </div>
+              </div>
+            {% else %}
+              <div class="whitespace-pre-line">{{ company.activity_kind|default:"—" }}</div>
+            {% endif %}
           </div>
           <div>
             <div class="text-brand-dark/50">Численность сотрудников</div>
@@ -458,7 +562,23 @@
           </div>
           <div class="md:col-span-2">
             <div class="text-brand-dark/50">Адрес</div>
-            <div class="whitespace-pre-line">{{ company.address|default:"—" }}</div>
+            {% if can_edit_company %}
+              <div class="inline-field-wrapper" data-inline-field="address" data-company-id="{{ company.id }}" data-inline-display-kind="multiline">
+                <div class="inline-field-display whitespace-pre-line cursor-pointer hover:text-brand-dark/80 transition-colors" data-inline-edit>
+                  {{ company.address|default:"—" }}
+                </div>
+                <div class="inline-field-edit hidden mt-1">
+                  <textarea class="input w-full" data-inline-input rows="3" maxlength="500" style="min-height:88px;resize:vertical">{{ company.address|default:'' }}</textarea>
+                  <div class="flex gap-1 mt-1">
+                    <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
+                    <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
+                  </div>
+                  <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
+                </div>
+              </div>
+            {% else %}
+              <div class="whitespace-pre-line">{{ company.address|default:"—" }}</div>
+            {% endif %}
           </div>
         </div>
 
@@ -2102,6 +2222,177 @@
           if (cancelBtn) cancelBtn.click();
         }
       });
+
+      // Инлайн-редактирование базовых полей компании (как комментарии)
+      (function() {
+        // Не запускаем, если нет доступа к редактированию (инлайн-блоков нет)
+        if (!document.querySelector('.inline-field-wrapper[data-company-id]')) return;
+
+        function showError(wrapper, msg) {
+          const err = wrapper.querySelector('[data-inline-error]');
+          if (!err) return;
+          err.textContent = (msg || '').trim();
+          err.classList.toggle('hidden', !err.textContent);
+        }
+
+        function openEdit(wrapper) {
+          const display = wrapper.querySelector('.inline-field-display');
+          const edit = wrapper.querySelector('.inline-field-edit');
+          const input = wrapper.querySelector('[data-inline-input]');
+          if (!display || !edit || !input) return;
+          if (wrapper.dataset.inlineOriginal === undefined) {
+            wrapper.dataset.inlineOriginal = (input.value !== undefined ? input.value : (input.textContent || ''));
+          }
+          showError(wrapper, '');
+          display.classList.add('hidden');
+          edit.classList.remove('hidden');
+          try {
+            input.focus();
+            if (input.select) input.select();
+          } catch (e) {}
+        }
+
+        function closeEdit(wrapper, restore) {
+          const display = wrapper.querySelector('.inline-field-display');
+          const edit = wrapper.querySelector('.inline-field-edit');
+          const input = wrapper.querySelector('[data-inline-input]');
+          if (!display || !edit || !input) return;
+          if (restore && wrapper.dataset.inlineOriginal !== undefined) {
+            if (input.value !== undefined) input.value = wrapper.dataset.inlineOriginal;
+            else input.textContent = wrapper.dataset.inlineOriginal;
+          }
+          showError(wrapper, '');
+          display.classList.remove('hidden');
+          edit.classList.add('hidden');
+        }
+
+        function normalizeWebsiteHref(raw) {
+          const v = (raw || '').trim();
+          if (!v) return '';
+          if (v.includes('://')) return v;
+          if (v.startsWith('//')) return 'https:' + v;
+          return 'https://' + v;
+        }
+
+        function updateWebsiteDisplay(wrapper, newValue) {
+          const display = wrapper.querySelector('[data-inline-display]');
+          if (!display) return;
+          const href = normalizeWebsiteHref(newValue);
+          display.innerHTML = '';
+          if (newValue && newValue.trim()) {
+            const a = document.createElement('a');
+            a.className = 'link break-all';
+            a.href = href;
+            a.target = '_blank';
+            a.rel = 'noopener';
+            a.textContent = newValue.trim();
+            display.appendChild(a);
+          } else {
+            const span = document.createElement('span');
+            span.className = 'text-brand-dark/70';
+            span.textContent = '—';
+            display.appendChild(span);
+          }
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'btn btn-outline btn-xs';
+          btn.setAttribute('data-inline-edit', '');
+          btn.title = 'Редактировать сайт';
+          btn.textContent = 'Изменить';
+          display.appendChild(btn);
+        }
+
+        // Открыть редактирование
+        document.addEventListener('click', function(e) {
+          const editBtn = e.target.closest('[data-inline-edit]');
+          if (!editBtn) return;
+          const wrapper = editBtn.closest('.inline-field-wrapper');
+          if (!wrapper) return;
+          e.preventDefault();
+          openEdit(wrapper);
+        });
+
+        // Отмена
+        document.addEventListener('click', function(e) {
+          const cancelBtn = e.target.closest('[data-inline-cancel]');
+          if (!cancelBtn) return;
+          const wrapper = cancelBtn.closest('.inline-field-wrapper');
+          if (!wrapper) return;
+          e.preventDefault();
+          closeEdit(wrapper, true);
+        });
+
+        // Сохранение
+        document.addEventListener('click', function(e) {
+          const saveBtn = e.target.closest('[data-inline-save]');
+          if (!saveBtn) return;
+          const wrapper = saveBtn.closest('.inline-field-wrapper');
+          if (!wrapper) return;
+
+          const field = (wrapper.dataset.inlineField || '').trim();
+          const companyId = (wrapper.dataset.companyId || '').trim();
+          const input = wrapper.querySelector('[data-inline-input]');
+          if (!field || !companyId || !input) return;
+
+          const value = (input.value !== undefined ? input.value : (input.textContent || '')).toString();
+
+          const formData = new FormData();
+          formData.append('field', field);
+          formData.append('value', value);
+          formData.append('csrfmiddlewaretoken', csrftoken);
+
+          fetch(`/companies/${companyId}/inline/`, {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+          })
+          .then(r => r.json().then(data => ({ ok: r.ok, status: r.status, data })))
+          .then(({ ok, data }) => {
+            if (!ok || !data.ok) {
+              const msg = (data && (data.error || (data.errors && data.errors[field] && data.errors[field][0]))) || 'Ошибка сохранения.';
+              showError(wrapper, msg);
+              return;
+            }
+
+            const newVal = (data.value ?? '').toString();
+            wrapper.dataset.inlineOriginal = newVal;
+
+            // Обновляем display
+            if (wrapper.dataset.inlineDisplayKind === 'website') {
+              updateWebsiteDisplay(wrapper, newVal);
+            } else {
+              const display = wrapper.querySelector('.inline-field-display');
+              if (display) {
+                const placeholder = '—';
+                display.textContent = newVal && newVal.trim() ? newVal : placeholder;
+              }
+            }
+
+            closeEdit(wrapper, false);
+          })
+          .catch(err => {
+            showError(wrapper, 'Ошибка: ' + err.message);
+          });
+        });
+
+        // Быстрые клавиши: Ctrl/Cmd+Enter сохранить, Esc отмена
+        document.addEventListener('keydown', function(e) {
+          const input = e.target.closest('[data-inline-input]');
+          if (!input) return;
+          const wrapper = input.closest('.inline-field-wrapper');
+          if (!wrapper) return;
+
+          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            const saveBtn = wrapper.querySelector('[data-inline-save]');
+            if (saveBtn) saveBtn.click();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            const cancelBtn = wrapper.querySelector('[data-inline-cancel]');
+            if (cancelBtn) cancelBtn.click();
+          }
+        });
+      })();
 
       // Добавление email в рассылочную кампанию (модалка)
       (function() {

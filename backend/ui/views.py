@@ -43,6 +43,7 @@ from .forms import (
     CompanyQuickEditForm,
     CompanyContractForm,
     CompanyEditForm,
+    CompanyInlineEditForm,
     CompanyNoteForm,
     ContactEmailFormSet,
     ContactForm,
@@ -3964,6 +3965,51 @@ def company_update(request: HttpRequest, company_id) -> HttpResponse:
     else:
         messages.error(request, "Не удалось обновить компанию. Проверь поля.")
     return redirect("company_detail", company_id=company.id)
+
+
+@login_required
+def company_inline_update(request: HttpRequest, company_id) -> HttpResponse:
+    """
+    Инлайн-обновление одного поля компании (AJAX) из карточки компании.
+    Вход: POST {field, value}. Выход: JSON.
+    """
+    if request.method != "POST":
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"ok": False, "error": "Метод не разрешен."}, status=405)
+        return redirect("company_detail", company_id=company_id)
+
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_edit_company(user, company):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"ok": False, "error": "Нет прав на редактирование этой компании."}, status=403)
+        messages.error(request, "Нет прав на редактирование этой компании.")
+        return redirect("company_detail", company_id=company.id)
+
+    field = (request.POST.get("field") or "").strip()
+    if field not in CompanyInlineEditForm.ALLOWED_FIELDS:
+        return JsonResponse({"ok": False, "error": "Недопустимое поле."}, status=400)
+
+    value = request.POST.get("value")
+    data = {field: value}
+    form = CompanyInlineEditForm(data=data, instance=company, field=field)
+    if not form.is_valid():
+        return JsonResponse({"ok": False, "errors": form.errors, "error": "Проверь значение поля."}, status=400)
+
+    form.save()
+    updated_value = getattr(company, field, "")
+
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="company",
+        entity_id=company.id,
+        company_id=company.id,
+        message=f"Инлайн-обновление поля компании: {field}",
+        meta={"field": field},
+    )
+
+    return JsonResponse({"ok": True, "field": field, "value": updated_value})
 
 
 @login_required

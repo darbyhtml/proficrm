@@ -317,6 +317,63 @@ class CompanyEditForm(forms.ModelForm):
         }
 
 
+class CompanyInlineEditForm(forms.ModelForm):
+    """
+    Инлайн-редактирование отдельных полей компании из карточки компании.
+    Используется для частичного обновления одного поля через AJAX.
+    """
+
+    ALLOWED_FIELDS = (
+        "name",
+        "legal_name",
+        "inn",
+        "kpp",
+        "address",
+        "website",
+        "activity_kind",
+    )
+
+    def __init__(self, *args, **kwargs):
+        # field: какое именно поле редактируем (для частичного update)
+        field = (kwargs.pop("field", None) or "").strip()
+        super().__init__(*args, **kwargs)
+        self._inline_field = field
+
+        # Оставляем только одно поле, которое редактируем
+        if field:
+            for f in list(self.fields.keys()):
+                if f != field:
+                    self.fields.pop(f, None)
+
+    def clean_name(self):
+        v = (self.cleaned_data.get("name") or "").strip()
+        if not v:
+            raise ValidationError("Название обязательно.")
+        return v
+
+    def clean_legal_name(self):
+        return (self.cleaned_data.get("legal_name") or "").strip()
+
+    def clean_inn(self):
+        return (self.cleaned_data.get("inn") or "").strip()
+
+    def clean_kpp(self):
+        return (self.cleaned_data.get("kpp") or "").strip()
+
+    def clean_address(self):
+        return (self.cleaned_data.get("address") or "").strip()
+
+    def clean_website(self):
+        return (self.cleaned_data.get("website") or "").strip()
+
+    def clean_activity_kind(self):
+        return (self.cleaned_data.get("activity_kind") or "").strip()
+
+    class Meta:
+        model = Company
+        fields = list(ALLOWED_FIELDS)
+
+
 class CompanyContractForm(forms.ModelForm):
     """
     Мини-форма для редактирования договора прямо из карточки компании.
