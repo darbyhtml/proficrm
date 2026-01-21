@@ -408,6 +408,10 @@ CELERY_WORKER_LOG_COLOR = False  # Отключить цветной вывод 
 # Celery Beat Schedule (периодические задачи)
 # Частота синхронизации квоты smtp.bz (сек). По умолчанию раз в 5 минут.
 SMTP_BZ_QUOTA_SYNC_SECONDS = float(os.getenv("SMTP_BZ_QUOTA_SYNC_SECONDS", "300") or "300")
+# Частота синхронизации отписок smtp.bz (сек). По умолчанию раз в 10 минут.
+SMTP_BZ_UNSUB_SYNC_SECONDS = float(os.getenv("SMTP_BZ_UNSUB_SYNC_SECONDS", "600") or "600")
+# Частота reconcile очереди рассылок (сек). По умолчанию раз в 5 минут.
+MAILER_QUEUE_RECONCILE_SECONDS = float(os.getenv("MAILER_QUEUE_RECONCILE_SECONDS", "300") or "300")
 CELERY_BEAT_SCHEDULE = {
     "send-pending-emails": {
         "task": "mailer.tasks.send_pending_emails",
@@ -416,6 +420,14 @@ CELERY_BEAT_SCHEDULE = {
     "sync-smtp-bz-quota": {
         "task": "mailer.tasks.sync_smtp_bz_quota",
         "schedule": SMTP_BZ_QUOTA_SYNC_SECONDS,
+    },
+    "sync-smtp-bz-unsubscribes": {
+        "task": "mailer.tasks.sync_smtp_bz_unsubscribes",
+        "schedule": SMTP_BZ_UNSUB_SYNC_SECONDS,
+    },
+    "reconcile-mail-campaign-queue": {
+        "task": "mailer.tasks.reconcile_campaign_queue",
+        "schedule": MAILER_QUEUE_RECONCILE_SECONDS,
     },
     "clean-old-call-requests": {
         "task": "phonebridge.tasks.clean_old_call_requests",

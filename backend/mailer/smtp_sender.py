@@ -34,6 +34,8 @@ def build_message(
     from_name: Optional[str] = None,
     reply_to: Optional[str] = None,
     attachment: Optional[any] = None,
+    attachment_content: Optional[bytes] = None,
+    attachment_filename: Optional[str] = None,
 ) -> EmailMessage:
     msg = EmailMessage()
     msg["Subject"] = subject
@@ -54,23 +56,37 @@ def build_message(
     else:
         msg.set_content(body_text or " ", subtype="plain", charset="utf-8")
 
-    # Добавляем вложение, если оно есть
-    if attachment:
+    # Добавляем вложение, если оно есть (поддерживаем кеширование bytes на уровне батча)
+    if attachment_content is not None:
+        import mimetypes
+        fname = (attachment_filename or "attachment").strip()
+        mime_type, _ = mimetypes.guess_type(fname)
+        if mime_type:
+            maintype, subtype = mime_type.split("/", 1)
+        else:
+            maintype, subtype = "application", "octet-stream"
+        msg.add_attachment(
+            attachment_content,
+            maintype=maintype,
+            subtype=subtype,
+            filename=fname,
+        )
+    elif attachment:
         import mimetypes
         attachment.open()
         try:
             content = attachment.read()
-            # Определяем MIME-тип по расширению файла
-            mime_type, _ = mimetypes.guess_type(attachment.name)
+            fname = getattr(attachment, "name", None) or "attachment"
+            mime_type, _ = mimetypes.guess_type(fname)
             if mime_type:
-                maintype, subtype = mime_type.split('/', 1)
+                maintype, subtype = mime_type.split("/", 1)
             else:
                 maintype, subtype = "application", "octet-stream"
             msg.add_attachment(
                 content,
                 maintype=maintype,
                 subtype=subtype,
-                filename=attachment.name,
+                filename=fname,
             )
         finally:
             attachment.close()
@@ -155,12 +171,10 @@ def format_smtp_error(error: Exception, account: _SmtpAccountLike) -> str:
     return f"Ошибка отправки: {error_str[:200]}"
 
 
-def send_via_smtp(account: _SmtpAccountLike, msg: EmailMessage) -> None:
+def open_smtp_connection(account: _SmtpAccountLike) -> smtplib.SMTP:
     """
-    Отправляет письмо через SMTP с улучшенной обработкой ошибок.
-    
-    Raises:
-        RuntimeError: С понятным сообщением об ошибке
+    Открывает SMTP соединение (для reuse на батч).
+    Возвращает залогиненный smtplib.SMTP. Закрытие — на вызывающей стороне (smtp.quit()).
     """
     password = account.get_password()
     if not account.is_enabled:
@@ -171,16 +185,44 @@ def send_via_smtp(account: _SmtpAccountLike, msg: EmailMessage) -> None:
     try:
         if account.use_starttls:
             context = ssl.create_default_context()
-            with smtplib.SMTP(account.smtp_host, account.smtp_port, timeout=30) as smtp:
-                smtp.ehlo()
-                smtp.starttls(context=context)
-                smtp.ehlo()
-                smtp.login(account.smtp_username, password)
-                smtp.send_message(msg)
-        else:
-            with smtplib.SMTP(account.smtp_host, account.smtp_port, timeout=30) as smtp:
-                smtp.login(account.smtp_username, password)
-                smtp.send_message(msg)
+            smtp = smtplib.SMTP(account.smtp_host, account.smtp_port, timeout=30)
+            smtp.ehlo()
+            smtp.starttls(context=context)
+            smtp.ehlo()
+            smtp.login(account.smtp_username, password)
+            return smtp
+
+        smtp = smtplib.SMTP(account.smtp_host, account.smtp_port, timeout=30)
+        smtp.login(account.smtp_username, password)
+        return smtp
+    except Exception as e:
+        formatted_error = format_smtp_error(e, account)
+        formatted_error_obj = RuntimeError(formatted_error)
+        formatted_error_obj.original_error = e
+        raise formatted_error_obj from e
+
+
+def send_via_smtp(account: _SmtpAccountLike, msg: EmailMessage, *, smtp: Optional[smtplib.SMTP] = None) -> None:
+    """
+    Отправляет письмо через SMTP с улучшенной обработкой ошибок.
+    
+    Raises:
+        RuntimeError: С понятным сообщением об ошибке
+    """
+    try:
+        if smtp is not None:
+            smtp.send_message(msg)
+            return
+
+        # Одиночная отправка (открыть/закрыть соединение внутри)
+        smtp_local = open_smtp_connection(account)
+        try:
+            smtp_local.send_message(msg)
+        finally:
+            try:
+                smtp_local.quit()
+            except Exception:
+                pass
     except Exception as e:
         # Форматируем ошибку в понятное сообщение
         formatted_error = format_smtp_error(e, account)

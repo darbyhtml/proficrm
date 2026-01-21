@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, CampaignQueue
 from mailer.smtp_sender import build_message, send_via_smtp
-from mailer.utils import html_to_text
+from mailer.utils import html_to_text, msk_day_bounds
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +21,20 @@ class Command(BaseCommand):
         parser.add_argument("--sleep", type=float, default=1.0, help="Пауза между итерациями (сек).")
         parser.add_argument("--batch", type=int, default=50, help="Максимум писем за итерацию на кампанию.")
         parser.add_argument("--once", action="store_true", help="Сделать один проход и выйти.")
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Разрешить запуск устаревшего воркера (НЕ рекомендуется; используйте Celery).",
+        )
 
     def handle(self, *args, **opts):
+        # Celery-only: этот воркер оставлен только для диагностики/аварийных случаев.
+        # В проде отправку делает mailer.tasks.send_pending_emails.
+        if not bool(opts.get("force")):
+            self.stdout.write(self.style.ERROR("mailer_worker устарел. Используйте Celery: mailer.tasks.send_pending_emails (celery + beat)."))
+            self.stdout.write(self.style.ERROR("Если вы понимаете риск и всё равно хотите запустить: добавьте флаг --force"))
+            return
+
         sleep_s = float(opts["sleep"])
         batch_size = int(opts["batch"])
         once = bool(opts["once"])
@@ -58,10 +70,8 @@ class Command(BaseCommand):
                     next_queue.save(update_fields=["status", "started_at"])
                     camps = [next_queue.campaign]
                 else:
-                    # fallback: старый режим без очереди
-                    camps = Campaign.objects.filter(
-                        recipients__status=CampaignRecipient.Status.PENDING
-                    ).distinct().order_by("created_at")[:20]
+                    # Celery-only: без CampaignQueue не отправляем
+                    camps = []
 
             for camp in camps:
                 user = camp.created_by
@@ -76,8 +86,9 @@ class Command(BaseCommand):
                     continue
 
                 now = timezone.now()
+                start_day_utc, end_day_utc, _now_msk = msk_day_bounds(now)
                 sent_last_min = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__gte=now - timezone.timedelta(minutes=1)).count()
-                sent_today = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__date=now.date()).count()
+                sent_today = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__gte=start_day_utc, created_at__lt=end_day_utc).count()
                 if sent_today >= smtp_cfg.rate_per_day or sent_last_min >= smtp_cfg.rate_per_minute:
                     continue
 

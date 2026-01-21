@@ -12,6 +12,7 @@ from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
 
 from accounts.models import User
 from audit.models import ActivityEvent
@@ -20,19 +21,17 @@ from companies.models import Company
 from companies.permissions import get_users_for_lists
 from accounts.models import Branch
 from companies.models import CompanySphere, CompanyStatus, ContactEmail, Contact
+from mailer.constants import COOLDOWN_DAYS_DEFAULT, PER_USER_DAILY_LIMIT_DEFAULT
 from mailer.forms import CampaignForm, CampaignGenerateRecipientsForm, CampaignRecipientAddForm, MailAccountForm, GlobalMailAccountForm, EmailSignatureForm
 from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, UnsubscribeToken, EmailCooldown, SmtpBzQuota, CampaignQueue
 from mailer.smtp_sender import build_message, send_via_smtp
-from mailer.utils import html_to_text
+from mailer.mail_content import apply_signature
+from mailer.utils import html_to_text, msk_day_bounds
 from crm.utils import require_admin
 from notifications.service import notify
 from notifications.models import Notification
 
 logger = logging.getLogger(__name__)
-
-PER_USER_DAILY_LIMIT = 100  # значение по умолчанию; может быть переопределено в GlobalMailAccount.per_user_daily_limit
-COOLDOWN_DAYS_DEFAULT = 3
-
 
 def _smtp_bz_extract_total(resp) -> int | None:
     """
@@ -103,22 +102,6 @@ def _can_manage_campaign(user: User, camp: Campaign) -> bool:
 def _contains_links(value: str) -> bool:
     v = (value or "").lower()
     return any(x in v for x in ("<a ", "href=", "http://", "https://", "www."))
-
-
-def _apply_signature(*, user: User, body_html: str, body_text: str) -> tuple[str, str]:
-    sig_html = (getattr(user, "email_signature_html", "") or "").strip()
-    if not sig_html:
-        return body_html, body_text
-    sig_text = (html_to_text(sig_html or "") or "").strip()
-    new_html = (body_html or "")
-    if new_html:
-        new_html = new_html + "<br><br>" + sig_html
-    else:
-        new_html = sig_html
-    new_text = (body_text or "")
-    if sig_text:
-        new_text = (new_text + "\n\n" + sig_text) if new_text else sig_text
-    return new_html, new_text
 
 
 @login_required
@@ -198,16 +181,33 @@ def mail_settings(request: HttpRequest) -> HttpResponse:
                 base = (getattr(settings, "PUBLIC_BASE_URL", "") or "").strip().rstrip("/")
                 test_url = (base + rel) if base else request.build_absolute_uri(rel)
                 # From: по умолчанию используем SMTP логин (самый совместимый вариант), Reply-To = email админа
+                # Добавляем ссылку отписки (чтобы тест был максимально похож на реальную отправку)
+                try:
+                    from mailer.mail_content import ensure_unsubscribe_tokens, build_unsubscribe_url, append_unsubscribe_footer
+                    token = ensure_unsubscribe_tokens([to_email]).get(to_email.strip().lower(), "")
+                    unsub_url = build_unsubscribe_url(token) if token else ""
+                except Exception:
+                    unsub_url = ""
+
+                body_html = "<p>Тестовое письмо из CRM ПРОФИ.</p><p>Если вы это читаете — SMTP настроен.</p>"
+                body_text = "Тестовое письмо из CRM ПРОФИ.\n\nЕсли вы это читаете — SMTP настроен.\n"
+                if unsub_url:
+                    body_html, body_text = append_unsubscribe_footer(body_html=body_html, body_text=body_text, unsubscribe_url=unsub_url)
+
                 msg = build_message(
                     account=cfg,  # type: ignore[arg-type]
                     to_email=to_email,
                     subject="CRM ПРОФИ: тест отправки",
-                    body_text="Тестовое письмо из CRM ПРОФИ.\n\nЕсли вы это читаете — SMTP настроен.\n",
-                    body_html="<p>Тестовое письмо из CRM ПРОФИ.</p><p>Если вы это читаете — SMTP настроен.</p>",
+                    body_text=body_text,
+                    body_html=body_html,
                     from_email=((cfg.from_email or "").strip() or (cfg.smtp_username or "").strip()),
                     from_name=(cfg.from_name or "CRM ПРОФИ").strip(),
                     reply_to=to_email,
                 )
+                if unsub_url:
+                    msg["List-Unsubscribe"] = f"<{unsub_url}>"
+                    msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+                    msg["X-Tag"] = "test:mail_settings"
                 try:
                     send_via_smtp(cfg, msg)
                     messages.success(request, f"Тестовое письмо отправлено на {to_email}.")
@@ -309,15 +309,13 @@ def campaigns(request: HttpRequest) -> HttpResponse:
     if is_admin:
         from django.utils import timezone as _tz
         from django.db.models import Count, Q
-        from zoneinfo import ZoneInfo
         now = _tz.now()
-        msk_tz = ZoneInfo("Europe/Moscow")
-        msk_now = now.astimezone(msk_tz)
+        start_day_utc, end_day_utc, msk_now = msk_day_bounds(now)
         today = msk_now.date()
         today_str = today.strftime("%Y-%m-%d")
         
         smtp_cfg = GlobalMailAccount.load()
-        per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT
+        per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT_DEFAULT
         
         # Статистика по пользователям: кто сколько писем отправил сегодня
         user_stats = []
@@ -328,7 +326,8 @@ def campaigns(request: HttpRequest) -> HttpResponse:
                 provider="smtp_global",
                 status="sent",
                 campaign__created_by=u,
-                created_at__date=today
+                created_at__gte=start_day_utc,
+                created_at__lt=end_day_utc,
             ).count()
             
             # Количество активных кампаний пользователя
@@ -342,7 +341,8 @@ def campaigns(request: HttpRequest) -> HttpResponse:
                 provider="smtp_global",
                 status="failed",
                 campaign__created_by=u,
-                created_at__date=today
+                created_at__gte=start_day_utc,
+                created_at__lt=end_day_utc,
             ).count()
             
             # Количество кампаний пользователя
@@ -369,13 +369,15 @@ def campaigns(request: HttpRequest) -> HttpResponse:
         total_sent_today = SendLog.objects.filter(
             provider="smtp_global",
             status="sent",
-            created_at__date=today
+            created_at__gte=start_day_utc,
+            created_at__lt=end_day_utc,
         ).count()
         
         total_failed_today = SendLog.objects.filter(
             provider="smtp_global",
             status="failed",
-            created_at__date=today
+            created_at__gte=start_day_utc,
+            created_at__lt=end_day_utc,
         ).count()
         
         # Статистика по кампаниям
@@ -451,16 +453,18 @@ def campaigns(request: HttpRequest) -> HttpResponse:
     # Информация о лимите пользователя (для всех)
     from django.utils import timezone as _tz
     now = _tz.now()
-    today = now.date()
+    start_day_utc, end_day_utc, now_msk = msk_day_bounds(now)
+    today = now_msk.date()
     sent_today_user = SendLog.objects.filter(
         provider="smtp_global",
         status="sent",
         campaign__created_by=user,
-        created_at__date=today
+        created_at__gte=start_day_utc,
+        created_at__lt=end_day_utc,
     ).count()
     
     smtp_cfg = GlobalMailAccount.load()
-    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT
+    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT_DEFAULT
     
     # Количество кампаний пользователя
     user_campaigns_count = Campaign.objects.filter(created_by=user).count()
@@ -483,12 +487,9 @@ def campaigns(request: HttpRequest) -> HttpResponse:
     
     # Добавляем информацию о паузе и рабочем времени для каждой кампании
     from mailer.tasks import _is_working_hours
-    from zoneinfo import ZoneInfo
-    
     campaigns_list = list(qs)
     is_working_time = _is_working_hours(now)
-    msk_tz = ZoneInfo("Europe/Moscow")
-    msk_now = now.astimezone(msk_tz)
+    msk_now = now_msk
     current_time_msk = msk_now.strftime("%H:%M")
     
     # Получаем лимиты для проверки паузы
@@ -501,7 +502,7 @@ def campaigns(request: HttpRequest) -> HttpResponse:
         max_per_hour = 100
         emails_available = global_limit
     
-    sent_today = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__date=today).count()
+    sent_today = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__gte=start_day_utc, created_at__lt=end_day_utc).count()
     sent_last_hour = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__gte=now - _tz.timedelta(hours=1)).count()
     
     # Для каждой кампании определяем причины паузы и информацию об очереди
@@ -522,7 +523,8 @@ def campaigns(request: HttpRequest) -> HttpResponse:
                 provider="smtp_global",
                 status="sent",
                 campaign__created_by=camp.created_by,
-                created_at__date=today
+                created_at__gte=start_day_utc,
+                created_at__lt=end_day_utc,
             ).count() if camp.created_by else 0
             
             if per_user_daily_limit and camp_sent_today >= per_user_daily_limit:
@@ -739,11 +741,12 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
         emails_available = global_limit
     
     now = _tz.now()
+    start_day_utc, end_day_utc, now_msk = msk_day_bounds(now)
     sent_last_hour = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__gte=now - _tz.timedelta(hours=1)).count()
-    sent_today = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__date=now.date()).count()
-    sent_today_user = SendLog.objects.filter(provider="smtp_global", status="sent", campaign__created_by=user, created_at__date=now.date()).count()
+    sent_today = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__gte=start_day_utc, created_at__lt=end_day_utc).count()
+    sent_today_user = SendLog.objects.filter(provider="smtp_global", status="sent", campaign__created_by=user, created_at__gte=start_day_utc, created_at__lt=end_day_utc).count()
     
-    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT
+    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT_DEFAULT
     is_working_time = _is_working_hours(now)
     
     # Количество кампаний пользователя
@@ -754,8 +757,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
     ).count()
     
     # Текущее московское время для отображения
-    msk_tz = ZoneInfo("Europe/Moscow")
-    msk_now = now.astimezone(msk_tz)
+    msk_now = now_msk
     current_time_msk = msk_now.strftime("%H:%M")
     
     # Причины паузы/блокировки
@@ -778,8 +780,8 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
         "sent_today": sent_today,
         "sent_today_user": sent_today_user,
         "sent_last_hour": sent_last_hour,
-        "failed_today": SendLog.objects.filter(provider="smtp_global", status="failed", created_at__date=now.date()).count(),
-        "failed_today_campaign": SendLog.objects.filter(campaign=camp, provider="smtp_global", status="failed", created_at__date=now.date()).count(),
+        "failed_today": SendLog.objects.filter(provider="smtp_global", status="failed", created_at__gte=start_day_utc, created_at__lt=end_day_utc).count(),
+        "failed_today_campaign": SendLog.objects.filter(campaign=camp, provider="smtp_global", status="failed", created_at__gte=start_day_utc, created_at__lt=end_day_utc).count(),
     }
     
     # Последние ошибки отправки для этой кампании (для отображения)
@@ -828,7 +830,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
     preview_html = camp.body_html or ""
     if preview_html:
         auto_plain = html_to_text(preview_html)
-        preview_html, _ = _apply_signature(
+        preview_html, _ = apply_signature(
             user=user,
             body_html=preview_html,
             body_text=auto_plain or camp.body_text or ""
@@ -933,17 +935,19 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
     from django.utils import timezone as _tz
 
     now = _tz.now()
+    start_day_utc, end_day_utc, _now_msk = msk_day_bounds(now)
     smtp_cfg = GlobalMailAccount.load()
     sent_today = SendLog.objects.filter(
-        provider="smtp_global", status="sent", created_at__date=now.date()
+        provider="smtp_global", status="sent", created_at__gte=start_day_utc, created_at__lt=end_day_utc
     ).count()
     sent_today_user = SendLog.objects.filter(
         provider="smtp_global",
         status="sent",
         campaign__created_by=user,
-        created_at__date=now.date(),
+        created_at__gte=start_day_utc,
+        created_at__lt=end_day_utc,
     ).count()
-    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT
+    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT_DEFAULT
     limit_reached = False
     if per_user_daily_limit and sent_today_user >= per_user_daily_limit and pending > 0:
         limit_reached = True
@@ -1282,122 +1286,92 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
 
     from django.utils import timezone as _tz
     now = _tz.now()
-    cooldown_emails = set(
-        EmailCooldown.objects.filter(created_by=user, until_at__gt=now).values_list("email", flat=True)
-    )
-    
-    # 1) Берём email контактов, связанных с компаниями (если включено)
-    if include_contact_emails:
-        # Если нет компаний после фильтрации, пропускаем
-        if not company_ids:
-            messages.info(request, "Нет компаний, соответствующих фильтрам.")
-        else:
-            # company_ids уже содержит только компании с выбранными сферами (если сферы были выбраны)
-            # Фильтр spheres__id__in работает как OR: компания попадает, если имеет хотя бы одну из выбранных сфер
-            emails_qs = (
-                ContactEmail.objects.filter(contact__company_id__in=company_ids)
-                .select_related("contact", "contact__company")
-            )
-            # Фильтруем по типам email'ов, если указаны
-            if contact_email_types:
-                emails_qs = emails_qs.filter(type__in=contact_email_types)
-            emails_qs = emails_qs.order_by("value")
+    cooldown_emails = {
+        (e or "").strip().lower()
+        for e in EmailCooldown.objects.filter(created_by=user, until_at__gt=now).values_list("email", flat=True)
+    }
 
-            for e in emails_qs.iterator():
-                if created >= limit:
-                    break
-                email = (e.value or "").strip().lower()
-                if not email:
-                    continue
-                if email in cooldown_emails:
-                    skipped_cooldown += 1
-                    continue
-                # Проверяем, что контакт существует и привязан к компании
-                if not e.contact or not e.contact.company_id:
-                    continue
-                if Unsubscribe.objects.filter(email__iexact=email).exists():
-                    CampaignRecipient.objects.get_or_create(
-                        campaign=camp,
-                        email=email,
-                        defaults={"status": CampaignRecipient.Status.UNSUBSCRIBED, "contact_id": e.contact_id, "company_id": e.contact.company_id},
-                    )
-                    continue
-                _, was_created = CampaignRecipient.objects.get_or_create(
-                    campaign=camp,
-                    email=email,
-                    defaults={"contact_id": e.contact_id, "company_id": e.contact.company_id},
-                )
-                if was_created:
-                    created += 1
+    # Собираем кандидатов (email -> (contact_id, company_id)) с приоритетом контактных email
+    candidates: dict[str, tuple[str | None, str | None]] = {}
 
-    # 2) Добавляем основной email компании (если включено и лимит не достигнут)
-    if include_company_email and created < limit and company_ids:
-        # company_ids уже содержит только компании с выбранными сферами (если сферы были выбраны)
-        for c in Company.objects.filter(id__in=company_ids).only("id", "email").iterator():
+    if include_contact_emails and company_ids:
+        emails_qs = ContactEmail.objects.filter(contact__company_id__in=company_ids)
+        if contact_email_types:
+            emails_qs = emails_qs.filter(type__in=contact_email_types)
+        for value, contact_id, company_id in emails_qs.values_list("value", "contact_id", "contact__company_id").iterator():
+            email = (value or "").strip().lower()
+            if not email or email in candidates:
+                continue
+            candidates[email] = (str(contact_id) if contact_id else None, str(company_id) if company_id else None)
+            if len(candidates) >= (limit * 3):
+                break
+
+    if include_company_email and company_ids:
+        # Основной email компании
+        for email_value, company_id in Company.objects.filter(id__in=company_ids).values_list("email", "id").iterator():
+            email = (email_value or "").strip().lower()
+            if not email or email in candidates:
+                continue
+            candidates[email] = (None, str(company_id))
+            if len(candidates) >= (limit * 3):
+                break
+
+        # Дополнительные email компании (CompanyEmail)
+        from companies.models import CompanyEmail
+
+        for email_value, company_id in CompanyEmail.objects.filter(company_id__in=company_ids).values_list("value", "company_id").iterator():
+            email = (email_value or "").strip().lower()
+            if not email or email in candidates:
+                continue
+            candidates[email] = (None, str(company_id))
+            if len(candidates) >= (limit * 3):
+                break
+
+    if not candidates:
+        messages.info(request, "Email адреса не найдены по выбранным источникам/фильтрам.")
+    else:
+        # cooldown
+        for e in list(candidates.keys()):
+            if e in cooldown_emails:
+                skipped_cooldown += 1
+                candidates.pop(e, None)
+
+        # Отписки — одним запросом
+        unsub_set = set(Unsubscribe.objects.filter(email__in=list(candidates.keys())).values_list("email", flat=True))
+        unsub_set = {(e or "").strip().lower() for e in unsub_set if (e or "").strip()}
+
+        # Уже существующие получатели кампании — одним запросом
+        existing_set = set(
+            CampaignRecipient.objects.filter(campaign=camp, email__in=list(candidates.keys())).values_list("email", flat=True)
+        )
+        existing_set = {(e or "").strip().lower() for e in existing_set if (e or "").strip()}
+
+        to_create = []
+        for email, (contact_id, company_id) in candidates.items():
             if created >= limit:
                 break
-            email = (getattr(c, "email", "") or "").strip().lower()
-            if not email:
+            if email in existing_set:
                 continue
-            if email in cooldown_emails:
-                skipped_cooldown += 1
-                continue
-            # Пропускаем, если этот email уже добавлен из контактов
-            if include_contact_emails:
-                # Проверяем, не был ли уже добавлен этот email из контактов
-                if CampaignRecipient.objects.filter(campaign=camp, email__iexact=email).exists():
-                    continue
-            if Unsubscribe.objects.filter(email__iexact=email).exists():
-                CampaignRecipient.objects.get_or_create(
+            status = CampaignRecipient.Status.UNSUBSCRIBED if email in unsub_set else CampaignRecipient.Status.PENDING
+            to_create.append(
+                CampaignRecipient(
                     campaign=camp,
                     email=email,
-                    defaults={"status": CampaignRecipient.Status.UNSUBSCRIBED, "contact_id": None, "company_id": c.id},
+                    status=status,
+                    contact_id=contact_id,
+                    company_id=company_id,
                 )
-                continue
-            _, was_created = CampaignRecipient.objects.get_or_create(
-                campaign=camp,
-                email=email,
-                defaults={"contact_id": None, "company_id": c.id},
             )
-            if was_created:
-                created += 1
-    
-    # 3) Добавляем дополнительные email адреса компании из CompanyEmail (если включено и лимит не достигнут)
-    if include_company_email and created < limit and company_ids:
-        from companies.models import CompanyEmail
-        # company_ids уже содержит только компании с выбранными сферами (если сферы были выбраны)
-        company_emails_qs = (
-            CompanyEmail.objects.filter(company_id__in=company_ids)
-            .select_related("company")
-            .order_by("company_id", "order", "value")
-        )
-        
-        for ce in company_emails_qs.iterator():
-                if created >= limit:
-                    break
-                email = (ce.value or "").strip().lower()
-                if not email:
-                    continue
-                if email in cooldown_emails:
-                    skipped_cooldown += 1
-                    continue
-                # Пропускаем, если этот email уже добавлен из контактов или основного email компании
-                if CampaignRecipient.objects.filter(campaign=camp, email__iexact=email).exists():
-                    continue
-                if Unsubscribe.objects.filter(email__iexact=email).exists():
-                    CampaignRecipient.objects.get_or_create(
-                        campaign=camp,
-                        email=email,
-                        defaults={"status": CampaignRecipient.Status.UNSUBSCRIBED, "contact_id": None, "company_id": ce.company_id},
-                    )
-                    continue
-                _, was_created = CampaignRecipient.objects.get_or_create(
-                    campaign=camp,
-                    email=email,
-                    defaults={"contact_id": None, "company_id": ce.company_id},
-                )
-                if was_created:
-                    created += 1
+            created += 1
+
+        if to_create:
+            CampaignRecipient.objects.bulk_create(to_create, ignore_conflicts=True)
+
+        # Если email уже был в кампании, но теперь он в Unsubscribe — помечаем как UNSUBSCRIBED
+        if unsub_set:
+            CampaignRecipient.objects.filter(campaign=camp, email__in=list(unsub_set)).exclude(
+                status=CampaignRecipient.Status.UNSUBSCRIBED
+            ).update(status=CampaignRecipient.Status.UNSUBSCRIBED, updated_at=now)
 
     # НЕ меняем статус автоматически - пользователь должен нажать "Старт" вручную
     # camp.status остается DRAFT (или текущий статус)
@@ -1451,6 +1425,16 @@ def campaign_recipients_reset(request: HttpRequest, campaign_id) -> HttpResponse
     # Кампания снова готова к отправке
     camp.status = Campaign.Status.READY
     camp.save(update_fields=["status", "updated_at"])
+    # Гарантируем присутствие в очереди (Celery-only)
+    queue_entry, _ = CampaignQueue.objects.get_or_create(
+        campaign=camp,
+        defaults={"status": CampaignQueue.Status.PENDING, "priority": 0},
+    )
+    queue_entry.status = CampaignQueue.Status.PENDING
+    queue_entry.queued_at = timezone.now()
+    queue_entry.started_at = None
+    queue_entry.completed_at = None
+    queue_entry.save(update_fields=["status", "queued_at", "started_at", "completed_at"])
     return redirect("campaign_detail", campaign_id=camp.id)
 
 
@@ -1486,12 +1470,19 @@ def campaign_clear(request: HttpRequest, campaign_id) -> HttpResponse:
     camp.recipients.all().delete()
     camp.status = Campaign.Status.DRAFT
     camp.save(update_fields=["status", "updated_at"])
+
+    # Если кампания была в очереди — отменяем
+    queue_entry = getattr(camp, "queue_entry", None)
+    if queue_entry and queue_entry.status in (CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING):
+        queue_entry.status = CampaignQueue.Status.CANCELLED
+        queue_entry.completed_at = timezone.now()
+        queue_entry.save(update_fields=["status", "completed_at"])
     messages.success(request, f"Кампания очищена. Удалено получателей: {removed}. Повторно эти email можно использовать через {COOLDOWN_DAYS_DEFAULT} дн.")
     log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Очищена кампания", meta={"removed": removed, "cooldown_days": COOLDOWN_DAYS_DEFAULT})
     return redirect("campaign_detail", campaign_id=camp.id)
 
 
-@login_required
+@csrf_exempt
 def unsubscribe(request: HttpRequest, token: str) -> HttpResponse:
     """
     Отписка по токену.
@@ -1500,7 +1491,12 @@ def unsubscribe(request: HttpRequest, token: str) -> HttpResponse:
     t = UnsubscribeToken.objects.filter(token=token).first()
     email = (t.email if t else "").strip().lower()
     if email:
-        Unsubscribe.objects.get_or_create(email=email)
+        # One-click отписка может приходить POST'ом без CSRF (List-Unsubscribe-Post)
+        reason = "unsubscribe" if request.method == "POST" else "user"
+        Unsubscribe.objects.update_or_create(
+            email=email,
+            defaults={"source": "token", "reason": reason, "last_seen_at": timezone.now()},
+        )
     return render(request, "ui/mail/unsubscribe.html", {"email": email})
 
 
@@ -1523,6 +1519,10 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
         messages.error(request, "SMTP не настроен администратором (Почта → Настройки).")
         return redirect("campaign_detail", campaign_id=camp.id)
 
+    if not (user.email or "").strip():
+        messages.error(request, "В вашем профиле не задан email (Reply-To). Укажите email в профиле и повторите попытку.")
+        return redirect("campaign_detail", campaign_id=camp.id)
+
     # Ограничение по рабочему времени (9:00-18:00 МСК) — чтобы письма не уходили ночью
     from mailer.tasks import _is_working_hours
     from zoneinfo import ZoneInfo
@@ -1542,188 +1542,44 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
         messages.error(request, "Подтвердите отправку (кнопка отправки должна быть нажата осознанно).")
         return redirect("campaign_detail", campaign_id=camp.id)
 
-    # Получаем лимиты из API
-    quota = SmtpBzQuota.load()
-    if quota.last_synced_at and not quota.sync_error and quota.emails_limit > 0:
-        max_per_hour = quota.max_per_hour or 100
-        emails_available = quota.emails_available or 0
-        emails_limit = quota.emails_limit or 15000
-    else:
-        max_per_hour = 100
-        emails_available = 15000
-        emails_limit = 15000
-    
-    # Rate limit: глобальные лимиты из API
-    from django.utils import timezone as _tz
-    now = _tz.now()
-    sent_last_hour = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__gte=now - _tz.timedelta(hours=1)).count()
-    sent_today = SendLog.objects.filter(provider="smtp_global", status="sent", created_at__date=now.date()).count()
-    sent_today_user = SendLog.objects.filter(provider="smtp_global", status="sent", campaign__created_by=user, created_at__date=now.date()).count()
-
-    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT
-    if per_user_daily_limit and sent_today_user >= per_user_daily_limit:
-        messages.error(request, f"Достигнут лимит отправки {per_user_daily_limit} писем в день для вашего аккаунта.")
-        return redirect("campaign_detail", campaign_id=camp.id)
-    if emails_available <= 0:
-        messages.error(request, f"Квота исчерпана: доступно {emails_available} из {emails_limit} писем.")
-        return redirect("campaign_detail", campaign_id=camp.id)
-    if sent_last_hour >= max_per_hour:
-        messages.error(request, f"Слишком часто. Подожди час (лимит в час: {max_per_hour}).")
-        return redirect("campaign_detail", campaign_id=camp.id)
-
-    # 50 писем за шаг — безопасный MVP, но с учетом лимитов
-    allowed = max(
-        1,
-        min(
-            50,
-            max_per_hour - sent_last_hour,
-            emails_available,
-            (per_user_daily_limit - sent_today_user) if per_user_daily_limit else 50,
-        ),
-    )
-    batch = list(camp.recipients.filter(status=CampaignRecipient.Status.PENDING)[:allowed])
-    if not batch:
-        messages.info(request, "Очередь пуста.")
-        # Если все отправлено, обновляем статус кампании
-        if camp.recipients.filter(status=CampaignRecipient.Status.PENDING).count() == 0:
-            if camp.status == Campaign.Status.SENDING:
-                camp.status = Campaign.Status.SENT
-                camp.save(update_fields=["status", "updated_at"])
-            # И закрываем запись в очереди, если она есть
-            queue_entry = getattr(camp, "queue_entry", None)
-            if queue_entry and queue_entry.status in (CampaignQueue.Status.PROCESSING, CampaignQueue.Status.PENDING):
-                queue_entry.status = CampaignQueue.Status.COMPLETED
-                queue_entry.completed_at = timezone.now()
-                queue_entry.save(update_fields=["status", "completed_at"])
-        return redirect("campaign_detail", campaign_id=camp.id)
-
-    # Обновляем статус кампании на SENDING при начале отправки
-    if camp.status == Campaign.Status.READY:
-        camp.status = Campaign.Status.SENDING
-        camp.save(update_fields=["status", "updated_at"])
-
-    sent = 0
-    failed = 0
-    for r in batch:
-        if Unsubscribe.objects.filter(email__iexact=r.email).exists():
-            r.status = CampaignRecipient.Status.UNSUBSCRIBED
-            r.save(update_fields=["status", "updated_at"])
-            continue
-
-        auto_plain = html_to_text(camp.body_html or "")
-        base_html, base_text = _apply_signature(user=user, body_html=(camp.body_html or ""), body_text=(auto_plain or camp.body_text or ""))
-        msg = build_message(
-            account=MailAccount.objects.get_or_create(user=user)[0],  # fallback fields for build_message
-            to_email=r.email,
-            subject=camp.subject,
-            body_text=(base_text or ""),
-            body_html=(base_html or ""),
-            from_email=((smtp_cfg.from_email or "").strip() or (smtp_cfg.smtp_username or "").strip()),
-            from_name=((camp.sender_name or "").strip() or (smtp_cfg.from_name or "CRM ПРОФИ").strip()),
-            reply_to=(user.email or "").strip(),
-            attachment=camp.attachment if camp.attachment else None,
-        )
-
-        try:
-            send_via_smtp(smtp_cfg, msg)
-            r.status = CampaignRecipient.Status.SENT
-            r.last_error = ""
-            r.save(update_fields=["status", "last_error", "updated_at"])
-            SendLog.objects.create(campaign=camp, recipient=r, account=None, provider="smtp_global", status="sent", message_id=str(msg["Message-ID"]))
-            sent += 1
-        except Exception as ex:
-            # Получаем понятное сообщение об ошибке
-            error_message = str(ex)
-            if hasattr(ex, 'original_error'):
-                error_message = str(ex)
-                logger.error(f"Failed to send email {r.email}: {ex.original_error}", exc_info=True)
-            else:
-                logger.error(f"Failed to send email {r.email}: {ex}", exc_info=True)
-            
-            # Пытаемся получить детальную информацию через API smtp.bz, если доступно
-            detailed_error = error_message
-            if smtp_cfg.smtp_bz_api_key:
-                try:
-                    from mailer.smtp_bz_api import get_message_info, get_message_logs
-                    from django.utils import timezone as _tz
-                    import time
-                    
-                    # Небольшая задержка для обработки на стороне smtp.bz
-                    time.sleep(2)
-                    
-                    # Сначала пробуем найти по Message-ID
-                    message_id = str(msg.get("Message-ID", "")).strip("<>")
-                    msg_info = None
-                    
-                    if message_id:
-                        msg_info = get_message_info(smtp_cfg.smtp_bz_api_key, message_id)
-                    
-                    # Если не нашли по Message-ID, пробуем найти по email получателя и дате
-                    if not msg_info:
-                        # Извлекаем чистый email из заголовков (может быть в формате "Name <email@example.com>")
-                        to_header = msg.get("To", "")
-                        from_header = msg.get("From", "")
-                        
-                        # Парсим email из заголовка
-                        import re
-                        email_pattern = r'[\w\.-]+@[\w\.-]+\.\w+'
-                        to_email_match = re.search(email_pattern, to_header)
-                        from_email_match = re.search(email_pattern, from_header)
-                        
-                        to_email = to_email_match.group(0) if to_email_match else ""
-                        from_email = from_email_match.group(0) if from_email_match else ""
-                        
-                        # Ищем письма за последние 5 минут
-                        start_date = (_tz.now() - _tz.timedelta(minutes=5)).strftime("%Y-%m-%d")
-                        end_date = _tz.now().strftime("%Y-%m-%d")
-                        
-                        logs = get_message_logs(
-                            smtp_cfg.smtp_bz_api_key,
-                            to_email=to_email,
-                            from_email=from_email,
-                            status="bounce",  # Ищем только отскоки
-                            limit=10,
-                            start_date=start_date,
-                            end_date=end_date,
-                        )
-                        
-                        if logs:
-                            # Берем первое найденное письмо
-                            messages = logs.get("data", []) if isinstance(logs, dict) else logs if isinstance(logs, list) else []
-                            if messages:
-                                msg_info = messages[0] if isinstance(messages[0], dict) else None
-                    
-                    if msg_info:
-                        status = msg_info.get("status", "")
-                        bounce_reason = msg_info.get("bounce_reason") or msg_info.get("error") or msg_info.get("reason") or msg_info.get("bounceReason", "")
-                        if status in ("bounce", "return", "cancel") and bounce_reason:
-                            detailed_error = f"{error_message} | Статус: {status}, Причина: {bounce_reason[:150]}"
-                        elif status:
-                            detailed_error = f"{error_message} | Статус: {status}"
-                except Exception as api_error:
-                    logger.debug(f"Failed to get message info from smtp.bz API: {api_error}")
-            
-            r.status = CampaignRecipient.Status.FAILED
-            r.last_error = detailed_error[:255]
-            r.save(update_fields=["status", "last_error", "updated_at"])
-            SendLog.objects.create(campaign=camp, recipient=r, account=None, provider="smtp_global", status="failed", error=detailed_error[:500])
-            failed += 1
-
-    messages.success(request, f"Отправлено: {sent}, ошибок: {failed}.")
-    log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Отправка батча", meta={"sent": sent, "failed": failed})
-    
-    # Если все отправлено, обновляем статус кампании на SENT
     pending_count = camp.recipients.filter(status=CampaignRecipient.Status.PENDING).count()
-    if pending_count == 0 and camp.status == Campaign.Status.SENDING:
-        camp.status = Campaign.Status.SENT
-        camp.save(update_fields=["status", "updated_at"])
-        # Закрываем очередь, если кампания была в очереди
+    if pending_count == 0:
+        messages.info(request, "Очередь пуста.")
+        # Закрываем запись в очереди, если она есть
         queue_entry = getattr(camp, "queue_entry", None)
         if queue_entry and queue_entry.status in (CampaignQueue.Status.PROCESSING, CampaignQueue.Status.PENDING):
             queue_entry.status = CampaignQueue.Status.COMPLETED
             queue_entry.completed_at = timezone.now()
             queue_entry.save(update_fields=["status", "completed_at"])
+        # Если кампания была в процессе — считаем завершенной
+        if camp.status == Campaign.Status.SENDING:
+            camp.status = Campaign.Status.SENT
+            camp.save(update_fields=["status", "updated_at"])
+        return redirect("campaign_detail", campaign_id=camp.id)
 
+    # Celery-only: ручной шаг не отправляет SMTP напрямую — только ставит в очередь и триггерит обработку.
+    if camp.status in (Campaign.Status.DRAFT, Campaign.Status.STOPPED, Campaign.Status.PAUSED):
+        camp.status = Campaign.Status.READY
+        camp.save(update_fields=["status", "updated_at"])
+
+    queue_entry, _ = CampaignQueue.objects.get_or_create(
+        campaign=camp,
+        defaults={"status": CampaignQueue.Status.PENDING, "priority": 0},
+    )
+    if queue_entry.status == CampaignQueue.Status.CANCELLED:
+        queue_entry.status = CampaignQueue.Status.PENDING
+        queue_entry.queued_at = timezone.now()
+        queue_entry.save(update_fields=["status", "queued_at"])
+
+    try:
+        from mailer.tasks import send_pending_emails
+        send_pending_emails.delay()
+    except Exception:
+        # не критично: beat подхватит
+        pass
+
+    messages.success(request, "Отправка запущена. Кампания в очереди, письма будут отправляться в рабочее время и с учетом лимитов.")
+    log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Ручной запуск отправки (celery)")
     return redirect("campaign_detail", campaign_id=camp.id)
 
 
@@ -1744,6 +1600,10 @@ def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
     smtp_cfg = GlobalMailAccount.load()
     if not smtp_cfg.is_enabled:
         messages.error(request, "SMTP не настроен администратором (Почта → Настройки).")
+        return redirect("campaign_detail", campaign_id=camp.id)
+
+    if not ((camp.created_by.email if camp.created_by else "") or "").strip():
+        messages.error(request, "У создателя кампании не задан email (Reply-To). Укажите email в профиле создателя кампании.")
         return redirect("campaign_detail", campaign_id=camp.id)
     
     pending_count = camp.recipients.filter(status=CampaignRecipient.Status.PENDING).count()
@@ -1775,10 +1635,12 @@ def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
             }
         )
         if not created:
-            if queue_entry.status == CampaignQueue.Status.CANCELLED:
+            if queue_entry.status != CampaignQueue.Status.PENDING:
                 queue_entry.status = CampaignQueue.Status.PENDING
                 queue_entry.queued_at = timezone.now()
-                queue_entry.save(update_fields=["status", "queued_at"])
+                queue_entry.started_at = None
+                queue_entry.completed_at = None
+                queue_entry.save(update_fields=["status", "queued_at", "started_at", "completed_at"])
         
         # Определяем позицию в очереди
         queue_position = None
@@ -1844,11 +1706,13 @@ def campaign_pause(request: HttpRequest, campaign_id) -> HttpResponse:
             if queue_entry.status == CampaignQueue.Status.PROCESSING:
                 # Если обрабатывается, отменяем и очередь перейдет на следующего
                 queue_entry.status = CampaignQueue.Status.CANCELLED
-                queue_entry.save(update_fields=["status"])
+                queue_entry.completed_at = timezone.now()
+                queue_entry.save(update_fields=["status", "completed_at"])
             elif queue_entry.status == CampaignQueue.Status.PENDING:
                 # Если в очереди, просто отменяем
                 queue_entry.status = CampaignQueue.Status.CANCELLED
-                queue_entry.save(update_fields=["status"])
+                queue_entry.completed_at = timezone.now()
+                queue_entry.save(update_fields=["status", "completed_at"])
         
         messages.success(request, "Рассылка поставлена на паузу. Очередь перешла на следующую кампанию.")
         log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Рассылка поставлена на паузу вручную")
@@ -1873,6 +1737,9 @@ def campaign_resume(request: HttpRequest, campaign_id) -> HttpResponse:
     if camp.status == Campaign.Status.PAUSED:
         pending_count = camp.recipients.filter(status=CampaignRecipient.Status.PENDING).count()
         if pending_count > 0:
+            if not ((camp.created_by.email if camp.created_by else "") or "").strip():
+                messages.error(request, "У создателя кампании не задан email (Reply-To). Укажите email в профиле создателя кампании.")
+                return redirect("campaign_detail", campaign_id=camp.id)
             camp.status = Campaign.Status.READY
             camp.save(update_fields=["status", "updated_at"])
             
@@ -1895,10 +1762,12 @@ def campaign_resume(request: HttpRequest, campaign_id) -> HttpResponse:
                 }
             )
             if not created:
-                if queue_entry.status == CampaignQueue.Status.CANCELLED:
+                if queue_entry.status != CampaignQueue.Status.PENDING:
                     queue_entry.status = CampaignQueue.Status.PENDING
                     queue_entry.queued_at = timezone.now()
-                    queue_entry.save(update_fields=["status", "queued_at"])
+                    queue_entry.started_at = None
+                    queue_entry.completed_at = None
+                    queue_entry.save(update_fields=["status", "queued_at", "started_at", "completed_at"])
             
             # Определяем позицию в очереди
             queue_position = None
@@ -1971,7 +1840,18 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
     # (хотя в этой функции мы их не трогаем, это дополнительная защита)
     recipients_before = list(camp.recipients.values_list("id", "status"))
 
-    base_html, base_text = _apply_signature(user=user, body_html=(camp.body_html or ""), body_text=(html_to_text(camp.body_html or "") or camp.body_text or ""))
+    base_html, base_text = apply_signature(
+        user=user,
+        body_html=(camp.body_html or ""),
+        body_text=(html_to_text(camp.body_html or "") or camp.body_text or ""),
+    )
+
+    # Добавляем отписку и заголовки как в реальной рассылке (для корректного теста)
+    from mailer.mail_content import ensure_unsubscribe_tokens, build_unsubscribe_url, append_unsubscribe_footer
+    token = ensure_unsubscribe_tokens([to_email]).get(to_email.strip().lower(), "")
+    unsub_url = build_unsubscribe_url(token) if token else ""
+    if unsub_url:
+        base_html, base_text = append_unsubscribe_footer(body_html=base_html, body_text=base_text, unsubscribe_url=unsub_url)
 
     msg = build_message(
         account=MailAccount.objects.get_or_create(user=user)[0],
@@ -1984,6 +1864,10 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
         reply_to=(user.email or "").strip(),
         attachment=camp.attachment if camp.attachment else None,
     )
+    if unsub_url:
+        msg["List-Unsubscribe"] = f"<{unsub_url}>"
+        msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+    msg["X-Tag"] = f"test:campaign:{camp.id}"
     try:
         send_via_smtp(smtp_cfg, msg)
         # ВАЖНО: Создаем SendLog БЕЗ recipient, чтобы не было связи с получателями

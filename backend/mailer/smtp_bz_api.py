@@ -450,3 +450,62 @@ def get_message_logs(
     except Exception as e:
         logger.error(f"smtp.bz API: неожиданная ошибка при получении логов: {e}", exc_info=True)
         return None
+
+
+def get_unsubscribers(
+    api_key: str,
+    *,
+    limit: int = 200,
+    offset: int = 0,
+    address: Optional[str] = None,
+    reason: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    GET /unsubscribe — получение списка отписчиков (smtp.bz).
+
+    Параметры (query):
+      - limit, offset
+      - address (email)
+      - reason: bounce, user, unsubscribe
+    """
+    if not api_key:
+        return None
+
+    try:
+        endpoint = "/unsubscribe"
+        url = f"{SMTP_BZ_API_BASE}{endpoint}"
+
+        params: Dict[str, Any] = {"limit": limit, "offset": offset}
+        if address:
+            params["address"] = address
+        if reason:
+            params["reason"] = reason
+
+        auth_variants = [
+            {"Authorization": api_key},
+            {"Authorization": f"API-KEY {api_key}"},
+            {"Authorization": f"Bearer {api_key}"},
+        ]
+        headers_base = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+
+        for auth_header in auth_variants:
+            headers = {**headers_base, **auth_header}
+            try:
+                response = requests.get(url, headers=headers, params=params, timeout=10)
+                if response.status_code == 200:
+                    return response.json()
+                if response.status_code == 404:
+                    return {"data": [], "total": 0}
+                if response.status_code == 401:
+                    continue
+            except requests.exceptions.RequestException as e:
+                logger.debug(f"smtp.bz API: ошибка при запросе /unsubscribe: {e}")
+                continue
+
+        return None
+    except Exception as e:
+        logger.error(f"smtp.bz API: неожиданная ошибка при получении /unsubscribe: {e}", exc_info=True)
+        return None

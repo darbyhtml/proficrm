@@ -88,6 +88,21 @@ class GlobalMailAccount(models.Model):
 
 class Unsubscribe(models.Model):
     email = models.EmailField("Email", unique=True)
+    source = models.CharField(
+        "Источник",
+        max_length=24,
+        blank=True,
+        default="",
+        help_text="manual/token/smtp_bz",
+    )
+    reason = models.CharField(
+        "Причина",
+        max_length=24,
+        blank=True,
+        default="",
+        help_text="bounce/user/unsubscribe (если известно)",
+    )
+    last_seen_at = models.DateTimeField("Последнее обновление (из внешних источников)", null=True, blank=True)
     created_at = models.DateTimeField("Когда", auto_now_add=True)
 
     def __str__(self) -> str:

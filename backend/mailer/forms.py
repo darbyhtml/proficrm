@@ -3,6 +3,7 @@ from __future__ import annotations
 from django import forms
 
 from mailer.models import Campaign, MailAccount, GlobalMailAccount
+from mailer.utils import sanitize_email_html
 
 
 class EmailSignatureForm(forms.Form):
@@ -12,6 +13,10 @@ class EmailSignatureForm(forms.Form):
         widget=forms.Textarea(attrs={"class": "textarea", "rows": 10, "id": "id_signature_html"}),
         help_text="HTML-подпись, которая будет добавляться в конец письма.",
     )
+
+    def clean_signature_html(self):
+        html = (self.cleaned_data.get("signature_html") or "").strip()
+        return sanitize_email_html(html)
 
 
 class MailAccountForm(forms.ModelForm):
@@ -150,7 +155,22 @@ class CampaignForm(forms.ModelForm):
             max_size = 15 * 1024 * 1024  # 15 МБ
             if attachment.size > max_size:
                 raise forms.ValidationError(f"Размер файла не должен превышать 15 МБ. Текущий размер: {attachment.size / 1024 / 1024:.2f} МБ")
+            # Allowlist расширений (дублируем accept атрибут, но на сервере)
+            allowed_ext = {
+                ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+                ".png", ".jpg", ".jpeg", ".gif", ".webp",
+                ".txt", ".csv", ".zip", ".rar",
+            }
+            name = getattr(attachment, "name", "") or ""
+            lower = name.lower()
+            ext = "." + lower.split(".")[-1] if "." in lower else ""
+            if ext and ext not in allowed_ext:
+                raise forms.ValidationError("Недопустимый тип файла вложения.")
         return attachment
+
+    def clean_body_html(self):
+        html = (self.cleaned_data.get("body_html") or "").strip()
+        return sanitize_email_html(html)
 
 
 class CampaignGenerateRecipientsForm(forms.Form):
