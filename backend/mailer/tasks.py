@@ -50,6 +50,25 @@ def send_pending_emails(self, batch_size: int = 50):
     """
     try:
         did_work = False
+
+        # Авто-очистка "зависших" записей очереди:
+        # если у кампании больше нет pending-получателей, но она осталась в очереди (pending/processing),
+        # помечаем CampaignQueue как completed и (если нужно) кампанию как sent.
+        stale_qs = (
+            CampaignQueue.objects.filter(status__in=(CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING))
+            .exclude(campaign__recipients__status=CampaignRecipient.Status.PENDING)
+            .select_related("campaign")
+        )
+        if stale_qs.exists():
+            now = timezone.now()
+            for q in stale_qs:
+                camp = q.campaign
+                if camp and camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
+                    camp.status = Campaign.Status.SENT
+                    camp.save(update_fields=["status", "updated_at"])
+                q.status = CampaignQueue.Status.COMPLETED
+                q.completed_at = now
+                q.save(update_fields=["status", "completed_at"])
         
         # Работа с очередью: берем только одну кампанию из очереди за раз
         # Сначала ищем кампанию, которая уже обрабатывается
