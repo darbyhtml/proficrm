@@ -618,13 +618,13 @@
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">Ответственный</label>
               <select class="select w-full" name="responsible" id="responsibleSelect">
-                <option value="{{ user.id }}" selected>{{ user.get_full_name|default:user.username }}</option>
+                <option value="{{ user.id }}" data-branch-id="{{ user.branch_id|default:'' }}" selected>{{ user.get_full_name|default:user.username }}</option>
                 {% regroup responsibles by branch as branches_list %}
                 {% for branch_group in branches_list %}
                   <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
                     {% for u in branch_group.list %}
                       {% if u.id != user.id %}
-                        <option value="{{ u.id }}">{{ u }}</option>
+                        <option value="{{ u.id }}" data-branch-id="{{ u.branch_id|default:'' }}">{{ u }}</option>
                       {% endif %}
                     {% endfor %}
                   </optgroup>
@@ -764,6 +764,46 @@
         }
       {% endif %}
     {% endif %}
+
+    // Связка фильтров: если выбран филиал — показываем сотрудников только этого филиала
+    (function () {
+      const branchSelect = document.getElementById('branchSelect');
+      const responsibleSelect = document.getElementById('responsibleSelect');
+      if (!branchSelect || !responsibleSelect) return;
+
+      function filterResponsibles() {
+        const branchId = (branchSelect.value || '').trim();
+        const options = Array.from(responsibleSelect.querySelectorAll('option'));
+
+        // Любой филиал -> показываем всё
+        if (!branchId) {
+          options.forEach(o => { o.hidden = false; o.disabled = false; });
+          return;
+        }
+
+        // Показываем только тех, у кого branch_id совпадает с выбранным
+        let hasSelectedVisible = false;
+        options.forEach(o => {
+          const optBranch = (o.getAttribute('data-branch-id') || '').trim();
+          const visible = optBranch === branchId;
+          o.hidden = !visible;
+          o.disabled = !visible;
+          if (o.selected && visible) hasSelectedVisible = true;
+        });
+
+        // Если текущий выбранный "ответственный" не из этого филиала — выбираем первого доступного
+        if (!hasSelectedVisible) {
+          const firstVisible = options.find(o => !o.disabled && !o.hidden);
+          if (firstVisible) {
+            responsibleSelect.value = firstVisible.value;
+          }
+        }
+      }
+
+      branchSelect.addEventListener('change', filterResponsibles);
+      // При открытии модалки/первом рендере тоже применяем фильтр
+      filterResponsibles();
+    })();
   </script>
 {% endblock %}
 
