@@ -331,62 +331,44 @@
           <div>
             <div class="text-brand-dark/50">Телефон (основной)</div>
             <div class="flex items-center justify-between gap-2">
-              <div class="font-mono text-xs">{{ company.phone|format_phone|default:"—" }}</div>
+              <div class="min-w-0">
+                <div class="font-mono text-xs" data-company-main-phone-display>{{ company.phone|format_phone|default:"—" }}</div>
+                {% if can_edit_company %}
+                  <div class="hidden mt-1" data-company-main-phone-edit>
+                    <input class="input text-xs" data-company-main-phone-input value="{{ company.phone|default:'' }}" placeholder="+7..." style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:240px" />
+                    <div class="flex gap-1 mt-1">
+                      <button type="button" class="btn btn-primary btn-sm" data-company-main-phone-save>Сохранить</button>
+                      <button type="button" class="btn btn-outline btn-sm" data-company-main-phone-cancel>Отмена</button>
+                    </div>
+                    <div class="text-xs text-red-600 mt-1 hidden" data-company-main-phone-error></div>
+                  </div>
+                {% endif %}
+              </div>
+
               {% if company.phone %}
-                <div class="flex items-center gap-2 shrink-0">
-                  {% if can_edit_company %}
-                    {% if not company.primary_contact_is_cold_call and not company.primary_cold_marked_at %}
-                      <form method="post" action="/companies/{{ company.id }}/cold-call/toggle/" style="display:inline" class="js-cold-call-form" data-confirm="Вы действительно хотите отметить звонок как холодный?">
-                        {% csrf_token %}
-                        <input type="hidden" name="confirmed" value="1">
-                        <button
-                          type="submit"
-                          class="btn btn-outline btn-xs js-cold-mark"
-                          style="padding:4px 8px;"
-                          data-cold-btn="primary"
-                          title="Отметить холодный звонок"
-                          aria-label="Отметить холодный звонок"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M12 2v20M4 6l16 12M20 6 4 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            <path d="M6 4l12 16M18 4 6 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".35"/>
-                          </svg>
-                        </button>
-                      </form>
-                    {% elif company.primary_contact_is_cold_call %}
-                      {% if is_admin %}
-                      <form method="post" action="/companies/{{ company.id }}/cold-call/reset/" style="display:inline">
-                        {% csrf_token %}
-                        <button
-                          type="submit"
-                          class="btn btn-xs"
-                          style="background:#003D38;color:#fff;border-color:#003D38;padding:4px 8px;"
-                          title="Откатить отметку холодного звонка (только для администраторов)"
-                          aria-label="Откатить отметку холодного звонка"
-                          onclick="return confirm('Откатить отметку холодного звонка?');"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                          </svg>
-                        </button>
-                      </form>
+                <div class="relative shrink-0" data-dd-root>
+                  <button type="button" class="btn btn-outline btn-xs" data-dd-toggle title="Действия" aria-label="Действия">⋯</button>
+                  <div class="hidden absolute right-0 mt-2 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
+                    <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 js-call-phone" data-phone="{{ company.phone }}" data-company="{{ company.id }}" data-contact="">Позвонить</button>
+                    <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-copy-phone="{{ company.phone }}">Скопировать</button>
+
+                    {% if can_edit_company %}
+                      {% if not company.primary_contact_is_cold_call and not company.primary_cold_marked_at %}
+                        <form method="post" action="/companies/{{ company.id }}/cold-call/toggle/" class="js-cold-call-form" data-confirm="Вы действительно хотите отметить звонок как холодный?">
+                          {% csrf_token %}
+                          <input type="hidden" name="confirmed" value="1">
+                          <button type="submit" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25">Отметить холодным</button>
+                        </form>
+                      {% elif company.primary_contact_is_cold_call and is_admin %}
+                        <form method="post" action="/companies/{{ company.id }}/cold-call/reset/" onsubmit="return confirm('Откатить отметку холодного звонка?');">
+                          {% csrf_token %}
+                          <button type="submit" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25">Снять отметку</button>
+                        </form>
                       {% endif %}
+
+                      <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-edit-main-phone>Изменить</button>
                     {% endif %}
-                  {% endif %}
-                  <button
-                    type="button"
-                    class="btn btn-outline btn-xs js-call-phone"
-                    style="padding:4px 8px;"
-                    data-phone="{{ company.phone }}"
-                    data-company="{{ company.id }}"
-                    data-contact=""
-                    title="Позвонить с телефона"
-                    aria-label="Позвонить с телефона"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                  </button>
+                  </div>
                 </div>
               {% endif %}
             </div>
@@ -427,61 +409,43 @@
               {% for phone in company.phones.all %}
                 <div>
                   <div class="flex items-center justify-between gap-2">
-                    <div class="font-mono text-xs">{{ phone.value|format_phone }}</div>
+                    <div class="min-w-0">
+                      <div class="font-mono text-xs" data-company-phone-display="{{ phone.id }}">{{ phone.value|format_phone }}</div>
+                      {% if can_edit_company %}
+                        <div class="hidden mt-1" data-company-phone-edit="{{ phone.id }}">
+                          <input class="input text-xs" data-company-phone-input value="{{ phone.value|default:'' }}" placeholder="+7..." style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:240px" />
+                          <div class="flex gap-1 mt-1">
+                            <button type="button" class="btn btn-primary btn-sm" data-company-phone-save="{{ phone.id }}">Сохранить</button>
+                            <button type="button" class="btn btn-outline btn-sm" data-company-phone-cancel="{{ phone.id }}">Отмена</button>
+                          </div>
+                          <div class="text-xs text-red-600 mt-1 hidden" data-company-phone-error="{{ phone.id }}"></div>
+                        </div>
+                      {% endif %}
+                    </div>
                     {% if phone.value %}
-                      <div class="flex items-center gap-2 shrink-0">
-                        {% if can_edit_company %}
-                          {% if not phone.is_cold_call and not phone.cold_marked_at %}
-                            <form method="post" action="/company-phones/{{ phone.id }}/cold-call/toggle/" style="display:inline" class="js-cold-call-form" data-confirm="Вы действительно хотите отметить звонок как холодный?">
-                              {% csrf_token %}
-                              <input type="hidden" name="confirmed" value="1">
-                              <button
-                                type="submit"
-                                class="btn btn-outline btn-xs"
-                                style="padding:4px 8px;"
-                                title="Отметить холодный звонок"
-                                aria-label="Отметить холодный звонок"
-                              >
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                  <path d="M12 2v20M4 6l16 12M20 6 4 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                  <path d="M6 4l12 16M18 4 6 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".35"/>
-                                </svg>
-                              </button>
-                            </form>
-                          {% elif phone.is_cold_call %}
-                            {% if is_admin %}
-                              <form method="post" action="/company-phones/{{ phone.id }}/cold-call/reset/" style="display:inline">
+                      <div class="relative shrink-0" data-dd-root>
+                        <button type="button" class="btn btn-outline btn-xs" data-dd-toggle title="Действия" aria-label="Действия">⋯</button>
+                        <div class="hidden absolute right-0 mt-2 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
+                          <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 js-call-phone" data-phone="{{ phone.value }}" data-company="{{ company.id }}" data-contact="">Позвонить</button>
+                          <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-copy-phone="{{ phone.value }}">Скопировать</button>
+
+                          {% if can_edit_company %}
+                            {% if not phone.is_cold_call and not phone.cold_marked_at %}
+                              <form method="post" action="/company-phones/{{ phone.id }}/cold-call/toggle/" class="js-cold-call-form" data-confirm="Вы действительно хотите отметить звонок как холодный?">
                                 {% csrf_token %}
-                                <button
-                                  type="submit"
-                                  class="btn btn-xs"
-                                  style="background:#003D38;color:#fff;border-color:#003D38;padding:4px 8px;"
-                                  title="Откатить отметку холодного звонка (только для администраторов)"
-                                  aria-label="Откатить отметку холодного звонка"
-                                  onclick="return confirm('Откатить отметку холодного звонка?');"
-                                >
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M20 6 9 17l-5-5" stroke="CurrentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                  </svg>
-                                </button>
+                                <input type="hidden" name="confirmed" value="1">
+                                <button type="submit" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25">Отметить холодным</button>
+                              </form>
+                            {% elif phone.is_cold_call and is_admin %}
+                              <form method="post" action="/company-phones/{{ phone.id }}/cold-call/reset/" onsubmit="return confirm('Откатить отметку холодного звонка?');">
+                                {% csrf_token %}
+                                <button type="submit" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25">Снять отметку</button>
                               </form>
                             {% endif %}
+
+                            <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-edit-company-phone="{{ phone.id }}">Изменить</button>
                           {% endif %}
-                        {% endif %}
-                        <button
-                          type="button"
-                          class="btn btn-outline btn-xs js-call-phone"
-                          style="padding:4px 8px;"
-                          data-phone="{{ phone.value }}"
-                          data-company="{{ company.id }}"
-                          data-contact=""
-                          title="Позвонить с телефона"
-                          aria-label="Позвонить с телефона"
-                        >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                          </svg>
-                        </button>
+                        </div>
                       </div>
                     {% endif %}
                   </div>
@@ -525,26 +489,58 @@
             <div class="text-brand-dark/50">Email адреса</div>
             <div class="space-y-1">
               {% if company.email %}
-                <div class="flex items-center gap-2">
-                  <a class="link font-mono text-xs js-copy-email" href="#" data-email="{{ company.email }}" onclick="event.preventDefault(); return false;">{{ company.email }}</a>
-                  <button type="button" class="btn btn-outline btn-xs js-add-email-to-campaign" data-email="{{ company.email }}" data-company-id="{{ company.id }}" title="Добавить в рассылочную кампанию">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                      <polyline points="22,6 12,13 2,6"/>
-                    </svg>
-                  </button>
-                  <span class="text-xs text-brand-dark/50 ml-1">(основной)</span>
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <div class="font-mono text-xs" data-company-main-email-display>{{ company.email }}</div>
+                    <div class="text-xs text-brand-dark/50">(основной)</div>
+                    {% if can_edit_company %}
+                      <div class="hidden mt-1" data-company-main-email-edit>
+                        <input class="input text-xs" data-company-main-email-input value="{{ company.email|default:'' }}" placeholder="email@example.com" style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:280px" />
+                        <div class="flex gap-1 mt-1">
+                          <button type="button" class="btn btn-primary btn-sm" data-company-main-email-save>Сохранить</button>
+                          <button type="button" class="btn btn-outline btn-sm" data-company-main-email-cancel>Отмена</button>
+                        </div>
+                        <div class="text-xs text-red-600 mt-1 hidden" data-company-main-email-error></div>
+                      </div>
+                    {% endif %}
+                  </div>
+                  <div class="relative shrink-0" data-dd-root>
+                    <button type="button" class="btn btn-outline btn-xs" data-dd-toggle title="Действия" aria-label="Действия">⋯</button>
+                    <div class="hidden absolute right-0 mt-2 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
+                      <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 js-copy-email" data-email="{{ company.email }}">Скопировать</button>
+                      {% if can_edit_company %}
+                        <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-edit-main-email>Изменить</button>
+                      {% endif %}
+                      <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 js-add-email-to-campaign" data-email="{{ company.email }}" data-company-id="{{ company.id }}">Добавить в рассылку</button>
+                    </div>
+                  </div>
                 </div>
               {% endif %}
               {% for email in company.emails.all %}
-                <div class="flex items-center gap-2">
-                  <a class="link font-mono text-xs js-copy-email" href="#" data-email="{{ email.value }}" onclick="event.preventDefault(); return false;">{{ email.value }}</a>
-                  <button type="button" class="btn btn-outline btn-xs js-add-email-to-campaign" data-email="{{ email.value }}" data-company-id="{{ company.id }}" title="Добавить в рассылочную кампанию">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                      <polyline points="22,6 12,13 2,6"/>
-                    </svg>
-                  </button>
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <div class="font-mono text-xs" data-company-email-display="{{ email.id }}">{{ email.value }}</div>
+                    {% if can_edit_company %}
+                      <div class="hidden mt-1" data-company-email-edit="{{ email.id }}">
+                        <input class="input text-xs" data-company-email-input value="{{ email.value|default:'' }}" placeholder="email@example.com" style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:280px" />
+                        <div class="flex gap-1 mt-1">
+                          <button type="button" class="btn btn-primary btn-sm" data-company-email-save="{{ email.id }}">Сохранить</button>
+                          <button type="button" class="btn btn-outline btn-sm" data-company-email-cancel="{{ email.id }}">Отмена</button>
+                        </div>
+                        <div class="text-xs text-red-600 mt-1 hidden" data-company-email-error="{{ email.id }}"></div>
+                      </div>
+                    {% endif %}
+                  </div>
+                  <div class="relative shrink-0" data-dd-root>
+                    <button type="button" class="btn btn-outline btn-xs" data-dd-toggle title="Действия" aria-label="Действия">⋯</button>
+                    <div class="hidden absolute right-0 mt-2 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
+                      <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 js-copy-email" data-email="{{ email.value }}">Скопировать</button>
+                      {% if can_edit_company %}
+                        <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-edit-company-email="{{ email.id }}">Изменить</button>
+                      {% endif %}
+                      <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 js-add-email-to-campaign" data-email="{{ email.value }}" data-company-id="{{ company.id }}">Добавить в рассылку</button>
+                    </div>
+                  </div>
                 </div>
               {% endfor %}
               {% if not company.email and not company.emails.all %}
@@ -2520,6 +2516,266 @@
             document.body.removeChild(textarea);
           }
         });
+      });
+    })();
+  </script>
+
+  <script>
+    // Dropdown меню для телефонов/email + копирование телефона + инлайн-редактирование phone/email
+    (function() {
+      const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || document.querySelector('meta[name=csrf-token]')?.content;
+
+      function closeAll() {
+        document.querySelectorAll('[data-dd-menu]').forEach(m => m.classList.add('hidden'));
+      }
+
+      document.addEventListener('click', function(e) {
+        const toggle = e.target.closest('[data-dd-toggle]');
+        if (toggle) {
+          e.preventDefault();
+          e.stopPropagation();
+          const root = toggle.closest('[data-dd-root]');
+          if (!root) return;
+          const menu = root.querySelector('[data-dd-menu]');
+          if (!menu) return;
+          const isOpen = !menu.classList.contains('hidden');
+          closeAll();
+          if (!isOpen) menu.classList.remove('hidden');
+          return;
+        }
+        // клик вне меню -> закрываем
+        if (!e.target.closest('[data-dd-menu]')) closeAll();
+      });
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeAll();
+      });
+
+      // Copy phone
+      document.addEventListener('click', async function(e) {
+        const btn = e.target.closest('[data-copy-phone]');
+        if (!btn) return;
+        e.preventDefault();
+        const phone = (btn.getAttribute('data-copy-phone') || '').trim();
+        if (!phone) return;
+        try {
+          await navigator.clipboard.writeText(phone);
+          if (window.uiToast) window.uiToast('Телефон скопирован: ' + phone, 'success');
+        } catch (_err) {
+          const textarea = document.createElement('textarea');
+          textarea.value = phone;
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.select();
+          try {
+            document.execCommand('copy');
+            if (window.uiToast) window.uiToast('Телефон скопирован: ' + phone, 'success');
+          } catch (e2) {
+            if (window.uiToast) window.uiToast('Не удалось скопировать телефон', 'error');
+          }
+          document.body.removeChild(textarea);
+        }
+      });
+
+      function showErr(el, msg) {
+        if (!el) return;
+        el.textContent = (msg || '').trim();
+        el.classList.toggle('hidden', !el.textContent);
+      }
+
+      // Open edit blocks from menu
+      document.addEventListener('click', function(e) {
+        const btnMainPhone = e.target.closest('[data-edit-main-phone]');
+        if (btnMainPhone) {
+          e.preventDefault();
+          closeAll();
+          const edit = document.querySelector('[data-company-main-phone-edit]');
+          const display = document.querySelector('[data-company-main-phone-display]');
+          if (edit && display) {
+            display.classList.add('hidden');
+            edit.classList.remove('hidden');
+            edit.querySelector('[data-company-main-phone-input]')?.focus();
+          }
+          return;
+        }
+        const btnPhone = e.target.closest('[data-edit-company-phone]');
+        if (btnPhone) {
+          e.preventDefault();
+          closeAll();
+          const id = btnPhone.getAttribute('data-edit-company-phone');
+          const edit = document.querySelector(`[data-company-phone-edit="${id}"]`);
+          const display = document.querySelector(`[data-company-phone-display="${id}"]`);
+          if (edit && display) {
+            display.classList.add('hidden');
+            edit.classList.remove('hidden');
+            edit.querySelector('[data-company-phone-input]')?.focus();
+          }
+          return;
+        }
+        const btnMainEmail = e.target.closest('[data-edit-main-email]');
+        if (btnMainEmail) {
+          e.preventDefault();
+          closeAll();
+          const edit = document.querySelector('[data-company-main-email-edit]');
+          const display = document.querySelector('[data-company-main-email-display]');
+          if (edit && display) {
+            display.classList.add('hidden');
+            edit.classList.remove('hidden');
+            edit.querySelector('[data-company-main-email-input]')?.focus();
+          }
+          return;
+        }
+        const btnEmail = e.target.closest('[data-edit-company-email]');
+        if (btnEmail) {
+          e.preventDefault();
+          closeAll();
+          const id = btnEmail.getAttribute('data-edit-company-email');
+          const edit = document.querySelector(`[data-company-email-edit="${id}"]`);
+          const display = document.querySelector(`[data-company-email-display="${id}"]`);
+          if (edit && display) {
+            display.classList.add('hidden');
+            edit.classList.remove('hidden');
+            edit.querySelector('[data-company-email-input]')?.focus();
+          }
+          return;
+        }
+      });
+
+      // Cancel buttons
+      document.addEventListener('click', function(e) {
+        const btn = e.target.closest('[data-company-main-phone-cancel]');
+        if (btn) {
+          e.preventDefault();
+          const edit = document.querySelector('[data-company-main-phone-edit]');
+          const display = document.querySelector('[data-company-main-phone-display]');
+          edit?.classList.add('hidden');
+          display?.classList.remove('hidden');
+          showErr(document.querySelector('[data-company-main-phone-error]'), '');
+          return;
+        }
+        const btn2 = e.target.closest('[data-company-phone-cancel]');
+        if (btn2) {
+          e.preventDefault();
+          const id = btn2.getAttribute('data-company-phone-cancel');
+          document.querySelector(`[data-company-phone-edit="${id}"]`)?.classList.add('hidden');
+          document.querySelector(`[data-company-phone-display="${id}"]`)?.classList.remove('hidden');
+          showErr(document.querySelector(`[data-company-phone-error="${id}"]`), '');
+          return;
+        }
+        const b3 = e.target.closest('[data-company-main-email-cancel]');
+        if (b3) {
+          e.preventDefault();
+          document.querySelector('[data-company-main-email-edit]')?.classList.add('hidden');
+          document.querySelector('[data-company-main-email-display]')?.classList.remove('hidden');
+          showErr(document.querySelector('[data-company-main-email-error]'), '');
+          return;
+        }
+        const b4 = e.target.closest('[data-company-email-cancel]');
+        if (b4) {
+          e.preventDefault();
+          const id = b4.getAttribute('data-company-email-cancel');
+          document.querySelector(`[data-company-email-edit="${id}"]`)?.classList.add('hidden');
+          document.querySelector(`[data-company-email-display="${id}"]`)?.classList.remove('hidden');
+          showErr(document.querySelector(`[data-company-email-error="${id}"]`), '');
+          return;
+        }
+      });
+
+      async function postForm(url, data) {
+        const fd = new FormData();
+        for (const [k, v] of Object.entries(data)) fd.append(k, v);
+        if (csrftoken) fd.append('csrfmiddlewaretoken', csrftoken);
+        const res = await fetch(url, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        const json = await res.json().catch(() => ({}));
+        return { ok: res.ok, data: json };
+      }
+
+      // Save: main phone
+      document.addEventListener('click', async function(e) {
+        const btn = e.target.closest('[data-company-main-phone-save]');
+        if (!btn) return;
+        e.preventDefault();
+        const input = document.querySelector('[data-company-main-phone-input]');
+        const err = document.querySelector('[data-company-main-phone-error]');
+        const display = document.querySelector('[data-company-main-phone-display]');
+        if (!input || !display) return;
+        const val = (input.value || '').trim();
+        const companyId = '{{ company.id }}';
+        const { ok, data } = await postForm(`/companies/${companyId}/main-phone/update/`, { phone: val });
+        if (!ok || !data.success) {
+          showErr(err, data.error || 'Ошибка сохранения телефона.');
+          return;
+        }
+        display.textContent = data.display || '—';
+        document.querySelector('[data-company-main-phone-edit]')?.classList.add('hidden');
+        display.classList.remove('hidden');
+        showErr(err, '');
+      });
+
+      // Save: company phone
+      document.addEventListener('click', async function(e) {
+        const btn = e.target.closest('[data-company-phone-save]');
+        if (!btn) return;
+        e.preventDefault();
+        const id = btn.getAttribute('data-company-phone-save');
+        const input = document.querySelector(`[data-company-phone-edit="${id}"] [data-company-phone-input]`);
+        const err = document.querySelector(`[data-company-phone-error="${id}"]`);
+        const display = document.querySelector(`[data-company-phone-display="${id}"]`);
+        if (!input || !display) return;
+        const val = (input.value || '').trim();
+        const { ok, data } = await postForm(`/company-phones/${id}/update/`, { phone: val });
+        if (!ok || !data.success) {
+          showErr(err, data.error || 'Ошибка сохранения телефона.');
+          return;
+        }
+        display.textContent = data.display || '—';
+        document.querySelector(`[data-company-phone-edit="${id}"]`)?.classList.add('hidden');
+        display.classList.remove('hidden');
+        showErr(err, '');
+      });
+
+      // Save: main email
+      document.addEventListener('click', async function(e) {
+        const btn = e.target.closest('[data-company-main-email-save]');
+        if (!btn) return;
+        e.preventDefault();
+        const input = document.querySelector('[data-company-main-email-input]');
+        const err = document.querySelector('[data-company-main-email-error]');
+        const display = document.querySelector('[data-company-main-email-display]');
+        if (!input || !display) return;
+        const val = (input.value || '').trim();
+        const companyId = '{{ company.id }}';
+        const { ok, data } = await postForm(`/companies/${companyId}/main-email/update/`, { email: val });
+        if (!ok || !data.success) {
+          showErr(err, data.error || 'Ошибка сохранения email.');
+          return;
+        }
+        display.textContent = data.email || '';
+        document.querySelector('[data-company-main-email-edit]')?.classList.add('hidden');
+        display.classList.remove('hidden');
+        showErr(err, '');
+      });
+
+      // Save: company email
+      document.addEventListener('click', async function(e) {
+        const btn = e.target.closest('[data-company-email-save]');
+        if (!btn) return;
+        e.preventDefault();
+        const id = btn.getAttribute('data-company-email-save');
+        const input = document.querySelector(`[data-company-email-edit="${id}"] [data-company-email-input]`);
+        const err = document.querySelector(`[data-company-email-error="${id}"]`);
+        const display = document.querySelector(`[data-company-email-display="${id}"]`);
+        if (!input || !display) return;
+        const val = (input.value || '').trim();
+        const { ok, data } = await postForm(`/company-emails/${id}/update/`, { email: val });
+        if (!ok || !data.success) {
+          showErr(err, data.error || 'Ошибка сохранения email.');
+          return;
+        }
+        display.textContent = data.email || '';
+        document.querySelector(`[data-company-email-edit="${id}"]`)?.classList.add('hidden');
+        display.classList.remove('hidden');
+        showErr(err, '');
       });
     })();
   </script>

@@ -17,6 +17,8 @@ from django.http import FileResponse, Http404
 from django.db import models, transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.core.exceptions import ValidationError
+from django.core.validators import validate_email
 
 from accounts.models import Branch, User, MagicLinkToken
 from audit.models import ActivityEvent
@@ -67,6 +69,7 @@ from ui.models import UiGlobalConfig, AmoApiConfig
 from amocrm.client import AmoApiError, AmoClient
 from amocrm.migrate import fetch_amo_users, fetch_company_custom_fields, migrate_filtered
 from crm.utils import require_admin, get_effective_user
+from ui.templatetags.ui_extras import format_phone
 
 # Константы для фильтров
 RESPONSIBLE_FILTER_NONE = "none"  # Значение для фильтрации компаний без ответственного
@@ -3531,6 +3534,180 @@ def company_phone_cold_call_reset(request: HttpRequest, company_phone_id) -> Htt
         message=f"Откат: холодный звонок (номер {company_phone.value})",
     )
     return redirect("company_detail", company_id=company.id)
+
+
+@login_required
+def company_main_phone_update(request: HttpRequest, company_id) -> HttpResponse:
+    """Обновление основного телефона компании (AJAX)"""
+    if request.method != "POST":
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"success": False, "error": "Метод не разрешен."}, status=405)
+        return redirect("company_detail", company_id=company_id)
+
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_edit_company(user, company):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"success": False, "error": "Нет прав на редактирование этой компании."}, status=403)
+        messages.error(request, "Нет прав на редактирование этой компании.")
+        return redirect("company_detail", company_id=company.id)
+
+    raw = (request.POST.get("phone") or "").strip()
+    from ui.forms import _normalize_phone
+    normalized = _normalize_phone(raw) if raw else ""
+
+    # Проверка дублей с доп. телефонами
+    if normalized:
+        exists = CompanyPhone.objects.filter(company=company, value=normalized).exists()
+        if exists:
+            return JsonResponse({"success": False, "error": "Такой телефон уже есть в дополнительных номерах."}, status=400)
+
+    company.phone = normalized
+    company.save(update_fields=["phone", "updated_at"])
+
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="company",
+        entity_id=company.id,
+        company_id=company.id,
+        message="Инлайн: обновлен основной телефон",
+    )
+
+    return JsonResponse({"success": True, "phone": normalized, "display": format_phone(normalized) if normalized else "—"})
+
+
+@login_required
+def company_phone_value_update(request: HttpRequest, company_phone_id) -> HttpResponse:
+    """Обновление значения дополнительного телефона компании (AJAX)"""
+    if request.method != "POST":
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"success": False, "error": "Метод не разрешен."}, status=405)
+        return redirect("dashboard")
+
+    user: User = request.user
+    company_phone = get_object_or_404(CompanyPhone.objects.select_related("company"), id=company_phone_id)
+    company = company_phone.company
+    if not _can_edit_company(user, company):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"success": False, "error": "Нет прав на редактирование этой компании."}, status=403)
+        messages.error(request, "Нет прав на редактирование этой компании.")
+        return redirect("company_detail", company_id=company.id)
+
+    raw = (request.POST.get("phone") or "").strip()
+    from ui.forms import _normalize_phone
+    normalized = _normalize_phone(raw) if raw else ""
+    if not normalized:
+        return JsonResponse({"success": False, "error": "Телефон не может быть пустым."}, status=400)
+
+    # Дубли: основной телефон и другие доп. телефоны
+    if (company.phone or "").strip() == normalized:
+        return JsonResponse({"success": False, "error": "Этот телефон уже указан как основной."}, status=400)
+    if CompanyPhone.objects.filter(company=company, value=normalized).exclude(id=company_phone.id).exists():
+        return JsonResponse({"success": False, "error": "Такой телефон уже есть в дополнительных номерах."}, status=400)
+
+    company_phone.value = normalized
+    company_phone.save(update_fields=["value"])
+
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="company_phone",
+        entity_id=str(company_phone.id),
+        company_id=company.id,
+        message="Инлайн: обновлен дополнительный телефон",
+    )
+
+    return JsonResponse({"success": True, "phone": normalized, "display": format_phone(normalized)})
+
+
+@login_required
+def company_main_email_update(request: HttpRequest, company_id) -> HttpResponse:
+    """Обновление основного email компании (AJAX)"""
+    if request.method != "POST":
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"success": False, "error": "Метод не разрешен."}, status=405)
+        return redirect("company_detail", company_id=company_id)
+
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_edit_company(user, company):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"success": False, "error": "Нет прав на редактирование этой компании."}, status=403)
+        messages.error(request, "Нет прав на редактирование этой компании.")
+        return redirect("company_detail", company_id=company.id)
+
+    raw = (request.POST.get("email") or "").strip()
+    email = raw.lower()
+    if email:
+        try:
+            validate_email(email)
+        except ValidationError:
+            return JsonResponse({"success": False, "error": "Некорректный email."}, status=400)
+
+        # Дубли с доп. email
+        if CompanyEmail.objects.filter(company=company, value__iexact=email).exists():
+            return JsonResponse({"success": False, "error": "Такой email уже есть в дополнительных адресах."}, status=400)
+
+    company.email = email
+    company.save(update_fields=["email", "updated_at"])
+
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="company",
+        entity_id=company.id,
+        company_id=company.id,
+        message="Инлайн: обновлен основной email",
+    )
+    return JsonResponse({"success": True, "email": email})
+
+
+@login_required
+def company_email_value_update(request: HttpRequest, company_email_id) -> HttpResponse:
+    """Обновление значения дополнительного email компании (AJAX)"""
+    if request.method != "POST":
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"success": False, "error": "Метод не разрешен."}, status=405)
+        return redirect("dashboard")
+
+    user: User = request.user
+    company_email = get_object_or_404(CompanyEmail.objects.select_related("company"), id=company_email_id)
+    company = company_email.company
+    if not _can_edit_company(user, company):
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"success": False, "error": "Нет прав на редактирование этой компании."}, status=403)
+        messages.error(request, "Нет прав на редактирование этой компании.")
+        return redirect("company_detail", company_id=company.id)
+
+    raw = (request.POST.get("email") or "").strip()
+    email = raw.lower()
+    if not email:
+        return JsonResponse({"success": False, "error": "Email не может быть пустым."}, status=400)
+    try:
+        validate_email(email)
+    except ValidationError:
+        return JsonResponse({"success": False, "error": "Некорректный email."}, status=400)
+
+    # Дубли: основной email и другие доп. email
+    if (company.email or "").strip().lower() == email:
+        return JsonResponse({"success": False, "error": "Этот email уже указан как основной."}, status=400)
+    if CompanyEmail.objects.filter(company=company, value__iexact=email).exclude(id=company_email.id).exists():
+        return JsonResponse({"success": False, "error": "Такой email уже есть в дополнительных адресах."}, status=400)
+
+    company_email.value = email
+    company_email.save(update_fields=["value"])
+
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="company_email",
+        entity_id=str(company_email.id),
+        company_id=company.id,
+        message="Инлайн: обновлен дополнительный email",
+    )
+
+    return JsonResponse({"success": True, "email": email})
 
 
 @login_required
