@@ -88,13 +88,17 @@ class MailerQueueConsistencyTests(TestCase):
         camp.status = Campaign.Status.SENDING
         camp.save(update_fields=["status", "updated_at"])
         r = CampaignRecipient.objects.create(campaign=camp, email="a@example.com", status=CampaignRecipient.Status.SENT)
-        q = CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.CANCELLED, priority=0)
+        # Имитируем ситуацию, когда кампания могла быть в очереди.
+        q = CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.PENDING, priority=0)
 
         resp = self.client.post(reverse("campaign_recipients_reset", kwargs={"campaign_id": camp.id}))
         self.assertEqual(resp.status_code, 302)
         r.refresh_from_db()
         self.assertEqual(r.status, CampaignRecipient.Status.PENDING)
+        camp.refresh_from_db()
+        self.assertEqual(camp.status, Campaign.Status.DRAFT)
         q.refresh_from_db()
-        self.assertEqual(q.status, CampaignQueue.Status.PENDING)
+        # «Вернуть в очередь» не должно автозапускать рассылку: очередь отменяется, старт делается вручную.
+        self.assertEqual(q.status, CampaignQueue.Status.CANCELLED)
         self.assertIsNone(q.started_at)
-        self.assertIsNone(q.completed_at)
+        self.assertIsNotNone(q.completed_at)
