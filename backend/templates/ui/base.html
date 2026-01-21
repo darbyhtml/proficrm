@@ -1637,6 +1637,10 @@
             let searchTimeout = null;
             let currentAbortController = null;
             const isCompanySelect = select.name === 'company' || select.id === 'id_company';
+            const isHeadCompanySelect = select.name === 'head_company' || select.id === 'id_head_company';
+            const isAjaxCompanySearch = isCompanySelect || isHeadCompanySelect;
+            const ajaxUrlBase = root.getAttribute('data-ms-ajax-url') || '/companies/autocomplete/';
+            const ajaxExcludeId = (root.getAttribute('data-ms-ajax-exclude') || '').trim();
             
             search.addEventListener('input', () => {
               const query = search.value.trim();
@@ -1646,8 +1650,8 @@
                 currentAbortController.abort();
               }
               
-              // Если это поле выбора компании и запрос >= 2 символов, используем AJAX
-              if (isCompanySelect && query.length >= 2) {
+              // Если это поле выбора компании/головной компании и запрос >= 2 символов, используем AJAX
+              if (isAjaxCompanySearch && query.length >= 2) {
                 // Очищаем предыдущий таймаут
                 if (searchTimeout) {
                   clearTimeout(searchTimeout);
@@ -1656,8 +1660,12 @@
                 // Устанавливаем новый таймаут для debounce
                 searchTimeout = setTimeout(() => {
                   currentAbortController = new AbortController();
+
+                  const url = new URL(ajaxUrlBase, window.location.origin);
+                  url.searchParams.set('q', query);
+                  if (ajaxExcludeId) url.searchParams.set('exclude', ajaxExcludeId);
                   
-                  fetch(`/companies/autocomplete/?q=${encodeURIComponent(query)}`, {
+                  fetch(url.toString(), {
                     signal: currentAbortController.signal,
                     headers: { 'X-Requested-With': 'XMLHttpRequest' }
                   })
@@ -1666,16 +1674,25 @@
                     if (data.items && data.items.length > 0) {
                       // Временно сохраняем текущее значение
                       const currentValue = select.value;
+                      const currentSelectedOpt = currentValue
+                        ? Array.from(select.options).find(o => (o.value || '') === currentValue)
+                        : null;
                       
                       // Очищаем опции (кроме пустой)
                       const emptyOpt = select.querySelector('option[value=""]');
+                      const emptyOptClone = emptyOpt ? emptyOpt.cloneNode(true) : null;
+                      const selectedClone = currentSelectedOpt ? currentSelectedOpt.cloneNode(true) : null;
                       select.innerHTML = '';
-                      if (emptyOpt) {
-                        select.appendChild(emptyOpt);
+                      if (emptyOptClone) select.appendChild(emptyOptClone);
+                      if (selectedClone && (selectedClone.value || '').trim()) {
+                        // гарантируем, что текущее значение не "потеряется" при обновлении опций
+                        select.appendChild(selectedClone);
                       }
                       
                       // Добавляем найденные компании
+                      const existing = new Set(Array.from(select.options).map(o => (o.value || '').trim()).filter(Boolean));
                       data.items.forEach(item => {
+                        if (existing.has(item.id)) return;
                         const opt = document.createElement('option');
                         opt.value = item.id;
                         opt.textContent = item.name;

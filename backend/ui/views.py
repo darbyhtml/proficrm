@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from datetime import timedelta
+from uuid import UUID
 
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -2436,7 +2437,7 @@ def company_create(request: HttpRequest) -> HttpResponse:
     user: User = request.user
 
     if request.method == "POST":
-        form = CompanyCreateForm(request.POST)
+        form = CompanyCreateForm(request.POST, user=user)
         if form.is_valid():
             company: Company = form.save(commit=False)
 
@@ -2543,6 +2544,14 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
     if not q or len(q) < 2:
         return JsonResponse({"items": []})
 
+    exclude_raw = (request.GET.get("exclude") or "").strip()
+    exclude_id = None
+    if exclude_raw:
+        try:
+            exclude_id = UUID(exclude_raw)
+        except Exception:
+            exclude_id = None
+
     # Подготовим нормализованные значения для последующей подсветки совпадений
     normalized_phone = _normalize_phone_for_search(q)
     normalized_email = _normalize_email_for_search(q)
@@ -2553,6 +2562,10 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
     filtered = _apply_company_filters(qs=base_qs, params={"q": q}, default_responsible_id=None)
     qs = (
         filtered["qs"]
+        .exclude(id=exclude_id) if exclude_id else filtered["qs"]
+    )
+    qs = (
+        qs
         .select_related("responsible", "branch", "status")
         .prefetch_related("phones", "emails", "contacts__phones", "contacts__emails")
         .distinct()
@@ -3756,7 +3769,7 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
     company_phones: list[CompanyPhone] = []
 
     if request.method == "POST":
-        form = CompanyEditForm(request.POST, instance=company)
+        form = CompanyEditForm(request.POST, instance=company, user=user)
         if form.is_valid():
             # Вспомогательные структуры: (index, value)
             new_company_emails: list[tuple[int, str]] = []
@@ -3861,7 +3874,7 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
                         CompanyPhone(company=company, value=(value or "").strip())
                     )
     else:
-        form = CompanyEditForm(instance=company)
+        form = CompanyEditForm(instance=company, user=user)
         # Загружаем существующие email и телефоны для отображения в форме
         company_emails = list(company.emails.all())
         company_phones = list(company.phones.all())

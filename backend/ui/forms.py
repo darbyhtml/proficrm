@@ -1,4 +1,5 @@
 import mimetypes
+from uuid import UUID
 from django import forms
 from django.forms import inlineformset_factory, BaseInlineFormSet, ValidationError
 from django.contrib.auth.password_validation import validate_password
@@ -102,20 +103,54 @@ class FlexibleUserChoiceField(forms.ModelChoiceField):
             raise e
 
 
+class FlexibleCompanyChoiceField(forms.ModelChoiceField):
+    """
+    Поле выбора компании, которое корректно работает с AJAX-подгрузкой опций:
+    если выбранное значение не входит в текущий queryset (который может быть пустым/минимальным),
+    пробуем загрузить объект из "разрешённого" queryset по ID.
+    """
+
+    allowed_qs_getter = None
+
+    def clean(self, value):
+        if value in self.empty_values:
+            if self.required:
+                raise forms.ValidationError(self.error_messages["required"], code="required")
+            return None
+
+        try:
+            return super().clean(value)
+        except forms.ValidationError as e:
+            # Попытка восстановить объект по UUID (для AJAX-опций)
+            try:
+                company_id = UUID(str(value).strip())
+            except Exception:
+                raise e
+
+            qs = self.allowed_qs_getter() if callable(self.allowed_qs_getter) else self.queryset
+            try:
+                obj = qs.only("id", "name", "head_company_id").get(id=company_id)
+            except Company.DoesNotExist:
+                raise e
+
+            # Временно расширяем queryset, чтобы последующие проверки/рендер были консистентны
+            self.queryset = Company.objects.filter(
+                Q(id__in=self.queryset.values_list("id", flat=True)) | Q(id=company_id)
+            ).only("id", "name", "head_company_id")
+            return obj
+
+
 class CompanyCreateForm(forms.ModelForm):
+    head_company = FlexibleCompanyChoiceField(queryset=Company.objects.none(), required=False)
+
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        
-        # Оптимизация queryset для head_company: ограничиваем только теми компаниями, которые пользователь может видеть
-        # и ограничиваем количество для быстрой загрузки (первые 500)
-        if user:
-            from companies.permissions import editable_company_qs
-            head_company_qs = editable_company_qs(user).order_by("name")[:500]
-            self.fields["head_company"].queryset = head_company_qs
-        else:
-            # Если user не передан, ограничиваем просто по количеству
-            self.fields["head_company"].queryset = Company.objects.only("id", "name").order_by("name")[:500]
+
+        # Для head_company используем AJAX-поиск (см. base.html), поэтому не грузим огромный <select>.
+        # Но при этом должны валидировать любой выбранный ID — через FlexibleCompanyChoiceField.
+        self.fields["head_company"].empty_label = "— Не выбрано —"
+        self.fields["head_company"].allowed_qs_getter = (lambda: Company.objects.all())
         
         # Оптимизация queryset для status и spheres: используем only() для загрузки только необходимых полей
         self.fields["status"].queryset = CompanyStatus.objects.only("id", "name").order_by("name")
@@ -188,10 +223,49 @@ class CompanyEditForm(forms.ModelForm):
     Полное редактирование данных компании (без смены ответственного/филиала).
     Статус/сферы здесь тоже доступны, чтобы редактирование было "в одном месте".
     """
+    head_company = FlexibleCompanyChoiceField(queryset=Company.objects.none(), required=False)
+
     def __init__(self, *args, **kwargs):
+        user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
         # Поле email необязательное (бывают ситуации, когда email еще неизвестен)
         self.fields["email"].required = False
+
+        # head_company: минимальный queryset для рендера (текущая выбранная + пустая),
+        # дальше работает AJAX-поиск, а валидация идёт через allowed_qs_getter.
+        self.fields["head_company"].empty_label = "— Не выбрано —"
+        self.fields["head_company"].allowed_qs_getter = (lambda: Company.objects.all())
+        current_id = getattr(self.instance, "head_company_id", None)
+        if current_id:
+            self.fields["head_company"].queryset = Company.objects.filter(id=current_id).only("id", "name", "head_company_id")
+        else:
+            self.fields["head_company"].queryset = Company.objects.none()
+
+    def clean_head_company(self):
+        hc = self.cleaned_data.get("head_company")
+        if not hc:
+            return None
+        if not getattr(self.instance, "id", None):
+            return hc
+
+        if hc.id == self.instance.id:
+            raise ValidationError("Нельзя выбрать эту компанию как головную для самой себя.")
+
+        # Защита от циклов: у выбранной головной не должно быть в цепочке родителей текущей компании.
+        cur_id = hc.id
+        seen: set = set()
+        while cur_id:
+            if cur_id in seen:
+                break
+            seen.add(cur_id)
+            if cur_id == self.instance.id:
+                raise ValidationError("Нельзя выбрать дочернюю карточку этой организации как головную (получится цикл).")
+            cur = Company.objects.only("id", "head_company_id").filter(id=cur_id).first()
+            if not cur or not cur.head_company_id:
+                break
+            cur_id = cur.head_company_id
+
+        return hc
     
     class Meta:
         model = Company
