@@ -357,7 +357,10 @@ def get_message_logs(
     api_key: str,
     to_email: Optional[str] = None,
     from_email: Optional[str] = None,
+    tag: Optional[str] = None,
     status: Optional[str] = None,
+    is_open: Optional[bool] = None,
+    is_unsubscribe: Optional[bool] = None,
     limit: int = 100,
     offset: int = 0,
     start_date: Optional[str] = None,
@@ -370,7 +373,10 @@ def get_message_logs(
         api_key: API ключ для аутентификации
         to_email: Email получателя (фильтр)
         from_email: Email отправителя (фильтр)
+        tag: Идентификатор X-Tag (фильтр)
         status: Статус письма (sent, resent, return, bounce, cancel)
+        is_open: Только открытые письма (True/False)
+        is_unsubscribe: Только письма с отпиской (True/False)
         limit: Количество строк возврата
         offset: Шаг (пагинация)
         start_date: Дата от (формат 2020-01-01)
@@ -396,8 +402,14 @@ def get_message_logs(
             params["to"] = to_email
         if from_email:
             params["from"] = from_email
+        if tag:
+            params["tag"] = tag
         if status:
             params["status"] = status
+        if is_open is not None:
+            params["is_open"] = "true" if bool(is_open) else "false"
+        if is_unsubscribe is not None:
+            params["is_unsubscribe"] = "true" if bool(is_unsubscribe) else "false"
         if start_date:
             params["startDate"] = start_date
         if end_date:

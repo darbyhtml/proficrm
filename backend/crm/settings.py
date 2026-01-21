@@ -406,6 +406,8 @@ CELERY_WORKER_LOG_COLOR = False  # Отключить цветной вывод 
 # Предупреждение о root user можно игнорировать в Docker окружении
 
 # Celery Beat Schedule (периодические задачи)
+# Частота синхронизации квоты smtp.bz (сек). По умолчанию раз в 5 минут.
+SMTP_BZ_QUOTA_SYNC_SECONDS = float(os.getenv("SMTP_BZ_QUOTA_SYNC_SECONDS", "300") or "300")
 CELERY_BEAT_SCHEDULE = {
     "send-pending-emails": {
         "task": "mailer.tasks.send_pending_emails",
@@ -413,7 +415,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     "sync-smtp-bz-quota": {
         "task": "mailer.tasks.sync_smtp_bz_quota",
-        "schedule": 1800.0,  # Каждые 30 минут
+        "schedule": SMTP_BZ_QUOTA_SYNC_SECONDS,
     },
     "clean-old-call-requests": {
         "task": "phonebridge.tasks.clean_old_call_requests",

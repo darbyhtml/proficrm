@@ -5,6 +5,7 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.http import HttpRequest, HttpResponse
 from django.http import JsonResponse
@@ -31,6 +32,63 @@ logger = logging.getLogger(__name__)
 
 PER_USER_DAILY_LIMIT = 100  # значение по умолчанию; может быть переопределено в GlobalMailAccount.per_user_daily_limit
 COOLDOWN_DAYS_DEFAULT = 3
+
+
+def _smtp_bz_extract_total(resp) -> int | None:
+    """
+    Унифицирует "сколько записей" из ответа smtp.bz /log/message.
+    В Swagger у ответа может быть total/count либо просто список.
+    """
+    if resp is None:
+        return None
+    if isinstance(resp, dict):
+        for k in ("total", "count", "Total", "Count"):
+            v = resp.get(k)
+            if isinstance(v, (int, float)):
+                return int(v)
+            if isinstance(v, str) and v.isdigit():
+                return int(v)
+        data = resp.get("data")
+        if isinstance(data, list):
+            return len(data)
+        return 0
+    if isinstance(resp, list):
+        return len(resp)
+    return None
+
+
+def _smtp_bz_today_stats_cached(*, api_key: str, today_str: str) -> dict:
+    """
+    Лёгкая аналитика из smtp.bz API (кешируем, чтобы не дергать API на каждый рендер).
+    today_str: YYYY-MM-DD (по МСК).
+    """
+    cache_key = f"smtp_bz:stats:{today_str}"
+    cached = cache.get(cache_key)
+    if isinstance(cached, dict):
+        return cached
+
+    try:
+        from mailer.smtp_bz_api import get_message_logs
+
+        # Используем limit=1, надеясь на total в ответе. Если total нет — fallback на len(data).
+        bounce = _smtp_bz_extract_total(get_message_logs(api_key, status="bounce", limit=1, start_date=today_str, end_date=today_str))
+        returned = _smtp_bz_extract_total(get_message_logs(api_key, status="return", limit=1, start_date=today_str, end_date=today_str))
+        cancelled = _smtp_bz_extract_total(get_message_logs(api_key, status="cancel", limit=1, start_date=today_str, end_date=today_str))
+        opened = _smtp_bz_extract_total(get_message_logs(api_key, is_open=True, limit=1, start_date=today_str, end_date=today_str))
+        unsub = _smtp_bz_extract_total(get_message_logs(api_key, is_unsubscribe=True, limit=1, start_date=today_str, end_date=today_str))
+
+        result = {
+            "bounce": bounce,
+            "return": returned,
+            "cancel": cancelled,
+            "opened": opened,
+            "unsub": unsub,
+        }
+        cache.set(cache_key, result, timeout=60)  # 1 минута
+        return result
+    except Exception as e:
+        logger.debug(f"Failed to fetch smtp.bz stats: {e}")
+        return {}
 
 def _can_manage_campaign(user: User, camp: Campaign) -> bool:
     # Админ — всегда
@@ -192,6 +250,37 @@ def mail_settings(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+def mail_quota_poll(request: HttpRequest) -> JsonResponse:
+    """
+    Лёгкий эндпоинт для автообновления блока квоты/тарифа на странице кампаний.
+    Данные берём из БД (SmtpBzQuota), которую обновляет Celery задача sync_smtp_bz_quota.
+    """
+    quota = SmtpBzQuota.load()
+    now = timezone.now()
+    try:
+        from zoneinfo import ZoneInfo
+
+        msk_now = now.astimezone(ZoneInfo("Europe/Moscow"))
+        server_time_msk = msk_now.isoformat()
+    except Exception:
+        server_time_msk = now.isoformat()
+
+    return JsonResponse(
+        {
+            "tariff_name": quota.tariff_name or "",
+            "tariff_renewal_date": quota.tariff_renewal_date.isoformat() if quota.tariff_renewal_date else None,
+            "emails_available": int(quota.emails_available or 0),
+            "emails_limit": int(quota.emails_limit or 0),
+            "sent_per_hour": int(quota.sent_per_hour or 0),
+            "max_per_hour": int(quota.max_per_hour or 100),
+            "last_synced_at": quota.last_synced_at.isoformat() if quota.last_synced_at else None,
+            "sync_error": quota.sync_error or "",
+            "server_time_msk": server_time_msk,
+        }
+    )
+
+
+@login_required
 def campaigns(request: HttpRequest) -> HttpResponse:
     user: User = request.user
     is_admin = (user.role == User.Role.ADMIN)
@@ -220,8 +309,12 @@ def campaigns(request: HttpRequest) -> HttpResponse:
     if is_admin:
         from django.utils import timezone as _tz
         from django.db.models import Count, Q
+        from zoneinfo import ZoneInfo
         now = _tz.now()
-        today = now.date()
+        msk_tz = ZoneInfo("Europe/Moscow")
+        msk_now = now.astimezone(msk_tz)
+        today = msk_now.date()
+        today_str = today.strftime("%Y-%m-%d")
         
         smtp_cfg = GlobalMailAccount.load()
         per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT
@@ -304,15 +397,12 @@ def campaigns(request: HttpRequest) -> HttpResponse:
         
         # Получаем информацию об очереди
         from mailer.tasks import _is_working_hours
-        from zoneinfo import ZoneInfo
         queue_list = []
         queue_entries_all = list(CampaignQueue.objects.filter(
             status__in=[CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING]
         ).select_related("campaign", "campaign__created_by").order_by("-priority", "queued_at"))
         
         # Определяем время начала следующего рабочего дня, если сейчас не рабочее время
-        msk_tz = ZoneInfo("Europe/Moscow")
-        msk_now = now.astimezone(msk_tz)
         is_working = _is_working_hours(now)
         next_working_time = None
         if not is_working:
@@ -332,6 +422,10 @@ def campaigns(request: HttpRequest) -> HttpResponse:
                 "next_working_time": next_working_time,
             })
         
+        smtp_bz_stats = {}
+        if smtp_cfg.smtp_bz_api_key:
+            smtp_bz_stats = _smtp_bz_today_stats_cached(api_key=smtp_cfg.smtp_bz_api_key, today_str=today_str)
+
         analytics = {
             "user_stats": user_stats,
             "total_sent_today": total_sent_today,
@@ -348,6 +442,7 @@ def campaigns(request: HttpRequest) -> HttpResponse:
             "queue_list": queue_list,
             "is_working_time": is_working,
             "current_time_msk": msk_now.strftime("%H:%M"),
+            "smtp_bz": smtp_bz_stats,
         }
     
     # Информация о квоте smtp.bz (для всех пользователей)

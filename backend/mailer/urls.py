@@ -6,6 +6,7 @@ urlpatterns = [
     path("mail/settings/", views.mail_settings, name="mail_settings"),
     path("mail/signature/", views.mail_signature, name="mail_signature"),
     path("mail/progress/poll/", views.mail_progress_poll, name="mail_progress_poll"),
+    path("mail/quota/poll/", views.mail_quota_poll, name="mail_quota_poll"),
     path("mail/campaigns/", views.campaigns, name="campaigns"),
     path("mail/campaigns/new/", views.campaign_create, name="campaign_create"),
     path("mail/campaigns/pick/", views.campaign_pick, name="campaign_pick"),
