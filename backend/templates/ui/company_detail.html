@@ -891,7 +891,7 @@
       <section class="card card-pad">
         <div class="font-medium mb-3">Заметки</div>
         {% if can_edit_company %}
-          <form class="space-y-2" method="post" action="/companies/{{ company.id }}/notes/add/" enctype="multipart/form-data" id="noteForm">
+          <form class="space-y-2" method="post" action="/companies/{{ company.id }}/notes/add/" enctype="multipart/form-data" id="noteForm" data-company-id="{{ company.id }}" data-user-id="{{ request.user.id }}">
             {% csrf_token %}
             <div class="space-y-2">
               {{ note_form.text }}
@@ -917,7 +917,7 @@
 
         <div class="mt-4 space-y-3">
           {% for n in notes %}
-            <div class="rounded-lg border p-3">
+            <div class="rounded-lg border p-3" data-note-item>
               <div class="flex items-start justify-between gap-3">
                 <div class="text-xs text-brand-dark/70 mb-1">
                   {{ n.created_at }} · {{ n.author|default:"—" }}
@@ -968,7 +968,7 @@
                   {% endif %}
                 </div>
               </div>
-              <div class="text-sm whitespace-pre-line wrap-anywhere">{{ n.text }}</div>
+              <div class="text-sm whitespace-pre-line wrap-anywhere" data-note-body>{{ n.text }}</div>
               {% if n.attachment %}
                 <div class="mt-2 rounded-lg border border-brand-soft bg-brand-soft/15 px-3 py-2">
                   <div class="flex items-center justify-between gap-2">
@@ -1403,6 +1403,71 @@
         input.addEventListener('change', () => {
           const f = input.files && input.files.length ? input.files[0] : null;
           if (name) name.textContent = f ? f.name : '';
+        });
+      })();
+    </script>
+
+    <script>
+      // Черновик заметки в карточке компании: сохраняем текст локально, чтобы не терялся при переходах.
+      (function(){
+        const form = document.getElementById('noteForm');
+        if (!form) return;
+
+        const textarea = form.querySelector('textarea[name="text"]');
+        if (!textarea) return;
+
+        const companyId = form.getAttribute('data-company-id') || '';
+        const userId = form.getAttribute('data-user-id') || '';
+        const storageKey = `companyNoteDraft:v1:${userId}:${companyId}`;
+
+        function normalize(s) {
+          return String(s || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+        }
+
+        function getDraft() {
+          try { return localStorage.getItem(storageKey) || ''; } catch (_e) { return ''; }
+        }
+        function setDraft(v) {
+          try { localStorage.setItem(storageKey, v); } catch (_e) {}
+        }
+        function clearDraft() {
+          try { localStorage.removeItem(storageKey); } catch (_e) {}
+        }
+
+        // Если последний добавленный note совпадает с черновиком — считаем, что он сохранён, и очищаем.
+        const draft = getDraft();
+        if (draft) {
+          const firstNoteBody = document.querySelector('[data-note-item] [data-note-body]');
+          if (firstNoteBody) {
+            const noteText = normalize(firstNoteBody.textContent || '');
+            if (noteText && noteText === normalize(draft)) {
+              clearDraft();
+            }
+          }
+        }
+
+        // Восстановление черновика (только если поле пустое/не тронуто сервером)
+        const current = normalize(textarea.value);
+        const draft2 = getDraft();
+        if (!current && draft2) {
+          textarea.value = draft2;
+        }
+
+        // Автосохранение по мере ввода (debounce)
+        let t = null;
+        textarea.addEventListener('input', () => {
+          if (t) window.clearTimeout(t);
+          t = window.setTimeout(() => {
+            const v = textarea.value || '';
+            if (normalize(v)) setDraft(v);
+            else clearDraft();
+          }, 250);
+        });
+
+        // На случай быстрых переходов — сохраняем при уходе со страницы
+        window.addEventListener('beforeunload', () => {
+          const v = textarea.value || '';
+          if (normalize(v)) setDraft(v);
         });
       })();
     </script>
