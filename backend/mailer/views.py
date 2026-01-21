@@ -1155,6 +1155,32 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
     # Преобразуем QuerySet в список для использования в __in
     # distinct() уже применен выше, если были сферы
     company_ids = list(company_qs.order_by().values_list("id", flat=True).distinct())
+    
+    # Дополнительная проверка: если сферы выбраны, убеждаемся, что все компании имеют хотя бы одну из выбранных сфер
+    # Это защита от возможных проблем с фильтрацией M2M
+    if sphere_ids:
+        if company_ids:
+            # Проверяем, что все компании действительно имеют выбранные сферы
+            valid_company_ids = list(
+                Company.objects.filter(
+                    id__in=company_ids,
+                    spheres__id__in=sphere_ids
+                ).values_list("id", flat=True).distinct()
+            )
+            if len(valid_company_ids) != len(company_ids):
+                # Есть компании, которые не прошли проверку - используем только валидные
+                logger.warning(
+                    f"Campaign {camp.id}: Found {len(company_ids) - len(valid_company_ids)} companies "
+                    f"that don't match sphere filter {sphere_ids}. Using only {len(valid_company_ids)} valid companies."
+                )
+                company_ids = valid_company_ids
+            # Логируем успешную фильтрацию
+            logger.info(
+                f"Campaign {camp.id}: Filtered by spheres {sphere_ids}, found {len(company_ids)} companies"
+            )
+        else:
+            # Нет компаний после фильтрации - это нормально, если фильтры строгие
+            logger.info(f"Campaign {camp.id}: No companies found matching sphere filter {sphere_ids}")
 
     created = 0
     skipped_cooldown = 0
