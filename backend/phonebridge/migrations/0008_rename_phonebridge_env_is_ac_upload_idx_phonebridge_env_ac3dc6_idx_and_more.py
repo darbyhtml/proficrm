@@ -10,50 +10,92 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RenameIndex(
-            model_name='mobileappbuild',
-            new_name='phonebridge_env_ac3dc6_idx',
-            old_name='phonebridge_env_is_ac_upload_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='mobileappqrtoken',
-            new_name='phonebridge_token_d78bf5_idx',
-            old_name='phonebridge_token_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='mobileappqrtoken',
-            new_name='phonebridge_user_id_43a6d6_idx',
-            old_name='phonebridge_user_creat_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='mobileappqrtoken',
-            new_name='phonebridge_expires_88a1ee_idx',
-            old_name='phonebridge_expires_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='phonedevice',
-            new_name='phonebridge_last_se_a9839e_idx',
-            old_name='phonebridge_last_see_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='phonelogbundle',
-            new_name='phonebridge_user_id_9749ea_idx',
-            old_name='phonebridge_log_user_ts_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='phonelogbundle',
-            new_name='phonebridge_source_edb9f8_idx',
-            old_name='phonebridge_log_source_ts_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='phonetelemetry',
-            new_name='phonebridge_user_id_76c561_idx',
-            old_name='phonebridge_telemetry_user_ts_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='phonetelemetry',
-            new_name='phonebridge_endpoin_eecea4_idx',
-            old_name='phonebridge_telemetry_ep_ts_idx',
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS phonebridge_env_is_ac_upload_idx RENAME TO phonebridge_env_ac3dc6_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS phonebridge_env_ac3dc6_idx RENAME TO phonebridge_env_is_ac_upload_idx;",
+                ),
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS phonebridge_token_idx RENAME TO phonebridge_token_d78bf5_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS phonebridge_token_d78bf5_idx RENAME TO phonebridge_token_idx;",
+                ),
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS phonebridge_user_creat_idx RENAME TO phonebridge_user_id_43a6d6_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS phonebridge_user_id_43a6d6_idx RENAME TO phonebridge_user_creat_idx;",
+                ),
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS phonebridge_expires_idx RENAME TO phonebridge_expires_88a1ee_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS phonebridge_expires_88a1ee_idx RENAME TO phonebridge_expires_idx;",
+                ),
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS phonebridge_last_see_idx RENAME TO phonebridge_last_se_a9839e_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS phonebridge_last_se_a9839e_idx RENAME TO phonebridge_last_see_idx;",
+                ),
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS phonebridge_log_user_ts_idx RENAME TO phonebridge_user_id_9749ea_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS phonebridge_user_id_9749ea_idx RENAME TO phonebridge_log_user_ts_idx;",
+                ),
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS phonebridge_log_source_ts_idx RENAME TO phonebridge_source_edb9f8_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS phonebridge_source_edb9f8_idx RENAME TO phonebridge_log_source_ts_idx;",
+                ),
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS phonebridge_telemetry_user_ts_idx RENAME TO phonebridge_user_id_76c561_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS phonebridge_user_id_76c561_idx RENAME TO phonebridge_telemetry_user_ts_idx;",
+                ),
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS phonebridge_telemetry_ep_ts_idx RENAME TO phonebridge_endpoin_eecea4_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS phonebridge_endpoin_eecea4_idx RENAME TO phonebridge_telemetry_ep_ts_idx;",
+                ),
+            ],
+            state_operations=[
+                migrations.RenameIndex(
+                    model_name="mobileappbuild",
+                    old_name="phonebridge_env_is_ac_upload_idx",
+                    new_name="phonebridge_env_ac3dc6_idx",
+                ),
+                migrations.RenameIndex(
+                    model_name="mobileappqrtoken",
+                    old_name="phonebridge_token_idx",
+                    new_name="phonebridge_token_d78bf5_idx",
+                ),
+                migrations.RenameIndex(
+                    model_name="mobileappqrtoken",
+                    old_name="phonebridge_user_creat_idx",
+                    new_name="phonebridge_user_id_43a6d6_idx",
+                ),
+                migrations.RenameIndex(
+                    model_name="mobileappqrtoken",
+                    old_name="phonebridge_expires_idx",
+                    new_name="phonebridge_expires_88a1ee_idx",
+                ),
+                migrations.RenameIndex(
+                    model_name="phonedevice",
+                    old_name="phonebridge_last_see_idx",
+                    new_name="phonebridge_last_se_a9839e_idx",
+                ),
+                migrations.RenameIndex(
+                    model_name="phonelogbundle",
+                    old_name="phonebridge_log_user_ts_idx",
+                    new_name="phonebridge_user_id_9749ea_idx",
+                ),
+                migrations.RenameIndex(
+                    model_name="phonelogbundle",
+                    old_name="phonebridge_log_source_ts_idx",
+                    new_name="phonebridge_source_edb9f8_idx",
+                ),
+                migrations.RenameIndex(
+                    model_name="phonetelemetry",
+                    old_name="phonebridge_telemetry_user_ts_idx",
+                    new_name="phonebridge_user_id_76c561_idx",
+                ),
+                migrations.RenameIndex(
+                    model_name="phonetelemetry",
+                    old_name="phonebridge_telemetry_ep_ts_idx",
+                    new_name="phonebridge_endpoin_eecea4_idx",
+                ),
+            ],
         ),
         migrations.AlterField(
             model_name='callrequest',

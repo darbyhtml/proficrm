@@ -10,9 +10,19 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveIndex(
-            model_name='task',
-            name='tasksapp_task_company_due_status_idx',
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunSQL(
+                    sql="DROP INDEX IF EXISTS tasksapp_task_company_due_status_idx;",
+                    reverse_sql=migrations.RunSQL.noop,
+                ),
+            ],
+            state_operations=[
+                migrations.RemoveIndex(
+                    model_name="task",
+                    name="tasksapp_task_company_due_status_idx",
+                ),
+            ],
         ),
         migrations.AlterField(
             model_name='tasktype',

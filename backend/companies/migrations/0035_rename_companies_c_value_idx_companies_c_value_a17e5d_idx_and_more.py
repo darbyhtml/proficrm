@@ -10,24 +10,46 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RenameIndex(
-            model_name='companyemail',
-            new_name='companies_c_value_a17e5d_idx',
-            old_name='companies_c_value_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='companyemail',
-            new_name='companies_c_company_90564b_idx',
-            old_name='companies_c_company_order_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='companyphone',
-            new_name='companies_c_value_b68823_idx',
-            old_name='companies_c_phone_value_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='companyphone',
-            new_name='companies_c_company_3cdaea_idx',
-            old_name='companies_c_phone_company_order_idx',
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS companies_c_value_idx RENAME TO companies_c_value_a17e5d_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS companies_c_value_a17e5d_idx RENAME TO companies_c_value_idx;",
+                ),
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS companies_c_company_order_idx RENAME TO companies_c_company_90564b_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS companies_c_company_90564b_idx RENAME TO companies_c_company_order_idx;",
+                ),
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS companies_c_phone_value_idx RENAME TO companies_c_value_b68823_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS companies_c_value_b68823_idx RENAME TO companies_c_phone_value_idx;",
+                ),
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS companies_c_phone_company_order_idx RENAME TO companies_c_company_3cdaea_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS companies_c_company_3cdaea_idx RENAME TO companies_c_phone_company_order_idx;",
+                ),
+            ],
+            state_operations=[
+                migrations.RenameIndex(
+                    model_name="companyemail",
+                    old_name="companies_c_value_idx",
+                    new_name="companies_c_value_a17e5d_idx",
+                ),
+                migrations.RenameIndex(
+                    model_name="companyemail",
+                    old_name="companies_c_company_order_idx",
+                    new_name="companies_c_company_90564b_idx",
+                ),
+                migrations.RenameIndex(
+                    model_name="companyphone",
+                    old_name="companies_c_phone_value_idx",
+                    new_name="companies_c_value_b68823_idx",
+                ),
+                migrations.RenameIndex(
+                    model_name="companyphone",
+                    old_name="companies_c_phone_company_order_idx",
+                    new_name="companies_c_company_3cdaea_idx",
+                ),
+            ],
         ),
     ]

@@ -4,20 +4,35 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('accounts', '0006_merge_0002_0005'),
+        ("accounts", "0006_merge_0002_0005"),
     ]
 
     operations = [
-        migrations.RenameIndex(
-            model_name='magiclinktoken',
-            new_name='accounts_ma_token_h_1115dc_idx',
-            old_name='accounts_m_token_h_abc123_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='magiclinktoken',
-            new_name='accounts_ma_user_id_c3f298_idx',
-            old_name='accounts_m_user_id_xyz789_idx',
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                # На некоторых окружениях индексы могли уже получить "новые" имена
+                # (или быть созданы иначе). Делаем rename безопасным.
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS accounts_m_token_h_abc123_idx RENAME TO accounts_ma_token_h_1115dc_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS accounts_ma_token_h_1115dc_idx RENAME TO accounts_m_token_h_abc123_idx;",
+                ),
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS accounts_m_user_id_xyz789_idx RENAME TO accounts_ma_user_id_c3f298_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS accounts_ma_user_id_c3f298_idx RENAME TO accounts_m_user_id_xyz789_idx;",
+                ),
+            ],
+            state_operations=[
+                migrations.RenameIndex(
+                    model_name="magiclinktoken",
+                    old_name="accounts_m_token_h_abc123_idx",
+                    new_name="accounts_ma_token_h_1115dc_idx",
+                ),
+                migrations.RenameIndex(
+                    model_name="magiclinktoken",
+                    old_name="accounts_m_user_id_xyz789_idx",
+                    new_name="accounts_ma_user_id_c3f298_idx",
+                ),
+            ],
         ),
     ]

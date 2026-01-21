@@ -13,20 +13,38 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RenameIndex(
-            model_name='campaignqueue',
-            new_name='mailer_camp_status_5db2fb_idx',
-            old_name='mailer_camp_status_priority_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='emailcooldown',
-            new_name='mailer_emai_created_817c96_idx',
-            old_name='mailer_emai_created_7b9a3d_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='userdailylimitstatus',
-            new_name='mailer_user_user_id_db59f8_idx',
-            old_name='mailer_user_user_id_2a3b4c_idx',
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS mailer_camp_status_priority_idx RENAME TO mailer_camp_status_5db2fb_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS mailer_camp_status_5db2fb_idx RENAME TO mailer_camp_status_priority_idx;",
+                ),
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS mailer_emai_created_7b9a3d_idx RENAME TO mailer_emai_created_817c96_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS mailer_emai_created_817c96_idx RENAME TO mailer_emai_created_7b9a3d_idx;",
+                ),
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS mailer_user_user_id_2a3b4c_idx RENAME TO mailer_user_user_id_db59f8_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS mailer_user_user_id_db59f8_idx RENAME TO mailer_user_user_id_2a3b4c_idx;",
+                ),
+            ],
+            state_operations=[
+                migrations.RenameIndex(
+                    model_name="campaignqueue",
+                    old_name="mailer_camp_status_priority_idx",
+                    new_name="mailer_camp_status_5db2fb_idx",
+                ),
+                migrations.RenameIndex(
+                    model_name="emailcooldown",
+                    old_name="mailer_emai_created_7b9a3d_idx",
+                    new_name="mailer_emai_created_817c96_idx",
+                ),
+                migrations.RenameIndex(
+                    model_name="userdailylimitstatus",
+                    old_name="mailer_user_user_id_2a3b4c_idx",
+                    new_name="mailer_user_user_id_db59f8_idx",
+                ),
+            ],
         ),
         migrations.AlterField(
             model_name='emailcooldown',

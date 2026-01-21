@@ -10,19 +10,37 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RenameIndex(
-            model_name='errorlog',
-            new_name='audit_error_created_dc9bc2_idx',
-            old_name='audit_error_created_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='errorlog',
-            new_name='audit_error_level_bbfdc3_idx',
-            old_name='audit_error_level_res_idx',
-        ),
-        migrations.RenameIndex(
-            model_name='errorlog',
-            new_name='audit_error_path_54ddb9_idx',
-            old_name='audit_error_path_res_idx',
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS audit_error_created_idx RENAME TO audit_error_created_dc9bc2_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS audit_error_created_dc9bc2_idx RENAME TO audit_error_created_idx;",
+                ),
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS audit_error_level_res_idx RENAME TO audit_error_level_bbfdc3_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS audit_error_level_bbfdc3_idx RENAME TO audit_error_level_res_idx;",
+                ),
+                migrations.RunSQL(
+                    sql="ALTER INDEX IF EXISTS audit_error_path_res_idx RENAME TO audit_error_path_54ddb9_idx;",
+                    reverse_sql="ALTER INDEX IF EXISTS audit_error_path_54ddb9_idx RENAME TO audit_error_path_res_idx;",
+                ),
+            ],
+            state_operations=[
+                migrations.RenameIndex(
+                    model_name="errorlog",
+                    old_name="audit_error_created_idx",
+                    new_name="audit_error_created_dc9bc2_idx",
+                ),
+                migrations.RenameIndex(
+                    model_name="errorlog",
+                    old_name="audit_error_level_res_idx",
+                    new_name="audit_error_level_bbfdc3_idx",
+                ),
+                migrations.RenameIndex(
+                    model_name="errorlog",
+                    old_name="audit_error_path_res_idx",
+                    new_name="audit_error_path_54ddb9_idx",
+                ),
+            ],
         ),
     ]
