@@ -13,12 +13,27 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.RemoveField(
-            model_name="company",
-            name="lead_state",
-        ),
-        migrations.DeleteModel(
-            name="CompanyLeadStateRequest",
+        migrations.SeparateDatabaseAndState(
+            database_operations=[
+                # На некоторых окружениях поле/таблица могли быть удалены ранее.
+                migrations.RunSQL(
+                    sql="ALTER TABLE IF EXISTS companies_company DROP COLUMN IF EXISTS lead_state;",
+                    reverse_sql=migrations.RunSQL.noop,
+                ),
+                migrations.RunSQL(
+                    sql="DROP TABLE IF EXISTS companies_companyleadstaterequest;",
+                    reverse_sql=migrations.RunSQL.noop,
+                ),
+            ],
+            state_operations=[
+                migrations.RemoveField(
+                    model_name="company",
+                    name="lead_state",
+                ),
+                migrations.DeleteModel(
+                    name="CompanyLeadStateRequest",
+                ),
+            ],
         ),
     ]
 
