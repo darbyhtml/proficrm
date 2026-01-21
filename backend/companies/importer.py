@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import datetime as dt
 import html
 import re
 from dataclasses import dataclass
@@ -34,6 +35,33 @@ def _digits_only(s: str) -> str:
     return re.sub(r"\D+", "", s or "")
 
 
+def _parse_int(v: str) -> int | None:
+    try:
+        vv = _digits_only(v)
+        if not vv:
+            return None
+        return int(vv)
+    except Exception:
+        return None
+
+
+def _parse_worktime(v: str) -> tuple[dt.time | None, dt.time | None]:
+    # поддерживаем форматы: "09:00-18:00", "09:00–18:00", "с 9:00 до 18:00"
+    s = (v or "").replace("–", "-").strip()
+    if not s:
+        return (None, None)
+    m = re.search(r"(\d{1,2})[:.](\d{2})\s*-\s*(\d{1,2})[:.](\d{2})", s)
+    if not m:
+        return (None, None)
+    try:
+        h1, m1, h2, m2 = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
+        if 0 <= h1 <= 23 and 0 <= h2 <= 23 and 0 <= m1 <= 59 and 0 <= m2 <= 59:
+            return (dt.time(h1, m1), dt.time(h2, m2))
+    except Exception:
+        pass
+    return (None, None)
+
+
 def _norm_name(s: str) -> str:
     s = _clean_str(s).lower()
     s = re.sub(r"\s+", " ", s)
@@ -47,6 +75,58 @@ def _split_multi(s: str) -> list[str]:
     # Часто встречается ; или , как разделитель
     parts = re.split(r"[;,]+", s)
     return [p.strip() for p in parts if p.strip()]
+
+
+def _sphere_key(s: str) -> str:
+    s = _clean_str(s).strip().lower()
+    s = s.replace("ё", "е")
+    s = s.replace(",", " ")
+    s = s.replace("-", " ")
+    s = s.replace(".", " ")
+    s = re.sub(r"\s+", " ", s)
+    return s.strip()
+
+
+# Канонизация сфер (чтобы не плодить дубли при импорте из amoCRM)
+_SPHERE_CANON: dict[str, str] = {
+    # опечатки/варианты написания
+    _sphere_key("Металургия"): "Металлургия",
+    _sphere_key("Металлургия"): "Металлургия",
+    _sphere_key("Администрации"): "Администрация",
+    _sphere_key("Администрация"): "Администрация",
+    _sphere_key("ЦЗН"): "Центры занятости",
+    _sphere_key("Центры занятости"): "Центры занятости",
+    _sphere_key("Медики"): "Медицина",
+    _sphere_key("Медицина"): "Медицина",
+    _sphere_key("Аэро"): "Авиация",
+    _sphere_key("Авиация"): "Авиация",
+    _sphere_key("Силовики"): "Силовые структуры",
+    _sphere_key("Силовые структуры"): "Силовые структуры",
+    _sphere_key("Сельск. хоз"): "Сельхоз отрасль",
+    _sphere_key("Сельхоз отрасль"): "Сельхоз отрасль",
+    _sphere_key("Отдых"): "Отдых, оздоровление",
+    _sphere_key("Отдых, оздоровление"): "Отдых, оздоровление",
+}
+
+# Сферы, которые не должны импортироваться (мусор/другие признаки)
+_SPHERE_DROP: set[str] = {
+    _sphere_key("Новая CRM"),
+    _sphere_key("Информация не найдена"),
+    _sphere_key("Конкурент"),
+    _sphere_key("Постоянный клиент"),
+}
+
+
+def _canon_sphere_name(s: str) -> str | None:
+    raw = _clean_str(s)
+    if not raw:
+        return None
+    key = _sphere_key(raw)
+    if not key:
+        return None
+    if key in _SPHERE_DROP:
+        return None
+    return _SPHERE_CANON.get(key) or _norm_spaces(raw)
 
 
 def _unescape(s: str) -> str:
@@ -127,39 +207,6 @@ def import_amo_csv(
     """
     csv_path = Path(csv_path)
     result = ImportResult(preview_companies=[], preview_updates=[])
-                    # Доп. поля карточки
-                    employees_count_raw = _unescape(_get(row, "Численность сотрудников", "Численность сотрудников (Скайнет)", "Сотрудников"))
-                    worktime_raw = _unescape(_get(row, "Рабочее время", "Рабочее время (Скайнет)", "Часы работы"))
-                    timezone_raw = _unescape(_get(row, "Часовой пояс", "Часовой пояс (Скайнет)", "Таймзона", "Timezone"))
-
-                    def _parse_int(v: str) -> int | None:
-                        try:
-                            vv = _digits_only(v)
-                            if not vv:
-                                return None
-                            return int(vv)
-                        except Exception:
-                            return None
-
-                    def _parse_worktime(v: str) -> tuple[datetime.time | None, datetime.time | None]:
-                        # поддерживаем форматы: "09:00-18:00", "09:00–18:00", "с 9:00 до 18:00"
-                        import re
-                        s = (v or "").replace("–", "-").strip()
-                        if not s:
-                            return (None, None)
-                        m = re.search(r"(\d{1,2})[:.](\d{2})\s*-\s*(\d{1,2})[:.](\d{2})", s)
-                        if not m:
-                            return (None, None)
-                        try:
-                            h1, m1, h2, m2 = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
-                            if 0 <= h1 <= 23 and 0 <= h2 <= 23 and 0 <= m1 <= 59 and 0 <= m2 <= 59:
-                                return (datetime.time(h1, m1), datetime.time(h2, m2))
-                        except Exception:
-                            pass
-                        return (None, None)
-
-                    employees_count = _parse_int(employees_count_raw)
-                    workday_start, workday_end = _parse_worktime(worktime_raw)
 
     # Кеш пользователей
     # Важно: __str__ у нас = "Фамилия Имя", а get_full_name() у Django = "Имя Фамилия".
@@ -218,6 +265,13 @@ def import_amo_csv(
                     # Статус: в файле встречаются 2 колонки ("Статус" и "Статус из Скайнет") — берём более "живую".
                     status_name = _unescape(_get(row, "Статус", "Статус из Скайнет", "Статус из Скайнет (компания)"))
                     spheres_raw = _get(row, "Сферы деятельности", "Сферы деятельности (компания)")
+
+                    # Доп. поля карточки
+                    employees_count_raw = _unescape(_get(row, "Численность сотрудников", "Численность сотрудников (Скайнет)", "Сотрудников"))
+                    worktime_raw = _unescape(_get(row, "Рабочее время", "Рабочее время (Скайнет)", "Часы работы"))
+                    timezone_raw = _unescape(_get(row, "Часовой пояс", "Часовой пояс (Скайнет)", "Таймзона", "Timezone"))
+                    employees_count = _parse_int(employees_count_raw)
+                    workday_start, workday_end = _parse_worktime(worktime_raw)
 
                     # Телефоны/почта компании (основные)
                     phone_work = _unescape(_get(row, "Рабочий телефон"))
@@ -400,9 +454,16 @@ def import_amo_csv(
                         company.save()
 
                         # spheres m2m — только после save
-                        spheres = []
+                        spheres: list[CompanySphere] = []
+                        seen = set()
                         for sname in _split_multi(spheres_raw):
-                            obj, _ = CompanySphere.objects.get_or_create(name=sname)
+                            canon = _canon_sphere_name(sname)
+                            if not canon:
+                                continue
+                            if canon.lower() in seen:
+                                continue
+                            seen.add(canon.lower())
+                            obj, _ = CompanySphere.objects.get_or_create(name=canon)
                             spheres.append(obj)
                         if spheres:
                             company.spheres.set(spheres)

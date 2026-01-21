@@ -84,7 +84,13 @@ class Command(BaseCommand):
             "--map",
             type=str,
             default="",
-            help="Путь к JSON-файлу с явной картой merge: {\"from\": \"to\", ...} (id или name).",
+            help="Путь к JSON-файлу с явной картой: {\"from\": \"to\"|null, ...} (id или name). null/\"\" = удалить сферу.",
+        )
+        parser.add_argument(
+            "--delete",
+            type=str,
+            default="",
+            help="Удалить сферы (список через запятую ИЛИ путь к JSON-файлу-массиву). Пример: \"Новая CRM,Информация не найдена\"",
         )
         parser.add_argument(
             "--threshold",
@@ -103,6 +109,7 @@ class Command(BaseCommand):
         apply_exact = bool(opts.get("apply_exact"))
         dry_run = bool(opts.get("dry_run"))
         map_path = (opts.get("map") or "").strip()
+        delete_arg = (opts.get("delete") or "").strip()
         threshold = float(opts.get("threshold") or 0.92)
 
         spheres = list(CompanySphere.objects.all().order_by("name").only("id", "name"))
@@ -154,19 +161,36 @@ class Command(BaseCommand):
 
         # Явная карта слияния
         merges: list[tuple[CompanySphere, CompanySphere]] = []
+        deletes: list[CompanySphere] = []
         if map_path:
             p = Path(map_path)
             if not p.exists():
                 raise CommandError(f"Файл не найден: {map_path}")
             raw = json.loads(p.read_text(encoding="utf-8"))
             if not isinstance(raw, dict):
-                raise CommandError("--map ожидает JSON-объект вида {\"from\": \"to\"}")
+                raise CommandError("--map ожидает JSON-объект вида {\"from\": \"to\"|null}")
             for k, v in raw.items():
                 src = _resolve_sphere(str(k))
-                dst = _resolve_sphere(str(v))
-                if src.id == dst.id:
-                    continue
-                merges.append((src, dst))
+                if v is None or (isinstance(v, str) and not v.strip()):
+                    deletes.append(src)
+                else:
+                    dst = _resolve_sphere(str(v))
+                    if src.id == dst.id:
+                        continue
+                    merges.append((src, dst))
+
+        if delete_arg:
+            p = Path(delete_arg)
+            if p.exists():
+                raw = json.loads(p.read_text(encoding="utf-8"))
+                if not isinstance(raw, list):
+                    raise CommandError("--delete файл должен содержать JSON-массив: [\"name\", ...]")
+                for x in raw:
+                    deletes.append(_resolve_sphere(str(x)))
+            else:
+                parts = [x.strip() for x in delete_arg.split(",") if x.strip()]
+                for x in parts:
+                    deletes.append(_resolve_sphere(x))
 
         # Авто-слияние по "точным" дублям
         if apply_exact:
@@ -186,14 +210,29 @@ class Command(BaseCommand):
             uniq[(src.id, dst.id)] = (src, dst)
         merges = list(uniq.values())
 
-        if not merges:
+        # Уникализируем удаления
+        del_uniq: dict[int, CompanySphere] = {}
+        for s in deletes:
+            del_uniq[s.id] = s
+        deletes = list(del_uniq.values())
+
+        # Если сфера удаляется — не пытаемся её ещё и мерджить
+        del_ids = {s.id for s in deletes}
+        merges = [(src, dst) for (src, dst) in merges if src.id not in del_ids and dst.id not in del_ids]
+
+        if not merges and not deletes:
             if not do_report:
-                self.stdout.write("Нет операций слияния (merge).")
+                self.stdout.write("Нет операций слияния/удаления.")
             return
 
-        self.stdout.write("\n## План слияния\n")
-        for src, dst in merges:
-            self.stdout.write(f"- {src.id} '{src.name}' -> {dst.id} '{dst.name}'")
+        if merges:
+            self.stdout.write("\n## План слияния\n")
+            for src, dst in merges:
+                self.stdout.write(f"- {src.id} '{src.name}' -> {dst.id} '{dst.name}'")
+        if deletes:
+            self.stdout.write("\n## План удаления\n")
+            for s in deletes:
+                self.stdout.write(f"- {s.id} '{s.name}' (companies={s.companies.count()})")
 
         if dry_run:
             self.stdout.write("\nDRY-RUN: изменения не применены.")
@@ -205,6 +244,27 @@ class Command(BaseCommand):
         with transaction.atomic():
             total_links_moved = 0
             total_spheres_deleted = 0
+
+            # Удаления (мусорные/служебные)
+            for s in deletes:
+                # Удаляем связи m2m
+                deleted_links, _ = through.objects.filter(**{sphere_fk: s.id}).delete()
+                total_links_moved += int(deleted_links or 0)
+                # Чистим filter_meta у кампаний
+                try:
+                    from mailer.models import Campaign
+                    for camp in Campaign.objects.filter(filter_meta__sphere__contains=[s.id]).only("id", "filter_meta").iterator():
+                        meta = dict(camp.filter_meta or {})
+                        sph = meta.get("sphere")
+                        if isinstance(sph, list):
+                            meta["sphere"] = [x for x in sph if str(x).strip() and int(x) != int(s.id)]
+                            camp.filter_meta = meta
+                            camp.save(update_fields=["filter_meta", "updated_at"])
+                except Exception:
+                    pass
+                s.delete()
+                total_spheres_deleted += 1
+
             for src, dst in merges:
                 if src.id == dst.id:
                     continue
@@ -240,7 +300,7 @@ class Command(BaseCommand):
 
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"\nГотово: удалено сфер={total_spheres_deleted}, перенесено связей (company-sphere)={total_links_moved}."
+                    f"\nГотово: удалено сфер={total_spheres_deleted}, изменено связей (company-sphere)={total_links_moved}."
                 )
             )
 
