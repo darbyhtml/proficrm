@@ -1376,31 +1376,35 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
     # distinct() уже применен выше, если были сферы
     company_ids = list(company_qs.order_by().values_list("id", flat=True).distinct())
     
-    # Дополнительная проверка: если сферы выбраны, убеждаемся, что все компании имеют хотя бы одну из выбранных сфер
-    # Это защита от возможных проблем с фильтрацией M2M
+    # "Защита от дурака": перепроверяем, что итоговый набор компаний соответствует ВСЕМ выбранным фильтрам.
+    # Это страхует от неожиданных эффектов (M2M join, типы параметров, ручные правки в БД и т.п.)
+    if company_ids and (branch or responsible or statuses or sphere_ids):
+        valid_qs = Company.objects.filter(id__in=company_ids)
+        if branch:
+            valid_qs = valid_qs.filter(branch_id=branch)
+        if responsible:
+            valid_qs = valid_qs.filter(responsible_id=responsible)
+        if statuses:
+            valid_qs = valid_qs.filter(status_id__in=statuses)
+        if sphere_ids:
+            valid_qs = valid_qs.filter(spheres__id__in=sphere_ids)
+        valid_company_ids = list(valid_qs.values_list("id", flat=True).distinct())
+        if len(valid_company_ids) != len(company_ids):
+            logger.warning(
+                f"Campaign {camp.id}: Filter re-check removed {len(company_ids) - len(valid_company_ids)} companies "
+                f"(branch={branch!r}, responsible={responsible!r}, statuses={statuses}, spheres={sphere_ids})."
+            )
+            company_ids = valid_company_ids
+
     if sphere_ids:
         if company_ids:
-            # Проверяем, что все компании действительно имеют выбранные сферы
-            valid_company_ids = list(
-                Company.objects.filter(
-                    id__in=company_ids,
-                    spheres__id__in=sphere_ids
-                ).values_list("id", flat=True).distinct()
-            )
-            if len(valid_company_ids) != len(company_ids):
-                # Есть компании, которые не прошли проверку - используем только валидные
-                logger.warning(
-                    f"Campaign {camp.id}: Found {len(company_ids) - len(valid_company_ids)} companies "
-                    f"that don't match sphere filter {sphere_ids}. Using only {len(valid_company_ids)} valid companies."
-                )
-                company_ids = valid_company_ids
-            # Логируем успешную фильтрацию
-            logger.info(
-                f"Campaign {camp.id}: Filtered by spheres {sphere_ids}, found {len(company_ids)} companies"
-            )
+            logger.info(f"Campaign {camp.id}: Filtered by spheres {sphere_ids}, found {len(company_ids)} companies")
         else:
-            # Нет компаний после фильтрации - это нормально, если фильтры строгие
             logger.info(f"Campaign {camp.id}: No companies found matching sphere filter {sphere_ids}")
+
+    # Явное предупреждение: если выбран "Любой" филиал, в рассылку могут попасть компании из других регионов.
+    if not branch and user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+        messages.warning(request, "Филиал: «Любой». В рассылку могут попасть компании из других регионов.")
 
     created = 0
     skipped_cooldown = 0
