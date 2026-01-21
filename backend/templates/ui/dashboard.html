@@ -52,7 +52,7 @@
       </div>
       <div class="flex items-center gap-2 flex-wrap">
         {% if can_view_cold_call_reports %}
-          <button type="button" class="btn btn-outline btn-min-h" id="openColdDay" title="Ежедневный отчёт: холодные звонки, входящие звонки, новые компании и контакты" aria-label="Ежедневный отчёт">
+          <button type="button" class="btn btn-outline btn-min-h" style="min-height:38px" id="openColdDay" title="Ежедневный отчёт: холодные звонки, входящие звонки, новые компании и контакты" aria-label="Ежедневный отчёт">
             <span class="inline-flex items-center gap-2">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -60,7 +60,7 @@
               <span>Отчёт за день</span>
             </span>
           </button>
-          <button type="button" class="btn btn-outline btn-min-h" id="openColdMonth" title="Месячный отчёт: холодные звонки, входящие звонки, новые компании и контакты" aria-label="Месячный отчёт">
+          <button type="button" class="btn btn-outline btn-min-h" style="min-height:38px" id="openColdMonth" title="Месячный отчёт: холодные звонки, входящие звонки, новые компании и контакты" aria-label="Месячный отчёт">
             <span class="inline-flex items-center gap-2">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <path d="M8 2v3M16 2v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -72,7 +72,7 @@
             </span>
           </button>
         {% endif %}
-        <a href="/companies/new/" class="btn btn-secondary btn-min-h">
+        <a href="/companies/new/" class="btn btn-secondary btn-min-h" style="min-height:38px">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
             <circle cx="9" cy="7" r="4"/>
@@ -80,7 +80,7 @@
           </svg>
           + Новая компания
         </a>
-        <button type="button" class="btn btn-primary btn-min-h" data-create-task>+ Новая задача</button>
+        <button type="button" class="btn btn-primary btn-min-h" style="min-height:38px" data-create-task>+ Новая задача</button>
       </div>
     </div>
 
@@ -115,7 +115,7 @@
           <ul class="space-y-2">
             {% for t in tasks_today %}
               <li>
-                <button type="button" class="w-full text-left rounded-lg border p-3 transition-all hover:border-brand-teal/50 hover:bg-brand-soft/20 {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}border-red-300 bg-red-50/50{% else %}border-brand-soft{% endif %}" data-view-task data-task-id="{{ t.id }}">
+                <button type="button" class="w-full text-left rounded-lg border p-3 transition-all hover:border-brand-teal/50 hover:bg-brand-soft/20 {% if t.due_at and today_start and t.due_at < today_start and t.status != 'done' and t.status != 'cancelled' %}border-red-300 bg-red-50/50{% else %}border-brand-soft{% endif %}" data-view-task data-task-id="{{ t.id }}">
                   <div class="flex items-start justify-between gap-3">
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 mb-1">
@@ -132,7 +132,7 @@
                         {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
                       </div>
                       {% if t.due_at %}
-                        <div class="mt-1.5 flex items-center gap-1.5 {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700 font-semibold{% else %}text-brand-dark/80 font-medium{% endif %}">
+                        <div class="mt-1.5 flex items-center gap-1.5 {% if t.due_at and today_start and t.due_at < today_start and t.status != 'done' and t.status != 'cancelled' %}text-red-700 font-semibold{% else %}text-brand-dark/80 font-medium{% endif %}">
                           <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M8 2v3M16 2v3M3 6h18M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6"/>
                           </svg>
@@ -164,13 +164,13 @@
       <section class="card card-pad dashboard-card" id="section-tasks-new">
         <div class="flex items-center justify-between mb-3">
           <div class="font-medium">
-            Задачи
+            Новые задачи
             {% if tasks_new_count > 0 %}
               <span class="ml-2 badge badge-new">{{ tasks_new_count }}</span>
             {% endif %}
           </div>
           {% if tasks_new_count > 5 %}
-            <a class="text-sm link" href="/tasks/?mine=1&status=new,in_progress">
+            <a class="text-sm link" href="/tasks/?mine=1&status=new">
               Посмотреть все
               <span class="text-xs text-brand-dark/60">({{ tasks_new_count }})</span>
             </a>
@@ -220,7 +220,7 @@
             <svg class="w-12 h-12 text-brand-dark/30 mb-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/>
             </svg>
-            <div class="text-sm font-medium text-brand-dark/70 mb-1">Задач нет</div>
+            <div class="text-sm font-medium text-brand-dark/70 mb-1">Новых задач нет</div>
             <div class="text-xs text-brand-dark/50 mb-4">Задачи появятся здесь</div>
             <button type="button" class="btn btn-outline text-xs" data-create-task>+ Создать задачу</button>
           </div>
@@ -368,7 +368,7 @@
           <ul class="space-y-2">
             {% for t in tasks_week %}
               <li>
-                <button type="button" class="w-full text-left rounded-lg border border-brand-soft p-3 transition-all hover:border-brand-teal/50 hover:bg-brand-soft/20 {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}border-red-300 bg-red-50/50{% endif %}" data-view-task data-task-id="{{ t.id }}">
+                <button type="button" class="w-full text-left rounded-lg border border-brand-soft p-3 transition-all hover:border-brand-teal/50 hover:bg-brand-soft/20 {% if t.due_at and today_start and t.due_at < today_start and t.status != 'done' and t.status != 'cancelled' %}border-red-300 bg-red-50/50{% endif %}" data-view-task data-task-id="{{ t.id }}">
                   <div class="flex items-start justify-between gap-3">
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 mb-1">
@@ -385,7 +385,7 @@
                         {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
                       </div>
                       {% if t.due_at %}
-                        <div class="mt-1.5 flex items-center gap-1.5 {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700 font-semibold{% else %}text-brand-dark/80 font-medium{% endif %}">
+                        <div class="mt-1.5 flex items-center gap-1.5 {% if t.due_at and today_start and t.due_at < today_start and t.status != 'done' and t.status != 'cancelled' %}text-red-700 font-semibold{% else %}text-brand-dark/80 font-medium{% endif %}">
                           <svg class="w-3.5 h-3.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M8 2v3M16 2v3M3 6h18M4 6v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6"/>
                           </svg>

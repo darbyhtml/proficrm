@@ -646,13 +646,11 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow_start = today_start + timedelta(days=1)
     
-    # Неделя: с понедельника по воскресенье
-    # Находим понедельник текущей недели (0 = понедельник, 6 = воскресенье)
-    days_since_monday = today_date.weekday()  # 0 = понедельник, 6 = воскресенье
-    week_monday = today_date - timedelta(days=days_since_monday)
+    # "Задачи на неделю" в UI и тестах = ближайшие 7 дней, начиная с завтра (сегодня исключаем).
+    week_monday = today_date + timedelta(days=1)
     week_sunday = week_monday + timedelta(days=6)
-    week_start = timezone.make_aware(datetime.combine(week_monday, datetime.min.time()))
-    week_end = timezone.make_aware(datetime.combine(week_sunday, datetime.max.time())) + timedelta(seconds=1)  # inclusive: до конца воскресенья
+    week_start = tomorrow_start
+    week_end = tomorrow_start + timedelta(days=7)
     
     contract_until_30 = today_date + timedelta(days=30)
 
@@ -667,9 +665,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     #     cached_data["local_now"] = local_now
     #     return render(request, "ui/dashboard.html", cached_data)
 
-    # ОПТИМИЗАЦИЯ: Объединяем запросы задач в один с фильтрацией в Python
-    # Получаем все активные задачи пользователя одним запросом
-    # Используем only() для загрузки только необходимых полей
+    # ОПТИМИЗАЦИЯ: один запрос на активные задачи, затем категоризация в Python
     all_tasks = (
         Task.objects.filter(assigned_to=user)
         .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
@@ -680,50 +676,49 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             "created_by__id", "created_by__first_name", "created_by__last_name",
             "type__id", "type__name", "type__color", "type__icon"
         )
-        .order_by("due_at", "-created_at")
+        .order_by("-created_at")
     )
 
-    # Разделяем задачи по категориям в Python (быстрее, чем 4 отдельных запроса)
+    # Разделяем задачи по категориям в Python
     tasks_today_list = []
     overdue_list = []
     tasks_week_list = []
-    tasks_new_list = []
-    tasks_new_all = []  # Все задачи для блока "Задачи" (кроме просроченных)
+    tasks_new_all = []  # NEW (для блока "Новые задачи")
 
     # Проходим по всем задачам и категоризируем их
     for task in all_tasks:
-        if task.due_at is None:
-            # Задачи без дедлайна идут в блок "Задачи"
+        # "Новые задачи" = только статус NEW
+        if task.status == Task.Status.NEW:
             tasks_new_all.append(task)
+
+        if task.due_at is None:
             continue
-        
+
         task_due_local = timezone.localtime(task.due_at)
-        
-        # Просроченные (due_at в прошлом относительно текущего момента)
-        if task_due_local < local_now:
+
+        # Просроченные = дедлайн раньше начала сегодняшнего дня (не относительно текущего времени)
+        if task_due_local < today_start:
             overdue_list.append(task)
-            continue  # Просроченные не попадают в другие категории
-        
-        # На сегодня
+            continue
+
+        # На сегодня (в пределах календарного дня)
         if today_start <= task_due_local < tomorrow_start:
             tasks_today_list.append(task)
-        
-        # На неделю (с понедельника по воскресенье текущей недели)
+            continue
+
+        # На неделю (ближайшие 7 дней начиная с завтра)
         if week_start <= task_due_local < week_end:
             tasks_week_list.append(task)
-        
-        # Все остальные задачи с дедлайном (не просроченные) идут в блок "Задачи"
-        tasks_new_all.append(task)
 
     # Сортируем:
-    # - Просроченные: по дате (самые старые первыми)
-    # - На сегодня: по ближайшему дедлайну
-    # - На неделю: по ближайшему дедлайну
-    # - Задачи: по ближайшему дедлайну (ближайшие первыми), затем по created_at
+    # - Просроченные: по due_at (самые старые первыми)
+    # - На сегодня: по due_at (раньше первыми)
+    # - На неделю: по due_at (раньше первыми)
+    # - Новые: по created_at (новые первыми)
     overdue_list.sort(key=lambda t: t.due_at or timezone.now())
     tasks_today_list.sort(key=lambda t: t.due_at or timezone.now())
     tasks_week_list.sort(key=lambda t: t.due_at or timezone.now())
-    tasks_new_all.sort(key=lambda t: (t.due_at or timezone.max, -t.created_at.timestamp() if t.created_at else 0))
+    tasks_new_all.sort(key=lambda t: t.created_at or timezone.now(), reverse=True)
     
     # Подсчитываем общие количества
     overdue_count = len(overdue_list)
@@ -735,7 +730,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     overdue_list = overdue_list[:5]  # 5 самых просроченных
     tasks_today_list = tasks_today_list[:5]
     tasks_week_list = tasks_week_list[:5]
-    tasks_new_list = tasks_new_all[:5]  # 5 ближайших к дедлайну (кроме просроченных)
+    tasks_new_list = tasks_new_all[:5]
 
     # Договоры, которые подходят по сроку (<= 30 дней) — только для ответственного
     contracts_soon_qs = (
@@ -775,6 +770,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     context = {
         "now": now,
         "local_now": local_now,
+        "today_start": today_start,
         "tasks_new": tasks_new_list,
         "tasks_today": tasks_today_list,
         "overdue": overdue_list,
@@ -832,12 +828,11 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
     today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow_start = today_start + timedelta(days=1)
     
-    # Неделя: с понедельника по воскресенье
-    days_since_monday = today_date.weekday()  # 0 = понедельник, 6 = воскресенье
-    week_monday = today_date - timedelta(days=days_since_monday)
+    # "Задачи на неделю" = ближайшие 7 дней, начиная с завтра
+    week_monday = today_date + timedelta(days=1)
     week_sunday = week_monday + timedelta(days=6)
-    week_start = timezone.make_aware(datetime.combine(week_monday, datetime.min.time()))
-    week_end = timezone.make_aware(datetime.combine(week_sunday, datetime.max.time())) + timedelta(seconds=1)
+    week_start = tomorrow_start
+    week_end = tomorrow_start + timedelta(days=7)
     
     contract_until_30 = today_date + timedelta(days=30)
 
@@ -857,28 +852,19 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
 
     # Проходим по всем задачам и категоризируем их (та же логика, что и в dashboard)
     for task in all_tasks:
-        if task.due_at is None:
-            # Задачи без дедлайна идут в блок "Задачи"
+        if task.status == Task.Status.NEW:
             tasks_new_all.append(task)
+        if task.due_at is None:
             continue
-        
         task_due_local = timezone.localtime(task.due_at)
-        
-        # Просроченные (due_at в прошлом относительно текущего момента)
-        if task_due_local < local_now:
+        if task_due_local < today_start:
             overdue_list.append(task)
-            continue  # Просроченные не попадают в другие категории
-        
-        # На сегодня
+            continue
         if today_start <= task_due_local < tomorrow_start:
             tasks_today_list.append(task)
-        
-        # На неделю (с понедельника по воскресенье текущей недели)
+            continue
         if week_start <= task_due_local < week_end:
             tasks_week_list.append(task)
-        
-        # Все остальные задачи с дедлайном (не просроченные) идут в блок "Задачи"
-        tasks_new_all.append(task)
 
     # Сортируем:
     # - Просроченные: по дате (самые старые первыми)
@@ -888,7 +874,7 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
     overdue_list.sort(key=lambda t: t.due_at or timezone.now())
     tasks_today_list.sort(key=lambda t: t.due_at or timezone.now())
     tasks_week_list.sort(key=lambda t: t.due_at or timezone.now())
-    tasks_new_all.sort(key=lambda t: (t.due_at or timezone.max, -t.created_at.timestamp() if t.created_at else 0))
+    tasks_new_all.sort(key=lambda t: t.created_at or timezone.now(), reverse=True)
     
     # Ограничиваем для JSON ответа
     overdue_list = overdue_list[:20]
