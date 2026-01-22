@@ -111,9 +111,9 @@
       .mail-progress--limit .mail-progress__limit{ display:block; }
       .mail-progress.is-collapsed.mail-progress--limit .mail-progress__limit{ display:none; }
       .mail-progress.is-collapsed{ padding: 8px 10px; gap: 8px; }
-      /* На совсем узких экранах делаем еще компактнее */
+      /* На совсем узких экранах поднимаем выше кнопок/панелей */
       @media (max-width: 480px){
-        .mail-progress{ left: 12px; right: 12px; bottom: 12px; max-width:none; }
+        .mail-progress{ left: 12px; right: 12px; bottom: 76px; max-width:none; }
         .mail-progress__title, .mail-progress__counts, .mail-progress__counts-short{ max-width: 180px; }
       }
       
@@ -1021,7 +1021,7 @@
     </div>
 
     {# Глобальный прогресс рассылки (показывается только если есть активная отправка) #}
-    <a id="mailProgressWidget" href="#" class="hidden fixed bottom-5 left-5 z-50 bg-white border border-brand-soft rounded-2xl shadow-lg px-3 py-2 flex items-center gap-3 hover:bg-brand-soft/20 mail-progress is-collapsed" style="min-width:210px; position:fixed;">
+    <a id="mailProgressWidget" href="#" class="hidden fixed bottom-5 right-5 z-50 bg-white border border-brand-soft rounded-2xl shadow-lg px-3 py-2 flex items-center gap-3 hover:bg-brand-soft/20 mail-progress is-collapsed" style="min-width:210px; position:fixed;">
       <div id="mailProgressCircle" class="w-10 h-10 rounded-full flex items-center justify-center text-xs font-semibold" style="background:conic-gradient(var(--brand-teal) 0deg, rgba(194,226,222,.6) 0deg); color:var(--brand-dark); border:1px solid rgba(194,226,222,.9)">
         <span id="mailProgressPct">0%</span>
       </div>
