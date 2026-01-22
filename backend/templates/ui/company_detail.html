@@ -303,12 +303,13 @@
             <div class="text-brand-dark/50">Часовой пояс</div>
             {% with tz=company.work_timezone|default:company.address|guess_ru_tz %}
               {% if tz %}
-                <div>
-                  {{ tz|tz_label }}
+                <div class="inline-flex items-center gap-2 flex-wrap">
+                  <span class="badge badge-warn badge-sm">Часовой пояс</span>
+                  <span class="text-sm">{{ tz|tz_label }}</span>
                   {% with now_hhmm=tz|tz_now_hhmm %}
-                    {% if now_hhmm %}<span class="text-brand-dark/60 text-xs">· сейчас {{ now_hhmm }}</span>{% endif %}
+                    {% if now_hhmm %}<span class="badge badge-warn badge-sm">Сейчас {{ now_hhmm }}</span>{% endif %}
                   {% endwith %}
-                  {% if not company.work_timezone %}<span class="text-brand-dark/60 text-xs">· авто</span>{% endif %}
+                  {% if not company.work_timezone %}<span class="badge badge-warn badge-sm">Авто</span>{% endif %}
                 </div>
               {% else %}
                 —
@@ -355,11 +356,11 @@
               <div class="min-w-0">
                 <div class="font-mono text-xs" data-company-main-phone-display>{{ company.phone|format_phone|default:"—" }}</div>
                 {% with info=company.phone|phone_local_info %}
-                  {% if info %}<div class="text-[11px] muted-2 mt-0.5" data-company-main-phone-local>{{ info }}</div>{% endif %}
+                  {% if info %}<div class="mt-1" data-company-main-phone-local><span class="badge badge-warn badge-sm">{{ info }}</span></div>{% endif %}
                 {% endwith %}
                 {% if not company.phone|phone_local_info %}
                   {% with tz=company.work_timezone|default:company.address|guess_ru_tz %}
-                    {% if tz %}<div class="text-[11px] muted-2 mt-0.5">{{ tz|tz_now_hhmm }} - {{ tz|tz_label }}</div>{% endif %}
+                    {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-sm">{{ tz|tz_now_hhmm }} - {{ tz|tz_label }}</span></div>{% endif %}
                   {% endwith %}
                 {% endif %}
                 {% if can_edit_company %}
@@ -465,11 +466,11 @@
                     <div class="min-w-0">
                       <div class="font-mono text-xs" data-company-phone-display="{{ phone.id }}">{{ phone.value|format_phone }}</div>
                       {% with info=phone.value|phone_local_info %}
-                        {% if info %}<div class="text-[11px] muted-2 mt-0.5" data-company-phone-local="{{ phone.id }}">{{ info }}</div>{% endif %}
+                        {% if info %}<div class="mt-1" data-company-phone-local="{{ phone.id }}"><span class="badge badge-warn badge-sm">{{ info }}</span></div>{% endif %}
                       {% endwith %}
                       {% if not phone.value|phone_local_info %}
                         {% with tz=company.work_timezone|default:company.address|guess_ru_tz %}
-                          {% if tz %}<div class="text-[11px] muted-2 mt-0.5">{{ tz|tz_now_hhmm }} - {{ tz|tz_label }}</div>{% endif %}
+                          {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-sm">{{ tz|tz_now_hhmm }} - {{ tz|tz_label }}</span></div>{% endif %}
                         {% endwith %}
                       {% endif %}
                       {% if can_edit_company %}
@@ -2799,8 +2800,14 @@
         display.textContent = data.display || '—';
         const local = document.querySelector('[data-company-main-phone-local]');
         if (local && data.local_info !== undefined) {
-          local.textContent = data.local_info || '';
-          local.classList.toggle('hidden', !local.textContent);
+          // local может быть контейнером с badge внутри
+          const badge = local.querySelector('.badge');
+          if (badge) {
+            badge.textContent = data.local_info || '';
+          } else {
+            local.textContent = data.local_info || '';
+          }
+          local.classList.toggle('hidden', !(data.local_info || '').trim());
         }
         document.querySelector('[data-company-main-phone-edit]')?.classList.add('hidden');
         display.classList.remove('hidden');
@@ -2826,8 +2833,13 @@
         display.textContent = data.display || '—';
         const local = document.querySelector(`[data-company-phone-local="${id}"]`);
         if (local && data.local_info !== undefined) {
-          local.textContent = data.local_info || '';
-          local.classList.toggle('hidden', !local.textContent);
+          const badge = local.querySelector('.badge');
+          if (badge) {
+            badge.textContent = data.local_info || '';
+          } else {
+            local.textContent = data.local_info || '';
+          }
+          local.classList.toggle('hidden', !(data.local_info || '').trim());
         }
         document.querySelector(`[data-company-phone-edit="${id}"]`)?.classList.add('hidden');
         display.classList.remove('hidden');
