@@ -6133,6 +6133,56 @@ def settings_access(request: HttpRequest) -> HttpResponse:
         # Безопасный baseline: запретить sensitive ресурсы менеджеру.
         # Это "минимально опасный" набор (уменьшает риск утечек/деструктивных операций).
         action = (request.POST.get("action") or "").strip()
+        if action == "restore_default_page_rules":
+            from policy.engine import baseline_allowed_for_role
+            from policy.resources import list_resources
+
+            # "Восстановление" = сделать дефолтные права видимыми в UI:
+            # генерим явные allow/deny правила для СТРАНИЦ по всем ролям.
+            # Важно: не перетираем уже существующие правила — только добавляем недостающие.
+            changed = 0
+            created = 0
+            roles = [v for v, _ in User.Role.choices]
+            pages = [r for r in list_resources(resource_type="page")]
+
+            for role_value in roles:
+                for res in pages:
+                    exists = PolicyRule.objects.filter(
+                        enabled=True,
+                        subject_type=PolicyRule.SubjectType.ROLE,
+                        role=role_value,
+                        resource_type=res.resource_type,
+                        resource=res.key,
+                    ).exists()
+                    if exists:
+                        continue
+
+                    allowed = baseline_allowed_for_role(
+                        role=role_value,
+                        resource_type=res.resource_type,
+                        resource_key=res.key,
+                        is_superuser=False,
+                    )
+                    PolicyRule.objects.create(
+                        enabled=True,
+                        priority=200,
+                        subject_type=PolicyRule.SubjectType.ROLE,
+                        role=role_value,
+                        resource_type=res.resource_type,
+                        resource=res.key,
+                        effect=(PolicyRule.Effect.ALLOW if allowed else PolicyRule.Effect.DENY),
+                        conditions={},
+                    )
+                    created += 1
+                    changed += 1
+
+            messages.success(
+                request,
+                "Дефолтные правила для страниц восстановлены (созданы недостающие записи). "
+                f"Добавлено: {created}.",
+            )
+            return redirect("settings_access")
+
         if action == "baseline_manager_deny_sensitive":
             from policy.resources import list_resources
 

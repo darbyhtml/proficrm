@@ -21,14 +21,19 @@ class PolicyDecision:
     resource_type: str = ""
 
 
-def _baseline_allowed(*, user: User, resource_type: str, resource_key: str) -> bool:
+def baseline_allowed_for_role(*, role: str, resource_type: str, resource_key: str, is_superuser: bool = False) -> bool:
     """
-    Базовые правила по умолчанию (до настроек в админке), чтобы поведение
-    было предсказуемым и соответствовало текущей логике проекта.
+    То же, что и _baseline_allowed, но без объекта User.
 
-    Важно: эти дефолты можно расширять/перекрывать PolicyRule'ами.
+    Нужен для:
+    - генерации "восстановленных" дефолтных правил по ролям (UI-кнопка),
+    - предсказуемых проверок без создания фиктивного пользователя.
     """
-    role = getattr(user, "role", "") or ""
+    role = (role or "").strip()
+
+    # Суперпользователь — всегда разрешаем (как и в decide()).
+    if is_superuser:
+        return True
 
     # Pages
     if resource_type == PolicyRule.ResourceType.PAGE:
@@ -46,8 +51,7 @@ def _baseline_allowed(*, user: User, resource_type: str, resource_key: str) -> b
             return True
         if resource_key == "ui:analytics":
             return bool(
-                getattr(user, "is_superuser", False)
-                or role
+                role
                 in (
                     User.Role.ADMIN,
                     User.Role.GROUP_MANAGER,
@@ -56,7 +60,7 @@ def _baseline_allowed(*, user: User, resource_type: str, resource_key: str) -> b
                 )
             )
         if resource_key == "ui:settings":
-            return bool(getattr(user, "is_superuser", False) or role == User.Role.ADMIN)
+            return bool(role == User.Role.ADMIN)
 
     # API / phone endpoints: по умолчанию разрешаем аутентифицированным,
     # конкретные ограничения делают queryset/per-object проверки.
@@ -68,6 +72,21 @@ def _baseline_allowed(*, user: User, resource_type: str, resource_key: str) -> b
     if r and r.sensitive:
         return False
     return True
+
+
+def _baseline_allowed(*, user: User, resource_type: str, resource_key: str) -> bool:
+    """
+    Базовые правила по умолчанию (до настроек в админке), чтобы поведение
+    было предсказуемым и соответствовало текущей логике проекта.
+
+    Важно: эти дефолты можно расширять/перекрывать PolicyRule'ами.
+    """
+    return baseline_allowed_for_role(
+        role=(getattr(user, "role", "") or ""),
+        resource_type=resource_type,
+        resource_key=resource_key,
+        is_superuser=bool(getattr(user, "is_superuser", False)),
+    )
 
 
 def decide(*, user: User, resource_type: str, resource: str, context: dict[str, Any] | None = None) -> PolicyDecision:

@@ -51,6 +51,20 @@
     </div>
 
     <div class="card card-pad">
+      <div class="font-medium">Восстановление дефолтных правил</div>
+      <div class="text-sm text-brand-dark/70 mt-1">
+        Если раньше доступы были “вшиты” в код (роли/меню), то в базе явных правил могло не быть.
+        Эта кнопка создаст <b>недостающие</b> правила по умолчанию для <b>страниц</b> по всем ролям (ALLOW/DENY),
+        чтобы всё было прозрачно в конструкторе. Существующие правила не перезаписываются.
+      </div>
+      <form method="post" class="mt-3">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="restore_default_page_rules">
+        <button class="btn btn-outline" type="submit">Восстановить дефолтные правила страниц</button>
+      </form>
+    </div>
+
+    <div class="card card-pad">
       <div class="font-medium">Правила по ролям</div>
       <div class="text-sm text-brand-dark/70 mt-1">Выберите роль и настройте доступы к ресурсам (страницы/действия).</div>
 
