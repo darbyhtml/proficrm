@@ -3706,6 +3706,49 @@ def company_phone_value_update(request: HttpRequest, company_phone_id) -> HttpRe
 
 
 @login_required
+def company_phone_create(request: HttpRequest, company_id) -> HttpResponse:
+    """Создание дополнительного телефона компании (AJAX)"""
+    if request.method != "POST":
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"success": False, "error": "Метод не разрешен."}, status=405)
+        return redirect("company_detail", company_id=company_id)
+
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_edit_company(user, company):
+        return JsonResponse({"success": False, "error": "Нет прав на редактирование этой компании."}, status=403)
+
+    raw = (request.POST.get("phone") or "").strip()
+    from ui.forms import _normalize_phone
+    normalized = _normalize_phone(raw) if raw else ""
+    if not normalized:
+        return JsonResponse({"success": False, "error": "Телефон не может быть пустым."}, status=400)
+
+    # Дубли: основной телефон и другие доп. телефоны
+    if (company.phone or "").strip() == normalized:
+        return JsonResponse({"success": False, "error": "Этот телефон уже указан как основной."}, status=400)
+    if CompanyPhone.objects.filter(company=company, value=normalized).exists():
+        return JsonResponse({"success": False, "error": "Такой телефон уже есть в дополнительных номерах."}, status=400)
+
+    from django.db.models import Max
+
+    max_order = CompanyPhone.objects.filter(company=company).aggregate(m=Max("order")).get("m")
+    next_order = int(max_order) + 1 if max_order is not None else 0
+
+    company_phone = CompanyPhone.objects.create(company=company, value=normalized, order=next_order)
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.CREATE,
+        entity_type="company_phone",
+        entity_id=str(company_phone.id),
+        company_id=company.id,
+        message="Инлайн: добавлен дополнительный телефон",
+    )
+
+    return JsonResponse({"success": True, "id": company_phone.id, "phone": normalized, "display": format_phone(normalized)})
+
+
+@login_required
 def company_main_email_update(request: HttpRequest, company_id) -> HttpResponse:
     """Обновление основного email компании (AJAX)"""
     if request.method != "POST":

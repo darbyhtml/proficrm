@@ -404,8 +404,32 @@
             </div>
           </div>
           <div>
-            <div class="text-brand-dark/50">Дополнительные телефоны</div>
-            <div class="space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <div class="text-brand-dark/50">Дополнительные телефоны</div>
+              {% if can_edit_company %}
+                <div class="relative shrink-0" data-dd-root>
+                  <button type="button" class="btn btn-outline btn-xs" data-dd-toggle title="Действия" aria-label="Действия">⋯</button>
+                  <div class="hidden absolute right-0 mt-2 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
+                    <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-add-company-phone>Добавить телефон</button>
+                    <a class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" href="/companies/{{ company.id }}/edit/">Открыть редактирование</a>
+                  </div>
+                </div>
+              {% endif %}
+            </div>
+
+            {% if can_edit_company %}
+              <div class="hidden mt-2" data-company-phone-add>
+                <div class="flex items-start gap-2 flex-wrap">
+                  <input class="input text-xs" data-company-phone-add-input placeholder="+7..." style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:240px" />
+                  <button type="button" class="btn btn-primary btn-sm" data-company-phone-add-save>Сохранить</button>
+                  <button type="button" class="btn btn-outline btn-sm" data-company-phone-add-cancel>Отмена</button>
+                </div>
+                <div class="text-xs text-red-600 mt-1 hidden" data-company-phone-add-error></div>
+                <div class="text-[11px] muted-2 mt-1">Можно вставить несколько (Enter/запятая/точка с запятой) — добавится несколько номеров.</div>
+              </div>
+            {% endif %}
+
+            <div class="space-y-2 mt-2" data-company-phones-list>
               {% for phone in company.phones.all %}
                 <div>
                   <div class="flex items-center justify-between gap-2">
@@ -481,7 +505,7 @@
                   </div>
                 </div>
               {% empty %}
-                —
+                <div class="text-xs muted-2">—</div>
               {% endfor %}
             </div>
           </div>
@@ -2639,6 +2663,18 @@
           }
           return;
         }
+
+        const btnAddCompanyPhone = e.target.closest('[data-add-company-phone]');
+        if (btnAddCompanyPhone) {
+          e.preventDefault();
+          closeAll();
+          const box = document.querySelector('[data-company-phone-add]');
+          if (box) {
+            box.classList.remove('hidden');
+            box.querySelector('[data-company-phone-add-input]')?.focus();
+          }
+          return;
+        }
       });
 
       // Cancel buttons
@@ -2677,6 +2713,15 @@
           document.querySelector(`[data-company-email-edit="${id}"]`)?.classList.add('hidden');
           document.querySelector(`[data-company-email-display="${id}"]`)?.classList.remove('hidden');
           showErr(document.querySelector(`[data-company-email-error="${id}"]`), '');
+          return;
+        }
+
+        const addCancel = e.target.closest('[data-company-phone-add-cancel]');
+        if (addCancel) {
+          e.preventDefault();
+          const box = document.querySelector('[data-company-phone-add]');
+          box?.classList.add('hidden');
+          showErr(document.querySelector('[data-company-phone-add-error]'), '');
           return;
         }
       });
@@ -2732,6 +2777,106 @@
         document.querySelector(`[data-company-phone-edit="${id}"]`)?.classList.add('hidden');
         display.classList.remove('hidden');
         showErr(err, '');
+      });
+
+      function extractPhonesForAdd(text) {
+        const src = String(text || '');
+        const re = /(\+?\d[\d()\s\-]{8,}\d)/g;
+        const matches = [];
+        let m;
+        while ((m = re.exec(src)) !== null) matches.push(m[1]);
+        const candidates = matches.length ? matches : src.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+        return candidates.map(s => (s || '').trim()).filter(Boolean);
+      }
+
+      function renderCompanyPhoneItem(phoneId, rawPhone, displayText) {
+        const companyId = '{{ company.id }}';
+        return `
+          <div>
+            <div class="flex items-center justify-between gap-2">
+              <div class="min-w-0">
+                <div class="font-mono text-xs" data-company-phone-display="${phoneId}">${displayText || '—'}</div>
+                <div class="hidden mt-1" data-company-phone-edit="${phoneId}">
+                  <input class="input text-xs" data-company-phone-input value="${rawPhone || ''}" placeholder="+7..." style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:240px" />
+                  <div class="flex gap-1 mt-1">
+                    <button type="button" class="btn btn-primary btn-sm" data-company-phone-save="${phoneId}">Сохранить</button>
+                    <button type="button" class="btn btn-outline btn-sm" data-company-phone-cancel="${phoneId}">Отмена</button>
+                  </div>
+                  <div class="text-xs text-red-600 mt-1 hidden" data-company-phone-error="${phoneId}"></div>
+                </div>
+              </div>
+              <div class="relative shrink-0" data-dd-root>
+                <button type="button" class="btn btn-outline btn-xs" data-dd-toggle title="Действия" aria-label="Действия">⋯</button>
+                <div class="hidden absolute right-0 mt-2 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
+                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 js-call-phone" data-phone="${rawPhone || ''}" data-company="${companyId}" data-contact="">Позвонить</button>
+                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-copy-phone="${rawPhone || ''}">Скопировать</button>
+                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-edit-company-phone="${phoneId}">Изменить</button>
+                </div>
+              </div>
+            </div>
+            <div class="mt-1">
+              <div class="phone-comment-wrapper" data-phone-type="company" data-phone-id="${phoneId}">
+                <div class="phone-comment-display text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors" data-edit-comment style="white-space: pre-wrap;">Комментарий</div>
+                <div class="phone-comment-edit hidden mt-1">
+                  <textarea class="input text-xs" placeholder="Комментарий к номеру" maxlength="255" data-comment-input rows="2" style="padding:.35rem .5rem;font-size:.75rem;min-height:3.25rem;resize:vertical"></textarea>
+                  <div class="flex gap-1 mt-1">
+                    <button type="button" class="btn btn-primary btn-sm" data-save-comment>Сохранить</button>
+                    <button type="button" class="btn btn-outline btn-sm" data-cancel-comment>Отмена</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      // Save: add company phone(s)
+      document.addEventListener('click', async function(e) {
+        const btn = e.target.closest('[data-company-phone-add-save]');
+        if (!btn) return;
+        e.preventDefault();
+        const companyId = '{{ company.id }}';
+        const input = document.querySelector('[data-company-phone-add-input]');
+        const err = document.querySelector('[data-company-phone-add-error]');
+        const list = document.querySelector('[data-company-phones-list]');
+        if (!input || !list) return;
+        const raw = (input.value || '').trim();
+        const items = extractPhonesForAdd(raw);
+        if (!items.length) {
+          showErr(err, 'Введите телефон.');
+          return;
+        }
+        showErr(err, '');
+
+        for (const phoneRaw of items) {
+          const { ok, data } = await postForm(`/companies/${companyId}/phones/create/`, { phone: phoneRaw });
+          if (!ok || !data.success) {
+            showErr(err, data.error || 'Ошибка добавления телефона.');
+            return;
+          }
+          // Убираем "—" если он был в пустом списке
+          const emptyMark = list.querySelector('.muted-2');
+          if (emptyMark && emptyMark.textContent.trim() === '—') emptyMark.remove();
+          const wrapper = document.createElement('div');
+          wrapper.innerHTML = renderCompanyPhoneItem(data.id, data.phone, data.display);
+          // Добавляем как отдельный элемент списка (вверх)
+          list.prepend(wrapper.firstElementChild);
+        }
+
+        input.value = '';
+        document.querySelector('[data-company-phone-add]')?.classList.add('hidden');
+      });
+
+      // Bulk paste into add phone input
+      document.addEventListener('paste', function(e) {
+        const t = e.target;
+        if (!t || !t.closest || !t.closest('[data-company-phone-add]')) return;
+        if (!t.matches('[data-company-phone-add-input]')) return;
+        const txt = (e.clipboardData || window.clipboardData).getData('text');
+        const items = extractPhonesForAdd(txt);
+        if (items.length <= 1) return;
+        e.preventDefault();
+        t.value = items.join('\n');
       });
 
       // Save: main email
