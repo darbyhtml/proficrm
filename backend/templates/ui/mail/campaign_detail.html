@@ -493,15 +493,20 @@
           {% if counts.failed > 0 or is_admin %}
           <div class="card card-pad">
             <div class="font-medium mb-2 text-sm">Дополнительные действия</div>
-            <div class="flex flex-wrap gap-2">
+            <div class="text-xs text-brand-dark/60 mb-3">
+              Быстрые действия по кампании. <b>«Повторить ошибки»</b> — безопасно, повторит только неотправленные.
+            </div>
+            <div class="flex flex-col gap-2">
               {% if counts.failed > 0 %}
                 <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/reset/" onsubmit="return confirm('Вернуть в очередь ТОЛЬКО ошибочные email?');" class="inline">
                   {% csrf_token %}
                   <input type="hidden" name="scope" value="failed" />
-                  <button class="btn-icon btn btn-outline" type="submit" title="Повторить ошибки" style="padding:0.375rem 0.75rem;font-size:0.875rem">
-                    <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <button class="btn w-full flex items-center gap-2 justify-start" type="submit" title="Вернуть в очередь только ошибочные (FAILED → PENDING)" style="background:#fff7ed;border:1px solid #fdba74;color:#9a3412;padding:0.55rem 0.75rem;font-size:0.875rem">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
                     </svg>
+                    <span class="font-medium">Повторить ошибки</span>
+                    <span class="ml-auto text-xs text-brand-dark/60">FAILED → PENDING</span>
                   </button>
                 </form>
               {% endif %}
@@ -509,22 +514,26 @@
                 <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/reset/" onsubmit="return confirm('ВНИМАНИЕ: это вернёт в очередь даже УЖЕ ОТПРАВЛЕННЫЕ email. Письма могут уйти повторно. Продолжить?');" class="inline">
                   {% csrf_token %}
                   <input type="hidden" name="scope" value="all" />
-                  <button class="btn-icon btn btn-outline" type="submit" title="Повторить всем (опасно)" style="padding:0.375rem 0.75rem;font-size:0.875rem">
-                    <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <button class="btn w-full flex items-center gap-2 justify-start" type="submit" title="ОПАСНО: вернёт в очередь и отправленные (SENT/FAILED → PENDING)" style="background:#fff1f2;border:1px solid #fda4af;color:#9f1239;padding:0.55rem 0.75rem;font-size:0.875rem">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                       <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12a7.5 7.5 0 0 1 13.5-4.5M19.5 12a7.5 7.5 0 0 1-13.5 4.5M4.5 7.5V3m0 4.5H9M19.5 16.5V21m0-4.5H15" />
                     </svg>
+                    <span class="font-medium">Повторить всем (опасно)</span>
+                    <span class="ml-auto text-xs text-brand-dark/60">SENT+FAILED → PENDING</span>
                   </button>
                 </form>
               {% endif %}
               <form method="post" action="/mail/campaigns/{{ campaign.id }}/clear/" onsubmit="return confirm('Очистить кампанию?');" class="inline">
                 {% csrf_token %}
-                <button class="btn-icon btn btn-outline" type="submit" title="Очистить кампанию" style="padding:0.375rem 0.75rem;font-size:0.875rem">
-                  <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                <button class="btn w-full flex items-center gap-2 justify-start" type="submit" title="Удалит всех получателей и поставит cooldown на email" style="background:#f8fafc;border:1px solid #cbd5e1;color:#0f172a;padding:0.55rem 0.75rem;font-size:0.875rem">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M6 7h12" />
                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
                     <path stroke-linecap="round" stroke-linejoin="round" d="M7 7l1 14h8l1-14" />
                     <path stroke-linecap="round" stroke-linejoin="round" d="M10 11v7M14 11v7" />
                   </svg>
+                  <span class="font-medium">Очистить кампанию</span>
+                  <span class="ml-auto text-xs text-brand-dark/60">удалить получателей</span>
                 </button>
               </form>
             </div>
