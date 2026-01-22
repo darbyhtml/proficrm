@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 from celery import shared_task
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 from zoneinfo import ZoneInfo
@@ -155,6 +156,14 @@ def send_pending_emails(self, batch_size: int = 50):
     Args:
         batch_size: Максимум писем за итерацию на кампанию
     """
+    # Глобальный lock: не допускаем параллельных запусков send_pending_emails,
+    # иначе возможны гонки по очереди и дубль-отправки.
+    lock_key = "mailer:send_pending_emails:lock"
+    lock_val = str(timezone.now().timestamp())
+    # timeout с запасом: отправка батча + сетевые таймауты SMTP
+    if not cache.add(lock_key, lock_val, timeout=600):
+        return {"processed": False, "campaigns": 0, "reason": "locked"}
+
     try:
         did_work = False
 
@@ -202,17 +211,26 @@ def send_pending_emails(self, batch_size: int = 50):
 
         if not processing_queue:
             # Берем следующую кампанию из очереди
-            next_queue = CampaignQueue.objects.filter(
-                status=CampaignQueue.Status.PENDING,
-                campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING),
-                campaign__recipients__status=CampaignRecipient.Status.PENDING
-            ).select_related("campaign").order_by("-priority", "queued_at").first()
+            next_queue = None
+            # Берём следующую кампанию атомарно: защита от гонок между несколькими celery-процессами.
+            with transaction.atomic():
+                next_queue = (
+                    CampaignQueue.objects.select_for_update(skip_locked=True)
+                    .filter(
+                        status=CampaignQueue.Status.PENDING,
+                        campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING),
+                        campaign__recipients__status=CampaignRecipient.Status.PENDING,
+                    )
+                    .select_related("campaign")
+                    .order_by("-priority", "queued_at")
+                    .first()
+                )
+                if next_queue:
+                    next_queue.status = CampaignQueue.Status.PROCESSING
+                    next_queue.started_at = timezone.now()
+                    next_queue.save(update_fields=["status", "started_at"])
             
             if next_queue:
-                # Помечаем как обрабатываемую
-                next_queue.status = CampaignQueue.Status.PROCESSING
-                next_queue.started_at = timezone.now()
-                next_queue.save(update_fields=["status", "started_at"])
                 camps = [next_queue.campaign]
                 
                 # Отправляем уведомление создателю кампании о начале рассылки
@@ -233,8 +251,12 @@ def send_pending_emails(self, batch_size: int = 50):
         # Проверка рабочего времени (9:00-18:00 МСК)
         if not _is_working_hours():
             logger.debug("Outside working hours (9:00-18:00 MSK), skipping email sending")
-            # НЕ ставим на паузу автоматически - пользователь может запустить вручную,
-            # а автоматическая отправка просто не будет происходить вне рабочего времени
+            # Важно: не оставляем очередь в PROCESSING вне рабочего времени,
+            # иначе одна кампания может "занять" очередь и создавать ощущение зависания.
+            CampaignQueue.objects.filter(status=CampaignQueue.Status.PROCESSING).update(
+                status=CampaignQueue.Status.PENDING,
+                started_at=None,
+            )
             return {"processed": False, "campaigns": 0, "reason": "outside_working_hours"}
         
         for camp in camps:
@@ -244,10 +266,26 @@ def send_pending_emails(self, batch_size: int = 50):
             
             # Пропускаем кампании на паузе (дополнительная проверка)
             if camp.status == Campaign.Status.PAUSED:
+                queue_entry = getattr(camp, "queue_entry", None)
+                if queue_entry and queue_entry.status in (CampaignQueue.Status.PROCESSING, CampaignQueue.Status.PENDING):
+                    queue_entry.status = CampaignQueue.Status.CANCELLED
+                    queue_entry.completed_at = timezone.now()
+                    queue_entry.save(update_fields=["status", "completed_at"])
                 continue
                 
             smtp_cfg = GlobalMailAccount.load()
             if not smtp_cfg.is_enabled:
+                # SMTP отключен: не держим кампанию в очереди "в обработке"
+                queue_entry = getattr(camp, "queue_entry", None)
+                if queue_entry and queue_entry.status in (CampaignQueue.Status.PROCESSING, CampaignQueue.Status.PENDING):
+                    queue_entry.status = CampaignQueue.Status.CANCELLED
+                    queue_entry.completed_at = timezone.now()
+                    queue_entry.save(update_fields=["status", "completed_at"])
+                try:
+                    camp.status = Campaign.Status.PAUSED
+                    camp.save(update_fields=["status", "updated_at"])
+                except Exception:
+                    pass
                 continue
 
             # Получаем лимиты из API smtp.bz
@@ -318,20 +356,51 @@ def send_pending_emails(self, batch_size: int = 50):
                     limit_status.save(update_fields=["last_notified_date", "last_limit_reached_date"])
             
             # Проверка лимитов
-            # НЕ ставим на паузу автоматически - просто пропускаем отправку, кампания остается в очереди
             if per_user_daily_limit and sent_today_user >= per_user_daily_limit:
-                logger.info(f"Campaign {camp.id} skipped: user daily limit reached ({sent_today_user}/{per_user_daily_limit}), staying in queue")
+                logger.info(f"Campaign {camp.id} skipped: user daily limit reached ({sent_today_user}/{per_user_daily_limit}), pausing campaign")
+                # Чтобы кампания не блокировала очередь, ставим её на паузу и убираем из очереди.
+                try:
+                    camp.status = Campaign.Status.PAUSED
+                    camp.save(update_fields=["status", "updated_at"])
+                except Exception:
+                    pass
+                queue_entry = getattr(camp, "queue_entry", None)
+                if queue_entry and queue_entry.status in (CampaignQueue.Status.PROCESSING, CampaignQueue.Status.PENDING):
+                    queue_entry.status = CampaignQueue.Status.CANCELLED
+                    queue_entry.completed_at = timezone.now()
+                    queue_entry.save(update_fields=["status", "completed_at"])
+                try:
+                    from notifications.service import notify
+                    from notifications.models import Notification
+
+                    notify(
+                        user=user,
+                        kind=Notification.Kind.SYSTEM,
+                        title="Рассылка остановлена: дневной лимит",
+                        body=f"Кампания '{camp.name}' поставлена на паузу: достигнут дневной лимит ({sent_today_user}/{per_user_daily_limit}).",
+                        url=f"/mail/campaigns/{camp.id}/",
+                    )
+                except Exception:
+                    pass
                 continue
             
             # Проверка доступных писем из квоты
-            # НЕ ставим на паузу автоматически - просто пропускаем отправку, кампания остается в очереди
             if emails_available <= 0:
                 logger.info(f"Campaign {camp.id} skipped: quota exhausted ({emails_available}/{emails_limit}), staying in queue")
-                continue
+                # Глобальная блокировка: не держим PROCESSING, чтобы UI/очередь не выглядели "зависшими".
+                CampaignQueue.objects.filter(status=CampaignQueue.Status.PROCESSING).update(
+                    status=CampaignQueue.Status.PENDING,
+                    started_at=None,
+                )
+                return {"processed": False, "campaigns": 0, "reason": "quota_exhausted"}
             
             if sent_last_hour >= max_per_hour:
                 # Лимит в час достигнут - пропускаем эту итерацию
-                continue
+                CampaignQueue.objects.filter(status=CampaignQueue.Status.PROCESSING).update(
+                    status=CampaignQueue.Status.PENDING,
+                    started_at=None,
+                )
+                return {"processed": False, "campaigns": 0, "reason": "rate_per_hour_reached"}
 
             # Вычисляем, сколько писем можно отправить
             allowed = max(1, min(
@@ -468,6 +537,9 @@ def send_pending_emails(self, batch_size: int = 50):
                     if unsub_url:
                         msg["List-Unsubscribe"] = f"<{unsub_url}>"
                         msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+                    # Deliverability/auto-replies: явные заголовки bulk-рассылки
+                    msg["Precedence"] = "bulk"
+                    msg["Auto-Submitted"] = "auto-generated"
                     msg["X-Tag"] = f"camp:{camp.id};rcpt:{r.id}"
 
                     try:
@@ -569,6 +641,12 @@ def send_pending_emails(self, batch_size: int = 50):
         logger.error(f"Error in send_pending_emails task: {exc}", exc_info=True)
         # Повторяем задачу при ошибке
         raise self.retry(exc=exc, countdown=60)
+    finally:
+        # снимаем lock
+        try:
+            cache.delete(lock_key)
+        except Exception:
+            pass
 
 
 @shared_task(name="mailer.tasks.reconcile_campaign_queue")

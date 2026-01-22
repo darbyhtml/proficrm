@@ -773,13 +773,13 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
         return redirect("campaigns")
 
     smtp_cfg = GlobalMailAccount.load()
-    counts = {
-        "pending": camp.recipients.filter(status=CampaignRecipient.Status.PENDING).count(),
-        "sent": camp.recipients.filter(status=CampaignRecipient.Status.SENT).count(),
-        "failed": camp.recipients.filter(status=CampaignRecipient.Status.FAILED).count(),
-        "unsub": camp.recipients.filter(status=CampaignRecipient.Status.UNSUBSCRIBED).count(),
-        "total": camp.recipients.count(),
-    }
+    counts = camp.recipients.aggregate(
+        pending=Count("id", filter=Q(status=CampaignRecipient.Status.PENDING)),
+        sent=Count("id", filter=Q(status=CampaignRecipient.Status.SENT)),
+        failed=Count("id", filter=Q(status=CampaignRecipient.Status.FAILED)),
+        unsub=Count("id", filter=Q(status=CampaignRecipient.Status.UNSUBSCRIBED)),
+        total=Count("id"),
+    )
     # Альтернативный взгляд "кому реально уходило" — по логам SendLog (полезно, если статусы получателей сбрасывали).
     counts["sent_log"] = (
         SendLog.objects.filter(campaign=camp, provider="smtp_global", status="sent", recipient__isnull=False)
@@ -1078,10 +1078,16 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
     if not active:
         return JsonResponse({"ok": True, "active": None})
 
-    pending = active.recipients.filter(status=CampaignRecipient.Status.PENDING).count()
-    sent = active.recipients.filter(status=CampaignRecipient.Status.SENT).count()
-    failed = active.recipients.filter(status=CampaignRecipient.Status.FAILED).count()
-    total = active.recipients.count()
+    agg = active.recipients.aggregate(
+        pending=Count("id", filter=Q(status=CampaignRecipient.Status.PENDING)),
+        sent=Count("id", filter=Q(status=CampaignRecipient.Status.SENT)),
+        failed=Count("id", filter=Q(status=CampaignRecipient.Status.FAILED)),
+        total=Count("id"),
+    )
+    pending = int(agg.get("pending") or 0)
+    sent = int(agg.get("sent") or 0)
+    failed = int(agg.get("failed") or 0)
+    total = int(agg.get("total") or 0)
     done = sent + failed
     percent = 0
     if total > 0:
