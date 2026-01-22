@@ -279,27 +279,33 @@
           <div>
             <div class="text-brand-dark/50">Рабочее время</div>
             <div>
-              {% if company.workday_start and company.workday_end %}
-                {{ company.workday_start|time:"H:i" }}–{{ company.workday_end|time:"H:i" }}
-                {% with guessed=company.address|guess_ru_tz %}
-                {% with tz=guessed|default:company.work_timezone %}
-                  {% if tz %}
-                    <span class="text-brand-dark/60 text-xs">({{ tz|tz_label }})</span>
-                    <span class="text-brand-dark/60 text-xs">· сейчас <span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
-                  {% endif %}
-                {% endwith %}
-                {% endwith %}
-
-                {% if worktime.status == "ok" %}
-                  <span class="badge badge-done badge-sm ml-2">Рабочее время</span>
-                {% elif worktime.status == "warn_end" %}
-                  <span class="badge badge-warn badge-sm ml-2">Остался час</span>
-                {% elif worktime.status == "off" %}
-                  <span class="badge badge-danger badge-sm ml-2">Не рабочее время</span>
+              {% with guessed=company.address|guess_ru_tz %}
+              {% with tz=guessed|default:company.work_timezone %}
+                {% if company.workday_start and company.workday_end %}
+                  {{ company.workday_start|time:"H:i" }}–{{ company.workday_end|time:"H:i" }}
+                {% else %}
+                  —
                 {% endif %}
-              {% else %}
-                <span class="badge badge-warn badge-sm">По умолчанию</span>
-              {% endif %}
+
+                {% if tz %}
+                  <span class="text-brand-dark/60 text-[10px]">({{ tz|tz_label }})</span>
+                  <span class="text-brand-dark/60 text-[10px]">·</span>
+                  {% if company.workday_start and company.workday_end %}
+                    {% if worktime.status == "ok" %}
+                      <span class="badge badge-done badge-xxxs align-middle"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
+                    {% elif worktime.status == "warn_end" %}
+                      <span class="badge badge-warn badge-xxxs align-middle"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
+                    {% elif worktime.status == "off" %}
+                      <span class="badge badge-danger badge-xxxs align-middle"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
+                    {% else %}
+                      <span class="badge badge-warn badge-xxxs align-middle"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
+                    {% endif %}
+                  {% else %}
+                    <span class="badge badge-warn badge-xxxs align-middle"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
+                  {% endif %}
+                {% endif %}
+              {% endwith %}
+              {% endwith %}
             </div>
           </div>
           <div>
@@ -309,7 +315,7 @@
             {% with tz=guessed|default:company.work_timezone %}
               {% if tz %}
                 <div>
-                  <span class="badge badge-warn badge-xxs">
+                  <span class="badge badge-warn badge-xxxs">
                     <span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span>
                     · {{ tz|tz_label }}
                   </span>
@@ -360,12 +366,12 @@
               <div class="min-w-0">
                 <div class="font-mono text-xs" data-company-main-phone-display>{{ company.phone|format_phone|default:"—" }}</div>
                 {% with info=company.phone|phone_local_info %}
-                  {% if info %}<div class="mt-1" data-company-main-phone-local><span class="badge badge-warn badge-xxs">{{ info }}</span></div>{% endif %}
+                  {% if info %}<div class="mt-1" data-company-main-phone-local><span class="badge badge-warn badge-xxxs">{{ info }}</span></div>{% endif %}
                 {% endwith %}
                 {% if not company.phone|phone_local_info %}
                   {% with guessed=company.address|guess_ru_tz %}
                   {% with tz=guessed|default:company.work_timezone %}
-                    {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxs"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
+                    {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxxs"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
                   {% endwith %}
                   {% endwith %}
                 {% endif %}
@@ -472,12 +478,12 @@
                     <div class="min-w-0">
                       <div class="font-mono text-xs" data-company-phone-display="{{ phone.id }}">{{ phone.value|format_phone }}</div>
                       {% with info=phone.value|phone_local_info %}
-                        {% if info %}<div class="mt-1" data-company-phone-local="{{ phone.id }}"><span class="badge badge-warn badge-xxs">{{ info }}</span></div>{% endif %}
+                        {% if info %}<div class="mt-1" data-company-phone-local="{{ phone.id }}"><span class="badge badge-warn badge-xxxs">{{ info }}</span></div>{% endif %}
                       {% endwith %}
                       {% if not phone.value|phone_local_info %}
                         {% with guessed=company.address|guess_ru_tz %}
                         {% with tz=guessed|default:company.work_timezone %}
-                          {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxs"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
+                          {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxxs"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
                         {% endwith %}
                         {% endwith %}
                       {% endif %}
@@ -852,12 +858,12 @@
                           <div class="flex-1">
                             <div class="font-mono text-xs">{{ p.value|format_phone }}</div>
                             {% with info=p.value|phone_local_info %}
-                              {% if info %}<div class="mt-1"><span class="badge badge-warn badge-xxs">{{ info }}</span></div>{% endif %}
+                              {% if info %}<div class="mt-1"><span class="badge badge-warn badge-xxxs">{{ info }}</span></div>{% endif %}
                             {% endwith %}
                             {% if not p.value|phone_local_info %}
                               {% with guessed=company.address|guess_ru_tz %}
                               {% with tz=guessed|default:company.work_timezone %}
-                                {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxs"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
+                                {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxxs"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
                               {% endwith %}
                               {% endwith %}
                             {% endif %}
