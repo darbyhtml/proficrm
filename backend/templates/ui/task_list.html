@@ -279,11 +279,12 @@
                       {% with tz=guessed|default:t.company.work_timezone %}
                         {% if tz %}
                           <div class="mt-1">
-                            <span class="badge badge-warn badge-xxxs" title="{{ tz }}">
+                            <span class="badge badge-warn badge-xxxs" title="{{ tz }}" data-live-worktime="1" data-company-id="{{ t.company.id }}">
                               <span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span>
                               · {{ tz|tz_label }}
                             </span>
                           </div>
+                          <span class="hidden" data-work-schedule-display="1" data-company-id="{{ t.company.id }}">{{ t.company.work_schedule|default:"" }}</span>
                         {% endif %}
                       {% endwith %}
                       {% endwith %}
