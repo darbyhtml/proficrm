@@ -126,6 +126,7 @@
           {{ form.phone }}
           <div>
             <label class="block text-xs text-brand-dark/60 mb-1">Дополнительные телефоны</label>
+            <div class="text-[11px] muted-2 mb-1">Можно вставить сразу несколько (Enter/запятая/точка с запятой) — поля создадутся автоматически.</div>
             <div id="company-phones-container" class="space-y-2">
               {% if company_phones %}
                 {% for phone in company_phones %}
@@ -243,9 +244,9 @@
       // EMAILS
       const emailsContainer = document.getElementById('company-emails-container');
       const addEmailBtn = document.getElementById('add-email-btn');
-      let emailIndex = {{ company_emails|length|default:0 }};
+      let emailIndex = (emailsContainer ? emailsContainer.querySelectorAll('input[name^="company_emails_"]').length : 0);
 
-      addEmailBtn.addEventListener('click', function() {
+      function addEmailRow(val) {
         const row = document.createElement('div');
         row.className = 'flex gap-2 items-center company-email-row';
         row.innerHTML = `
@@ -256,7 +257,14 @@
           </button>
         `;
         emailsContainer.appendChild(row);
+        const input = row.querySelector('input');
+        if (input && val) input.value = val;
         emailIndex++;
+        return input;
+      }
+
+      addEmailBtn.addEventListener('click', function() {
+        addEmailRow('');
       });
 
       emailsContainer.addEventListener('click', function(e) {
@@ -273,9 +281,53 @@
       // PHONES
       const phonesContainer = document.getElementById('company-phones-container');
       const addPhoneBtn = document.getElementById('add-phone-btn');
-      let phoneIndex = {{ company_phones|length|default:0 }};
+      let phoneIndex = (phonesContainer ? phonesContainer.querySelectorAll('input[name^="company_phones_"]').length : 0);
 
-      addPhoneBtn.addEventListener('click', function() {
+      function formatRuPhone11(d11) {
+        // d11: 11 цифр, начинается с 7
+        const p = d11.slice(1);
+        return `+7 (${p.slice(0,3)}) ${p.slice(3,6)}-${p.slice(6,8)}-${p.slice(8,10)}`;
+      }
+
+      function normalizePhoneToDisplay(raw) {
+        const digits = String(raw || '').replace(/\D/g, '');
+        if (!digits) return null;
+        if (digits.length === 10) {
+          return formatRuPhone11('7' + digits);
+        }
+        if (digits.length >= 11) {
+          let base = digits;
+          if (base[0] === '8') base = '7' + base.slice(1);
+          if (base[0] === '7') {
+            base = base.slice(0, 11);
+            return formatRuPhone11(base);
+          }
+          // fallback: неизвестная страна/формат — просто +digits
+          return '+' + digits;
+        }
+        return null;
+      }
+
+      function extractPhones(text) {
+        const src = String(text || '');
+        const re = /(\+?\d[\d()\s\-]{8,}\d)/g;
+        const matches = [];
+        let m;
+        while ((m = re.exec(src)) !== null) matches.push(m[1]);
+        const candidates = matches.length ? matches : src.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+        const out = [];
+        const seen = new Set();
+        for (const c of candidates) {
+          const normalized = normalizePhoneToDisplay(c);
+          if (!normalized) continue;
+          if (seen.has(normalized)) continue;
+          seen.add(normalized);
+          out.push(normalized);
+        }
+        return out;
+      }
+
+      function addPhoneRow(val) {
         const row = document.createElement('div');
         row.className = 'flex gap-2 items-center company-phone-row';
         row.innerHTML = `
@@ -286,7 +338,20 @@
           </button>
         `;
         phonesContainer.appendChild(row);
+        const input = row.querySelector('input');
+        if (input && val) input.value = val;
         phoneIndex++;
+        return input;
+      }
+
+      // Приводим уже загруженные телефоны к читаемому виду
+      phonesContainer.querySelectorAll('input[name^="company_phones_"]').forEach(function(inp){
+        const normalized = normalizePhoneToDisplay(inp.value);
+        if (normalized) inp.value = normalized;
+      });
+
+      addPhoneBtn.addEventListener('click', function() {
+        addPhoneRow('');
       });
 
       phonesContainer.addEventListener('click', function(e) {
@@ -297,6 +362,21 @@
           } else if (row) {
             row.querySelector('input').value = '';
           }
+        }
+      });
+
+      // Вставка нескольких телефонов за раз (из чекко/таблиц): создаём нужное число полей автоматически.
+      phonesContainer.addEventListener('paste', function(e) {
+        const t = e.target;
+        if (!t || t.tagName !== 'INPUT') return;
+        const txt = (e.clipboardData || window.clipboardData).getData('text');
+        const phones = extractPhones(txt);
+        if (!phones || phones.length <= 1) return; // обычная вставка
+        e.preventDefault();
+        e.stopPropagation();
+        t.value = phones[0] || '';
+        for (let i = 1; i < phones.length; i++) {
+          addPhoneRow(phones[i]);
         }
       });
 
