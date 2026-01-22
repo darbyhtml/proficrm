@@ -25,12 +25,12 @@
       <form method="post" class="mt-3 flex items-center gap-2 flex-wrap">
         {% csrf_token %}
         <select name="mode" class="select w-auto">
-          <option value="observe_only" {% if cfg.mode == 'observe_only' %}selected{% endif %}>observe_only (наблюдение)</option>
-          <option value="enforce" {% if cfg.mode == 'enforce' %}selected{% endif %}>enforce (применять)</option>
+          <option value="observe_only" {% if cfg.mode == 'observe_only' %}selected{% endif %}>Наблюдение (не блокировать)</option>
+          <option value="enforce" {% if cfg.mode == 'enforce' %}selected{% endif %}>Применять (блокировать)</option>
         </select>
         <label class="text-xs muted flex items-center gap-2">
           <input type="checkbox" name="confirm_enforce">
-          Подтверждаю включение enforce
+          Подтверждаю включение режима «Применять»
         </label>
         <button class="btn btn-primary" type="submit">Сохранить</button>
         <div class="text-xs muted">Текущий режим: <b>{{ cfg.mode }}</b></div>
@@ -40,7 +40,7 @@
     <div class="card card-pad">
       <div class="font-medium">Безопасный baseline</div>
       <div class="text-sm text-brand-dark/70 mt-1">
-        Быстрый старт: запретить для роли <b>Менеджер</b> все ресурсы, помеченные как <b>sensitive</b>.
+        Быстрый старт: запретить для роли <b>Менеджер</b> все ресурсы, помеченные как <b>опасные</b>.
         Это снижает риск утечек и деструктивных действий.
       </div>
       <form method="post" class="mt-3">

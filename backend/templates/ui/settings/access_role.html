@@ -17,8 +17,8 @@
     <form method="post" class="card card-pad space-y-3">
       {% csrf_token %}
       <div class="flex items-center gap-2 flex-wrap">
-        <button class="btn btn-outline" type="submit" name="preset" value="deny_sensitive">Запретить все sensitive</button>
-        <button class="btn btn-outline" type="submit" name="preset" value="inherit_all">Сбросить всё в inherit</button>
+        <button class="btn btn-outline" type="submit" name="preset" value="deny_sensitive">Запретить все опасные</button>
+        <button class="btn btn-outline" type="submit" name="preset" value="inherit_all">Сбросить всё в «по умолчанию»</button>
         <span class="text-xs muted">Пресеты применяются ко всем ресурсам, а не только к отфильтрованным.</span>
       </div>
 
@@ -35,8 +35,8 @@
       </div>
 
       <div class="text-sm text-brand-dark/70">
-        Значение <b>inherit</b> — использовать дефолтную логику (без явного правила).<br/>
-        Для чувствительных операций рекомендовано явное <b>deny</b> и включение <b>enforce</b> только после проверки.
+        «По умолчанию» — использовать дефолтную логику (без явного правила).<br/>
+        Для опасных операций рекомендовано явное «Запретить» и включение режима «Применять» только после проверки.
       </div>
 
       <div class="overflow-auto">
@@ -57,18 +57,20 @@
                   <div class="text-xs muted mt-0.5"><code>{{ it.key }}</code></div>
                 </td>
                 <td>
-                  <span class="badge {% if it.resource_type == 'action' %}badge-warn{% endif %}">{{ it.resource_type }}</span>
+                  <span class="badge {% if it.resource_type == 'action' %}badge-warn{% endif %}">
+                    {% if it.resource_type == 'action' %}Действие{% else %}Страница{% endif %}
+                  </span>
                 </td>
                 <td>
                   <select name="{{ it.field_name }}" class="select">
-                    <option value="inherit" {% if it.value == 'inherit' %}selected{% endif %}>inherit</option>
-                    <option value="allow" {% if it.value == 'allow' %}selected{% endif %}>allow</option>
-                    <option value="deny" {% if it.value == 'deny' %}selected{% endif %}>deny</option>
+                    <option value="inherit" {% if it.value == 'inherit' %}selected{% endif %}>По умолчанию</option>
+                    <option value="allow" {% if it.value == 'allow' %}selected{% endif %}>Разрешить</option>
+                    <option value="deny" {% if it.value == 'deny' %}selected{% endif %}>Запретить</option>
                   </select>
                 </td>
                 <td>
                   {% if it.sensitive %}
-                    <span class="badge badge-danger">sensitive</span>
+                    <span class="badge badge-danger">опасно</span>
                   {% else %}
                     <span class="badge">—</span>
                   {% endif %}
