@@ -412,7 +412,14 @@ def campaigns(request: HttpRequest) -> HttpResponse:
     # - Менеджер: только свои
     # - Администратор и управляющий: все
     # - Директор филиала и РОП: все своего филиала
-    qs = Campaign.objects.all().order_by("-created_at")
+    # Важно для производительности:
+    # - на списке кампаний не нужны большие поля body_html/body_text/filter_meta → defer
+    # - в шаблоне часто используется created_by → select_related, чтобы избежать N+1
+    qs = (
+        Campaign.objects.select_related("created_by", "created_by__branch")
+        .defer("body_html", "body_text", "filter_meta")
+        .order_by("-created_at")
+    )
     if user.role == User.Role.MANAGER:
         qs = qs.filter(created_by=user)
     elif is_branch_director or is_sales_head:
