@@ -2699,8 +2699,10 @@
       })();
     </script>
     <script>
-      // Live clock for elements with data-live-tz.
+      // Live clock + live worktime colors (ok/warn/off) without page reload.
       (function(){
+        const DAY_MAP = { 'пн':0, 'вт':1, 'ср':2, 'чт':3, 'пт':4, 'сб':5, 'вс':6 };
+
         function formatTimeInTz(tz){
           try{
             const fmt = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
@@ -2710,7 +2712,178 @@
           }
         }
 
-        function tick(){
+        function getTzNowParts(tz){
+          try{
+            const fmt = new Intl.DateTimeFormat('ru-RU', { weekday:'short', hour:'2-digit', minute:'2-digit', hour12:false, timeZone: tz });
+            const parts = fmt.formatToParts(new Date());
+            let wd = '';
+            let hh = '';
+            let mm = '';
+            parts.forEach(p => {
+              if (p.type === 'weekday') wd = (p.value || '').toLowerCase().slice(0,2);
+              if (p.type === 'hour') hh = p.value;
+              if (p.type === 'minute') mm = p.value;
+            });
+            const dayIdx = DAY_MAP[wd];
+            if (dayIdx === undefined) return null;
+            const minutes = (parseInt(hh, 10) * 60) + parseInt(mm, 10);
+            return { dayIdx, minutes };
+          }catch(_e){
+            return null;
+          }
+        }
+
+        function parseSchedule(text){
+          const src = String(text || '').trim();
+          if (!src || src === '—') return null;
+          const s = src.toLowerCase();
+          if (s.includes('24/7') || s.includes('круглосуточ')) {
+            const all = {};
+            for (let i=0;i<7;i++) all[i] = [[0, 1439]];
+            return all;
+          }
+
+          function expandDays(spec){
+            let d = String(spec || '').trim().toLowerCase();
+            if (!d) return [];
+            d = d.replace(/понедельник/g,'пн').replace(/вторник/g,'вт').replace(/среда/g,'ср').replace(/четверг/g,'чт')
+                 .replace(/пятница/g,'пт').replace(/суббота/g,'сб').replace(/воскресенье/g,'вс');
+            d = d.replace(/без\s+выходных/g,'пн-вс').replace(/ежедневно/g,'пн-вс').replace(/каждый\s+день/g,'пн-вс');
+            d = d.replace(/[—–−]/g,'-');
+            const parts = d.split(/[,/;]+/).map(x => x.trim()).filter(Boolean);
+            const out = [];
+            parts.forEach(p => {
+              const m = p.match(/^(пн|вт|ср|чт|пт|сб|вс)\s*-\s*(пн|вт|ср|чт|пт|сб|вс)$/);
+              if (m) {
+                const a = DAY_MAP[m[1]], b = DAY_MAP[m[2]];
+                if (a <= b) for (let i=a;i<=b;i++) out.push(i);
+                else { for (let i=a;i<7;i++) out.push(i); for (let i=0;i<=b;i++) out.push(i); }
+              } else {
+                const tok = p.trim().slice(0,2);
+                if (DAY_MAP[tok] !== undefined) out.push(DAY_MAP[tok]);
+              }
+            });
+            return Array.from(new Set(out));
+          }
+
+          function toMin(h, m){ return (parseInt(h,10)*60) + parseInt(m||'00',10); }
+
+          const schedule = {0:[],1:[],2:[],3:[],4:[],5:[],6:[]};
+          let any = false;
+          const lines = src.replace(/\r/g,'\n').split(/\n+/).map(x => x.trim()).filter(Boolean);
+          for (const line0 of lines) {
+            const line = String(line0).replace(/[—–−]/g,'-');
+            const off = /(выходн|закрыт|не\s*работ)/i.test(line);
+            let dayPart = '';
+            let rest = line;
+            if (line.includes(':')) {
+              const sp = line.split(':');
+              dayPart = sp.shift();
+              rest = sp.join(':');
+            }
+            const days = expandDays(dayPart);
+            if (!days.length) continue;
+            if (off) {
+              days.forEach(d => { schedule[d] = []; });
+              any = true;
+              continue;
+            }
+            const ranges = [];
+            const re = /(\d{1,2})(?:[:.\-](\d{2}))?\s*[-–]\s*(\d{1,2})(?:[:.\-](\d{2}))?/g;
+            let m;
+            while ((m = re.exec(rest)) !== null) {
+              const a = toMin(m[1], m[2]);
+              const b = toMin(m[3], m[4]);
+              if (a >= 0 && a <= 1439 && b >= 0 && b <= 1439) ranges.push([a,b]);
+            }
+            if (!ranges.length) continue;
+            days.forEach(d => { schedule[d].push(...ranges); });
+            any = true;
+          }
+          if (!any) return null;
+          return schedule;
+        }
+
+        function evalStatus(schedule, dayIdx, minutes){
+          if (!schedule) return { status:'unknown', minutesLeft:null };
+          const today = schedule[dayIdx] || [];
+          const prev = schedule[(dayIdx+6)%7] || [];
+
+          // Check spillovers from previous day where end<=start and now is before end
+          for (const [a,b] of prev) {
+            if (b <= a) {
+              if (minutes <= b) {
+                const left = (b - minutes);
+                return { status: (left <= 60 ? 'warn_end' : 'ok'), minutesLeft: left };
+              }
+            }
+          }
+
+          for (const [a,b] of today) {
+            if (b > a) {
+              if (minutes >= a && minutes <= b) {
+                const left = (b - minutes);
+                return { status: (left <= 60 ? 'warn_end' : 'ok'), minutesLeft: left };
+              }
+            } else if (b <= a) {
+              // crosses midnight: active if minutes>=a OR minutes<=b
+              if (minutes >= a) {
+                const left = (1440 - minutes) + b;
+                return { status: (left <= 60 ? 'warn_end' : 'ok'), minutesLeft: left };
+              }
+              if (minutes <= b) {
+                const left = (b - minutes);
+                return { status: (left <= 60 ? 'warn_end' : 'ok'), minutesLeft: left };
+              }
+            }
+          }
+          return { status:'off', minutesLeft:null };
+        }
+
+        function setBadgeStatus(badge, status){
+          if (!badge) return;
+          badge.classList.remove('badge-done','badge-warn','badge-danger');
+          if (status === 'ok') badge.classList.add('badge-done');
+          else if (status === 'warn_end') badge.classList.add('badge-warn');
+          else if (status === 'off') badge.classList.add('badge-danger');
+          else badge.classList.add('badge-warn');
+        }
+
+        function tickWorktimeBadges(){
+          // Company detail: badge knows company id -> read schedule text from DOM.
+          document.querySelectorAll('[data-live-worktime][data-company-id]').forEach(function(badge){
+            const cid = (badge.getAttribute('data-company-id') || '').trim();
+            const tEl = badge.querySelector('[data-live-tz]') || badge.closest('[data-live-tz]');
+            const tz = (tEl && tEl.getAttribute('data-live-tz') || '').trim();
+            if (!cid || !tz) return;
+            const parts = getTzNowParts(tz);
+            if (!parts) return;
+            const sEl = document.querySelector('[data-work-schedule-display][data-company-id=\"' + cid + '\"]');
+            const scheduleText = sEl ? sEl.textContent : '';
+            const schedule = parseSchedule(scheduleText);
+            const res = evalStatus(schedule, parts.dayIdx, parts.minutes);
+            setBadgeStatus(badge, res.status);
+          });
+
+          // Create/Edit preview: read schedule from textarea and tz from select
+          document.querySelectorAll('[data-live-worktime-preview][data-work-schedule-input][data-work-tz-input]').forEach(function(badge){
+            const schedSel = badge.getAttribute('data-work-schedule-input');
+            const tzSel = badge.getAttribute('data-work-tz-input');
+            const schedEl = schedSel ? document.querySelector(schedSel) : null;
+            const tzEl = tzSel ? document.querySelector(tzSel) : null;
+            const scheduleText = schedEl ? schedEl.value : '';
+            const tz = (tzEl && tzEl.value || '').trim() || 'Europe/Moscow';
+            const timeEl = badge.querySelector('[data-live-time][data-live-tz]');
+            if (timeEl) timeEl.setAttribute('data-live-tz', tz);
+            const parts = getTzNowParts(tz);
+            if (!parts) return;
+            const schedule = parseSchedule(scheduleText);
+            const res = evalStatus(schedule, parts.dayIdx, parts.minutes);
+            setBadgeStatus(badge, res.status);
+          });
+        }
+
+        function tickClock(){
           document.querySelectorAll('[data-live-time][data-live-tz]').forEach(function(el){
             const tz = (el.getAttribute('data-live-tz') || '').trim();
             if(!tz) return;
@@ -2719,10 +2892,35 @@
           });
         }
 
+        function tickAll(){
+          tickClock();
+          tickWorktimeBadges();
+        }
+
+        // expose manual trigger (after inline save etc)
+        window.UIWorktime = window.UIWorktime || {};
+        window.UIWorktime.tick = tickAll;
+
+        // react quickly to user edits in forms
+        document.addEventListener('input', function(e){
+          const t = e.target;
+          if (!t) return;
+          if (t.matches && (t.matches('textarea[name=\"work_schedule\"]') || t.matches('select[name=\"work_timezone\"]'))) {
+            tickAll();
+          }
+        }, true);
+        document.addEventListener('change', function(e){
+          const t = e.target;
+          if (!t) return;
+          if (t.matches && (t.matches('textarea[name=\"work_schedule\"]') || t.matches('select[name=\"work_timezone\"]'))) {
+            tickAll();
+          }
+        }, true);
+
         if (document.readyState === 'loading') {
-          document.addEventListener('DOMContentLoaded', function(){ tick(); setInterval(tick, 30000); });
+          document.addEventListener('DOMContentLoaded', function(){ tickAll(); setInterval(tickAll, 30000); });
         } else {
-          tick(); setInterval(tick, 30000);
+          tickAll(); setInterval(tickAll, 30000);
         }
       })();
     </script>

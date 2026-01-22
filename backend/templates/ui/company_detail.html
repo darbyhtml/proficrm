@@ -292,16 +292,16 @@
                   <span class="text-brand-dark/60 text-[10px]">·</span>
                   {% if worktime.has %}
                     {% if worktime.status == "ok" %}
-                      <span class="badge badge-done badge-xxxs align-middle"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
+                      <span class="badge badge-done badge-xxxs align-middle" data-live-worktime="1" data-company-id="{{ company.id }}"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
                     {% elif worktime.status == "warn_end" %}
-                      <span class="badge badge-warn badge-xxxs align-middle"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
+                      <span class="badge badge-warn badge-xxxs align-middle" data-live-worktime="1" data-company-id="{{ company.id }}"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
                     {% elif worktime.status == "off" %}
-                      <span class="badge badge-danger badge-xxxs align-middle"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
+                      <span class="badge badge-danger badge-xxxs align-middle" data-live-worktime="1" data-company-id="{{ company.id }}"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
                     {% else %}
-                      <span class="badge badge-warn badge-xxxs align-middle"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
+                      <span class="badge badge-warn badge-xxxs align-middle" data-live-worktime="1" data-company-id="{{ company.id }}"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
                     {% endif %}
                   {% else %}
-                    <span class="badge badge-warn badge-xxxs align-middle"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
+                    <span class="badge badge-warn badge-xxxs align-middle" data-live-worktime="1" data-company-id="{{ company.id }}"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
                   {% endif %}
                 {% endif %}
               {% endwith %}
@@ -330,7 +330,7 @@
             <div class="text-brand-dark/50">Режим работы</div>
             {% if can_edit_company %}
               <div class="inline-field-wrapper" data-inline-field="work_schedule" data-company-id="{{ company.id }}" data-inline-display-kind="multiline">
-                <div class="inline-field-display whitespace-pre-line font-mono text-xs cursor-pointer hover:text-brand-dark/80 transition-colors" data-inline-edit>
+                <div class="inline-field-display whitespace-pre-line font-mono text-xs cursor-pointer hover:text-brand-dark/80 transition-colors" data-inline-edit data-work-schedule-display="1" data-company-id="{{ company.id }}">
                   {{ company.work_schedule|default:"—" }}
                 </div>
                 <div class="inline-field-edit hidden mt-1">
@@ -344,7 +344,7 @@
                 </div>
               </div>
             {% else %}
-              <div class="whitespace-pre-line font-mono text-xs">{{ company.work_schedule|default:"—" }}</div>
+              <div class="whitespace-pre-line font-mono text-xs" data-work-schedule-display="1" data-company-id="{{ company.id }}">{{ company.work_schedule|default:"—" }}</div>
             {% endif %}
           </div>
           <div>
@@ -2466,6 +2466,11 @@
             }
 
             closeEdit(wrapper, false);
+            try {
+              if (window.UIWorktime && typeof window.UIWorktime.tick === 'function') {
+                window.UIWorktime.tick();
+              }
+            } catch (_e) {}
           })
           .catch(err => {
             showError(wrapper, 'Ошибка: ' + err.message);
