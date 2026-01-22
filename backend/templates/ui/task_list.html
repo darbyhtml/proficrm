@@ -274,15 +274,18 @@
                   {% if t.company %}
                     <div style="line-height:1.4">
                       <a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>
-                      {% with tz=t.company.work_timezone|default:t.company.address|guess_ru_tz %}
+                      {# приоритет: TZ по адресу (авто), потом сохранённый #}
+                      {% with guessed=t.company.address|guess_ru_tz %}
+                      {% with tz=guessed|default:t.company.work_timezone %}
                         {% if tz %}
                           <div class="mt-1">
                             <span class="badge badge-warn badge-xs" title="{{ tz }}">
-                              <span data-live-time data-live-tz="{{ tz }}"></span>
+                              <span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span>
                               · {{ tz|tz_label }}
                             </span>
                           </div>
                         {% endif %}
+                      {% endwith %}
                       {% endwith %}
                     </div>
                   {% else %}

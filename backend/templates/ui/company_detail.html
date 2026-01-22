@@ -301,17 +301,20 @@
           </div>
           <div>
             <div class="text-brand-dark/50">Часовой пояс</div>
-            {% with tz=company.work_timezone|default:company.address|guess_ru_tz %}
+            {# приоритет: TZ по адресу (авто), потом сохранённый #}
+            {% with guessed=company.address|guess_ru_tz %}
+            {% with tz=guessed|default:company.work_timezone %}
               {% if tz %}
                 <div>
                   <span class="badge badge-warn badge-xs">
-                    <span data-live-time data-live-tz="{{ tz }}"></span>
+                    <span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span>
                     · {{ tz|tz_label }}
                   </span>
                 </div>
               {% else %}
                 —
               {% endif %}
+            {% endwith %}
             {% endwith %}
           </div>
           {% if company.work_schedule %}
@@ -357,8 +360,10 @@
                   {% if info %}<div class="mt-1" data-company-main-phone-local><span class="badge badge-warn badge-xs">{{ info }}</span></div>{% endif %}
                 {% endwith %}
                 {% if not company.phone|phone_local_info %}
-                  {% with tz=company.work_timezone|default:company.address|guess_ru_tz %}
-                    {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xs"><span data-live-time data-live-tz="{{ tz }}"></span> · {{ tz|tz_label }}</span></div>{% endif %}
+                  {% with guessed=company.address|guess_ru_tz %}
+                  {% with tz=guessed|default:company.work_timezone %}
+                    {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xs"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
+                  {% endwith %}
                   {% endwith %}
                 {% endif %}
                 {% if can_edit_company %}
@@ -467,8 +472,10 @@
                         {% if info %}<div class="mt-1" data-company-phone-local="{{ phone.id }}"><span class="badge badge-warn badge-xs">{{ info }}</span></div>{% endif %}
                       {% endwith %}
                       {% if not phone.value|phone_local_info %}
-                        {% with tz=company.work_timezone|default:company.address|guess_ru_tz %}
-                          {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xs"><span data-live-time data-live-tz="{{ tz }}"></span> · {{ tz|tz_label }}</span></div>{% endif %}
+                        {% with guessed=company.address|guess_ru_tz %}
+                        {% with tz=guessed|default:company.work_timezone %}
+                          {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xs"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
+                        {% endwith %}
                         {% endwith %}
                       {% endif %}
                       {% if can_edit_company %}
@@ -845,8 +852,10 @@
                               {% if info %}<div class="mt-1"><span class="badge badge-warn badge-xs">{{ info }}</span></div>{% endif %}
                             {% endwith %}
                             {% if not p.value|phone_local_info %}
-                              {% with tz=company.work_timezone|default:company.address|guess_ru_tz %}
-                                {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xs"><span data-live-time data-live-tz="{{ tz }}"></span> · {{ tz|tz_label }}</span></div>{% endif %}
+                              {% with guessed=company.address|guess_ru_tz %}
+                              {% with tz=guessed|default:company.work_timezone %}
+                                {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xs"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
+                              {% endwith %}
                               {% endwith %}
                             {% endif %}
                             {% if p.is_cold_call %}

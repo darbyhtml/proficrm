@@ -136,7 +136,7 @@ _TZ_LABELS: dict[str, str] = {
     "Asia/Kamchatka": "КМЧ",
 }
 
-from ui.timezone_utils import guess_ru_timezone_from_address
+from ui.timezone_utils import RUS_TZ_CHOICES, guess_ru_timezone_from_address
 
 
 @lru_cache(maxsize=128)
@@ -218,6 +218,14 @@ def guess_ru_tz(address: str) -> str:
         return ""
 
 
+_RUS_TZ_SET = {tz for tz, _label in (RUS_TZ_CHOICES or [])} | {
+    # на всякий случай
+    "Europe/Moscow",
+    "Europe/Samara",
+    "Europe/Kaliningrad",
+}
+
+
 try:
     import phonenumbers  # type: ignore
     from phonenumbers import geocoder as _pn_geocoder  # type: ignore
@@ -258,11 +266,19 @@ def phone_local_info(raw_phone: str) -> str:
         tz_name = None
         if _pn_tz is not None:
             tzs = _pn_tz.time_zones_for_number(num) or ()
-            tz_name = tzs[0] if tzs else None
+            # Берём только РФ-таймзоны, чтобы не показывать Almaty и т.п.
+            for z in tzs:
+                if z in _RUS_TZ_SET:
+                    tz_name = z
+                    break
 
         region = ""
         if _pn_geocoder is not None:
             region = (_pn_geocoder.description_for_number(num, "ru") or "").strip()
+
+        # Если регион/город не на кириллице — не показываем (будет fallback на TZ компании).
+        if region and not re.search(r"[А-Яа-яЁё]", region):
+            region = ""
 
         hhmm = ""
         if tz_name:
@@ -271,8 +287,12 @@ def phone_local_info(raw_phone: str) -> str:
             except Exception:
                 hhmm = ""
 
+        # Если tz_name не РФ — вообще не показываем (иначе вводит в заблуждение).
+        if not tz_name:
+            return ""
+
         # Если регион не определился — показываем TZ-лейбл
-        if not region and tz_name:
+        if not region:
             region = tz_label(tz_name)
 
         if not hhmm and not region:
