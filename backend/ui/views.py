@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from datetime import timedelta
 from uuid import UUID
+from decimal import Decimal
 
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
@@ -64,7 +65,7 @@ from .forms import (
     AmoMigrateFilterForm,
     CompanyListColumnsForm,
 )
-from ui.models import UiGlobalConfig, AmoApiConfig
+from ui.models import UiGlobalConfig, AmoApiConfig, UiUserPreference
 
 from amocrm.client import AmoApiError, AmoClient
 from amocrm.migrate import fetch_amo_users, fetch_company_custom_fields, migrate_filtered
@@ -1119,11 +1120,38 @@ def preferences(request: HttpRequest) -> HttpResponse:
     Настройки пользователя (не админские).
     Здесь собраны страницы, которые доступны всем ролям и позволяют что-то "донастроить".
     """
+    user = request.user
+
+    if request.method == "POST":
+        scale_raw = (request.POST.get("font_scale") or "").strip().replace(",", ".")
+        try:
+            scale = float(scale_raw)
+        except Exception:
+            scale = None
+
+        if scale is None or not (0.90 <= scale <= 1.15):
+            messages.error(request, "Некорректный масштаб. Допустимо от 90% до 115%.")
+            return redirect("preferences")
+
+        prefs = UiUserPreference.load_for_user(user)
+        # DecimalField хранит нормально, но пишем аккуратно и ограничиваем шагом 0.01
+        prefs.font_scale = Decimal(f"{scale:.2f}")
+        prefs.save(update_fields=["font_scale", "updated_at"])
+        try:
+            request.session["ui_font_scale"] = float(prefs.font_scale_float())
+        except Exception:
+            pass
+        messages.success(request, "Настройки интерфейса сохранены.")
+        return redirect("preferences")
+
+    prefs = UiUserPreference.load_for_user(user)
+    font_scale = prefs.font_scale_float()
     return render(
         request,
         "ui/preferences.html",
         {
-            "user": request.user,
+            "user": user,
+            "ui_font_scale_value": font_scale,
         },
     )
 

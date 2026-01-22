@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import AmoApiConfig, UiGlobalConfig
+from .models import AmoApiConfig, UiGlobalConfig, UiUserPreference
 
 
 @admin.register(UiGlobalConfig)
@@ -18,3 +18,10 @@ class AmoApiConfigAdmin(admin.ModelAdmin):
         return obj.is_connected()
     is_connected.boolean = True
     is_connected.short_description = "Подключено"
+
+
+@admin.register(UiUserPreference)
+class UiUserPreferenceAdmin(admin.ModelAdmin):
+    list_display = ("user", "font_scale", "updated_at")
+    search_fields = ("user__username", "user__first_name", "user__last_name")
+    list_select_related = ("user",)

@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" style="--ui-font-scale: {{ ui_font_scale|default:1.0 }};">
   <head>
     {% load static %}
     <meta charset="utf-8" />
@@ -34,6 +34,8 @@
         --brand-dark:#003D38;
         --brand-soft:#C2E2DE;
       }
+      /* Персональный масштаб интерфейса (влияет на все страницы через rem). */
+      html{ font-size: calc(100% * var(--ui-font-scale, 1)); }
       .card{border:1px solid rgba(194,226,222,.9); border-radius:16px; background:#fff; box-shadow:0 1px 0 rgba(0,61,56,.04)}
       .card-pad{padding:16px}
       .btn{display:inline-flex; align-items:center; justify-content:center; gap:.5rem; border-radius:12px; padding:.55rem .9rem; font-size:.875rem; line-height:1.1; transition:background-color .15s ease, border-color .15s ease, transform .05s ease}

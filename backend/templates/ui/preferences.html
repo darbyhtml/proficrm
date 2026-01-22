@@ -11,6 +11,52 @@
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="card card-pad md:col-span-2">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="font-medium mb-1">Размер шрифта</div>
+            <div class="text-sm muted">Один ползунок меняет масштаб интерфейса на всех страницах. Диапазон ограничен, чтобы верстка не “ехала”.</div>
+          </div>
+          <div class="text-sm font-semibold whitespace-nowrap" id="fontScaleLabel"></div>
+        </div>
+
+        <form method="post" class="mt-4 space-y-3" id="fontScaleForm">
+          {% csrf_token %}
+          <input type="hidden" name="font_scale" id="fontScaleHidden" value="{{ ui_font_scale_value|default:1.0 }}" />
+
+          <div class="flex items-center gap-3">
+            <div class="text-xs muted-2 w-10 text-right">90%</div>
+            <input
+              id="fontScaleRange"
+              type="range"
+              min="90"
+              max="115"
+              step="1"
+              class="w-full"
+            />
+            <div class="text-xs muted-2 w-10">115%</div>
+          </div>
+
+          <div class="rounded-xl border border-brand-soft bg-brand-soft/15 p-3" id="fontScalePreview">
+            <div class="font-semibold mb-1">Предпросмотр</div>
+            <div class="text-sm muted mb-2">Пример текста, кнопок и бейджа при выбранном масштабе.</div>
+            <div class="flex flex-wrap items-center gap-2">
+              <button type="button" class="btn btn-primary">Кнопка</button>
+              <button type="button" class="btn btn-outline">Вторичная</button>
+              <span class="badge badge-new">Новый</span>
+              <span class="badge badge-warn">Внимание</span>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="submit" class="btn btn-primary">Сохранить</button>
+            <button type="button" class="btn btn-outline" id="fontScaleCancelBtn">Отменить</button>
+            <button type="button" class="btn btn-secondary" id="fontScaleResetBtn">100%</button>
+            <div class="text-xs muted-2">Если где-то начинает “не помещаться” таблица — уменьшите масштаб.</div>
+          </div>
+        </form>
+      </div>
+
       <div class="card card-pad">
         <div class="font-medium mb-1">Подпись в письмах</div>
         <div class="text-sm muted mb-3">Настройте подпись, которая автоматически добавляется к вашим письмам.</div>
@@ -28,5 +74,51 @@
       Если вам нужны админские настройки (пользователи, справочники, безопасность) — они доступны только администраторам.
     </div>
   </div>
+
+  <script>
+    (function () {
+      const htmlEl = document.documentElement;
+      const range = document.getElementById('fontScaleRange');
+      const hidden = document.getElementById('fontScaleHidden');
+      const label = document.getElementById('fontScaleLabel');
+      const cancelBtn = document.getElementById('fontScaleCancelBtn');
+      const resetBtn = document.getElementById('fontScaleResetBtn');
+
+      if (!range || !hidden || !label || !cancelBtn || !resetBtn) return;
+
+      const savedScale = (function () {
+        const raw = (hidden.value || '').toString().trim().replace(',', '.');
+        const f = parseFloat(raw);
+        if (!isFinite(f) || f <= 0) return 1.0;
+        return f;
+      })();
+
+      function setScale(scale) {
+        const safe = Math.max(0.90, Math.min(1.15, scale));
+        htmlEl.style.setProperty('--ui-font-scale', safe.toFixed(2));
+        hidden.value = safe.toFixed(2);
+        const pct = Math.round(safe * 100);
+        label.textContent = pct + '%';
+        range.value = String(pct);
+      }
+
+      // Инициализация из сохраненного значения
+      setScale(savedScale);
+
+      range.addEventListener('input', function () {
+        const pct = parseInt(range.value || '100', 10);
+        const scale = pct / 100;
+        setScale(scale);
+      });
+
+      cancelBtn.addEventListener('click', function () {
+        setScale(savedScale);
+      });
+
+      resetBtn.addEventListener('click', function () {
+        setScale(1.0);
+      });
+    })();
+  </script>
 {% endblock %}
 

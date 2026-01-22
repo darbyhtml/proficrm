@@ -13,6 +13,30 @@ def ui_globals(request):
     is_auth = bool(user and user.is_authenticated and user.is_active)
     role = getattr(user, "role", "") if is_auth else ""
 
+    # Персональная настройка масштаба UI (шрифт/интерфейс).
+    # Стараемся брать из session, чтобы не делать лишний запрос на каждый рендер.
+    ui_font_scale = 1.0
+    if is_auth:
+        session = getattr(request, "session", None)
+        raw = None
+        if session is not None:
+            raw = session.get("ui_font_scale")
+        if raw is not None:
+            try:
+                ui_font_scale = float(raw)
+            except Exception:
+                ui_font_scale = 1.0
+        else:
+            try:
+                from ui.models import UiUserPreference
+
+                prefs = UiUserPreference.load_for_user(user)
+                ui_font_scale = prefs.font_scale_float()
+                if session is not None:
+                    session["ui_font_scale"] = ui_font_scale
+            except Exception:
+                ui_font_scale = 1.0
+
     is_admin = bool(is_auth and (getattr(user, "is_superuser", False) or role == User.Role.ADMIN))
     is_group_manager = bool(
         is_auth and (getattr(user, "is_superuser", False) or role in (User.Role.ADMIN, User.Role.GROUP_MANAGER))
@@ -116,6 +140,8 @@ def ui_globals(request):
         "is_branch_lead": is_branch_lead,
         "can_view_activity": can_view_activity,
         "can_view_cold_call_reports": can_view_cold_call_reports,
+        # Персональные настройки UI
+        "ui_font_scale": ui_font_scale,
         # Визуальные права с учётом режима "просмотр как"
         "view_is_admin": view_is_admin,
         "view_is_group_manager": view_is_group_manager,

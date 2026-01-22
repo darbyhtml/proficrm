@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
+from django.conf import settings
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 
@@ -82,3 +86,43 @@ class AmoApiConfig(models.Model):
         if self.long_lived_token and self.domain:
             return True
         return bool(self.access_token and self.refresh_token and self.domain and self.client_id and self.client_secret)
+
+
+class UiUserPreference(models.Model):
+    """
+    Персональные настройки интерфейса (одна запись на пользователя).
+    """
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="ui_preferences",
+        verbose_name="Пользователь",
+    )
+    font_scale = models.DecimalField(
+        "Масштаб шрифта",
+        max_digits=4,
+        decimal_places=2,
+        default=Decimal("1.00"),
+        validators=[
+            # Держим диапазон аккуратным, чтобы не "ехала" верстка на сетках/таблицах.
+            MinValueValidator(Decimal("0.90")),
+            MaxValueValidator(Decimal("1.15")),
+        ],
+    )
+    updated_at = models.DateTimeField("Обновлено", auto_now=True)
+
+    class Meta:
+        verbose_name = "Настройки интерфейса (пользователь)"
+        verbose_name_plural = "Настройки интерфейса (пользователь)"
+
+    @classmethod
+    def load_for_user(cls, user) -> "UiUserPreference":
+        obj, _ = cls.objects.get_or_create(user=user, defaults={"font_scale": Decimal("1.00")})
+        return obj
+
+    def font_scale_float(self) -> float:
+        try:
+            return float(self.font_scale or Decimal("1.00"))
+        except Exception:
+            return 1.0
