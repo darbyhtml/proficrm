@@ -1,10 +1,12 @@
 from rest_framework import serializers, viewsets
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
 
 from accounts.models import User
 from .permissions import can_edit_company
 from .models import Company, Contact, CompanyNote
+from policy.drf import PolicyPermission
 
 
 class CompanySerializer(serializers.ModelSerializer):
@@ -51,6 +53,8 @@ class CompanySerializer(serializers.ModelSerializer):
 
 class CompanyViewSet(viewsets.ModelViewSet):
     serializer_class = CompanySerializer
+    permission_classes = [IsAuthenticated, PolicyPermission]
+    policy_resource_prefix = "api:companies"
     filter_backends = (DjangoFilterBackend,)
     filterset_fields = ("branch", "responsible", "status", "contract_type", "is_cold_call")
     search_fields = ("name", "inn", "legal_name", "address", "phone", "email", "contact_name", "contact_position")

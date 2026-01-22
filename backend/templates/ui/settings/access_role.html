@@ -1,0 +1,89 @@
+{% extends "ui/base.html" %}
+{% block title %}Доступы — {{ role_label }} — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div class="flex items-start justify-between gap-3 flex-wrap">
+      <div>
+        <h1 class="text-2xl font-semibold">Доступы: {{ role_label }}</h1>
+        <div class="text-sm text-brand-dark/70">Роль: <code>{{ role }}</code></div>
+      </div>
+      <div class="flex items-center gap-2">
+        <a class="btn btn-outline" href="{% url 'settings_access' %}">← К ролям</a>
+        <a class="btn btn-outline" href="/settings/">Настройки</a>
+      </div>
+    </div>
+
+    <form method="post" class="card card-pad space-y-3">
+      {% csrf_token %}
+      <div class="flex items-center gap-2 flex-wrap">
+        <button class="btn btn-outline" type="submit" name="preset" value="deny_sensitive">Запретить все sensitive</button>
+        <button class="btn btn-outline" type="submit" name="preset" value="inherit_all">Сбросить всё в inherit</button>
+        <span class="text-xs muted">Пресеты применяются ко всем ресурсам, а не только к отфильтрованным.</span>
+      </div>
+
+      <div class="flex items-center gap-2 flex-wrap">
+        <input class="input" style="max-width:420px" type="text" name="q" value="{{ request.GET.q }}" placeholder="Поиск по ключу/названию (например tasks, phone:qr, ui:analytics)">
+        <select class="select w-auto" name="group">
+          <option value="" {% if not request.GET.group or request.GET.group == 'all' %}selected{% endif %}>Все группы</option>
+          <option value="ui" {% if request.GET.group == 'ui' %}selected{% endif %}>UI</option>
+          <option value="api" {% if request.GET.group == 'api' %}selected{% endif %}>API</option>
+          <option value="phone" {% if request.GET.group == 'phone' %}selected{% endif %}>Phone</option>
+        </select>
+        <button class="btn btn-secondary" formmethod="get" type="submit">Фильтровать</button>
+        <a class="btn btn-outline" href="{% url 'settings_access_role' role=role %}">Сброс фильтров</a>
+      </div>
+
+      <div class="text-sm text-brand-dark/70">
+        Значение <b>inherit</b> — использовать дефолтную логику (без явного правила).<br/>
+        Для чувствительных операций рекомендовано явное <b>deny</b> и включение <b>enforce</b> только после проверки.
+      </div>
+
+      <div class="overflow-auto">
+        <table class="table">
+          <thead>
+            <tr>
+              <th style="min-width: 320px;">Ресурс</th>
+              <th style="min-width: 120px;">Тип</th>
+              <th style="min-width: 220px;">Доступ</th>
+              <th style="min-width: 120px;">Риск</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for it in items %}
+              <tr>
+                <td class="wrap-anywhere">
+                  <div class="font-medium">{{ it.title }}</div>
+                  <div class="text-xs muted mt-0.5"><code>{{ it.key }}</code></div>
+                </td>
+                <td>
+                  <span class="badge {% if it.resource_type == 'action' %}badge-warn{% endif %}">{{ it.resource_type }}</span>
+                </td>
+                <td>
+                  <select name="{{ it.field_name }}" class="select">
+                    <option value="inherit" {% if it.value == 'inherit' %}selected{% endif %}>inherit</option>
+                    <option value="allow" {% if it.value == 'allow' %}selected{% endif %}>allow</option>
+                    <option value="deny" {% if it.value == 'deny' %}selected{% endif %}>deny</option>
+                  </select>
+                </td>
+                <td>
+                  {% if it.sensitive %}
+                    <span class="badge badge-danger">sensitive</span>
+                  {% else %}
+                    <span class="badge">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button class="btn btn-primary" type="submit">Сохранить</button>
+        <a class="btn btn-outline" href="{% url 'settings_access_role' role=role %}">Сбросить форму</a>
+      </div>
+    </form>
+  </div>
+{% endblock %}
+

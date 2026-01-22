@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import CallRequest, PhoneDevice, PhoneTelemetry, PhoneLogBundle, MobileAppQrToken
+from policy.engine import enforce
 
 
 def mask_phone(phone: str | None) -> str:
@@ -32,6 +33,7 @@ class RegisterDeviceView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        enforce(user=request.user, resource_type="action", resource="phone:devices:register", context={"path": request.path})
         s = RegisterDeviceSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         device_id = s.validated_data["device_id"]
@@ -72,6 +74,7 @@ class DeviceHeartbeatView(APIView):
         import logging
 
         logger = logging.getLogger(__name__)
+        enforce(user=request.user, resource_type="action", resource="phone:devices:heartbeat", context={"path": request.path})
 
         s = DeviceHeartbeatSerializer(data=request.data)
         s.is_valid(raise_exception=True)
@@ -151,6 +154,7 @@ class PullCallView(APIView):
         import logging
 
         logger = logging.getLogger(__name__)
+        enforce(user=request.user, resource_type="action", resource="phone:calls:pull", context={"path": request.path})
 
         device_id = (request.query_params.get("device_id") or "").strip()
         if not device_id:
@@ -295,6 +299,7 @@ class UpdateCallInfoView(APIView):
     def post(self, request):
         import logging
         logger = logging.getLogger(__name__)
+        enforce(user=request.user, resource_type="action", resource="phone:calls:update", context={"path": request.path})
         
         s = UpdateCallInfoSerializer(data=request.data)
         s.is_valid(raise_exception=True)
@@ -414,6 +419,7 @@ class PhoneTelemetryView(APIView):
         import logging
 
         logger = logging.getLogger(__name__)
+        enforce(user=request.user, resource_type="action", resource="phone:telemetry", context={"path": request.path})
 
         s = TelemetryBatchSerializer(data=request.data)
         s.is_valid(raise_exception=True)
@@ -480,6 +486,7 @@ class PhoneLogUploadView(APIView):
         import logging
 
         logger = logging.getLogger(__name__)
+        enforce(user=request.user, resource_type="action", resource="phone:logs:upload", context={"path": request.path})
 
         many = isinstance(request.data, list)
         if many:
@@ -536,6 +543,7 @@ class QrTokenCreateView(APIView):
         from django.db import DatabaseError
 
         logger = logging.getLogger(__name__)
+        enforce(user=request.user, resource_type="action", resource="phone:qr:create", context={"path": request.path})
 
         try:
             # Rate limiting: не чаще 1 раза в 10 секунд
@@ -617,7 +625,10 @@ class QrTokenExchangeView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Помечаем как использованный
+        # Policy: можно запретить вход в мобильное приложение для некоторых ролей/пользователей
+        enforce(user=qr_token.user, resource_type="action", resource="phone:qr:exchange", context={"path": request.path})
+
+        # Помечаем как использованный (делаем ПОСЛЕ проверки policy, чтобы не «сжигать» токен при запрете)
         qr_token.mark_as_used()
 
         # Генерируем JWT токены
@@ -660,6 +671,7 @@ class LogoutView(APIView):
         from accounts.security import get_client_ip
 
         logger = logging.getLogger(__name__)
+        enforce(user=request.user, resource_type="action", resource="phone:logout", context={"path": request.path})
         s = LogoutSerializer(data=request.data)
         s.is_valid(raise_exception=True)
         
@@ -719,6 +731,7 @@ class LogoutAllView(APIView):
         from accounts.security import get_client_ip
 
         logger = logging.getLogger(__name__)
+        enforce(user=request.user, resource_type="action", resource="phone:logout_all", context={"path": request.path})
         
         # Логируем logout всех устройств
         try:
@@ -754,6 +767,7 @@ class UserInfoView(APIView):
     
     def get(self, request):
         from accounts.models import User
+        enforce(user=request.user, resource_type="action", resource="phone:user:info", context={"path": request.path})
         
         user = request.user
         is_admin = bool(

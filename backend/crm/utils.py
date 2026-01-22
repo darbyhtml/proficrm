@@ -18,7 +18,14 @@ def require_admin(user: User) -> bool:
     Returns:
         True если пользователь администратор, False иначе
     """
-    return bool(user.is_authenticated and user.is_active and (user.is_superuser or user.role == User.Role.ADMIN))
+    # Важно для безопасности: доступ к UI-админке /settings/ всегда только
+    # у реального администратора (role=ADMIN) или суперпользователя.
+    return bool(
+        user
+        and user.is_authenticated
+        and user.is_active
+        and (user.is_superuser or user.role == User.Role.ADMIN)
+    )
 
 
 def get_view_as_user(request) -> User | None:

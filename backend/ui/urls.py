@@ -68,6 +68,8 @@ urlpatterns = [
 
     # Settings (admin only)
     path("settings/", views.settings_dashboard, name="settings_dashboard"),
+    path("settings/access/", views.settings_access, name="settings_access"),
+    path("settings/access/roles/<str:role>/", views.settings_access_role, name="settings_access_role"),
     # Режим "просмотр как" (админ может визуально переключаться под роль/филиал)
     path("settings/view-as/", views.view_as_update, name="view_as_update"),
     path("settings/view-as/reset/", views.view_as_reset, name="view_as_reset"),

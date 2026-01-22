@@ -1,11 +1,14 @@
 from rest_framework import serializers, viewsets
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import Q
 
 from accounts.models import User
 from companies.models import Company
 from companies.permissions import can_edit_company
 from .models import Task, TaskType
+from policy.drf import PolicyPermission
 
 
 def _can_manage_task_status_api(user: User, task: Task) -> bool:
@@ -60,14 +63,37 @@ class TaskTypeViewSet(viewsets.ModelViewSet):
 
 class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
+    permission_classes = [IsAuthenticated, PolicyPermission]
+    policy_resource_prefix = "api:tasks"
     filter_backends = (DjangoFilterBackend,)
     filterset_fields = ("status", "assigned_to", "company", "type")
     search_fields = ("title", "description", "company__name")
     ordering_fields = ("created_at", "due_at")
 
     def get_queryset(self):
+        """
+        Важно: видимость задач в API должна совпадать с Web UI.
+        Иначе возможна утечка задач (например, менеджер увидит чужие через /api/tasks/).
+        """
+        user: User = getattr(self.request, "user", None)
         qs = Task.objects.select_related("company", "assigned_to", "created_by").order_by("-created_at")
-        # В UI сейчас задачи видны всем (фильтр "мои" — опционально). Держим тот же принцип и в API.
+
+        if not user or not user.is_authenticated or not user.is_active:
+            return qs.none()
+
+        # По ТЗ/логике UI:
+        # - менеджер: только свои задачи (исполнитель)
+        # - директор/РОП: задачи своего филиала + свои
+        # - админ/управляющий: все
+        if user.role == User.Role.MANAGER:
+            qs = qs.filter(assigned_to=user)
+        elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+            qs = qs.filter(
+                Q(assigned_to__branch_id=user.branch_id)
+                | Q(company__branch_id=user.branch_id)
+                | Q(assigned_to=user)
+            )
+
         return qs.distinct()
 
     def perform_create(self, serializer):

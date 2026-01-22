@@ -6111,6 +6111,293 @@ def settings_dashboard(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+def settings_access(request: HttpRequest) -> HttpResponse:
+    """
+    UI-админка: управление policy (режим observe/enforce + переход к правкам по ролям).
+    """
+    # Критично: управлять политиками может только реальный админ,
+    # иначе любая ошибка в policy может дать эскалацию прав.
+    user: User = request.user
+    if not (user.is_superuser or user.role == User.Role.ADMIN):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    from policy.models import PolicyConfig
+    from policy.models import PolicyRule
+
+    cfg = PolicyConfig.load()
+    rules_total = PolicyRule.objects.filter(enabled=True).count()
+    rules_role_total = PolicyRule.objects.filter(enabled=True, subject_type=PolicyRule.SubjectType.ROLE).count()
+
+    if request.method == "POST":
+        # Безопасный baseline: запретить sensitive ресурсы менеджеру.
+        # Это "минимально опасный" набор (уменьшает риск утечек/деструктивных операций).
+        action = (request.POST.get("action") or "").strip()
+        if action == "baseline_manager_deny_sensitive":
+            from policy.resources import list_resources
+
+            changed = 0
+            for res in list_resources():
+                if not getattr(res, "sensitive", False):
+                    continue
+                qs = PolicyRule.objects.filter(
+                    subject_type=PolicyRule.SubjectType.ROLE,
+                    role=User.Role.MANAGER,
+                    resource_type=res.resource_type,
+                    resource=res.key,
+                )
+                obj = qs.order_by("id").first()
+                if obj is None:
+                    PolicyRule.objects.create(
+                        enabled=True,
+                        priority=100,
+                        subject_type=PolicyRule.SubjectType.ROLE,
+                        role=User.Role.MANAGER,
+                        resource_type=res.resource_type,
+                        resource=res.key,
+                        effect=PolicyRule.Effect.DENY,
+                        conditions={},
+                    )
+                    changed += 1
+                else:
+                    if obj.effect != PolicyRule.Effect.DENY or not obj.enabled:
+                        obj.effect = PolicyRule.Effect.DENY
+                        obj.enabled = True
+                        obj.save(update_fields=["effect", "enabled", "updated_at"])
+                        changed += 1
+
+            messages.success(request, f"Baseline применён: менеджеру запрещены sensitive ресурсы. Изменений: {changed}.")
+            return redirect("settings_access")
+
+        mode = (request.POST.get("mode") or "").strip()
+        if mode in (PolicyConfig.Mode.OBSERVE_ONLY, PolicyConfig.Mode.ENFORCE):
+            if cfg.mode != mode:
+                # Предупреждение: enforce без правил обычно означает "всё по дефолту",
+                # что админ может не ожидать.
+                if mode == PolicyConfig.Mode.ENFORCE:
+                    confirmed = (request.POST.get("confirm_enforce") or "").strip()
+                    if confirmed != "on":
+                        messages.error(
+                            request,
+                            "Для включения enforce нужно подтверждение (галочка). "
+                            "Это защита от случайного включения.",
+                        )
+                        return redirect("settings_access")
+                if mode == PolicyConfig.Mode.ENFORCE and rules_total == 0:
+                    messages.warning(
+                        request,
+                        "Включён режим enforce, но активных правил пока нет. "
+                        "Проверьте доступы по ролям и критичные эндпоинты.",
+                    )
+                cfg.mode = mode
+                cfg.save(update_fields=["mode", "updated_at"])
+                messages.success(request, f"Режим policy обновлён: {cfg.mode}.")
+        else:
+            messages.error(request, "Некорректный режим policy.")
+        return redirect("settings_access")
+
+    roles = list(User.Role.choices)
+    return render(
+        request,
+        "ui/settings/access_dashboard.html",
+        {
+            "cfg": cfg,
+            "roles": roles,
+            "rules_total": rules_total,
+            "rules_role_total": rules_role_total,
+        },
+    )
+
+
+@login_required
+def settings_access_role(request: HttpRequest, role: str) -> HttpResponse:
+    """
+    UI-админка: правка allow/deny по ресурсам для конкретной роли.
+    """
+    user: User = request.user
+    if not (user.is_superuser or user.role == User.Role.ADMIN):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    from policy.models import PolicyRule
+    from policy.resources import list_resources
+
+    role = (role or "").strip()
+    valid_roles = {v for v, _ in User.Role.choices}
+    if role not in valid_roles:
+        messages.error(request, "Неизвестная роль.")
+        return redirect("settings_access")
+
+    # Текущие правила по этой роли
+    existing = (
+        PolicyRule.objects.filter(
+            enabled=True,
+            subject_type=PolicyRule.SubjectType.ROLE,
+            role=role,
+        )
+        .order_by("priority", "id")
+    )
+    existing_map = {r.resource: r for r in existing}
+
+    def _fname(key: str) -> str:
+        # HTML field name (без двоеточий)
+        return "perm__" + key.replace(":", "__")
+
+    q = (request.GET.get("q") or "").strip().lower()
+    group = (request.GET.get("group") or "").strip().lower()  # ui|api|phone|all
+    if group not in ("", "all", "ui", "api", "phone"):
+        group = ""
+
+    resources = list_resources()
+    items = []
+    for res in resources:
+        if group in ("ui", "api", "phone"):
+            if not res.key.startswith(group + ":"):
+                continue
+        if q:
+            hay = f"{res.key} {res.title}".lower()
+            if q not in hay:
+                continue
+        rule = existing_map.get(res.key)
+        current = "inherit"
+        if rule is not None:
+            current = rule.effect  # allow|deny
+        items.append(
+            {
+                "key": res.key,
+                "title": res.title,
+                "resource_type": res.resource_type,
+                "sensitive": bool(getattr(res, "sensitive", False)),
+                "field_name": _fname(res.key),
+                "value": current,
+            }
+        )
+
+    if request.method == "POST":
+        preset = (request.POST.get("preset") or "").strip()
+        if preset:
+            changed = 0
+            # Пресеты применяем к ПОЛНОМУ списку ресурсов (без фильтров),
+            # чтобы админ случайно не "сохранил" только часть.
+            full_items = []
+            for res in list_resources():
+                full_items.append(
+                    {
+                        "key": res.key,
+                        "resource_type": res.resource_type,
+                        "sensitive": bool(getattr(res, "sensitive", False)),
+                    }
+                )
+
+            if preset == "inherit_all":
+                deleted, _ = PolicyRule.objects.filter(
+                    subject_type=PolicyRule.SubjectType.ROLE,
+                    role=role,
+                ).delete()
+                changed = deleted
+                messages.success(request, f"Готово: всё сброшено в inherit. Удалено правил: {changed}.")
+                return redirect("settings_access_role", role=role)
+
+            if preset == "deny_sensitive":
+                for it2 in full_items:
+                    if not it2["sensitive"]:
+                        continue
+                    qs2 = PolicyRule.objects.filter(
+                        subject_type=PolicyRule.SubjectType.ROLE,
+                        role=role,
+                        resource_type=it2["resource_type"],
+                        resource=it2["key"],
+                    )
+                    obj2 = qs2.order_by("id").first()
+                    if obj2 is None:
+                        PolicyRule.objects.create(
+                            enabled=True,
+                            priority=100,
+                            subject_type=PolicyRule.SubjectType.ROLE,
+                            role=role,
+                            resource_type=it2["resource_type"],
+                            resource=it2["key"],
+                            effect=PolicyRule.Effect.DENY,
+                            conditions={},
+                        )
+                        changed += 1
+                    else:
+                        if obj2.effect != PolicyRule.Effect.DENY or not obj2.enabled:
+                            obj2.effect = PolicyRule.Effect.DENY
+                            obj2.enabled = True
+                            obj2.save(update_fields=["effect", "enabled", "updated_at"])
+                            changed += 1
+
+                messages.success(request, f"Готово: sensitive ресурсы запрещены. Изменений: {changed}.")
+                return redirect("settings_access_role", role=role)
+
+        # Сохраняем по всем ресурсам
+        changed = 0
+        for it in items:
+            key = it["key"]
+            resource_type = it["resource_type"]
+            v = (request.POST.get(it["field_name"]) or "").strip()
+            if v not in ("inherit", PolicyRule.Effect.ALLOW, PolicyRule.Effect.DENY):
+                continue
+
+            qs = PolicyRule.objects.filter(
+                subject_type=PolicyRule.SubjectType.ROLE,
+                role=role,
+                resource_type=resource_type,
+                resource=key,
+            )
+
+            if v == "inherit":
+                # Возвращаем к дефолту: удаляем правила (и disabled тоже — чтобы не копить мусор)
+                deleted, _ = qs.delete()
+                if deleted:
+                    changed += 1
+                continue
+
+            obj = qs.order_by("id").first()
+            if obj is None:
+                PolicyRule.objects.create(
+                    enabled=True,
+                    priority=100,
+                    subject_type=PolicyRule.SubjectType.ROLE,
+                    role=role,
+                    resource_type=resource_type,
+                    resource=key,
+                    effect=v,
+                    conditions={},
+                )
+                changed += 1
+            else:
+                update_fields = []
+                if not obj.enabled:
+                    obj.enabled = True
+                    update_fields.append("enabled")
+                if obj.effect != v:
+                    obj.effect = v
+                    update_fields.append("effect")
+                if obj.resource_type != resource_type:
+                    obj.resource_type = resource_type
+                    update_fields.append("resource_type")
+                if update_fields:
+                    obj.save(update_fields=update_fields + ["updated_at"])
+                    changed += 1
+
+        messages.success(request, f"Сохранено. Изменений: {changed}.")
+        return redirect("settings_access_role", role=role)
+
+    role_map = {v: label for v, label in User.Role.choices}
+    return render(
+        request,
+        "ui/settings/access_role.html",
+        {
+            "role": role,
+            "role_label": role_map.get(role, role),
+            "items": items,
+        },
+    )
+
+
+@login_required
 def settings_branches(request: HttpRequest) -> HttpResponse:
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")

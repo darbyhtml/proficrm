@@ -158,6 +158,7 @@ INSTALLED_APPS = [
     'notifications',
     'phonebridge',
     'amocrm',  # AmoCRM integration (migration tools and management commands)
+    'policy',
 ]
 
 MIDDLEWARE = [
