@@ -39,8 +39,8 @@ def _expand_day_spec(day_spec: str) -> List[int]:
     s = s.replace("без выходных", "пн-вс")
     s = s.replace("ежедневно", "пн-вс").replace("каждый день", "пн-вс")
 
-    # unify dashes
-    s = s.replace("—", "-").replace("–", "-").replace("−", "-")
+    # unify dashes (incl. non-breaking hyphen etc.)
+    s = re.sub(r"[‐‑‒–—−]", "-", s)
     s = re.sub(r"\s+", " ", s)
 
     out: List[int] = []
@@ -96,7 +96,8 @@ def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
         return {}
 
     s = src.lower()
-    s = s.replace("—", "-").replace("–", "-").replace("−", "-")
+    # normalize all dash-like characters to '-'
+    s = re.sub(r"[‐‑‒–—−]", "-", s)
     s = s.replace("\t", " ")
     # split into chunks
     chunks = []
@@ -130,19 +131,14 @@ def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
         # detect "выходной/закрыто"
         is_off = bool(re.search(r"(выходн|закрыт|не\s*работ)", ch))
 
-        # try split day part and rest
+        # split day part and rest robustly:
+        # supports both "пн-пт: 09:00-18:00" and "пн-пт 8:30-17:00"
         day_part = ""
-        rest = ch
-        if ":" in ch:
-            a, b = ch.split(":", 1)
-            day_part = a.strip()
-            rest = b.strip()
-        else:
-            # if starts with day tokens, take first "word-ish" chunk
-            m = day_spec_re.match(ch)
-            if m:
-                day_part = m.group(1).strip()
-                rest = ch[m.end():].strip()
+        rest = ""
+        m = day_spec_re.match(ch)
+        if m:
+            day_part = m.group(1).strip()
+            rest = ch[m.end():].lstrip(" :").strip()
 
         days = _expand_day_spec(day_part) if day_part else []
         if not days:
@@ -189,6 +185,9 @@ def normalize_work_schedule(text: str) -> str:
     if not raw:
         return ""
 
+    # First: normalize dash-like chars for more robust parsing (keep original text for output generation later).
+    raw_for_parse = re.sub(r"[‐‑‒–—−]", "-", raw)
+
     # Always normalize time tokens like 9.00 -> 09:00
     def _fmt_time_tokens(s: str) -> str:
         return re.sub(
@@ -197,7 +196,7 @@ def normalize_work_schedule(text: str) -> str:
             s,
         )
 
-    schedule = parse_work_schedule(raw)
+    schedule = parse_work_schedule(raw_for_parse)
     if not schedule:
         # best-effort for arbitrary text
         out = _fmt_time_tokens(raw)

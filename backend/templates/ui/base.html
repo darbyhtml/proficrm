@@ -2749,7 +2749,7 @@
             d = d.replace(/понедельник/g,'пн').replace(/вторник/g,'вт').replace(/среда/g,'ср').replace(/четверг/g,'чт')
                  .replace(/пятница/g,'пт').replace(/суббота/g,'сб').replace(/воскресенье/g,'вс');
             d = d.replace(/без\s+выходных/g,'пн-вс').replace(/ежедневно/g,'пн-вс').replace(/каждый\s+день/g,'пн-вс');
-            d = d.replace(/[—–−]/g,'-');
+            d = d.replace(/[‐‑‒–—−]/g,'-');
             const parts = d.split(/[,/;]+/).map(x => x.trim()).filter(Boolean);
             const out = [];
             parts.forEach(p => {
@@ -2772,15 +2772,13 @@
           let any = false;
           const lines = src.replace(/\r/g,'\n').split(/\n+/).map(x => x.trim()).filter(Boolean);
           for (const line0 of lines) {
-            const line = String(line0).replace(/[—–−]/g,'-');
+            const line = String(line0).replace(/[‐‑‒–—−]/g,'-');
             const off = /(выходн|закрыт|не\s*работ)/i.test(line);
+            // Robust split: support both "пн-пт: 09:00-18:00" and "пн-пт 8:30-17:00"
             let dayPart = '';
-            let rest = line;
-            if (line.includes(':')) {
-              const sp = line.split(':');
-              dayPart = sp.shift();
-              rest = sp.join(':');
-            }
+            let rest = '';
+            const m2 = line.match(/^((?:(?:пн|вт|ср|чт|пт|сб|вс)|ежедневно|каждый\s+день|без\s+выходных)(?:\s*-\s*(?:пн|вт|ср|чт|пт|сб|вс))?(?:\s*[, ]\s*(?:пн|вт|ср|чт|пт|сб|вс))*)(?:\s*:)?\s*(.*)$/i);
+            if (m2) { dayPart = m2[1]; rest = m2[2]; }
             const days = expandDays(dayPart);
             if (!days.length) continue;
             if (off) {
@@ -2789,7 +2787,7 @@
               continue;
             }
             const ranges = [];
-            const re = /(\d{1,2})(?:[:.\-](\d{2}))?\s*[-–]\s*(\d{1,2})(?:[:.\-](\d{2}))?/g;
+            const re = /(\d{1,2})(?:[:.\-](\d{2}))?\s*-\s*(\d{1,2})(?:[:.\-](\d{2}))?/g;
             let m;
             while ((m = re.exec(rest)) !== null) {
               const a = toMin(m[1], m[2]);
