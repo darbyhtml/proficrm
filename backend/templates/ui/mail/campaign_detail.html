@@ -488,7 +488,9 @@
 
       <div class="lg:col-span-4 space-y-4">
         {# Дополнительные действия #}
-        {% if counts.total > 0 and (counts.failed > 0 or is_admin) %}
+        {# В Django templates нельзя использовать скобки в if-условиях #}
+        {% if counts.total > 0 %}
+          {% if counts.failed > 0 or is_admin %}
           <div class="card card-pad">
             <div class="font-medium mb-2 text-sm">Дополнительные действия</div>
             <div class="flex flex-wrap gap-2">
@@ -527,6 +529,7 @@
               </form>
             </div>
           </div>
+          {% endif %}
         {% endif %}
         
         {# Детальная статистика ошибок - только для администратора #}

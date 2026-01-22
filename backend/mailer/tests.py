@@ -132,3 +132,21 @@ class MailerQueueConsistencyTests(TestCase):
         self.assertEqual(resp.status_code, 302)
         r_sent.refresh_from_db()
         self.assertEqual(r_sent.status, CampaignRecipient.Status.PENDING)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class MailerCampaignDetailTemplateTest(TestCase):
+    def test_campaign_detail_renders(self):
+        user = User.objects.create_user(username="m2", password="pass", role=User.Role.MANAGER, email="m2@example.com")
+        self.client.force_login(user)
+        camp = Campaign.objects.create(
+            created_by=user,
+            name="Camp",
+            subject="Subj",
+            body_html="<p>hi</p>",
+            body_text="hi",
+            sender_name="CRM",
+            status=Campaign.Status.DRAFT,
+        )
+        resp = self.client.get(reverse("campaign_detail", kwargs={"campaign_id": camp.id}))
+        self.assertEqual(resp.status_code, 200)
