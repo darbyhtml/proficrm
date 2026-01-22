@@ -62,6 +62,11 @@
         <input type="hidden" name="action" value="restore_default_page_rules">
         <button class="btn btn-outline" type="submit">Восстановить дефолтные правила страниц</button>
       </form>
+      <form method="post" class="mt-2">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="restore_default_action_rules">
+        <button class="btn btn-outline" type="submit">Восстановить дефолтные правила действий (UI)</button>
+      </form>
     </div>
 
     <div class="card card-pad">

@@ -12,12 +12,14 @@ from notifications.models import Notification
 from notifications.context_processors import notifications_panel
 from tasksapp.models import Task
 from companies.models import Company
+from policy.engine import enforce
 
 
 @login_required
 def mark_all_read(request: HttpRequest) -> HttpResponse:
     if request.method != "POST":
         return redirect(request.META.get("HTTP_REFERER") or "/")
+    enforce(user=request.user, resource_type="action", resource="ui:notifications:mark_all_read", context={"path": request.path, "method": request.method})
     Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
     messages.success(request, "Уведомления отмечены как прочитанные.")
     return redirect(request.META.get("HTTP_REFERER") or "/")
@@ -27,6 +29,7 @@ def mark_all_read(request: HttpRequest) -> HttpResponse:
 def mark_read(request: HttpRequest, notification_id: int) -> HttpResponse:
     if request.method != "POST":
         return redirect(request.META.get("HTTP_REFERER") or "/")
+    enforce(user=request.user, resource_type="action", resource="ui:notifications:mark_read", context={"path": request.path, "method": request.method})
     n = get_object_or_404(Notification, id=notification_id, user=request.user)
     n.is_read = True
     n.save(update_fields=["is_read"])
@@ -39,6 +42,7 @@ def poll(request: HttpRequest) -> HttpResponse:
     Live-обновление колокольчика: возвращает JSON со списком непрочитанных уведомлений и напоминаний.
     Безопасный polling (без WebSocket), ничего не ломает если JS отключен.
     """
+    enforce(user=request.user, resource_type="action", resource="ui:notifications:poll", context={"path": request.path, "method": request.method})
     ctx = notifications_panel(request)
     user = request.user
     notif_items = Notification.objects.filter(user=user, is_read=False).order_by("-created_at")[:10]
@@ -68,6 +72,7 @@ def poll(request: HttpRequest) -> HttpResponse:
 @login_required
 def all_notifications(request: HttpRequest) -> HttpResponse:
     """Страница со всеми уведомлениями (непрочитанными и прочитанными)."""
+    enforce(user=request.user, resource_type="page", resource="ui:notifications:all", context={"path": request.path})
     user = request.user
     
     # Получаем все уведомления пользователя, отсортированные по дате создания (новые сверху)
@@ -93,6 +98,7 @@ def all_notifications(request: HttpRequest) -> HttpResponse:
 @login_required
 def all_reminders(request: HttpRequest) -> HttpResponse:
     """Страница со всеми напоминаниями (задачи и договоры)."""
+    enforce(user=request.user, resource_type="page", resource="ui:notifications:reminders", context={"path": request.path})
     user = request.user
     now = timezone.now()
     today_date = timezone.localdate(now)

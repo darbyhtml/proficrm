@@ -30,6 +30,7 @@ from mailer.smtp_sender import build_message, send_via_smtp
 from mailer.mail_content import apply_signature
 from mailer.utils import html_to_text, msk_day_bounds
 from crm.utils import require_admin
+from policy.engine import enforce
 from notifications.service import notify
 from notifications.models import Notification
 
@@ -131,6 +132,7 @@ def mail_signature(request: HttpRequest) -> HttpResponse:
     """
     Настройка подписи (персональная, для всех пользователей).
     """
+    enforce(user=request.user, resource_type="page", resource="ui:mail:signature", context={"path": request.path})
     user: User = request.user
     if request.method == "POST":
         form = EmailSignatureForm(request.POST)
@@ -157,11 +159,13 @@ def mail_settings(request: HttpRequest) -> HttpResponse:
     """
     Настройки SMTP. Редактирует только администратор (глобально для всей CRM).
     """
+    enforce(user=request.user, resource_type="page", resource="ui:mail:settings", context={"path": request.path})
     user: User = request.user
     is_admin = require_admin(user)
     cfg = GlobalMailAccount.load()
 
     if request.method == "POST":
+        enforce(user=request.user, resource_type="action", resource="ui:mail:settings:update", context={"path": request.path, "method": request.method})
         if not is_admin:
             messages.error(request, "Доступ запрещён.")
             return redirect("mail_settings")
@@ -277,6 +281,7 @@ def mail_quota_poll(request: HttpRequest) -> JsonResponse:
     Лёгкий эндпоинт для автообновления блока квоты/тарифа на странице кампаний.
     Данные берём из БД (SmtpBzQuota), которую обновляет Celery задача sync_smtp_bz_quota.
     """
+    enforce(user=request.user, resource_type="action", resource="ui:mail:quota:poll", context={"path": request.path, "method": request.method})
     quota = SmtpBzQuota.load()
     now = timezone.now()
     try:
@@ -308,6 +313,7 @@ def mail_unsubscribes_list(request: HttpRequest) -> JsonResponse:
     Список отписок (для админского модального окна в разделе "Почта").
     """
     user: User = request.user
+    enforce(user=request.user, resource_type="action", resource="ui:mail:unsubscribes:list", context={"path": request.path, "method": request.method})
     if user.role != User.Role.ADMIN:
         return JsonResponse({"ok": False, "error": "forbidden"}, status=403)
 
@@ -359,6 +365,7 @@ def mail_unsubscribes_delete(request: HttpRequest) -> JsonResponse:
     Удаление выбранных email из списка отписок (админ).
     """
     user: User = request.user
+    enforce(user=request.user, resource_type="action", resource="ui:mail:unsubscribes:delete", context={"path": request.path, "method": request.method})
     if user.role != User.Role.ADMIN:
         return JsonResponse({"ok": False, "error": "forbidden"}, status=403)
     if request.method != "POST":
@@ -391,6 +398,7 @@ def mail_unsubscribes_clear(request: HttpRequest) -> JsonResponse:
     Полная очистка списка отписок (админ).
     """
     user: User = request.user
+    enforce(user=request.user, resource_type="action", resource="ui:mail:unsubscribes:clear", context={"path": request.path, "method": request.method})
     if user.role != User.Role.ADMIN:
         return JsonResponse({"ok": False, "error": "forbidden"}, status=403)
     if request.method != "POST":
@@ -402,6 +410,7 @@ def mail_unsubscribes_clear(request: HttpRequest) -> JsonResponse:
 
 @login_required
 def campaigns(request: HttpRequest) -> HttpResponse:
+    enforce(user=request.user, resource_type="page", resource="ui:mail:campaigns", context={"path": request.path})
     user: User = request.user
     is_admin = (user.role == User.Role.ADMIN)
     is_group_manager = (user.role == User.Role.GROUP_MANAGER)
@@ -715,6 +724,7 @@ def campaigns(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def campaign_create(request: HttpRequest) -> HttpResponse:
+    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:create", context={"path": request.path, "method": request.method})
     user: User = request.user
     smtp_cfg = GlobalMailAccount.load()
     if request.method == "POST":
@@ -743,6 +753,7 @@ def campaign_create(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def campaign_edit(request: HttpRequest, campaign_id) -> HttpResponse:
+    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:edit", context={"path": request.path, "method": request.method})
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
@@ -773,6 +784,7 @@ def campaign_edit(request: HttpRequest, campaign_id) -> HttpResponse:
 
 @login_required
 def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
+    enforce(user=request.user, resource_type="page", resource="ui:mail:campaigns:detail", context={"path": request.path})
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
@@ -1051,6 +1063,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
 
 @login_required
 def campaign_delete(request: HttpRequest, campaign_id) -> HttpResponse:
+    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:delete", context={"path": request.path, "method": request.method})
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
@@ -1074,6 +1087,7 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
     Возвращает активную кампанию пользователя (если есть) и процент.
     """
     user: User = request.user
+    enforce(user=request.user, resource_type="action", resource="ui:mail:progress:poll", context={"path": request.path, "method": request.method})
 
     # Берём ближайшую "активную" кампанию пользователя:
     # - SENDING — во время отправки
@@ -1164,6 +1178,7 @@ def campaign_pick(request: HttpRequest) -> JsonResponse:
     Менеджер видит только свои, админ — все.
     """
     user: User = request.user
+    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:pick", context={"path": request.path, "method": request.method})
     qs = Campaign.objects.all().order_by("-created_at")
     if user.role == User.Role.MANAGER:
         qs = qs.filter(created_by=user)
@@ -1185,6 +1200,7 @@ def campaign_add_email(request: HttpRequest) -> JsonResponse:
     Добавить email в выбранную кампанию (AJAX).
     """
     user: User = request.user
+    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:add_email", context={"path": request.path, "method": request.method})
     if request.method != "POST":
         return JsonResponse({"ok": False, "error": "Метод не разрешен."}, status=405)
 
@@ -1244,6 +1260,7 @@ def campaign_add_email(request: HttpRequest) -> JsonResponse:
 
 @login_required
 def campaign_recipient_add(request: HttpRequest, campaign_id) -> HttpResponse:
+    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:recipients:add", context={"path": request.path, "method": request.method})
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
@@ -1304,6 +1321,7 @@ def campaign_recipient_add(request: HttpRequest, campaign_id) -> HttpResponse:
 
 @login_required
 def campaign_recipient_delete(request: HttpRequest, campaign_id, recipient_id) -> HttpResponse:
+    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:recipients:delete", context={"path": request.path, "method": request.method})
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
@@ -1322,6 +1340,7 @@ def campaign_recipient_delete(request: HttpRequest, campaign_id, recipient_id) -
 @login_required
 def campaign_recipients_bulk_delete(request: HttpRequest, campaign_id) -> HttpResponse:
     """Массовое удаление получателей."""
+    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:recipients:bulk_delete", context={"path": request.path, "method": request.method})
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
@@ -1366,6 +1385,7 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
     """
     MVP: генерируем получателей из email контактов + основного email компании (вся база видна всем пользователям).
     """
+    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:recipients:generate", context={"path": request.path, "method": request.method})
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
@@ -1626,6 +1646,7 @@ def campaign_recipients_reset(request: HttpRequest, campaign_id) -> HttpResponse
         return redirect("campaign_detail", campaign_id=camp.id)
 
     if scope == "failed":
+        enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:recipients:reset_failed", context={"path": request.path, "method": request.method})
         qs = camp.recipients.filter(status=CampaignRecipient.Status.FAILED)
         updated = qs.update(status=CampaignRecipient.Status.PENDING, last_error="")
         messages.success(request, f"Возвращено в очередь (только ошибки): {updated}. Нажмите «Старт», чтобы снова запустить рассылку.")
@@ -1639,6 +1660,7 @@ def campaign_recipients_reset(request: HttpRequest, campaign_id) -> HttpResponse
         )
     else:
         # scope == "all"
+        enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:recipients:reset_all", context={"path": request.path, "method": request.method})
         if user.role != User.Role.ADMIN and not user.is_superuser:
             messages.error(request, "Недостаточно прав для повторной отправки всем.")
             return redirect("campaign_detail", campaign_id=camp.id)
@@ -1675,6 +1697,7 @@ def campaign_clear(request: HttpRequest, campaign_id) -> HttpResponse:
     """
     Очистить кампанию от получателей. Перед очисткой ставим cooldown на email (по умолчанию 3 дня).
     """
+    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:clear", context={"path": request.path, "method": request.method})
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
@@ -1741,6 +1764,7 @@ def campaign_send_step(request: HttpRequest, campaign_id) -> HttpResponse:
         return redirect("campaign_detail", campaign_id=campaign_id)
 
     user: User = request.user
+    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:send_step", context={"path": request.path, "method": request.method})
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
         messages.error(request, "Доступ запрещён.")
@@ -1831,6 +1855,7 @@ def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
         return redirect("campaign_detail", campaign_id=campaign_id)
     
     user: User = request.user
+    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:start", context={"path": request.path, "method": request.method})
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
         messages.error(request, "Доступ запрещён.")
@@ -1923,6 +1948,7 @@ def campaign_pause(request: HttpRequest, campaign_id) -> HttpResponse:
         return redirect("campaign_detail", campaign_id=campaign_id)
     
     user: User = request.user
+    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:pause", context={"path": request.path, "method": request.method})
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
         messages.error(request, "Доступ запрещён.")
@@ -1962,6 +1988,7 @@ def campaign_resume(request: HttpRequest, campaign_id) -> HttpResponse:
         return redirect("campaign_detail", campaign_id=campaign_id)
     
     user: User = request.user
+    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:resume", context={"path": request.path, "method": request.method})
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
         messages.error(request, "Доступ запрещён.")
@@ -2048,6 +2075,7 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
     Тестовое письмо отправляется только для проверки содержимого и не создает запись CampaignRecipient.
     """
     user: User = request.user
+    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:test_send", context={"path": request.path, "method": request.method})
     camp = get_object_or_404(Campaign, id=campaign_id)
     if not _can_manage_campaign(user, camp):
         messages.error(request, "Доступ запрещён.")

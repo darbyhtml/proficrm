@@ -47,6 +47,12 @@ def baseline_allowed_for_role(*, role: str, resource_type: str, resource_key: st
             "ui:preferences",
             "ui:mail",
             "ui:notifications",
+            "ui:mail:settings",
+            "ui:mail:signature",
+            "ui:mail:campaigns",
+            "ui:mail:campaigns:detail",
+            "ui:notifications:all",
+            "ui:notifications:reminders",
         ):
             return True
         if resource_key == "ui:analytics":
@@ -60,6 +66,116 @@ def baseline_allowed_for_role(*, role: str, resource_type: str, resource_key: st
                 )
             )
         if resource_key == "ui:settings":
+            return bool(role == User.Role.ADMIN)
+
+    # Actions (coarse RBAC gate; object/branch checks stay in code)
+    if resource_type == PolicyRule.ResourceType.ACTION:
+        # --- Settings / admin tools ---
+        if resource_key in ("ui:settings:view_as:update", "ui:settings:view_as:reset"):
+            return bool(role == User.Role.ADMIN)
+
+        # --- Notifications: allowed for any authenticated user ---
+        if resource_key in (
+            "ui:notifications:poll",
+            "ui:notifications:mark_read",
+            "ui:notifications:mark_all_read",
+        ):
+            return True
+
+        # --- Companies ---
+        if resource_key in (
+            "ui:companies:create",
+            "ui:companies:update",
+            "ui:companies:contract:update",
+            "ui:companies:transfer",
+            "ui:companies:cold_call:toggle",
+            "ui:companies:autocomplete",
+            "ui:companies:duplicates",
+        ):
+            return bool(
+                role
+                in (
+                    User.Role.MANAGER,
+                    User.Role.SALES_HEAD,
+                    User.Role.BRANCH_DIRECTOR,
+                    User.Role.GROUP_MANAGER,
+                    User.Role.ADMIN,
+                )
+            )
+        if resource_key in (
+            "ui:companies:bulk_transfer",
+            "ui:companies:delete_request:cancel",
+            "ui:companies:delete_request:approve",
+            "ui:companies:delete",
+        ):
+            # Менеджерам запрещаем на уровне policy (в коде тоже запрещено).
+            return bool(
+                role
+                in (
+                    User.Role.SALES_HEAD,
+                    User.Role.BRANCH_DIRECTOR,
+                    User.Role.GROUP_MANAGER,
+                    User.Role.ADMIN,
+                )
+            )
+        if resource_key == "ui:companies:delete_request:create":
+            return bool(role == User.Role.MANAGER)
+        if resource_key in ("ui:companies:cold_call:reset", "ui:companies:export"):
+            return bool(role == User.Role.ADMIN)
+
+        # --- Tasks ---
+        if resource_key in ("ui:tasks:create", "ui:tasks:update", "ui:tasks:delete", "ui:tasks:status"):
+            # Детальная проверка "своё/филиал/ответственный" остаётся в UI коде.
+            return bool(
+                role
+                in (
+                    User.Role.MANAGER,
+                    User.Role.SALES_HEAD,
+                    User.Role.BRANCH_DIRECTOR,
+                    User.Role.GROUP_MANAGER,
+                    User.Role.ADMIN,
+                )
+            )
+        if resource_key == "ui:tasks:bulk_reassign":
+            return bool(role == User.Role.ADMIN)
+
+        # --- Mail ---
+        if resource_key in ("ui:mail:smtp_settings", "ui:mail:settings:update"):
+            return bool(role == User.Role.ADMIN)
+        if resource_key in ("ui:mail:quota:poll", "ui:mail:progress:poll"):
+            return True
+        if resource_key.startswith("ui:mail:unsubscribes:"):
+            return bool(role == User.Role.ADMIN)
+        if resource_key in (
+            "ui:mail:campaigns:create",
+            "ui:mail:campaigns:edit",
+            "ui:mail:campaigns:pick",
+            "ui:mail:campaigns:add_email",
+            "ui:mail:campaigns:recipients:add",
+            "ui:mail:campaigns:recipients:delete",
+            "ui:mail:campaigns:recipients:bulk_delete",
+            "ui:mail:campaigns:recipients:generate",
+            "ui:mail:campaigns:recipients:reset_failed",
+            "ui:mail:campaigns:clear",
+            "ui:mail:campaigns:send_step",
+            "ui:mail:campaigns:start",
+            "ui:mail:campaigns:pause",
+            "ui:mail:campaigns:resume",
+            "ui:mail:campaigns:test_send",
+            "ui:mail:campaigns:delete",
+            "ui:mail:campaigns:manage",
+        ):
+            return bool(
+                role
+                in (
+                    User.Role.MANAGER,
+                    User.Role.SALES_HEAD,
+                    User.Role.BRANCH_DIRECTOR,
+                    User.Role.GROUP_MANAGER,
+                    User.Role.ADMIN,
+                )
+            )
+        if resource_key == "ui:mail:campaigns:recipients:reset_all":
             return bool(role == User.Role.ADMIN)
 
     # API / phone endpoints: по умолчанию разрешаем аутентифицированным,

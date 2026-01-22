@@ -70,6 +70,7 @@ from ui.models import UiGlobalConfig, AmoApiConfig, UiUserPreference
 from amocrm.client import AmoApiError, AmoClient
 from amocrm.migrate import fetch_amo_users, fetch_company_custom_fields, migrate_filtered
 from crm.utils import require_admin, get_effective_user
+from policy.engine import enforce
 from ui.templatetags.ui_extras import format_phone
 
 # Константы для фильтров
@@ -1676,6 +1677,7 @@ def cold_calls_report_last_7_days(request: HttpRequest) -> JsonResponse:
 @login_required
 def company_list(request: HttpRequest) -> HttpResponse:
     user: User = request.user
+    enforce(user=user, resource_type="page", resource="ui:companies:list", context={"path": request.path})
     now = timezone.now()
     # Просмотр компаний: всем доступна вся база (без ограничения по филиалу/scope).
     # Кэшируем общее количество компаний (TTL 10 минут)
@@ -2264,6 +2266,7 @@ def company_export(request: HttpRequest) -> HttpResponse:
     import csv
 
     user: User = request.user
+    enforce(user=user, resource_type="action", resource="ui:companies:export", context={"path": request.path, "method": request.method})
     if not require_admin(user):
         log_event(
             actor=user,
@@ -2509,6 +2512,7 @@ def company_export(request: HttpRequest) -> HttpResponse:
 @login_required
 def company_create(request: HttpRequest) -> HttpResponse:
     user: User = request.user
+    enforce(user=user, resource_type="action", resource="ui:companies:create", context={"path": request.path, "method": request.method})
 
     if request.method == "POST":
         form = CompanyCreateForm(request.POST, user=user)
@@ -2614,6 +2618,7 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
     AJAX: автодополнение для поиска компаний.
     Возвращает список компаний по запросу (название, ИНН, адрес, телефон, email).
     """
+    enforce(user=request.user, resource_type="action", resource="ui:companies:autocomplete", context={"path": request.path, "method": request.method})
     q = (request.GET.get("q") or "").strip()
     if not q or len(q) < 2:
         return JsonResponse({"items": []})
@@ -2712,6 +2717,7 @@ def company_duplicates(request: HttpRequest) -> HttpResponse:
     JSON: подсказки дублей при создании компании.
     Проверяем по ИНН/КПП/названию/адресу и возвращаем только то, что пользователь может видеть.
     """
+    enforce(user=request.user, resource_type="action", resource="ui:companies:duplicates", context={"path": request.path, "method": request.method})
     user: User = request.user
     inn = (request.GET.get("inn") or "").strip()
     kpp = (request.GET.get("kpp") or "").strip()
@@ -2763,6 +2769,7 @@ def company_duplicates(request: HttpRequest) -> HttpResponse:
 @login_required
 def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     user: User = request.user
+    enforce(user=user, resource_type="page", resource="ui:companies:detail", context={"path": request.path})
     # Загружаем компанию с связанными объектами, включая поля для истории холодных звонков
     company = get_object_or_404(
         Company.objects.select_related(
@@ -2944,6 +2951,7 @@ def company_delete_request_create(request: HttpRequest, company_id) -> HttpRespo
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
     user: User = request.user
+    enforce(user=user, resource_type="action", resource="ui:companies:delete_request:create", context={"path": request.path, "method": request.method})
     company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
     if not (user.role == User.Role.MANAGER and company.responsible_id == user.id):
         messages.error(request, "Запрос на удаление может отправить только ответственный менеджер.")
@@ -2988,6 +2996,7 @@ def company_delete_request_cancel(request: HttpRequest, company_id, req_id: int)
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
     user: User = request.user
+    enforce(user=user, resource_type="action", resource="ui:companies:delete_request:cancel", context={"path": request.path, "method": request.method})
     company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
     if not _can_delete_company(user, company):
         messages.error(request, "Нет прав на обработку запросов удаления по этой компании.")
@@ -3031,6 +3040,7 @@ def company_delete_request_approve(request: HttpRequest, company_id, req_id: int
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
     user: User = request.user
+    enforce(user=user, resource_type="action", resource="ui:companies:delete_request:approve", context={"path": request.path, "method": request.method})
     company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
     if not _can_delete_company(user, company):
         messages.error(request, "Нет прав на удаление этой компании.")
@@ -3080,6 +3090,7 @@ def company_delete_direct(request: HttpRequest, company_id) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
     user: User = request.user
+    enforce(user=user, resource_type="action", resource="ui:companies:delete", context={"path": request.path, "method": request.method})
     company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
     if not _can_delete_company(user, company):
         messages.error(request, "Нет прав на удаление этой компании.")
@@ -3114,6 +3125,7 @@ def company_contract_update(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
+    enforce(user=user, resource_type="action", resource="ui:companies:contract:update", context={"path": request.path, "method": request.method})
     company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
     if not _can_edit_company(user, company):
         messages.error(request, "Нет прав на изменение договора по этой компании.")
@@ -3147,6 +3159,7 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
+    enforce(user=user, resource_type="action", resource="ui:companies:cold_call:toggle", context={"path": request.path, "method": request.method})
     company = get_object_or_404(Company.objects.select_related("responsible", "branch", "primary_cold_marked_by"), id=company_id)
     if not _can_edit_company(user, company):
         messages.error(request, "Нет прав на изменение признака 'Холодный звонок'.")
@@ -3278,6 +3291,7 @@ def company_cold_call_reset(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
+    enforce(user=user, resource_type="action", resource="ui:companies:cold_call:reset", context={"path": request.path, "method": request.method})
     if not require_admin(user):
         messages.error(request, "Только администратор может откатить отметку холодного звонка.")
         return redirect("company_detail", company_id=company_id)
@@ -4140,6 +4154,7 @@ def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
+    enforce(user=user, resource_type="action", resource="ui:companies:transfer", context={"path": request.path, "method": request.method})
     company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
     
     # Проверка прав на передачу (используем новую функцию)
@@ -4191,6 +4206,7 @@ def company_update(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
+    enforce(user=user, resource_type="action", resource="ui:companies:update", context={"path": request.path, "method": request.method})
     company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
     if not _can_edit_company(user, company):
         messages.error(request, "Редактирование доступно только создателю/ответственному/директору филиала/управляющему.")
@@ -4226,6 +4242,7 @@ def company_inline_update(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
+    enforce(user=user, resource_type="action", resource="ui:companies:update", context={"path": request.path, "method": request.method})
     company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
     if not _can_edit_company(user, company):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -4697,6 +4714,7 @@ def phone_call_create(request: HttpRequest) -> HttpResponse:
 @login_required
 def task_list(request: HttpRequest) -> HttpResponse:
     user: User = request.user
+    enforce(user=user, resource_type="page", resource="ui:tasks:list", context={"path": request.path})
     now = timezone.now()
     local_now = timezone.localtime(now)
     today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -5112,6 +5130,7 @@ def _clean_assigned_to_id(value) -> str | None:
 @login_required
 def task_create(request: HttpRequest) -> HttpResponse:
     user: User = request.user
+    enforce(user=user, resource_type="action", resource="ui:tasks:create", context={"path": request.path, "method": request.method})
     # Получаем company_id из GET параметров (доступно и для GET, и для POST)
     company_id = (request.GET.get("company") or "").strip()
 
@@ -5656,6 +5675,7 @@ def _create_note_from_task(task: Task, user: User) -> CompanyNote:
 @login_required
 def task_delete(request: HttpRequest, task_id) -> HttpResponse:
     user: User = request.user
+    enforce(user=user, resource_type="action", resource="ui:tasks:delete", context={"path": request.path, "method": request.method})
     try:
         task = Task.objects.select_related("company", "assigned_to", "created_by", "type").get(id=task_id)
     except Task.DoesNotExist:
@@ -5733,6 +5753,7 @@ def task_bulk_reassign(request: HttpRequest) -> HttpResponse:
         return redirect("task_list")
 
     user: User = request.user
+    enforce(user=user, resource_type="action", resource="ui:tasks:bulk_reassign", context={"path": request.path, "method": request.method})
     if not require_admin(user):
         messages.error(request, "Нет прав на массовое переназначение задач.")
         return redirect("task_list")
@@ -5820,6 +5841,7 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
         return redirect("task_list")
 
     user: User = request.user
+    enforce(user=user, resource_type="action", resource="ui:tasks:status", context={"path": request.path, "method": request.method})
     try:
         task = Task.objects.select_related("company", "company__responsible", "company__branch", "assigned_to", "type").get(id=task_id)
     except Task.DoesNotExist:
@@ -5962,6 +5984,7 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
     Возвращает только HTML модального окна без всей страницы task_list.
     """
     user: User = request.user
+    enforce(user=user, resource_type="page", resource="ui:tasks:detail", context={"path": request.path})
     task = get_object_or_404(
         Task.objects.select_related("company", "assigned_to", "created_by", "type").only(
             "id", "title", "description", "status", "due_at", "created_at", "completed_at",
@@ -6028,6 +6051,7 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
 def task_edit(request: HttpRequest, task_id) -> HttpResponse:
     """Редактирование задачи (поддержка AJAX для модалок)"""
     user: User = request.user
+    enforce(user=user, resource_type="action", resource="ui:tasks:update", context={"path": request.path, "method": request.method})
     task = get_object_or_404(
         Task.objects.select_related("company", "assigned_to", "created_by", "type").only(
             "id", "title", "description", "status", "due_at", "created_at", "completed_at", "recurrence_rrule",
@@ -6179,6 +6203,53 @@ def settings_access(request: HttpRequest) -> HttpResponse:
             messages.success(
                 request,
                 "Дефолтные правила для страниц восстановлены (созданы недостающие записи). "
+                f"Добавлено: {created}.",
+            )
+            return redirect("settings_access")
+
+        if action == "restore_default_action_rules":
+            from policy.engine import baseline_allowed_for_role
+            from policy.resources import list_resources
+
+            # "Восстановление" для действий: создаём недостающие role-rules для UI actions.
+            # Важно: не перетираем существующие правила — только добавляем.
+            created = 0
+            roles = [v for v, _ in User.Role.choices]
+            actions = [r for r in list_resources(resource_type="action") if (r.key or "").startswith("ui:")]
+
+            for role_value in roles:
+                for res in actions:
+                    exists = PolicyRule.objects.filter(
+                        enabled=True,
+                        subject_type=PolicyRule.SubjectType.ROLE,
+                        role=role_value,
+                        resource_type=res.resource_type,
+                        resource=res.key,
+                    ).exists()
+                    if exists:
+                        continue
+
+                    allowed = baseline_allowed_for_role(
+                        role=role_value,
+                        resource_type=res.resource_type,
+                        resource_key=res.key,
+                        is_superuser=False,
+                    )
+                    PolicyRule.objects.create(
+                        enabled=True,
+                        priority=210,
+                        subject_type=PolicyRule.SubjectType.ROLE,
+                        role=role_value,
+                        resource_type=res.resource_type,
+                        resource=res.key,
+                        effect=(PolicyRule.Effect.ALLOW if allowed else PolicyRule.Effect.DENY),
+                        conditions={},
+                    )
+                    created += 1
+
+            messages.success(
+                request,
+                "Дефолтные правила для действий восстановлены (созданы недостающие записи). "
                 f"Добавлено: {created}.",
             )
             return redirect("settings_access")
