@@ -4,6 +4,7 @@ Celery tasks для модуля mailer.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from celery import shared_task
 from django.db.models import Q
 from django.utils import timezone
@@ -55,6 +56,73 @@ def _is_transient_send_error(err: str) -> bool:
         "network is unreachable",
     )
     return any(h in e for h in transient_hints)
+
+
+def _get_campaign_attachment_bytes(camp: Campaign) -> tuple[bytes | None, str | None, str | None]:
+    """
+    Безопасно читает вложение кампании.
+    Если файл отсутствует (часто из-за регистрозависимости на Linux), пытается найти его в директории
+    по case-insensitive совпадению имени и (если нашёл) обновляет путь в БД.
+
+    Returns:
+        (attachment_bytes, attachment_name, error_message)
+    """
+    if not camp.attachment:
+        return None, None, None
+
+    try:
+        camp.attachment.open()
+        try:
+            content = camp.attachment.read()
+            name = getattr(camp.attachment, "name", None) or "attachment"
+            return content, name, None
+        finally:
+            try:
+                camp.attachment.close()
+            except Exception:
+                pass
+    except FileNotFoundError:
+        pass
+    except OSError:
+        # может прилететь как OSError: [Errno 2] No such file...
+        pass
+
+    # Fallback: пробуем найти файл в той же папке по имени без учёта регистра
+    stored_name = (getattr(camp.attachment, "name", None) or "").strip()
+    if not stored_name:
+        return None, None, "Файл вложения не найден (пустой путь в БД)."
+
+    storage_location = getattr(camp.attachment.storage, "location", None)
+    if not storage_location:
+        return None, None, f"Файл вложения не найден: {stored_name}"
+
+    stored_path = Path(str(storage_location)) / stored_name
+    parent = stored_path.parent
+    target_name = stored_path.name
+    if not parent.exists() or not parent.is_dir():
+        return None, None, f"Файл вложения не найден: {stored_name}"
+
+    target_cf = target_name.casefold()
+    matches = [p for p in parent.iterdir() if p.is_file() and p.name.casefold() == target_cf]
+    if len(matches) != 1:
+        return None, None, f"Файл вложения не найден: {stored_name}"
+
+    found = matches[0]
+    try:
+        content = found.read_bytes()
+    except Exception:
+        return None, None, f"Файл вложения не найден: {stored_name}"
+
+    # Обновляем путь в БД на реально существующий (исправляет проблемы регистра)
+    try:
+        rel = found.relative_to(Path(str(storage_location)))
+        camp.attachment.name = str(rel).replace("\\", "/")
+        camp.save(update_fields=["attachment", "updated_at"])
+    except Exception:
+        # не критично, главное что вложение прочитали
+        pass
+
+    return content, found.name, None
 
 
 def _is_working_hours(now=None) -> bool:
@@ -321,15 +389,40 @@ def send_pending_emails(self, batch_size: int = 50):
             attachment_bytes = None
             attachment_name = None
             if camp.attachment:
-                try:
-                    camp.attachment.open()
-                    attachment_bytes = camp.attachment.read()
-                    attachment_name = getattr(camp.attachment, "name", None) or "attachment"
-                finally:
+                attachment_bytes, attachment_name, att_err = _get_campaign_attachment_bytes(camp)
+                if att_err:
+                    # Не даём кампании "упасть" и превратиться в массовые FAILED из-за вложения.
+                    # Ставим на паузу и освобождаем очередь, чтобы не блокировать остальные.
+                    logger.error(f"Campaign {camp.id}: attachment missing: {att_err}")
                     try:
-                        camp.attachment.close()
+                        camp.status = Campaign.Status.PAUSED
+                        camp.save(update_fields=["status", "updated_at"])
                     except Exception:
                         pass
+                    queue_entry = getattr(camp, "queue_entry", None)
+                    if queue_entry and queue_entry.status == CampaignQueue.Status.PROCESSING:
+                        try:
+                            queue_entry.status = CampaignQueue.Status.CANCELLED
+                            queue_entry.completed_at = timezone.now()
+                            queue_entry.save(update_fields=["status", "completed_at"])
+                        except Exception:
+                            pass
+                    # Уведомляем создателя
+                    try:
+                        from notifications.service import notify
+                        from notifications.models import Notification
+
+                        if camp.created_by:
+                            notify(
+                                user=camp.created_by,
+                                kind=Notification.Kind.SYSTEM,
+                                title="Рассылка поставлена на паузу: проблема с вложением",
+                                body=f"Кампания '{camp.name}' остановлена: {att_err}. Перезагрузите вложение и нажмите «Продолжить».",
+                                url=f"/mail/campaigns/{camp.id}/",
+                            )
+                    except Exception:
+                        pass
+                    continue
 
             # Открываем SMTP соединение один раз на батч
             smtp = open_smtp_connection(smtp_cfg)

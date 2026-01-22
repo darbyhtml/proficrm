@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import tempfile
 import uuid
 
 from django.test import TestCase
 from django.test.utils import override_settings
 from django.urls import reverse
 from django.utils import timezone
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 from accounts.models import User
 from mailer.forms import CampaignForm, EmailSignatureForm
@@ -150,3 +152,60 @@ class MailerCampaignDetailTemplateTest(TestCase):
         )
         resp = self.client.get(reverse("campaign_detail", kwargs={"campaign_id": camp.id}))
         self.assertEqual(resp.status_code, 200)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class MailerAttachmentRecoveryTests(TestCase):
+    def test_attachment_case_mismatch_is_recovered(self):
+        from mailer.tasks import _get_campaign_attachment_bytes
+
+        user = User.objects.create_user(username="m3", password="pass", role=User.Role.MANAGER, email="m3@example.com")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with override_settings(MEDIA_ROOT=tmpdir):
+                camp = Campaign.objects.create(
+                    created_by=user,
+                    name="Camp",
+                    subject="Subj",
+                    body_html="<p>hi</p>",
+                    body_text="hi",
+                    sender_name="CRM",
+                    status=Campaign.Status.DRAFT,
+                )
+                up = SimpleUploadedFile("ГДШ_Север_Бланк_заявки_GMMyLxa.docx", b"abc", content_type="application/octet-stream")
+                camp.attachment.save(up.name, up)
+
+                # Имитируем проблему: в БД имя файла отличается регистром (Linux чувствителен к регистру)
+                bad_name = camp.attachment.name.replace("Бланк", "бланк")
+                Campaign.objects.filter(id=camp.id).update(attachment=bad_name)
+                camp.refresh_from_db()
+
+                content, name, err = _get_campaign_attachment_bytes(camp)
+                self.assertIsNone(err)
+                self.assertEqual(content, b"abc")
+                self.assertTrue(name)  # имя реального файла
+                camp.refresh_from_db()
+                # После восстановления путь должен указывать на реально существующий файл
+                self.assertNotEqual(camp.attachment.name, bad_name)
+
+    def test_attachment_missing_returns_error(self):
+        from mailer.tasks import _get_campaign_attachment_bytes
+
+        user = User.objects.create_user(username="m4", password="pass", role=User.Role.MANAGER, email="m4@example.com")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with override_settings(MEDIA_ROOT=tmpdir):
+                camp = Campaign.objects.create(
+                    created_by=user,
+                    name="Camp",
+                    subject="Subj",
+                    body_html="<p>hi</p>",
+                    body_text="hi",
+                    sender_name="CRM",
+                    status=Campaign.Status.DRAFT,
+                )
+                # Создаем запись на "вложение", но файл не кладём
+                Campaign.objects.filter(id=camp.id).update(attachment="campaign_attachments/2026/01/missing.docx")
+                camp.refresh_from_db()
+                content, name, err = _get_campaign_attachment_bytes(camp)
+                self.assertIsNone(content)
+                self.assertIsNone(name)
+                self.assertTrue(err)
