@@ -1,5 +1,6 @@
 import mimetypes
 from ui.timezone_utils import RUS_TZ_CHOICES, guess_ru_timezone_from_address
+from ui.work_schedule_utils import normalize_work_schedule
 from uuid import UUID
 from django import forms
 from django.forms import inlineformset_factory, BaseInlineFormSet, ValidationError
@@ -180,6 +181,9 @@ class CompanyCreateForm(forms.ModelForm):
             guessed = guess_ru_timezone_from_address(addr)
             if guessed:
                 cleaned["work_timezone"] = guessed
+        ws = (cleaned.get("work_schedule") or "").strip()
+        if ws:
+            cleaned["work_schedule"] = normalize_work_schedule(ws)
         return cleaned
     
     class Meta:
@@ -193,8 +197,6 @@ class CompanyCreateForm(forms.ModelForm):
             "website",
             "activity_kind",
             "employees_count",
-            "workday_start",
-            "workday_end",
             "work_timezone",
             "work_schedule",
             "contract_type",
@@ -216,8 +218,6 @@ class CompanyCreateForm(forms.ModelForm):
             "website": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "activity_kind": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2", "placeholder": "Напр.: строительство, услуги, производство… (можно с новой строки)"}),
             "employees_count": forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "min": "0", "placeholder": "Напр.: 120"}),
-            "workday_start": forms.TimeInput(attrs={"type": "time", "class": "w-full rounded-lg border px-3 py-2"}),
-            "workday_end": forms.TimeInput(attrs={"type": "time", "class": "w-full rounded-lg border px-3 py-2"}),
             "work_timezone": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "work_schedule": forms.Textarea(attrs={"rows": 6, "class": "w-full rounded-lg border px-3 py-2 font-mono text-sm", "placeholder": "Например:\nПн-Пт: 09:00-18:00\nСб: 10:00-16:00\nВс: выходной\n\nИли скопируйте режим работы с сайта компании. Время автоматически форматируется в формат HH:MM."}),
             "contract_type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
@@ -286,6 +286,9 @@ class CompanyEditForm(forms.ModelForm):
             guessed = guess_ru_timezone_from_address(addr)
             if guessed:
                 cleaned["work_timezone"] = guessed
+        ws = (cleaned.get("work_schedule") or "").strip()
+        if ws:
+            cleaned["work_schedule"] = normalize_work_schedule(ws)
         return cleaned
 
     def clean_head_company(self):
@@ -325,8 +328,6 @@ class CompanyEditForm(forms.ModelForm):
             "website",
             "activity_kind",
             "employees_count",
-            "workday_start",
-            "workday_end",
             "work_timezone",
             "work_schedule",
             "contract_type",
@@ -348,8 +349,6 @@ class CompanyEditForm(forms.ModelForm):
             "website": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "activity_kind": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2", "placeholder": "Напр.: строительство, услуги, производство… (можно с новой строки)"}),
             "employees_count": forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "min": "0", "placeholder": "Напр.: 120"}),
-            "workday_start": forms.TimeInput(attrs={"type": "time", "class": "w-full rounded-lg border px-3 py-2"}),
-            "workday_end": forms.TimeInput(attrs={"type": "time", "class": "w-full rounded-lg border px-3 py-2"}),
             "work_timezone": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "work_schedule": forms.Textarea(attrs={"rows": 6, "class": "w-full rounded-lg border px-3 py-2 font-mono text-sm", "placeholder": "Например:\nПн-Пт: 09:00-18:00\nСб: 10:00-16:00\nВс: выходной\n\nИли скопируйте режим работы с сайта компании. Время автоматически форматируется в формат HH:MM."}),
             "contract_type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
@@ -378,6 +377,7 @@ class CompanyInlineEditForm(forms.ModelForm):
         "address",
         "website",
         "activity_kind",
+        "work_schedule",
     )
 
     def __init__(self, *args, **kwargs):
@@ -416,6 +416,12 @@ class CompanyInlineEditForm(forms.ModelForm):
     def clean_activity_kind(self):
         return (self.cleaned_data.get("activity_kind") or "").strip()
 
+    def clean_work_schedule(self):
+        v = (self.cleaned_data.get("work_schedule") or "").strip()
+        if not v:
+            return ""
+        return normalize_work_schedule(v)
+
     class Meta:
         model = Company
         fields = [
@@ -426,6 +432,7 @@ class CompanyInlineEditForm(forms.ModelForm):
             "address",
             "website",
             "activity_kind",
+            "work_schedule",
         ]
 
 

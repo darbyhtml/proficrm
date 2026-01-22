@@ -2847,32 +2847,40 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     local_now = timezone.localtime(now)
     # Индикатор: можно ли звонить (рабочее время компании + часовой пояс)
     worktime = {
-        "has": bool(company.workday_start and company.workday_end),
+        "has": bool(company.work_schedule or (company.workday_start and company.workday_end)),
         "status": None,  # "ok" | "warn_end" | "off" | "unknown"
         "label": "",
     }
-    if company.workday_start and company.workday_end:
-        try:
-            from zoneinfo import ZoneInfo
-            from ui.timezone_utils import guess_ru_timezone_from_address
+    try:
+        from zoneinfo import ZoneInfo
+        from ui.timezone_utils import guess_ru_timezone_from_address
+        from ui.work_schedule_utils import get_worktime_status_from_schedule
 
-            guessed = guess_ru_timezone_from_address(company.address or "")
-            tz_name = (guessed or (company.work_timezone or "").strip() or "Europe/Moscow").strip()
-            tz = ZoneInfo(tz_name)
+        guessed = guess_ru_timezone_from_address(company.address or "")
+        tz_name = (guessed or (company.work_timezone or "").strip() or "Europe/Moscow").strip()
+        tz = ZoneInfo(tz_name)
+        now_tz = timezone.now().astimezone(tz)
 
-            now_tz = timezone.now().astimezone(tz)
+        if company.work_schedule:
+            status, _mins = get_worktime_status_from_schedule(company.work_schedule, now_tz=now_tz)
+            worktime["status"] = status
+            if status == "ok":
+                worktime["label"] = "Рабочее время"
+            elif status == "warn_end":
+                worktime["label"] = "Остался час"
+            elif status == "off":
+                worktime["label"] = "Не рабочее время"
+            else:
+                worktime["label"] = ""
+        elif company.workday_start and company.workday_end:
             today = now_tz.date()
-            start_t = company.workday_start
-            end_t = company.workday_end
-
-            start_dt = datetime.combine(today, start_t, tzinfo=tz)
-            end_dt = datetime.combine(today, end_t, tzinfo=tz)
+            start_dt = datetime.combine(today, company.workday_start, tzinfo=tz)
+            end_dt = datetime.combine(today, company.workday_end, tzinfo=tz)
 
             # Если рабочий интервал "перетекает" через полночь (например 22:00-06:00)
             if end_dt <= start_dt:
                 end_dt = end_dt + timedelta(days=1)
-                # если сейчас до конца (после полуночи), то старт был вчера
-                if now_tz < datetime.combine(today, end_t, tzinfo=tz):
+                if now_tz < datetime.combine(today, company.workday_end, tzinfo=tz):
                     start_dt = start_dt - timedelta(days=1)
 
             if start_dt <= now_tz <= end_dt:
@@ -2886,9 +2894,9 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             else:
                 worktime["status"] = "off"
                 worktime["label"] = "Не рабочее время"
-        except Exception:
-            worktime["status"] = "unknown"
-            worktime["label"] = ""
+    except Exception:
+        worktime["status"] = "unknown"
+        worktime["label"] = ""
     tasks = (
         Task.objects.filter(company=company)
         .exclude(status=Task.Status.DONE)  # Исключаем выполненные задачи
@@ -2947,6 +2955,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "note_form": note_form,
             "tasks": tasks,
             "local_now": local_now,  # Для корректного сравнения дат в шаблоне
+            "worktime": worktime,
             "activity": activity,
             "can_view_activity": can_view_activity,
             "can_delete_company": can_delete_company,

@@ -290,7 +290,7 @@
                 {% if tz %}
                   <span class="text-brand-dark/60 text-[10px]">({{ tz|tz_label }})</span>
                   <span class="text-brand-dark/60 text-[10px]">·</span>
-                  {% if company.workday_start and company.workday_end %}
+                  {% if worktime.has %}
                     {% if worktime.status == "ok" %}
                       <span class="badge badge-done badge-xxxs align-middle"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
                     {% elif worktime.status == "warn_end" %}
@@ -326,12 +326,27 @@
             {% endwith %}
             {% endwith %}
           </div>
-          {% if company.work_schedule %}
           <div>
             <div class="text-brand-dark/50">Режим работы</div>
-            <div class="whitespace-pre-line font-mono text-sm">{{ company.work_schedule }}</div>
+            {% if can_edit_company %}
+              <div class="inline-field-wrapper" data-inline-field="work_schedule" data-company-id="{{ company.id }}" data-inline-display-kind="multiline">
+                <div class="inline-field-display whitespace-pre-line font-mono text-xs cursor-pointer hover:text-brand-dark/80 transition-colors" data-inline-edit>
+                  {{ company.work_schedule|default:"—" }}
+                </div>
+                <div class="inline-field-edit hidden mt-1">
+                  <textarea class="input w-full font-mono text-xs" data-inline-input rows="5" style="min-height:96px;resize:vertical">{{ company.work_schedule|default:'' }}</textarea>
+                  <div class="flex gap-1 mt-1">
+                    <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
+                    <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
+                  </div>
+                  <div class="text-[11px] muted-2 mt-1">Можно вставить как с сайта (любой формат) — при сохранении приведётся к виду «Пн–Пт: 09:00–18:00».</div>
+                  <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
+                </div>
+              </div>
+            {% else %}
+              <div class="whitespace-pre-line font-mono text-xs">{{ company.work_schedule|default:"—" }}</div>
+            {% endif %}
           </div>
-          {% endif %}
           <div>
             <div class="text-brand-dark/50">Руководитель</div>
             <div>{{ company.contact_name|default:"—" }}</div>
