@@ -4,6 +4,7 @@ Celery tasks для модуля mailer.
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 from celery import shared_task
 from django.db import transaction
@@ -15,7 +16,7 @@ from django.core.cache import cache
 from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, SmtpBzQuota, CampaignQueue, UserDailyLimitStatus
 from mailer.smtp_sender import build_message, open_smtp_connection, send_via_smtp
 from mailer.utils import html_to_text, msk_day_bounds
-from mailer.smtp_bz_api import get_quota_info
+from mailer.smtp_bz_api import get_quota_info, get_message_info, get_message_logs
 from mailer.constants import PER_USER_DAILY_LIMIT_DEFAULT, WORKING_HOURS_START, WORKING_HOURS_END
 from mailer.mail_content import apply_signature, append_unsubscribe_footer, build_unsubscribe_url, ensure_unsubscribe_tokens
 
@@ -58,6 +59,193 @@ def _is_transient_send_error(err: str) -> bool:
     )
     return any(h in e for h in transient_hints)
 
+
+def _smtp_bz_enrich_error(api_key: str, msg, campaign_id: str, recipient_id: str, err: str) -> str:
+    """
+    Пытаемся обогатить текст ошибки данными из smtp.bz API (log/message, log/message/{id}).
+    Делается "best-effort": если API недоступен/ключ неверный — возвращаем исходную ошибку.
+    """
+    api_key = (api_key or "").strip()
+    if not api_key:
+        return err
+
+    try:
+        message_id = str(msg.get("Message-ID", "") or "").strip().strip("<>").strip()
+        tag = f"camp:{campaign_id};rcpt:{recipient_id}"
+
+        info = None
+        if message_id:
+            info = get_message_info(api_key, message_id)
+
+        if not info:
+            # Пробуем найти по X-Tag (самый точный вариант)
+            today = timezone.now().strftime("%Y-%m-%d")
+            logs = get_message_logs(api_key, tag=tag, limit=1, start_date=today, end_date=today)
+            if isinstance(logs, dict):
+                data = logs.get("data")
+                if isinstance(data, list) and data:
+                    info = data[0] if isinstance(data[0], dict) else None
+            elif isinstance(logs, list) and logs:
+                info = logs[0] if isinstance(logs[0], dict) else None
+
+        if not isinstance(info, dict):
+            return err
+
+        status = str(info.get("status") or "").strip()
+        reason = (
+            info.get("bounce_reason")
+            or info.get("bounceReason")
+            or info.get("error")
+            or info.get("reason")
+            or ""
+        )
+        reason = str(reason or "").strip()
+
+        if status and reason:
+            return f"{err} | smtp.bz status={status}, reason={reason[:180]}"
+        if status:
+            return f"{err} | smtp.bz status={status}"
+        return err
+    except Exception:
+        return err
+
+
+_SMTP_BZ_TAG_RE = re.compile(r"camp:([0-9a-fA-F-]{32,36});rcpt:([0-9a-fA-F-]{32,36})")
+
+
+def _smtp_bz_extract_tag(row: dict) -> str:
+    """
+    В разных реализациях API/проксей поле tag может называться по-разному.
+    Документация говорит о query-параметре `tag` (идентификатор X-Tag).
+    """
+    if not isinstance(row, dict):
+        return ""
+    tag = (
+        row.get("tag")
+        or row.get("x_tag")
+        or row.get("xTag")
+        or row.get("X-Tag")
+        or row.get("X_Tag")
+        or ""
+    )
+    return str(tag or "").strip()
+
+
+def _smtp_bz_parse_campaign_recipient_from_tag(tag: str) -> tuple[str | None, str | None]:
+    tag = (tag or "").strip()
+    m = _SMTP_BZ_TAG_RE.search(tag)
+    if not m:
+        return None, None
+    return m.group(1), m.group(2)
+
+
+@shared_task(name="mailer.tasks.sync_smtp_bz_delivery_events")
+def sync_smtp_bz_delivery_events():
+    """
+    Безопасная синхронизация "пост-фактум" статусов доставки из smtp.bz:
+    по документации `GET /log/message` возвращает `status` = sent|resent|return|bounce|cancel.
+
+    Мы используем уникальный X-Tag (camp:{camp_id};rcpt:{recipient_id}) на каждое письмо,
+    поэтому можем привязать bounce/return/cancel к конкретному получателю и пометить его FAILED.
+
+    Важно: это best-effort и не ломает отправку; если API недоступен — просто пропускаем.
+    """
+    smtp_cfg = GlobalMailAccount.load()
+    api_key = (smtp_cfg.smtp_bz_api_key or "").strip()
+    if not api_key:
+        return {"status": "skipped", "reason": "no_api_key"}
+
+    # Берём текущий день (в логах smtp.bz даты идут без времени; захватить "поздние" события можно увеличением окна при нужде)
+    today = timezone.now().strftime("%Y-%m-%d")
+    statuses = ("bounce", "return", "cancel")
+
+    updated = 0
+    seen = 0
+    now = timezone.now()
+    logs_to_create: list[SendLog] = []
+
+    for st in statuses:
+        offset = 0
+        limit = 200
+        # Ограничиваемся разумным числом страниц за запуск
+        for _page in range(0, 10):
+            resp = get_message_logs(api_key, status=st, limit=limit, offset=offset, start_date=today, end_date=today)
+            if not resp:
+                break
+            rows = resp.get("data", []) if isinstance(resp, dict) else (resp if isinstance(resp, list) else [])
+            if not rows:
+                break
+
+            to_update: list[CampaignRecipient] = []
+            ids: list[str] = []
+            meta: dict[str, tuple[str, str]] = {}
+
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                tag = _smtp_bz_extract_tag(row)
+                camp_id, rcpt_id = _smtp_bz_parse_campaign_recipient_from_tag(tag)
+                if not camp_id or not rcpt_id:
+                    continue
+                seen += 1
+
+                reason = (
+                    row.get("bounce_reason")
+                    or row.get("bounceReason")
+                    or row.get("error")
+                    or row.get("reason")
+                    or ""
+                )
+                reason = str(reason or "").strip()
+                meta[str(rcpt_id)] = (st, reason)
+                ids.append(str(rcpt_id))
+
+            if ids:
+                qs = CampaignRecipient.objects.filter(id__in=ids).select_related("campaign")
+                for r in qs:
+                    st_i, reason_i = meta.get(str(r.id), (st, ""))
+                    # Не трогаем явные отписки и НЕ ухудшаем PENDING: события доставки имеют смысл только для уже отправленных.
+                    if r.status in (CampaignRecipient.Status.UNSUBSCRIBED, CampaignRecipient.Status.PENDING):
+                        continue
+
+                    msg = f"smtp.bz status={st_i}"
+                    if reason_i:
+                        msg += f", reason={reason_i[:180]}"
+
+                    # Пишем FAILED только если раньше было SENT (переход "отправлено" -> "недоставлено")
+                    if r.status == CampaignRecipient.Status.SENT:
+                        r.status = CampaignRecipient.Status.FAILED
+                        r.last_error = msg[:255]
+                        r.updated_at = now
+                        to_update.append(r)
+                        logs_to_create.append(
+                            SendLog(
+                                campaign=r.campaign,
+                                recipient=r,
+                                account=None,
+                                provider="smtp_global",
+                                status="failed",
+                                error=msg[:500],
+                            )
+                        )
+                    # Если уже FAILED — просто обновим last_error, если было пусто/другое
+                    elif r.status == CampaignRecipient.Status.FAILED:
+                        if (r.last_error or "").strip() != msg[:255]:
+                            r.last_error = msg[:255]
+                            r.updated_at = now
+                            to_update.append(r)
+
+                if to_update:
+                    CampaignRecipient.objects.bulk_update(to_update, ["status", "last_error", "updated_at"])
+                    updated += len(to_update)
+
+            offset += limit
+
+    if logs_to_create:
+        # Создаем логи одним батчем; это не влияет на отправку, но улучшает аудит/UX.
+        SendLog.objects.bulk_create(logs_to_create)
+
+    return {"status": "success", "seen": seen, "updated": updated, "logs_created": len(logs_to_create)}
 
 def _get_campaign_attachment_bytes(camp: Campaign) -> tuple[bytes | None, str | None, str | None]:
     """
@@ -210,6 +398,81 @@ def send_pending_emails(self, batch_size: int = 50):
                 camps = [camp]
 
         if not processing_queue:
+            # Вне рабочего времени не начинаем обработку очереди (и не шлём уведомления).
+            if not _is_working_hours():
+                logger.debug("Outside working hours (9:00-18:00 MSK), skipping email sending")
+                CampaignQueue.objects.filter(status=CampaignQueue.Status.PROCESSING).update(
+                    status=CampaignQueue.Status.PENDING,
+                    started_at=None,
+                )
+
+                # UX: единоразовое уведомление пользователям, что рассылка на паузе до 09:00 МСК.
+                # Не спамим: троттлим через cache и доп. дедупликацию в notify().
+                try:
+                    msk_now = timezone.now().astimezone(ZoneInfo("Europe/Moscow"))
+                    next_start = msk_now.replace(hour=WORKING_HOURS_START, minute=0, second=0, microsecond=0)
+                    if msk_now.hour >= WORKING_HOURS_END:
+                        next_start = next_start + timezone.timedelta(days=1)
+                    if msk_now.hour < WORKING_HOURS_START:
+                        # сегодня в 09:00
+                        pass
+
+                    throttle_key = f"mailer:notify:outside_hours:{msk_now.date().isoformat()}"
+                    if cache.add(throttle_key, "1", timeout=60 * 60):  # максимум раз в час
+                        # Берём кампании в очереди (ограниченно), группируем по создателю
+                        qs = (
+                            CampaignQueue.objects.filter(
+                                status=CampaignQueue.Status.PENDING,
+                                campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING),
+                                campaign__recipients__status=CampaignRecipient.Status.PENDING,
+                            )
+                            .select_related("campaign", "campaign__created_by")
+                            .order_by("-priority", "queued_at")
+                        )
+
+                        per_user: dict[int, dict[str, object]] = {}
+                        for q in qs[:200]:
+                            u = getattr(getattr(q, "campaign", None), "created_by", None)
+                            if not u:
+                                continue
+                            uid = int(u.id)
+                            d = per_user.get(uid)
+                            if not d:
+                                per_user[uid] = {"user": u, "count": 1, "first_name": q.campaign.name, "first_id": q.campaign.id}
+                            else:
+                                d["count"] = int(d.get("count", 0)) + 1
+
+                        if per_user:
+                            from notifications.service import notify
+                            from notifications.models import Notification
+
+                            time_str = next_start.strftime("%H:%M")
+                            date_str = next_start.strftime("%d.%m")
+                            for d in per_user.values():
+                                u = d["user"]
+                                n = int(d["count"])
+                                first_name = str(d.get("first_name") or "—")
+                                body = (
+                                    f"Сейчас вне рабочего времени. Отправка возобновится в {time_str} МСК ({date_str}). "
+                                    f"В очереди: {n} камп."
+                                )
+                                # Если кампаний мало — покажем название первой
+                                if first_name and first_name != "—":
+                                    body += f" Первая: «{first_name}»."
+
+                                notify(
+                                    user=u,
+                                    kind=Notification.Kind.SYSTEM,
+                                    title="Рассылка на паузе: вне рабочего времени",
+                                    body=body,
+                                    url="/mail/campaigns/",
+                                    dedupe_seconds=6 * 3600,
+                                )
+                except Exception:
+                    pass
+
+                return {"processed": False, "campaigns": 0, "reason": "outside_working_hours"}
+
             # Берем следующую кампанию из очереди
             next_queue = None
             # Берём следующую кампанию атомарно: защита от гонок между несколькими celery-процессами.
@@ -232,32 +495,9 @@ def send_pending_emails(self, batch_size: int = 50):
             
             if next_queue:
                 camps = [next_queue.campaign]
-                
-                # Отправляем уведомление создателю кампании о начале рассылки
-                if next_queue.campaign.created_by:
-                    from notifications.service import notify
-                    from notifications.models import Notification
-                    notify(
-                        user=next_queue.campaign.created_by,
-                        kind=Notification.Kind.SYSTEM,
-                        title="Рассылка началась",
-                        body=f"Кампания '{next_queue.campaign.name}' начала отправку писем.",
-                        url=f"/mail/campaigns/{next_queue.campaign.id}/"
-                    )
             else:
                 # Celery-only: отправка возможна только через CampaignQueue
                 return {"processed": False, "campaigns": 0, "reason": "no_queue"}
-        
-        # Проверка рабочего времени (9:00-18:00 МСК)
-        if not _is_working_hours():
-            logger.debug("Outside working hours (9:00-18:00 MSK), skipping email sending")
-            # Важно: не оставляем очередь в PROCESSING вне рабочего времени,
-            # иначе одна кампания может "занять" очередь и создавать ощущение зависания.
-            CampaignQueue.objects.filter(status=CampaignQueue.Status.PROCESSING).update(
-                status=CampaignQueue.Status.PENDING,
-                started_at=None,
-            )
-            return {"processed": False, "campaigns": 0, "reason": "outside_working_hours"}
         
         for camp in camps:
             user = camp.created_by
@@ -430,6 +670,21 @@ def send_pending_emails(self, batch_size: int = 50):
             if camp.status == Campaign.Status.READY:
                 camp.status = Campaign.Status.SENDING
                 camp.save(update_fields=["status", "updated_at"])
+                # Уведомляем только когда отправка действительно стартовала (READY -> SENDING)
+                try:
+                    from notifications.service import notify
+                    from notifications.models import Notification
+
+                    notify(
+                        user=user,
+                        kind=Notification.Kind.SYSTEM,
+                        title="Рассылка началась",
+                        body=f"Кампания '{camp.name}' начала отправку писем.",
+                        url=f"/mail/campaigns/{camp.id}/",
+                        dedupe_seconds=3600,
+                    )
+                except Exception:
+                    pass
 
             # Готовим базовый контент письма один раз на кампанию
             auto_plain = html_to_text(camp.body_html or "")
@@ -584,6 +839,16 @@ def send_pending_emails(self, batch_size: int = 50):
                             )
                             transient_blocked = True
                             break
+
+                        # Не временная ошибка — попробуем уточнить её через smtp.bz API (если ключ задан)
+                        if smtp_cfg.smtp_bz_api_key:
+                            err = _smtp_bz_enrich_error(
+                                api_key=smtp_cfg.smtp_bz_api_key,
+                                msg=msg,
+                                campaign_id=str(camp.id),
+                                recipient_id=str(r.id),
+                                err=err,
+                            )
 
                         # Постоянная ошибка — помечаем получателя как FAILED
                         r.status = CampaignRecipient.Status.FAILED

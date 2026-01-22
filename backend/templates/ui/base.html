@@ -97,8 +97,9 @@
       .mail-progress__counts-short{
         display:none;
         max-width: 240px;
-        white-space:pre-line;
-        line-height:1.25;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .mail-progress.is-collapsed .mail-progress__title,
       .mail-progress.is-collapsed .mail-progress__counts{ display:none; }
@@ -1987,18 +1988,37 @@
             pct.textContent = `${p}%`;
             text.textContent = a.name || 'Кампания';
             counts.textContent = `Всего: ${a.total} · Отправлено: ${a.sent} · Ошибки: ${a.failed} · В очереди: ${a.pending}`;
-            countsShort.innerHTML = [
-              `Всего: <b>${a.total}</b>`,
-              `Отправлено: <b>${a.sent}</b>`,
-              `Ошибки: <b>${a.failed}</b>`,
-            ].join('<br>');
+
+            // Компактная строка (не увеличиваем высоту виджета)
+            const name = (a.name || 'Кампания').trim();
+            let prefix = 'Рассылка';
+            if (status === 'paused') prefix = 'Пауза';
+            if (status === 'sent') prefix = 'Готово';
+            if (status === 'sending') prefix = 'Отправка';
+            const reason = (a.reason_text || '').trim();
+            const mainBits = [];
+            mainBits.push(`${prefix}: ${name}`);
+            if (status === 'sent') {
+              mainBits.push(`${a.sent}/${a.total}`);
+              if (Number(a.failed || 0) > 0) mainBits.push(`ош ${a.failed}`);
+            } else {
+              mainBits.push(`${a.sent}/${a.total}`);
+              if (Number(a.failed || 0) > 0) mainBits.push(`ош ${a.failed}`);
+              if (reason) mainBits.push(reason);
+              else if (Number(a.pending || 0) > 0) mainBits.push(`оч ${a.pending}`);
+            }
+            countsShort.textContent = mainBits.join(' · ');
+            // Подсказка по наведению (полный текст, без увеличения размеров)
+            try {
+              countsShort.title = counts.textContent + (reason ? (` · ${reason}`) : '');
+            } catch (_e) {}
             circle.style.background = `conic-gradient(var(--brand-teal) ${deg}deg, rgba(194,226,222,.6) ${deg}deg)`;
 
             // Лимит на сегодня
             const limitReached = !!a.limit_reached;
             if (limitReached) {
-              limitNote.classList.remove('hidden');
-              limitNote.textContent = `Лимит на сегодня (${a.per_user_daily_limit || '—'}) исчерпан`;
+              // Не показываем отдельную строку (чтобы не увеличивать виджет) — причина уже попадает в compact-line.
+              limitNote.classList.add('hidden');
               widget.classList.add('mail-progress--limit');
             } else {
               limitNote.classList.add('hidden');

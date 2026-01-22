@@ -1070,11 +1070,10 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
 
     # Берём ближайшую "активную" кампанию пользователя:
     # - SENDING — во время отправки
+    # - PAUSED  — пауза из-за лимитов/времени/вложений и т.п. (показываем, чтобы было понятно почему "не идёт")
     # - SENT    — сразу после завершения (чтобы менеджер увидел результат, даже если писем было мало)
     qs = Campaign.objects.filter(created_by=user).order_by("-updated_at")
-    active = (
-        qs.filter(status__in=[Campaign.Status.SENDING, Campaign.Status.SENT]).first()
-    )
+    active = qs.filter(status__in=[Campaign.Status.SENDING, Campaign.Status.PAUSED, Campaign.Status.SENT]).first()
     if not active:
         return JsonResponse({"ok": True, "active": None})
 
@@ -1093,15 +1092,13 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
     if total > 0:
         percent = int(round((done / total) * 100))
 
-    # Проверяем, не упёрлись ли в дневной лимит
+    # Мини-пояснение "почему не идёт": дневной лимит / вне времени / SMTP выключен
     from django.utils import timezone as _tz
+    from mailer.tasks import _is_working_hours
 
     now = _tz.now()
     start_day_utc, end_day_utc, _now_msk = msk_day_bounds(now)
     smtp_cfg = GlobalMailAccount.load()
-    sent_today = SendLog.objects.filter(
-        provider="smtp_global", status="sent", created_at__gte=start_day_utc, created_at__lt=end_day_utc
-    ).count()
     sent_today_user = SendLog.objects.filter(
         provider="smtp_global",
         status="sent",
@@ -1113,6 +1110,21 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
     limit_reached = False
     if per_user_daily_limit and sent_today_user >= per_user_daily_limit and pending > 0:
         limit_reached = True
+
+    reason_code = None
+    reason_text = ""
+    if not getattr(smtp_cfg, "is_enabled", True):
+        reason_code = "smtp_disabled"
+        reason_text = "SMTP отключен администратором"
+    elif not _is_working_hours(now) and pending > 0:
+        reason_code = "outside_working_hours"
+        reason_text = "Вне рабочего времени (МСК)"
+    elif limit_reached:
+        reason_code = "user_daily_limit"
+        reason_text = "Дневной лимит исчерпан"
+
+    q = getattr(active, "queue_entry", None)
+    queue_status = (getattr(q, "status", None) if q else None)
 
     return JsonResponse(
         {
@@ -1130,6 +1142,9 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
                 "limit_reached": limit_reached,
                 "per_user_daily_limit": per_user_daily_limit,
                 "sent_today_user": sent_today_user,
+                "reason_code": reason_code,
+                "reason_text": reason_text,
+                "queue_status": queue_status,
             },
         }
     )
@@ -1870,15 +1885,8 @@ def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
                 queue_position = queue_list.index(camp.id) + 1
         
         if active_queues == 0 and is_working:
-            # Можно начать сразу
-            messages.success(request, "Рассылка началась. Письма отправляются.")
-            notify(
-                user=user,
-                kind=Notification.Kind.SYSTEM,
-                title="Рассылка началась",
-                body=f"Кампания '{camp.name}' начала отправку писем.",
-                url=f"/mail/campaigns/{camp.id}/"
-            )
+            # Не обещаем "началась" синхронно: фактический старт делает воркер (и он же шлёт уведомление).
+            messages.success(request, "Рассылка поставлена в очередь и начнётся в ближайшее время.")
         else:
             # Ставим в очередь
             if queue_position:
@@ -1890,7 +1898,8 @@ def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
                 kind=Notification.Kind.SYSTEM,
                 title="Рассылка в очереди",
                 body=f"Кампания '{camp.name}' поставлена в очередь" + (f" (позиция: {queue_position})" if queue_position else "") + ". Вы получите уведомление, когда начнется отправка.",
-                url=f"/mail/campaigns/{camp.id}/"
+                url=f"/mail/campaigns/{camp.id}/",
+                dedupe_seconds=900,
             )
         
         log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Запущена автоматическая рассылка")
@@ -1997,15 +2006,8 @@ def campaign_resume(request: HttpRequest, campaign_id) -> HttpResponse:
                     queue_position = queue_list.index(camp.id) + 1
             
             if active_queues == 0 and is_working:
-                # Можно начать сразу
-                messages.success(request, "Рассылка возобновлена. Письма отправляются.")
-                notify(
-                    user=user,
-                    kind=Notification.Kind.SYSTEM,
-                    title="Рассылка возобновлена",
-                    body=f"Кампания '{camp.name}' продолжила отправку писем.",
-                    url=f"/mail/campaigns/{camp.id}/"
-                )
+                # Фактический старт делает воркер (и он же шлёт уведомление о старте).
+                messages.success(request, "Рассылка возобновлена и поставлена в очередь. Старт — в ближайшее время.")
             else:
                 # Ставим в очередь
                 if queue_position:
@@ -2017,7 +2019,8 @@ def campaign_resume(request: HttpRequest, campaign_id) -> HttpResponse:
                     kind=Notification.Kind.SYSTEM,
                     title="Рассылка в очереди",
                     body=f"Кампания '{camp.name}' поставлена в очередь" + (f" (позиция: {queue_position})" if queue_position else "") + ". Вы получите уведомление, когда начнется отправка.",
-                    url=f"/mail/campaigns/{camp.id}/"
+                    url=f"/mail/campaigns/{camp.id}/",
+                    dedupe_seconds=900,
                 )
             
             log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Рассылка возобновлена")

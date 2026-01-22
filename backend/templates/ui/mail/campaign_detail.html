@@ -138,6 +138,11 @@
             <div>From: {{ smtp_from_email|default:"—" }}</div>
             <div>Имя отправителя: {{ campaign.sender_name|default:smtp_from_name_default }}</div>
             <div>Reply-To: {{ request.user.email|default:"—" }}</div>
+            {% if smtp_cfg and smtp_cfg.smtp_bz_api_key %}
+              <div class="text-brand-dark/50">
+                Статусы доставки (bounce/return/cancel) дополнительно подтягиваются из smtp.bz и могут обновляться с задержкой.
+              </div>
+            {% endif %}
           </div>
         </details>
       </div>

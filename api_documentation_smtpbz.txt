@@ -1,0 +1,183 @@
+SMTP.bz API — расширенная документация (сводка)
+
+Формат ответов: `application/json`
+
+====================
+User — данные пользователя
+====================
+
+GET /user — Данные о пользователе
+- Parameters: нет
+- Responses:
+  - 200: Успешно
+  - 401: Не авторизован
+
+GET /user/stats — Статистика по рассылкам
+- Parameters: нет
+- Responses:
+  - 200: Успешно
+  - 401: Не авторизован
+
+GET /user/domain — Домены отправителя
+- Parameters: нет
+- Responses:
+  - 200: Успешно
+  - 401: Не авторизован
+
+GET /user/domain/{domain} — Домен отправителя
+- Parameters:
+  - domain* (string, path): домен
+- Responses:
+  - 200: Успешно
+  - 400: Имя домена некорректно
+  - 401: Не авторизован
+  - 404: Домен не найден
+
+POST /user/domain/add — Добавление домена отправителя
+- Parameters:
+  - domain* (string, formData): домен отправителя без `http`/`https`
+- Responses:
+  - 200: Успешно
+  - 400: Один или несколько аргументов указаны некорректно
+
+POST /user/domain/verify — Верификация и проверка записей домена отправителя
+- Parameters:
+  - domain* (string, formData): домен отправителя без `http`/`https`
+- Responses:
+  - 200: Успешно
+  - 400: Один или несколько аргументов указаны некорректно
+
+GET /user/ip — Выделенные IP-адреса пользователя
+- Parameters: нет
+- Responses:
+  - 200: Успешно
+  - 400: IP-адреса не найдены
+  - 401: Не авторизован
+
+GET /user/ip/{ip} — Выделенный IP-адрес пользователя
+- Parameters:
+  - ip* (string, path): IP-адрес
+- Responses:
+  - 200: Успешно
+  - 400: IP-адрес некорректный
+  - 401: Не авторизован
+  - 404: IP-адрес не найден
+
+====================
+Log — журнал писем
+====================
+
+GET /log/message — Получить отправленные письма
+- Parameters (query):
+  - limit (integer): кол-во строк возврата
+  - offset (integer): шаг (пагинация)
+  - from (string): email отправителя
+  - to (string): email получателя
+  - is_open (boolean): открытые письма
+  - is_unsubscribe (boolean): отписка
+  - startDate (string): дата от, формат `2020-01-01`
+  - endDate (string): дата до, формат `2020-01-01`
+  - tag (string): идентификатор `X-Tag`
+  - status (string): статус письма — `sent`, `resent`, `return`, `bounce`, `cancel`
+- Responses:
+  - 200: Успешно
+  - 401: Не авторизован
+  - 404: Отправленные письма не найдены
+
+GET /log/message/{messageid} — Получить отправленное письмо по ID
+- Parameters:
+  - messageid* (string, path): ID письма
+- Responses:
+  - 200: Успешно
+  - 400: MessageId указан некорректно
+  - 401: Не авторизован
+  - 404: Письмо не найдено
+
+====================
+Unsubscribe — отписки
+====================
+
+GET /unsubscribe — Получить список отписчиков
+- Parameters (query):
+  - limit (integer): кол-во строк возврата
+  - offset (integer): шаг (пагинация)
+  - address (string): email адрес
+  - reason (string): причина отписки (`bounce`, `user`, `unsubscribe`)
+- Responses:
+  - 200: Успешно
+  - 404: Отписчики не найдены
+
+POST /unsubscribe/add — Добавление email в список отписчиков
+- Parameters:
+  - address* (unsubscribe): email-адреса, каждый с новой строки, не более 500 за раз
+- Responses:
+  - 200: Успешно
+  - 400: Один или несколько аргументов указаны некорректно
+
+POST /unsubscribe/remove — Удаление email-адреса из списка отписчиков
+- Parameters:
+  - address* (formData): email-адрес
+- Responses:
+  - 200: Успешно
+  - 400: Один или несколько аргументов указаны некорректно
+
+POST /unsubscribe/removeall — Удаление всего списка отписчиков
+- Parameters: нет
+- Responses:
+  - 200: Успешно
+  - 400: Один или несколько аргументов указаны некорректно
+
+====================
+SMTP — отправка писем
+====================
+
+POST /smtp/send — Отправка письма
+- Parameters (formData):
+  - from* (string): email отправителя
+  - name (string): имя отправителя
+  - subject* (string): тема письма
+  - to* (string): email получателя
+  - bcc (string): email получателя в скрытой копии
+  - to_name (string): имя получателя
+  - reply (string): email для ответа
+  - html* (string): HTML-версия письма
+  - text (string): TXT-версия письма
+  - tag (string): тег для выборки писем
+  - files (string): вложения в base64, пример:
+    - [{ "name": "file.pdf", "body": "BASE64_ENCODE_FILE" }, { "name": "my_img.jpg", "body": "BASE64_ENCODE_FILE" }, ...]
+  - headers (string): дополнительные заголовки, пример:
+    - [{ "X-Name1": "value1" }, { "X-Name2": "value2" }, ...]
+- Responses:
+  - 200: Успешно
+  - 400: Один или несколько аргументов указаны некорректно
+  - 401: Не авторизован
+
+POST /smtp/mass — Массовая отправка писем
+- Parameters (formData):
+  - from* (string): email отправителя
+  - name (string): имя отправителя
+  - subject* (string): тема письма
+  - to* (string): email получателей массивом, пример:
+    - ["smtpbz@mail.com", {"name": "Alex", "address": "emailbz@mail.com"}]
+  - reply (string): email для ответа
+  - html* (string): HTML-версия письма
+  - text (string): TXT-версия письма
+  - tag (string): тег для выборки писем
+  - headers (string): дополнительные заголовки массивом, пример:
+    - [{ "X-Name1": "value1" }, { "X-Name2": "value2" }, ...]
+- Responses:
+  - 200: Успешно
+  - 400: Один или несколько аргументов указаны некорректно
+  - 401: Не авторизован
+
+====================
+Validate — валидация email
+====================
+
+GET /check/email/{email} — Валидация email-адреса
+- Parameters:
+  - email* (string, path): email адрес для проверки
+- Responses:
+  - 200: Успешно
+  - 400: Ошибка квоты или валидации
+  - 401: Не авторизован

@@ -133,6 +133,8 @@ class Command(BaseCommand):
                         reply_to=(user.email or "").strip(),
                         attachment=camp.attachment if camp.attachment else None,
                     )
+                    # Для дальнейшей диагностики через smtp.bz API
+                    msg["X-Tag"] = f"camp:{camp.id};rcpt:{r.id}"
                     try:
                         send_via_smtp(smtp_cfg, msg)
                         r.status = CampaignRecipient.Status.SENT
@@ -154,19 +156,33 @@ class Command(BaseCommand):
                             try:
                                 from mailer.smtp_bz_api import get_message_info, get_message_logs
                                 from django.utils import timezone as _tz
-                                import time
-                                
-                                # Небольшая задержка для обработки на стороне smtp.bz
-                                time.sleep(2)
                                 
                                 # Сначала пробуем найти по Message-ID
-                                message_id = str(msg.get("Message-ID", "")).strip("<>")
+                                message_id = str(msg.get("Message-ID", "")).strip().strip("<>").strip()
                                 msg_info = None
                                 
                                 if message_id:
                                     msg_info = get_message_info(smtp_cfg.smtp_bz_api_key, message_id)
                                 
-                                # Если не нашли по Message-ID, пробуем найти по email получателя и дате
+                                # Если не нашли по Message-ID, пробуем найти по X-Tag (точнее)
+                                if not msg_info:
+                                    tag = str(msg.get("X-Tag", "") or "").strip()
+                                    start_date = (_tz.now() - _tz.timedelta(minutes=5)).strftime("%Y-%m-%d")
+                                    end_date = _tz.now().strftime("%Y-%m-%d")
+                                    if tag:
+                                        logs = get_message_logs(
+                                            smtp_cfg.smtp_bz_api_key,
+                                            tag=tag,
+                                            limit=5,
+                                            start_date=start_date,
+                                            end_date=end_date,
+                                        )
+                                        if logs:
+                                            messages = logs.get("data", []) if isinstance(logs, dict) else logs if isinstance(logs, list) else []
+                                            if messages:
+                                                msg_info = messages[0] if isinstance(messages[0], dict) else None
+
+                                # Если не нашли по Message-ID и X-Tag, пробуем найти по email получателя и дате
                                 if not msg_info:
                                     # Извлекаем чистый email из заголовков (может быть в формате "Name <email@example.com>")
                                     to_header = msg.get("To", "")
@@ -189,7 +205,6 @@ class Command(BaseCommand):
                                         smtp_cfg.smtp_bz_api_key,
                                         to_email=to_email,
                                         from_email=from_email,
-                                        status="bounce",  # Ищем только отскоки
                                         limit=10,
                                         start_date=start_date,
                                         end_date=end_date,
