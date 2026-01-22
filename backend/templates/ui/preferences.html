@@ -6,210 +6,27 @@
     <div class="flex items-end justify-between gap-3">
       <div>
         <h1 class="text-2xl font-semibold">Настройки</h1>
-        <div class="muted text-sm">Персональные настройки: подпись в письмах и другие параметры.</div>
+        <div class="muted text-sm">Выберите раздел настроек.</div>
       </div>
     </div>
 
-    {# Вкладки #}
-    <div class="flex flex-wrap items-center gap-2">
-      <button type="button" class="btn btn-secondary" data-pref-tab="ui">Интерфейс</button>
-      <button type="button" class="btn btn-outline" data-pref-tab="mail">Почта</button>
-    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <a class="card card-pad block hover:bg-brand-soft/20 transition-colors" href="/preferences/ui/">
+        <div class="font-medium mb-1">Интерфейс</div>
+        <div class="text-sm muted mb-3">Размер шрифта и визуальные параметры.</div>
+        <div class="btn btn-outline">Открыть</div>
+      </a>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4" data-pref-tab-panel="ui">
-      <div class="card card-pad md:col-span-2">
-        <div class="flex items-start justify-between gap-3">
-          <div>
-            <div class="font-medium mb-1">Размер шрифта</div>
-            <div class="text-sm muted">Один ползунок меняет масштаб интерфейса на всех страницах. Диапазон ограничен, чтобы верстка не “ехала”.</div>
-          </div>
-          <div class="text-sm font-semibold whitespace-nowrap" id="fontScaleLabel"></div>
-        </div>
-
-        <form method="post" class="mt-4 space-y-3" id="fontScaleForm">
-          {% csrf_token %}
-          <input type="hidden" name="font_scale" id="fontScaleHidden" value="{{ ui_font_scale_value|default:1.0 }}" />
-
-          <div class="flex items-center gap-3">
-            <div class="text-xs muted-2 w-10 text-right">90%</div>
-            <input
-              id="fontScaleRange"
-              type="range"
-              min="90"
-              max="115"
-              step="1"
-              class="w-full"
-            />
-            <div class="text-xs muted-2 w-10">115%</div>
-          </div>
-
-          <div class="rounded-xl border border-brand-soft bg-brand-soft/15 p-3" id="fontScalePreview">
-            <div class="font-semibold mb-1">Предпросмотр</div>
-            <div class="text-sm muted mb-3">Пример элементов интерфейса при выбранном масштабе.</div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              <div class="space-y-2">
-                <div class="font-medium">Карточка</div>
-                <div class="text-sm muted">Небольшой текст описания. Проверьте, удобно ли читать.</div>
-                <div class="flex flex-wrap items-center gap-2">
-                  <button type="button" class="btn btn-primary">Кнопка</button>
-                  <button type="button" class="btn btn-outline">Вторичная</button>
-                  <span class="badge badge-new">Новый</span>
-                  <span class="badge badge-warn">Внимание</span>
-                </div>
-              </div>
-
-              <div class="space-y-2">
-                <div class="font-medium">Поля</div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div>
-                    <div class="text-xs muted-2 mb-1">Название</div>
-                    <input class="input" type="text" value="ООО Пример" readonly />
-                  </div>
-                  <div>
-                    <div class="text-xs muted-2 mb-1">Статус</div>
-                    <select class="select" disabled>
-                      <option selected>Новый</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="mt-3 rounded-xl border border-brand-soft bg-white p-3">
-              <div class="font-medium mb-2">Строка списка (таблица)</div>
-              <div class="grid grid-cols-12 gap-2 text-xs muted-2 mb-1">
-                <div class="col-span-5">Компания</div>
-                <div class="col-span-3">Ответственный</div>
-                <div class="col-span-2">Статус</div>
-                <div class="col-span-2 text-right">Обновлено</div>
-              </div>
-              <div class="grid grid-cols-12 gap-2 items-center rounded-lg border border-brand-soft bg-brand-soft/10 px-2.5 py-2">
-                <div class="col-span-5 font-medium truncate">ООО «Тестовая компания»</div>
-                <div class="col-span-3 text-sm truncate">Иванов И.И.</div>
-                <div class="col-span-2"><span class="badge badge-new">Новый</span></div>
-                <div class="col-span-2 text-sm text-right muted">сегодня</div>
-              </div>
-            </div>
-
-            <div class="mt-3 rounded-xl border border-brand-teal/40 bg-brand-teal/10 px-3 py-2 text-sm text-brand-dark">
-              Пример уведомления: изменения сохранятся только после нажатия «Сохранить».
-            </div>
-          </div>
-
-          <div class="flex flex-wrap items-center gap-2">
-            <button type="submit" class="btn btn-primary">Сохранить</button>
-            <button type="button" class="btn btn-outline" id="fontScaleCancelBtn">Отменить</button>
-            <button type="button" class="btn btn-secondary" id="fontScaleResetBtn">100%</button>
-            <div class="text-xs muted-2">Если где-то начинает “не помещаться” таблица — уменьшите масштаб.</div>
-          </div>
-        </form>
-      </div>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4" data-pref-tab-panel="mail" style="display:none">
-      <div class="card card-pad">
-        <div class="font-medium mb-1">Подпись в письмах</div>
-        <div class="text-sm muted mb-3">Настройте подпись, которая автоматически добавляется к вашим письмам.</div>
-        <a class="btn btn-primary" href="/mail/signature/">Открыть</a>
-      </div>
-
-      <div class="card card-pad">
+      <a class="card card-pad block hover:bg-brand-soft/20 transition-colors" href="/preferences/mail/">
         <div class="font-medium mb-1">Почта</div>
-        <div class="text-sm muted mb-3">Создание кампаний, получатели и отправка.</div>
-        <a class="btn btn-outline" href="/mail/campaigns/">Открыть</a>
-      </div>
+        <div class="text-sm muted mb-3">Подпись, рассылки и связанные настройки.</div>
+        <div class="btn btn-outline">Открыть</div>
+      </a>
     </div>
 
     <div class="text-xs muted-2">
       Если вам нужны админские настройки (пользователи, справочники, безопасность) — они доступны только администраторам.
     </div>
   </div>
-
-  <script>
-    (function () {
-      const htmlEl = document.documentElement;
-      const range = document.getElementById('fontScaleRange');
-      const hidden = document.getElementById('fontScaleHidden');
-      const label = document.getElementById('fontScaleLabel');
-      const cancelBtn = document.getElementById('fontScaleCancelBtn');
-      const resetBtn = document.getElementById('fontScaleResetBtn');
-
-      if (!range || !hidden || !label || !cancelBtn || !resetBtn) return;
-
-      const savedScale = (function () {
-        const raw = (hidden.value || '').toString().trim().replace(',', '.');
-        const f = parseFloat(raw);
-        if (!isFinite(f) || f <= 0) return 1.0;
-        return f;
-      })();
-
-      function setScale(scale) {
-        const safe = Math.max(0.90, Math.min(1.15, scale));
-        htmlEl.style.setProperty('--ui-font-scale', safe.toFixed(2));
-        hidden.value = safe.toFixed(2);
-        const pct = Math.round(safe * 100);
-        label.textContent = pct + '%';
-        range.value = String(pct);
-      }
-
-      // Инициализация из сохраненного значения
-      setScale(savedScale);
-
-      range.addEventListener('input', function () {
-        const pct = parseInt(range.value || '100', 10);
-        const scale = pct / 100;
-        setScale(scale);
-      });
-
-      cancelBtn.addEventListener('click', function () {
-        setScale(savedScale);
-      });
-
-      resetBtn.addEventListener('click', function () {
-        setScale(1.0);
-      });
-    })();
-  </script>
-
-  <script>
-    (function () {
-      const tabs = Array.from(document.querySelectorAll('[data-pref-tab]'));
-      const panels = Array.from(document.querySelectorAll('[data-pref-tab-panel]'));
-      if (!tabs.length || !panels.length) return;
-
-      function activate(tabKey) {
-        panels.forEach((p) => {
-          const key = p.getAttribute('data-pref-tab-panel');
-          p.style.display = (key === tabKey) ? '' : 'none';
-        });
-        tabs.forEach((b) => {
-          const key = b.getAttribute('data-pref-tab');
-          const isActive = key === tabKey;
-          b.classList.toggle('btn-secondary', isActive);
-          b.classList.toggle('btn-outline', !isActive);
-        });
-        try { localStorage.setItem('preferencesTab', tabKey); } catch (e) {}
-      }
-
-      tabs.forEach((b) => {
-        b.addEventListener('click', function () {
-          const key = b.getAttribute('data-pref-tab') || 'ui';
-          activate(key);
-        });
-      });
-
-      let initial = 'ui';
-      const hash = (window.location.hash || '').replace('#', '').trim();
-      if (hash && (hash === 'ui' || hash === 'mail')) initial = hash;
-      else {
-        try {
-          const saved = localStorage.getItem('preferencesTab');
-          if (saved && (saved === 'ui' || saved === 'mail')) initial = saved;
-        } catch (e) {}
-      }
-      activate(initial);
-    })();
-  </script>
 {% endblock %}
 

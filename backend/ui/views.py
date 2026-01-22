@@ -1120,6 +1120,20 @@ def preferences(request: HttpRequest) -> HttpResponse:
     Настройки пользователя (не админские).
     Здесь собраны страницы, которые доступны всем ролям и позволяют что-то "донастроить".
     """
+    return render(
+        request,
+        "ui/preferences.html",
+        {
+            "user": request.user,
+        },
+    )
+
+
+@login_required
+def preferences_ui(request: HttpRequest) -> HttpResponse:
+    """
+    Настройки интерфейса (персональные): масштаб шрифта и т.п.
+    """
     user = request.user
 
     if request.method == "POST":
@@ -1131,10 +1145,9 @@ def preferences(request: HttpRequest) -> HttpResponse:
 
         if scale is None or not (0.90 <= scale <= 1.15):
             messages.error(request, "Некорректный масштаб. Допустимо от 90% до 115%.")
-            return redirect("preferences")
+            return redirect("preferences_ui")
 
         prefs = UiUserPreference.load_for_user(user)
-        # DecimalField хранит нормально, но пишем аккуратно и ограничиваем шагом 0.01
         prefs.font_scale = Decimal(f"{scale:.2f}")
         prefs.save(update_fields=["font_scale", "updated_at"])
         try:
@@ -1142,16 +1155,30 @@ def preferences(request: HttpRequest) -> HttpResponse:
         except Exception:
             pass
         messages.success(request, "Настройки интерфейса сохранены.")
-        return redirect("preferences")
+        return redirect("preferences_ui")
 
     prefs = UiUserPreference.load_for_user(user)
     font_scale = prefs.font_scale_float()
     return render(
         request,
-        "ui/preferences.html",
+        "ui/preferences_ui.html",
         {
             "user": user,
             "ui_font_scale_value": font_scale,
+        },
+    )
+
+
+@login_required
+def preferences_mail(request: HttpRequest) -> HttpResponse:
+    """
+    Почтовые настройки/разделы.
+    """
+    return render(
+        request,
+        "ui/preferences_mail.html",
+        {
+            "user": request.user,
         },
     )
 
