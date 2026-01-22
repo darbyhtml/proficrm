@@ -1,4 +1,5 @@
 import mimetypes
+import re
 from uuid import UUID
 from django import forms
 from django.forms import inlineformset_factory, BaseInlineFormSet, ValidationError
@@ -10,6 +11,69 @@ from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus,
 from tasksapp.models import Task, TaskType
 from ui.models import UiGlobalConfig
 from ui.widgets import TaskTypeSelectWidget, UserSelectWithBranchWidget
+
+
+RUS_TZ_CHOICES: list[tuple[str, str]] = [
+    ("Europe/Kaliningrad", "Калининград (UTC+02)"),
+    ("Europe/Moscow", "Москва / СПБ (UTC+03)"),
+    ("Europe/Samara", "Самара (UTC+04)"),
+    ("Asia/Yekaterinburg", "Екатеринбург / Тюмень (UTC+05)"),
+    ("Asia/Omsk", "Омск (UTC+06)"),
+    ("Asia/Novosibirsk", "Новосибирск (UTC+07)"),
+    ("Asia/Krasnoyarsk", "Красноярск (UTC+07)"),
+    ("Asia/Irkutsk", "Иркутск (UTC+08)"),
+    ("Asia/Yakutsk", "Якутск (UTC+09)"),
+    ("Asia/Vladivostok", "Владивосток (UTC+10)"),
+    ("Asia/Sakhalin", "Сахалин (UTC+11)"),
+    ("Asia/Magadan", "Магадан (UTC+11)"),
+    ("Asia/Kamchatka", "Камчатка (UTC+12)"),
+]
+
+
+def _guess_ru_timezone_from_address(address: str) -> str:
+    """
+    Эвристика определения часового пояса по адресу (Россия).
+    Если не удалось — вернёт пустую строку (ничего не подставляем).
+    """
+    s = (address or "").strip().lower()
+    if not s:
+        return ""
+
+    # Нормализуем: убираем лишнюю пунктуацию, приводим "обл."/"область", "край" и т.п.
+    s = s.replace("ё", "е")
+    s = re.sub(r"[\.,;:()\[\]{}]", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+
+    # Дальний восток / восток — проверяем в первую очередь
+    far_map: list[tuple[str, list[str]]] = [
+        ("Asia/Kamchatka", ["камчат", "петропавловск", "камчатский край"]),
+        ("Asia/Magadan", ["магадан"]),
+        ("Asia/Sakhalin", ["сахалин", "южно-сахалинск"]),
+        ("Asia/Vladivostok", ["владивосток", "примор", "хабаров", "амур", "благовещенск", "еврейская автоном", "биробиджан"]),
+        ("Asia/Yakutsk", ["якут", "саха", "нерюнгри", "алдан", "ленск"]),
+        ("Asia/Irkutsk", ["иркут", "улан-удэ", "бурят", "чита", "забайкал", "прибайкал"]),
+        ("Asia/Krasnoyarsk", ["краснояр", "хакас", "абакан", "тыва", "тува", "кызыл"]),
+        ("Asia/Novosibirsk", ["новосибир", "томск", "кемеров", "кузбасс", "алтай", "барнаул", "горно-алтайск", "республика алтай"]),
+        ("Asia/Omsk", ["омск"]),
+        ("Asia/Yekaterinburg", ["екатеринбург", "свердлов", "тюмен", "ханты-мансий", "юмр", "ямало-ненец", "курган", "челябин", "перм", "удмурт", "ижевск", "оренбург"]),
+        ("Europe/Samara", ["самар", "ульянов", "тольятти", "сызрань", "саратов", "татарстан", "казань"]),
+        ("Europe/Kaliningrad", ["калининград"]),
+        ("Europe/Moscow", []),  # дефолт для РФ/большинства регионов
+    ]
+
+    for tz, keys in far_map:
+        if not keys:
+            continue
+        for k in keys:
+            if k and k in s:
+                return tz
+
+    # Для остальных регионов РФ считаем МСК (UTC+03)
+    # Если адрес явно не РФ (латиница + без регионов) — не подставляем
+    has_cyrillic = bool(re.search(r"[а-я]", s))
+    if has_cyrillic:
+        return "Europe/Moscow"
+    return ""
 
 
 class FlexibleUserChoiceField(forms.ModelChoiceField):
@@ -158,6 +222,28 @@ class CompanyCreateForm(forms.ModelForm):
         
         # Поле email необязательное (бывают ситуации, когда email еще неизвестен)
         self.fields["email"].required = False
+
+        # Часовой пояс: показываем понятный селект по РФ + авто по адресу при пустом значении.
+        self.fields["work_timezone"].required = False
+        _choices = [("", "Авто (по адресу)")] + RUS_TZ_CHOICES
+        self.fields["work_timezone"].widget = forms.Select(choices=_choices, attrs={"class": "w-full rounded-lg border px-3 py-2"})
+        # На GET (когда форма не связана) подставляем предположение из адреса
+        if not self.is_bound:
+            addr = (getattr(self.instance, "address", "") or "").strip()
+            if addr and not (getattr(self.instance, "work_timezone", "") or "").strip():
+                guessed = _guess_ru_timezone_from_address(addr)
+                if guessed:
+                    self.initial["work_timezone"] = guessed
+
+    def clean(self):
+        cleaned = super().clean()
+        tz = (cleaned.get("work_timezone") or "").strip()
+        addr = (cleaned.get("address") or "").strip()
+        if not tz and addr:
+            guessed = _guess_ru_timezone_from_address(addr)
+            if guessed:
+                cleaned["work_timezone"] = guessed
+        return cleaned
     
     class Meta:
         model = Company
@@ -195,7 +281,7 @@ class CompanyCreateForm(forms.ModelForm):
             "employees_count": forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "min": "0", "placeholder": "Напр.: 120"}),
             "workday_start": forms.TimeInput(attrs={"type": "time", "class": "w-full rounded-lg border px-3 py-2"}),
             "workday_end": forms.TimeInput(attrs={"type": "time", "class": "w-full rounded-lg border px-3 py-2"}),
-            "work_timezone": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "Напр.: Europe/Moscow"}),
+            "work_timezone": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "work_schedule": forms.Textarea(attrs={"rows": 6, "class": "w-full rounded-lg border px-3 py-2 font-mono text-sm", "placeholder": "Например:\nПн-Пт: 09:00-18:00\nСб: 10:00-16:00\nВс: выходной\n\nИли скопируйте режим работы с сайта компании. Время автоматически форматируется в формат HH:MM."}),
             "contract_type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "contract_until": forms.DateInput(attrs={"type": "date", "class": "w-full rounded-lg border px-3 py-2"}),
@@ -240,6 +326,30 @@ class CompanyEditForm(forms.ModelForm):
             self.fields["head_company"].queryset = Company.objects.filter(id=current_id).only("id", "name", "head_company_id")
         else:
             self.fields["head_company"].queryset = Company.objects.none()
+
+        # Часовой пояс: селект по РФ + авто по адресу при пустом значении.
+        self.fields["work_timezone"].required = False
+        _choices = [("", "Авто (по адресу)")] + RUS_TZ_CHOICES
+        current_tz = (getattr(self.instance, "work_timezone", "") or "").strip()
+        if current_tz and all(v != current_tz for v, _ in _choices):
+            _choices = _choices + [(current_tz, current_tz)]
+        self.fields["work_timezone"].widget = forms.Select(choices=_choices, attrs={"class": "w-full rounded-lg border px-3 py-2"})
+        if not self.is_bound:
+            addr = (getattr(self.instance, "address", "") or "").strip()
+            if addr and not (getattr(self.instance, "work_timezone", "") or "").strip():
+                guessed = _guess_ru_timezone_from_address(addr)
+                if guessed:
+                    self.initial["work_timezone"] = guessed
+
+    def clean(self):
+        cleaned = super().clean()
+        tz = (cleaned.get("work_timezone") or "").strip()
+        addr = (cleaned.get("address") or "").strip()
+        if not tz and addr:
+            guessed = _guess_ru_timezone_from_address(addr)
+            if guessed:
+                cleaned["work_timezone"] = guessed
+        return cleaned
 
     def clean_head_company(self):
         hc = self.cleaned_data.get("head_company")
@@ -303,7 +413,7 @@ class CompanyEditForm(forms.ModelForm):
             "employees_count": forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "min": "0", "placeholder": "Напр.: 120"}),
             "workday_start": forms.TimeInput(attrs={"type": "time", "class": "w-full rounded-lg border px-3 py-2"}),
             "workday_end": forms.TimeInput(attrs={"type": "time", "class": "w-full rounded-lg border px-3 py-2"}),
-            "work_timezone": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "placeholder": "Напр.: Europe/Moscow"}),
+            "work_timezone": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "work_schedule": forms.Textarea(attrs={"rows": 6, "class": "w-full rounded-lg border px-3 py-2 font-mono text-sm", "placeholder": "Например:\nПн-Пт: 09:00-18:00\nСб: 10:00-16:00\nВс: выходной\n\nИли скопируйте режим работы с сайта компании. Время автоматически форматируется в формат HH:MM."}),
             "contract_type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "contract_until": forms.DateInput(attrs={"type": "date", "class": "w-full rounded-lg border px-3 py-2"}),

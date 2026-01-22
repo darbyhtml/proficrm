@@ -207,3 +207,71 @@ def tz_now_hhmm(tz_name: str) -> str:
     except Exception:
         return ""
 
+
+try:
+    import phonenumbers  # type: ignore
+    from phonenumbers import geocoder as _pn_geocoder  # type: ignore
+    from phonenumbers import timezone as _pn_tz  # type: ignore
+except Exception:  # pragma: no cover
+    phonenumbers = None
+    _pn_geocoder = None
+    _pn_tz = None
+
+
+@lru_cache(maxsize=2048)
+def _parse_phone(raw: str):
+    if not raw:
+        return None
+    if phonenumbers is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    try:
+        # По умолчанию считаем RU, чтобы "8..." и "9xx..." распознавались.
+        return phonenumbers.parse(s, "RU")
+    except Exception:
+        return None
+
+
+@register.filter(name="phone_local_info")
+def phone_local_info(raw_phone: str) -> str:
+    """
+    Подсказка под телефоном: текущее время и регион/город, определённые по номеру.
+    Пример: "19:26 - Тюменская обл".
+    """
+    num = _parse_phone(str(raw_phone or "").strip())
+    if not num or phonenumbers is None:
+        return ""
+
+    try:
+        tz_name = None
+        if _pn_tz is not None:
+            tzs = _pn_tz.time_zones_for_number(num) or ()
+            tz_name = tzs[0] if tzs else None
+
+        region = ""
+        if _pn_geocoder is not None:
+            region = (_pn_geocoder.description_for_number(num, "ru") or "").strip()
+
+        hhmm = ""
+        if tz_name:
+            try:
+                hhmm = timezone.now().astimezone(_zoneinfo(tz_name)).strftime("%H:%M")
+            except Exception:
+                hhmm = ""
+
+        # Если регион не определился — показываем TZ-лейбл
+        if not region and tz_name:
+            region = tz_label(tz_name)
+
+        if not hhmm and not region:
+            return ""
+        if not region:
+            return hhmm
+        if not hhmm:
+            return region
+        return f"{hhmm} - {region}"
+    except Exception:
+        return ""
+

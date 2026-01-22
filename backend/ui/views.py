@@ -3658,7 +3658,13 @@ def company_main_phone_update(request: HttpRequest, company_id) -> HttpResponse:
         message="Инлайн: обновлен основной телефон",
     )
 
-    return JsonResponse({"success": True, "phone": normalized, "display": format_phone(normalized) if normalized else "—"})
+    try:
+        from ui.templatetags.ui_extras import phone_local_info  # type: ignore
+        local_info = phone_local_info(normalized)
+    except Exception:
+        local_info = ""
+
+    return JsonResponse({"success": True, "phone": normalized, "display": format_phone(normalized) if normalized else "—", "local_info": local_info})
 
 
 @login_required
@@ -3702,7 +3708,13 @@ def company_phone_value_update(request: HttpRequest, company_phone_id) -> HttpRe
         message="Инлайн: обновлен дополнительный телефон",
     )
 
-    return JsonResponse({"success": True, "phone": normalized, "display": format_phone(normalized)})
+    try:
+        from ui.templatetags.ui_extras import phone_local_info  # type: ignore
+        local_info = phone_local_info(normalized)
+    except Exception:
+        local_info = ""
+
+    return JsonResponse({"success": True, "phone": normalized, "display": format_phone(normalized), "local_info": local_info})
 
 
 @login_required
@@ -3745,7 +3757,13 @@ def company_phone_create(request: HttpRequest, company_id) -> HttpResponse:
         message="Инлайн: добавлен дополнительный телефон",
     )
 
-    return JsonResponse({"success": True, "id": company_phone.id, "phone": normalized, "display": format_phone(normalized)})
+    try:
+        from ui.templatetags.ui_extras import phone_local_info  # type: ignore
+        local_info = phone_local_info(normalized)
+    except Exception:
+        local_info = ""
+
+    return JsonResponse({"success": True, "id": company_phone.id, "phone": normalized, "display": format_phone(normalized), "local_info": local_info})
 
 
 @login_required
