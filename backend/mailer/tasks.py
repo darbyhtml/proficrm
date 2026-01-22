@@ -20,6 +20,43 @@ from mailer.mail_content import apply_signature, append_unsubscribe_footer, buil
 logger = logging.getLogger(__name__)
 
 
+def _is_transient_send_error(err: str) -> bool:
+    """
+    Пытаемся отличить временные/системные ошибки от постоянных (битый ящик и т.п.).
+    Временные ошибки НЕ должны превращать весь список получателей в FAILED.
+    """
+    e = (err or "").strip().lower()
+    if not e:
+        return False
+
+    # SMTP коды, которые чаще всего означают "временно"
+    transient_codes = ("421", "450", "451", "452")
+    for code in transient_codes:
+        if f"(код {code})" in e or f" код {code}" in e:
+            return True
+
+    # Типичные временные признаки (по тексту из format_smtp_error / окружения)
+    transient_hints = (
+        "service unavailable",
+        "try again later",
+        "попробуйте позже",
+        "таймаут",
+        "timed out",
+        "timeout",
+        "temporary failure",
+        "temporarily",
+        "временно",
+        "too many",
+        "rate",
+        "connection",
+        "соединен",
+        "dns",
+        "no route to host",
+        "network is unreachable",
+    )
+    return any(h in e for h in transient_hints)
+
+
 def _is_working_hours(now=None) -> bool:
     """
     Проверка, находится ли текущее время в рабочем времени (9:00-18:00 МСК).
@@ -300,6 +337,7 @@ def send_pending_emails(self, batch_size: int = 50):
                 now_ts = timezone.now()
                 recipients_to_update = []
                 logs_to_create = []
+                transient_blocked = False
 
                 for r in batch:
                     email_norm = (r.email or "").strip().lower()
@@ -362,6 +400,27 @@ def send_pending_emails(self, batch_size: int = 50):
                         else:
                             logger.error(f"Failed to send email {r.email}: {ex}", exc_info=True)
 
+                        # Если ошибка похожа на временную/системную — не превращаем всю кампанию в FAILED.
+                        # Ставим текущего получателя обратно в PENDING и выходим из батча (ретрай позже).
+                        if _is_transient_send_error(err):
+                            r.status = CampaignRecipient.Status.PENDING
+                            r.last_error = (err or "Временная ошибка отправки")[:255]
+                            r.updated_at = timezone.now()
+                            recipients_to_update.append(r)
+                            logs_to_create.append(
+                                SendLog(
+                                    campaign=camp,
+                                    recipient=r,
+                                    account=None,
+                                    provider="smtp_global",
+                                    status="failed",
+                                    error=(err or "Временная ошибка отправки")[:500],
+                                )
+                            )
+                            transient_blocked = True
+                            break
+
+                        # Постоянная ошибка — помечаем получателя как FAILED
                         r.status = CampaignRecipient.Status.FAILED
                         r.last_error = (err or "Ошибка отправки")[:255]
                         r.updated_at = timezone.now()
@@ -386,6 +445,14 @@ def send_pending_emails(self, batch_size: int = 50):
                     smtp.quit()
                 except Exception:
                     pass
+
+            # Если упёрлись во временную ошибку — освобождаем очередь, чтобы не блокировать другие кампании.
+            if transient_blocked:
+                queue_entry = getattr(camp, "queue_entry", None)
+                if queue_entry and queue_entry.status == CampaignQueue.Status.PROCESSING:
+                    queue_entry.status = CampaignQueue.Status.PENDING
+                    queue_entry.started_at = None
+                    queue_entry.save(update_fields=["status", "started_at"])
 
             # Если очередь пустая — помечаем как SENT (если уже было SENDING)
             if not camp.recipients.filter(status=CampaignRecipient.Status.PENDING).exists():

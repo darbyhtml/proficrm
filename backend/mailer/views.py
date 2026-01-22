@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.paginator import Paginator
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Exists, OuterRef
 from django.http import HttpRequest, HttpResponse
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -780,6 +780,13 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
         "unsub": camp.recipients.filter(status=CampaignRecipient.Status.UNSUBSCRIBED).count(),
         "total": camp.recipients.count(),
     }
+    # Альтернативный взгляд "кому реально уходило" — по логам SendLog (полезно, если статусы получателей сбрасывали).
+    counts["sent_log"] = (
+        SendLog.objects.filter(campaign=camp, provider="smtp_global", status="sent", recipient__isnull=False)
+        .values("recipient_id")
+        .distinct()
+        .count()
+    )
     
     # Пагинация с выбором per_page (как в company_list)
     per_page_param = request.GET.get("per_page", "").strip()
@@ -798,7 +805,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
     
     # "Стопки" по статусу в UI
     view = (request.GET.get("view") or "").strip().lower()
-    allowed_views = {"pending", "sent", "failed", "unsub", "all"}
+    allowed_views = {"pending", "sent", "failed", "unsub", "sent_log", "all"}
     if view not in allowed_views:
         # По умолчанию показываем "pending", если есть, иначе "all"
         view = "pending" if counts["pending"] > 0 else "all"
@@ -816,6 +823,14 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
         all_recipients_qs = all_recipients_qs.filter(status=CampaignRecipient.Status.FAILED)
     elif view == "unsub":
         all_recipients_qs = all_recipients_qs.filter(status=CampaignRecipient.Status.UNSUBSCRIBED)
+    elif view == "sent_log":
+        sent_exists = SendLog.objects.filter(
+            campaign=camp,
+            provider="smtp_global",
+            status="sent",
+            recipient_id=OuterRef("id"),
+        )
+        all_recipients_qs = all_recipients_qs.annotate(_sent_log=Exists(sent_exists)).filter(_sent_log=True)
     # Если view == "all" - не применяем фильтр, показываем всех
     
     # Пагинация для таблицы
@@ -1185,12 +1200,16 @@ def campaign_add_email(request: HttpRequest) -> JsonResponse:
         defaults={"status": CampaignRecipient.Status.PENDING, "company_id": company_uuid},
     )
     if not created and r.status != CampaignRecipient.Status.PENDING:
-        r.status = CampaignRecipient.Status.PENDING
-        r.last_error = ""
-        if company_uuid and not r.company_id:
-            r.company_id = company_uuid
-        r.save(update_fields=["status", "last_error", "company_id", "updated_at"])
-        return JsonResponse({"ok": True, "status": "pending", "message": "Email добавлен, статус сброшен в очередь."})
+        # Безопасное поведение: не переотправляем тем, кому уже отправлено.
+        # Повторяем автоматически только FAILED -> PENDING.
+        if r.status == CampaignRecipient.Status.FAILED:
+            r.status = CampaignRecipient.Status.PENDING
+            r.last_error = ""
+            if company_uuid and not r.company_id:
+                r.company_id = company_uuid
+            r.save(update_fields=["status", "last_error", "company_id", "updated_at"])
+            return JsonResponse({"ok": True, "status": "pending", "message": "Email был с ошибкой — возвращён в очередь."})
+        return JsonResponse({"ok": True, "status": r.status, "message": "Email уже есть в кампании. Повторная отправка не выполняется автоматически."})
 
     return JsonResponse({"ok": True, "status": r.status, "message": "Email добавлен." if created else "Email уже был в кампании."})
 
@@ -1232,8 +1251,8 @@ def campaign_recipient_add(request: HttpRequest, campaign_id) -> HttpResponse:
         messages.warning(request, f"{email} в списке отписавшихся — добавлен как 'Отписался'.")
         return redirect("campaign_detail", campaign_id=camp.id)
 
-    # ВАЖНО: При добавлении получателя всегда создаем/обновляем со статусом PENDING
-    # даже если получатель уже существовал (например, был удален и добавлен снова)
+    # ВАЖНО: Безопасное поведение — не сбрасываем SENT обратно в PENDING автоматически.
+    # Автоматически возвращаем в очередь только FAILED -> PENDING.
     recipient, created = CampaignRecipient.objects.get_or_create(
         campaign=camp,
         email=email,
@@ -1241,10 +1260,13 @@ def campaign_recipient_add(request: HttpRequest, campaign_id) -> HttpResponse:
     )
     # Если получатель уже существовал, но его статус не PENDING - сбрасываем на PENDING
     if not created and recipient.status != CampaignRecipient.Status.PENDING:
-        recipient.status = CampaignRecipient.Status.PENDING
-        recipient.last_error = ""
-        recipient.save(update_fields=["status", "last_error", "updated_at"])
-        messages.success(request, f"Получатель добавлен заново: {email} (статус сброшен на 'В очереди')")
+        if recipient.status == CampaignRecipient.Status.FAILED:
+            recipient.status = CampaignRecipient.Status.PENDING
+            recipient.last_error = ""
+            recipient.save(update_fields=["status", "last_error", "updated_at"])
+            messages.success(request, f"Получатель был с ошибкой: {email} (возвращён в очередь)")
+        else:
+            messages.info(request, f"Получатель уже есть: {email} (статус: {recipient.get_status_display()}). Повторная отправка не включена.")
     elif created:
         messages.success(request, f"Добавлен получатель: {email}")
     else:
@@ -1558,7 +1580,9 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
 @login_required
 def campaign_recipients_reset(request: HttpRequest, campaign_id) -> HttpResponse:
     """
-    Вернуть получателей для повторной рассылки: SENT/FAILED → PENDING (UNSUBSCRIBED не трогаем).
+    Вернуть получателей для повторной рассылки.
+    По умолчанию: FAILED → PENDING (без повторной отправки тем, кому уже отправлено).
+    Опционально (только админ): SENT/FAILED → PENDING.
     """
     user: User = request.user
     camp = get_object_or_404(Campaign, id=campaign_id)
@@ -1568,10 +1592,43 @@ def campaign_recipients_reset(request: HttpRequest, campaign_id) -> HttpResponse
     if request.method != "POST":
         return redirect("campaign_detail", campaign_id=camp.id)
 
-    qs = camp.recipients.filter(status__in=[CampaignRecipient.Status.SENT, CampaignRecipient.Status.FAILED])
-    updated = qs.update(status=CampaignRecipient.Status.PENDING, last_error="")
-    messages.success(request, f"Возвращено в очередь: {updated}. Нажмите «Старт», чтобы снова запустить рассылку.")
-    log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Сброс статусов получателей", meta={"reset": updated})
+    scope = (request.POST.get("scope") or "failed").strip().lower()
+    if scope not in ("failed", "all"):
+        messages.error(request, "Некорректный режим сброса.")
+        return redirect("campaign_detail", campaign_id=camp.id)
+
+    if scope == "failed":
+        qs = camp.recipients.filter(status=CampaignRecipient.Status.FAILED)
+        updated = qs.update(status=CampaignRecipient.Status.PENDING, last_error="")
+        messages.success(request, f"Возвращено в очередь (только ошибки): {updated}. Нажмите «Старт», чтобы снова запустить рассылку.")
+        log_event(
+            actor=user,
+            verb=ActivityEvent.Verb.UPDATE,
+            entity_type="campaign",
+            entity_id=camp.id,
+            message="Сброс статусов получателей (только ошибки)",
+            meta={"reset": updated, "scope": "failed"},
+        )
+    else:
+        # scope == "all"
+        if user.role != User.Role.ADMIN and not user.is_superuser:
+            messages.error(request, "Недостаточно прав для повторной отправки всем.")
+            return redirect("campaign_detail", campaign_id=camp.id)
+        qs = camp.recipients.filter(status__in=[CampaignRecipient.Status.SENT, CampaignRecipient.Status.FAILED])
+        updated = qs.update(status=CampaignRecipient.Status.PENDING, last_error="")
+        messages.success(
+            request,
+            f"Возвращено в очередь (включая отправленные): {updated}. "
+            f"Нажмите «Старт», чтобы снова запустить рассылку. ВНИМАНИЕ: письма могут уйти повторно.",
+        )
+        log_event(
+            actor=user,
+            verb=ActivityEvent.Verb.UPDATE,
+            entity_type="campaign",
+            entity_id=camp.id,
+            message="Сброс статусов получателей (включая отправленные)",
+            meta={"reset": updated, "scope": "all"},
+        )
 
     # ВАЖНО: «Вернуть в очередь» не должно автоматически стартовать отправку.
     # Переводим кампанию в DRAFT и отменяем запись в очереди (если была).

@@ -83,18 +83,21 @@ class MailerQueueConsistencyTests(TestCase):
         self.assertEqual(q.status, CampaignQueue.Status.CANCELLED)
         self.assertIsNotNone(q.completed_at)
 
-    def test_campaign_recipients_reset_puts_in_queue(self):
+    def test_campaign_recipients_reset_resets_only_failed_by_default(self):
         camp = self._make_campaign()
         camp.status = Campaign.Status.SENDING
         camp.save(update_fields=["status", "updated_at"])
-        r = CampaignRecipient.objects.create(campaign=camp, email="a@example.com", status=CampaignRecipient.Status.SENT)
+        r_sent = CampaignRecipient.objects.create(campaign=camp, email="a@example.com", status=CampaignRecipient.Status.SENT)
+        r_failed = CampaignRecipient.objects.create(campaign=camp, email="b@example.com", status=CampaignRecipient.Status.FAILED, last_error="x")
         # Имитируем ситуацию, когда кампания могла быть в очереди.
         q = CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.PENDING, priority=0)
 
         resp = self.client.post(reverse("campaign_recipients_reset", kwargs={"campaign_id": camp.id}))
         self.assertEqual(resp.status_code, 302)
-        r.refresh_from_db()
-        self.assertEqual(r.status, CampaignRecipient.Status.PENDING)
+        r_sent.refresh_from_db()
+        r_failed.refresh_from_db()
+        self.assertEqual(r_sent.status, CampaignRecipient.Status.SENT)
+        self.assertEqual(r_failed.status, CampaignRecipient.Status.PENDING)
         camp.refresh_from_db()
         self.assertEqual(camp.status, Campaign.Status.DRAFT)
         q.refresh_from_db()
@@ -102,3 +105,30 @@ class MailerQueueConsistencyTests(TestCase):
         self.assertEqual(q.status, CampaignQueue.Status.CANCELLED)
         self.assertIsNone(q.started_at)
         self.assertIsNotNone(q.completed_at)
+
+    def test_campaign_recipients_reset_all_requires_admin(self):
+        # Создаем кампанию менеджера и одного отправленного получателя
+        camp = self._make_campaign()
+        camp.status = Campaign.Status.SENDING
+        camp.save(update_fields=["status", "updated_at"])
+        r_sent = CampaignRecipient.objects.create(campaign=camp, email="a@example.com", status=CampaignRecipient.Status.SENT)
+
+        # Менеджер не может сбросить SENT в PENDING через scope=all
+        resp = self.client.post(
+            reverse("campaign_recipients_reset", kwargs={"campaign_id": camp.id}),
+            data={"scope": "all"},
+        )
+        self.assertEqual(resp.status_code, 302)
+        r_sent.refresh_from_db()
+        self.assertEqual(r_sent.status, CampaignRecipient.Status.SENT)
+
+        # Админ может
+        admin = User.objects.create_user(username="adm", password="pass", role=User.Role.ADMIN, email="adm@example.com")
+        self.client.force_login(admin)
+        resp = self.client.post(
+            reverse("campaign_recipients_reset", kwargs={"campaign_id": camp.id}),
+            data={"scope": "all"},
+        )
+        self.assertEqual(resp.status_code, 302)
+        r_sent.refresh_from_db()
+        self.assertEqual(r_sent.status, CampaignRecipient.Status.PENDING)
