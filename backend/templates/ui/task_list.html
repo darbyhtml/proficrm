@@ -274,14 +274,17 @@
                   {% if t.company %}
                     <div style="line-height:1.4">
                       <a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>
-                      {% if t.company.work_timezone %}
-                        <div class="text-[11px] muted-2 mt-1" title="{{ t.company.work_timezone }}">
-                          {{ t.company.work_timezone|tz_label }}
-                          {% with now_hhmm=t.company.work_timezone|tz_now_hhmm %}
-                            {% if now_hhmm %} · сейчас {{ now_hhmm }}{% endif %}
-                          {% endwith %}
-                        </div>
-                      {% endif %}
+                      {% with tz=t.company.work_timezone|default:t.company.address|guess_ru_tz %}
+                        {% if tz %}
+                          <div class="text-[11px] muted-2 mt-1" title="{{ tz }}">
+                            {{ tz|tz_label }}
+                            {% with now_hhmm=tz|tz_now_hhmm %}
+                              {% if now_hhmm %} · сейчас {{ now_hhmm }}{% endif %}
+                            {% endwith %}
+                            {% if not t.company.work_timezone %}<span class="muted-2"> · авто</span>{% endif %}
+                          </div>
+                        {% endif %}
+                      {% endwith %}
                     </div>
                   {% else %}
                     —

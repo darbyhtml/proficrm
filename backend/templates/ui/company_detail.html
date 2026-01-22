@@ -299,6 +299,22 @@
               {% endif %}
             </div>
           </div>
+          <div>
+            <div class="text-brand-dark/50">Часовой пояс</div>
+            {% with tz=company.work_timezone|default:company.address|guess_ru_tz %}
+              {% if tz %}
+                <div>
+                  {{ tz|tz_label }}
+                  {% with now_hhmm=tz|tz_now_hhmm %}
+                    {% if now_hhmm %}<span class="text-brand-dark/60 text-xs">· сейчас {{ now_hhmm }}</span>{% endif %}
+                  {% endwith %}
+                  {% if not company.work_timezone %}<span class="text-brand-dark/60 text-xs">· авто</span>{% endif %}
+                </div>
+              {% else %}
+                —
+              {% endif %}
+            {% endwith %}
+          </div>
           {% if company.work_schedule %}
           <div>
             <div class="text-brand-dark/50">Режим работы</div>
@@ -341,6 +357,11 @@
                 {% with info=company.phone|phone_local_info %}
                   {% if info %}<div class="text-[11px] muted-2 mt-0.5" data-company-main-phone-local>{{ info }}</div>{% endif %}
                 {% endwith %}
+                {% if not company.phone|phone_local_info %}
+                  {% with tz=company.work_timezone|default:company.address|guess_ru_tz %}
+                    {% if tz %}<div class="text-[11px] muted-2 mt-0.5">{{ tz|tz_now_hhmm }} - {{ tz|tz_label }}</div>{% endif %}
+                  {% endwith %}
+                {% endif %}
                 {% if can_edit_company %}
                   <div class="hidden mt-1" data-company-main-phone-edit>
                     <input class="input text-xs" data-company-main-phone-input value="{{ company.phone|default:'' }}" placeholder="+7..." style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:240px" />
@@ -446,6 +467,11 @@
                       {% with info=phone.value|phone_local_info %}
                         {% if info %}<div class="text-[11px] muted-2 mt-0.5" data-company-phone-local="{{ phone.id }}">{{ info }}</div>{% endif %}
                       {% endwith %}
+                      {% if not phone.value|phone_local_info %}
+                        {% with tz=company.work_timezone|default:company.address|guess_ru_tz %}
+                          {% if tz %}<div class="text-[11px] muted-2 mt-0.5">{{ tz|tz_now_hhmm }} - {{ tz|tz_label }}</div>{% endif %}
+                        {% endwith %}
+                      {% endif %}
                       {% if can_edit_company %}
                         <div class="hidden mt-1" data-company-phone-edit="{{ phone.id }}">
                           <input class="input text-xs" data-company-phone-input value="{{ phone.value|default:'' }}" placeholder="+7..." style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:240px" />
@@ -819,6 +845,11 @@
                             {% with info=p.value|phone_local_info %}
                               {% if info %}<div class="text-[11px] muted-2 mt-0.5">{{ info }}</div>{% endif %}
                             {% endwith %}
+                            {% if not p.value|phone_local_info %}
+                              {% with tz=company.work_timezone|default:company.address|guess_ru_tz %}
+                                {% if tz %}<div class="text-[11px] muted-2 mt-0.5">{{ tz|tz_now_hhmm }} - {{ tz|tz_label }}</div>{% endif %}
+                              {% endwith %}
+                            {% endif %}
                             {% if p.is_cold_call %}
                               <div class="mt-0.5 text-xs text-brand-dark/70">
                                 <span class="font-medium">Холодный звонок:</span>

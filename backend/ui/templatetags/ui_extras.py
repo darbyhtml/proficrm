@@ -1,5 +1,4 @@
 import re
-from datetime import datetime
 from functools import lru_cache
 from zoneinfo import ZoneInfo
 
@@ -137,6 +136,8 @@ _TZ_LABELS: dict[str, str] = {
     "Asia/Kamchatka": "КМЧ",
 }
 
+from ui.timezone_utils import guess_ru_timezone_from_address
+
 
 @lru_cache(maxsize=128)
 def _zoneinfo(name: str) -> ZoneInfo:
@@ -204,6 +205,15 @@ def tz_now_hhmm(tz_name: str) -> str:
         z = _zoneinfo(name)
         local_dt = dt.astimezone(z)
         return local_dt.strftime("%H:%M")
+    except Exception:
+        return ""
+
+
+@register.filter(name="guess_ru_tz")
+def guess_ru_tz(address: str) -> str:
+    """IANA TZ по адресу (эвристика по РФ)."""
+    try:
+        return guess_ru_timezone_from_address(address)
     except Exception:
         return ""
 
