@@ -1,0 +1,32 @@
+{% extends "ui/base.html" %}
+{% block title %}Настройки — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <div class="space-y-4">
+    <div class="flex items-end justify-between gap-3">
+      <div>
+        <h1 class="text-2xl font-semibold">Настройки</h1>
+        <div class="muted text-sm">Персональные настройки: подпись в письмах и другие параметры.</div>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="card card-pad">
+        <div class="font-medium mb-1">Подпись в письмах</div>
+        <div class="text-sm muted mb-3">Настройте подпись, которая автоматически добавляется к вашим письмам.</div>
+        <a class="btn btn-primary" href="/mail/signature/">Открыть</a>
+      </div>
+
+      <div class="card card-pad">
+        <div class="font-medium mb-1">Почта</div>
+        <div class="text-sm muted mb-3">Создание кампаний, получатели и отправка.</div>
+        <a class="btn btn-outline" href="/mail/campaigns/">Открыть</a>
+      </div>
+    </div>
+
+    <div class="text-xs muted-2">
+      Если вам нужны админские настройки (пользователи, справочники, безопасность) — они доступны только администраторам.
+    </div>
+  </div>
+{% endblock %}
+

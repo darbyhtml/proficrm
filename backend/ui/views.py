@@ -1113,6 +1113,21 @@ def help_page(request: HttpRequest) -> HttpResponse:
     return render(request, "ui/help.html")
 
 
+@login_required
+def preferences(request: HttpRequest) -> HttpResponse:
+    """
+    Настройки пользователя (не админские).
+    Здесь собраны страницы, которые доступны всем ролям и позволяют что-то "донастроить".
+    """
+    return render(
+        request,
+        "ui/preferences.html",
+        {
+            "user": request.user,
+        },
+    )
+
+
 def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
     """
     Страница конкретного сотрудника (менеджера/РОП/директора).

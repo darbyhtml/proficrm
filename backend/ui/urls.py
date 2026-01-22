@@ -9,6 +9,7 @@ urlpatterns = [
     path("analytics/", views.analytics, name="analytics"),
     path("analytics/users/<int:user_id>/", views.analytics_user, name="analytics_user"),
     path("help/", views.help_page, name="help"),
+    path("preferences/", views.preferences, name="preferences"),
     path("reports/cold-calls/day/", views.cold_calls_report_day, name="cold_calls_report_day"),
     path("reports/cold-calls/month/", views.cold_calls_report_month, name="cold_calls_report_month"),
     path("reports/cold-calls/last-7-days/", views.cold_calls_report_last_7_days, name="cold_calls_report_last_7_days"),
