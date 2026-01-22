@@ -58,6 +58,7 @@
       .btn-danger.btn-primary{background:#b91c1c; color:#fff; border-color:#b91c1c}
       .btn-danger.btn-primary:hover{background:#991b1b}
       /* Размеры бейджей */
+      .badge-xs{padding:.06rem .28rem; font-size:.60rem}
       .badge-sm{padding:.1rem .35rem; font-size:.65rem}
       .badge-md{padding:.15rem .55rem; font-size:.75rem}
       .badge-lg{padding:.2rem .7rem; font-size:.8125rem}
@@ -2693,6 +2694,34 @@
         
         const observer = new MutationObserver(initCustomDatetimePicker);
         observer.observe(document.body, { childList: true, subtree: true });
+      })();
+    </script>
+    <script>
+      // Live clock for elements with data-live-tz.
+      (function(){
+        function formatTimeInTz(tz){
+          try{
+            const fmt = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tz });
+            return fmt.format(new Date());
+          }catch(_e){
+            return '';
+          }
+        }
+
+        function tick(){
+          document.querySelectorAll('[data-live-time][data-live-tz]').forEach(function(el){
+            const tz = (el.getAttribute('data-live-tz') || '').trim();
+            if(!tz) return;
+            const t = formatTimeInTz(tz);
+            if(t) el.textContent = t;
+          });
+        }
+
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', function(){ tick(); setInterval(tick, 30000); });
+        } else {
+          tick(); setInterval(tick, 30000);
+        }
       })();
     </script>
     {% block extra_js %}{% endblock %}

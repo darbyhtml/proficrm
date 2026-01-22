@@ -276,12 +276,11 @@
                       <a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>
                       {% with tz=t.company.work_timezone|default:t.company.address|guess_ru_tz %}
                         {% if tz %}
-                          <div class="mt-1 inline-flex items-center gap-2 flex-wrap" title="{{ tz }}">
-                            <span class="badge badge-warn badge-sm">{{ tz|tz_label }}</span>
-                            {% with now_hhmm=tz|tz_now_hhmm %}
-                              {% if now_hhmm %}<span class="badge badge-warn badge-sm">Сейчас {{ now_hhmm }}</span>{% endif %}
-                            {% endwith %}
-                            {% if not t.company.work_timezone %}<span class="badge badge-warn badge-sm">Авто</span>{% endif %}
+                          <div class="mt-1">
+                            <span class="badge badge-warn badge-xs" title="{{ tz }}">
+                              <span data-live-time data-live-tz="{{ tz }}"></span>
+                              · {{ tz|tz_label }}
+                            </span>
                           </div>
                         {% endif %}
                       {% endwith %}

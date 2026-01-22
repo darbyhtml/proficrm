@@ -303,13 +303,11 @@
             <div class="text-brand-dark/50">Часовой пояс</div>
             {% with tz=company.work_timezone|default:company.address|guess_ru_tz %}
               {% if tz %}
-                <div class="inline-flex items-center gap-2 flex-wrap">
-                  <span class="badge badge-warn badge-sm">Часовой пояс</span>
-                  <span class="text-sm">{{ tz|tz_label }}</span>
-                  {% with now_hhmm=tz|tz_now_hhmm %}
-                    {% if now_hhmm %}<span class="badge badge-warn badge-sm">Сейчас {{ now_hhmm }}</span>{% endif %}
-                  {% endwith %}
-                  {% if not company.work_timezone %}<span class="badge badge-warn badge-sm">Авто</span>{% endif %}
+                <div>
+                  <span class="badge badge-warn badge-xs">
+                    <span data-live-time data-live-tz="{{ tz }}"></span>
+                    · {{ tz|tz_label }}
+                  </span>
                 </div>
               {% else %}
                 —
@@ -356,11 +354,11 @@
               <div class="min-w-0">
                 <div class="font-mono text-xs" data-company-main-phone-display>{{ company.phone|format_phone|default:"—" }}</div>
                 {% with info=company.phone|phone_local_info %}
-                  {% if info %}<div class="mt-1" data-company-main-phone-local><span class="badge badge-warn badge-sm">{{ info }}</span></div>{% endif %}
+                  {% if info %}<div class="mt-1" data-company-main-phone-local><span class="badge badge-warn badge-xs">{{ info }}</span></div>{% endif %}
                 {% endwith %}
                 {% if not company.phone|phone_local_info %}
                   {% with tz=company.work_timezone|default:company.address|guess_ru_tz %}
-                    {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-sm">{{ tz|tz_now_hhmm }} - {{ tz|tz_label }}</span></div>{% endif %}
+                    {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xs"><span data-live-time data-live-tz="{{ tz }}"></span> · {{ tz|tz_label }}</span></div>{% endif %}
                   {% endwith %}
                 {% endif %}
                 {% if can_edit_company %}
@@ -466,11 +464,11 @@
                     <div class="min-w-0">
                       <div class="font-mono text-xs" data-company-phone-display="{{ phone.id }}">{{ phone.value|format_phone }}</div>
                       {% with info=phone.value|phone_local_info %}
-                        {% if info %}<div class="mt-1" data-company-phone-local="{{ phone.id }}"><span class="badge badge-warn badge-sm">{{ info }}</span></div>{% endif %}
+                        {% if info %}<div class="mt-1" data-company-phone-local="{{ phone.id }}"><span class="badge badge-warn badge-xs">{{ info }}</span></div>{% endif %}
                       {% endwith %}
                       {% if not phone.value|phone_local_info %}
                         {% with tz=company.work_timezone|default:company.address|guess_ru_tz %}
-                          {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-sm">{{ tz|tz_now_hhmm }} - {{ tz|tz_label }}</span></div>{% endif %}
+                          {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xs"><span data-live-time data-live-tz="{{ tz }}"></span> · {{ tz|tz_label }}</span></div>{% endif %}
                         {% endwith %}
                       {% endif %}
                       {% if can_edit_company %}
@@ -844,11 +842,11 @@
                           <div class="flex-1">
                             <div class="font-mono text-xs">{{ p.value|format_phone }}</div>
                             {% with info=p.value|phone_local_info %}
-                              {% if info %}<div class="text-[11px] muted-2 mt-0.5">{{ info }}</div>{% endif %}
+                              {% if info %}<div class="mt-1"><span class="badge badge-warn badge-xs">{{ info }}</span></div>{% endif %}
                             {% endwith %}
                             {% if not p.value|phone_local_info %}
                               {% with tz=company.work_timezone|default:company.address|guess_ru_tz %}
-                                {% if tz %}<div class="text-[11px] muted-2 mt-0.5">{{ tz|tz_now_hhmm }} - {{ tz|tz_label }}</div>{% endif %}
+                                {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xs"><span data-live-time data-live-tz="{{ tz }}"></span> · {{ tz|tz_label }}</span></div>{% endif %}
                               {% endwith %}
                             {% endif %}
                             {% if p.is_cold_call %}
