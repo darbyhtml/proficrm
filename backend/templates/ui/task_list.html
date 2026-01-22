@@ -1,4 +1,5 @@
 {% extends "ui/base.html" %}
+{% load ui_extras %}
 {% block title %}Задачи — CRM ПРОФИ{% endblock %}
 
 {% block content %}
@@ -270,7 +271,21 @@
                   </div>
                 </td>
                 <td class="px-2 py-2" style="width:168px;min-width:168px;max-width:168px;word-wrap:break-word;overflow-wrap:break-word">
-                  {% if t.company %}<a class="link" href="/companies/{{ t.company.id }}/" style="line-height:1.4">{{ t.company.name }}</a>{% else %}—{% endif %}
+                  {% if t.company %}
+                    <div style="line-height:1.4">
+                      <a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>
+                      {% if t.company.work_timezone %}
+                        <div class="text-[11px] muted-2 mt-1" title="{{ t.company.work_timezone }}">
+                          {{ t.company.work_timezone|tz_label }}
+                          {% with now_hhmm=t.company.work_timezone|tz_now_hhmm %}
+                            {% if now_hhmm %} · сейчас {{ now_hhmm }}{% endif %}
+                          {% endwith %}
+                        </div>
+                      {% endif %}
+                    </div>
+                  {% else %}
+                    —
+                  {% endif %}
                 </td>
                 <td class="px-2 py-2" style="width:168px;min-width:168px;max-width:168px;word-wrap:break-word;overflow-wrap:break-word">
                   <span style="line-height:1.4">{{ t.assigned_to|default:"—" }}</span>

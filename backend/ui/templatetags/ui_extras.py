@@ -1,6 +1,10 @@
 import re
+from datetime import datetime
+from functools import lru_cache
+from zoneinfo import ZoneInfo
 
 from django import template
+from django.utils import timezone
 
 register = template.Library()
 
@@ -118,4 +122,88 @@ def format_resolve_method(value):
         return "Определено автоматически"
     
     return "—"
+
+
+_TZ_LABELS: dict[str, str] = {
+    # Частые TZ в РФ/CRM (чтобы менеджерам было понятно с первого взгляда)
+    "Europe/Moscow": "МСК",
+    "Asia/Yekaterinburg": "ЕКБ",
+    "Asia/Krasnoyarsk": "КРС",
+    "Asia/Novosibirsk": "НСК",
+    "Asia/Omsk": "ОМС",
+    "Asia/Irkutsk": "ИРК",
+    "Asia/Vladivostok": "ВЛД",
+    "Asia/Sakhalin": "СХЛ",
+    "Asia/Kamchatka": "КМЧ",
+}
+
+
+@lru_cache(maxsize=128)
+def _zoneinfo(name: str) -> ZoneInfo:
+    return ZoneInfo(name)
+
+
+@register.filter(name="tz_offset")
+def tz_offset(tz_name: str) -> str:
+    """
+    Возвращает UTC-offset для таймзоны на текущий момент.
+    Пример: "UTC+03", "UTC+05:30".
+    """
+    if tz_name is None:
+        return ""
+    name = str(tz_name).strip()
+    if not name:
+        return ""
+    try:
+        dt = timezone.now()
+        z = _zoneinfo(name)
+        off = dt.astimezone(z).utcoffset()
+        if off is None:
+            return ""
+        total_minutes = int(off.total_seconds() // 60)
+        sign = "+" if total_minutes >= 0 else "-"
+        total_minutes = abs(total_minutes)
+        hh = total_minutes // 60
+        mm = total_minutes % 60
+        if mm:
+            return f"UTC{sign}{hh:02d}:{mm:02d}"
+        return f"UTC{sign}{hh:02d}"
+    except Exception:
+        return ""
+
+
+@register.filter(name="tz_label")
+def tz_label(tz_name: str) -> str:
+    """
+    Человекочитаемая подпись таймзоны (для списков).
+    Пример: "ЕКБ (UTC+05)" или "Yekaterinburg (UTC+05)".
+    """
+    if tz_name is None:
+        return ""
+    name = str(tz_name).strip()
+    if not name:
+        return ""
+    label = _TZ_LABELS.get(name)
+    if not label:
+        # "Asia/Yekaterinburg" -> "Yekaterinburg"
+        label = name.split("/")[-1].replace("_", " ")
+    off = tz_offset(name)
+    return f"{label} ({off})" if off else label
+
+
+@register.filter(name="tz_now_hhmm")
+def tz_now_hhmm(tz_name: str) -> str:
+    """Текущее время в указанной таймзоне (HH:MM)."""
+    if tz_name is None:
+        return ""
+    name = str(tz_name).strip()
+    if not name:
+        return ""
+    try:
+        dt = timezone.now()
+        z = _zoneinfo(name)
+        local_dt = dt.astimezone(z)
+        return local_dt.strftime("%H:%M")
+    except Exception:
+        return ""
 
