@@ -11,6 +11,50 @@ def _fmt_hhmm(t: time) -> str:
     return f"{t.hour:02d}:{t.minute:02d}"
 
 
+_DASH_RE = re.compile(r"[‐‑‒–—−]")  # various dash-like chars -> '-'
+
+
+def _normalize_text_for_parse(text: str) -> str:
+    """
+    Подготовка текста для парсинга:
+    - приводит дни недели к сокращениям
+    - нормализует тире/дефисы
+    - унифицирует разделители
+    """
+    s = (text or "").strip().lower()
+    if not s:
+        return ""
+    s = s.replace("\t", " ")
+
+    # day names -> короткие
+    s = (
+        s.replace("понедельник", "пн")
+        .replace("вторник", "вт")
+        .replace("среда", "ср")
+        .replace("четверг", "чт")
+        .replace("пятница", "пт")
+        .replace("суббота", "сб")
+        .replace("воскресенье", "вс")
+    )
+    # "суббота и воскресенье" / "сб и вс" -> "сб, вс"
+    s = re.sub(r"\b(сб|вс)\s+и\s+(сб|вс)\b", r"\1, \2", s)
+
+    # dash variants -> '-'
+    s = _DASH_RE.sub("-", s)
+
+    # separators: pipe -> semicolon
+    s = s.replace("|", ";")
+
+    # split one-line comma-separated day blocks into separate chunks:
+    # "... , пт: ..." / "... , сб-вс выходной" / "... , выходные: ..."
+    s = re.sub(
+        r",(?=\s*(?:пн|вт|ср|чт|пт|сб|вс|будни|выходн|ежедневно|каждый\s+день|без\s+выходных)\b)",
+        ";",
+        s,
+    )
+    return s.strip()
+
+
 def _parse_time_token(s: str) -> Optional[time]:
     s = (s or "").strip()
     if not s:
@@ -38,9 +82,11 @@ def _expand_day_spec(day_spec: str) -> List[int]:
     s = s.replace("пятница", "пт").replace("суббота", "сб").replace("воскресенье", "вс")
     s = s.replace("без выходных", "пн-вс")
     s = s.replace("ежедневно", "пн-вс").replace("каждый день", "пн-вс")
+    s = s.replace("будни", "пн-пт").replace("рабочие дни", "пн-пт").replace("по будням", "пн-пт")
+    s = s.replace("выходные", "сб-вс").replace("выходные дни", "сб-вс")
 
     # unify dashes (incl. non-breaking hyphen etc.)
-    s = re.sub(r"[‐‑‒–—−]", "-", s)
+    s = _DASH_RE.sub("-", s)
     s = re.sub(r"\s+", " ", s)
 
     out: List[int] = []
@@ -95,12 +141,11 @@ def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
     if not src:
         return {}
 
-    s = src.lower()
-    # normalize all dash-like characters to '-'
-    s = re.sub(r"[‐‑‒–—−]", "-", s)
-    s = s.replace("\t", " ")
+    s = _normalize_text_for_parse(src)
+    if not s:
+        return {}
     # split into chunks
-    chunks = []
+    chunks: list[str] = []
     for part in re.split(r"[\n\r]+", s):
         part = part.strip()
         if not part:
@@ -109,6 +154,7 @@ def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
 
     schedule: Dict[int, List[Tuple[time, time]]] = {i: [] for i in range(7)}
     any_parsed = False
+    any_interval = False
 
     # quick "24/7" / "круглосуточно"
     if re.search(r"\b24\s*/\s*7\b", s) or "круглосуточ" in s:
@@ -119,7 +165,7 @@ def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
     day_token_re = r"(пн|вт|ср|чт|пт|сб|вс)"
     # include 'ежедневно' / 'каждый день' / 'без выходных' at start
     day_spec_re = re.compile(
-        rf"((?:{day_token_re}|ежедневно|каждый\s+день|без\s+выходных)"
+        rf"((?:{day_token_re}|будни|выходн(?:ые)?|ежедневно|каждый\s+день|без\s+выходных)"
         rf"(?:\s*-\s*{day_token_re})?"
         rf"(?:\s*[, ]\s*{day_token_re})*)"
     )
@@ -129,7 +175,7 @@ def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
             continue
 
         # detect "выходной/закрыто"
-        is_off = bool(re.search(r"(выходн|закрыт|не\s*работ)", ch))
+        is_off = bool(re.search(r"(закрыт|не\s*работ|выходн)", ch)) and not bool(re.search(r"без\s+выходн", ch))
 
         # split day part and rest robustly:
         # supports both "пн-пт: 09:00-18:00" and "пн-пт 8:30-17:00"
@@ -139,6 +185,17 @@ def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
         if m:
             day_part = m.group(1).strip()
             rest = ch[m.end():].lstrip(" :").strip()
+        else:
+            # fallback for phrases without explicit day prefix
+            if re.search(r"\bпо\s+будням\b|\bбудни(?:е)?\b|\bбудние\s+дни\b", ch):
+                day_part = "будни"
+                rest = ch
+            elif re.search(r"\bежедневно\b|\bкаждый\s+день\b|\bбез\s+выходных\b", ch):
+                day_part = "ежедневно"
+                rest = ch
+            elif re.search(r"\bвыходн", ch) and not re.search(r"без\s+выходн", ch):
+                day_part = "выходные"
+                rest = ch
 
         days = _expand_day_spec(day_part) if day_part else []
         if not days:
@@ -160,14 +217,22 @@ def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
             if t1 and t2:
                 intervals.append((t1, t2))
 
+        # "с 8:00 до 17:00"
+        for m in re.finditer(r"\bс\s*(\d{1,2})(?:[:.\-](\d{2}))\s*до\s*(\d{1,2})(?:[:.\-](\d{2}))\b", rest):
+            t1 = _parse_time_token(f"{m.group(1)}:{m.group(2) or '00'}")
+            t2 = _parse_time_token(f"{m.group(3)}:{m.group(4) or '00'}")
+            if t1 and t2:
+                intervals.append((t1, t2))
+
         if not intervals:
             continue
 
         for d in days:
             schedule[d].extend(intervals)
         any_parsed = True
+        any_interval = True
 
-    if not any_parsed:
+    if not any_parsed or not any_interval:
         return {}
 
     # normalize ordering per day
@@ -185,8 +250,8 @@ def normalize_work_schedule(text: str) -> str:
     if not raw:
         return ""
 
-    # First: normalize dash-like chars for more robust parsing (keep original text for output generation later).
-    raw_for_parse = re.sub(r"[‐‑‒–—−]", "-", raw)
+    # First: normalize to improve parsing robustness.
+    raw_for_parse = _normalize_text_for_parse(raw)
 
     # Always normalize time tokens like 9.00 -> 09:00
     def _fmt_time_tokens(s: str) -> str:

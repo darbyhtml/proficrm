@@ -2749,6 +2749,8 @@
             d = d.replace(/понедельник/g,'пн').replace(/вторник/g,'вт').replace(/среда/g,'ср').replace(/четверг/g,'чт')
                  .replace(/пятница/g,'пт').replace(/суббота/g,'сб').replace(/воскресенье/g,'вс');
             d = d.replace(/без\s+выходных/g,'пн-вс').replace(/ежедневно/g,'пн-вс').replace(/каждый\s+день/g,'пн-вс');
+            d = d.replace(/\bбудни\b/g,'пн-пт').replace(/\bпо\s+будням\b/g,'пн-пт').replace(/\bрабочие\s+дни\b/g,'пн-пт');
+            d = d.replace(/\bвыходн(?:ые)?\b/g,'сб-вс').replace(/\bвыходные\s+дни\b/g,'сб-вс');
             d = d.replace(/[‐‑‒–—−]/g,'-');
             const parts = d.split(/[,/;]+/).map(x => x.trim()).filter(Boolean);
             const out = [];
@@ -2770,15 +2772,20 @@
 
           const schedule = {0:[],1:[],2:[],3:[],4:[],5:[],6:[]};
           let any = false;
-          const lines = src.replace(/\r/g,'\n').split(/\n+/).map(x => x.trim()).filter(Boolean);
+          const lines = src.replace(/[|]/g,';').replace(/\r/g,'\n').split(/[\n;]+/).map(x => x.trim()).filter(Boolean);
           for (const line0 of lines) {
             const line = String(line0).replace(/[‐‑‒–—−]/g,'-');
-            const off = /(выходн|закрыт|не\s*работ)/i.test(line);
+            const off = (/(закрыт|не\s*работ)/i.test(line)) || (/(выходн)/i.test(line) && !/без\s+выходн/i.test(line));
             // Robust split: support both "пн-пт: 09:00-18:00" and "пн-пт 8:30-17:00"
             let dayPart = '';
             let rest = '';
-            const m2 = line.match(/^((?:(?:пн|вт|ср|чт|пт|сб|вс)|ежедневно|каждый\s+день|без\s+выходных)(?:\s*-\s*(?:пн|вт|ср|чт|пт|сб|вс))?(?:\s*[, ]\s*(?:пн|вт|ср|чт|пт|сб|вс))*)(?:\s*:)?\s*(.*)$/i);
+            const m2 = line.match(/^((?:(?:пн|вт|ср|чт|пт|сб|вс)|будни|выходн(?:ые)?|ежедневно|каждый\s+день|без\s+выходных)(?:\s*-\s*(?:пн|вт|ср|чт|пт|сб|вс))?(?:\s*[, ]\s*(?:пн|вт|ср|чт|пт|сб|вс))*)(?:\s*:)?\s*(.*)$/i);
             if (m2) { dayPart = m2[1]; rest = m2[2]; }
+            else {
+              if (/\bпо\s+будням\b|\bбудни(?:е)?\b|\bбудние\s+дни\b/i.test(line)) { dayPart = 'будни'; rest = line; }
+              else if (/\bежедневно\b|\bкаждый\s+день\b|\bбез\s+выходных\b/i.test(line)) { dayPart = 'ежедневно'; rest = line; }
+              else if (/\bвыходн/i.test(line) && !/без\s+выходн/i.test(line)) { dayPart = 'выходные'; rest = line; }
+            }
             const days = expandDays(dayPart);
             if (!days.length) continue;
             if (off) {
@@ -2787,9 +2794,17 @@
               continue;
             }
             const ranges = [];
+            // dash range (after normalization) e.g. 8:30-17:00
             const re = /(\d{1,2})(?:[:.\-](\d{2}))?\s*-\s*(\d{1,2})(?:[:.\-](\d{2}))?/g;
             let m;
             while ((m = re.exec(rest)) !== null) {
+              const a = toMin(m[1], m[2]);
+              const b = toMin(m[3], m[4]);
+              if (a >= 0 && a <= 1439 && b >= 0 && b <= 1439) ranges.push([a,b]);
+            }
+            // "с 8:00 до 17:00"
+            const re2 = /\bс\s*(\d{1,2})(?:[:.\-](\d{2}))\s*до\s*(\d{1,2})(?:[:.\-](\d{2}))\b/g;
+            while ((m = re2.exec(rest)) !== null) {
               const a = toMin(m[1], m[2]);
               const b = toMin(m[3], m[4]);
               if (a >= 0 && a <= 1439 && b >= 0 && b <= 1439) ranges.push([a,b]);
