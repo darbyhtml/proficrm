@@ -514,3 +514,9 @@ LOGGING = {
         },
     },
 }
+
+# Явно задаём тип авто-поля для всех моделей проекта.
+# Это предотвращает предупреждение вида:
+# "Your models in app(s) ... have changes that are not yet reflected in a migration"
+# когда миграции создавались с BigAutoField, а настройка отсутствовала.
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
