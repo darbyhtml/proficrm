@@ -2,7 +2,7 @@
 {% block title %}Доступы — CRM ПРОФИ{% endblock %}
 
 {% block content %}
-  <div class="space-y-4">
+  <div class="space-y-3">
     <div class="flex items-start justify-between gap-3 flex-wrap">
       <div>
         <h1 class="text-2xl font-semibold">Доступы (policy)</h1>
@@ -12,14 +12,16 @@
     </div>
 
     <div class="card card-pad">
-      <div class="font-medium">Режим применения</div>
-      <div class="text-sm text-brand-dark/70 mt-1">
-        <div><b>observe_only</b> — не блокирует, только пишет решения в журнал.</div>
-        <div><b>enforce</b> — запрещённые правилами ресурсы блокируются.</div>
-        <div class="mt-2 text-xs muted">
-          Активных правил: <b>{{ rules_total }}</b> (по ролям: <b>{{ rules_role_total }}</b>).
-          Логи решений ищите в «Журнал действий» (entity_type = policy).
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div class="font-medium">Режим применения</div>
+          <div class="text-xs muted mt-1">
+            <span class="badge badge-sm">Правил: <b>{{ rules_total }}</b></span>
+            <span class="badge badge-sm">По ролям: <b>{{ rules_role_total }}</b></span>
+            <span class="ml-2">Логи: «Журнал действий» (entity_type = policy)</span>
+          </div>
         </div>
+        <div class="text-xs muted">Текущий режим: <b>{{ cfg.mode }}</b></div>
       </div>
 
       <form method="post" class="mt-3 flex items-center gap-2 flex-wrap">
@@ -33,49 +35,65 @@
           Подтверждаю включение режима «Применять»
         </label>
         <button class="btn btn-primary" type="submit">Сохранить</button>
-        <div class="text-xs muted">Текущий режим: <b>{{ cfg.mode }}</b></div>
       </form>
-    </div>
 
-    <div class="card card-pad">
-      <div class="font-medium">Безопасный baseline</div>
-      <div class="text-sm text-brand-dark/70 mt-1">
-        Быстрый старт: запретить для роли <b>Менеджер</b> все ресурсы, помеченные как <b>опасные</b>.
-        Это снижает риск утечек и деструктивных действий.
+      <div class="text-xs text-brand-dark/70 mt-2">
+        <div><b>observe_only</b> — не блокирует, только пишет решения в журнал.</div>
+        <div><b>enforce</b> — запрещённые правилами ресурсы блокируются.</div>
       </div>
-      <form method="post" class="mt-3">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="baseline_manager_deny_sensitive">
-        <button class="btn btn-outline" type="submit">Применить baseline для менеджера</button>
-      </form>
     </div>
 
-    <div class="card card-pad">
-      <div class="font-medium">Восстановление дефолтных правил</div>
-      <div class="text-sm text-brand-dark/70 mt-1">
-        Если раньше доступы были “вшиты” в код (роли/меню), то в базе явных правил могло не быть.
-        Эта кнопка создаст <b>недостающие</b> правила по умолчанию для <b>страниц</b> по всем ролям (ALLOW/DENY),
-        чтобы всё было прозрачно в конструкторе. Существующие правила не перезаписываются.
+    <details class="card card-pad" open>
+      <summary class="cursor-pointer select-none font-medium">
+        Быстрые действия
+        <span class="text-xs muted-2 ml-2">baseline / восстановление дефолтов</span>
+      </summary>
+
+      <div class="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+        <div class="rounded-2xl border border-brand-soft p-3 bg-white">
+          <div class="font-medium">Безопасный baseline</div>
+          <div class="text-xs text-brand-dark/70 mt-1">
+            Запретить для роли <b>Менеджер</b> все ресурсы, помеченные как <b>опасные</b>.
+          </div>
+          <form method="post" class="mt-2">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="baseline_manager_deny_sensitive">
+            <button class="btn btn-outline btn-sm" type="submit">Применить для менеджера</button>
+          </form>
+        </div>
+
+        <div class="rounded-2xl border border-brand-soft p-3 bg-white">
+          <div class="font-medium">Восстановление дефолтных правил</div>
+          <div class="text-xs text-brand-dark/70 mt-1">
+            Создаёт <b>недостающие</b> правила (не перезаписывает существующие).
+          </div>
+          <div class="mt-2 flex items-center gap-2 flex-wrap">
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="restore_default_page_rules">
+              <button class="btn btn-outline btn-sm" type="submit">Для страниц</button>
+            </form>
+            <form method="post">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="restore_default_action_rules">
+              <button class="btn btn-outline btn-sm" type="submit">Для действий (UI)</button>
+            </form>
+          </div>
+        </div>
       </div>
-      <form method="post" class="mt-3">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="restore_default_page_rules">
-        <button class="btn btn-outline" type="submit">Восстановить дефолтные правила страниц</button>
-      </form>
-      <form method="post" class="mt-2">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="restore_default_action_rules">
-        <button class="btn btn-outline" type="submit">Восстановить дефолтные правила действий (UI)</button>
-      </form>
-    </div>
+    </details>
 
     <div class="card card-pad">
-      <div class="font-medium">Правила по ролям</div>
-      <div class="text-sm text-brand-dark/70 mt-1">Выберите роль и настройте доступы к ресурсам (страницы/действия).</div>
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <div class="font-medium">Правила по ролям</div>
+          <div class="text-sm text-brand-dark/70 mt-1">Выберите роль и настройте доступы к ресурсам (страницы/действия).</div>
+        </div>
+      </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 mt-3">
         {% for value,label in roles %}
-          <a href="{% url 'settings_access_role' role=value %}" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
+          <a href="{% url 'settings_access_role' role=value %}" class="bg-white border border-brand-soft rounded-2xl p-3 hover:bg-brand-soft/25">
             <div class="font-medium">{{ label }}</div>
             <div class="text-xs muted mt-1">{{ value }}</div>
           </a>
