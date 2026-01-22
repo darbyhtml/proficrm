@@ -2848,29 +2848,44 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     # Индикатор: можно ли звонить (рабочее время компании + часовой пояс)
     worktime = {
         "has": bool(company.workday_start and company.workday_end),
-        "status": None,  # "ok" | "late" | "early" | "unknown"
+        "status": None,  # "ok" | "warn_end" | "off" | "unknown"
         "label": "",
     }
     if company.workday_start and company.workday_end:
         try:
             from zoneinfo import ZoneInfo
+            from ui.timezone_utils import guess_ru_timezone_from_address
 
-            tz_name = (company.work_timezone or "").strip() or "Europe/Moscow"
+            guessed = guess_ru_timezone_from_address(company.address or "")
+            tz_name = (guessed or (company.work_timezone or "").strip() or "Europe/Moscow").strip()
             tz = ZoneInfo(tz_name)
+
             now_tz = timezone.now().astimezone(tz)
-            tnow = now_tz.timetz().replace(tzinfo=None)
-            start = company.workday_start
-            end = company.workday_end
-            # простой случай: start < end (внутри суток)
-            if start <= tnow <= end:
-                worktime["status"] = "ok"
-                worktime["label"] = "Можно звонить"
-            elif tnow < start:
-                worktime["status"] = "early"
-                worktime["label"] = "Рано — ещё не рабочее время"
+            today = now_tz.date()
+            start_t = company.workday_start
+            end_t = company.workday_end
+
+            start_dt = datetime.combine(today, start_t, tzinfo=tz)
+            end_dt = datetime.combine(today, end_t, tzinfo=tz)
+
+            # Если рабочий интервал "перетекает" через полночь (например 22:00-06:00)
+            if end_dt <= start_dt:
+                end_dt = end_dt + timedelta(days=1)
+                # если сейчас до конца (после полуночи), то старт был вчера
+                if now_tz < datetime.combine(today, end_t, tzinfo=tz):
+                    start_dt = start_dt - timedelta(days=1)
+
+            if start_dt <= now_tz <= end_dt:
+                minutes_left = int((end_dt - now_tz).total_seconds() // 60)
+                if minutes_left <= 60:
+                    worktime["status"] = "warn_end"
+                    worktime["label"] = "Остался час"
+                else:
+                    worktime["status"] = "ok"
+                    worktime["label"] = "Рабочее время"
             else:
-                worktime["status"] = "late"
-                worktime["label"] = "Уже не рабочее время"
+                worktime["status"] = "off"
+                worktime["label"] = "Не рабочее время"
         except Exception:
             worktime["status"] = "unknown"
             worktime["label"] = ""
