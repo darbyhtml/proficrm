@@ -793,14 +793,59 @@ def fetch_tasks_for_companies(client: AmoClient, company_ids: list[int]) -> list
     return out
 
 
+def fetch_notes_for_companies_bulk(client: AmoClient, company_ids: list[int], *, batch_size: int = 200) -> list[dict[str, Any]]:
+    """
+    ОПТИМИЗИРОВАННАЯ версия получения заметок компаний через bulk-запросы.
+
+    Использует /api/v4/notes с фильтром по entity_type=companies и entity_id[] (батчами),
+    аналогично fetch_notes_for_contacts_bulk.
+
+    Важно: в некоторых аккаунтах/тарифах/правах endpoint может быть недоступен —
+    тогда вызывающая сторона должна сделать fallback на fetch_notes_for_companies (legacy).
+    """
+    if not company_ids:
+        return []
+
+    out: list[dict[str, Any]] = []
+    for i in range(0, len(company_ids), batch_size):
+        batch_ids = company_ids[i : i + batch_size]
+        try:
+            notes = client.get_all_pages(
+                "/api/v4/notes",
+                params={
+                    "filter[entity_type]": "companies",
+                    "filter[entity_id]": batch_ids,  # AmoClient обработает как filter[entity_id][]=...
+                },
+                embedded_key="notes",
+                limit=250,
+                max_pages=100,
+            )
+            out.extend([n for n in notes if isinstance(n, dict)])
+        except Exception as e:
+            logger.warning(
+                f"fetch_notes_for_companies_bulk: ошибка для батча компаний ({len(batch_ids)}): {e}",
+                exc_info=True,
+            )
+            continue
+    return out
+
+
 def fetch_notes_for_companies(client: AmoClient, company_ids: list[int]) -> list[dict[str, Any]]:
     """
     Получает заметки для компаний.
     Rate limiting применяется автоматически в AmoClient.
-    API не поддерживает батчинг для заметок, поэтому обрабатываем по одной компании.
+    Сначала пытаемся bulk-метод через /api/v4/notes, затем fallback на per-company endpoint.
     """
     if not company_ids:
         return []
+    try:
+        bulk = fetch_notes_for_companies_bulk(client, company_ids)
+        if bulk:
+            return bulk
+    except Exception:
+        # fallback below
+        pass
+
     out: list[dict[str, Any]] = []
     for cid in company_ids:
         try:
@@ -811,10 +856,9 @@ def fetch_notes_for_companies(client: AmoClient, company_ids: list[int]) -> list
                 limit=50,
                 max_pages=10,
             )
-            out.extend(notes)
+            out.extend([n for n in notes if isinstance(n, dict)])
         except Exception as e:
             logger.debug(f"Error fetching notes for company {cid}: {e}", exc_info=True)
-            # Продолжаем для следующих компаний
             continue
     return out
 
