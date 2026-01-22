@@ -1752,16 +1752,32 @@ def migrate_filtered(
                 res.preview.append({"company": comp.name, "amo_id": comp.amocrm_company_id})
 
         amo_ids = [int(c.get("id") or 0) for c in batch if int(c.get("id") or 0)]
+        # ОПТИМИЗАЦИЯ (без изменения результата):
+        # - заранее подгружаем компании из БД для текущей пачки, чтобы убрать N+1 в задачах/заметках
+        # Важно: в dry-run новые компании НЕ сохранены, поэтому мапа из БД может быть неполной — это
+        # сохраняет старое поведение (задачи/заметки для новых компаний в dry-run не привяжутся).
+        companies_db_by_amo_id: dict[int, Company] = {}
+        if amo_ids:
+            for cobj in Company.objects.filter(amocrm_company_id__in=amo_ids):
+                if cobj.amocrm_company_id:
+                    companies_db_by_amo_id[int(cobj.amocrm_company_id)] = cobj
 
         # Задачи: запрашиваем только если нужно импортировать (не для dry-run без задач)
         if import_tasks and amo_ids and not (dry_run and not import_tasks):
             tasks = fetch_tasks_for_companies(client, amo_ids)
             res.tasks_seen = len(tasks)
+            # ОПТИМИЗАЦИЯ: убираем N+1 запросы к Task (проверка существования/обновление)
+            task_uids = {str(int(t.get("id") or 0)) for t in tasks if int(t.get("id") or 0)}
+            existing_tasks_by_uid: dict[str, Task] = {}
+            if task_uids:
+                for tsk in Task.objects.filter(external_source="amo_api", external_uid__in=task_uids):
+                    if tsk.external_uid:
+                        existing_tasks_by_uid[str(tsk.external_uid)] = tsk
             for t in tasks:
                 tid = int(t.get("id") or 0)
-                existing = Task.objects.filter(external_source="amo_api", external_uid=str(tid)).first() if tid else None
+                existing = existing_tasks_by_uid.get(str(tid)) if tid else None
                 entity_id = int((t.get("entity_id") or 0) or 0)
-                company = Company.objects.filter(amocrm_company_id=entity_id).first() if entity_id else None
+                company = companies_db_by_amo_id.get(entity_id) if entity_id else None
                 title = str(t.get("text") or t.get("result") or t.get("name") or "Задача (amo)").strip()[:255]
                 due_at = None
                 # важно: не используем "or", потому что 0/"" могут скрыть реальные значения
@@ -1834,13 +1850,20 @@ def migrate_filtered(
             try:
                 notes = fetch_notes_for_companies(client, amo_ids)
                 res.notes_seen = len(notes)
+                # ОПТИМИЗАЦИЯ: убираем N+1 запросы к CompanyNote и Company
+                note_uids = {str(int(n.get("id") or 0)) for n in notes if int(n.get("id") or 0)}
+                existing_notes_by_uid: dict[str, CompanyNote] = {}
+                if note_uids:
+                    for nn in CompanyNote.objects.filter(external_source="amo_api", external_uid__in=note_uids):
+                        if nn.external_uid:
+                            existing_notes_by_uid[str(nn.external_uid)] = nn
                 for n in notes:
                     nid = int(n.get("id") or 0)
-                    existing_note = CompanyNote.objects.filter(external_source="amo_api", external_uid=str(nid)).first() if nid else None
+                    existing_note = existing_notes_by_uid.get(str(nid)) if nid else None
 
                     # В карточечных notes entity_id часто = id компании в amo
                     entity_id = int((n.get("entity_id") or 0) or 0)
-                    company = Company.objects.filter(amocrm_company_id=entity_id).first() if entity_id else None
+                    company = companies_db_by_amo_id.get(entity_id) if entity_id else None
                     if not company:
                         continue
 
