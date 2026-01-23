@@ -2872,7 +2872,13 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "head_company",
             "primary_cold_marked_by",
             "primary_cold_marked_call",
-        ).prefetch_related("emails", "phones__cold_marked_by"),
+        ).prefetch_related(
+            "emails",
+            Prefetch(
+                "phones",
+                queryset=CompanyPhone.objects.select_related("cold_marked_by", "cold_marked_call").order_by("order", "value")
+            ),
+        ),
         id=company_id,
     )
     can_edit_company = _can_edit_company(user, company)
