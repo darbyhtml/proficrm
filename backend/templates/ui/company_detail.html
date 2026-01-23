@@ -410,14 +410,32 @@
                     <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-copy-phone="{{ company.phone }}">Скопировать</button>
 
                     {% if can_edit_company %}
-                      {% if not company.primary_contact_is_cold_call and not company.primary_cold_marked_at %}
-                        <form method="post" action="/companies/{{ company.id }}/cold-call/toggle/" class="js-cold-call-form" data-confirm="Вы действительно хотите отметить звонок как холодный?" data-cold-entity="company" data-cold-id="{{ company.id }}" data-cold-kind="toggle">
-                          {% csrf_token %}
-                          <input type="hidden" name="confirmed" value="1">
-                          <button type="submit" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25">Отметить холодным</button>
-                        </form>
-                      {% elif company.primary_contact_is_cold_call and is_admin %}
-                        <form method="post" action="/companies/{{ company.id }}/cold-call/reset/" class="js-cold-call-form" data-confirm="Откатить отметку холодного звонка?" data-cold-entity="company" data-cold-id="{{ company.id }}" data-cold-kind="reset">
+                      {# Важно: для AJAX-режима обе формы должны быть в DOM, иначе после отметки нечего показывать. #}
+                      <form
+                        method="post"
+                        action="/companies/{{ company.id }}/cold-call/toggle/"
+                        class="js-cold-call-form"
+                        data-confirm="Вы действительно хотите отметить звонок как холодный?"
+                        data-cold-entity="company"
+                        data-cold-id="{{ company.id }}"
+                        data-cold-kind="toggle"
+                        style="{% if company.primary_contact_is_cold_call or company.primary_cold_marked_at %}display:none{% endif %}"
+                      >
+                        {% csrf_token %}
+                        <input type="hidden" name="confirmed" value="1">
+                        <button type="submit" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25">Отметить холодным</button>
+                      </form>
+                      {% if is_admin %}
+                        <form
+                          method="post"
+                          action="/companies/{{ company.id }}/cold-call/reset/"
+                          class="js-cold-call-form"
+                          data-confirm="Откатить отметку холодного звонка?"
+                          data-cold-entity="company"
+                          data-cold-id="{{ company.id }}"
+                          data-cold-kind="reset"
+                          style="{% if not company.primary_contact_is_cold_call %}display:none{% endif %}"
+                        >
                           {% csrf_token %}
                           <button type="submit" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25">Снять отметку</button>
                         </form>
@@ -519,14 +537,31 @@
                           <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-copy-phone="{{ phone.value }}">Скопировать</button>
 
                           {% if can_edit_company %}
-                            {% if not phone.is_cold_call and not phone.cold_marked_at %}
-                              <form method="post" action="/company-phones/{{ phone.id }}/cold-call/toggle/" class="js-cold-call-form" data-confirm="Вы действительно хотите отметить звонок как холодный?" data-cold-entity="company_phone" data-cold-id="{{ phone.id }}" data-cold-kind="toggle">
-                                {% csrf_token %}
-                                <input type="hidden" name="confirmed" value="1">
-                                <button type="submit" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25">Отметить холодным</button>
-                              </form>
-                            {% elif phone.is_cold_call and is_admin %}
-                              <form method="post" action="/company-phones/{{ phone.id }}/cold-call/reset/" class="js-cold-call-form" data-confirm="Откатить отметку холодного звонка?" data-cold-entity="company_phone" data-cold-id="{{ phone.id }}" data-cold-kind="reset">
+                            <form
+                              method="post"
+                              action="/company-phones/{{ phone.id }}/cold-call/toggle/"
+                              class="js-cold-call-form"
+                              data-confirm="Вы действительно хотите отметить звонок как холодный?"
+                              data-cold-entity="company_phone"
+                              data-cold-id="{{ phone.id }}"
+                              data-cold-kind="toggle"
+                              style="{% if phone.is_cold_call or phone.cold_marked_at %}display:none{% endif %}"
+                            >
+                              {% csrf_token %}
+                              <input type="hidden" name="confirmed" value="1">
+                              <button type="submit" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25">Отметить холодным</button>
+                            </form>
+                            {% if is_admin %}
+                              <form
+                                method="post"
+                                action="/company-phones/{{ phone.id }}/cold-call/reset/"
+                                class="js-cold-call-form"
+                                data-confirm="Откатить отметку холодного звонка?"
+                                data-cold-entity="company_phone"
+                                data-cold-id="{{ phone.id }}"
+                                data-cold-kind="reset"
+                                style="{% if not phone.is_cold_call %}display:none{% endif %}"
+                              >
                                 {% csrf_token %}
                                 <button type="submit" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25">Снять отметку</button>
                               </form>
@@ -909,41 +944,56 @@
                           </div>
                           <div class="flex items-center gap-1 shrink-0">
                             {% if can_edit_company %}
-                              {% if not p.is_cold_call and not p.cold_marked_at %}
-                                <form method="post" action="/contact-phones/{{ p.id }}/cold-call/toggle/" class="js-cold-call-form" data-confirm="Вы действительно хотите отметить звонок как холодный?" data-cold-entity="contact_phone" data-cold-id="{{ p.id }}" data-cold-kind="toggle">
+                              <form
+                                method="post"
+                                action="/contact-phones/{{ p.id }}/cold-call/toggle/"
+                                class="js-cold-call-form"
+                                data-confirm="Вы действительно хотите отметить звонок как холодный?"
+                                data-cold-entity="contact_phone"
+                                data-cold-id="{{ p.id }}"
+                                data-cold-kind="toggle"
+                                style="{% if p.is_cold_call or p.cold_marked_at %}display:none{% endif %}"
+                              >
+                                {% csrf_token %}
+                                <input type="hidden" name="confirmed" value="1">
+                                <button
+                                  type="submit"
+                                  class="btn btn-outline btn-xs js-cold-mark"
+                                  style="padding:4px 8px;"
+                                  data-cold-btn="phone-{{ p.id }}"
+                                  title="Отметить холодный звонок"
+                                  aria-label="Отметить холодный звонок"
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                    <path d="M12 2v20M4 6l16 12M20 6 4 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M6 4l12 16M18 4 6 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".35"/>
+                                  </svg>
+                                </button>
+                              </form>
+                              {% if is_admin %}
+                                <form
+                                  method="post"
+                                  action="/contact-phones/{{ p.id }}/cold-call/reset/"
+                                  class="js-cold-call-form"
+                                  data-confirm="Откатить отметку холодного звонка?"
+                                  data-cold-entity="contact_phone"
+                                  data-cold-id="{{ p.id }}"
+                                  data-cold-kind="reset"
+                                  style="display:inline;{% if not p.is_cold_call %}display:none{% endif %}"
+                                >
                                   {% csrf_token %}
-                                  <input type="hidden" name="confirmed" value="1">
                                   <button
                                     type="submit"
-                                    class="btn btn-outline btn-xs js-cold-mark"
+                                    class="btn btn-outline btn-xs"
                                     style="padding:4px 8px;"
-                                    data-cold-btn="phone-{{ p.id }}"
-                                    title="Отметить холодный звонок"
-                                    aria-label="Отметить холодный звонок"
+                                    title="Откатить отметку холодного звонка (только для администраторов)"
+                                    aria-label="Откатить отметку холодного звонка"
                                   >
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                      <path d="M12 2v20M4 6l16 12M20 6 4 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                      <path d="M6 4l12 16M18 4 6 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".35"/>
+                                      <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                     </svg>
                                   </button>
                                 </form>
-                              {% else %}
-                                {% if is_admin %}
-                                  <form method="post" action="/contact-phones/{{ p.id }}/cold-call/reset/" class="js-cold-call-form" data-confirm="Откатить отметку холодного звонка?" data-cold-entity="contact_phone" data-cold-id="{{ p.id }}" data-cold-kind="reset" style="display:inline">
-                                    {% csrf_token %}
-                                    <button
-                                      type="submit"
-                                      class="btn btn-outline btn-xs"
-                                      style="padding:4px 8px;"
-                                      title="Откатить отметку холодного звонка (только для администраторов)"
-                                      aria-label="Откатить отметку холодного звонка"
-                                    >
-                                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                        <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                      </svg>
-                                    </button>
-                                  </form>
-                                {% endif %}
                               {% endif %}
                             {% endif %}
                             {# Убрали отдельный квадрат-статус (дублировал смысл). #}
