@@ -144,13 +144,31 @@ def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
     s = _normalize_text_for_parse(src)
     if not s:
         return {}
-    # split into chunks
+    # split into logical chunks: поддерживаем формат,
+    # где дни и время могут быть на разных строках:
+    #
+    #   "пн-пт"
+    #   "08:45-18:00"
+    #   "пятница"
+    #   "09:00-17:00"
+    #   "сб-вс"
+    #   "выходной"
+    raw_lines: List[str] = [part.strip() for part in re.split(r"[\n\r]+", s) if part.strip()]
     chunks: list[str] = []
-    for part in re.split(r"[\n\r]+", s):
-        part = part.strip()
-        if not part:
-            continue
-        chunks.extend([p.strip() for p in re.split(r"[;]+", part) if p.strip()])
+
+    def _has_time_fragment(line: str) -> bool:
+        return bool(re.search(r"\d{1,2}\s*[:.\-]\s*\d{2}", line))
+
+    i = 0
+    while i < len(raw_lines):
+        line = raw_lines[i]
+        # Если в строке нет времени, но есть потенциальное продолжение на следующей строке — склеиваем.
+        if not _has_time_fragment(line) and i + 1 < len(raw_lines) and _has_time_fragment(raw_lines[i + 1]):
+            line = f"{line} {raw_lines[i + 1].strip()}"
+            i += 1
+        # теперь режем по ';'
+        chunks.extend([p.strip() for p in re.split(r"[;]+", line) if p.strip()])
+        i += 1
 
     schedule: Dict[int, List[Tuple[time, time]]] = {i: [] for i in range(7)}
     any_parsed = False
@@ -226,6 +244,17 @@ def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
 
         if not intervals:
             continue
+
+        # Если указана ровно одна конкретная дата (например, "пт") —
+        # считаем это уточнением и перезаписываем ранее заданные интервалы для этого дня.
+        is_single_day = (
+            len(days) == 1
+            and day_part
+            and re.fullmatch(r"(?:пн|вт|ср|чт|пт|сб|вс)", day_part.strip())
+        )
+        if is_single_day:
+            for d in days:
+                schedule[d] = []
 
         for d in days:
             schedule[d].extend(intervals)
