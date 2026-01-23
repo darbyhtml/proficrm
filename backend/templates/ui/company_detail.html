@@ -1337,6 +1337,10 @@
               {% csrf_token %}
               <div>
                 <label class="block text-xs text-brand-dark/70 mb-1">Примечание</label>
+                <div class="flex flex-wrap gap-2 mb-2">
+                  <button type="button" class="btn btn-outline btn-xs" data-delreq-template="Карточка задвоена">Карточка задвоена</button>
+                  <button type="button" class="btn btn-outline btn-xs" data-delreq-template="Предприятие ликвидировано">Предприятие ликвидировано</button>
+                </div>
                 <textarea name="note" class="textarea" rows="5" placeholder="Почему нужно удалить карточку?">{{ delete_req.note|default:"" }}</textarea>
               </div>
               <div class="flex gap-2">
@@ -1472,11 +1476,36 @@
         const openDelReq = document.getElementById('openDeleteRequestModal');
         if (delReqModal && openDelReq) {
           const closeBtns = delReqModal.querySelectorAll('[data-close-delreq]');
-          function openM() { delReqModal.classList.remove('hidden'); }
+          const noteTa = delReqModal.querySelector('textarea[name="note"]');
+          function openM() {
+            delReqModal.classList.remove('hidden');
+            try { noteTa && noteTa.focus(); } catch(_e) {}
+          }
           function closeM() { delReqModal.classList.add('hidden'); }
           openDelReq.addEventListener('click', openM);
           closeBtns.forEach(b => b.addEventListener('click', closeM));
           document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeM(); });
+
+          // Быстрые варианты примечаний
+          delReqModal.querySelectorAll('[data-delreq-template]').forEach(btn => {
+            btn.addEventListener('click', function() {
+              if (!noteTa) return;
+              const tpl = (this.getAttribute('data-delreq-template') || '').trim();
+              if (!tpl) return;
+              const cur = (noteTa.value || '');
+              const curTrim = cur.trim();
+              if (curTrim) {
+                const next = curTrim + '\n' + tpl;
+                noteTa.value = next;
+              } else {
+                noteTa.value = tpl;
+              }
+              try {
+                noteTa.focus();
+                noteTa.selectionStart = noteTa.selectionEnd = noteTa.value.length;
+              } catch(_e) {}
+            });
+          });
         }
 
         const delCompanyModal = document.getElementById('deleteCompanyModal');
