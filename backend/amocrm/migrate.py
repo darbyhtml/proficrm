@@ -604,6 +604,7 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
         phones_list = list(dict.fromkeys(all_phones))  # Сохраняем порядок, убираем дубликаты
     
     return {
+        # ИНН может приходить как строка с несколькими значениями — нормализуем дальше при применении
         "inn": first(fid_inn),
         "kpp": first(fid_kpp),
         "legal_name": first(fid_legal),
@@ -1536,18 +1537,19 @@ def migrate_filtered(
                     if dry_run:
                         company_updates_diff["legal_name"] = {"old": old_legal, "new": comp.legal_name}
             if extra.get("inn"):
-                new_inn = str(extra["inn"]).strip()[:20]  # сначала strip, потом обрезка до max_length=20
+                from companies.inn_utils import merge_inn_strings
+
                 old_inn = (comp.inn or "").strip()
-                if not old_inn:
-                    comp.inn = new_inn
-                    changed = True
-                    if dry_run and new_inn:
-                        company_updates_diff["inn"] = {"old": "", "new": new_inn}
-                elif len(comp.inn) > 20:  # защита: если уже заполнено, но слишком длинное
-                    comp.inn = comp.inn.strip()[:20]
+                incoming = str(extra["inn"])
+
+                # Импорт из amoCRM: не затираем вручную внесённые ИНН,
+                # но если в amo пришли новые — аккуратно добавляем (уникально).
+                merged = merge_inn_strings(old_inn, incoming)[:255]
+                if merged and merged != old_inn:
+                    comp.inn = merged
                     changed = True
                     if dry_run:
-                        company_updates_diff["inn"] = {"old": old_inn, "new": comp.inn}
+                        company_updates_diff["inn"] = {"old": old_inn, "new": merged}
             if extra.get("kpp"):
                 new_kpp = str(extra["kpp"]).strip()[:20]  # сначала strip, потом обрезка до max_length=20
                 old_kpp = (comp.kpp or "").strip()

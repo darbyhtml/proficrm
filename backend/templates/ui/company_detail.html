@@ -41,11 +41,21 @@
           {% if can_edit_company %}
             <span>ИНН:</span>
             <span class="inline-field-wrapper" data-inline-field="inn" data-company-id="{{ company.id }}">
-              <span class="font-mono inline-field-display cursor-pointer hover:text-brand-dark/80 transition-colors" data-inline-edit>
-                {{ company.inn|default:"—" }}
+              <span class="inline-field-display cursor-pointer hover:text-brand-dark/80 transition-colors" data-inline-edit>
+                {% with inns=company.inn|split_inns %}
+                  {% if inns %}
+                    <span class="flex flex-wrap gap-1 items-center">
+                      {% for x in inns %}
+                        <span class="badge badge-xs font-mono">{{ x }}</span>
+                      {% endfor %}
+                    </span>
+                  {% else %}
+                    <span class="font-mono">—</span>
+                  {% endif %}
+                {% endwith %}
               </span>
               <span class="inline-field-edit hidden ml-2 align-middle">
-                <input class="input" data-inline-input maxlength="20" value="{{ company.inn|default:'' }}" style="width:220px" />
+                <input class="input" data-inline-input maxlength="255" value="{{ company.inn|default:'' }}" style="width:320px" placeholder="Можно несколько: через запятую/пробел/Enter" />
                 <button type="button" class="btn btn-primary btn-xs ml-1" data-inline-save>Сохранить</button>
                 <button type="button" class="btn btn-outline btn-xs ml-1" data-inline-cancel>Отмена</button>
                 <span class="text-xs text-red-600 ml-2 hidden" data-inline-error></span>
@@ -66,7 +76,14 @@
               </span>
             </span>
           {% else %}
-            {% if company.inn %}ИНН: <span class="font-mono">{{ company.inn }}</span>{% endif %}
+            {% with inns=company.inn|split_inns %}
+              {% if inns %}
+                ИНН:
+                {% for x in inns %}
+                  <span class="font-mono">{{ x }}</span>{% if not forloop.last %}, {% endif %}
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
             {% if company.kpp %} · КПП: <span class="font-mono">{{ company.kpp }}</span>{% endif %}
           {% endif %}
         </div>

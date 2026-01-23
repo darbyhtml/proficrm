@@ -49,7 +49,8 @@ class Company(models.Model):
 
     name = models.CharField("Название", max_length=255, db_index=True)
     legal_name = models.CharField("Юр. название", max_length=255, blank=True, default="")
-    inn = models.CharField("ИНН", max_length=20, blank=True, default="", db_index=True)
+    # Может содержать несколько ИНН (10/12 цифр), разделённых запятой: "123..., 456..."
+    inn = models.CharField("ИНН", max_length=255, blank=True, default="", db_index=True)
     kpp = models.CharField("КПП", max_length=20, blank=True, default="")
     address = models.CharField("Адрес", max_length=500, blank=True, default="")
     website = models.CharField("Сайт", max_length=255, blank=True, default="")
@@ -141,7 +142,10 @@ class Company(models.Model):
         # Защита от длинных значений (особенно важно при импорте из amoCRM)
         # ВАЖНО: обрезаем ВСЕГДА, даже если значение уже установлено (защита от любых источников данных)
         if self.inn:
-            self.inn = str(self.inn).strip()[:20]
+            from .inn_utils import normalize_inn_string
+
+            # Нормализуем множественный ИНН (поддерживаем вставку "как есть": с пробелами/переносами и т.п.)
+            self.inn = normalize_inn_string(self.inn)[:255]
         if self.kpp:
             self.kpp = str(self.kpp).strip()[:20]
         if self.legal_name:

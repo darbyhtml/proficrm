@@ -224,8 +224,13 @@ def import_amo_csv(
                 user_by_name.setdefault(c, u)
     user_by_username: dict[str, User] = {u.username.strip(): u for u in User.objects.all()}
 
-    # Кеш компаний для дедупа
-    company_by_inn: dict[str, Company] = {c.inn: c for c in Company.objects.exclude(inn="")}
+    # Кеш компаний для дедупа (учитываем, что ИНН может быть множественным)
+    from companies.inn_utils import parse_inns
+
+    company_by_inn: dict[str, Company] = {}
+    for c in Company.objects.exclude(inn=""):
+        for x in parse_inns(c.inn):
+            company_by_inn.setdefault(x, c)
     company_by_name_addr: dict[tuple[str, str], Company] = {}
 
     @transaction.atomic
@@ -253,7 +258,10 @@ def import_amo_csv(
 
                     name = _unescape(_get(row, "Название компании", "Компания", "Наименование"))
                     legal_name = _unescape(_get(row, "Юридическое название компании", "Юридическое название компании (компания)"))
-                    inn = _digits_only(_get(row, "ИНН", "ИНН (компания)"))
+                    # ИНН: в базе встречаются компании с несколькими ИНН — поддерживаем ввод через любые разделители.
+                    inn_raw = _get(row, "ИНН", "ИНН (компания)")
+                    inn_list = parse_inns(inn_raw)
+                    inn = ", ".join(inn_list)
                     kpp = _digits_only(_get(row, "КПП", "КПП (компания)"))
                     region = _unescape(_get(row, "Область"))
                     address = _unescape(_get(row, "Адрес", "Адрес (компания)"))
@@ -315,8 +323,11 @@ def import_amo_csv(
                                 )
 
                     company = None
-                    if inn:
-                        company = company_by_inn.get(inn)
+                    if inn_list:
+                        for x in inn_list:
+                            company = company_by_inn.get(x)
+                            if company is not None:
+                                break
 
                     if company is None:
                         key = (_norm_name(name), _norm_name(address))
@@ -330,7 +341,7 @@ def import_amo_csv(
                         company = Company(
                             name=(name or "(без названия)")[:255],
                             legal_name=legal_name[:255] if legal_name else "",
-                            inn=inn[:20] if inn else "",
+                            inn=inn[:255] if inn else "",
                             kpp=kpp[:20] if kpp else "",
                             address=address[:500] if address else "",
                             website=website[:255] if website else "",
@@ -374,7 +385,7 @@ def import_amo_csv(
                         field_max_lengths = {
                             "name": 255,
                             "legal_name": 255,
-                            "inn": 20,
+                            "inn": 255,
                             "kpp": 20,
                             "address": 500,
                             "website": 255,

@@ -185,6 +185,11 @@ class CompanyCreateForm(forms.ModelForm):
         if ws:
             cleaned["work_schedule"] = normalize_work_schedule(ws)
         return cleaned
+
+    def clean_inn(self):
+        from companies.inn_utils import normalize_inn_string
+
+        return normalize_inn_string(self.cleaned_data.get("inn"))
     
     class Meta:
         model = Company
@@ -212,7 +217,13 @@ class CompanyCreateForm(forms.ModelForm):
         widgets = {
             "name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "legal_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "inn": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "inn": forms.Textarea(
+                attrs={
+                    "rows": 2,
+                    "class": "w-full rounded-lg border px-3 py-2 font-mono",
+                    "placeholder": "Можно несколько ИНН: через пробел, запятую или с новой строки",
+                }
+            ),
             "kpp": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "address": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2"}),
             "website": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
@@ -291,6 +302,11 @@ class CompanyEditForm(forms.ModelForm):
             cleaned["work_schedule"] = normalize_work_schedule(ws)
         return cleaned
 
+    def clean_inn(self):
+        from companies.inn_utils import normalize_inn_string
+
+        return normalize_inn_string(self.cleaned_data.get("inn"))
+
     def clean_head_company(self):
         hc = self.cleaned_data.get("head_company")
         if not hc:
@@ -343,7 +359,13 @@ class CompanyEditForm(forms.ModelForm):
         widgets = {
             "name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "legal_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "inn": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "inn": forms.Textarea(
+                attrs={
+                    "rows": 2,
+                    "class": "w-full rounded-lg border px-3 py-2 font-mono",
+                    "placeholder": "Можно несколько ИНН: через пробел, запятую или с новой строки",
+                }
+            ),
             "kpp": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "address": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2"}),
             "website": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
@@ -403,7 +425,9 @@ class CompanyInlineEditForm(forms.ModelForm):
         return (self.cleaned_data.get("legal_name") or "").strip()
 
     def clean_inn(self):
-        return (self.cleaned_data.get("inn") or "").strip()
+        from companies.inn_utils import normalize_inn_string
+
+        return normalize_inn_string(self.cleaned_data.get("inn"))
 
     def clean_kpp(self):
         return (self.cleaned_data.get("kpp") or "").strip()

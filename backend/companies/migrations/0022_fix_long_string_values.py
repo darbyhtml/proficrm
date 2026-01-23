@@ -15,8 +15,9 @@ def truncate_long_values(apps, schema_editor):
         changed = False
         updates = {}
         
-        if company.inn and len(company.inn) > 20:
-            updates['inn'] = company.inn[:20]
+        # ИНН может быть множественным; в актуальной схеме max_length=255
+        if company.inn and len(company.inn) > 255:
+            updates['inn'] = company.inn[:255]
             changed = True
         if company.kpp and len(company.kpp) > 20:
             updates['kpp'] = company.kpp[:20]
