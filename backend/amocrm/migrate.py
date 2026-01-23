@@ -563,6 +563,39 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
         for s in vals:
             out.extend(_split_multi(s))
         return out
+    
+    def list_vals_all_phone_fields() -> list[str]:
+        """
+        Находит ВСЕ поля с телефонами (включая "Список телефонов (Скайнет)")
+        и объединяет их значения.
+        """
+        all_phones: list[str] = []
+        seen_phones = set()
+        
+        # Ищем все поля, содержащие "телефон" в названии
+        for fid, m in field_meta.items():
+            code = str(m.get("code") or "").lower()
+            name = str(m.get("name") or "").lower()
+            
+            # Проверяем, что это поле с телефонами
+            is_phone_field = (
+                code == "phone" or 
+                "телефон" in name or
+                "скайнет" in name  # Специальная обработка для полей "Скайнет"
+            )
+            
+            if is_phone_field:
+                vals = _custom_values_text(amo_company, fid)
+                for s in vals:
+                    phone_parts = _split_multi(s)
+                    for phone in phone_parts:
+                        phone_normalized = phone.strip().lower()
+                        # Добавляем только уникальные телефоны
+                        if phone_normalized and phone_normalized not in seen_phones:
+                            all_phones.append(phone.strip())
+                            seen_phones.add(phone_normalized)
+        
+        return all_phones
 
     fid_inn = _find_field_id(field_meta, codes=["inn"], name_contains=["инн"])
     fid_kpp = _find_field_id(field_meta, codes=["kpp"], name_contains=["кпп"])
@@ -582,7 +615,8 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
         ],
     )
     fid_addr = _find_field_id(field_meta, codes=["address"], name_contains=["адрес"])
-    fid_phone = _find_field_id(field_meta, codes=["phone"], name_contains=["телефон"])
+    # ИСПРАВЛЕНИЕ: используем функцию, которая находит ВСЕ поля с телефонами
+    phones = list_vals_all_phone_fields()
     fid_email = _find_field_id(field_meta, codes=["email"], name_contains=["email", "e-mail", "почта"])
     fid_web = _find_field_id(field_meta, codes=["web"], name_contains=["сайт", "web"])
     fid_director = _find_field_id(field_meta, name_contains=["руководитель", "директор", "генеральный"])
@@ -597,7 +631,7 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
         "kpp": first(fid_kpp),
         "legal_name": first(fid_legal),
         "address": first(fid_addr),
-        "phones": list_vals(fid_phone),
+        "phones": phones,  # Используем все найденные телефоны
         "emails": list_vals(fid_email),
         "website": first(fid_web),
         "director": first(fid_director),
