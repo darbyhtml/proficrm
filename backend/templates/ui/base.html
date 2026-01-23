@@ -2042,15 +2042,39 @@
         if (!widget || !circle || !pct || !text || !counts || !countsShort || !limitNote || !closeBtn) return;
 
         const STORAGE_KEY = 'mail_progress_dismissed_campaign';
+        const STORAGE_UNTIL_KEY = 'mail_progress_dismissed_until';
         let dismissedForCampaignId = null;
+        let dismissedUntil = 0;
+        let lastStatus = '';
+        let lastCampaignId = '';
         try {
           dismissedForCampaignId = window.localStorage.getItem(STORAGE_KEY) || null;
         } catch (_e) {
           dismissedForCampaignId = null;
         }
+        try {
+          dismissedUntil = Number(window.localStorage.getItem(STORAGE_UNTIL_KEY) || '0') || 0;
+        } catch (_e) {
+          dismissedUntil = 0;
+        }
+
+        function isBlockingOverlayOpen(){
+          // 1) Немодальная панель контакта на карточке компании
+          const contactPanel = document.getElementById('contactPanel');
+          if (contactPanel && !contactPanel.classList.contains('hidden')) return true;
+          // 2) Любые модалки-оверлеи (типовой паттерн: fixed inset-0 + hidden)
+          const overlay = document.querySelector('.fixed.inset-0:not(.hidden)');
+          if (overlay) return true;
+          return false;
+        }
 
         async function poll() {
           try {
+            // Если открыта модалка/панель — не показываем виджет (чтобы не перекрывал кнопки).
+            if (isBlockingOverlayOpen()) {
+              widget.classList.add('hidden');
+              return;
+            }
             const res = await fetch('/mail/progress/poll/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
             const data = await res.json();
             if (!data || !data.ok || !data.active) {
@@ -2058,8 +2082,17 @@
               dismissedForCampaignId = null;
               return;
             }
+            // Временное скрытие (если пользователь закрыл виджет во время отправки)
+            try {
+              if (dismissedUntil && Date.now() < dismissedUntil) {
+                widget.classList.add('hidden');
+                return;
+              }
+            } catch (_e) {}
             const a = data.active;
             const status = (a.status || '').toLowerCase();
+            lastStatus = status;
+            lastCampaignId = String(a.id || '');
 
             // Как только начинается отправка любой кампании — сбрасываем прежний dismiss,
             // чтобы прогресс новой отправки всегда был виден.
@@ -2118,12 +2151,8 @@
               widget.classList.remove('mail-progress--limit');
             }
 
-            // Крестик показываем только после завершения (SENT)
-            if (status === 'sent') {
-              closeBtn.classList.remove('hidden');
-            } else {
-              closeBtn.classList.add('hidden');
-            }
+            // Крестик всегда доступен (менеджеры не должны застревать из-за перекрытия UI)
+            closeBtn.classList.remove('hidden');
           } catch (e) {
             // тихо: не мешаем работе
           }
@@ -2132,15 +2161,17 @@
         closeBtn.addEventListener('click', function(e) {
           e.preventDefault();
           widget.classList.add('hidden');
-          // Запоминаем кампанию, для которой пользователь закрыл виджет
-          const href = widget.getAttribute('href') || '';
-          const match = href.match(/\/mail\/campaigns\/([^/]+)\//);
-          if (match && match[1]) {
-            dismissedForCampaignId = match[1];
-            try {
+          // Если рассылка уже завершена — запоминаем кампанию (как раньше).
+          // Если в процессе — скрываем только на время, чтобы не мешало работе в CRM.
+          try {
+            if ((lastStatus || '') === 'sent' && lastCampaignId) {
+              dismissedForCampaignId = lastCampaignId;
               window.localStorage.setItem(STORAGE_KEY, dismissedForCampaignId);
-            } catch (_e) {}
-          }
+            } else {
+              dismissedUntil = Date.now() + (10 * 60 * 1000); // 10 минут
+              window.localStorage.setItem(STORAGE_UNTIL_KEY, String(dismissedUntil));
+            }
+          } catch (_e) {}
         });
 
         // Всегда показываем в компактном режиме; клик ведёт сразу в кампанию
