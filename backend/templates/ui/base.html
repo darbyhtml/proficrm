@@ -2925,7 +2925,44 @@
             days.forEach(d => { schedule[d].push(...ranges); });
             any = true;
           }
-          if (!any) return null;
+          if (!any) {
+            // Fallback: форматы без дней, вроде "с 08:00-17:00\nобед с 12:00-13:00" (ежедневно, с обедом)
+            const norm = src.toLowerCase().replace(/[‐‑‒–—−]/g,'-');
+            const spanRe = /(\d{1,2})[:.\-](\d{2})\s*(?:-|до)\s*(\d{1,2})[:.\-](\d{2})/;
+            const mainM = norm.match(spanRe);
+            let mainStart = null, mainEnd = null;
+            if (mainM) {
+              const a = toMin(mainM[1], mainM[2]);
+              const b = toMin(mainM[3], mainM[4]);
+              if (a >= 0 && a < b && b <= 1439) {
+                mainStart = a; mainEnd = b;
+              }
+            }
+            let lunchStart = null, lunchEnd = null;
+            if (/обед|перерыв/.test(norm)) {
+              const lunchRe = /(обед|перерыв)[^0-9]{0,20}(\d{1,2})[:.\-](\d{2})\s*(?:-|до)\s*(\d{1,2})[:.\-](\d{2})/;
+              const lm = norm.match(lunchRe);
+              if (lm) {
+                const a = toMin(lm[2], lm[3]);
+                const b = toMin(lm[4], lm[5]);
+                if (a >= 0 && a < b && b <= 1439) {
+                  lunchStart = a; lunchEnd = b;
+                }
+              }
+            }
+            if (mainStart !== null && mainEnd !== null) {
+              const intervals = [];
+              if (lunchStart !== null && lunchEnd !== null && mainStart < lunchStart && lunchEnd < mainEnd) {
+                intervals.push([mainStart, lunchStart]);
+                intervals.push([lunchEnd, mainEnd]);
+              } else {
+                intervals.push([mainStart, mainEnd]);
+              }
+              for (let i=0;i<7;i++) schedule[i] = intervals.map(p => p.slice());
+              return schedule;
+            }
+            return null;
+          }
           return schedule;
         }
 

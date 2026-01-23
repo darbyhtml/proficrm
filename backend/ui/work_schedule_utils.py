@@ -233,6 +233,43 @@ def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
         any_interval = True
 
     if not any_parsed or not any_interval:
+        # Fallback: форматы без указания дней, типа:
+        # "с 08:00-17:00\nобед с 12:00-13:00" (ежедневно, с обедом)
+        span_re = re.compile(
+            r"(?<!\d)(\d{1,2})[:.\-](\d{2})\s*(?:-|до)\s*(\d{1,2})[:.\-](\d{2})"
+        )
+        s_lower = src.lower()
+        main_m = span_re.search(s_lower)
+        if main_m:
+            main_start = _parse_time_token(f"{main_m.group(1)}:{main_m.group(2)}")
+            main_end = _parse_time_token(f"{main_m.group(3)}:{main_m.group(4)}")
+        else:
+            main_start = main_end = None
+
+        lunch_start: Optional[time] = None
+        lunch_end: Optional[time] = None
+        if "обед" in s_lower or "перерыв" in s_lower:
+            lunch_pattern = re.compile(
+                r"(обед|перерыв)[^0-9]{0,20}(\d{1,2})[:.\-](\d{2})\s*(?:-|до)\s*(\d{1,2})[:.\-](\d{2})"
+            )
+            lm = lunch_pattern.search(s_lower)
+            if lm:
+                lunch_start = _parse_time_token(f"{lm.group(2)}:{lm.group(3)}")
+                lunch_end = _parse_time_token(f"{lm.group(4)}:{lm.group(5)}")
+
+        if main_start and main_end and main_start < main_end:
+            intervals_all: List[Tuple[time, time]] = []
+            if lunch_start and lunch_end and main_start < lunch_start < lunch_end < main_end:
+                # Основной интервал минус обед
+                intervals_all.append((main_start, lunch_start))
+                intervals_all.append((lunch_end, main_end))
+            else:
+                intervals_all.append((main_start, main_end))
+
+            for i in range(7):
+                schedule[i] = intervals_all.copy()
+            return schedule
+
         return {}
 
     # normalize ordering per day
