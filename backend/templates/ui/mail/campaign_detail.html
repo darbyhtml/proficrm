@@ -227,6 +227,9 @@
                   <div class="text-xs text-gray-500 mt-0.5">{{ campaign.attachment.size|filesizeformat }}</div>
                 </div>
               </div>
+              <div class="mt-2">
+                <a class="btn btn-outline btn-sm" href="/mail/campaigns/{{ campaign.id }}/attachment/download/" target="_blank" rel="noopener">Скачать вложение</a>
+              </div>
             {% endif %}
           </div>
         </details>

@@ -263,8 +263,13 @@ def _get_campaign_attachment_bytes(camp: Campaign) -> tuple[bytes | None, str | 
         camp.attachment.open()
         try:
             content = camp.attachment.read()
+            # Для отправки важно оригинальное имя (чтобы у получателя файл не "переименовывался").
+            original = (getattr(camp, "attachment_original_name", None) or "").strip()
+            if original:
+                return content, original[:255], None
             name = getattr(camp.attachment, "name", None) or "attachment"
-            return content, name, None
+            base = name.split("/")[-1] if "/" in name else name
+            return content, base[:255], None
         finally:
             try:
                 camp.attachment.close()
@@ -311,7 +316,10 @@ def _get_campaign_attachment_bytes(camp: Campaign) -> tuple[bytes | None, str | 
         # не критично, главное что вложение прочитали
         pass
 
-    return content, found.name, None
+    original = (getattr(camp, "attachment_original_name", None) or "").strip()
+    if original:
+        return content, original[:255], None
+    return content, found.name[:255], None
 
 
 def _is_working_hours(now=None) -> bool:

@@ -172,6 +172,20 @@ class CampaignForm(forms.ModelForm):
         html = (self.cleaned_data.get("body_html") or "").strip()
         return sanitize_email_html(html)
 
+    def save(self, commit=True):
+        obj: Campaign = super().save(commit=False)
+        att = self.cleaned_data.get("attachment")
+        if att is not None:
+            # Если пользователь загрузил новый файл, фиксируем оригинальное имя.
+            try:
+                obj.attachment_original_name = (getattr(att, "name", "") or "").strip()[:255]
+            except Exception:
+                pass
+        if commit:
+            obj.save()
+            self.save_m2m()
+        return obj
+
 
 class CampaignGenerateRecipientsForm(forms.Form):
     limit = forms.IntegerField(label="Лимит получателей", min_value=1, max_value=5000, initial=200)

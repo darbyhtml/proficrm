@@ -10,6 +10,7 @@ from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Exists, OuterRef
 from django.http import HttpRequest, HttpResponse
+from django.http import FileResponse
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -1055,10 +1056,35 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "queue_entry": getattr(camp, "queue_entry", None),
             "emails_available": emails_available,
             "rate_per_hour": max_per_hour,
-            "attachment_ext": (camp.attachment.name.split(".")[-1].upper() if camp.attachment and "." in camp.attachment.name else "") if camp.attachment else "",
-            "attachment_filename": camp.attachment.name.split("/")[-1] if camp.attachment and camp.attachment.name else "",
+            "attachment_ext": (
+                ((camp.attachment_original_name or camp.attachment.name).split(".")[-1].upper() if (camp.attachment_original_name or camp.attachment) and "." in (camp.attachment_original_name or camp.attachment.name) else "")
+                if camp.attachment
+                else ""
+            ),
+            "attachment_filename": (camp.attachment_original_name or (camp.attachment.name.split("/")[-1] if camp.attachment and camp.attachment.name else "")),
         },
     )
+
+
+@login_required
+def campaign_attachment_download(request: HttpRequest, campaign_id) -> HttpResponse:
+    """
+    Скачивание вложения кампании с оригинальным именем файла (без переименования).
+    """
+    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:attachment:download", context={"path": request.path, "method": request.method})
+    user: User = request.user
+    camp = get_object_or_404(Campaign, id=campaign_id)
+    if not _can_manage_campaign(user, camp):
+        raise Http404()
+    if not camp.attachment:
+        raise Http404()
+    fname = (camp.attachment_original_name or "").strip() or (camp.attachment.name.split("/")[-1] if camp.attachment.name else "attachment")
+    # Django FileResponse умеет ставить Content-Disposition с filename
+    try:
+        f = camp.attachment.open("rb")
+    except Exception:
+        f = camp.attachment.open()
+    return FileResponse(f, as_attachment=True, filename=fname)
 
 
 @login_required

@@ -3,6 +3,7 @@ from __future__ import annotations
 import smtplib
 import ssl
 import re
+import base64
 from email.message import EmailMessage
 from email.utils import formataddr, make_msgid
 
@@ -21,6 +22,63 @@ class _SmtpAccountLike(Protocol):
     is_enabled: bool
 
     def get_password(self) -> str: ...
+
+
+_RE_DATA_IMG = re.compile(
+    r"""(<img\b[^>]*?\bsrc\s*=\s*)(["'])(data:image/[^;"']+;base64,[^"']+)\2""",
+    re.IGNORECASE,
+)
+
+
+def _inline_data_images(body_html: str) -> tuple[str, list[tuple[str, bytes, str]]]:
+    """
+    Конвертирует <img src="data:image/...;base64,..."> в cid: и возвращает список inline-вложений.
+
+    Returns:
+        (html_with_cid, images) где images = [(cid_without_brackets, bytes, mime_subtype)]
+    """
+    if not body_html:
+        return body_html, []
+
+    images: list[tuple[str, bytes, str]] = []
+    html_out = body_html
+
+    # Идём по совпадениям и заменяем по одной, чтобы не сломать индексы.
+    # Ограничения: не более 30 картинок и не более ~10MB суммарно (страховка).
+    total = 0
+    count = 0
+
+    def _replace(m: re.Match) -> str:
+        nonlocal total, count, images
+        if count >= 30:
+            return m.group(0)
+        prefix = m.group(1)
+        quote = m.group(2)
+        data_url = m.group(3) or ""
+        try:
+            header, b64 = data_url.split(",", 1)
+            # header: data:image/png;base64
+            mime = header.split(";", 1)[0].split(":", 1)[-1].strip().lower()
+            subtype = "png"
+            if "/" in mime:
+                _mt, st = mime.split("/", 1)
+                subtype = st or "png"
+            raw = base64.b64decode(b64.strip(), validate=False)
+            if not raw:
+                return m.group(0)
+            total += len(raw)
+            if total > 10 * 1024 * 1024:
+                return m.group(0)
+            cid_full = make_msgid(domain=None)  # <...>
+            cid = cid_full[1:-1]
+            images.append((cid, raw, subtype))
+            count += 1
+            return f"{prefix}{quote}cid:{cid}{quote}"
+        except Exception:
+            return m.group(0)
+
+    html_out = _RE_DATA_IMG.sub(_replace, html_out)
+    return html_out, images
 
 
 def build_message(
@@ -52,7 +110,25 @@ def build_message(
 
     if body_html:
         msg.set_content(body_text or " ", subtype="plain", charset="utf-8")
-        msg.add_alternative(body_html, subtype="html", charset="utf-8")
+        # Важно: inline base64-картинки из буфера (например, из Яндекса) многие почтовики режут/ломают.
+        # Конвертим data:image/... в cid: и прикладываем как multipart/related.
+        html_fixed, inline_imgs = _inline_data_images(body_html)
+        html_part = msg.add_alternative(html_fixed, subtype="html", charset="utf-8")
+        # Привязываем inline-картинки к HTML-части.
+        for cid, content, subtype in inline_imgs:
+            try:
+                # filename не задаём, чтобы почтовики реже показывали картинку как "вложение сверху"
+                html_part.add_related(
+                    content,
+                    maintype="image",
+                    subtype=subtype,
+                    cid=f"<{cid}>",
+                    filename=None,
+                    disposition="inline",
+                )
+            except Exception:
+                # если не получилось — письмо всё равно должно уйти
+                continue
     else:
         msg.set_content(body_text or " ", subtype="plain", charset="utf-8")
 

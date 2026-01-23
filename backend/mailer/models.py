@@ -139,6 +139,13 @@ class Campaign(models.Model):
     body_html = models.TextField("Текст письма (HTML)", blank=True, default="")
     sender_name = models.CharField("Имя отправителя", max_length=120, blank=True, default="")
     attachment = models.FileField("Вложение", upload_to="campaign_attachments/%Y/%m/", blank=True, null=True, help_text="Файл, который будет прикреплен ко всем письмам кампании")
+    attachment_original_name = models.CharField(
+        "Оригинальное имя вложения",
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Имя файла при загрузке (используется при отправке, чтобы не переименовывать вложение).",
+    )
 
     # Снэпшот фильтра (пока просто сохраняем параметры)
     filter_meta = models.JSONField("Фильтр", default=dict, blank=True)
