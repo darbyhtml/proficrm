@@ -3017,6 +3017,15 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         elif contract_days_left <= 30:
             contract_alert = "warn"
 
+    # Принудительно загружаем телефоны, чтобы убедиться, что prefetch работает
+    # Это гарантирует, что телефоны будут доступны в шаблоне
+    company_phones_list = list(company.phones.all())
+    # Отладочная информация: логируем количество загруженных телефонов
+    if company_phones_list:
+        logger.info(f"Company {company.id} has {len(company_phones_list)} phones loaded")
+    else:
+        logger.warning(f"Company {company.id} has no phones loaded (check if phones exist in DB)")
+    
     return render(
         request,
         "ui/company_detail.html",
@@ -3045,6 +3054,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "transfer_targets": transfer_targets,
             "contract_alert": contract_alert,
             "contract_days_left": contract_days_left,
+            "company_phones_list": company_phones_list,  # Явно передаем список телефонов для отладки
         },
     )
 
