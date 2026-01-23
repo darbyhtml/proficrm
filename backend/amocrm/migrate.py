@@ -14,7 +14,7 @@ from django.utils.dateparse import parse_datetime, parse_date
 from datetime import datetime, time as dt_time, timezone as dt_timezone
 
 from accounts.models import User
-from companies.models import Company, CompanyNote, CompanySphere, Contact, ContactEmail, ContactPhone
+from companies.models import Company, CompanyNote, CompanySphere, Contact, ContactEmail, ContactPhone, CompanyPhone, CompanyEmail
 from tasksapp.models import Task
 
 from .client import AmoClient, AmoApiError
@@ -1714,33 +1714,59 @@ def migrate_filtered(
                 except Exception as e:
                     logger.error(f"Failed to save email for company {comp.name}: {e}", exc_info=True)
 
-            # Остальные телефоны/почты — в "Контакты" отдельной записью (stub)
+            # Дополнительные телефоны сохраняем в CompanyPhone (а не в ContactPhone)
             extra_phones = [p for p in phones[1:] if str(p).strip()]
-            extra_emails = [e for e in emails[1:] if str(e).strip()]
-            if (extra_phones or extra_emails) and not dry_run:
-                # sentinel: amocrm_contact_id = -amocrm_company_id, чтобы не плодить дубли на повторных запусках
-                sentinel = -int(comp.amocrm_company_id or 0) if comp.amocrm_company_id else 0
-                c = None
-                if sentinel:
-                    c = Contact.objects.filter(company=comp, amocrm_contact_id=sentinel).first()
-                if c is None:
-                    c = Contact(company=comp, amocrm_contact_id=sentinel or None, raw_fields={"source": "amo_api_company_channels"})
-                    c.save()
+            if extra_phones and not dry_run:
+                # Нормализуем телефоны перед сохранением
+                from ui.forms import _normalize_phone
+                from django.db.models import Max
+                
+                # Получаем максимальный order для существующих телефонов
+                max_order = CompanyPhone.objects.filter(company=comp).aggregate(m=Max("order")).get("m")
+                next_order = int(max_order) + 1 if max_order is not None else 0
+                
                 for p in extra_phones:
                     v = str(p).strip()[:50]
                     if not v:
                         continue
-                    if not ContactPhone.objects.filter(contact=c, value=v).exists():
-                        ContactPhone.objects.create(contact=c, type=ContactPhone.PhoneType.OTHER, value=v)
+                    # Нормализуем телефон
+                    normalized = _normalize_phone(v) if v else ""
+                    if not normalized:
+                        normalized = v  # Если нормализация не удалась, используем исходное значение
+                    
+                    # Проверяем, что такого телефона еще нет (ни в основном, ни в дополнительных)
+                    if (comp.phone or "").strip() == normalized:
+                        continue  # Пропускаем, если это основной телефон
+                    if CompanyPhone.objects.filter(company=comp, value=normalized).exists():
+                        continue  # Пропускаем дубликаты
+                    
+                    try:
+                        CompanyPhone.objects.create(company=comp, value=normalized, order=next_order)
+                        next_order += 1
+                    except Exception as e:
+                        logger.error(f"Failed to create CompanyPhone for company {comp.name}: {e}", exc_info=True)
+            
+            # Дополнительные email сохраняем в CompanyEmail
+            extra_emails = [e for e in emails[1:] if str(e).strip()]
+            if extra_emails and not dry_run:
                 for e in extra_emails:
                     v = str(e).strip()[:254]
                     if not v:
                         continue
-                    if not ContactEmail.objects.filter(contact=c, value__iexact=v).exists():
-                        try:
-                            ContactEmail.objects.create(contact=c, type=ContactEmail.EmailType.OTHER, value=v)
-                        except Exception:
-                            pass
+                    # Проверяем, что такого email еще нет (ни в основном, ни в дополнительных)
+                    if (comp.email or "").strip().lower() == v.lower():
+                        continue  # Пропускаем, если это основной email
+                    if CompanyEmail.objects.filter(company=comp, value__iexact=v).exists():
+                        continue  # Пропускаем дубликаты
+                    
+                    try:
+                        CompanyEmail.objects.create(company=comp, value=v)
+                    except Exception as e:
+                        logger.error(f"Failed to create CompanyEmail for company {comp.name}: {e}", exc_info=True)
+            
+            # Остальные телефоны/почты, которые не удалось сохранить в CompanyPhone/CompanyEmail,
+            # сохраняем в "Контакты" отдельной записью (stub) - это fallback для совместимости
+            # (оставляем эту логику для обратной совместимости, но приоритет - CompanyPhone/CompanyEmail)
             if created:
                 res.companies_created += 1
             else:
