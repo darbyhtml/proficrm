@@ -135,7 +135,13 @@
                     <input type="text" name="company_phones_{{ forloop.counter0 }}" value="{{ phone.value }}"
                            class="flex-1 rounded-lg border px-3 py-2" placeholder="+7 ..." />
                     <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-phone-btn" title="Удалить номер">
-                      ✕
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6l-1 14H6L5 6"></path>
+                        <path d="M10 11v6"></path>
+                        <path d="M14 11v6"></path>
+                        <path d="M9 6l1-3h4l1 3"></path>
+                      </svg>
                     </button>
                   </div>
                 {% endfor %}
@@ -166,18 +172,30 @@
                   <div class="flex gap-2 items-center company-email-row">
                     <input type="email" name="company_emails_{{ forloop.counter0 }}" value="{{ email.value }}"
                            class="flex-1 rounded-lg border px-3 py-2" placeholder="email@example.com" />
-                    <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-email-btn" title="Удалить email">
-                      ✕
-                    </button>
+          <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-email-btn" title="Удалить email">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6l-1 14H6L5 6"></path>
+              <path d="M10 11v6"></path>
+              <path d="M14 11v6"></path>
+              <path d="M9 6l1-3h4l1 3"></path>
+            </svg>
+          </button>
                   </div>
                 {% endfor %}
               {% else %}
                 <div class="flex gap-2 items-center company-email-row">
                   <input type="email" name="company_emails_0" value=""
                          class="flex-1 rounded-lg border px-3 py-2" placeholder="email@example.com" />
-                  <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-email-btn" title="Удалить email">
-                    ✕
-                  </button>
+          <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-email-btn" title="Удалить email">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6l-1 14H6L5 6"></path>
+              <path d="M10 11v6"></path>
+              <path d="M14 11v6"></path>
+              <path d="M9 6l1-3h4l1 3"></path>
+            </svg>
+          </button>
                 </div>
               {% endif %}
             </div>
@@ -320,7 +338,13 @@
           <input type="email" name="company_emails_${emailIndex}" value=""
                  class="flex-1 rounded-lg border px-3 py-2" placeholder="email@example.com" />
           <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-email-btn" title="Удалить email">
-            ✕
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6l-1 14H6L5 6"></path>
+              <path d="M10 11v6"></path>
+              <path d="M14 11v6"></path>
+              <path d="M9 6l1-3h4l1 3"></path>
+            </svg>
           </button>
         `;
         emailsContainer.appendChild(row);
@@ -403,7 +427,13 @@
           <input type="text" name="company_phones_${phoneIndex}" value=""
                  class="flex-1 rounded-lg border px-3 py-2" placeholder="+7 ..." />
           <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-phone-btn" title="Удалить номер">
-            ✕
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6l-1 14H6L5 6"></path>
+              <path d="M10 11v6"></path>
+              <path d="M14 11v6"></path>
+              <path d="M9 6l1-3h4l1 3"></path>
+            </svg>
           </button>
         `;
         phonesContainer.appendChild(row);

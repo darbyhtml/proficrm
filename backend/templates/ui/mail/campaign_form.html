@@ -223,7 +223,13 @@
                   <path d="M9 6l1-3h4l1 3"></path>
                 </svg>
               </button>
-              <a class="btn btn-outline btn-sm" href="/mail/campaigns/{{ campaign.id }}/attachment/download/" target="_blank" rel="noopener">Скачать вложение</a>
+              <a class="btn btn-outline btn-sm" href="/mail/campaigns/{{ campaign.id }}/attachment/download/" target="_blank" rel="noopener" title="Скачать вложение">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+              </a>
             </div>
           </div>
           <div class="mt-1 text-xs muted-2">Если выбрать новый файл — текущее будет заменено.</div>
@@ -577,7 +583,14 @@
           const span = fileLabel.querySelector('span');
           if (span) span.textContent = 'Выберите файл';
           showPreview(file);
-          if (file && removeCb) removeCb.checked = false;
+          if (file && removeCb) {
+            removeCb.checked = false;
+            // Показываем блок обратно, если он был скрыт
+            if (currentBlock && currentBlock.style.display === 'none') {
+              currentBlock.style.display = '';
+              currentBlock.classList.remove('opacity-60');
+            }
+          }
         });
       }
       if (clearBtn && fileInput) {
@@ -590,7 +603,12 @@
         removeBtn.addEventListener('click', function(){
           removeCb.checked = !removeCb.checked;
           if (currentBlock) {
-            currentBlock.classList.toggle('opacity-60', removeCb.checked);
+            if (removeCb.checked) {
+              currentBlock.style.display = 'none';
+            } else {
+              currentBlock.style.display = '';
+              currentBlock.classList.remove('opacity-60');
+            }
           }
         });
       }
