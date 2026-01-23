@@ -1935,6 +1935,80 @@
 
       // Обработчик подтверждения для форм холодного звонка
       document.addEventListener('DOMContentLoaded', function() {
+        function getCookie(name) {
+          const value = `; ${document.cookie}`;
+          const parts = value.split(`; ${name}=`);
+          if (parts.length === 2) return parts.pop().split(';').shift();
+          return '';
+        }
+        const csrftoken = getCookie('csrftoken');
+
+        function setColdInfo(entity, id, data){
+          const el = document.querySelector('[data-cold-info="' + entity + ':' + id + '"]');
+          if(!el) return;
+          if(data && (data.is_cold_call || data.has_mark)){
+            const by = data.marked_by ? (' (' + data.marked_by + ')') : '';
+            const at = data.marked_at ? (' <span>' + data.marked_at + '</span>') : '';
+            const rollback = (!data.is_cold_call && data.has_mark) ? ' <span class="opacity-80">(откат)</span>' : '';
+            el.innerHTML = '<span class="font-medium">Холодный звонок:</span>' + at + by + rollback;
+            el.classList.remove('hidden');
+          }else{
+            el.innerHTML = '';
+            el.classList.add('hidden');
+          }
+        }
+
+        function toggleColdForms(entity, id, data){
+          // Переключаем видимость toggle/reset форм для этой сущности, если они есть на странице.
+          const selector = '.js-cold-call-form[data-cold-entity="' + entity + '"][data-cold-id="' + id + '"]';
+          const forms = Array.from(document.querySelectorAll(selector));
+          if(!forms.length) return;
+          forms.forEach(f => {
+            const kind = (f.getAttribute('data-cold-kind') || '').toLowerCase();
+            if(kind === 'toggle'){
+              // Показываем toggle только если нет отметки
+              f.style.display = (data && !data.has_mark) ? '' : 'none';
+            }else if(kind === 'reset'){
+              // Reset только когда есть активная отметка и сервер разрешил
+              f.style.display = (data && data.is_cold_call && data.can_reset) ? '' : 'none';
+            }
+          });
+        }
+
+        async function submitColdForm(form){
+          const action = form.getAttribute('action') || '';
+          if(!action) return;
+          const fd = new FormData(form);
+          try{
+            const res = await fetch(action, {
+              method: 'POST',
+              body: fd,
+              headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json',
+                'X-CSRFToken': csrftoken,
+              },
+              credentials: 'same-origin',
+            });
+            const data = await res.json().catch(() => null);
+            if(!res.ok || !data || data.ok !== true){
+              const err = (data && (data.error || data.detail)) ? (data.error || data.detail) : 'Не удалось выполнить действие';
+              if(window.uiToast) window.uiToast(err, 'error');
+              return;
+            }
+            // Обновляем UI в карточке (без перезагрузки/скролла)
+            const entity = data.entity || form.getAttribute('data-cold-entity') || '';
+            const id = data.id || form.getAttribute('data-cold-id') || '';
+            if(entity && id){
+              setColdInfo(entity, id, data);
+              toggleColdForms(entity, id, data);
+            }
+            if(window.uiToast && data.message) window.uiToast(data.message, 'success');
+          }catch(e){
+            if(window.uiToast) window.uiToast('Ошибка сети при сохранении', 'error');
+          }
+        }
+
         document.querySelectorAll('.js-cold-call-form').forEach(function(form) {
           if (form.__coldCallBound) return;
           form.__coldCallBound = true;
@@ -1944,6 +2018,13 @@
               e.preventDefault();
               return false;
             }
+            // Если fetch недоступен — деградируем на обычный submit (как раньше).
+            if (typeof window.fetch !== 'function') return true;
+            // Делаем AJAX только если форма размечена как cold-call сущность (чтобы не ломать другие формы со старым классом).
+            if (!form.getAttribute('data-cold-entity') || !form.getAttribute('data-cold-id')) return true;
+            e.preventDefault();
+            submitColdForm(form);
+            return false;
           });
         });
       });

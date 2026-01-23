@@ -362,6 +362,38 @@ def _normalize_email_for_search(email: str) -> str:
     return email.strip().lower()
 
 
+def _is_ajax(request: HttpRequest) -> bool:
+    # Django 4+ убрал request.is_ajax(); используем заголовок как и в других AJAX endpoints проекта.
+    return (request.headers.get("X-Requested-With") or "") == "XMLHttpRequest"
+
+
+def _dt_label(dt: datetime | None) -> str:
+    if not dt:
+        return ""
+    try:
+        return timezone.localtime(dt).strftime("%d.%m.%Y %H:%M")
+    except Exception:
+        try:
+            return dt.strftime("%d.%m.%Y %H:%M")
+        except Exception:
+            return ""
+
+
+def _cold_call_json(*, entity: str, entity_id: str, is_cold_call: bool, marked_at: datetime | None, marked_by: str, can_reset: bool, message: str) -> JsonResponse:
+    return JsonResponse(
+        {
+            "ok": True,
+            "entity": entity,
+            "id": entity_id,
+            "is_cold_call": bool(is_cold_call),
+            "has_mark": bool(marked_at),
+            "marked_at": _dt_label(marked_at),
+            "marked_by": marked_by or "",
+            "can_reset": bool(can_reset),
+            "message": message or "",
+        }
+    )
+
 def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | None = None):
     """
     Единые фильтры компаний для:
@@ -3247,22 +3279,38 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
     enforce(user=user, resource_type="action", resource="ui:companies:cold_call:toggle", context={"path": request.path, "method": request.method})
     company = get_object_or_404(Company.objects.select_related("responsible", "branch", "primary_cold_marked_by"), id=company_id)
     if not _can_edit_company(user, company):
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Нет прав на изменение признака 'Холодный звонок'."}, status=403)
         messages.error(request, "Нет прав на изменение признака 'Холодный звонок'.")
         return redirect("company_detail", company_id=company.id)
 
     # Проверка подтверждения
     confirmed = request.POST.get("confirmed") == "1"
     if not confirmed:
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Требуется подтверждение действия."}, status=400)
         messages.error(request, "Требуется подтверждение действия.")
         return redirect("company_detail", company_id=company.id)
 
     # Проверка: уже отмечен?
     if company.primary_contact_is_cold_call:
+        if _is_ajax(request):
+            return _cold_call_json(
+                entity="company",
+                entity_id=str(company.id),
+                is_cold_call=True,
+                marked_at=company.primary_cold_marked_at,
+                marked_by=str(company.primary_cold_marked_by or ""),
+                can_reset=bool(require_admin(user)),
+                message="Основной контакт уже отмечен как холодный.",
+            )
         messages.info(request, "Основной контакт уже отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
     phone = (company.phone or "").strip()
     if not phone:
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "У компании не задан основной телефон."}, status=400)
         messages.error(request, "У компании не задан основной телефон.")
         return redirect("company_detail", company_id=company.id)
 
@@ -3275,6 +3323,8 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
         .first()
     )
     if not last_call:
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Не найден звонок по основному номеру."}, status=400)
         messages.error(request, "Не найден звонок по основному номеру.")
         return redirect("company_detail", company_id=company.id)
 
@@ -3288,6 +3338,17 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
     if not last_call.is_cold_call:
         last_call.is_cold_call = True
         last_call.save(update_fields=["is_cold_call"])
+
+    if _is_ajax(request):
+        return _cold_call_json(
+            entity="company",
+            entity_id=str(company.id),
+            is_cold_call=True,
+            marked_at=company.primary_cold_marked_at,
+            marked_by=str(company.primary_cold_marked_by or ""),
+            can_reset=bool(require_admin(user)),
+            message="Отмечено: холодный звонок (основной контакт).",
+        )
 
     messages.success(request, "Отмечено: холодный звонок (основной контакт).")
     log_event(
@@ -3317,17 +3378,31 @@ def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
         messages.error(request, "Контакт не привязан к компании.")
         return redirect("dashboard")
     if not _can_edit_company(user, company):
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Нет прав на изменение контактов этой компании."}, status=403)
         messages.error(request, "Нет прав на изменение контактов этой компании.")
         return redirect("company_detail", company_id=company.id)
 
     # Проверка подтверждения
     confirmed = request.POST.get("confirmed") == "1"
     if not confirmed:
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Требуется подтверждение действия."}, status=400)
         messages.error(request, "Требуется подтверждение действия.")
         return redirect("company_detail", company_id=company.id)
 
     # Проверка: уже отмечен?
     if contact.is_cold_call:
+        if _is_ajax(request):
+            return _cold_call_json(
+                entity="contact",
+                entity_id=str(contact.id),
+                is_cold_call=True,
+                marked_at=contact.cold_marked_at,
+                marked_by=str(contact.cold_marked_by or ""),
+                can_reset=bool(require_admin(user)),
+                message="Контакт уже отмечен как холодный.",
+            )
         messages.info(request, "Контакт уже отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
@@ -3339,6 +3414,8 @@ def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
         .first()
     )
     if not last_call:
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Не найден звонок по этому контакту."}, status=400)
         messages.error(request, "Не найден звонок по этому контакту.")
         return redirect("company_detail", company_id=company.id)
 
@@ -3352,6 +3429,17 @@ def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
     if not last_call.is_cold_call:
         last_call.is_cold_call = True
         last_call.save(update_fields=["is_cold_call"])
+
+    if _is_ajax(request):
+        return _cold_call_json(
+            entity="contact",
+            entity_id=str(contact.id),
+            is_cold_call=True,
+            marked_at=contact.cold_marked_at,
+            marked_by=str(contact.cold_marked_by or ""),
+            can_reset=bool(require_admin(user)),
+            message="Отмечено: холодный звонок (контакт).",
+        )
 
     messages.success(request, "Отмечено: холодный звонок (контакт).")
     log_event(
@@ -3378,12 +3466,24 @@ def company_cold_call_reset(request: HttpRequest, company_id) -> HttpResponse:
     user: User = request.user
     enforce(user=user, resource_type="action", resource="ui:companies:cold_call:reset", context={"path": request.path, "method": request.method})
     if not require_admin(user):
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Только администратор может откатить отметку холодного звонка."}, status=403)
         messages.error(request, "Только администратор может откатить отметку холодного звонка.")
         return redirect("company_detail", company_id=company_id)
 
     company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
     
     if not company.primary_contact_is_cold_call:
+        if _is_ajax(request):
+            return _cold_call_json(
+                entity="company",
+                entity_id=str(company.id),
+                is_cold_call=False,
+                marked_at=company.primary_cold_marked_at,
+                marked_by=str(company.primary_cold_marked_by or ""),
+                can_reset=True,
+                message="Основной контакт не отмечен как холодный.",
+            )
         messages.info(request, "Основной контакт не отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
@@ -3393,6 +3493,17 @@ def company_cold_call_reset(request: HttpRequest, company_id) -> HttpResponse:
     company.primary_cold_marked_by = None
     company.primary_cold_marked_call = None
     company.save(update_fields=["primary_contact_is_cold_call", "primary_cold_marked_at", "primary_cold_marked_by", "primary_cold_marked_call", "updated_at"])
+
+    if _is_ajax(request):
+        return _cold_call_json(
+            entity="company",
+            entity_id=str(company.id),
+            is_cold_call=False,
+            marked_at=company.primary_cold_marked_at,
+            marked_by="",
+            can_reset=True,
+            message="Отметка холодного звонка отменена (основной контакт).",
+        )
 
     messages.success(request, "Отметка холодного звонка отменена (основной контакт).")
     log_event(
@@ -3417,6 +3528,8 @@ def contact_cold_call_reset(request: HttpRequest, contact_id) -> HttpResponse:
 
     user: User = request.user
     if not require_admin(user):
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Только администратор может откатить отметку холодного звонка."}, status=403)
         messages.error(request, "Только администратор может откатить отметку холодного звонка.")
         return redirect("dashboard")
 
@@ -3427,13 +3540,37 @@ def contact_cold_call_reset(request: HttpRequest, contact_id) -> HttpResponse:
         return redirect("dashboard")
 
     if not contact.is_cold_call:
+        if _is_ajax(request):
+            return _cold_call_json(
+                entity="contact",
+                entity_id=str(contact.id),
+                is_cold_call=False,
+                marked_at=contact.cold_marked_at,
+                marked_by=str(contact.cold_marked_by or ""),
+                can_reset=True,
+                message="Контакт не отмечен как холодный.",
+            )
         messages.info(request, "Контакт не отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
     # Откатываем отметку
     contact.is_cold_call = False
-    contact.save(update_fields=["is_cold_call"])
-    # НЕ удаляем поля cold_marked_at, cold_marked_by, cold_marked_call для истории
+    # Важно для отчетов/аналитики: очищаем метаданные, иначе звонок продолжит считаться "подтвержденным".
+    contact.cold_marked_at = None
+    contact.cold_marked_by = None
+    contact.cold_marked_call = None
+    contact.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
+
+    if _is_ajax(request):
+        return _cold_call_json(
+            entity="contact",
+            entity_id=str(contact.id),
+            is_cold_call=False,
+            marked_at=contact.cold_marked_at,
+            marked_by="",
+            can_reset=True,
+            message="Отметка холодного звонка отменена (контакт).",
+        )
 
     messages.success(request, "Отметка холодного звонка отменена (контакт).")
     log_event(
@@ -3462,6 +3599,8 @@ def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> Ht
         contact_phone = get_object_or_404(ContactPhone.objects.select_related("contact__company", "cold_marked_by"), id=contact_phone_id)
     except Exception as e:
         logger.error(f"Error finding ContactPhone {contact_phone_id}: {e}", exc_info=True)
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Ошибка: номер телефона не найден."}, status=404)
         messages.error(request, f"Ошибка: номер телефона не найден.")
         return redirect("dashboard")
     contact = contact_phone.contact
@@ -3470,17 +3609,31 @@ def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> Ht
         messages.error(request, "Контакт не привязан к компании.")
         return redirect("dashboard")
     if not _can_edit_company(user, company):
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Нет прав на изменение контактов этой компании."}, status=403)
         messages.error(request, "Нет прав на изменение контактов этой компании.")
         return redirect("company_detail", company_id=company.id)
 
     # Проверка подтверждения
     confirmed = request.POST.get("confirmed") == "1"
     if not confirmed:
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Требуется подтверждение действия."}, status=400)
         messages.error(request, "Требуется подтверждение действия.")
         return redirect("company_detail", company_id=company.id)
 
     # Проверка: уже отмечен?
     if contact_phone.is_cold_call:
+        if _is_ajax(request):
+            return _cold_call_json(
+                entity="contact_phone",
+                entity_id=str(contact_phone.id),
+                is_cold_call=True,
+                marked_at=contact_phone.cold_marked_at,
+                marked_by=str(contact_phone.cold_marked_by or ""),
+                can_reset=bool(require_admin(user)),
+                message="Этот номер уже отмечен как холодный.",
+            )
         messages.info(request, "Этот номер уже отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
@@ -3509,6 +3662,8 @@ def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> Ht
         .first()
     )
     if not last_call:
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Не найден звонок по этому номеру телефона."}, status=400)
         messages.error(request, "Не найден звонок по этому номеру телефона.")
         return redirect("company_detail", company_id=company.id)
 
@@ -3522,6 +3677,17 @@ def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> Ht
     if not last_call.is_cold_call:
         last_call.is_cold_call = True
         last_call.save(update_fields=["is_cold_call"])
+
+    if _is_ajax(request):
+        return _cold_call_json(
+            entity="contact_phone",
+            entity_id=str(contact_phone.id),
+            is_cold_call=True,
+            marked_at=contact_phone.cold_marked_at,
+            marked_by=str(contact_phone.cold_marked_by or ""),
+            can_reset=bool(require_admin(user)),
+            message=f"Отмечено: холодный звонок (номер {contact_phone.value}).",
+        )
 
     messages.success(request, f"Отмечено: холодный звонок (номер {contact_phone.value}).")
     log_event(
@@ -3547,6 +3713,8 @@ def contact_phone_cold_call_reset(request: HttpRequest, contact_phone_id) -> Htt
 
     user: User = request.user
     if not require_admin(user):
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Только администратор может откатить отметку холодного звонка."}, status=403)
         messages.error(request, "Только администратор может откатить отметку холодного звонка.")
         return redirect("dashboard")
 
@@ -3558,6 +3726,16 @@ def contact_phone_cold_call_reset(request: HttpRequest, contact_phone_id) -> Htt
         return redirect("dashboard")
 
     if not contact_phone.is_cold_call and not contact_phone.cold_marked_at:
+        if _is_ajax(request):
+            return _cold_call_json(
+                entity="contact_phone",
+                entity_id=str(contact_phone.id),
+                is_cold_call=False,
+                marked_at=contact_phone.cold_marked_at,
+                marked_by=str(contact_phone.cold_marked_by or ""),
+                can_reset=True,
+                message="Этот номер не отмечен как холодный.",
+            )
         messages.info(request, "Этот номер не отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
@@ -3567,6 +3745,17 @@ def contact_phone_cold_call_reset(request: HttpRequest, contact_phone_id) -> Htt
     contact_phone.cold_marked_by = None
     contact_phone.cold_marked_call = None
     contact_phone.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
+
+    if _is_ajax(request):
+        return _cold_call_json(
+            entity="contact_phone",
+            entity_id=str(contact_phone.id),
+            is_cold_call=False,
+            marked_at=contact_phone.cold_marked_at,
+            marked_by="",
+            can_reset=True,
+            message=f"Отметка холодного звонка отменена (номер {contact_phone.value}).",
+        )
 
     messages.success(request, f"Отметка холодного звонка отменена (номер {contact_phone.value}).")
     log_event(
@@ -3595,21 +3784,37 @@ def company_phone_cold_call_toggle(request: HttpRequest, company_phone_id) -> Ht
         company_phone = get_object_or_404(CompanyPhone.objects.select_related("company", "cold_marked_by"), id=company_phone_id)
     except Exception as e:
         logger.error(f"Error finding CompanyPhone {company_phone_id}: {e}", exc_info=True)
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Ошибка: номер телефона не найден."}, status=404)
         messages.error(request, f"Ошибка: номер телефона не найден.")
         return redirect("dashboard")
     company = company_phone.company
     if not _can_edit_company(user, company):
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Нет прав на изменение данных этой компании."}, status=403)
         messages.error(request, "Нет прав на изменение данных этой компании.")
         return redirect("company_detail", company_id=company.id)
 
     # Проверка подтверждения
     confirmed = request.POST.get("confirmed") == "1"
     if not confirmed:
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Требуется подтверждение действия."}, status=400)
         messages.error(request, "Требуется подтверждение действия.")
         return redirect("company_detail", company_id=company.id)
 
     # Проверка: уже отмечен?
     if company_phone.is_cold_call:
+        if _is_ajax(request):
+            return _cold_call_json(
+                entity="company_phone",
+                entity_id=str(company_phone.id),
+                is_cold_call=True,
+                marked_at=company_phone.cold_marked_at,
+                marked_by=str(company_phone.cold_marked_by or ""),
+                can_reset=bool(require_admin(user)),
+                message="Этот номер уже отмечен как холодный.",
+            )
         messages.info(request, "Этот номер уже отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
@@ -3638,6 +3843,8 @@ def company_phone_cold_call_toggle(request: HttpRequest, company_phone_id) -> Ht
         .first()
     )
     if not last_call:
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Не найден звонок по этому номеру телефона."}, status=400)
         messages.error(request, "Не найден звонок по этому номеру телефона.")
         return redirect("company_detail", company_id=company.id)
 
@@ -3651,6 +3858,17 @@ def company_phone_cold_call_toggle(request: HttpRequest, company_phone_id) -> Ht
     if not last_call.is_cold_call:
         last_call.is_cold_call = True
         last_call.save(update_fields=["is_cold_call"])
+
+    if _is_ajax(request):
+        return _cold_call_json(
+            entity="company_phone",
+            entity_id=str(company_phone.id),
+            is_cold_call=True,
+            marked_at=company_phone.cold_marked_at,
+            marked_by=str(company_phone.cold_marked_by or ""),
+            can_reset=bool(require_admin(user)),
+            message=f"Отмечено: холодный звонок (номер {company_phone.value}).",
+        )
 
     messages.success(request, f"Отмечено: холодный звонок (номер {company_phone.value}).")
     log_event(
@@ -3676,6 +3894,8 @@ def company_phone_cold_call_reset(request: HttpRequest, company_phone_id) -> Htt
 
     user: User = request.user
     if not require_admin(user):
+        if _is_ajax(request):
+            return JsonResponse({"ok": False, "error": "Только администратор может откатить отметку холодного звонка."}, status=403)
         messages.error(request, "Только администратор может откатить отметку холодного звонка.")
         return redirect("dashboard")
 
@@ -3683,6 +3903,16 @@ def company_phone_cold_call_reset(request: HttpRequest, company_phone_id) -> Htt
     company = company_phone.company
 
     if not company_phone.is_cold_call and not company_phone.cold_marked_at:
+        if _is_ajax(request):
+            return _cold_call_json(
+                entity="company_phone",
+                entity_id=str(company_phone.id),
+                is_cold_call=False,
+                marked_at=company_phone.cold_marked_at,
+                marked_by=str(company_phone.cold_marked_by or ""),
+                can_reset=True,
+                message="Этот номер не отмечен как холодный.",
+            )
         messages.info(request, "Этот номер не отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
@@ -3692,6 +3922,17 @@ def company_phone_cold_call_reset(request: HttpRequest, company_phone_id) -> Htt
     company_phone.cold_marked_by = None
     company_phone.cold_marked_call = None
     company_phone.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
+
+    if _is_ajax(request):
+        return _cold_call_json(
+            entity="company_phone",
+            entity_id=str(company_phone.id),
+            is_cold_call=False,
+            marked_at=company_phone.cold_marked_at,
+            marked_by="",
+            can_reset=True,
+            message=f"Отметка холодного звонка отменена (номер {company_phone.value}).",
+        )
 
     messages.success(request, f"Отметка холодного звонка отменена (номер {company_phone.value}).")
     log_event(
