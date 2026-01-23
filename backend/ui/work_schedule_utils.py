@@ -238,7 +238,8 @@ def parse_work_schedule(text: str) -> Dict[int, List[Tuple[time, time]]]:
         span_re = re.compile(
             r"(?<!\d)(\d{1,2})[:.\-](\d{2})\s*(?:-|до)\s*(\d{1,2})[:.\-](\d{2})"
         )
-        s_lower = src.lower()
+        # Используем уже нормализованный текст (тире приведены к '-')
+        s_lower = s.lower()
         main_m = span_re.search(s_lower)
         if main_m:
             main_start = _parse_time_token(f"{main_m.group(1)}:{main_m.group(2)}")

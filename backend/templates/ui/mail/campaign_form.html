@@ -173,50 +173,60 @@
           <span class="text-sm text-brand-dark/70">Выберите файл</span>
           {{ form.attachment }}
         </label>
-        {# Превью выбранного файла (и в create, и в edit) #}
-        <div id="attachmentPreview" class="mt-2 hidden p-2.5 bg-brand-soft/20 rounded-lg border border-brand-soft/60 flex items-center gap-2.5">
-          <svg class="w-4 h-4 text-brand-dark/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
-          </svg>
+        {# Превью выбранного файла (логика/вид как в предпросмотре) #}
+        <div id="attachmentPreview" class="mt-4 hidden p-3 rounded-lg border border-gray-200 bg-gray-50 flex items-center gap-3">
+          <div class="flex-shrink-0" id="attachmentPreviewIcon">
+            <svg class="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+            </svg>
+          </div>
           <div class="flex-1 min-w-0">
-            <div class="text-sm font-medium text-brand-dark/90 truncate" id="attachmentPreviewName">—</div>
+            <div class="font-medium text-sm truncate" id="attachmentPreviewName">—</div>
             <div class="text-xs text-brand-dark/50 mt-0.5" id="attachmentPreviewMeta">—</div>
           </div>
-          <button type="button" class="btn btn-outline btn-sm" id="attachmentPreviewClear">Убрать</button>
+          <button type="button" class="btn btn-outline btn-sm btn-danger" id="attachmentPreviewClear" title="Убрать выбранный файл" aria-label="Убрать выбранный файл">✕</button>
         </div>
 
         {% if mode == 'edit' and campaign.attachment %}
-          <div id="attachmentCurrent" class="mt-2 p-2.5 bg-white rounded-lg border border-brand-soft/60 flex items-start gap-2.5 transition-opacity">
-            <svg class="w-4 h-4 text-brand-dark/60 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
-            </svg>
-            <div class="flex-1 min-w-0">
-              <div class="text-sm font-medium text-brand-dark/90 truncate">{{ campaign.attachment_original_name|default:campaign.attachment.name|slice:"-50:" }}</div>
-              <div class="text-xs text-brand-dark/50 mt-0.5">
-                {{ campaign.attachment.size|filesizeformat }} · {{ campaign.attachment_original_name|default:campaign.attachment.name|slice:"-4:"|upper }}
-              </div>
-              <div class="mt-2 flex flex-wrap items-center gap-3">
-                <span class="hidden">{{ form.remove_attachment }}</span>
-                <button
-                  type="button"
-                  class="btn btn-outline btn-sm btn-danger flex items-center gap-1"
-                  id="attachmentRemoveBtn"
-                  title="Удалить текущее вложение"
-                  aria-label="Удалить текущее вложение"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="3 6 5 6 21 6"></polyline>
-                    <path d="M19 6l-1 14H6L5 6"></path>
-                    <path d="M10 11v6"></path>
-                    <path d="M14 11v6"></path>
-                    <path d="M9 6l1-3h4l1 3"></path>
-                  </svg>
-                </button>
-                <span class="text-xs muted-2">Если выбрать новый файл — текущее будет заменено.</span>
-              </div>
+          <div id="attachmentCurrent" class="mt-4 p-3 rounded-lg border border-gray-200 bg-gray-50 flex items-center gap-3 transition-opacity">
+            <div class="flex-shrink-0">
+              {% if attachment_ext == "PDF" %}
+                <svg class="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                </svg>
+              {% elif attachment_ext == "DOC" or attachment_ext == "DOCX" or attachment_ext == "RTF" %}
+                <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                </svg>
+              {% elif attachment_ext == "XLS" or attachment_ext == "XLSX" %}
+                <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                </svg>
+              {% else %}
+                <svg class="w-8 h-8 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
+                </svg>
+              {% endif %}
             </div>
-            <a href="/mail/campaigns/{{ campaign.id }}/attachment/download/" target="_blank" class="text-xs text-brand-dark/70 hover:text-brand-dark transition-colors underline">Скачать</a>
+            <div class="flex-1 min-w-0">
+              <div class="font-medium text-sm truncate">{{ attachment_filename|default:"Вложение" }}</div>
+              <div class="text-xs text-brand-dark/50 mt-0.5">{{ campaign.attachment.size|filesizeformat }}</div>
+              <span class="hidden">{{ form.remove_attachment }}</span>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <button type="button" class="btn btn-outline btn-sm btn-danger" id="attachmentRemoveBtn" title="Удалить текущее вложение" aria-label="Удалить текущее вложение">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6l-1 14H6L5 6"></path>
+                  <path d="M10 11v6"></path>
+                  <path d="M14 11v6"></path>
+                  <path d="M9 6l1-3h4l1 3"></path>
+                </svg>
+              </button>
+              <a class="btn btn-outline btn-sm" href="/mail/campaigns/{{ campaign.id }}/attachment/download/" target="_blank" rel="noopener">Скачать вложение</a>
+            </div>
           </div>
+          <div class="mt-1 text-xs muted-2">Если выбрать новый файл — текущее будет заменено.</div>
         {% endif %}
         <div class="text-xs text-brand-dark/50 mt-1.5">Максимальный размер: 15 МБ. Файл будет прикреплен ко всем письмам кампании.</div>
       </div>
@@ -504,6 +514,7 @@
       const fileInput = document.querySelector('input[type="file"][name="attachment"]');
       const fileLabel = fileInput?.closest('label');
       const preview = document.getElementById('attachmentPreview');
+      const prevIcon = document.getElementById('attachmentPreviewIcon');
       const prevName = document.getElementById('attachmentPreviewName');
       const prevMeta = document.getElementById('attachmentPreviewMeta');
       const clearBtn = document.getElementById('attachmentPreviewClear');
@@ -526,12 +537,23 @@
         if (idx === -1) return '';
         return s.slice(idx+1).toUpperCase();
       }
+      function iconHtml(ext){
+        const e = String(ext || '').toUpperCase();
+        const base = '<path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />';
+        let cls = 'text-gray-600';
+        if (e === 'PDF') cls = 'text-red-600';
+        else if (e === 'DOC' || e === 'DOCX' || e === 'RTF') cls = 'text-blue-600';
+        else if (e === 'XLS' || e === 'XLSX') cls = 'text-green-600';
+        else if (e === 'ZIP' || e === 'RAR' || e === '7Z') cls = 'text-purple-600';
+        return `<svg class="w-8 h-8 ${cls}" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">${base}</svg>`;
+      }
       function showPreview(file){
         if (!preview || !prevName || !prevMeta) return;
         if (!file) {
           preview.classList.add('hidden');
           prevName.textContent = '—';
           prevMeta.textContent = '—';
+          if (prevIcon) prevIcon.innerHTML = iconHtml('');
           if (currentBlock) currentBlock.classList.remove('opacity-60');
           return;
         }
@@ -542,6 +564,7 @@
         const ext = getExt(file.name);
         if (ext) meta.push(ext);
         prevMeta.textContent = meta.join(' · ') || '—';
+        if (prevIcon) prevIcon.innerHTML = iconHtml(ext);
         preview.classList.remove('hidden');
         // визуально показываем, что текущее будет заменено
         if (currentBlock) currentBlock.classList.add('opacity-60');

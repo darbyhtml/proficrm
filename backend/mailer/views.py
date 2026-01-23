@@ -748,7 +748,13 @@ def campaign_create(request: HttpRequest) -> HttpResponse:
     return render(
         request,
         "ui/mail/campaign_form.html",
-        {"form": form, "mode": "create", "smtp_from_email": (smtp_cfg.from_email or smtp_cfg.smtp_username or "").strip()},
+        {
+            "form": form,
+            "mode": "create",
+            "smtp_from_email": (smtp_cfg.from_email or smtp_cfg.smtp_username or "").strip(),
+            "attachment_ext": "",
+            "attachment_filename": "",
+        },
     )
 
 
@@ -776,10 +782,30 @@ def campaign_edit(request: HttpRequest, campaign_id) -> HttpResponse:
             return redirect("campaign_detail", campaign_id=camp.id)
     else:
         form = CampaignForm(instance=camp)
+
+    attachment_filename = ""
+    attachment_ext = ""
+    if getattr(camp, "attachment", None):
+        try:
+            attachment_filename = (camp.attachment_original_name or (camp.attachment.name.split("/")[-1] if camp.attachment and camp.attachment.name else "")).strip()
+            if attachment_filename and "." in attachment_filename:
+                attachment_ext = attachment_filename.split(".")[-1].upper()
+            else:
+                attachment_ext = ""
+        except Exception:
+            attachment_filename = ""
+            attachment_ext = ""
     return render(
         request,
         "ui/mail/campaign_form.html",
-        {"form": form, "mode": "edit", "campaign": camp, "smtp_from_email": (smtp_cfg.from_email or smtp_cfg.smtp_username or "").strip()},
+        {
+            "form": form,
+            "mode": "edit",
+            "campaign": camp,
+            "smtp_from_email": (smtp_cfg.from_email or smtp_cfg.smtp_username or "").strip(),
+            "attachment_ext": attachment_ext,
+            "attachment_filename": attachment_filename,
+        },
     )
 
 
