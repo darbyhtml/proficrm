@@ -1195,9 +1195,10 @@
           <div class="text-sm text-brand-dark/70">Нет прав на добавление заметок по этой компании.</div>
         {% endif %}
 
-        <div class="mt-4 space-y-3">
-          {% for n in notes %}
-            <div class="rounded-lg border p-3" data-note-item>
+        <div class="mt-4">
+          <div class="max-h-96 overflow-y-auto pr-1 space-y-3">
+            {% for n in notes %}
+            <div class="rounded-lg border p-3 bg-white/80 hover:bg-white transition-colors" data-note-item>
               <div class="flex items-start justify-between gap-3">
                 <div class="text-xs text-brand-dark/70 mb-1">
                   {{ n.created_at }} · {{ n.author|default:"—" }}
@@ -1293,9 +1294,10 @@
                 </div>
               {% endif %}
             </div>
-          {% empty %}
-            <div class="text-sm text-brand-dark/70">Пока нет заметок.</div>
-          {% endfor %}
+            {% empty %}
+              <div class="text-sm text-brand-dark/70">Пока нет заметок.</div>
+            {% endfor %}
+          </div>
         </div>
       </section>
     </div>
