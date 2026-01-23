@@ -128,15 +128,25 @@
                           {% else %}
                             <span class="badge">FILE</span>
                           {% endif %}
-                        {% endwith %}
                         <div class="text-xs font-medium truncate">{{ pinned_note.attachment_name|default:"Файл" }}</div>
                         {% if pinned_note.attachment_size %}<div class="text-xs muted-2">{{ pinned_note.attachment_size|filesizeformat }}</div>{% endif %}
                       </div>
                     </div>
                     <div class="flex gap-2 shrink-0">
-                      <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/open/">Открыть</a>
+                      {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
+                        <button
+                          type="button"
+                          class="btn btn-outline btn-sm js-image-open"
+                          data-img-url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/open/"
+                          data-img-download="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/download/"
+                          data-img-title="{{ pinned_note.attachment_name|default:'Изображение' }}"
+                        >Открыть</button>
+                      {% else %}
+                        <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/open/">Открыть</a>
+                      {% endif %}
                       <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/download/">Скачать</a>
                     </div>
+                    {% endwith %}
                   </div>
                 {% endif %}
               </div>
@@ -1260,15 +1270,25 @@
                           {% else %}
                             <span class="badge">FILE</span>
                           {% endif %}
-                        {% endwith %}
                         <div class="text-sm font-medium truncate">{{ n.attachment_name|default:"Файл" }}</div>
                         {% if n.attachment_size %}<div class="text-xs muted-2">{{ n.attachment_size|filesizeformat }}</div>{% endif %}
                       </div>
                     </div>
                     <div class="flex flex-wrap gap-2 shrink-0">
-                      <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/">Открыть</a>
+                      {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
+                        <button
+                          type="button"
+                          class="btn btn-outline btn-sm js-image-open"
+                          data-img-url="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/"
+                          data-img-download="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/"
+                          data-img-title="{{ n.attachment_name|default:'Изображение' }}"
+                        >Открыть</button>
+                      {% else %}
+                        <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/">Открыть</a>
+                      {% endif %}
                       <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/">Скачать</a>
                     </div>
+                    {% endwith %}
                   </div>
                 </div>
               {% endif %}
@@ -1324,6 +1344,30 @@
               <button class="btn btn-outline" type="button" data-close-noteedit>Отмена</button>
             </div>
           </form>
+        </div>
+      </div>
+    </div>
+
+    {# Просмотр изображений (вложения заметок) в модалке #}
+    <div id="imagePreviewModal" class="fixed inset-0 z-[220] hidden">
+      <div class="fixed inset-0 bg-black/60" data-close-img></div>
+      <div class="absolute inset-x-4 top-10 mx-auto max-w-5xl">
+        <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
+          <div class="flex items-center justify-between gap-3 px-4 py-3 border-b">
+            <div class="min-w-0">
+              <div class="text-sm font-medium truncate" id="imagePreviewTitle">Изображение</div>
+              <div class="text-xs muted-2 truncate" id="imagePreviewHint">Esc — закрыть · колесо/тач — масштаб в браузере</div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+              <a class="btn btn-outline btn-sm" id="imagePreviewOpenLink" href="#" target="_blank" rel="noopener">В новой вкладке</a>
+              <a class="btn btn-outline btn-sm" id="imagePreviewDownloadLink" href="#" target="_blank" rel="noopener">Скачать</a>
+              <button type="button" class="btn btn-outline btn-sm" data-close-img aria-label="Закрыть" title="Закрыть">✕</button>
+            </div>
+          </div>
+          <div class="bg-black/5 p-3 flex items-center justify-center" style="max-height:85vh;">
+            <div id="imagePreviewLoader" class="text-sm text-brand-dark/70 py-10">Загрузка…</div>
+            <img id="imagePreviewImg" alt="" class="hidden rounded-xl border border-brand-soft bg-white" style="max-height:80vh; max-width:100%; object-fit:contain;" />
+          </div>
         </div>
       </div>
     </div>
@@ -1810,6 +1854,74 @@
 
   <script>
     (function() {
+      // Просмотр изображений (вложения заметок) без новой вкладки
+      const imgModal = document.getElementById('imagePreviewModal');
+      const imgEl = document.getElementById('imagePreviewImg');
+      const imgTitle = document.getElementById('imagePreviewTitle');
+      const imgLoader = document.getElementById('imagePreviewLoader');
+      const openLink = document.getElementById('imagePreviewOpenLink');
+      const dlLink = document.getElementById('imagePreviewDownloadLink');
+
+      function closeImgModal() {
+        if (!imgModal) return;
+        imgModal.classList.add('hidden');
+        if (imgEl) {
+          imgEl.classList.add('hidden');
+          imgEl.removeAttribute('src');
+          imgEl.alt = '';
+        }
+        if (imgLoader) imgLoader.style.display = '';
+        if (imgTitle) imgTitle.textContent = 'Изображение';
+        if (openLink) openLink.setAttribute('href', '#');
+        if (dlLink) dlLink.setAttribute('href', '#');
+      }
+
+      function openImgModal(url, downloadUrl, title) {
+        if (!imgModal || !imgEl) return;
+        const u = (url || '').toString().trim();
+        if (!u) return;
+        if (imgTitle) imgTitle.textContent = (title || 'Изображение').toString();
+        if (openLink) openLink.setAttribute('href', u);
+        if (dlLink) dlLink.setAttribute('href', (downloadUrl || u).toString());
+        if (imgLoader) imgLoader.style.display = '';
+        imgEl.classList.add('hidden');
+        imgEl.alt = (title || 'Изображение').toString();
+        imgEl.onload = function() {
+          if (imgLoader) imgLoader.style.display = 'none';
+          imgEl.classList.remove('hidden');
+        };
+        imgEl.onerror = function() {
+          if (imgLoader) imgLoader.textContent = 'Не удалось загрузить изображение.';
+        };
+        imgEl.src = u;
+        imgModal.classList.remove('hidden');
+      }
+
+      // Делегирование кликов по кнопке "Открыть" для картинок
+      document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.js-image-open');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+        openImgModal(
+          btn.getAttribute('data-img-url') || '',
+          btn.getAttribute('data-img-download') || '',
+          btn.getAttribute('data-img-title') || 'Изображение'
+        );
+      });
+
+      // Закрытие модалки
+      if (imgModal) {
+        imgModal.querySelectorAll('[data-close-img]').forEach(b => b.addEventListener('click', function(e){ e.preventDefault(); closeImgModal(); }));
+        imgModal.querySelector('[data-close-img]')?.addEventListener('click', function(e){ e.preventDefault(); closeImgModal(); });
+        imgModal.querySelector('.bg-black\\/60')?.addEventListener('click', function(e){
+          if (e.target === e.currentTarget) closeImgModal();
+        });
+        document.addEventListener('keydown', function(e){
+          if (e.key === 'Escape' && !imgModal.classList.contains('hidden')) closeImgModal();
+        });
+      }
+
       // Модальное окно для создания задачи
       const createModal = document.getElementById('taskCreateModal');
       const createModalContent = document.getElementById('taskCreateModalContent');
