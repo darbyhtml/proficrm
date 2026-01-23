@@ -8,14 +8,13 @@ def backfill_attachment_original_name(apps, schema_editor):
         if (c.attachment_original_name or "").strip():
             continue
         att = (c.attachment or "").strip()
-        # attachment хранится как относительный путь в storage
         base = att.split("/")[-1] if "/" in att else att
         Campaign.objects.filter(id=c.id).update(attachment_original_name=base[:255])
 
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("mailer", "0010_email_cooldown"),
+        ("mailer", "0017_rename_mailer_camp_status_priority_idx_mailer_camp_status_5db2fb_idx_and_more"),
     ]
 
     operations = [
