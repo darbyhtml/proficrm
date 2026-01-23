@@ -2966,6 +2966,9 @@
           return schedule;
         }
 
+        // Кэш для расписаний работы, чтобы не парсить один и тот же текст на каждом тике
+        const _workScheduleCache = new Map();
+
         function evalStatus(schedule, dayIdx, minutes){
           if (!schedule) return { status:'unknown', minutesLeft:null };
           const today = schedule[dayIdx] || [];
@@ -3018,11 +3021,16 @@
             const tEl = badge.querySelector('[data-live-tz]') || badge.closest('[data-live-tz]');
             const tz = (tEl && tEl.getAttribute('data-live-tz') || '').trim();
             if (!cid || !tz) return;
-            const parts = getTzNowParts(tz);
-            if (!parts) return;
             const sEl = document.querySelector('[data-work-schedule-display][data-company-id=\"' + cid + '\"]');
             const scheduleText = sEl ? sEl.textContent : '';
-            const schedule = parseSchedule(scheduleText);
+            const cacheKey = 'company:' + cid + '::' + (scheduleText || '');
+            let schedule = _workScheduleCache.get(cacheKey);
+            if (schedule === undefined) {
+              schedule = parseSchedule(scheduleText);
+              _workScheduleCache.set(cacheKey, schedule);
+            }
+            const parts = getTzNowParts(tz);
+            if (!parts) return;
             const res = evalStatus(schedule, parts.dayIdx, parts.minutes);
             setBadgeStatus(badge, res.status);
           });
@@ -3039,7 +3047,12 @@
             if (timeEl) timeEl.setAttribute('data-live-tz', tz);
             const parts = getTzNowParts(tz);
             if (!parts) return;
-            const schedule = parseSchedule(scheduleText);
+            const cacheKey = 'preview::' + (scheduleText || '');
+            let schedule = _workScheduleCache.get(cacheKey);
+            if (schedule === undefined) {
+              schedule = parseSchedule(scheduleText);
+              _workScheduleCache.set(cacheKey, schedule);
+            }
             const res = evalStatus(schedule, parts.dayIdx, parts.minutes);
             setBadgeStatus(badge, res.status);
           });

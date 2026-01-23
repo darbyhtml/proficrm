@@ -296,7 +296,7 @@
                 <div class="inline-field-wrapper" data-inline-field="work_timezone" data-company-id="{{ company.id }}" data-inline-display-kind="timezone">
                   <div class="inline-field-display cursor-pointer hover:text-brand-dark/80 transition-colors" data-inline-edit>
                     {% if tz %}
-                      <span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}">
+                      <span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}" data-live-worktime="1">
                         <span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span>
                         · {{ tz|tz_label }}
                       </span>
@@ -331,7 +331,7 @@
               {% else %}
                 {% if tz %}
                   <div>
-                    <span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}">
+                    <span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}" data-live-worktime="1">
                       <span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span>
                       · {{ tz|tz_label }}
                     </span>
@@ -403,7 +403,7 @@
                 {% if not company.phone|phone_local_info %}
                   {% with guessed=company.address|guess_ru_tz %}
                   {% with tz=company.work_timezone|default:guessed %}
-                    {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
+                    {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}" data-live-worktime="1"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
                   {% endwith %}
                   {% endwith %}
                 {% endif %}
@@ -531,7 +531,7 @@
                       {% if not phone.value|phone_local_info %}
                         {% with guessed=company.address|guess_ru_tz %}
                         {% with tz=company.work_timezone|default:guessed %}
-                          {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
+                          {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}" data-live-worktime="1"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
                         {% endwith %}
                         {% endwith %}
                       {% endif %}
@@ -926,7 +926,7 @@
                             {% if not p.value|phone_local_info %}
                               {% with guessed=company.address|guess_ru_tz %}
                               {% with tz=company.work_timezone|default:guessed %}
-                                {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
+                                {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}" data-live-worktime="1"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
                               {% endwith %}
                               {% endwith %}
                             {% endif %}
