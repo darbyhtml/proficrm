@@ -40,6 +40,7 @@ from phonebridge.models import CallRequest, PhoneDevice, MobileAppBuild, MobileA
 import mimetypes
 import os
 import re
+import logging
 from datetime import date as _date
 
 from .forms import (
@@ -2861,6 +2862,7 @@ def company_duplicates(request: HttpRequest) -> HttpResponse:
 
 @login_required
 def company_detail(request: HttpRequest, company_id) -> HttpResponse:
+    logger = logging.getLogger(__name__)
     user: User = request.user
     enforce(user=user, resource_type="page", resource="ui:companies:detail", context={"path": request.path})
     # Загружаем компанию с связанными объектами, включая поля для истории холодных звонков
