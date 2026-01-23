@@ -585,10 +585,10 @@
           showPreview(file);
           if (file && removeCb) {
             removeCb.checked = false;
-            // Показываем блок обратно, если он был скрыт
-            if (currentBlock && currentBlock.style.display === 'none') {
-              currentBlock.style.display = '';
+            // Возвращаем блок в нормальное состояние при выборе нового файла
+            if (currentBlock) {
               currentBlock.classList.remove('opacity-60');
+              currentBlock.style.textDecoration = '';
             }
           }
         });
@@ -604,10 +604,13 @@
           removeCb.checked = !removeCb.checked;
           if (currentBlock) {
             if (removeCb.checked) {
-              currentBlock.style.display = 'none';
+              // Файл будет удален при сохранении - показываем визуально
+              currentBlock.classList.add('opacity-60');
+              currentBlock.style.textDecoration = 'line-through';
             } else {
-              currentBlock.style.display = '';
+              // Отмена удаления
               currentBlock.classList.remove('opacity-60');
+              currentBlock.style.textDecoration = '';
             }
           }
         });
