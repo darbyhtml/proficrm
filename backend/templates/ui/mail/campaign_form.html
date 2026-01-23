@@ -173,15 +173,46 @@
           <span class="text-sm text-brand-dark/70">Выберите файл</span>
           {{ form.attachment }}
         </label>
+        {# Превью выбранного файла (и в create, и в edit) #}
+        <div id="attachmentPreview" class="mt-2 hidden p-2.5 bg-brand-soft/20 rounded-lg border border-brand-soft/60 flex items-center gap-2.5">
+          <svg class="w-4 h-4 text-brand-dark/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+          </svg>
+          <div class="flex-1 min-w-0">
+            <div class="text-sm font-medium text-brand-dark/90 truncate" id="attachmentPreviewName">—</div>
+            <div class="text-xs text-brand-dark/50 mt-0.5" id="attachmentPreviewMeta">—</div>
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" id="attachmentPreviewClear">Убрать</button>
+        </div>
+
         {% if mode == 'edit' and campaign.attachment %}
-          <div class="mt-2 p-2.5 bg-brand-soft/20 rounded-lg border border-brand-soft/60 flex items-center gap-2.5">
-            <svg class="w-4 h-4 text-brand-dark/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div id="attachmentCurrent" class="mt-2 p-2.5 bg-white rounded-lg border border-brand-soft/60 flex items-start gap-2.5 transition-opacity">
+            <svg class="w-4 h-4 text-brand-dark/60 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
             </svg>
             <div class="flex-1 min-w-0">
               <div class="text-sm font-medium text-brand-dark/90 truncate">{{ campaign.attachment_original_name|default:campaign.attachment.name|slice:"-50:" }}</div>
               <div class="text-xs text-brand-dark/50 mt-0.5">
                 {{ campaign.attachment.size|filesizeformat }} · {{ campaign.attachment_original_name|default:campaign.attachment.name|slice:"-4:"|upper }}
+              </div>
+              <div class="mt-2 flex flex-wrap items-center gap-3">
+                <span class="hidden">{{ form.remove_attachment }}</span>
+                <button
+                  type="button"
+                  class="btn btn-outline btn-sm btn-danger flex items-center gap-1"
+                  id="attachmentRemoveBtn"
+                  title="Удалить текущее вложение"
+                  aria-label="Удалить текущее вложение"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6l-1 14H6L5 6"></path>
+                    <path d="M10 11v6"></path>
+                    <path d="M14 11v6"></path>
+                    <path d="M9 6l1-3h4l1 3"></path>
+                  </svg>
+                </button>
+                <span class="text-xs muted-2">Если выбрать новый файл — текущее будет заменено.</span>
               </div>
             </div>
             <a href="/mail/campaigns/{{ campaign.id }}/attachment/download/" target="_blank" class="text-xs text-brand-dark/70 hover:text-brand-dark transition-colors underline">Скачать</a>
@@ -469,20 +500,74 @@
 
       showVisual();
 
-      // Обработка выбора файла
+      // Превью вложения (чтобы было как в предпросмотре, и без "двух файлов")
       const fileInput = document.querySelector('input[type="file"][name="attachment"]');
       const fileLabel = fileInput?.closest('label');
+      const preview = document.getElementById('attachmentPreview');
+      const prevName = document.getElementById('attachmentPreviewName');
+      const prevMeta = document.getElementById('attachmentPreviewMeta');
+      const clearBtn = document.getElementById('attachmentPreviewClear');
+      const currentBlock = document.getElementById('attachmentCurrent');
+      const removeCb = document.querySelector('input[name="remove_attachment"]');
+      const removeBtn = document.getElementById('attachmentRemoveBtn');
+
+      function fmtBytes(bytes){
+        try{
+          const n = Number(bytes || 0);
+          if (!n) return '';
+          const kb = 1024, mb = kb*1024;
+          if (n >= mb) return (n/mb).toFixed(1).replace('.0','') + ' МБ';
+          return Math.round(n/kb) + ' КБ';
+        }catch(_e){ return ''; }
+      }
+      function getExt(name){
+        const s = String(name || '');
+        const idx = s.lastIndexOf('.');
+        if (idx === -1) return '';
+        return s.slice(idx+1).toUpperCase();
+      }
+      function showPreview(file){
+        if (!preview || !prevName || !prevMeta) return;
+        if (!file) {
+          preview.classList.add('hidden');
+          prevName.textContent = '—';
+          prevMeta.textContent = '—';
+          if (currentBlock) currentBlock.classList.remove('opacity-60');
+          return;
+        }
+        prevName.textContent = file.name || 'Файл';
+        const meta = [];
+        const size = fmtBytes(file.size);
+        if (size) meta.push(size);
+        const ext = getExt(file.name);
+        if (ext) meta.push(ext);
+        prevMeta.textContent = meta.join(' · ') || '—';
+        preview.classList.remove('hidden');
+        // визуально показываем, что текущее будет заменено
+        if (currentBlock) currentBlock.classList.add('opacity-60');
+      }
+
       if (fileInput && fileLabel) {
         fileInput.addEventListener('change', function(e) {
-          const file = e.target.files[0];
-          if (file) {
-            const fileSize = (file.size / 1024).toFixed(1);
-            const fileName = file.name.length > 30 ? '...' + file.name.slice(-30) : file.name;
-            const fileExt = file.name.split('.').pop().toUpperCase();
-            const span = fileLabel.querySelector('span');
-            if (span) {
-              span.textContent = `${fileName} (${fileSize} КБ, ${fileExt})`;
-            }
+          const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+          // возвращаем текст на кнопке выбора
+          const span = fileLabel.querySelector('span');
+          if (span) span.textContent = 'Выберите файл';
+          showPreview(file);
+          if (file && removeCb) removeCb.checked = false;
+        });
+      }
+      if (clearBtn && fileInput) {
+        clearBtn.addEventListener('click', function(){
+          try{ fileInput.value = ''; }catch(_e){}
+          showPreview(null);
+        });
+      }
+      if (removeBtn && removeCb) {
+        removeBtn.addEventListener('click', function(){
+          removeCb.checked = !removeCb.checked;
+          if (currentBlock) {
+            currentBlock.classList.toggle('opacity-60', removeCb.checked);
           }
         });
       }

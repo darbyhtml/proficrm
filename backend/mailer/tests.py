@@ -24,6 +24,15 @@ class MailerSafetyAndUnsubTests(TestCase):
         self.assertNotIn("onclick", cleaned.lower())
         self.assertNotIn("javascript:", cleaned.lower())
 
+    def test_sanitize_email_html_normalizes_img_tags(self):
+        raw = '<div><img src="x" width="600"></div>'
+        cleaned = sanitize_email_html(raw)
+        # style should be injected for email-client friendliness
+        self.assertIn("<img", cleaned.lower())
+        self.assertIn("style=", cleaned.lower())
+        self.assertIn("max-width:100%", cleaned.lower())
+        self.assertIn("height:auto", cleaned.lower())
+
     def test_email_signature_form_sanitizes_html(self):
         form = EmailSignatureForm(data={"signature_html": "<script>alert(1)</script><b>ok</b>"})
         self.assertTrue(form.is_valid())

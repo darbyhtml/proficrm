@@ -137,6 +137,13 @@ class GlobalMailAccountForm(forms.ModelForm):
 
 
 class CampaignForm(forms.ModelForm):
+    remove_attachment = forms.BooleanField(
+        label="Удалить текущее вложение",
+        required=False,
+        initial=False,
+        help_text="Если включено — текущее вложение будет удалено при сохранении.",
+    )
+
     class Meta:
         model = Campaign
         fields = ["name", "subject", "sender_name", "body_html", "attachment"]
@@ -174,6 +181,7 @@ class CampaignForm(forms.ModelForm):
 
     def save(self, commit=True):
         obj: Campaign = super().save(commit=False)
+        remove_att = bool(self.cleaned_data.get("remove_attachment"))
         att = self.cleaned_data.get("attachment")
         if att is not None:
             # Если пользователь загрузил новый файл, фиксируем оригинальное имя.
@@ -181,6 +189,17 @@ class CampaignForm(forms.ModelForm):
                 obj.attachment_original_name = (getattr(att, "name", "") or "").strip()[:255]
             except Exception:
                 pass
+            # При замене снимаем флаг удаления (на случай, если пользователь отметил галку и выбрал файл)
+            remove_att = False
+
+        if remove_att and getattr(obj, "attachment", None):
+            # Удаляем файл со стораджа и очищаем поля
+            try:
+                obj.attachment.delete(save=False)
+            except Exception:
+                pass
+            obj.attachment = None
+            obj.attachment_original_name = ""
         if commit:
             obj.save()
             self.save_m2m()

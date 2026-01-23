@@ -55,6 +55,58 @@ _RE_JS_PROTO = re.compile(r"""(\b(?:href|src)\s*=\s*["']?)\s*javascript:[^"'>\s]
 _RE_BODY = re.compile(r"(?is)<\s*body\b[^>]*>(.*?)<\s*/\s*body\s*>")
 _RE_HTML_WRAPPERS = re.compile(r"(?is)<\s*/?\s*(html|head)\b[^>]*>")
 _RE_CK_SAVED_ATTR = re.compile(r"(?i)\sdata-cke-saved-(href|src)\s*=\s*(['\"]).*?\2")
+_RE_IMG_TAG = re.compile(r"(?is)<\s*img\b[^>]*>")
+_RE_IMG_STYLE = re.compile(r"(?is)\sstyle\s*=\s*(['\"])(.*?)\1")
+
+
+def _normalize_email_img_tags(html_value: str) -> str:
+    """
+    Делает <img> более "почтово-совместимыми" (Yandex/Gmail/Outlook):
+    - display:block (убирает лишние пробелы/inline-gap)
+    - max-width:100% + height:auto (не вылезает за контейнер)
+    - border/outline/text-decoration:0 (визуальная чистота)
+    """
+    s = html_value or ""
+    if "<img" not in s.lower():
+        return s
+
+    required_bits = [
+        "display:block",
+        "max-width:100%",
+        "height:auto",
+        "border:0",
+        "outline:none",
+        "text-decoration:none",
+    ]
+
+    def _fix_one(tag: str) -> str:
+        if not tag:
+            return tag
+        m = _RE_IMG_STYLE.search(tag)
+        if m:
+            q = m.group(1)
+            style = (m.group(2) or "").strip()
+            style_l = style.lower()
+            # добавляем недостающие кусочки
+            for bit in required_bits:
+                key = bit.split(":", 1)[0]
+                if key and key in style_l:
+                    continue
+                if style and not style.endswith(";"):
+                    style += ";"
+                style += bit + ";"
+                style_l = style.lower()
+            return _RE_IMG_STYLE.sub(f' style={q}{style}{q}', tag, count=1)
+
+        # style нет — добавим перед закрывающим ">"
+        style = ";".join(required_bits) + ";"
+        if tag.endswith("/>"):
+            return tag[:-2] + f' style="{style}"/>'  # self-closing
+        if tag.endswith(">"):
+            return tag[:-1] + f' style="{style}">'
+        return tag
+
+    return _RE_IMG_TAG.sub(lambda m: _fix_one(m.group(0)), s)
 
 
 def sanitize_email_html(value: str) -> str:
@@ -77,6 +129,8 @@ def sanitize_email_html(value: str) -> str:
     s = _RE_ON_ATTR_SQ.sub(" ", s)
     # Убираем javascript: в href/src
     s = _RE_JS_PROTO.sub(r"\1#", s)
+    # Подправляем <img> для предсказуемой верстки в почтовиках
+    s = _normalize_email_img_tags(s)
     return s
 
 
