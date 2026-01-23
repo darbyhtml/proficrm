@@ -306,6 +306,20 @@ def normalize_work_schedule(text: str) -> str:
         out = out.replace("\r\n", "\n").replace("\r", "\n").strip()
         return out
 
+    # Special case: круглосуточно без выходных (00:00–23:59 каждый день)
+    is_247 = True
+    for i in range(7):
+        intervals = schedule.get(i) or []
+        if len(intervals) != 1:
+            is_247 = False
+            break
+        a, b = intervals[0]
+        if a != time(0, 0) or b != time(23, 59):
+            is_247 = False
+            break
+    if is_247:
+        return "Круглосуточно, без выходных"
+
     # build per-day representation
     per_day: List[str] = []
     for i in range(7):
@@ -316,10 +330,41 @@ def normalize_work_schedule(text: str) -> str:
         parts = [f"{_fmt_hhmm(a)}–{_fmt_hhmm(b)}" for a, b in intervals]
         per_day.append(", ".join(parts))
 
+    # Try to detect единый "обед" по разрыву между двумя интервалами в дне.
+    # Если у большинства рабочих дней ровно два интервала и "дырка" похожего размера — считаем её обедом.
+    lunch_candidates: List[Tuple[time, time]] = []
+    for i in range(7):
+        intervals = schedule.get(i) or []
+        if len(intervals) != 2:
+            continue
+        (a1, b1), (a2, b2) = intervals
+        # gap между концом первого и началом второго
+        gap = (a2.hour * 60 + a2.minute) - (b1.hour * 60 + b1.minute)
+        # Обед обычно от 20 мин до 3 часов
+        if 20 <= gap <= 180 and a2 > b1:
+            lunch_candidates.append((b1, a2))
+
+    lunch_str: Optional[str] = None
+    if lunch_candidates:
+        # Оставляем уникальные интервалы
+        seen_lunch: List[Tuple[int, int]] = []
+        for s_t, e_t in lunch_candidates:
+            key = (s_t.hour * 60 + s_t.minute, e_t.hour * 60 + e_t.minute)
+            if key not in seen_lunch:
+                seen_lunch.append(key)
+        if len(seen_lunch) == 1:
+            start_min, end_min = seen_lunch[0]
+            s_h, s_m = divmod(start_min, 60)
+            e_h, e_m = divmod(end_min, 60)
+            lunch_str = f"{s_h:02d}:{s_m:02d}–{e_h:02d}:{e_m:02d}"
+
     # If all days identical:
     if len(set(per_day)) == 1:
         v = per_day[0]
-        return f"Ежедневно: {v}"
+        base = f"Ежедневно: {v}"
+        if lunch_str:
+            return f"{base}\nОбед: {lunch_str}"
+        return base
 
     # group consecutive days with same value
     lines: List[str] = []
@@ -336,7 +381,10 @@ def normalize_work_schedule(text: str) -> str:
         lines.append(f"{day_lbl}: {v}")
         i = j + 1
 
-    return "\n".join(lines).strip()
+    out = "\n".join(lines).strip()
+    if lunch_str:
+        out = f"{out}\nОбед: {lunch_str}"
+    return out
 
 
 def get_worktime_status_from_schedule(
