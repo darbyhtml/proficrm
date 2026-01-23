@@ -9,7 +9,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Exists, OuterRef
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, Http404
 from django.http import FileResponse
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -1111,6 +1111,35 @@ def campaign_attachment_download(request: HttpRequest, campaign_id) -> HttpRespo
     except Exception:
         f = camp.attachment.open()
     return FileResponse(f, as_attachment=True, filename=fname)
+
+
+@login_required
+def campaign_attachment_delete(request: HttpRequest, campaign_id) -> JsonResponse:
+    """
+    AJAX удаление вложения кампании.
+    """
+    if request.method != "POST":
+        return JsonResponse({"success": False, "error": "Метод не разрешен"}, status=405)
+    
+    enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:edit", context={"path": request.path, "method": request.method})
+    user: User = request.user
+    camp = get_object_or_404(Campaign, id=campaign_id)
+    if not _can_manage_campaign(user, camp):
+        return JsonResponse({"success": False, "error": "Доступ запрещён"}, status=403)
+    
+    if not camp.attachment:
+        return JsonResponse({"success": False, "error": "Вложение не найдено"}, status=404)
+    
+    try:
+        # Удаляем файл со стораджа
+        camp.attachment.delete(save=False)
+        camp.attachment = None
+        camp.attachment_original_name = ""
+        camp.save(update_fields=["attachment", "attachment_original_name", "updated_at"])
+        return JsonResponse({"success": True})
+    except Exception as e:
+        logger.error(f"Ошибка при удалении вложения кампании {camp.id}: {e}")
+        return JsonResponse({"success": False, "error": "Ошибка при удалении файла"}, status=500)
 
 
 @login_required

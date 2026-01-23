@@ -600,17 +600,47 @@
         });
       }
       if (removeBtn && removeCb) {
-        removeBtn.addEventListener('click', function(){
-          removeCb.checked = !removeCb.checked;
-          if (currentBlock) {
-            if (removeCb.checked) {
-              // Файл будет удален при сохранении - показываем визуально
-              currentBlock.classList.add('opacity-60');
-              currentBlock.style.textDecoration = 'line-through';
+        removeBtn.addEventListener('click', async function(){
+          if (!currentBlock) return;
+          
+          // Проверяем, есть ли ID кампании (только для режима редактирования)
+          const campaignIdMatch = window.location.pathname.match(/\/mail\/campaigns\/([^\/]+)\//);
+          if (!campaignIdMatch) {
+            // В режиме создания просто скрываем превью, если есть
+            if (preview) preview.classList.add('hidden');
+            return;
+          }
+          
+          const campaignId = campaignIdMatch[1];
+          
+          // Отправляем AJAX-запрос на удаление
+          try {
+            const response = await fetch(`/mail/campaigns/${campaignId}/attachment/delete/`, {
+              method: 'POST',
+              headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json',
+              },
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+              // Файл успешно удален - скрываем блок
+              currentBlock.style.display = 'none';
+              if (removeCb) removeCb.checked = false;
+              if (window.uiToast) {
+                window.uiToast('Вложение удалено', 'success');
+              }
             } else {
-              // Отмена удаления
-              currentBlock.classList.remove('opacity-60');
-              currentBlock.style.textDecoration = '';
+              if (window.uiToast) {
+                window.uiToast(data.error || 'Ошибка при удалении вложения', 'error');
+              }
+            }
+          } catch (error) {
+            console.error('Ошибка при удалении вложения:', error);
+            if (window.uiToast) {
+              window.uiToast('Ошибка при удалении вложения', 'error');
             }
           }
         });
