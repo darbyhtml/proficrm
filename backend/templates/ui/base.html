@@ -880,7 +880,7 @@
 
       <div class="mx-auto max-w-screen-2xl px-4 py-6 flex flex-col md:flex-row gap-5">
         <div id="sidebarOverlay" class="hidden md:hidden fixed inset-0 bg-black/30 z-40"></div>
-        <aside class="md:w-[130px] md:flex-shrink-0">
+        <aside class="md:w-[110px] md:flex-shrink-0">
           <div id="sidebarDrawer" class="bg-white border border-brand-soft rounded-xl p-2 md:sticky md:top-4
                md:block fixed z-50 inset-y-0 left-0 w-[280px] max-w-[85vw] md:w-auto
                transform -translate-x-full md:translate-x-0 transition-transform duration-150 ease-out
@@ -978,8 +978,8 @@
             <!-- Плитка "Приложение" под меню -->
             <div class="mt-4 pt-4 border-t border-brand-soft">
               <a href="{% url 'mobile_app_page' %}" class="block rounded-xl border border-brand-soft bg-gradient-to-br from-brand-soft/30 to-white p-3 hover:bg-brand-soft/50 transition-colors">
-                <div class="flex items-start gap-3">
-                  <div class="flex-shrink-0 mt-0.5">
+                <div class="flex flex-col items-center gap-1 text-[12px] text-brand-dark text-center">
+                  <div class="flex-shrink-0">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <rect x="3" y="3" width="7" height="7" rx="1.5" />
                       <rect x="14" y="3" width="7" height="7" rx="1.5" />
@@ -987,8 +987,8 @@
                       <path d="M14 14h3v3h-3zM18 18h3v3h-3zM16 16h1v1h-1z" />
                     </svg>
                   </div>
-                  <div class="flex-1 min-w-0">
-                    <div class="font-semibold text-sm text-brand-dark">Приложение</div>
+                  <div class="font-semibold leading-snug">
+                    Приложение
                   </div>
                 </div>
               </a>
