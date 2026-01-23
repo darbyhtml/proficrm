@@ -7,8 +7,15 @@ def backfill_attachment_original_name(apps, schema_editor):
     for c in qs.only("id", "attachment", "attachment_original_name"):
         if (c.attachment_original_name or "").strip():
             continue
-        att = (c.attachment or "").strip()
-        base = att.split("/")[-1] if "/" in att else att
+        # В миграциях attachment представлен как FieldFile, имя пути лежит в attachment.name
+        att_name = ""
+        try:
+            att_name = (getattr(getattr(c, "attachment", None), "name", "") or "").strip()
+        except Exception:
+            att_name = ""
+        if not att_name:
+            continue
+        base = att_name.split("/")[-1] if "/" in att_name else att_name
         Campaign.objects.filter(id=c.id).update(attachment_original_name=base[:255])
 
 
