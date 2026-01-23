@@ -911,6 +911,24 @@
             result = highlightedText;
           }
         }
+
+        // Если фраза не нашлась, но запрос многословный — подсвечиваем по токенам (не ломая старую логику).
+        // Это важно для кейсов типа "пат таштагол" vs "ПАТ', г.Таштагол".
+        if (!result.includes('<span') && /\s/.test(query)) {
+          // Берем "слова" (кириллица/латиница/цифры), отбрасываем 1-символьные
+          const tokens = (query.match(/[0-9A-Za-zА-Яа-яЁё]+/g) || [])
+            .map(s => (s || '').toString().trim())
+            .filter(s => s.length > 1);
+          if (tokens.length) {
+            let tokResult = escapedText;
+            tokens.forEach(tok => {
+              const tokEsc = tok.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const tokRe = new RegExp(`(${tokEsc})`, 'gi');
+              tokResult = tokResult.replace(tokRe, '<span style="font-weight: bold !important; color: #f97316 !important; background-color: #fff7ed !important;">$1</span>');
+            });
+            result = tokResult;
+          }
+        }
         
         return result;
       };

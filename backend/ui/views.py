@@ -39,6 +39,7 @@ from notifications.service import notify
 from phonebridge.models import CallRequest, PhoneDevice, MobileAppBuild, MobileAppQrToken
 import mimetypes
 import os
+import re
 from datetime import date as _date
 
 from .forms import (
@@ -328,6 +329,30 @@ def _normalize_for_search(text: str) -> str:
     return normalized.lower().strip()
 
 
+_SEARCH_TOKEN_RE = re.compile(r"[0-9A-Za-zА-Яа-яЁё]+", re.UNICODE)
+
+
+def _tokenize_search_query(q: str) -> list[str]:
+    """
+    Токенизация пользовательского поиска:
+    - режем по любым разделителям/пунктуации
+    - приводим к lower
+    - отбрасываем слишком короткие токены (1 символ), чтобы не раздувать выдачу по "г", "и" и т.п.
+    """
+    if not q:
+        return []
+    tokens = [m.group(0).lower() for m in _SEARCH_TOKEN_RE.finditer(q)]
+    out: list[str] = []
+    for t in tokens:
+        tt = (t or "").strip()
+        if not tt:
+            continue
+        if len(tt) == 1 and not tt.isdigit():
+            continue
+        out.append(tt)
+    return out
+
+
 def _normalize_email_for_search(email: str) -> str:
     """
     Нормализует email для поиска: убирает пробелы, приводит к нижнему регистру.
@@ -358,6 +383,7 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
     if q:
         # Нормализуем запрос для поиска (убираем тире, пробелы и т.д.)
         normalized_q = _normalize_for_search(q)
+        tokens = _tokenize_search_query(q)
         
         # Базовые фильтры по полям компании (обычный поиск)
         base_filters = (
@@ -405,6 +431,27 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
                     )
             
             base_filters |= normalized_simple_filters
+
+        # Токенизированный поиск: если в запросе несколько слов/токенов, ищем так, чтобы
+        # ВСЕ токены встречались (в любых из основных полей компании). Это чинит кейсы вида:
+        # "пат таштагол" vs "ПАТ', г.Таштагол" (пунктуация/точки/запятые).
+        token_filters = Q()
+        if len(tokens) >= 2:
+            token_filters = Q()
+            for tok in tokens:
+                per_tok = (
+                    Q(name__icontains=tok)
+                    | Q(legal_name__icontains=tok)
+                    | Q(inn__icontains=tok)
+                    | Q(kpp__icontains=tok)
+                    | Q(address__icontains=tok)
+                    | Q(phone__icontains=tok)
+                    | Q(email__icontains=tok)
+                    | Q(contact_name__icontains=tok)
+                    | Q(contact_position__icontains=tok)
+                    | Q(branch__name__icontains=tok)
+                )
+                token_filters &= per_tok
         
         # Поиск по телефонам (с нормализацией) - оптимизировано с использованием Exists
         normalized_phone = _normalize_phone_for_search(q)
@@ -513,7 +560,7 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
         
         # Поиск по ФИО в контактах
         # Разбиваем запрос на слова для более гибкого поиска
-        words = [w.strip() for w in q.split() if w.strip()]
+        words = tokens or [w.strip().lower() for w in q.split() if w.strip()]
         fio_filters = Q()
         
         if len(words) > 1:
@@ -555,6 +602,7 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
         # Объединяем все фильтры
         qs = qs.filter(
             base_filters
+            | token_filters
             | phone_filters
             | email_filters
             | fio_filters
@@ -1901,6 +1949,7 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
         normalized_q = _normalize_for_search(q)
         normalized_phone = _normalize_phone_for_search(q)
         normalized_email = _normalize_email_for_search(q)
+        tokens = _tokenize_search_query(q)
         
         # Используем уже предзагруженные данные через prefetch_related (не делаем дополнительные запросы)
         # Данные уже загружены в page.object_list через prefetch_related выше
@@ -1909,7 +1958,19 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
             match_info = []
             
             # Проверяем основные поля (которые видны в таблице)
-            if normalized_q:
+            if tokens:
+                nm = (company.name or "").lower()
+                inn = (company.inn or "").lower()
+                addr = (company.address or "").lower()
+                # Если любой токен встречается — считаем совпадением поля (для UI "Найдено:")
+                if any(t in nm for t in tokens):
+                    match_info.append("название")
+                if any(t in inn for t in tokens):
+                    match_info.append("ИНН")
+                if any(t in addr for t in tokens):
+                    match_info.append("адрес")
+            elif normalized_q:
+                # fallback на старую логику (один токен/строка)
                 if normalized_q in _normalize_for_search(company.name or ""):
                     match_info.append("название")
                 if normalized_q in _normalize_for_search(company.inn or ""):
