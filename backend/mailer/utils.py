@@ -52,6 +52,9 @@ _RE_ON_ATTR_DQ = re.compile(r'\son\w+\s*=\s*"[^"]*"',
 _RE_ON_ATTR_SQ = re.compile(r"\son\w+\s*=\s*'[^']*'",
                             re.IGNORECASE)
 _RE_JS_PROTO = re.compile(r"""(\b(?:href|src)\s*=\s*["']?)\s*javascript:[^"'>\s]+""", re.IGNORECASE)
+_RE_BODY = re.compile(r"(?is)<\s*body\b[^>]*>(.*?)<\s*/\s*body\s*>")
+_RE_HTML_WRAPPERS = re.compile(r"(?is)<\s*/?\s*(html|head)\b[^>]*>")
+_RE_CK_SAVED_ATTR = re.compile(r"(?i)\sdata-cke-saved-(href|src)\s*=\s*(['\"]).*?\2")
 
 
 def sanitize_email_html(value: str) -> str:
@@ -60,6 +63,14 @@ def sanitize_email_html(value: str) -> str:
     Email-клиенты обычно режут скрипты сами, но мы защищаем и CRM UI.
     """
     s = value or ""
+    # Если прилетела обертка целого письма из почтовика, вытаскиваем только body,
+    # чтобы не было вложенных <body>/<html> в письме (это часто ломает верстку в почтовиках).
+    m = _RE_BODY.search(s)
+    if m:
+        s = m.group(1) or ""
+    # Убираем <html>/<head> если они остались (и "data-cke-saved-*" атрибуты)
+    s = _RE_HTML_WRAPPERS.sub(" ", s)
+    s = _RE_CK_SAVED_ATTR.sub(" ", s)
     s = _RE_SCRIPT_TAG.sub("", s)
     # Удаляем inline обработчики событий
     s = _RE_ON_ATTR_DQ.sub(" ", s)

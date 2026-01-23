@@ -305,8 +305,38 @@
           const tempDiv = document.createElement("div");
           tempDiv.innerHTML = htmlData;
 
+          // Если вставили "целое письмо" с <body> — берём только содержимое body.
+          const bodyEl = tempDiv.querySelector('body');
+          if (bodyEl) {
+            const onlyBody = document.createElement('div');
+            onlyBody.innerHTML = bodyEl.innerHTML || '';
+            tempDiv.innerHTML = '';
+            while (onlyBody.firstChild) tempDiv.appendChild(onlyBody.firstChild);
+          }
+
+          // CKEditor/Yandex: data-cke-saved-src/href → src/href.
+          tempDiv.querySelectorAll('[data-cke-saved-src]').forEach(el => {
+            const v = el.getAttribute('data-cke-saved-src');
+            if (v && !el.getAttribute('src')) el.setAttribute('src', v);
+          });
+          tempDiv.querySelectorAll('[data-cke-saved-href]').forEach(el => {
+            const v = el.getAttribute('data-cke-saved-href');
+            if (v && !el.getAttribute('href')) el.setAttribute('href', v);
+          });
+          tempDiv.querySelectorAll('[data-cke-saved-src],[data-cke-saved-href]').forEach(el => {
+            el.removeAttribute('data-cke-saved-src');
+            el.removeAttribute('data-cke-saved-href');
+          });
+
           // Обрабатываем изображения: сохраняем base64 и внешние ссылки
           const images = tempDiv.querySelectorAll("img");
+          const hasYandexWebattach = Array.from(images).some(img => {
+            const src = (img.getAttribute('src') || '').toString();
+            return src.includes('webattach.mail.yandex.net/message_part_real');
+          });
+          if (hasYandexWebattach && window.uiToast) {
+            window.uiToast('В подпись вставлены картинки из Яндекс.Почты по защищённым ссылкам — у получателей они могут не отображаться.', 'error');
+          }
           images.forEach((img) => {
             const src = img.getAttribute("src");
             if (src) {
