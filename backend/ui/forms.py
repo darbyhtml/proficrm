@@ -377,6 +377,7 @@ class CompanyInlineEditForm(forms.ModelForm):
         "address",
         "website",
         "activity_kind",
+        "work_timezone",
         "work_schedule",
     )
 
@@ -416,6 +417,18 @@ class CompanyInlineEditForm(forms.ModelForm):
     def clean_activity_kind(self):
         return (self.cleaned_data.get("activity_kind") or "").strip()
 
+    def clean_work_timezone(self):
+        from ui.timezone_utils import RUS_TZ_CHOICES
+
+        v = (self.cleaned_data.get("work_timezone") or "").strip()
+        if not v:
+            # пустое = "авто по адресу" (будем брать guessed в UI)
+            return ""
+        allowed = {tz for tz, _label in (RUS_TZ_CHOICES or [])}
+        if v not in allowed:
+            raise ValidationError("Недопустимый часовой пояс.")
+        return v
+
     def clean_work_schedule(self):
         v = (self.cleaned_data.get("work_schedule") or "").strip()
         if not v:
@@ -432,6 +445,7 @@ class CompanyInlineEditForm(forms.ModelForm):
             "address",
             "website",
             "activity_kind",
+            "work_timezone",
             "work_schedule",
         ]
 

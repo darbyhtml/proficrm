@@ -2940,7 +2940,8 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     local_now = timezone.localtime(now)
     # Индикатор: можно ли звонить (рабочее время компании + часовой пояс)
     worktime = {
-        "has": bool(company.work_schedule or (company.workday_start and company.workday_end)),
+        # Источник "можно ли звонить" теперь только "Режим работы"
+        "has": bool(company.work_schedule),
         "status": None,  # "ok" | "warn_end" | "off" | "unknown"
         "label": "",
     }
@@ -2950,7 +2951,8 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         from ui.work_schedule_utils import get_worktime_status_from_schedule
 
         guessed = guess_ru_timezone_from_address(company.address or "")
-        tz_name = (guessed or (company.work_timezone or "").strip() or "Europe/Moscow").strip()
+        # приоритет: сохранённый вручную, затем авто по адресу
+        tz_name = (((company.work_timezone or "").strip()) or guessed or "Europe/Moscow").strip()
         tz = ZoneInfo(tz_name)
         now_tz = timezone.now().astimezone(tz)
 
@@ -2965,28 +2967,6 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
                 worktime["label"] = "Не рабочее время"
             else:
                 worktime["label"] = ""
-        elif company.workday_start and company.workday_end:
-            today = now_tz.date()
-            start_dt = datetime.combine(today, company.workday_start, tzinfo=tz)
-            end_dt = datetime.combine(today, company.workday_end, tzinfo=tz)
-
-            # Если рабочий интервал "перетекает" через полночь (например 22:00-06:00)
-            if end_dt <= start_dt:
-                end_dt = end_dt + timedelta(days=1)
-                if now_tz < datetime.combine(today, company.workday_end, tzinfo=tz):
-                    start_dt = start_dt - timedelta(days=1)
-
-            if start_dt <= now_tz <= end_dt:
-                minutes_left = int((end_dt - now_tz).total_seconds() // 60)
-                if minutes_left <= 60:
-                    worktime["status"] = "warn_end"
-                    worktime["label"] = "Остался час"
-                else:
-                    worktime["status"] = "ok"
-                    worktime["label"] = "Рабочее время"
-            else:
-                worktime["status"] = "off"
-                worktime["label"] = "Не рабочее время"
     except Exception:
         worktime["status"] = "unknown"
         worktime["label"] = ""
@@ -4659,6 +4639,34 @@ def company_inline_update(request: HttpRequest, company_id) -> HttpResponse:
         message=f"Инлайн-обновление поля компании: {field}",
         meta={"field": field},
     )
+
+    # Для часового пояса отдаём доп. данные, чтобы можно было обновить UI без перезагрузки
+    if field == "work_timezone":
+        try:
+            from zoneinfo import ZoneInfo
+            from ui.timezone_utils import RUS_TZ_CHOICES, guess_ru_timezone_from_address
+
+            guessed = guess_ru_timezone_from_address(company.address or "")
+            effective_tz = (((company.work_timezone or "").strip()) or guessed or "Europe/Moscow").strip()
+            label_map = {tz: lbl for tz, lbl in (RUS_TZ_CHOICES or [])}
+            effective_label = label_map.get(effective_tz, effective_tz)
+            now_hhmm = timezone.now().astimezone(ZoneInfo(effective_tz)).strftime("%H:%M")
+        except Exception:
+            effective_tz = (company.work_timezone or "").strip() or ""
+            effective_label = effective_tz
+            now_hhmm = ""
+
+        return JsonResponse(
+            {
+                "ok": True,
+                "field": field,
+                # value = сохранённое значение (может быть пустым = авто)
+                "value": (updated_value or ""),
+                "effective_tz": effective_tz,
+                "effective_label": effective_label,
+                "effective_now_hhmm": now_hhmm,
+            }
+        )
 
     return JsonResponse({"ok": True, "field": field, "value": updated_value})
 

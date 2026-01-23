@@ -133,7 +133,7 @@
                         {% if t.company %}
                           <span>{{ t.company.name }}</span>
                           {% with guessed=t.company.address|guess_ru_tz %}
-                          {% with tz=guessed|default:t.company.work_timezone %}
+                          {% with tz=t.company.work_timezone|default:guessed %}
                             {% if tz %}
                               <span class="badge badge-warn badge-xxxs" title="{{ tz }}" data-live-worktime="1" data-company-id="{{ t.company.id }}">
                                 <span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span>
@@ -211,7 +211,7 @@
                         {% if t.company %}
                           <span>{{ t.company.name }}</span>
                           {% with guessed=t.company.address|guess_ru_tz %}
-                          {% with tz=guessed|default:t.company.work_timezone %}
+                          {% with tz=t.company.work_timezone|default:guessed %}
                             {% if tz %}
                               <span class="badge badge-warn badge-xxxs" title="{{ tz }}" data-live-worktime="1" data-company-id="{{ t.company.id }}">
                                 <span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span>
@@ -291,7 +291,7 @@
                         {% if t.company %}
                           <span>{{ t.company.name }}</span>
                           {% with guessed=t.company.address|guess_ru_tz %}
-                          {% with tz=guessed|default:t.company.work_timezone %}
+                          {% with tz=t.company.work_timezone|default:guessed %}
                             {% if tz %}
                               <span class="badge badge-warn badge-xxxs" title="{{ tz }}" data-live-worktime="1" data-company-id="{{ t.company.id }}">
                                 <span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span>

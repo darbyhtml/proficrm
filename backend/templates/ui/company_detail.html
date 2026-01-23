@@ -276,52 +276,59 @@
             <div class="text-brand-dark/50">Численность сотрудников</div>
             <div>{{ company.employees_count|default:"—" }}</div>
           </div>
+          {# "Рабочее время" убрано: дублировало "Режим работы" #}
           <div>
-            <div class="text-brand-dark/50">Рабочее время</div>
-            <div>
-              {% with guessed=company.address|guess_ru_tz %}
-              {% with tz=guessed|default:company.work_timezone %}
-                {% if company.workday_start and company.workday_end %}
-                  {{ company.workday_start|time:"H:i" }}–{{ company.workday_end|time:"H:i" }}
+            <div class="text-brand-dark/50">Часовой пояс</div>
+            {# приоритет: сохранённый вручную, затем авто по адресу #}
+            {% with guessed=company.address|guess_ru_tz %}
+            {% with tz=company.work_timezone|default:guessed %}
+              {% if can_edit_company %}
+                <div class="inline-field-wrapper" data-inline-field="work_timezone" data-company-id="{{ company.id }}" data-inline-display-kind="timezone">
+                  <div class="inline-field-display cursor-pointer hover:text-brand-dark/80 transition-colors" data-inline-edit>
+                    {% if tz %}
+                      <span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}">
+                        <span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span>
+                        · {{ tz|tz_label }}
+                      </span>
+                    {% else %}
+                      —
+                    {% endif %}
+                  </div>
+                  <div class="inline-field-edit hidden mt-1">
+                    <select class="select w-full" data-inline-input>
+                      <option value="" {% if not company.work_timezone %}selected{% endif %}>Авто (по адресу)</option>
+                      <option value="Europe/Kaliningrad" {% if company.work_timezone == "Europe/Kaliningrad" %}selected{% endif %}>Калининград (UTC+02)</option>
+                      <option value="Europe/Moscow" {% if company.work_timezone == "Europe/Moscow" %}selected{% endif %}>Москва / СПБ (UTC+03)</option>
+                      <option value="Europe/Samara" {% if company.work_timezone == "Europe/Samara" %}selected{% endif %}>Самара (UTC+04)</option>
+                      <option value="Asia/Yekaterinburg" {% if company.work_timezone == "Asia/Yekaterinburg" %}selected{% endif %}>Екатеринбург / Тюмень (UTC+05)</option>
+                      <option value="Asia/Omsk" {% if company.work_timezone == "Asia/Omsk" %}selected{% endif %}>Омск (UTC+06)</option>
+                      <option value="Asia/Novosibirsk" {% if company.work_timezone == "Asia/Novosibirsk" %}selected{% endif %}>Новосибирск (UTC+07)</option>
+                      <option value="Asia/Krasnoyarsk" {% if company.work_timezone == "Asia/Krasnoyarsk" %}selected{% endif %}>Красноярск (UTC+07)</option>
+                      <option value="Asia/Irkutsk" {% if company.work_timezone == "Asia/Irkutsk" %}selected{% endif %}>Иркутск (UTC+08)</option>
+                      <option value="Asia/Yakutsk" {% if company.work_timezone == "Asia/Yakutsk" %}selected{% endif %}>Якутск (UTC+09)</option>
+                      <option value="Asia/Vladivostok" {% if company.work_timezone == "Asia/Vladivostok" %}selected{% endif %}>Владивосток (UTC+10)</option>
+                      <option value="Asia/Sakhalin" {% if company.work_timezone == "Asia/Sakhalin" %}selected{% endif %}>Сахалин (UTC+11)</option>
+                      <option value="Asia/Magadan" {% if company.work_timezone == "Asia/Magadan" %}selected{% endif %}>Магадан (UTC+11)</option>
+                      <option value="Asia/Kamchatka" {% if company.work_timezone == "Asia/Kamchatka" %}selected{% endif %}>Камчатка (UTC+12)</option>
+                    </select>
+                    <div class="flex gap-1 mt-1">
+                      <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
+                      <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
+                    </div>
+                    <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
+                  </div>
+                </div>
+              {% else %}
+                {% if tz %}
+                  <div>
+                    <span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}">
+                      <span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span>
+                      · {{ tz|tz_label }}
+                    </span>
+                  </div>
                 {% else %}
                   —
                 {% endif %}
-
-                {% if tz %}
-                  <span class="text-brand-dark/60 text-[10px]">({{ tz|tz_label }})</span>
-                  <span class="text-brand-dark/60 text-[10px]">·</span>
-                  {% if worktime.has %}
-                    {% if worktime.status == "ok" %}
-                      <span class="badge badge-done badge-xxxs align-middle" data-live-worktime="1" data-company-id="{{ company.id }}"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
-                    {% elif worktime.status == "warn_end" %}
-                      <span class="badge badge-warn badge-xxxs align-middle" data-live-worktime="1" data-company-id="{{ company.id }}"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
-                    {% elif worktime.status == "off" %}
-                      <span class="badge badge-danger badge-xxxs align-middle" data-live-worktime="1" data-company-id="{{ company.id }}"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
-                    {% else %}
-                      <span class="badge badge-warn badge-xxxs align-middle" data-live-worktime="1" data-company-id="{{ company.id }}"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
-                    {% endif %}
-                  {% else %}
-                    <span class="badge badge-warn badge-xxxs align-middle" data-live-worktime="1" data-company-id="{{ company.id }}"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span></span>
-                  {% endif %}
-                {% endif %}
-              {% endwith %}
-              {% endwith %}
-            </div>
-          </div>
-          <div>
-            <div class="text-brand-dark/50">Часовой пояс</div>
-            {# приоритет: TZ по адресу (авто), потом сохранённый #}
-            {% with guessed=company.address|guess_ru_tz %}
-            {% with tz=guessed|default:company.work_timezone %}
-              {% if tz %}
-                <div>
-                  <span class="badge badge-warn badge-xxxs">
-                    <span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span>
-                    · {{ tz|tz_label }}
-                  </span>
-                </div>
-              {% else %}
-                —
               {% endif %}
             {% endwith %}
             {% endwith %}
@@ -385,8 +392,8 @@
                 {% endwith %}
                 {% if not company.phone|phone_local_info %}
                   {% with guessed=company.address|guess_ru_tz %}
-                  {% with tz=guessed|default:company.work_timezone %}
-                    {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxxs"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
+                  {% with tz=company.work_timezone|default:guessed %}
+                    {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
                   {% endwith %}
                   {% endwith %}
                 {% endif %}
@@ -513,8 +520,8 @@
                       {% endwith %}
                       {% if not phone.value|phone_local_info %}
                         {% with guessed=company.address|guess_ru_tz %}
-                        {% with tz=guessed|default:company.work_timezone %}
-                          {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxxs"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
+                        {% with tz=company.work_timezone|default:guessed %}
+                          {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
                         {% endwith %}
                         {% endwith %}
                       {% endif %}
@@ -908,8 +915,8 @@
                             {% endwith %}
                             {% if not p.value|phone_local_info %}
                               {% with guessed=company.address|guess_ru_tz %}
-                              {% with tz=guessed|default:company.work_timezone %}
-                                {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxxs"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
+                              {% with tz=company.work_timezone|default:guessed %}
+                                {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
                               {% endwith %}
                               {% endwith %}
                             {% endif %}
@@ -2474,6 +2481,61 @@
           display.appendChild(btn);
         }
 
+        function escapeHtml(s){
+          return String(s || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+        }
+
+        function updateTimezoneDisplay(wrapper, payload){
+          const display = wrapper.querySelector('.inline-field-display');
+          if (!display) return;
+          const companyId = (wrapper.dataset.companyId || '').trim();
+          const effectiveTz = (payload && payload.effective_tz) ? String(payload.effective_tz) : '';
+          const label = (payload && payload.effective_label) ? String(payload.effective_label) : '';
+          const nowHhmm = (payload && payload.effective_now_hhmm) ? String(payload.effective_now_hhmm) : '';
+
+          if (!effectiveTz) {
+            display.textContent = '—';
+            return;
+          }
+
+          display.innerHTML =
+            `<span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="${escapeHtml(companyId)}">` +
+              `<span data-live-time data-live-tz="${escapeHtml(effectiveTz)}">${escapeHtml(nowHhmm || '--:--')}</span>` +
+              ` · ${escapeHtml(label || effectiveTz)}` +
+            `</span>`;
+        }
+
+        function updateCompanyTimezoneEverywhere(companyId, payload){
+          const cid = (companyId || '').toString().trim();
+          if (!cid) return;
+          const effectiveTz = (payload && payload.effective_tz) ? String(payload.effective_tz) : '';
+          const label = (payload && payload.effective_label) ? String(payload.effective_label) : '';
+          const nowHhmm = (payload && payload.effective_now_hhmm) ? String(payload.effective_now_hhmm) : '';
+          if (!effectiveTz) return;
+
+          // 1) Все "бейджи TZ" в карточке компании
+          document.querySelectorAll(`[data-company-tz-badge="1"][data-company-id="${cid}"]`).forEach(el => {
+            try{
+              el.innerHTML =
+                `<span data-live-time data-live-tz="${escapeHtml(effectiveTz)}">${escapeHtml(nowHhmm || '--:--')}</span>` +
+                ` · ${escapeHtml(label || effectiveTz)}`;
+            }catch(_e){}
+          });
+
+          // 2) Все live-time элементы, которые привязаны к компании (рабочее время/статус звонка)
+          document.querySelectorAll(`[data-live-worktime="1"][data-company-id="${cid}"] [data-live-time]`).forEach(span => {
+            try{
+              span.setAttribute('data-live-tz', effectiveTz);
+              if (nowHhmm) span.textContent = nowHhmm;
+            }catch(_e){}
+          });
+        }
+
         // Открыть редактирование
         document.addEventListener('click', function(e) {
           const editBtn = e.target.closest('[data-inline-edit]');
@@ -2532,6 +2594,9 @@
             // Обновляем display
             if (wrapper.dataset.inlineDisplayKind === 'website') {
               updateWebsiteDisplay(wrapper, newVal);
+            } else if (wrapper.dataset.inlineDisplayKind === 'timezone') {
+              updateTimezoneDisplay(wrapper, data);
+              updateCompanyTimezoneEverywhere(companyId, data);
             } else {
               const display = wrapper.querySelector('.inline-field-display');
               if (display) {
