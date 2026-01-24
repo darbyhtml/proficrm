@@ -3442,6 +3442,11 @@ def migrate_filtered(
 
                     # Обрабатываем данные о холодном звонке из amoCRM
                     cold_marked_at_dt = None
+                    # Инициализируем переменную, если она не была определена (на случай ошибки в блоке try)
+                    try:
+                        _ = cold_call_timestamp  # Проверяем, определена ли переменная
+                    except NameError:
+                        cold_call_timestamp = None
                     if cold_call_timestamp:
                         try:
                             UTC = getattr(timezone, "UTC", dt_timezone.utc)
