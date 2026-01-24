@@ -288,3 +288,66 @@ class TestNormalizePhone:
         
         # Все варианты должны обрабатываться без падения
         assert True  # Placeholder - реальная проверка будет в интеграционных тестах
+    
+    def test_phone_text_moved_to_note(self):
+        """Тест: PHONE='только через приемную! мини АТС' -> не в PHONE, а в NOTE."""
+        result = normalize_phone("только через приемную! мини АТС")
+        assert not result.isValid
+        assert result.note == "только через приемную! мини АТС"
+        assert result.phone_e164 is None
+    
+    def test_normalize_phone_format_8_dash(self):
+        """Тест: нормализация формата '8-816-565-49-58' -> '+78165654958'."""
+        result = normalize_phone("8-816-565-49-58")
+        assert result.isValid
+        assert result.phone_e164 == "+78165654958"
+    
+    def test_normalize_phone_format_brackets(self):
+        """Тест: нормализация формата '(38473)3-33-92' -> '+73847333392'."""
+        result = normalize_phone("(38473)3-33-92")
+        assert result.isValid
+        assert result.phone_e164 == "+73847333392"
+    
+    def test_position_phone_salvaged(self):
+        """Тест: POSITION='+7 495 632-21-97' -> не обновлять POSITION, добавить в PHONE."""
+        # Проверяем, что looks_like_phone_for_position распознает телефон
+        assert looks_like_phone_for_position("+7 495 632-21-97")
+        
+        # Проверяем, что normalize_phone извлекает номер
+        result = normalize_phone("+7 495 632-21-97")
+        assert result.isValid
+        assert result.phone_e164 == "+74956322197"
+    
+    def test_is_valid_phone(self):
+        """Тест: функция is_valid_phone для строгой проверки."""
+        from amocrm.migrate import is_valid_phone
+        
+        # Валидные телефоны
+        assert is_valid_phone("+7 495 632-21-97")
+        assert is_valid_phone("84951234567")
+        assert is_valid_phone("(38473)3-33-92")
+        
+        # Невалидные (текст)
+        assert not is_valid_phone("только через приемную! мини АТС")
+        assert not is_valid_phone("доб. 4 затем 1")
+        assert not is_valid_phone("Ольга Юрьевна")
+        assert not is_valid_phone("12345")  # слишком короткий
+    
+    def test_extract_phone_from_text(self):
+        """Тест: функция extract_phone_from_text извлекает телефон из текста."""
+        from amocrm.migrate import extract_phone_from_text
+        
+        # Телефон в тексте
+        phone, cleaned = extract_phone_from_text("+7 495 632-21-97")
+        assert phone == "+74956322197"
+        assert len(cleaned) < 3  # После извлечения телефона почти ничего не осталось
+        
+        # Только текст
+        phone, cleaned = extract_phone_from_text("только через приемную")
+        assert phone is None
+        assert cleaned == "только через приемную"
+        
+        # Текст с телефоном
+        phone, cleaned = extract_phone_from_text("Ольга Юрьевна +7 495 632-21-97")
+        assert phone == "+74956322197"
+        assert "Ольга" in cleaned or len(cleaned) < 3  # Имя должно быть удалено или остаться минимально

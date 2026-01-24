@@ -330,18 +330,77 @@ def sanitize_name(name: str) -> tuple[str, str]:
     return (cleaned, extracted_text)
 
 
-def looks_like_phone_for_position(value: str) -> bool:
+def is_valid_phone(value: str | None) -> bool:
     """
-    Проверяет, похоже ли значение должности на телефон.
+    Строгая проверка: является ли значение валидным телефоном.
     
-    Если значение содержит много цифр, начинается на +/8/7, содержит телефонные разделители -
-    вероятно, это телефон, а не должность.
+    Использует normalize_phone для проверки. Валидным считается только номер,
+    который после нормализации имеет >= MIN_PHONE_DIGITS цифр и проходит все проверки.
     
     Args:
         value: Значение для проверки
         
     Returns:
-        bool: True если похоже на телефон
+        bool: True если значение валидный телефон
+    """
+    if not value or not isinstance(value, str):
+        return False
+    
+    normalized = normalize_phone(value)
+    return normalized.isValid and normalized.phone_e164 is not None
+
+
+def extract_phone_from_text(text: str) -> tuple[str | None, str]:
+    """
+    Извлекает телефон из текста, который может содержать и текст, и телефон.
+    
+    Если в тексте найден валидный телефон - возвращает нормализованный номер и очищенный текст.
+    Если телефона нет - возвращает None и исходный текст.
+    
+    Args:
+        text: Текст, который может содержать телефон
+        
+    Returns:
+        tuple[phone_e164 | None, cleaned_text]: Нормализованный телефон (если найден) и очищенный текст
+    """
+    if not text or not isinstance(text, str):
+        return None, text or ""
+    
+    normalized = normalize_phone(text)
+    if normalized.isValid and normalized.phone_e164:
+        # Удаляем телефон из текста
+        cleaned = text
+        # Удаляем нормализованный номер
+        cleaned = cleaned.replace(normalized.phone_e164, "")
+        # Удаляем исходный номер (если отличается от нормализованного)
+        if text != normalized.phone_e164:
+            # Пытаемся найти и удалить исходный номер
+            digits_in_text = ''.join(c for c in text if c.isdigit() or c in ['+', '-', '(', ')', ' '])
+            if len(digits_in_text) >= 7:
+                # Удаляем все цифровые последовательности длиной >= 7
+                cleaned = re.sub(r'[\d\+\-\(\)\s]{7,}', '', cleaned)
+        
+        # Очищаем от лишних пробелов
+        cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+        return normalized.phone_e164, cleaned
+    
+    return None, text
+
+
+def looks_like_phone_for_position(value: str) -> bool:
+    """
+    Строгая проверка: похоже ли значение должности на телефон.
+    
+    Проверяет, что значение ПОСЛЕ ОЧИСТКИ содержит в основном телефонные символы
+    (цифры, +, пробелы, дефисы, скобки) и проходит валидацию телефона.
+    
+    Если значение содержит много букв или других символов - это не телефон.
+    
+    Args:
+        value: Значение для проверки
+        
+    Returns:
+        bool: True если значение похоже на телефон (в основном телефонные символы + валидно)
     """
     if not value or not isinstance(value, str):
         return False
@@ -350,13 +409,34 @@ def looks_like_phone_for_position(value: str) -> bool:
     if not value:
         return False
     
+    # Извлекаем все символы
+    phone_chars = set(['+', '-', '(', ')', ' ', '.', '/'])
+    phone_char_count = sum(1 for c in value if c.isdigit() or c in phone_chars)
+    total_chars = len(value)
+    
+    # Если менее 70% символов - телефонные (цифры, +, -, скобки, пробелы) - это не телефон
+    if total_chars > 0 and phone_char_count / total_chars < 0.7:
+        return False
+    
     # Извлекаем цифры
     digits = ''.join(c for c in value if c.isdigit())
     digit_count = len(digits)
     
-    # Если цифр слишком много (>= 7) - похоже на телефон
-    if digit_count >= 7:
-        return True
+    # Если цифр меньше 7 - точно не телефон
+    if digit_count < 7:
+        return False
+    
+    # Строгая проверка: используем normalize_phone для валидации
+    normalized = normalize_phone(value)
+    if not normalized.isValid:
+        return False
+    
+    # Дополнительная проверка: если после удаления телефонных символов осталось много текста - это не телефон
+    text_only = re.sub(r'[\d\+\-\(\)\s\.\/]', '', value)
+    if len(text_only) > 3:  # Если осталось больше 3 букв - это не телефон
+        return False
+    
+    return True
     
     # Если начинается с +, 8, 7 - похоже на телефон
     if value.startswith(('+', '8', '7')) and digit_count >= 6:
@@ -3973,11 +4053,12 @@ def migrate_filtered(
                                             # Первая строка - номер телефона
                                             phone_number = val_lines[0]
                                             
-                                            # ВАЛИДАЦИЯ: используем normalize_phone для строгой проверки
+                                            # СТРОГАЯ ВАЛИДАЦИЯ: используем normalize_phone для проверки
+                                            # НЕ записываем в PHONE если значение не валидно как телефон
                                             normalized = normalize_phone(phone_number)
-                                            if not normalized.isValid:
+                                            if not normalized.isValid or not normalized.phone_e164:
                                                 # Если значение не валидно как телефон - это примечание/комментарий
-                                                # Добавляем все строки в примечание, а не в телефоны
+                                                # НИКОГДА не записываем в PHONE, только в NOTE
                                                 note_parts = []
                                                 for line in val_lines:
                                                     # Убираем временные метки типа "22:05 - " или "20:05 - "
@@ -4001,29 +4082,37 @@ def migrate_filtered(
                                                 if normalized.note:
                                                     res.phones_rejected_as_note += 1
                                                     reason_type = "move_PHONE_text_to_NOTE"
-                                                    reason_text = "contains instruction keywords"
+                                                    reason_text = "contains instruction keywords or text"
                                                 else:
                                                     res.phones_rejected_invalid += 1
                                                     reason_type = "skip_PHONE"
-                                                    reason_text = "invalid after normalization"
+                                                    reason_text = f"invalid after normalization (digits < {MIN_PHONE_DIGITS})"
                                                 
-                                                # Логируем причину пропуска
+                                                # Логируем причину пропуска с исходным значением
                                                 if res.skip_reasons is None:
                                                     res.skip_reasons = []
                                                 res.skip_reasons.append({
                                                     "type": reason_type,
                                                     "reason": reason_text,
                                                     "value": phone_number[:100] if len(phone_number) <= 100 else phone_number[:50] + "...",
+                                                    "original_value": phone_number[:100],
                                                     "contact_id": amo_contact_id,
                                                     "field_name": field_name,
                                                 })
                                                 
                                                 if debug_count_for_extraction < 3:
-                                                    logger.debug(f"      -> Skipped non-phone value as note: {phone_number[:50]} (normalized.isValid=False)")
+                                                    logger.debug(f"      -> Skipped non-phone value as note: '{phone_number[:50]}' (normalized.isValid=False, reason={reason_text})")
                                                 continue
                                             
-                                            # Используем нормализованный номер
-                                            phone_number = normalized.phone_e164 or phone_number
+                                            # ВАЖНО: используем ТОЛЬКО нормализованный номер (phone_e164)
+                                            # НЕ используем исходный phone_number, если он не валиден
+                                            if not normalized.phone_e164:
+                                                # Если нормализация не дала phone_e164 - это не телефон
+                                                if debug_count_for_extraction < 3:
+                                                    logger.debug(f"      -> Skipped: normalized phone has no phone_e164: {phone_number[:50]}")
+                                                continue
+                                            
+                                            phone_number = normalized.phone_e164
                                             
                                             # Остальные строки - комментарий (регион/город)
                                             phone_comment_parts = []
@@ -4041,20 +4130,36 @@ def migrate_filtered(
                                             # Если комментарий пустой, используем enum_code как fallback
                                             if not phone_comment and enum_code:
                                                 phone_comment = str(enum_code)
+                                            
+                                            # Добавляем extension и note из нормализации (если есть)
+                                            if normalized.ext:
+                                                if phone_comment:
+                                                    phone_comment = f"{phone_comment}; доб. {normalized.ext}"
+                                                else:
+                                                    phone_comment = f"доб. {normalized.ext}"
+                                            if normalized.note:
+                                                if phone_comment:
+                                                    phone_comment = f"{phone_comment}; {normalized.note}"
+                                                else:
+                                                    phone_comment = normalized.note
                                     
                                             # Разбиваем номер на несколько, если есть запятые/точки с запятой
+                                            # ВАЖНО: проверяем валидность каждого номера перед добавлением
                                             for pv in _split_multi(phone_number):
-                                                if pv and _looks_like_phone(pv):  # ИСПРАВЛЕНИЕ: проверяем, что это телефон
-                                                    phones.append((ptype, pv, phone_comment))
-                                                elif pv:
-                                                    # Если значение не похоже на телефон, добавляем в примечание
-                                                    if not note_text:
-                                                        note_text = pv[:255]
-                                                    elif pv not in note_text:
-                                                        combined = f"{note_text}; {pv[:200]}"
-                                                        note_text = combined[:255]
-                                                    if debug_count_for_extraction < 3:
-                                                        logger.debug(f"      -> Skipped non-phone value as note: {pv[:50]}")
+                                                if pv:
+                                                    # Строгая проверка: используем is_valid_phone
+                                                    if is_valid_phone(pv):
+                                                        phones.append((ptype, pv, phone_comment[:255]))
+                                                    else:
+                                                        # Если значение не валидно как телефон, добавляем в примечание
+                                                        note_to_add = f"Комментарий к телефону: {pv}"
+                                                        if not note_text:
+                                                            note_text = note_to_add[:255]
+                                                        elif note_to_add not in note_text:
+                                                            combined = f"{note_text}; {note_to_add[:200]}"
+                                                            note_text = combined[:255]
+                                                        if debug_count_for_extraction < 3:
+                                                            logger.debug(f"      -> Skipped non-phone value as note: {pv[:50]}")
                                     
                                             if debug_count_for_extraction < 3:
                                                 logger.debug(f"      -> Added phone: {phone_number} (type={ptype}, comment='{phone_comment}')")
@@ -4105,7 +4210,8 @@ def migrate_filtered(
                                                 if debug_count_for_extraction < 3:
                                                     logger.debug(f"      -> Added email: {ev} (type={etype})")
                                     elif is_position:
-                                        # Защита POSITION от телефонов
+                                        # СТРОГАЯ защита POSITION от телефонов
+                                        # Извлекаем телефон из POSITION только если значение в основном состоит из телефонных символов
                                         if looks_like_phone_for_position(val):
                                             # Увеличиваем счетчик метрики
                                             res.position_rejected_as_phone += 1
@@ -4118,54 +4224,60 @@ def migrate_filtered(
                                                 "value": _mask_phone(val) if len(val) > 10 else val[:50],
                                                 "contact_id": amo_contact_id,
                                                 "field_name": field_name,
+                                                "source": "POSITION",
                                             })
                                             # Если позиция похожа на телефон - пытаемся интерпретировать как телефон
                                             normalized = normalize_phone(val)
-                                            if normalized.isValid:
-                                                # Переносим в телефоны
-                                                phone_value = normalized.phone_e164 or val
-                                                comment_parts = ["из поля должности"]
+                                            if normalized.isValid and normalized.phone_e164:
+                                                # Переносим в телефоны с пометкой source=POSITION
+                                                phone_value = normalized.phone_e164
+                                                comment_parts = ["из поля должности (POSITION)"]
                                                 if normalized.ext:
                                                     comment_parts.append(f"доб. {normalized.ext}")
                                                 if normalized.note:
                                                     comment_parts.append(normalized.note)
                                                 comment = "; ".join(comment_parts)
                                                 phones.append((ContactPhone.PhoneType.OTHER, phone_value, comment[:255]))
-                                                # ВАЖНО: очищаем POSITION - не оставляем номер в должности
-                                                # Если в исходной строке был и текст и номер - пытаемся извлечь текст
-                                                # Иначе оставляем пустым
-                                                position_cleaned = val
-                                                # Удаляем номер из строки должности
-                                                if normalized.phone_e164:
-                                                    # Удаляем нормализованный номер
-                                                    position_cleaned = position_cleaned.replace(normalized.phone_e164, "")
-                                                # Удаляем extension паттерны
-                                                for pattern in EXTENSION_PATTERNS:
-                                                    position_cleaned = re.sub(pattern, '', position_cleaned, flags=re.IGNORECASE)
-                                                position_cleaned = re.sub(r'\s+', ' ', position_cleaned).strip()
-                                                # Если после очистки остался только мусор - оставляем пустым
-                                                if len(position_cleaned) < 3 or position_cleaned.isdigit():
-                                                    position_cleaned = ""
-                                                # Устанавливаем очищенную должность только если она не пустая
-                                                if position_cleaned and not position:
-                                                    position = position_cleaned
-                                                if debug_count_for_extraction < 3:
-                                                    logger.debug(f"      -> Position '{val}' recognized as phone, moved to phones, position cleared to '{position_cleaned}'")
+                                                
+                                                # ВАЖНО: очищаем POSITION только если это 100% телефон (нет текста после извлечения)
+                                                phone_extracted, position_cleaned = extract_phone_from_text(val)
+                                                if phone_extracted:
+                                                    # Если после извлечения телефона остался только мусор (< 3 символов или только цифры) - очищаем
+                                                    if len(position_cleaned) < 3 or position_cleaned.strip().isdigit() or not position_cleaned.strip():
+                                                        position_cleaned = ""
+                                                    # Устанавливаем очищенную должность только если она не пустая и не была установлена ранее
+                                                    if position_cleaned and not position:
+                                                        position = position_cleaned
+                                                    
+                                                    # Логируем извлечение телефона из POSITION
+                                                    if res.skip_reasons is None:
+                                                        res.skip_reasons = []
+                                                    res.skip_reasons.append({
+                                                        "type": "extract_phone_from_POSITION",
+                                                        "reason": "phone extracted from position field",
+                                                        "phone": _mask_phone(phone_extracted),
+                                                        "original_position": val[:50],
+                                                        "cleaned_position": position_cleaned[:50] if position_cleaned else "",
+                                                        "contact_id": amo_contact_id,
+                                                        "source": "POSITION",
+                                                    })
+                                                    
+                                                    if debug_count_for_extraction < 3:
+                                                        logger.debug(f"      -> Position '{val}' recognized as phone, extracted '{phone_extracted}', position cleared to '{position_cleaned}'")
+                                                else:
+                                                    # Если не удалось извлечь телефон - оставляем POSITION как есть
+                                                    if not position:
+                                                        position = val
+                                                    if debug_count_for_extraction < 3:
+                                                        logger.debug(f"      -> Position '{val}' looks like phone but extraction failed, keeping original")
                                             else:
-                                                # Если не валидный телефон - переносим в примечание
-                                                note_to_add = normalized.note or val
-                                                if not note_text:
-                                                    note_text = f"Должность (не валидна): {note_to_add}"[:255]
-                                                elif note_to_add not in note_text:
-                                                    combined = f"{note_text}; Должность: {note_to_add[:200]}"
-                                                    note_text = combined[:255]
-                                                # Очищаем POSITION
+                                                # Если не валидный телефон - НЕ трогаем POSITION, но логируем
                                                 if not position:
-                                                    position = ""  # Оставляем пустым
+                                                    position = val  # Оставляем исходное значение
                                                 if debug_count_for_extraction < 3:
-                                                    logger.debug(f"      -> Position '{val}' not valid phone, moved to note, position cleared")
+                                                    logger.debug(f"      -> Position '{val}' not valid phone, keeping original position")
                                         else:
-                                            # Нормальная должность
+                                            # Нормальная должность - не трогаем
                                             if not position:
                                                 position = val
                                                 if debug_count_for_extraction < 3:
