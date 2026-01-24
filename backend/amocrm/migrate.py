@@ -3726,11 +3726,6 @@ def migrate_filtered(
                         )
                         note.save()
                         res.notes_created += 1
-            except Exception:
-                # Если заметки недоступны в конкретном аккаунте/тарифе/правах — не валим всю миграцию.
-                res.notes_seen = 0
-                res.notes_created = 0
-                res.notes_skipped_existing = 0
 
         # Импорт контактов компаний из amoCRM (опционально, т.к. может быть медленно)
         # Важно: импортируем контакты ТОЛЬКО для компаний из текущей пачки (amo_ids)
