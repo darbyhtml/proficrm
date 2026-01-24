@@ -2667,7 +2667,7 @@ def migrate_filtered(
                                 if note_text:
                                     logger.debug(f"  - Already found note_text from direct fields: {note_text[:100]}")
                     
-                            for cf_idx, cf in enumerate(custom_fields):
+                        for cf_idx, cf in enumerate(custom_fields):
                                 if not isinstance(cf, dict):
                                     if debug_count_for_extraction < 3:
                                         logger.debug(f"  - [field {cf_idx}] Skipped: not a dict, type={type(cf)}")
