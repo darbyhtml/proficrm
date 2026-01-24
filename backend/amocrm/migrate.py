@@ -4264,6 +4264,26 @@ def migrate_filtered(
                                 if isinstance(custom_fields, list) and len(custom_fields) > 0:
                                     logger.debug(f"  - ALL custom_fields ({len(custom_fields)} fields):")
                                     for cf_idx, cf in enumerate(custom_fields[:5]):  # Показываем первые 5
+                                        if isinstance(cf, dict):
+                                            field_name = str(cf.get('field_name') or '').strip()
+                                            field_code = str(cf.get('field_code') or '').strip()
+                                            values = cf.get('values') or []
+                                            first_val = ""
+                                            if values and isinstance(values, list) and len(values) > 0:
+                                                v = values[0]
+                                                if isinstance(v, dict):
+                                                    first_val = str(v.get('value', ''))
+                                                else:
+                                                    first_val = str(v)
+                                                # Маскируем телефоны и емейлы
+                                                if field_code == "PHONE" or "телефон" in field_name.lower():
+                                                    first_val = _mask_phone(first_val)
+                                                elif field_code == "EMAIL" or "email" in field_name.lower() or "почта" in field_name.lower():
+                                                    first_val = _mask_email(first_val)
+                                            logger.debug(f"    [{cf_idx}] {field_name} ({field_code}): {first_val[:50]}")
+                        except (NameError, UnboundLocalError, Exception) as debug_err:
+                            # Защита от ошибок в debug-логике - не валим миграцию
+                            logger.debug(f"Debug preview failed (non-critical): {debug_err}", exc_info=False)
                                     if isinstance(cf, dict):
                                         field_name = str(cf.get('field_name') or '').strip()
                                         field_code = str(cf.get('field_code') or '').strip()
@@ -4282,11 +4302,14 @@ def migrate_filtered(
                                                 first_val = _mask_email(first_val)
                                             else:
                                                 first_val = first_val[:100]  # Ограничиваем длину
-                                        logger.debug(f"    [{cf_idx}] id={cf.get('field_id')}, code='{field_code}', name='{field_name}', type={cf.get('field_type')}, first_value='{first_val}'")
-                            elif len(custom_fields) == 0:
-                                logger.debug(f"  - ⚠️ custom_fields is empty list (no custom fields found)")
-                            else:
-                                logger.debug(f"  - ⚠️ custom_fields is not a list: {type(custom_fields)}")
+                                            logger.debug(f"    [{cf_idx}] id={cf.get('field_id')}, code='{field_code}', name='{field_name}', type={cf.get('field_type')}, first_value='{first_val}'")
+                                elif len(custom_fields) == 0:
+                                    logger.debug(f"  - ⚠️ custom_fields is empty list (no custom fields found)")
+                                else:
+                                    logger.debug(f"  - ⚠️ custom_fields is not a list: {type(custom_fields)}")
+                        except (NameError, UnboundLocalError, Exception) as debug_err:
+                            # Защита от ошибок в debug-логике - не валим миграцию
+                            logger.debug(f"Debug preview failed (non-critical): {debug_err}", exc_info=False)
                     
                         # ПРОВЕРЯЕМ ВСЕ ВОЗМОЖНЫЕ МЕСТА ДЛЯ ПРИМЕЧАНИЙ:
                         # 1. Прямые поля контакта - проверяем ВСЕ возможные варианты
@@ -4444,6 +4467,17 @@ def migrate_filtered(
                                 logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
                                 logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields)}")
                                 # Логируем ВСЕ ключи контакта для поиска примечаний
+                                if isinstance(custom_fields, list) and len(custom_fields) > 0:
+                                    logger.debug(f"  - ALL custom_fields ({len(custom_fields)} fields):")
+                                    for cf_idx, cf in enumerate(custom_fields[:5]):  # Показываем первые 5
+                                        if isinstance(cf, dict):
+                                            field_name = str(cf.get('field_name') or '').strip()
+                                            field_code = str(cf.get('field_code') or '').strip()
+                                            logger.debug(f"    [{cf_idx}] id={cf.get('field_id')}, code='{field_code}', name='{field_name}'")
+                                elif len(custom_fields) == 0:
+                                    logger.debug(f"  - ⚠️ custom_fields is empty list (no custom fields found)")
+                                else:
+                                    logger.debug(f"  - ⚠️ custom_fields is not a list: {type(custom_fields)}")
                         except (NameError, UnboundLocalError, Exception) as debug_err:
                             # Защита от ошибок в debug-логике - не валим миграцию
                             logger.debug(f"Debug preview failed (non-critical): {debug_err}", exc_info=False)
