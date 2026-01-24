@@ -4821,30 +4821,29 @@ def migrate_filtered(
                                 res.contacts_created += 1
                         
                         # Телефоны: мягкий upsert (не удаляем вручную добавленные)
-                            # Примечание добавляется в comment первого телефона
-                            # ОПТИМИЗАЦИЯ: используем предзагруженные данные вместо запросов к БД
-                            # ВАЖНО: в dry-run не создаем/обновляем телефоны
-                            phones_added = 0
-                            phones_updated = 0
-                            phones_to_create: list[ContactPhone] = []
-                            phones_to_update: list[ContactPhone] = []
-                            
-                            if dry_run:
-                                # В dry-run только считаем, сколько телефонов было бы создано/обновлено
-                                for pt, pv, pc in phones:
-                                    pv_db = str(pv).strip()[:50]
-                                    if not pv_db:
-                                        continue
-                                    phone_key = (contact.id, pv_db.lower().strip())
-                                    obj = existing_phones_map.get(phone_key)
-                                    if obj is None:
-                                        phones_added += 1
-                                    else:
-                                        phones_updated += 1
-                                res.skipped_writes_dry_run += phones_added + phones_updated
-                                logger.debug(f"DRY-RUN: would add {phones_added} phones, update {phones_updated} phones for contact {amo_contact_id}")
-                            else:
-                            
+                        # Примечание добавляется в comment первого телефона
+                        # ОПТИМИЗАЦИЯ: используем предзагруженные данные вместо запросов к БД
+                        # ВАЖНО: в dry-run не создаем/обновляем телефоны
+                        phones_added = 0
+                        phones_updated = 0
+                        phones_to_create: list[ContactPhone] = []
+                        phones_to_update: list[ContactPhone] = []
+                        
+                        if dry_run:
+                            # В dry-run только считаем, сколько телефонов было бы создано/обновлено
+                            for pt, pv, pc in phones:
+                                pv_db = str(pv).strip()[:50]
+                                if not pv_db:
+                                    continue
+                                phone_key = (contact.id, pv_db.lower().strip())
+                                obj = existing_phones_map.get(phone_key)
+                                if obj is None:
+                                    phones_added += 1
+                                else:
+                                    phones_updated += 1
+                            res.skipped_writes_dry_run += phones_added + phones_updated
+                            logger.debug(f"DRY-RUN: would add {phones_added} phones, update {phones_updated} phones for contact {amo_contact_id}")
+                        else:
                             for idx, (pt, pv, pc) in enumerate(phones):
                                 pv_db = str(pv).strip()[:50]
                                 if not pv_db:
@@ -4897,26 +4896,26 @@ def migrate_filtered(
                             if phones_to_update:
                                 ContactPhone.objects.bulk_update(phones_to_update, ["type", "comment"])
                             
-                            # Email: мягкий upsert
-                            # ОПТИМИЗАЦИЯ: используем предзагруженные данные
-                            # ВАЖНО: в dry-run не создаем/обновляем email
-                            emails_added = 0
-                            emails_to_create: list[ContactEmail] = []
-                            
-                            if dry_run:
-                                # В dry-run только считаем, сколько email было бы создано
-                                for et, ev in emails:
-                                    ev_db = str(ev).strip().lower()
-                                    if not ev_db:
-                                        continue
-                                    email_key = (contact.id, ev_db)
-                                    obj = existing_emails_map.get(email_key)
-                                    if obj is None:
-                                        emails_added += 1
-                                res.skipped_writes_dry_run += emails_added
-                                logger.debug(f"DRY-RUN: would add {emails_added} emails for contact {amo_contact_id}")
-                            else:
-                                for et, ev in emails:
+                        # Email: мягкий upsert
+                        # ОПТИМИЗАЦИЯ: используем предзагруженные данные
+                        # ВАЖНО: в dry-run не создаем/обновляем email
+                        emails_added = 0
+                        emails_to_create: list[ContactEmail] = []
+                        
+                        if dry_run:
+                            # В dry-run только считаем, сколько email было бы создано
+                            for et, ev in emails:
+                                ev_db = str(ev).strip().lower()
+                                if not ev_db:
+                                    continue
+                                email_key = (contact.id, ev_db)
+                                obj = existing_emails_map.get(email_key)
+                                if obj is None:
+                                    emails_added += 1
+                            res.skipped_writes_dry_run += emails_added
+                            logger.debug(f"DRY-RUN: would add {emails_added} emails for contact {amo_contact_id}")
+                        else:
+                            for et, ev in emails:
                                 ev_db = str(ev).strip()[:254]
                                 if not ev_db:
                                     continue
