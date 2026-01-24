@@ -3779,6 +3779,20 @@ def migrate_filtered(
                         )
                         note.save()
                         res.notes_created += 1
+            
+            # Логируем статистику обработки заметок
+            logger.info(
+                f"migrate_filtered: заметки обработаны: processed={notes_processed}, "
+                f"skipped_amomail={notes_skipped_amomail}, skipped_no_text={notes_skipped_no_text}, "
+                f"skipped_no_company={notes_skipped_no_company}, created={res.notes_created}, "
+                f"updated={res.notes_updated}, skipped_existing={res.notes_skipped_existing}"
+            )
+        elif notes_error:
+            # Если была ошибка при получении заметок - логируем, но не обрабатываем
+            logger.warning(f"migrate_filtered: этап обработки заметок пропущен из-за ошибки: {notes_error}")
+            if res.warnings is None:
+                res.warnings = []
+            res.warnings.append(f"Этап обработки заметок пропущен из-за ошибки: {notes_error}")
 
         # Импорт контактов компаний из amoCRM (опционально, т.к. может быть медленно)
         # Важно: импортируем контакты ТОЛЬКО для компаний из текущей пачки (amo_ids)
