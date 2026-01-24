@@ -2479,16 +2479,17 @@ def migrate_filtered(
                             existing_contact = Contact.objects.filter(amocrm_contact_id=amo_contact_id, company=local_company).first()
                     
                         # В amoCRM телефоны и email могут быть:
-                            # 1. В стандартных полях (phone, email) - если они есть
-                            # 2. В custom_fields_values с field_code="PHONE"/"EMAIL" или по field_name
-                            # 3. В custom_fields_values по названию поля
-                            # phones/emails: сохраняем тип и комментарий (enum_code) для корректного отображения
-                            phones: list[tuple[str, str, str]] = []  # (type, value, comment)
-                            emails: list[tuple[str, str]] = []  # (type, value)
-                            position = ""
-                            cold_call_timestamp = None  # Timestamp холодного звонка из amoCRM
-                            note_text = ""  # "Примечание"/"Комментарий" контакта (одно на все номера)
-                            birthday_timestamp = None  # Timestamp дня рождения из amoCRM (если есть)
+                        # 1. В стандартных полях (phone, email) - если они есть
+                        # 2. В custom_fields_values с field_code="PHONE"/"EMAIL" или по field_name
+                        # 3. В custom_fields_values по названию поля
+                        # phones/emails: сохраняем тип и комментарий (enum_code) для корректного отображения
+                        # Переменные уже инициализированы ДО блока try, сбрасываем их значения
+                        phones = []
+                        emails = []
+                        position = ""
+                        cold_call_timestamp = None  # Timestamp холодного звонка из amoCRM
+                        note_text = ""  # "Примечание"/"Комментарий" контакта (одно на все номера)
+                        birthday_timestamp = None  # Timestamp дня рождения из amoCRM (если есть)
                     
                             # ОТЛАДКА: определяем счетчик для логирования (ДО использования)
                             debug_count_for_extraction = len(res.contacts_preview) if res.contacts_preview else 0
@@ -3442,11 +3443,7 @@ def migrate_filtered(
 
                     # Обрабатываем данные о холодном звонке из amoCRM
                     cold_marked_at_dt = None
-                    # Инициализируем переменную, если она не была определена (на случай ошибки в блоке try)
-                    try:
-                        _ = cold_call_timestamp  # Проверяем, определена ли переменная
-                    except NameError:
-                        cold_call_timestamp = None
+                    # Переменная cold_call_timestamp уже инициализирована ДО блока try
                     if cold_call_timestamp:
                         try:
                             UTC = getattr(timezone, "UTC", dt_timezone.utc)
