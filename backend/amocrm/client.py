@@ -343,7 +343,8 @@ class AmoClient:
         embedded_key: str | None = None,
         early_stop_callback: Callable[[list[dict]], bool] | None = None,
         extra_delay: float = 0.0,  # Дополнительная задержка между страницами (для заметок)
-    ) -> list[dict]:
+        return_meta: bool = False,  # Если True, возвращает tuple (list, meta), иначе только list (обратная совместимость)
+    ) -> list[dict] | tuple[list[dict], dict[str, Any]]:
         """
         Возвращает склеенный список элементов из _embedded (v4).
         Rate limiting применяется автоматически через _rate_limit() в _request().
@@ -352,12 +353,24 @@ class AmoClient:
             early_stop_callback: Функция, которая принимает текущий список элементов и возвращает True,
                                 если нужно прервать пагинацию. Вызывается после каждой страницы.
             extra_delay: Дополнительная задержка между страницами в секундах (для снижения нагрузки на API).
+            return_meta: Если True, возвращает tuple (list, meta) с метаданными пагинации.
+        
+        Returns:
+            list[dict] или tuple[list[dict], dict]: Список элементов или (список, метаданные)
+            Метаданные содержат: pages_fetched, elements_fetched, truncated, limit
         """
         out: list[dict] = []
         page = 1
+        truncated = False
+        
         while True:
             if page > max_pages:
-                logger.info(f"get_all_pages: достигнут max_pages={max_pages} для {path}, получено элементов: {len(out)}")
+                # Soft cap: логируем WARNING, устанавливаем флаг truncated
+                truncated = True
+                logger.warning(
+                    f"get_all_pages: достигнут max_pages={max_pages} для {path}, "
+                    f"получено элементов: {len(out)}. Возможна неполная выборка (truncated=True)."
+                )
                 break
             p = dict(params or {})
             p["page"] = page
@@ -412,7 +425,18 @@ class AmoClient:
             
             page += 1
         
-        logger.info(f"get_all_pages: завершена пагинация для {path}, всего страниц: {page - 1}, элементов: {len(out)}")
+        pages_fetched = page - 1
+        logger.info(f"get_all_pages: завершена пагинация для {path}, всего страниц: {pages_fetched}, элементов: {len(out)}")
+        
+        if return_meta:
+            pagination_meta = {
+                "pages_fetched": pages_fetched,
+                "elements_fetched": len(out),
+                "truncated": truncated,
+                "limit": limit,
+            }
+            return out, pagination_meta
+        
         return out
     
     def get_metrics(self) -> dict[str, Any]:

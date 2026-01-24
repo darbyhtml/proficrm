@@ -78,14 +78,72 @@ EXTENSION_PATTERNS = [
     r'x(\d+)',  # x123
 ]
 
+# Allowlist для enum_code телефонов (amoCRM)
+# Поддерживаемые типы: WORK, MOB (MOBILE), HOME, OTHER
+PHONE_ENUM_ALLOWLIST = {
+    "WORK": ContactPhone.PhoneType.WORK,
+    "WORKDD": ContactPhone.PhoneType.WORK,  # Work Direct Dial
+    "WORK_DIRECT": ContactPhone.PhoneType.WORK,
+    "MOBILE": ContactPhone.PhoneType.MOBILE,
+    "MOB": ContactPhone.PhoneType.MOBILE,
+    "CELL": ContactPhone.PhoneType.MOBILE,
+    "HOME": ContactPhone.PhoneType.HOME,
+    "FAX": ContactPhone.PhoneType.FAX,
+    "OTHER": ContactPhone.PhoneType.OTHER,
+}
+
+
+def map_phone_enum_code(enum_code: str | None, field_name: str = "") -> ContactPhone.PhoneType:
+    """
+    Маппинг enum_code из amoCRM в PhoneType нашей CRM.
+    
+    Использует allowlist: WORK, MOB, HOME, OTHER.
+    Любой неизвестный enum_code → OTHER.
+    
+    Args:
+        enum_code: enum_code из amoCRM (может быть None)
+        field_name: название поля (для определения типа по названию)
+        
+    Returns:
+        ContactPhone.PhoneType: Тип телефона
+    """
+    if enum_code:
+        enum_code_upper = str(enum_code).upper().strip()
+        if enum_code_upper in PHONE_ENUM_ALLOWLIST:
+            return PHONE_ENUM_ALLOWLIST[enum_code_upper]
+    
+    # Fallback: определяем по названию поля
+    field_name_lower = str(field_name).lower()
+    if "раб" in field_name_lower:
+        return ContactPhone.PhoneType.WORK
+    elif "моб" in field_name_lower:
+        return ContactPhone.PhoneType.MOBILE
+    elif "дом" in field_name_lower:
+        return ContactPhone.PhoneType.HOME
+    elif "факс" in field_name_lower:
+        return ContactPhone.PhoneType.FAX
+    
+    # По умолчанию → OTHER
+    return ContactPhone.PhoneType.OTHER
+
 
 def _norm(s: str) -> str:
     return (s or "").strip().lower()
 
 
 @dataclass
+class PhoneResult:
+    """Результат нормализации телефона с детальной информацией."""
+    digits: str = ""  # Только цифры номера (без + и форматирования)
+    e164: str | None = None  # Номер в формате E.164 (+7XXXXXXXXXX)
+    valid: bool = False  # Валидный ли телефон (>= 10 цифр для РФ)
+    ext: str | None = None  # Дополнительный номер (доб.)
+    reason: str | None = None  # Причина невалидности или дополнительная информация
+
+
+@dataclass
 class NormalizedPhone:
-    """Результат нормализации телефона."""
+    """Результат нормализации телефона (обратная совместимость)."""
     phone_e164: str | None = None  # Номер в формате E.164 (+7XXXXXXXXXX)
     ext: str | None = None  # Дополнительный номер (доб.)
     note: str | None = None  # Дополнительная информация (инструкции)
@@ -235,17 +293,181 @@ def normalize_phone(raw: str | None) -> NormalizedPhone:
     
     note_text = '; '.join(note_parts) if note_parts else None
     
-    return NormalizedPhone(
+    # Извлекаем только цифры для digits
+    digits_only = ''.join(c for c in phone_digits if c.isdigit())
+    
+    result = NormalizedPhone(
         phone_e164=phone_digits if phone_digits.startswith('+') else None,
         ext=ext_value,
         note=note_text,
         isValid=True
     )
+    
+    return result
+
+
+def normalize_phone_enhanced(raw: str | None) -> PhoneResult:
+    """
+    Улучшенная версия normalize_phone с детальной информацией.
+    
+    Возвращает PhoneResult с digits, e164, valid, ext, reason.
+    
+    Args:
+        raw: Исходная строка с телефоном (может быть None)
+        
+    Returns:
+        PhoneResult: Результат нормализации с детальной информацией
+    """
+    if raw is None:
+        return PhoneResult(reason="empty_input")
+    
+    if not isinstance(raw, str):
+        return PhoneResult(reason=f"invalid_type_{type(raw).__name__}")
+    
+    original = raw.strip()
+    if not original:
+        return PhoneResult(reason="empty_string")
+    
+    # Проверяем на инструкции
+    original_lower = original.lower()
+    has_instruction_keywords = any(kw in original_lower for kw in PHONE_INSTRUCTION_KEYWORDS)
+    
+    # Извлекаем только цифры
+    digits = ''.join(c for c in original if c.isdigit())
+    digit_count = len(digits)
+    
+    # Если цифр меньше минимума - это не телефон
+    if digit_count < MIN_PHONE_DIGITS:
+        if has_instruction_keywords:
+            return PhoneResult(digits=digits, reason="instruction_only_no_phone", ext=None)
+        return PhoneResult(digits=digits, reason=f"too_short_{digit_count}_digits")
+    
+    # Если слишком много цифр - тоже не телефон
+    if digit_count > MAX_PHONE_DIGITS:
+        return PhoneResult(digits=digits, reason=f"too_long_{digit_count}_digits")
+    
+    # Извлекаем extension/доб
+    ext_value = None
+    cleaned_phone = original
+    
+    for pattern in EXTENSION_PATTERNS:
+        match = re.search(pattern, original, re.IGNORECASE)
+        if match:
+            ext_value = match.group(1)
+            cleaned_phone = re.sub(pattern, '', cleaned_phone, flags=re.IGNORECASE).strip()
+            break
+    
+    # Нормализуем номер
+    has_brackets = '(' in cleaned_phone and ')' in cleaned_phone
+    
+    if has_brackets:
+        bracket_match = re.search(r'\((\d+)\)(.+)', cleaned_phone)
+        if bracket_match:
+            city_code = bracket_match.group(1)
+            number_part = bracket_match.group(2)
+            phone_digits = city_code + ''.join(c for c in number_part if c.isdigit())
+        else:
+            phone_digits = ''.join(c for c in cleaned_phone if c.isdigit() or c == '+')
+    else:
+        phone_digits = ''.join(c for c in cleaned_phone if c.isdigit() or c == '+')
+    
+    # Нормализация для РФ
+    if phone_digits.startswith('8') and len(phone_digits) >= 11:
+        phone_digits = '+7' + phone_digits[1:]
+    elif phone_digits.startswith('7') and not phone_digits.startswith('+7'):
+        phone_digits = '+' + phone_digits
+    
+    phone_digit_count = len([c for c in phone_digits if c.isdigit()])
+    if not phone_digits.startswith('+') and 10 <= phone_digit_count <= 11:
+        if phone_digit_count == 10:
+            phone_digits = '+7' + phone_digits
+        elif phone_digit_count == 11 and phone_digits[0] == '7':
+            phone_digits = '+' + phone_digits
+    
+    # Проверяем финальную валидность
+    final_digits = [c for c in phone_digits if c.isdigit()]
+    if len(final_digits) < MIN_PHONE_DIGITS or len(final_digits) > MAX_PHONE_DIGITS:
+        if has_instruction_keywords:
+            return PhoneResult(digits=digits, reason="instruction_only_no_phone", ext=ext_value)
+        return PhoneResult(digits=digits, reason=f"invalid_after_normalization_{len(final_digits)}_digits", ext=ext_value)
+    
+    # Валидный номер
+    e164 = phone_digits if phone_digits.startswith('+') else None
+    reason = None
+    if has_instruction_keywords and not ext_value:
+        reason = "has_instructions"
+    
+    return PhoneResult(
+        digits=digits,
+        e164=e164,
+        valid=True,
+        ext=ext_value,
+        reason=reason
+    )
+
+
+def extract_phone_candidates(text: str) -> list[str]:
+    """
+    Извлекает кандидаты на телефоны из "грязной" строки.
+    
+    Ищет последовательности цифр длиной >= 7 символов, которые могут быть телефонами.
+    
+    Args:
+        text: Исходный текст
+        
+    Returns:
+        list[str]: Список кандидатов (сырые строки для последующей нормализации)
+    """
+    if not text or not isinstance(text, str):
+        return []
+    
+    # Ищем последовательности цифр с возможными разделителями
+    # Паттерн: цифры, возможно с разделителями (пробелы, дефисы, скобки, плюсы)
+    patterns = [
+        r'\+?[\d\s\-\(\)]{7,}',  # Общий паттерн для телефонов
+        r'\(?\d{3,5}\)?[\s\-]?\d{2,4}[\s\-]?\d{2,4}',  # Формат (код)номер
+        r'\d{10,11}',  # Просто 10-11 цифр подряд
+    ]
+    
+    candidates = []
+    for pattern in patterns:
+        matches = re.finditer(pattern, text)
+        for match in matches:
+            candidate = match.group(0).strip()
+            # Проверяем, что это не просто случайная последовательность цифр в тексте
+            if len(''.join(c for c in candidate if c.isdigit())) >= 7:
+                candidates.append(candidate)
+    
+    # Убираем дубликаты, сохраняя порядок
+    seen = set()
+    unique_candidates = []
+    for c in candidates:
+        if c not in seen:
+            seen.add(c)
+            unique_candidates.append(c)
+    
+    return unique_candidates
+
+
+def clean_person_name_fields(name: str) -> tuple[str, str]:
+    """
+    Очищает имя/ФИО от "доб." и инструкций дозвона.
+    
+    Удаляет паттерны: доб\.?\s*\d+, затем\s*\d+, ext\.?\s*\d+, добавочн..., #\s*\d+, "перевести на …".
+    Извлечённые инструкции возвращаются отдельно для добавления в note.
+    
+    Args:
+        name: Исходное имя/ФИО
+        
+    Returns:
+        tuple[str, str]: (очищенное_имя, извлеченные_инструкции_дозвона)
+    """
+    return sanitize_name(name)
 
 
 def sanitize_name(name: str) -> tuple[str, str]:
     """
-    Очищает имя от "доб." и инструкций дозвона.
+    Очищает имя от "доб." и инструкций дозвона (обратная совместимость).
     
     Перед разбором ФИО удаляет хвосты вида: ", доб. 4", "доб.4", "затем 1", 
     "внутр. 123", "ext 12", "доп. 7", "тональный", "мини АТС" и т.п.
@@ -264,6 +486,8 @@ def sanitize_name(name: str) -> tuple[str, str]:
         return ("", "")
     
     # Расширенные паттерны для извлечения extension/инструкций из имени
+    # Включает: доб\.?\s*\d+, затем\s*\d+, ext\.?\s*\d+, добавочн..., #\s*\d+, "перевести на …"
+    # Используем raw strings для паттернов с обратными слешами
     extension_patterns = [
         r',\s*доб\.?\s*\d+',
         r',\s*доб\s+\d+',
@@ -277,6 +501,8 @@ def sanitize_name(name: str) -> tuple[str, str]:
         r',\s*нажать\s+\d+',
         r',\s*доп\.?\s*\d+',
         r',\s*доп\s+\d+',
+        r',\s*#\s*\d+',  # #123
+        r',\s*x\s*\d+',  # x123
         r'\s+доб\.?\s*\d+',
         r'\s+доб\s+\d+',
         r'\s+внутр\.?\s*\d+',
@@ -288,16 +514,22 @@ def sanitize_name(name: str) -> tuple[str, str]:
         r'\s+нажать\s+\d+',
         r'\s+доп\.?\s*\d+',
         r'\s+доп\s+\d+',
+        r'\s+#\s*\d+',  # #123
+        r'\s+x\s*\d+',  # x123
     ]
     
-    # Паттерны для текстовых инструкций (без цифр)
+    # Паттерны для текстовых инструкций (без цифр): "перевести на ...", "тональный", "мини АТС"
     instruction_patterns = [
         r',\s*тональный',
         r',\s*мини\s+атс',
         r',\s*миниатс',
+        r',\s*перевести\s+на\s+[^,]+',  # "перевести на ..."
+        r',\s*добавочн[^,]*',  # "добавочный", "добавочная"
         r'\s+тональный',
         r'\s+мини\s+атс',
         r'\s+миниатс',
+        r'\s+перевести\s+на\s+[^\s]+',  # "перевести на ..."
+        r'\s+добавочн[^\s]*',  # "добавочный", "добавочная"
     ]
     
     extracted_parts = []
@@ -1183,6 +1415,15 @@ class AmoMigrateResult:
     # Детальные причины для dry-run логирования
     skip_reasons: list[dict[str, Any]] = None  # список причин пропуска/изменений: [{"type": "skip_POSITION", "reason": "looks like phone", "value": "...", "contact_id": ...}, ...]
     
+    # Метаданные пагинации
+    companies_fetch_truncated: bool = False  # была ли обрезана выборка компаний
+    companies_pages_fetched: int = 0  # сколько страниц получено
+    companies_elements_fetched: int = 0  # сколько элементов получено
+    
+    # Статистика по заметкам
+    notes_bulk_supported: bool | None = None  # поддерживается ли bulk endpoint для заметок
+    notes_fetch_mode: str = "unknown"  # "bulk" или "per_company"
+    
     # Счетчики для dry-run (would_* вместо created/updated)
     companies_would_create: int = 0
     companies_would_update: int = 0
@@ -1289,6 +1530,15 @@ class AmoMigrateResult:
                 "name_cleaned_extension_moved_to_note": self.name_cleaned_extension_moved_to_note,
                 "skipped_writes_dry_run": self.skipped_writes_dry_run,
             },
+            "pagination": {
+                "companies_fetch_truncated": self.companies_fetch_truncated,
+                "companies_pages_fetched": self.companies_pages_fetched,
+                "companies_elements_fetched": self.companies_elements_fetched,
+            },
+            "notes": {
+                "bulk_supported": self.notes_bulk_supported,
+                "fetch_mode": self.notes_fetch_mode,
+            },
         }
         
         if is_dry_run:
@@ -1367,9 +1617,10 @@ def fetch_companies_by_responsible(client: AmoClient, responsible_user_id: int, 
     params = {f"filter[responsible_user_id]": responsible_user_id, "with": "custom_fields"}
     # НЕ запрашиваем contacts здесь - это создает огромные ответы и вызывает 504
     # Контакты получаем отдельно через filter[company_id][]
-    return client.get_all_pages(
+    result = client.get_all_pages(
         "/api/v4/companies",
         params=params,
+        return_meta=True,
         embedded_key="companies",
         limit=25,  # Оптимальный размер: не слишком большой (504), не слишком маленький
         max_pages=limit_pages,
@@ -1428,6 +1679,7 @@ def fetch_notes_for_companies_bulk(client: AmoClient, company_ids: list[int], *,
                 limit=250,
                 max_pages=100,
                 extra_delay=0.2,  # Дополнительная задержка 0.2s между страницами заметок
+                return_meta=False,
             )
             out.extend([n for n in notes if isinstance(n, dict)])
         except RateLimitError as e:
@@ -1451,9 +1703,21 @@ def fetch_notes_for_companies(client: AmoClient, company_ids: list[int]) -> list
     Получает заметки для компаний.
     Rate limiting применяется автоматически в AmoClient.
     Сначала пытаемся bulk-метод через /api/v4/notes, затем fallback на per-company endpoint.
+    
+    Если bulk endpoint недоступен (404), автоматически переключается на per-company
+    и больше не пытается использовать bulk в рамках этого запуска.
     """
+    global _notes_bulk_supported
+    
     if not company_ids:
         return []
+    
+    # Если bulk не поддерживается - сразу используем per-company
+    if _notes_bulk_supported is False:
+        logger.debug("fetch_notes_for_companies: bulk notes недоступен, используем per-company endpoint")
+        return _fetch_notes_per_company(client, company_ids)
+    
+    # Пытаемся bulk-метод
     try:
         bulk = fetch_notes_for_companies_bulk(client, company_ids)
         if bulk:
@@ -1461,7 +1725,17 @@ def fetch_notes_for_companies(client: AmoClient, company_ids: list[int]) -> list
     except Exception:
         # fallback below
         pass
+    
+    # Fallback на per-company endpoint
+    return _fetch_notes_per_company(client, company_ids)
 
+
+def _fetch_notes_per_company(client: AmoClient, company_ids: list[int]) -> list[dict[str, Any]]:
+    """
+    Получает заметки для компаний поштучно через per-company endpoint.
+    
+    Используется как fallback когда bulk endpoint недоступен.
+    """
     out: list[dict[str, Any]] = []
     for cid in company_ids:
         try:
@@ -2008,6 +2282,10 @@ def fetch_contacts_via_links(client: AmoClient, company_ids: list[int]) -> tuple
                         if entity_type:
                             if entity_type not in ("contact", "contacts"):
                                 links_skipped_wrong_type += 1
+                                # Логируем тип, который пропускаем
+                                if entity_type not in skipped_types:
+                                    skipped_types[entity_type] = 0
+                                skipped_types[entity_type] += 1
                                 continue
                         # Если тип отсутствует, но есть contact_id - считаем что это контакт
                         # (допускаем запись, если удаётся извлечь to_entity_id)
@@ -2027,6 +2305,10 @@ def fetch_contacts_via_links(client: AmoClient, company_ids: list[int]) -> tuple
                             links_processed += 1
                     
                     logger.info(f"fetch_contacts_via_links: обработано связей: processed={links_processed}, skipped_no_company={links_skipped_no_company}, skipped_no_contact={links_skipped_no_contact}, skipped_wrong_type={links_skipped_wrong_type}")
+                    if skipped_types:
+                        logger.info(f"fetch_contacts_via_links: пропущенные типы связей: {dict(skipped_types)}")
+                    if skipped_types:
+                        logger.info(f"fetch_contacts_via_links: пропущенные типы связей: {dict(skipped_types)}")
                 else:
                     logger.warning(f"fetch_contacts_via_links: неожиданный тип links в ответе: {type(links)}")
             else:
@@ -2258,7 +2540,7 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
             
             # Пробуем использовать filter[company_id][] с массивом
             # ОПТИМИЗАЦИЯ: получаем контакты с прерыванием, если уже нашли достаточно
-            contacts_batch = client.get_all_pages(
+            result = client.get_all_pages(
                 "/api/v4/contacts",
                 params={
                     "filter[company_id]": batch_company_ids,  # Массив - AmoClient обработает как filter[company_id][]=...
@@ -2268,7 +2550,9 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
                 limit=250,  # Максимальный limit для уменьшения числа запросов
                 max_pages=100,
                 early_stop_callback=should_stop_pagination,  # ОПТИМИЗАЦИЯ: раннее прерывание
+                return_meta=False,  # Не нужны метаданные для контактов
             )
+            contacts_batch = result
             
             if contacts_batch:
                 logger.info(f"fetch_contacts_bulk: получено {len(contacts_batch)} контактов для батча компаний (найдено контактов для {len(found_company_ids_during_pagination)}/{len(batch_company_ids)} компаний)")
@@ -2285,6 +2569,7 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
                 embedded_key="contacts",
                 limit=250,
                 max_pages=200,  # Увеличиваем для больших объемов
+                return_meta=False,
             )
             logger.info(f"fetch_contacts_bulk: получено {len(all_contacts)} контактов (без фильтра), фильтруем локально")
         except Exception as e2:
@@ -2387,7 +2672,7 @@ def fetch_notes_for_contacts_bulk(client: AmoClient, contact_ids: list[int], *, 
         
         try:
             # Получаем заметки через /api/v4/notes с фильтром по entity_type и entity_id[]
-            notes = client.get_all_pages(
+            result = client.get_all_pages(
                 "/api/v4/notes",
                 params={
                     "filter[entity_type]": "contacts",
@@ -2581,8 +2866,14 @@ def migrate_filtered(
     # КРИТИЧЕСКИ: ВСЕГДА запрашиваем компании БЕЗ контактов
     # Контакты получаем отдельно через filter[company_id][] - это надежнее и легче
     # Запрос компаний с with=contacts создает огромные ответы и вызывает 504
-    companies = fetch_companies_by_responsible(client, responsible_user_id, with_contacts=False)
+    # Получаем компании с метаданными пагинации
+    companies, pagination_meta = fetch_companies_by_responsible(client, responsible_user_id, with_contacts=False, return_meta=True)
     res.companies_seen = len(companies)
+    
+    # Сохраняем метаданные пагинации компаний
+    res.companies_fetch_truncated = pagination_meta.get("truncated", False)
+    res.companies_pages_fetched = pagination_meta.get("pages_fetched", 0)
+    res.companies_elements_fetched = pagination_meta.get("elements_fetched", 0)
     matched_all = []
     if skip_field_filter:
         # Мигрируем все компании ответственного без фильтра по полю
@@ -3116,6 +3407,17 @@ def migrate_filtered(
             try:
                 notes = fetch_notes_for_companies(client, amo_ids)
                 res.notes_seen = len(notes)
+                # Сохраняем режим получения заметок
+                global _notes_bulk_supported
+                if _notes_bulk_supported is False:
+                    res.notes_bulk_supported = False
+                    res.notes_fetch_mode = "per_company"
+                elif _notes_bulk_supported is True:
+                    res.notes_bulk_supported = True
+                    res.notes_fetch_mode = "bulk"
+                else:
+                    res.notes_bulk_supported = None
+                    res.notes_fetch_mode = "unknown"
             except RateLimitError as e:
                 # Rate limit при получении заметок - останавливаем импорт заметок с явной ошибкой
                 logger.error(
@@ -4045,22 +4347,22 @@ def migrate_filtered(
                                         logger.debug(f"    [value {v_idx}] val={val[:50]}, is_phone={is_phone}, is_email={is_email}, is_position={is_position}, is_cold_call_date={is_cold_call_date}, is_birthday={is_birthday}, is_note={is_note}")
                             
                                     if is_phone:
-                                        # Определяем тип телефона:
-                                        # 1. По enum_code (WORK/MOBILE/...)
-                                        # 2. По названию поля (если содержит "раб" - WORK, "моб" - MOBILE)
-                                        t = str(enum_code or "").upper()
-                                        field_name_lower = field_name.lower()
-                                
-                                        if t in ("WORK", "WORKDD", "WORK_DIRECT") or "раб" in field_name_lower:
-                                            ptype = ContactPhone.PhoneType.WORK
-                                        elif t in ("MOBILE", "CELL") or "моб" in field_name_lower:
-                                            ptype = ContactPhone.PhoneType.MOBILE
-                                        elif t == "HOME" or "дом" in field_name_lower:
-                                            ptype = ContactPhone.PhoneType.HOME
-                                        elif t == "FAX" or "факс" in field_name_lower:
-                                            ptype = ContactPhone.PhoneType.FAX
-                                        else:
-                                            ptype = ContactPhone.PhoneType.OTHER
+                                        # Определяем тип телефона через маппинг enum_code
+                                        # Используем allowlist: WORK, MOB, HOME, OTHER
+                                        original_enum_code = enum_code
+                                        ptype = map_phone_enum_code(enum_code, field_name)
+                                        
+                                        # Сохраняем информацию о маппинге enum_code для dry-run
+                                        if original_enum_code:
+                                            enum_code_upper = str(original_enum_code).upper().strip()
+                                            if enum_code_upper not in PHONE_ENUM_ALLOWLIST:
+                                                enum_mapped_info[f"phone_{field_id}"] = {
+                                                    "original_enum_code": original_enum_code,
+                                                    "mapped_to": str(ptype),
+                                                    "reason": "not_in_allowlist"
+                                                }
+                                                if debug_count_for_extraction < 3:
+                                                    logger.debug(f"      -> enum_code '{original_enum_code}' не в allowlist, замаплен в {ptype}")
                                 
                                         # Парсим значение: может быть многострочным с комментарием
                                         # Формат: "номер\nкомментарий" или "номер\nвремя - комментарий"
@@ -4200,6 +4502,14 @@ def migrate_filtered(
                                                         # Если значение не валидно как телефон - НЕ добавляем в PHONE
                                                         # ВЕСЬ исходный текст переносим в NOTE
                                                         note_to_add = f"Комментарий к телефону: {pv}"
+                                                        
+                                                        # Сохраняем для dry-run
+                                                        if dry_run:
+                                                            planned_phones_skipped_invalid.append({
+                                                                "value": _mask_phone(pv) if len(pv) > 10 else pv[:50],
+                                                                "reason": "invalid_after_normalization",
+                                                                "original_value": pv[:100],
+                                                            })
                                                         
                                                         # Логируем причину пропуска
                                                         if res.skip_reasons is None:
@@ -4611,15 +4921,28 @@ def migrate_filtered(
                                 # Это гарантирует, что дата не сместится при конвертации в другую таймзону
                                 cold_marked_at_dt = dt_utc.replace(hour=0, minute=0, second=0, microsecond=0)
                                 
-                                # ВАЖНО: amoCRM передает дату как timestamp начала дня в UTC или локальной таймзоне
-                                # Мы нормализуем на 00:00:00 UTC, чтобы избежать сдвига даты
-                                # Если нужно использовать другую таймзону (например, Europe/Moscow),
-                                # можно добавить настройку в settings, но для консистентности используем UTC
+                                # Сохраняем информацию о конвертации для dry-run
+                                if dry_run:
+                                    cold_call_date_info = {
+                                        "raw_epoch_seconds": cold_call_timestamp,
+                                        "converted_date": cold_marked_at_dt.strftime("%Y-%m-%d"),
+                                        "timezone": "UTC",
+                                        "normalized_to": "00:00:00 UTC"
+                                    }
                                 
                                 if debug_count_for_extraction < 3:
                                     logger.debug(f"      -> Cold call date: timestamp={cold_call_timestamp} -> {cold_marked_at_dt.isoformat()} (normalized to 00:00:00 UTC)")
-                            except Exception:
+                            except Exception as e:
                                 cold_marked_at_dt = None
+                                if dry_run:
+                                    cold_call_date_info = {
+                                        "raw_epoch_seconds": cold_call_timestamp,
+                                        "error": str(e),
+                                    }
+                        else:
+                            # Если нет cold_call_timestamp, очищаем info
+                            if dry_run:
+                                cold_call_date_info = {}
                     
                         debug_data = {
                             "source": "amo_api",
@@ -4813,7 +5136,13 @@ def migrate_filtered(
 
                         planned_field_changes: dict[str, dict[str, str]] = {}
                         planned_phones_add: list[dict[str, str]] = []
+                        planned_phones_skipped_invalid: list[dict[str, str]] = []  # Невалидные телефоны
+                        planned_phones_deduped: list[dict[str, str]] = []  # Дубликаты
                         planned_emails_add: list[dict[str, str]] = []
+                        planned_notes_appended: list[str] = []  # Добавленные примечания
+                        name_cleaned_info: dict[str, str] = {}  # Информация об очистке имени
+                        enum_mapped_info: dict[str, dict[str, str]] = {}  # Информация о маппинге enum_code
+                        cold_call_date_info: dict[str, Any] = {}  # Информация о дате холодного звонка
 
                         # Снимок текущих данных контакта (если он уже есть в CRM)
                         old_position = ""
@@ -4867,17 +5196,56 @@ def migrate_filtered(
                             }
 
                         # Телефоны/почты: покажем только добавления (мы не удаляем/не затираем)
+                        # Также показываем пропущенные невалидные и дедуплицированные
                         old_phone_values = set([p.get("value") for p in (old_phones or []) if p.get("value")])
+                        old_phone_values_normalized = set()  # Нормализованные номера для дедупликации
+                        for p in (old_phones or []):
+                            pv_old = p.get("value")
+                            if pv_old:
+                                normalized_old = normalize_phone(pv_old)
+                                if normalized_old.isValid and normalized_old.phone_e164:
+                                    old_phone_values_normalized.add(normalized_old.phone_e164)
+                        
+                        phones_added_count = 0
+                        phones_skipped_count = 0
+                        phones_deduped_count = 0
+                        
                         for pt, pv, pc in phones:
                             pv_db = str(pv).strip()[:50]
-                            if pv_db and pv_db not in old_phone_values:
+                            if not pv_db:
+                                continue
+                            
+                            # Проверяем дедупликацию по нормализованному виду
+                            normalized_for_dedup = normalize_phone(pv_db)
+                            if normalized_for_dedup.isValid and normalized_for_dedup.phone_e164:
+                                phone_key = normalized_for_dedup.phone_e164
+                            else:
+                                phone_key = pv_db.lower()
+                            
+                            # Если уже есть такой номер (по нормализованному виду) - это дубликат
+                            if phone_key in old_phone_values_normalized or pv_db in old_phone_values:
+                                phones_deduped_count += 1
+                                if dry_run:
+                                    planned_phones_deduped.append({
+                                        "value": _mask_phone(pv_db) if len(pv_db) > 10 else pv_db[:50],
+                                        "normalized": phone_key if normalized_for_dedup.isValid else None,
+                                        "reason": "already_exists"
+                                    })
+                                continue
+                            
+                            # Добавляем новый телефон
+                            phones_added_count += 1
+                            if dry_run:
                                 planned_phones_add.append(
                                     {
-                                        "value": pv_db,
+                                        "value": _mask_phone(pv_db) if len(pv_db) > 10 else pv_db[:50],
                                         "type": str(pt),
                                         "comment": str(pc or "")[:255],
                                     }
                                 )
+                            old_phone_values.add(pv_db)
+                            if normalized_for_dedup.isValid and normalized_for_dedup.phone_e164:
+                                old_phone_values_normalized.add(phone_key)
 
                         old_email_values = set([str(e or "").strip().lower() for e in (old_emails or []) if e])
                         for et, ev in emails:
