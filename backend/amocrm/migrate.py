@@ -4946,12 +4946,6 @@ def migrate_filtered(
                             debug_count_after = getattr(res, '_debug_contacts_logged', 0)
                             if debug_count_after < 10:
                                 logger.debug(f"  - Updated: phones={phones_added}, emails={emails_added}, position={bool(position)}")
-                        else:
-                            if dry_run:
-                                res.contacts_would_create += 1
-                                res.skipped_writes_dry_run += 1
-                            else:
-                                res.contacts_created += 1
                     else:
                         # СОЗДАЁМ новый контакт
                         # Сохраняем день рождения в raw_fields (пока нет поля в модели)
@@ -4976,72 +4970,81 @@ def migrate_filtered(
                             contact.cold_marked_at = cold_marked_at_dt
                             contact.cold_marked_by = cold_marked_by_user
                             # cold_marked_call оставляем NULL, т.к. в amoCRM нет связи с CallRequest
-                        if not dry_run:
+                        
+                        if dry_run:
+                            res.contacts_would_create += 1
+                            res.skipped_writes_dry_run += 1
+                            logger.debug(f"DRY-RUN: would create contact {amo_contact_id} for company {local_company.id if local_company else None}")
+                        else:
                             # ОПТИМИЗАЦИЯ: сохраняем контакт сразу (для телефонов/email нужен сохраненный контакт)
                             contact.save()
                             contacts_to_create.append(contact)  # Для статистики
-                            if dry_run:
-                                res.contacts_would_create += 1
-                                res.skipped_writes_dry_run += 1
-                            else:
-                                res.contacts_created += 1
+                            res.contacts_created += 1
                             
                             # ОПТИМИЗАЦИЯ: используем bulk_create для телефонов и почт новых контактов
-                            phones_added = 0
-                            phones_to_create_new: list[ContactPhone] = []
-                            
-                            for idx, (pt, pv, pc) in enumerate(phones):
-                                pv_db = str(pv).strip()[:50]
-                                if not pv_db:
-                                    continue
+                            # ВАЖНО: в dry-run не создаем телефоны/email
+                            if dry_run:
+                                # В dry-run только считаем
+                                phones_count = len([p for p in phones if str(p[1]).strip()])
+                                emails_count = len([e for e in emails if str(e[1]).strip()])
+                                res.skipped_writes_dry_run += phones_count + emails_count
+                                logger.debug(f"DRY-RUN: would add {phones_count} phones, {emails_count} emails for new contact {amo_contact_id}")
+                            else:
+                                phones_added = 0
+                                phones_to_create_new: list[ContactPhone] = []
                                 
-                                # Если это первый телефон и есть примечание - добавляем в comment (объединяем с существующим, если есть)
-                                phone_comment = str(pc or "").strip()
-                                if idx == 0 and note_text:
-                                    if phone_comment:
-                                        # Если уже есть комментарий, объединяем через точку с запятой
-                                        phone_comment = f"{phone_comment}; {note_text[:200]}"
-                                        phone_comment = phone_comment[:255]
-                                    else:
-                                        # Если комментария нет, просто добавляем примечание
-                                        phone_comment = note_text[:255]
-                                
-                                phones_to_create_new.append(ContactPhone(
-                                    contact=contact,
-                                    type=pt,
-                                    value=pv_db,
-                                    comment=phone_comment[:255]
-                                ))
-                                phones_added += 1
-                            
-                            # Bulk-создание телефонов для нового контакта
-                            if phones_to_create_new:
-                                ContactPhone.objects.bulk_create(phones_to_create_new, ignore_conflicts=True)
-                            
-                            emails_added = 0
-                            emails_to_create_new: list[ContactEmail] = []
-                            
-                            for et, ev in emails:
-                                ev_db = str(ev).strip()[:254]
-                                if ev_db:
-                                    emails_to_create_new.append(ContactEmail(
+                                for idx, (pt, pv, pc) in enumerate(phones):
+                                    pv_db = str(pv).strip()[:50]
+                                    if not pv_db:
+                                        continue
+                                    
+                                    # Если это первый телефон и есть примечание - добавляем в comment (объединяем с существующим, если есть)
+                                    phone_comment = str(pc or "").strip()
+                                    if idx == 0 and note_text:
+                                        if phone_comment:
+                                            # Если уже есть комментарий, объединяем через точку с запятой
+                                            phone_comment = f"{phone_comment}; {note_text[:200]}"
+                                            phone_comment = phone_comment[:255]
+                                        else:
+                                            # Если комментария нет, просто добавляем примечание
+                                            phone_comment = note_text[:255]
+                                    
+                                    phones_to_create_new.append(ContactPhone(
                                         contact=contact,
-                                        type=et,
-                                        value=ev_db
+                                        type=pt,
+                                        value=pv_db,
+                                        comment=phone_comment[:255]
                                     ))
-                                    emails_added += 1
-                            
-                            # Bulk-создание почт для нового контакта
-                            if emails_to_create_new:
-                                try:
-                                    ContactEmail.objects.bulk_create(emails_to_create_new, ignore_conflicts=True)
-                                except Exception:
-                                    # Fallback: создаем по одному при ошибке
-                                    for email_obj in emails_to_create_new:
-                                        try:
-                                            email_obj.save()
-                                        except Exception:
-                                            pass
+                                    phones_added += 1
+                                
+                                # Bulk-создание телефонов для нового контакта
+                                if phones_to_create_new:
+                                    ContactPhone.objects.bulk_create(phones_to_create_new, ignore_conflicts=True)
+                                
+                                emails_added = 0
+                                emails_to_create_new: list[ContactEmail] = []
+                                
+                                for et, ev in emails:
+                                    ev_db = str(ev).strip()[:254]
+                                    if ev_db:
+                                        emails_to_create_new.append(ContactEmail(
+                                            contact=contact,
+                                            type=et,
+                                            value=ev_db
+                                        ))
+                                        emails_added += 1
+                                
+                                # Bulk-создание почт для нового контакта
+                                if emails_to_create_new:
+                                    try:
+                                        ContactEmail.objects.bulk_create(emails_to_create_new, ignore_conflicts=True)
+                                    except Exception:
+                                        # Fallback: создаем по одному при ошибке
+                                        for email_obj in emails_to_create_new:
+                                            try:
+                                                email_obj.save()
+                                            except Exception:
+                                                pass
                             # Логируем результат сохранения
                             debug_count_after = getattr(res, '_debug_contacts_logged', 0)
                             if debug_count_after < 10:
