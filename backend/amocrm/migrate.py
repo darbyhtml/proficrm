@@ -3738,25 +3738,13 @@ def migrate_filtered(
                         else:
                             res.contacts_created += 1
                 
-                # ОПТИМИЗАЦИЯ: bulk создание новых контактов (обновления уже сохранены выше)
+                # ОПТИМИЗАЦИЯ: логируем статистику (контакты уже сохранены выше для обработки телефонов/email)
                 if not dry_run:
-                    if contacts_to_create:
-                        try:
-                            Contact.objects.bulk_create(contacts_to_create, ignore_conflicts=True)
-                            logger.info(f"migrate_filtered: bulk created {len(contacts_to_create)} contacts")
-                            # Обновляем предзагруженные карты после создания
-                            for contact in contacts_to_create:
-                                if contact.amocrm_contact_id and hasattr(contact, 'id') and contact.id:
-                                    company_id_for_key = contact.company_id if contact.company else None
-                                    existing_contacts_map[(contact.amocrm_contact_id, company_id_for_key)] = contact
-                        except Exception as e:
-                            logger.error(f"migrate_filtered: ошибка при bulk_create контактов: {e}", exc_info=True)
-                    
-                    # Логируем статистику (контакты уже сохранены выше для обработки телефонов/email)
                     if contacts_to_create:
                         logger.info(f"migrate_filtered: created {len(contacts_to_create)} new contacts")
                     if contacts_to_update:
-                        logger.info(f"migrate_filtered: updated {len(contacts_to_update)} existing contacts")
+                        skipped_count = len(full_contacts) - len(contacts_to_update) - len(contacts_to_create)
+                        logger.info(f"migrate_filtered: updated {len(contacts_to_update)} existing contacts, skipped {skipped_count} without changes")
             except Exception as e:
                 # Если контакты недоступны — не валим всю миграцию
                 contacts_errors += 1  # Увеличиваем счетчик ошибок при исключении
