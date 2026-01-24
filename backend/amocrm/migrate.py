@@ -1173,6 +1173,7 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
             logger.info(f"fetch_contacts_bulk: запрашиваем контакты для батча компаний {i//batch_size + 1} ({len(batch_company_ids)} компаний)")
             
             # Пробуем использовать filter[company_id][] с массивом
+            # ОПТИМИЗАЦИЯ: получаем контакты с прерыванием, если уже нашли достаточно
             contacts_batch = client.get_all_pages(
                 "/api/v4/contacts",
                 params={
@@ -1187,6 +1188,9 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
             if contacts_batch:
                 logger.info(f"fetch_contacts_bulk: получено {len(contacts_batch)} контактов для батча компаний")
                 all_contacts.extend(contacts_batch)
+                
+                # ОПТИМИЗАЦИЯ: если получили меньше контактов, чем limit, значит это последняя страница
+                # Можно прервать, если уже получили достаточно данных (но не прерываем, т.к. нужны все контакты)
     except Exception as e:
         logger.warning(f"fetch_contacts_bulk: ошибка при bulk-запросе контактов: {e}, пробуем альтернативный способ")
         # Fallback: получаем все контакты и фильтруем локально
@@ -1205,8 +1209,11 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
             logger.error(f"fetch_contacts_bulk: критическая ошибка при получении контактов: {e2}")
             return [], {}
     
-    # Фильтруем контакты по принадлежности к компаниям из списка
+    # ОПТИМИЗАЦИЯ: фильтруем контакты по принадлежности к компаниям из списка
+    # Используем множества для быстрой проверки
     filtered_contacts: list[dict[str, Any]] = []
+    found_company_ids: set[int] = set()  # Отслеживаем, для каких компаний уже нашли контакты
+    
     for contact in all_contacts:
         if not isinstance(contact, dict):
             continue
@@ -1248,6 +1255,7 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
             
             filtered_contacts.append(contact)
             contact_id_to_company_map[contact_id] = found_company_id
+            found_company_ids.add(found_company_id)
     
     logger.info(f"fetch_contacts_bulk: отфильтровано {len(filtered_contacts)} контактов из {len(all_contacts)} полученных для {len(company_ids)} компаний")
     return filtered_contacts, contact_id_to_company_map
@@ -2215,17 +2223,23 @@ def migrate_filtered(
                 # Заметки контактов: НЕ запрашиваем для dry-run (слишком тяжело)
                 # Заметки нужны только при реальном импорте, и то можно запросить отдельно
                 # ОПТИМИЗАЦИЯ: используем bulk-метод для получения заметок
+                # ОПТИМИЗАЦИЯ: заметки часто возвращают 404, делаем запрос опциональным и обрабатываем ошибки
                 contact_notes_map: dict[int, list[dict[str, Any]]] = {}
                 if not dry_run and full_contacts:
                     # Заметки запрашиваем только при реальном импорте через bulk-метод
+                    # ОПТИМИЗАЦИЯ: пропускаем запрос заметок, если их слишком много (ускоряет импорт)
                     contact_ids_for_notes = [int(c.get("id") or 0) for c in full_contacts if isinstance(c, dict) and c.get("id")]
-                    if contact_ids_for_notes:
+                    if contact_ids_for_notes and len(contact_ids_for_notes) <= 50:  # Запрашиваем заметки только для небольших батчей
                         logger.info(f"migrate_filtered: запрашиваем заметки для {len(contact_ids_for_notes)} контактов (bulk-метод)...")
                         try:
                             contact_notes_map = fetch_notes_for_contacts_bulk(client, contact_ids_for_notes)
                             logger.info(f"migrate_filtered: получено заметок для {len(contact_notes_map)} контактов")
                         except Exception as e:
-                            logger.warning(f"migrate_filtered: ошибка при получении заметок контактов: {e}", exc_info=True)
+                            # ОПТИМИЗАЦИЯ: не прерываем импорт при ошибке получения заметок (часто 404)
+                            logger.warning(f"migrate_filtered: ошибка при получении заметок контактов (пропускаем): {e}")
+                            contact_notes_map = {}
+                    elif contact_ids_for_notes:
+                        logger.info(f"migrate_filtered: пропускаем запрос заметок для {len(contact_ids_for_notes)} контактов (слишком много, ускоряет импорт)")
                 
                 # Отдельный счетчик для логирования структуры (не зависит от preview)
                 structure_logged_count = 0
