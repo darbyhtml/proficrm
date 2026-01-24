@@ -1220,11 +1220,13 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
                         relevant_contacts_count += 1
                 
                 # Условие 1: Нашли контакты для ВСЕХ компаний (100%) И получили достаточно контактов
+                # ВАЖНО: Это работает только если у ВСЕХ компаний есть контакты (редкий случай)
                 if len(current_contacts) >= 100 and len(found_company_ids_during_pagination) == len(batch_company_ids_set):
                     logger.info(f"fetch_contacts_bulk: прерываем пагинацию - найдены контакты для всех {len(batch_company_ids_set)} компаний (получено {len(current_contacts)} контактов)")
                     return True
                 
                 # Условие 2: Получили много контактов (2000+), но нашли для большинства компаний (80%+)
+                # ВАЖНО: Это работает только если у большинства компаний есть контакты
                 if len(current_contacts) >= 2000:
                     found_percentage = len(found_company_ids_during_pagination) / len(batch_company_ids_set) if batch_company_ids_set else 0
                     if found_percentage >= 0.8:  # 80% компаний
@@ -1232,11 +1234,13 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
                         return True
                 
                 # Условие 3: Получили слишком много контактов (5000+), но < 10% из них релевантны
-                # Это означает, что API возвращает все контакты, а не только для наших компаний
+                # ВАЖНО: Это основное условие для случая, когда у большинства компаний НЕТ контактов
+                # Если после 5000 контактов релевантность < 10%, значит API возвращает все контакты,
+                # а не только для наших компаний. Дальше получать не нужно - все релевантные уже получены.
                 if len(current_contacts) >= 5000:
                     relevance_percentage = relevant_contacts_count / len(current_contacts) if current_contacts else 0
                     if relevance_percentage < 0.1:  # Меньше 10% релевантных
-                        logger.warning(f"fetch_contacts_bulk: прерываем пагинацию - получено {len(current_contacts)} контактов, но только {relevant_contacts_count} ({relevance_percentage*100:.1f}%) релевантны для наших компаний")
+                        logger.warning(f"fetch_contacts_bulk: прерываем пагинацию - получено {len(current_contacts)} контактов, но только {relevant_contacts_count} ({relevance_percentage*100:.1f}%) релевантны для наших компаний. API возвращает все контакты, дальше получать не нужно.")
                         return True
                 
                 return False
