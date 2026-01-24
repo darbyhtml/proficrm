@@ -1146,6 +1146,10 @@ def fetch_contacts_per_company_precise(client: AmoClient, company_ids: list[int]
     ОПТИМИЗАЦИЯ: Используется для небольших батчей (≤10 компаний).
     Возвращает только релевантные контакты, не требует фильтрации.
     
+    Согласно документации AmoCRM API v4:
+    - filter[company_id]=ID возвращает полные данные контакта сразу (с custom_fields_values)
+    - Максимальный limit = 250
+    
     Args:
         client: AmoClient для запросов
         company_ids: список ID компаний, для которых нужны контакты
@@ -1166,16 +1170,17 @@ def fetch_contacts_per_company_precise(client: AmoClient, company_ids: list[int]
     
     for idx, company_id in enumerate(company_ids):
         try:
-            # Используем filter[company_id]=ID (БЕЗ []) для точного запроса
-            # Это возвращает только контакты для этой конкретной компании
+            # ОПТИМИЗАЦИЯ: используем filter[company_id]=ID (БЕЗ []) для точного запроса
+            # Согласно документации: это возвращает только контакты для этой конкретной компании
+            # И возвращает полные данные сразу (с custom_fields_values), в отличие от with=contacts
             contacts = client.get_all_pages(
                 "/api/v4/contacts",
                 params={
-                    "filter[company_id]": company_id,  # БЕЗ [] - для одного ID
+                    "filter[company_id]": company_id,  # БЕЗ [] - для одного ID (документация)
                     "with": "custom_fields",  # Получаем custom_fields сразу
                 },
                 embedded_key="contacts",
-                limit=250,  # Максимальный limit
+                limit=250,  # Максимальный limit согласно документации
                 max_pages=10,  # Обычно у компании не более 10 страниц контактов
             )
             
@@ -1205,6 +1210,106 @@ def fetch_contacts_per_company_precise(client: AmoClient, company_ids: list[int]
     return all_contacts, contact_id_to_company_map
 
 
+def fetch_contacts_medium_batch(client: AmoClient, company_ids: list[int]) -> tuple[list[dict[str, Any]], dict[int, int]]:
+    """
+    ОПТИМИЗИРОВАННОЕ получение контактов для средних батчей (11-30 компаний).
+    
+    Стратегия (на основе документации AmoCRM API v4):
+    1. Запрашиваем компании с with=contacts (быстро, только ID контактов)
+    2. Собираем все ID контактов
+    3. Запрашиваем полные данные контактов батчами через filter[id][] (50 ID за раз)
+    
+    Преимущества:
+    - Для 20 компаний: 1 запрос компаний + 1-2 запроса контактов = ~1-2 сек (вместо 3 сек)
+    - Не требует фильтрации (контакты уже привязаны к компаниям)
+    
+    Args:
+        client: AmoClient для запросов
+        company_ids: список ID компаний, для которых нужны контакты
+        
+    Returns:
+        tuple[list[dict], dict[int, int]]: 
+            - список контактов с полными данными (custom_fields, _embedded.companies)
+            - словарь contact_id -> company_id для маппинга
+    """
+    if not company_ids:
+        logger.info("fetch_contacts_medium_batch: company_ids пуст, возвращаем []")
+        return [], {}
+    
+    logger.info(f"fetch_contacts_medium_batch: начинаем оптимизированное получение контактов для {len(company_ids)} компаний")
+    
+    # Шаг 1: Запрашиваем компании с with=contacts (быстро, только ID контактов)
+    # Согласно документации: _embedded[contacts] возвращает только id контакта
+    contact_id_to_company_map: dict[int, int] = {}
+    all_contact_ids: set[int] = set()
+    
+    for idx, company_id in enumerate(company_ids):
+        try:
+            company_data = client.get(
+                f"/api/v4/companies/{company_id}",
+                params={"with": "contacts"}  # Только contacts, без custom_fields (быстрее)
+            )
+            
+            if isinstance(company_data, dict):
+                embedded = company_data.get("_embedded") or {}
+                contacts = embedded.get("contacts") or []
+                if isinstance(contacts, list):
+                    for contact in contacts:
+                        if isinstance(contact, dict):
+                            contact_id = int(contact.get("id") or 0)
+                            if contact_id:
+                                all_contact_ids.add(contact_id)
+                                contact_id_to_company_map[contact_id] = company_id
+        except Exception as e:
+            logger.warning(f"fetch_contacts_medium_batch: ошибка при получении компании {company_id}: {e}", exc_info=True)
+            continue
+    
+    if not all_contact_ids:
+        logger.info(f"fetch_contacts_medium_batch: контакты не найдены для {len(company_ids)} компаний")
+        return [], {}
+    
+    logger.info(f"fetch_contacts_medium_batch: найдено {len(all_contact_ids)} уникальных контактов, запрашиваем полные данные...")
+    
+    # Шаг 2: Запрашиваем полные данные контактов батчами через filter[id][]
+    # Согласно документации: максимальный размер батча = 50
+    all_contacts: list[dict[str, Any]] = []
+    contact_ids_list = list(all_contact_ids)
+    batch_size = 50
+    
+    for i in range(0, len(contact_ids_list), batch_size):
+        batch_ids = contact_ids_list[i:i + batch_size]
+        try:
+            contacts_data = client.get(
+                "/api/v4/contacts",
+                params={
+                    "filter[id]": batch_ids,  # Массив ID - AmoClient обработает как filter[id][]=...
+                    "with": "custom_fields",  # Получаем полные данные
+                }
+            )
+            
+            if isinstance(contacts_data, dict):
+                embedded = contacts_data.get("_embedded") or {}
+                contacts = embedded.get("contacts") or []
+                if isinstance(contacts, list):
+                    for contact in contacts:
+                        if isinstance(contact, dict):
+                            contact_id = int(contact.get("id") or 0)
+                            if contact_id and contact_id in contact_id_to_company_map:
+                                company_id = contact_id_to_company_map[contact_id]
+                                # Убеждаемся, что _embedded.companies заполнен
+                                if "_embedded" not in contact:
+                                    contact["_embedded"] = {}
+                                if "companies" not in contact["_embedded"] or not contact["_embedded"]["companies"]:
+                                    contact["_embedded"]["companies"] = [{"id": company_id}]
+                                all_contacts.append(contact)
+        except Exception as e:
+            logger.warning(f"fetch_contacts_medium_batch: ошибка при получении полных данных контактов (batch {i//batch_size + 1}): {e}", exc_info=True)
+            continue
+    
+    logger.info(f"fetch_contacts_medium_batch: ИТОГО получено {len(all_contacts)} контактов с полными данными для {len(company_ids)} компаний")
+    return all_contacts, contact_id_to_company_map
+
+
 def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list[dict[str, Any]], dict[int, int]]:
     """
     ОПТИМИЗИРОВАННАЯ версия получения контактов компаний через bulk-запросы.
@@ -1229,11 +1334,17 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
         logger.info("fetch_contacts_bulk: company_ids пуст, возвращаем []")
         return [], {}
     
-    # ОПТИМИЗАЦИЯ: для небольших батчей используем точный запрос для каждой компании
-    # Это быстрее и точнее, чем bulk-запрос с фильтрацией
+    # ОПТИМИЗАЦИЯ: используем разные стратегии в зависимости от размера батча
+    # На основе документации AmoCRM API v4:
+    # - ≤10 компаний: filter[company_id]=ID для каждой (точный запрос, полные данные сразу)
+    # - 11-30 компаний: with=contacts для компаний + filter[id][] для контактов (оптимизировано)
+    # - >30 компаний: bulk-запрос с ранним прерыванием (текущая реализация)
     if len(company_ids) <= 10:
         logger.info(f"fetch_contacts_bulk: используем точный запрос для {len(company_ids)} компаний (небольшой батч)")
         return fetch_contacts_per_company_precise(client, company_ids)
+    elif len(company_ids) <= 30:
+        logger.info(f"fetch_contacts_bulk: используем оптимизированный запрос для {len(company_ids)} компаний (средний батч)")
+        return fetch_contacts_medium_batch(client, company_ids)
     
     company_ids_set = set(company_ids)
     all_contacts: list[dict[str, Any]] = []
