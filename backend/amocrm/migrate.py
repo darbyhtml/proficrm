@@ -819,7 +819,7 @@ def fetch_tasks_for_companies(client: AmoClient, company_ids: list[int]) -> list
     if not company_ids:
         return []
     out: list[dict[str, Any]] = []
-    batch_size = 20  # ОПТИМИЗАЦИЯ: увеличен с 10 до 20 для ускорения (меньше запросов)
+    batch_size = 50  # ОПТИМИЗАЦИЯ: увеличен до максимума API (50) для ускорения (меньше запросов)
     for i in range(0, len(company_ids), batch_size):
         ids = company_ids[i : i + batch_size]
         out.extend(
@@ -1779,12 +1779,8 @@ def migrate_filtered(
                 # Основной телефон был пустой - первый телефон уже в comp.phone, остальные в CompanyPhone
                 extra_phones = [p for p in phones[1:] if str(p).strip()]
             
-            # Логируем для диагностики
-            if phones and not dry_run:
-                logger.info(f"Company {comp.name} (ID: {comp.id}): phones from amoCRM: {phones}, extra_phones to save: {extra_phones}, main phone: '{comp.phone}'")
-            
+            # ОПТИМИЗАЦИЯ: bulk операции для CompanyPhone
             if extra_phones and not dry_run:
-                # Нормализуем телефоны перед сохранением
                 from ui.forms import _normalize_phone
                 from django.db.models import Max
                 
@@ -1792,6 +1788,19 @@ def migrate_filtered(
                 max_order = CompanyPhone.objects.filter(company=comp).aggregate(m=Max("order")).get("m")
                 next_order = int(max_order) + 1 if max_order is not None else 0
                 
+                # ОПТИМИЗАЦИЯ: загружаем все существующие телефоны одним запросом
+                existing_phones_raw = list(CompanyPhone.objects.filter(company=comp).values_list('value', flat=True))
+                existing_phones_normalized = set()
+                for existing in existing_phones_raw:
+                    existing_norm = _normalize_phone(existing) if existing else ""
+                    if existing_norm:
+                        existing_phones_normalized.add(existing_norm)
+                
+                # Нормализуем основной телефон один раз
+                main_phone_normalized = _normalize_phone(comp.phone) if (comp.phone or "").strip() else ""
+                
+                # Собираем телефоны для bulk_create
+                phones_to_create = []
                 for p in extra_phones:
                     v = str(p).strip()[:50]
                     if not v:
@@ -1802,30 +1811,26 @@ def migrate_filtered(
                         normalized = v  # Если нормализация не удалась, используем исходное значение
                     
                     # Проверяем, что такого телефона еще нет (ни в основном, ни в дополнительных)
-                    main_phone_normalized = _normalize_phone(comp.phone) if (comp.phone or "").strip() else ""
                     if main_phone_normalized and main_phone_normalized == normalized:
                         logger.debug(f"Company {comp.name}: skipping phone {v} (normalized: {normalized}) - same as main phone")
-                        continue  # Пропускаем, если это основной телефон
+                        continue
                     
-                    # Проверяем дубликаты в CompanyPhone (с нормализацией)
-                    existing_phones = CompanyPhone.objects.filter(company=comp).values_list('value', flat=True)
-                    is_duplicate = False
-                    for existing in existing_phones:
-                        existing_normalized = _normalize_phone(existing) if existing else ""
-                        if existing_normalized and existing_normalized == normalized:
-                            logger.debug(f"Company {comp.name}: skipping phone {v} (normalized: {normalized}) - duplicate")
-                            is_duplicate = True
-                            break
+                    if normalized in existing_phones_normalized:
+                        logger.debug(f"Company {comp.name}: skipping phone {v} (normalized: {normalized}) - duplicate")
+                        continue
                     
-                    if is_duplicate:
-                        continue  # Пропускаем дубликаты
-                    
+                    # Добавляем в список для bulk_create
+                    phones_to_create.append(CompanyPhone(company=comp, value=normalized, order=next_order))
+                    existing_phones_normalized.add(normalized)  # Предотвращаем дубликаты в этом батче
+                    next_order += 1
+                
+                # Bulk создание телефонов
+                if phones_to_create:
                     try:
-                        CompanyPhone.objects.create(company=comp, value=normalized, order=next_order)
-                        logger.info(f"Company {comp.name}: created CompanyPhone {v} -> {normalized} (order: {next_order})")
-                        next_order += 1
+                        CompanyPhone.objects.bulk_create(phones_to_create, ignore_conflicts=True)
+                        logger.info(f"Company {comp.name}: bulk created {len(phones_to_create)} CompanyPhone records")
                     except Exception as e:
-                        logger.error(f"Failed to create CompanyPhone for company {comp.name}: {e}", exc_info=True)
+                        logger.error(f"Failed to bulk_create CompanyPhone for company {comp.name}: {e}", exc_info=True)
             
             # Дополнительные email сохраняем в CompanyEmail
             extra_emails = [e for e in emails[1:] if str(e).strip()]
