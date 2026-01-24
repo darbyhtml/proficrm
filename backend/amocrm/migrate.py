@@ -1501,14 +1501,24 @@ def migrate_filtered(
         res.companies_next_offset = off + len(batch)
         res.companies_has_more = res.companies_next_offset < len(matched_all)
 
-    @transaction.atomic
+    # ОПТИМИЗАЦИЯ: разбиваем на под-транзакции по 10-20 компаний для уменьшения блокировок БД
+    # Это позволяет быстрее коммитить изменения и уменьшает риск таймаутов
+    SUB_TRANSACTION_SIZE = 15  # Размер под-транзакции (компаний)
+    
     def _run():
         # Защита от пустого batch (когда offset за пределами списка)
         if not batch:
             return res
         
         local_companies: list[Company] = []
-        for amo_c in batch:
+        
+        # ОПТИМИЗАЦИЯ: обрабатываем компании под-транзакциями
+        for sub_batch_start in range(0, len(batch), SUB_TRANSACTION_SIZE):
+            sub_batch = batch[sub_batch_start:sub_batch_start + SUB_TRANSACTION_SIZE]
+            
+            # Каждая под-транзакция обрабатывает до SUB_TRANSACTION_SIZE компаний
+            with transaction.atomic():
+                for amo_c in sub_batch:
             extra = _extract_company_fields(amo_c, field_meta) if field_meta else {}
             comp, created = _upsert_company_from_amo(amo_company=amo_c, actor=actor, responsible=responsible_local, dry_run=dry_run)
             # заполнение "Данные" (только если поле пустое, чтобы не затереть уже заполненное вручную)
@@ -1857,11 +1867,15 @@ def migrate_filtered(
                 res.companies_created += 1
             else:
                 res.companies_updated += 1
-            # Сферы: исключаем "Новая CRM" (она только для фильтра), но ставим остальные
-            _apply_spheres_from_custom(amo_company=amo_c, company=comp, field_id=sphere_field_id, dry_run=dry_run, exclude_label="Новая CRM")
-            local_companies.append(comp)
-            if res.preview is not None and len(res.preview) < 15:
-                res.preview.append({"company": comp.name, "amo_id": comp.amocrm_company_id})
+                    # Сферы: исключаем "Новая CRM" (она только для фильтра), но ставим остальные
+                    _apply_spheres_from_custom(amo_company=amo_c, company=comp, field_id=sphere_field_id, dry_run=dry_run, exclude_label="Новая CRM")
+                    local_companies.append(comp)
+                    if res.preview is not None and len(res.preview) < 15:
+                        res.preview.append({"company": comp.name, "amo_id": comp.amocrm_company_id})
+            
+            # Логируем прогресс под-транзакций
+            if not dry_run:
+                logger.info(f"migrate_filtered: обработано {len(sub_batch)} компаний в под-транзакции ({sub_batch_start + 1}/{len(batch)})")
 
         amo_ids = [int(c.get("id") or 0) for c in batch if int(c.get("id") or 0)]
         # ОПТИМИЗАЦИЯ (без изменения результата):
@@ -3689,6 +3703,7 @@ def migrate_filtered(
                     "companies_count": len(amo_ids),
                 })
 
+        # ВАЖНО: для dry-run откатываем все изменения
         if dry_run:
             transaction.set_rollback(True)
 

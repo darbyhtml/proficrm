@@ -217,6 +217,11 @@ if DB_ENGINE == "postgres":
             "PASSWORD": os.getenv("POSTGRES_PASSWORD", "crm"),
             "HOST": os.getenv("POSTGRES_HOST", "localhost"),
             "PORT": int(os.getenv("POSTGRES_PORT", "5432")),
+            "OPTIONS": {
+                "connect_timeout": 10,  # Таймаут подключения 10 секунд
+                "options": "-c statement_timeout=300000",  # 5 минут на запрос (для импорта)
+            },
+            "CONN_MAX_AGE": 600,  # Переиспользование соединений до 10 минут
         }
     }
 else:
