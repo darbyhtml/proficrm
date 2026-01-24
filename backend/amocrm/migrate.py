@@ -4803,8 +4803,12 @@ def migrate_filtered(
                         if dry_run:
                             if existing_contact:
                                 res.contacts_would_update += 1
+                                res.skipped_writes_dry_run += 1
+                                logger.debug(f"DRY-RUN: would update contact {amo_contact_id} for company {local_company.id if local_company else None}")
                             else:
                                 res.contacts_would_create += 1
+                                res.skipped_writes_dry_run += 1
+                                logger.debug(f"DRY-RUN: would create contact {amo_contact_id} for company {local_company.id if local_company else None}")
                         else:
                             # ОПТИМИЗАЦИЯ: сохраняем контакт сразу, если изменился (для телефонов/email нужен сохраненный контакт)
                             # Если ничего не изменилось, пропускаем сохранение (ускоряет импорт при обновлении)
@@ -4812,15 +4816,11 @@ def migrate_filtered(
                                 contact.save()
                                 contacts_to_update.append(contact)  # Для статистики
                             if existing_contact:
-                                res.contacts_updated += 1 if hasattr(res, 'contacts_updated') else 0
-                            else:
-                                if dry_run:
-                                res.contacts_would_create += 1
-                                res.skipped_writes_dry_run += 1
+                                res.contacts_updated += 1
                             else:
                                 res.contacts_created += 1
-                            
-                            # Телефоны: мягкий upsert (не удаляем вручную добавленные)
+                        
+                        # Телефоны: мягкий upsert (не удаляем вручную добавленные)
                             # Примечание добавляется в comment первого телефона
                             # ОПТИМИЗАЦИЯ: используем предзагруженные данные вместо запросов к БД
                             # ВАЖНО: в dry-run не создаем/обновляем телефоны
