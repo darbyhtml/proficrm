@@ -50,7 +50,7 @@ def _mask_email(email: str) -> str:
 
 
 # Константы для валидации телефонов
-MIN_PHONE_DIGITS = 6  # Минимум цифр для валидного телефона
+MIN_PHONE_DIGITS = 10  # Минимум цифр для валидного телефона (для РФ номеров: 10 цифр без кода страны)
 MAX_PHONE_DIGITS = 15  # Максимум цифр (E.164 стандарт)
 
 # Ключевые фразы, которые указывают на инструкции, а не на телефон
@@ -181,11 +181,12 @@ def normalize_phone(raw: str | None) -> NormalizedPhone:
     elif phone_digits.startswith('7') and not phone_digits.startswith('+7'):
         phone_digits = '+' + phone_digits
     # Если номер не начинается с + и достаточно цифр - добавляем +7 для РФ
-    elif not phone_digits.startswith('+') and 10 <= len([c for c in phone_digits if c.isdigit()]) <= 11:
+    phone_digit_count = len([c for c in phone_digits if c.isdigit()])
+    if not phone_digits.startswith('+') and 10 <= phone_digit_count <= 11:
         # Предполагаем российский номер
-        if len([c for c in phone_digits if c.isdigit()]) == 10:
+        if phone_digit_count == 10:
             phone_digits = '+7' + phone_digits
-        elif len([c for c in phone_digits if c.isdigit()]) == 11 and phone_digits[0] == '7':
+        elif phone_digit_count == 11 and phone_digits[0] == '7':
             phone_digits = '+' + phone_digits
     
     # Проверяем финальную валидность
@@ -222,10 +223,10 @@ def normalize_phone(raw: str | None) -> NormalizedPhone:
 
 def sanitize_name(name: str) -> tuple[str, str]:
     """
-    Очищает имя от "доб." и инструкций.
+    Очищает имя от "доб." и инструкций дозвона.
     
     Перед разбором ФИО удаляет хвосты вида: ", доб. 4", "доб.4", "затем 1", 
-    "внутр. 123", "ext 12", "доп. 7" и т.п.
+    "внутр. 123", "ext 12", "доп. 7", "тональный", "мини АТС" и т.п.
     
     Args:
         name: Исходное имя
@@ -240,7 +241,7 @@ def sanitize_name(name: str) -> tuple[str, str]:
     if not original:
         return ("", "")
     
-    # Паттерны для извлечения extension/инструкций из имени
+    # Расширенные паттерны для извлечения extension/инструкций из имени
     extension_patterns = [
         r',\s*доб\.?\s*\d+',
         r',\s*доб\s+\d+',
@@ -250,6 +251,8 @@ def sanitize_name(name: str) -> tuple[str, str]:
         r',\s*ext\s+\d+',
         r',\s*extension\s+\d+',
         r',\s*затем\s+\d+',
+        r',\s*после\s+\d+',
+        r',\s*нажать\s+\d+',
         r',\s*доп\.?\s*\d+',
         r',\s*доп\s+\d+',
         r'\s+доб\.?\s*\d+',
@@ -259,14 +262,36 @@ def sanitize_name(name: str) -> tuple[str, str]:
         r'\s+ext\.?\s*\d+',
         r'\s+ext\s+\d+',
         r'\s+затем\s+\d+',
+        r'\s+после\s+\d+',
+        r'\s+нажать\s+\d+',
         r'\s+доп\.?\s*\d+',
         r'\s+доп\s+\d+',
+    ]
+    
+    # Паттерны для текстовых инструкций (без цифр)
+    instruction_patterns = [
+        r',\s*тональный',
+        r',\s*мини\s+атс',
+        r',\s*миниатс',
+        r'\s+тональный',
+        r'\s+мини\s+атс',
+        r'\s+миниатс',
     ]
     
     extracted_parts = []
     cleaned = original
     
+    # Извлекаем extension паттерны
     for pattern in extension_patterns:
+        matches = re.finditer(pattern, cleaned, re.IGNORECASE)
+        for match in matches:
+            extracted = match.group(0).strip().lstrip(',').strip()
+            if extracted:
+                extracted_parts.append(extracted)
+            cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
+    
+    # Извлекаем текстовые инструкции
+    for pattern in instruction_patterns:
         matches = re.finditer(pattern, cleaned, re.IGNORECASE)
         for match in matches:
             extracted = match.group(0).strip().lstrip(',').strip()
@@ -792,6 +817,7 @@ def _looks_like_phone(value: str) -> bool:
     """
     Проверяет, похоже ли значение на номер телефона.
     Использует normalize_phone для более точной проверки.
+    ВАЖНО: для строгой валидации используйте normalize_phone() напрямую.
     """
     if not value or not isinstance(value, str):
         return False
@@ -1031,6 +1057,7 @@ class AmoMigrateResult:
 
     contacts_seen: int = 0
     contacts_created: int = 0
+    contacts_updated: int = 0
     contacts_skipped: int = 0  # пропущенные контакты
     contacts_preview: list[dict] | None = None  # для dry-run отладки
 
@@ -1050,6 +1077,17 @@ class AmoMigrateResult:
     phones_rejected_invalid: int = 0  # не прошло порог валидации
     position_rejected_as_phone: int = 0  # сколько должностей распознано как телефон
     name_cleaned_extension_moved_to_note: int = 0  # сколько раз "доб./ext" вынесено из имени
+    
+    # Счетчики для dry-run (would_* вместо created/updated)
+    companies_would_create: int = 0
+    companies_would_update: int = 0
+    contacts_would_create: int = 0
+    contacts_would_update: int = 0
+    notes_would_add: int = 0
+    notes_would_update: int = 0
+    tasks_would_create: int = 0
+    tasks_would_update: int = 0
+    skipped_writes_dry_run: int = 0  # счетчик пропущенных write-операций в dry-run
     
     def get_dry_run_report(self) -> dict[str, Any]:
         """
@@ -1101,16 +1139,25 @@ class AmoMigrateResult:
                             if field_name:
                                 contact_fields.add(field_name)
         
-        return {
+        # Определяем, dry-run это или real-run
+        is_dry_run = (self.companies_would_create > 0 or self.companies_would_update > 0 or 
+                     self.contacts_would_create > 0 or self.contacts_would_update > 0 or
+                     self.notes_would_add > 0 or self.notes_would_update > 0 or
+                     self.tasks_would_create > 0 or self.tasks_would_update > 0)
+        
+        result = {
             "companies": {
                 "total": self.companies_batch,
-                "created": self.companies_created,
-                "updated": self.companies_updated,
             },
             "contacts": {
                 "total": self.contacts_seen,
-                "new": self.contacts_created,
                 "skipped": self.contacts_skipped,
+            },
+            "notes": {
+                "found": self.notes_seen,
+            },
+            "tasks": {
+                "found": self.tasks_seen,
             },
             "fields": {
                 "company": sorted(list(company_fields)),
@@ -1122,8 +1169,34 @@ class AmoMigrateResult:
                 "phones_rejected_invalid": self.phones_rejected_invalid,
                 "position_rejected_as_phone": self.position_rejected_as_phone,
                 "name_cleaned_extension_moved_to_note": self.name_cleaned_extension_moved_to_note,
+                "skipped_writes_dry_run": self.skipped_writes_dry_run,
             },
         }
+        
+        if is_dry_run:
+            # Dry-run: показываем would_*
+            result["companies"]["would_create"] = self.companies_would_create
+            result["companies"]["would_update"] = self.companies_would_update
+            result["contacts"]["would_create"] = self.contacts_would_create
+            result["contacts"]["would_update"] = self.contacts_would_update
+            result["notes"]["would_add"] = self.notes_would_add
+            result["notes"]["would_update"] = self.notes_would_update
+            result["notes"]["skipped_already_present"] = self.notes_skipped_existing
+            result["tasks"]["would_create"] = self.tasks_would_create
+            result["tasks"]["would_update"] = self.tasks_would_update
+        else:
+            # Real-run: показываем created/updated
+            result["companies"]["created"] = self.companies_created
+            result["companies"]["updated"] = self.companies_updated
+            result["contacts"]["created"] = self.contacts_created
+            result["contacts"]["updated"] = self.contacts_updated
+            result["notes"]["added"] = self.notes_created
+            result["notes"]["updated"] = self.notes_updated
+            result["notes"]["skipped_already_present"] = self.notes_skipped_existing
+            result["tasks"]["created"] = self.tasks_created
+            result["tasks"]["updated"] = self.tasks_updated
+        
+        return result
 
 
 def fetch_amo_users(client: AmoClient) -> list[dict[str, Any]]:
@@ -2888,26 +2961,37 @@ def migrate_filtered(
                     if assigned_to and existing.assigned_to_id != assigned_to.id:
                         existing.assigned_to = assigned_to
                         upd = True
-                    if upd and not dry_run:
-                        existing.save()
-                    res.tasks_updated += 1
-                    res.tasks_skipped_existing += 1
+                    if upd:
+                        if dry_run:
+                            res.tasks_would_update += 1
+                            res.skipped_writes_dry_run += 1
+                            logger.debug(f"DRY-RUN: would update task {tid} for company {company.id}")
+                        else:
+                            existing.save()
+                            res.tasks_updated += 1
+                    else:
+                        # Задача уже существует и не требует обновления
+                        res.tasks_skipped_existing += 1
                     continue
 
-                task = Task(
-                    title=title,
-                    description="",
-                    due_at=due_at,
-                    company=company,
-                    created_by=actor,
-                    assigned_to=assigned_to or actor,
-                    external_source="amo_api",
-                    external_uid=str(tid),
-                    status=Task.Status.NEW,
-                )
-                if not dry_run:
+                if dry_run:
+                    res.tasks_would_create += 1
+                    res.skipped_writes_dry_run += 1
+                    logger.debug(f"DRY-RUN: would create task {tid} for company {company.id}")
+                else:
+                    task = Task(
+                        title=title,
+                        description="",
+                        due_at=due_at,
+                        company=company,
+                        created_by=actor,
+                        assigned_to=assigned_to or actor,
+                        external_source="amo_api",
+                        external_uid=str(tid),
+                        status=Task.Status.NEW,
+                    )
                     task.save()
-                res.tasks_created += 1
+                    res.tasks_created += 1
 
         # Заметки: запрашиваем только если нужно импортировать (не для dry-run без заметок)
         if import_notes and amo_ids and not (dry_run and not import_notes):
@@ -3073,22 +3157,34 @@ def migrate_filtered(
                         if existing_note.author_id == actor.id and (author is None or author.id != actor.id):
                             existing_note.author = author  # может быть None
                             upd = True
-                        if upd and not dry_run:
-                            existing_note.save()
-                        res.notes_updated += 1
-                        res.notes_skipped_existing += 1
+                        if upd:
+                            if dry_run:
+                                res.notes_would_update += 1
+                                res.skipped_writes_dry_run += 1
+                                logger.debug(f"DRY-RUN: would update note {nid} for company {company.id}")
+                            else:
+                                existing_note.save()
+                                res.notes_updated += 1
+                        else:
+                            # Заметка уже существует и не требует обновления
+                            res.notes_skipped_existing += 1
                         continue
 
-                    note = CompanyNote(
-                        company=company,
-                        author=author,  # НЕ actor, чтобы не выглядело "как будто вы писали"
-                        text=text_full[:8000],
-                        external_source="amo_api",
-                        external_uid=str(nid) if nid else "",
-                    )
-                    if not dry_run:
+                    # Новая заметка
+                    if dry_run:
+                        res.notes_would_add += 1
+                        res.skipped_writes_dry_run += 1
+                        logger.debug(f"DRY-RUN: would create note {nid} for company {company.id}")
+                    else:
+                        note = CompanyNote(
+                            company=company,
+                            author=author,  # НЕ actor, чтобы не выглядело "как будто вы писали"
+                            text=text_full[:8000],
+                            external_source="amo_api",
+                            external_uid=str(nid) if nid else "",
+                        )
                         note.save()
-                    res.notes_created += 1
+                        res.notes_created += 1
             except Exception:
                 # Если заметки недоступны в конкретном аккаунте/тарифе/правах — не валим всю миграцию.
                 res.notes_seen = 0
@@ -3675,14 +3771,21 @@ def migrate_filtered(
                                             if normalized.note:
                                                 comment_parts.append(normalized.note)
                                             comment = "; ".join(comment_parts) if comment_parts else ""
-                                            phones.append((ContactPhone.PhoneType.OTHER, phone_value, comment))
+                                            phones.append((ContactPhone.PhoneType.OTHER, phone_value, comment[:255]))
                                         else:
-                                            # Если значение не похоже на телефон, добавляем в примечание
+                                            # Если значение не похоже на телефон - НЕ добавляем в PHONE
+                                            # Добавляем в примечание как "Комментарий к телефону"
                                             note_to_add = normalized.note or pv
+                                            note_text_to_add = f"Комментарий к телефону: {note_to_add}"
+                                            # Увеличиваем счетчик метрики
+                                            if normalized.note:
+                                                res.phones_rejected_as_note += 1
+                                            else:
+                                                res.phones_rejected_invalid += 1
                                             if not note_text:
-                                                note_text = note_to_add[:255]
-                                            elif note_to_add not in note_text:
-                                                combined = f"{note_text}; {note_to_add[:200]}"
+                                                note_text = note_text_to_add[:255]
+                                            elif note_text_to_add not in note_text:
+                                                combined = f"{note_text}; {note_text_to_add[:200]}"
                                                 note_text = combined[:255]
                         if ac.get("email"):
                             ev = str(ac.get("email")).strip()
@@ -3830,9 +3933,10 @@ def migrate_filtered(
                                             # Первая строка - номер телефона
                                             phone_number = val_lines[0]
                                             
-                                            # ИСПРАВЛЕНИЕ: проверяем, что первая строка действительно похожа на телефон
-                                            if not _looks_like_phone(phone_number):
-                                                # Если первая строка не похожа на телефон, это примечание
+                                            # ВАЛИДАЦИЯ: используем normalize_phone для строгой проверки
+                                            normalized = normalize_phone(phone_number)
+                                            if not normalized.isValid:
+                                                # Если значение не валидно как телефон - это примечание/комментарий
                                                 # Добавляем все строки в примечание, а не в телефоны
                                                 note_parts = []
                                                 for line in val_lines:
@@ -3844,7 +3948,7 @@ def migrate_filtered(
                                                         note_parts.append(line_clean.strip())
                                                 
                                                 if note_parts:
-                                                    note_text_from_phone_field = " | ".join(note_parts)
+                                                    note_text_from_phone_field = "Комментарий к телефону: " + " | ".join(note_parts)
                                                     # Если примечание еще не найдено, используем это
                                                     if not note_text:
                                                         note_text = note_text_from_phone_field[:255]
@@ -3853,9 +3957,18 @@ def migrate_filtered(
                                                         combined = f"{note_text}; {note_text_from_phone_field[:200]}"
                                                         note_text = combined[:255]
                                                 
+                                                # Увеличиваем счетчик метрики
+                                                if normalized.note:
+                                                    res.phones_rejected_as_note += 1
+                                                else:
+                                                    res.phones_rejected_invalid += 1
+                                                
                                                 if debug_count_for_extraction < 3:
-                                                    logger.debug(f"      -> Skipped non-phone value as note: {phone_number[:50]}")
+                                                    logger.debug(f"      -> Skipped non-phone value as note: {phone_number[:50]} (normalized.isValid=False)")
                                                 continue
+                                            
+                                            # Используем нормализованный номер
+                                            phone_number = normalized.phone_e164 or phone_number
                                             
                                             # Остальные строки - комментарий (регион/город)
                                             phone_comment_parts = []
@@ -3946,15 +4059,33 @@ def migrate_filtered(
                                             if normalized.isValid:
                                                 # Переносим в телефоны
                                                 phone_value = normalized.phone_e164 or val
-                                                comment_parts = []
+                                                comment_parts = ["из поля должности"]
                                                 if normalized.ext:
                                                     comment_parts.append(f"доб. {normalized.ext}")
                                                 if normalized.note:
                                                     comment_parts.append(normalized.note)
-                                                comment = "; ".join(comment_parts) if comment_parts else "из поля должности"
+                                                comment = "; ".join(comment_parts)
                                                 phones.append((ContactPhone.PhoneType.OTHER, phone_value, comment[:255]))
+                                                # ВАЖНО: очищаем POSITION - не оставляем номер в должности
+                                                # Если в исходной строке был и текст и номер - пытаемся извлечь текст
+                                                # Иначе оставляем пустым
+                                                position_cleaned = val
+                                                # Удаляем номер из строки должности
+                                                if normalized.phone_e164:
+                                                    # Удаляем нормализованный номер
+                                                    position_cleaned = position_cleaned.replace(normalized.phone_e164, "")
+                                                # Удаляем extension паттерны
+                                                for pattern in EXTENSION_PATTERNS:
+                                                    position_cleaned = re.sub(pattern, '', position_cleaned, flags=re.IGNORECASE)
+                                                position_cleaned = re.sub(r'\s+', ' ', position_cleaned).strip()
+                                                # Если после очистки остался только мусор - оставляем пустым
+                                                if len(position_cleaned) < 3 or position_cleaned.isdigit():
+                                                    position_cleaned = ""
+                                                # Устанавливаем очищенную должность только если она не пустая
+                                                if position_cleaned and not position:
+                                                    position = position_cleaned
                                                 if debug_count_for_extraction < 3:
-                                                    logger.debug(f"      -> Position '{val}' recognized as phone, moved to phones")
+                                                    logger.debug(f"      -> Position '{val}' recognized as phone, moved to phones, position cleared to '{position_cleaned}'")
                                             else:
                                                 # Если не валидный телефон - переносим в примечание
                                                 note_to_add = normalized.note or val
@@ -3963,8 +4094,11 @@ def migrate_filtered(
                                                 elif note_to_add not in note_text:
                                                     combined = f"{note_text}; Должность: {note_to_add[:200]}"
                                                     note_text = combined[:255]
+                                                # Очищаем POSITION
+                                                if not position:
+                                                    position = ""  # Оставляем пустым
                                                 if debug_count_for_extraction < 3:
-                                                    logger.debug(f"      -> Position '{val}' not valid phone, moved to note")
+                                                    logger.debug(f"      -> Position '{val}' not valid phone, moved to note, position cleared")
                                         else:
                                             # Нормальная должность
                                             if not position:
@@ -4174,15 +4308,28 @@ def migrate_filtered(
                                 logger.debug(f"  -> ⚠️ No note fields found in custom_fields. All fields: {all_custom_field_names}")
                     
                         # Обрабатываем данные о холодном звонке из amoCRM (ДО использования в contact_debug)
-                        # Нормализуем timestamp: если дата без времени - устанавливаем на 00:00 UTC
+                        # Нормализуем timestamp: конвертируем в дату без времени в таймзоне проекта
+                        # Используем Europe/Moscow как таймзону по умолчанию (можно настроить через settings)
                         cold_marked_at_dt = None
                         if cold_call_timestamp:
                             try:
+                                # Используем UTC для конвертации, затем нормализуем на начало дня в нужной таймзоне
                                 UTC = getattr(timezone, "UTC", dt_timezone.utc)
-                                # Конвертируем timestamp в datetime
-                                cold_marked_at_dt = timezone.datetime.fromtimestamp(cold_call_timestamp, tz=UTC)
-                                # Если время 00:00:00 - это может быть дата без времени, оставляем как есть
-                                # (amoCRM может передавать дату как timestamp начала дня)
+                                
+                                # Конвертируем timestamp в datetime в UTC
+                                dt_utc = timezone.datetime.fromtimestamp(cold_call_timestamp, tz=UTC)
+                                
+                                # Нормализуем на начало дня (00:00:00) в UTC
+                                # Это гарантирует, что дата не сместится при конвертации в другую таймзону
+                                cold_marked_at_dt = dt_utc.replace(hour=0, minute=0, second=0, microsecond=0)
+                                
+                                # ВАЖНО: amoCRM передает дату как timestamp начала дня в UTC или локальной таймзоне
+                                # Мы нормализуем на 00:00:00 UTC, чтобы избежать сдвига даты
+                                # Если нужно использовать другую таймзону (например, Europe/Moscow),
+                                # можно добавить настройку в settings, но для консистентности используем UTC
+                                
+                                if debug_count_for_extraction < 3:
+                                    logger.debug(f"      -> Cold call date: timestamp={cold_call_timestamp} -> {cold_marked_at_dt.isoformat()} (normalized to 00:00:00 UTC)")
                             except Exception:
                                 cold_marked_at_dt = None
                     
@@ -4653,21 +4800,50 @@ def migrate_filtered(
                             birthday_timestamp is not None  # raw_fields всегда обновляем
                         )
                         
-                        if not dry_run:
+                        if dry_run:
+                            if existing_contact:
+                                res.contacts_would_update += 1
+                            else:
+                                res.contacts_would_create += 1
+                        else:
                             # ОПТИМИЗАЦИЯ: сохраняем контакт сразу, если изменился (для телефонов/email нужен сохраненный контакт)
                             # Если ничего не изменилось, пропускаем сохранение (ускоряет импорт при обновлении)
                             if contact_changed:
                                 contact.save()
                                 contacts_to_update.append(contact)  # Для статистики
-                            res.contacts_created += 1  # Используем тот же счётчик для обновлённых
+                            if existing_contact:
+                                res.contacts_updated += 1 if hasattr(res, 'contacts_updated') else 0
+                            else:
+                                if dry_run:
+                                res.contacts_would_create += 1
+                                res.skipped_writes_dry_run += 1
+                            else:
+                                res.contacts_created += 1
                             
                             # Телефоны: мягкий upsert (не удаляем вручную добавленные)
                             # Примечание добавляется в comment первого телефона
                             # ОПТИМИЗАЦИЯ: используем предзагруженные данные вместо запросов к БД
+                            # ВАЖНО: в dry-run не создаем/обновляем телефоны
                             phones_added = 0
                             phones_updated = 0
                             phones_to_create: list[ContactPhone] = []
                             phones_to_update: list[ContactPhone] = []
+                            
+                            if dry_run:
+                                # В dry-run только считаем, сколько телефонов было бы создано/обновлено
+                                for pt, pv, pc in phones:
+                                    pv_db = str(pv).strip()[:50]
+                                    if not pv_db:
+                                        continue
+                                    phone_key = (contact.id, pv_db.lower().strip())
+                                    obj = existing_phones_map.get(phone_key)
+                                    if obj is None:
+                                        phones_added += 1
+                                    else:
+                                        phones_updated += 1
+                                res.skipped_writes_dry_run += phones_added + phones_updated
+                                logger.debug(f"DRY-RUN: would add {phones_added} phones, update {phones_updated} phones for contact {amo_contact_id}")
+                            else:
                             
                             for idx, (pt, pv, pc) in enumerate(phones):
                                 pv_db = str(pv).strip()[:50]
@@ -4723,10 +4899,24 @@ def migrate_filtered(
                             
                             # Email: мягкий upsert
                             # ОПТИМИЗАЦИЯ: используем предзагруженные данные
+                            # ВАЖНО: в dry-run не создаем/обновляем email
                             emails_added = 0
                             emails_to_create: list[ContactEmail] = []
                             
-                            for et, ev in emails:
+                            if dry_run:
+                                # В dry-run только считаем, сколько email было бы создано
+                                for et, ev in emails:
+                                    ev_db = str(ev).strip().lower()
+                                    if not ev_db:
+                                        continue
+                                    email_key = (contact.id, ev_db)
+                                    obj = existing_emails_map.get(email_key)
+                                    if obj is None:
+                                        emails_added += 1
+                                res.skipped_writes_dry_run += emails_added
+                                logger.debug(f"DRY-RUN: would add {emails_added} emails for contact {amo_contact_id}")
+                            else:
+                                for et, ev in emails:
                                 ev_db = str(ev).strip()[:254]
                                 if not ev_db:
                                     continue
@@ -4758,7 +4948,11 @@ def migrate_filtered(
                             if debug_count_after < 10:
                                 logger.debug(f"  - Updated: phones={phones_added}, emails={emails_added}, position={bool(position)}")
                         else:
-                            res.contacts_created += 1
+                            if dry_run:
+                                res.contacts_would_create += 1
+                                res.skipped_writes_dry_run += 1
+                            else:
+                                res.contacts_created += 1
                     else:
                         # СОЗДАЁМ новый контакт
                         # Сохраняем день рождения в raw_fields (пока нет поля в модели)
@@ -4787,7 +4981,11 @@ def migrate_filtered(
                             # ОПТИМИЗАЦИЯ: сохраняем контакт сразу (для телефонов/email нужен сохраненный контакт)
                             contact.save()
                             contacts_to_create.append(contact)  # Для статистики
-                            res.contacts_created += 1
+                            if dry_run:
+                                res.contacts_would_create += 1
+                                res.skipped_writes_dry_run += 1
+                            else:
+                                res.contacts_created += 1
                             
                             # ОПТИМИЗАЦИЯ: используем bulk_create для телефонов и почт новых контактов
                             phones_added = 0
@@ -4850,7 +5048,11 @@ def migrate_filtered(
                             if debug_count_after < 10:
                                 logger.debug(f"  - Saved: phones={phones_added}, emails={emails_added}, position={bool(position)}")
                         else:
-                            res.contacts_created += 1
+                            if dry_run:
+                                res.contacts_would_create += 1
+                                res.skipped_writes_dry_run += 1
+                            else:
+                                res.contacts_created += 1
                 
                 # ОПТИМИЗАЦИЯ: логируем статистику (контакты уже сохранены выше для обработки телефонов/email)
                 if not dry_run:

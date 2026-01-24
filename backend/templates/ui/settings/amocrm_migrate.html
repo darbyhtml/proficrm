@@ -144,11 +144,19 @@
           Задач: найдено <b>{{ result.tasks_seen }}</b>, добавлено <b>{{ result.tasks_created }}</b>, пропущено (уже было) <b>{{ result.tasks_skipped_existing }}</b>{% if result.tasks_skipped_old %}, пропущено (старые, до 2026 года) <b>{{ result.tasks_skipped_old }}</b>{% endif %}
         </div>
         <div class="text-sm text-brand-dark/80 mt-1">
-          Заметок: найдено <b>{{ result.notes_seen }}</b>, добавлено <b>{{ result.notes_created }}</b>, пропущено (уже было) <b>{{ result.notes_skipped_existing }}</b>
+          {% if form.dry_run.value %}
+            Заметок: найдено <b>{{ result.notes_seen }}</b>, {% if result.notes_would_add %}будет добавлено <b>{{ result.notes_would_add }}</b>{% else %}добавлено <b>0</b>{% endif %}, {% if result.notes_would_update %}будет обновлено <b>{{ result.notes_would_update }}</b>{% else %}обновлено <b>0</b>{% endif %}, пропущено (уже было) <b>{{ result.notes_skipped_existing|default:0 }}</b>
+          {% else %}
+            Заметок: найдено <b>{{ result.notes_seen }}</b>, добавлено <b>{{ result.notes_created }}</b>, обновлено <b>{{ result.notes_updated|default:0 }}</b>, пропущено (уже было) <b>{{ result.notes_skipped_existing }}</b>
+          {% endif %}
         </div>
-        {% if form.import_contacts.value %}
+        {% if form.import_contacts.value or form.dry_run.value %}
           <div class="text-sm text-brand-dark/80 mt-1">
-            Контактов: найдено <b>{{ result.contacts_seen|default:0 }}</b>, создано <b>{{ result.contacts_created|default:0 }}</b>
+            {% if form.dry_run.value %}
+              Контактов: найдено <b>{{ result.contacts_seen|default:0 }}</b>, {% if result.contacts_would_create %}будет создано <b>{{ result.contacts_would_create }}</b>{% else %}создано <b>0</b>{% endif %}, {% if result.contacts_would_update %}будет обновлено <b>{{ result.contacts_would_update }}</b>{% else %}обновлено <b>0</b>{% endif %}
+            {% else %}
+              Контактов: найдено <b>{{ result.contacts_seen|default:0 }}</b>, создано <b>{{ result.contacts_created|default:0 }}</b>, обновлено <b>{{ result.contacts_updated|default:0 }}</b>
+            {% endif %}
           </div>
         {% endif %}
 
