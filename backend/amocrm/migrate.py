@@ -1237,11 +1237,18 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
                 # ВАЖНО: Это основное условие для случая, когда у большинства компаний НЕТ контактов
                 # Если после 5000 контактов релевантность < 10%, значит API возвращает все контакты,
                 # а не только для наших компаний. Дальше получать не нужно - все релевантные уже получены.
+                # КРИТИЧНО: НЕ прерываем, если не нашли НИ ОДНОГО релевантного контакта - они могут быть дальше!
                 if len(current_contacts) >= 5000:
                     relevance_percentage = relevant_contacts_count / len(current_contacts) if current_contacts else 0
-                    if relevance_percentage < 0.1:  # Меньше 10% релевантных
-                        logger.warning(f"fetch_contacts_bulk: прерываем пагинацию - получено {len(current_contacts)} контактов, но только {relevant_contacts_count} ({relevance_percentage*100:.1f}%) релевантны для наших компаний. API возвращает все контакты, дальше получать не нужно.")
+                    # Прерываем только если нашли хотя бы ОДИН релевантный контакт И релевантность < 10%
+                    # Если relevant_contacts_count == 0, значит контакты могут быть дальше в пагинации
+                    if relevant_contacts_count > 0 and relevance_percentage < 0.1:  # Нашли хотя бы 1 И меньше 10% релевантных
+                        logger.warning(f"fetch_contacts_bulk: прерываем пагинацию - получено {len(current_contacts)} контактов, найдено {relevant_contacts_count} релевантных ({relevance_percentage*100:.1f}%). API возвращает все контакты, дальше получать не нужно.")
                         return True
+                    elif relevant_contacts_count == 0:
+                        # Не нашли ни одного релевантного контакта - продолжаем получать
+                        # Возможно, контакты находятся дальше в пагинации
+                        logger.debug(f"fetch_contacts_bulk: получено {len(current_contacts)} контактов, но релевантных не найдено. Продолжаем получать контакты...")
                 
                 return False
             
