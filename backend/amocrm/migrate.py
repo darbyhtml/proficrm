@@ -1214,6 +1214,9 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
     filtered_contacts: list[dict[str, Any]] = []
     found_company_ids: set[int] = set()  # Отслеживаем, для каких компаний уже нашли контакты
     
+    # ОПТИМИЗАЦИЯ: если получили слишком много контактов (25000+), но нашли контакты для всех компаний,
+    # можно прервать фильтрацию раньше (но не прерываем, т.к. контакт может быть связан с несколькими компаниями)
+    
     for contact in all_contacts:
         if not isinstance(contact, dict):
             continue
@@ -1327,7 +1330,13 @@ def fetch_notes_for_contacts_bulk(client: AmoClient, contact_ids: list[int], *, 
             logger.info(f"fetch_notes_for_contacts_bulk: получено {len(notes)} заметок для батча {batch_num}")
             
         except Exception as e:
-            logger.warning(f"fetch_notes_for_contacts_bulk: ошибка при получении заметок для батча {batch_num}: {e}", exc_info=True)
+            # ОПТИМИЗАЦИЯ: 404 ошибка для заметок - это нормально (API может не поддерживать этот endpoint)
+            # Не логируем как критическую ошибку, просто пропускаем
+            error_str = str(e)
+            if "404" in error_str or "Not Found" in error_str:
+                logger.debug(f"fetch_notes_for_contacts_bulk: заметки недоступны для батча {batch_num} (404 - это нормально для некоторых аккаунтов AmoCRM)")
+            else:
+                logger.warning(f"fetch_notes_for_contacts_bulk: ошибка при получении заметок для батча {batch_num}: {e}")
             # Продолжаем для следующих батчей
             continue
     
