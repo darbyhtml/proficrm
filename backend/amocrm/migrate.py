@@ -5641,6 +5641,7 @@ def migrate_filtered(
                         old_first_name = contact.first_name
                         old_last_name = contact.last_name
                         old_position = contact.position
+                        old_note = contact.note or ""  # ВАЖНО: нормализуем None -> "" для корректного сравнения
                         old_is_cold_call = contact.is_cold_call
                         old_cold_marked_at = contact.cold_marked_at
                         old_raw_fields = dict(contact.raw_fields or {})
@@ -5652,17 +5653,21 @@ def migrate_filtered(
                             contact.last_name = last_name[:120]
                         if position and c_can_update("position"):
                             contact.position = position[:255]
+                        if note_text and c_can_update("note"):
+                            contact.note = note_text[:8000]  # TextField может быть длинным
                         if cold_marked_at_dt:
                             contact.is_cold_call = True
                             contact.cold_marked_at = cold_marked_at_dt
                             contact.cold_marked_by = cold_marked_by_user
                         
                         # Проверяем, действительно ли что-то изменилось
+                        # ВАЖНО: нормализуем None -> "" для корректного сравнения строк
+                        new_note = contact.note or ""
                         contact_changed = (
                             contact.first_name != old_first_name or
                             contact.last_name != old_last_name or
                             contact.position != old_position or
-                            contact.note != old_note or
+                            new_note != old_note or
                             contact.is_cold_call != old_is_cold_call or
                             contact.cold_marked_at != old_cold_marked_at or
                             birthday_timestamp is not None  # raw_fields всегда обновляем
@@ -5816,6 +5821,9 @@ def migrate_filtered(
                                 logger.debug(f"  - Updated: phones={phones_added}, emails={emails_added}, position={bool(position)}")
                     else:
                         # СОЗДАЁМ новый контакт
+                        # ВАЖНО: для нового контакта old_note всегда пустая строка (нет старого значения)
+                        old_note = ""
+                        
                         # Сохраняем день рождения в raw_fields (пока нет поля в модели)
                         if birthday_timestamp:
                             debug_data["birthday_timestamp"] = birthday_timestamp
@@ -5839,6 +5847,11 @@ def migrate_filtered(
                             contact.cold_marked_at = cold_marked_at_dt
                             contact.cold_marked_by = cold_marked_by_user
                             # cold_marked_call оставляем NULL, т.к. в amoCRM нет связи с CallRequest
+                        
+                        # Для нового контакта всегда есть изменения (создаем новый)
+                        # ВАЖНО: нормализуем None -> "" для корректного сравнения строк
+                        new_note = contact.note or ""
+                        contact_changed = True  # Новый контакт всегда требует сохранения
                         
                         if dry_run:
                             res.contacts_would_create += 1
