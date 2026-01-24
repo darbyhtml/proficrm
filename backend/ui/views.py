@@ -8047,10 +8047,21 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                 messages.error(request, "Ошибка: клиент amoCRM не инициализирован. Проверьте настройки подключения.")
             else:
                 try:
+                    # Проверяем, была ли нажата кнопка "Dry-run"
+                    action = request.POST.get("action", "")
+                    is_dry_run_button = action == "dry_run"
+                    
                     # Используем размер пачки, указанный пользователем
-                    batch_size = int(form.cleaned_data.get("limit_companies") or 0)
-                    if batch_size <= 0:
-                        batch_size = 10  # дефолт, если не указано
+                    # Если нажата кнопка "Dry-run", принудительно устанавливаем 10 компаний
+                    if is_dry_run_button:
+                        batch_size = 10
+                        dry_run = True
+                    else:
+                        batch_size = int(form.cleaned_data.get("limit_companies") or 0)
+                        if batch_size <= 0:
+                            batch_size = 10  # дефолт, если не указано
+                        dry_run = bool(form.cleaned_data.get("dry_run"))
+                    
                     migrate_all = bool(form.cleaned_data.get("migrate_all_companies", False))
                     custom_field_id = form.cleaned_data.get("custom_field_id") or 0
                     
@@ -8081,7 +8092,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                                 sphere_label=form.cleaned_data.get("custom_value_label") or None,
                                 limit_companies=batch_size,
                                 offset=int(form.cleaned_data.get("offset") or 0),
-                                dry_run=bool(form.cleaned_data.get("dry_run")),
+                                dry_run=dry_run,
                                 import_tasks=bool(form.cleaned_data.get("import_tasks")),
                                 import_notes=bool(form.cleaned_data.get("import_notes")),
                                 import_contacts=bool(form.cleaned_data.get("import_contacts")),
@@ -8096,8 +8107,8 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                                 tasks_preview=[],
                                 notes_preview=[],
                                 contacts_preview=[],
-                                companies_updates_preview=[] if form.cleaned_data.get("dry_run") else None,
-                                contacts_updates_preview=[] if form.cleaned_data.get("dry_run") else None,
+                                companies_updates_preview=[] if dry_run else None,
+                                contacts_updates_preview=[] if dry_run else None,
                             )
                             
                             for user_id in responsible_user_ids:
@@ -8110,7 +8121,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                                     sphere_label=form.cleaned_data.get("custom_value_label") or None,
                                     limit_companies=batch_size,
                                     offset=int(form.cleaned_data.get("offset") or 0),
-                                    dry_run=bool(form.cleaned_data.get("dry_run")),
+                                    dry_run=dry_run,
                                     import_tasks=bool(form.cleaned_data.get("import_tasks")),
                                     import_notes=bool(form.cleaned_data.get("import_notes")),
                                     import_contacts=bool(form.cleaned_data.get("import_contacts")),
@@ -8174,7 +8185,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                         
                         # Для одного пользователя выводим сообщение
                         if len(responsible_user_ids) == 1:
-                            if form.cleaned_data.get("dry_run"):
+                            if dry_run:
                                 messages.success(request, "Проверка (dry-run) выполнена.")
                             else:
                                 messages.success(request, "Импорт выполнен.")
