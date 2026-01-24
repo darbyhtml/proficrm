@@ -1201,10 +1201,17 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
                     if comp_id_direct and comp_id_direct in batch_company_ids_set:
                         found_company_ids_during_pagination.add(comp_id_direct)
                 
-                # Прерываем, если нашли контакты для всех компаний в батче
-                # Но только если получили достаточно контактов (минимум 100, чтобы не пропустить)
+                # ОПТИМИЗАЦИЯ: прерываем пагинацию в двух случаях:
+                # 1. Нашли контакты для всех компаний в батче (минимум 100 контактов)
+                # 2. Получили слишком много контактов (2000+), но уже нашли контакты для большинства компаний (80%+)
                 if len(current_contacts) >= 100 and len(found_company_ids_during_pagination) == len(batch_company_ids_set):
                     return True
+                # Прерываем, если получили много контактов, но нашли контакты для большинства компаний
+                if len(current_contacts) >= 2000:
+                    found_percentage = len(found_company_ids_during_pagination) / len(batch_company_ids_set) if batch_company_ids_set else 0
+                    if found_percentage >= 0.8:  # 80% компаний
+                        logger.info(f"fetch_contacts_bulk: прерываем пагинацию - получено {len(current_contacts)} контактов, найдено для {len(found_company_ids_during_pagination)}/{len(batch_company_ids_set)} компаний ({found_percentage*100:.1f}%)")
+                        return True
                 return False
             
             # Пробуем использовать filter[company_id][] с массивом
@@ -3839,8 +3846,19 @@ def migrate_filtered(
                 })
 
         # ВАЖНО: для dry-run откатываем все изменения
+        # ОПТИМИЗАЦИЯ: проверяем, находимся ли мы внутри atomic блока
         if dry_run:
-            transaction.set_rollback(True)
+            try:
+                # Проверяем, есть ли активная транзакция
+                from django.db import connection
+                if connection.in_atomic_block:
+                    transaction.set_rollback(True)
+                else:
+                    # Если нет активной транзакции, просто не коммитим (dry-run уже не делает коммит)
+                    pass
+            except Exception:
+                # Если произошла ошибка, просто пропускаем (dry-run уже не делает коммит)
+                pass
 
     try:
         _run()
