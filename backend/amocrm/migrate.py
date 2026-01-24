@@ -1425,14 +1425,13 @@ def fetch_contacts_via_links(client: AmoClient, company_ids: list[int]) -> tuple
         logger.info(f"fetch_contacts_via_links: запрашиваем связи для батча компаний {i//batch_size + 1} ({len(batch_company_ids)} компаний)")
         
         try:
-            # Используем только /api/v4/companies/links с фильтрами
-            # Согласно документации AmoCRM API v4:
-            # GET /api/v4/companies/links?filter[from_entity_id][]=123&filter[from_entity_id][]=456&filter[to_entity_type]=contact
+            # Используем только /api/v4/companies/links
+            # ВАЖНО: ключ filter[entity_id] БЕЗ [] - AmoClient сам добавит [] при сериализации списка
+            # Если передать filter[entity_id][], получится filter[entity_id][][] и amo не видит фильтр
             links_data = client.get(
                 "/api/v4/companies/links",
                 params={
-                    "filter[from_entity_id]": batch_company_ids,  # Массив ID компаний
-                    "filter[to_entity_type]": "contact",  # Связи к контактам
+                    "filter[entity_id]": batch_company_ids,  # Массив ID компаний (БЕЗ [] в ключе!)
                 }
             )
             
@@ -1440,27 +1439,35 @@ def fetch_contacts_via_links(client: AmoClient, company_ids: list[int]) -> tuple
                 embedded = links_data.get("_embedded") or {}
                 links = embedded.get("links") or []
                 if isinstance(links, list):
-                    logger.info(f"fetch_contacts_via_links: получено {len(links)} связей для батча компаний")
-                    
-                    # Логируем первые 3 объекта links для отладки
+                    # Логирование для отладки (до стабилизации)
+                    import json
+                    logger.info(f"fetch_contacts_via_links: links count={len(links)}")
                     if links:
-                        import json
                         try:
                             links_sample = links[:3]
                             links_json = json.dumps(links_sample, ensure_ascii=False, indent=2)
-                            logger.info(f"fetch_contacts_via_links: первые 3 объекта links:\n{links_json}")
+                            # Ограничиваем размер до ~2000 символов
+                            links_json_limited = links_json[:2000]
+                            if len(links_json) > 2000:
+                                links_json_limited += "... (truncated)"
+                            logger.info(f"fetch_contacts_via_links: LINKS SAMPLE={links_json_limited}")
                         except Exception as e:
                             logger.warning(f"fetch_contacts_via_links: ошибка при логировании links: {e}")
                     
                     # Обрабатываем связи с устойчивым парсингом
+                    links_processed = 0
+                    links_skipped_no_company = 0
+                    links_skipped_no_contact = 0
+                    links_skipped_wrong_type = 0
+                    
                     for link in links:
                         if not isinstance(link, dict):
                             continue
                         
                         # Устойчивый парсинг company_id: может быть entity_id или from_entity_id
                         company_id = (
-                            int(link.get("from_entity_id") or 0) or
-                            int(link.get("entity_id") or 0)
+                            int(link.get("entity_id") or 0) or
+                            int(link.get("from_entity_id") or 0)
                         )
                         
                         # Устойчивый парсинг contact_id: может быть to_entity_id или to_entity.id
@@ -1478,16 +1485,29 @@ def fetch_contacts_via_links(client: AmoClient, company_ids: list[int]) -> tuple
                         if not entity_type:
                             entity_type = str(link.get("to_entity_type") or "").lower()
                         
-                        # Фильтрация по типу: допускаем "contacts" и "contact"
-                        if entity_type not in ("contact", "contacts"):
-                            continue
-                        
-                        if not company_id or not contact_id:
+                        # Проверяем company_id
+                        if not company_id:
+                            links_skipped_no_company += 1
                             continue
                         
                         # Проверяем, что компания в нашем списке
                         if company_id not in batch_company_ids:
+                            links_skipped_no_company += 1
                             continue
+                        
+                        # Проверяем contact_id
+                        if not contact_id:
+                            links_skipped_no_contact += 1
+                            continue
+                        
+                        # Фильтрация по типу: допускаем "contacts" и "contact"
+                        # Если to_entity_type отсутствует, но есть to_entity_id - допускаем запись (возможно это контакт)
+                        if entity_type:
+                            if entity_type not in ("contact", "contacts"):
+                                links_skipped_wrong_type += 1
+                                continue
+                        # Если тип отсутствует, но есть contact_id - считаем что это контакт
+                        # (допускаем запись, если удаётся извлечь to_entity_id)
                         
                         # Если контакт уже связан с другой компанией - используем первую (логируем warning)
                         if contact_id in contact_id_to_company_map:
@@ -1501,6 +1521,9 @@ def fetch_contacts_via_links(client: AmoClient, company_ids: list[int]) -> tuple
                             # Первая компания для этого контакта
                             contact_id_to_company_map[contact_id] = company_id
                             all_contact_ids.add(contact_id)
+                            links_processed += 1
+                    
+                    logger.info(f"fetch_contacts_via_links: обработано связей: processed={links_processed}, skipped_no_company={links_skipped_no_company}, skipped_no_contact={links_skipped_no_contact}, skipped_wrong_type={links_skipped_wrong_type}")
                 else:
                     logger.warning(f"fetch_contacts_via_links: неожиданный тип links в ответе: {type(links)}")
             else:
@@ -1517,21 +1540,25 @@ def fetch_contacts_via_links(client: AmoClient, company_ids: list[int]) -> tuple
     
     logger.info(f"fetch_contacts_via_links: найдено {len(all_contact_ids)} уникальных контактов для {len(company_ids)} компаний")
     
-    # Шаг 2: Получаем полные данные контактов через filter[id][]
+    # Шаг 2: Получаем полные данные контактов через filter[id]
+    # ВАЖНО: ключ filter[id] БЕЗ [] - AmoClient сам добавит [] при сериализации списка
     # Разбиваем на батчи по 50 контактов (максимальный размер фильтра)
     all_contacts: list[dict[str, Any]] = []
     contact_ids_list = list(all_contact_ids)
     contact_batch_size = 50
+    
+    logger.info(f"fetch_contacts_via_links: запрашиваем полные данные для {len(contact_ids_list)} контактов (разбито на {(len(contact_ids_list) + contact_batch_size - 1) // contact_batch_size} батчей)")
     
     for i in range(0, len(contact_ids_list), contact_batch_size):
         batch_contact_ids = contact_ids_list[i:i + contact_batch_size]
         logger.info(f"fetch_contacts_via_links: запрашиваем полные данные для батча контактов {i//contact_batch_size + 1} ({len(batch_contact_ids)} контактов)")
         
         try:
+            # ВАЖНО: ключ filter[id] БЕЗ [] - AmoClient сам добавит [] при сериализации списка
             contacts_data = client.get(
                 "/api/v4/contacts",
                 params={
-                    "filter[id]": batch_contact_ids,  # Массив ID контактов
+                    "filter[id]": batch_contact_ids,  # Массив ID контактов (БЕЗ [] в ключе!)
                     "with": "custom_fields",  # Получаем полные данные с custom_fields
                 }
             )
@@ -1540,6 +1567,8 @@ def fetch_contacts_via_links(client: AmoClient, company_ids: list[int]) -> tuple
                 embedded = contacts_data.get("_embedded") or {}
                 contacts = embedded.get("contacts") or []
                 if isinstance(contacts, list):
+                    logger.info(f"fetch_contacts_via_links: получено {len(contacts)} контактов для батча {i//contact_batch_size + 1}")
+                    
                     # Добавляем информацию о компании в _embedded.companies для каждого контакта
                     for contact in contacts:
                         if not isinstance(contact, dict):
@@ -1567,6 +1596,8 @@ def fetch_contacts_via_links(client: AmoClient, company_ids: list[int]) -> tuple
             logger.error(f"fetch_contacts_via_links: ошибка при получении полных данных контактов (batch {i//contact_batch_size + 1}): {e}", exc_info=True)
             # НЕ делаем fallback - просто пропускаем этот батч
             continue
+    
+    logger.info(f"fetch_contacts_via_links: contacts fetched by ids={len(all_contacts)} из {len(contact_ids_list)} запрошенных")
     
     logger.info(f"fetch_contacts_via_links: ИТОГО получено {len(all_contacts)} контактов с полными данными для {len(company_ids)} компаний")
     if warnings:
