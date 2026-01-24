@@ -176,7 +176,8 @@ ALTER TABLE companies SET (autovacuum_enabled = false);
 1. ✅ Bulk операции для CompanyPhone/CompanyEmail
 2. ✅ Bulk проверка дубликатов
 3. ✅ Увеличение batch size для задач до 50
-4. ✅ Оптимизация транзакций (под-транзакции)
+4. ✅ Оптимизация транзакций (под-транзакции по 15 компаний)
+5. ✅ Настройки подключения к БД (timeout, CONN_MAX_AGE)
 
 ### Важные (средний эффект):
 5. Увеличение work_mem в PostgreSQL
