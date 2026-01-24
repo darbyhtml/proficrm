@@ -1240,8 +1240,8 @@ def fetch_contacts_medium_batch(client: AmoClient, company_ids: list[int]) -> tu
     
     # Шаг 1: Запрашиваем компании с with=contacts (быстро, только ID контактов)
     # Согласно документации: _embedded[contacts] возвращает только id контакта
-    contact_id_to_company_map: dict[int, int] = {}
     all_contact_ids: set[int] = set()
+    contact_id_to_company_map: dict[int, int] = {}
     
     for idx, company_id in enumerate(company_ids):
         try:
@@ -1338,13 +1338,32 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
     # На основе документации AmoCRM API v4:
     # - ≤10 компаний: filter[company_id]=ID для каждой (точный запрос, полные данные сразу)
     # - 11-30 компаний: with=contacts для компаний + filter[id][] для контактов (оптимизировано)
-    # - >30 компаний: bulk-запрос с ранним прерыванием (текущая реализация)
+    # - 31-100 компаний: разбиваем на подбатчи по 10 и используем точный запрос (быстрее bulk)
+    # - >100 компаний: bulk-запрос с ранним прерыванием (для очень больших батчей)
     if len(company_ids) <= 10:
         logger.info(f"fetch_contacts_bulk: используем точный запрос для {len(company_ids)} компаний (небольшой батч)")
         return fetch_contacts_per_company_precise(client, company_ids)
     elif len(company_ids) <= 30:
         logger.info(f"fetch_contacts_bulk: используем оптимизированный запрос для {len(company_ids)} компаний (средний батч)")
         return fetch_contacts_medium_batch(client, company_ids)
+    elif len(company_ids) <= 100:
+        # ОПТИМИЗАЦИЯ: для 31-100 компаний разбиваем на подбатчи по 10 и используем точный запрос
+        # Это намного быстрее bulk-метода, т.к. не получаем лишние контакты
+        logger.info(f"fetch_contacts_bulk: разбиваем {len(company_ids)} компаний на подбатчи по 10 (оптимизированный подход)")
+        all_contacts: list[dict[str, Any]] = []
+        all_contact_id_to_company_map: dict[int, int] = {}
+        
+        batch_size = 10
+        for i in range(0, len(company_ids), batch_size):
+            batch_company_ids = company_ids[i:i + batch_size]
+            logger.info(f"fetch_contacts_bulk: обрабатываем подбатч {i//batch_size + 1} ({len(batch_company_ids)} компаний)")
+            
+            batch_contacts, batch_map = fetch_contacts_per_company_precise(client, batch_company_ids)
+            all_contacts.extend(batch_contacts)
+            all_contact_id_to_company_map.update(batch_map)
+        
+        logger.info(f"fetch_contacts_bulk: ИТОГО получено {len(all_contacts)} контактов для {len(company_ids)} компаний (разбито на {len(company_ids)//batch_size + 1} подбатчей)")
+        return all_contacts, all_contact_id_to_company_map
     
     company_ids_set = set(company_ids)
     all_contacts: list[dict[str, Any]] = []
