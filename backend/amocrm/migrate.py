@@ -603,9 +603,19 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
         all_phones = phones_list + skynet_phones
         phones_list = list(dict.fromkeys(all_phones))  # Сохраняем порядок, убираем дубликаты
     
+    # ИНН может приходить как строка с несколькими значениями (через /, запятую, пробел)
+    # Используем list_vals для извлечения всех значений, затем нормализуем через inn_utils
+    inn_vals = list_vals(fid_inn)
+    if inn_vals:
+        # Объединяем все значения в одну строку для парсинга
+        inn_raw = " / ".join(inn_vals)
+        from companies.inn_utils import normalize_inn_string
+        inn_combined = normalize_inn_string(inn_raw)
+    else:
+        inn_combined = first(fid_inn)
+    
     return {
-        # ИНН может приходить как строка с несколькими значениями — нормализуем дальше при применении
-        "inn": first(fid_inn),
+        "inn": inn_combined,
         "kpp": first(fid_kpp),
         "legal_name": first(fid_legal),
         "address": first(fid_addr),
@@ -1728,7 +1738,15 @@ def migrate_filtered(
                     logger.error(f"Failed to save email for company {comp.name}: {e}", exc_info=True)
 
             # Дополнительные телефоны сохраняем в CompanyPhone (а не в ContactPhone)
-            extra_phones = [p for p in phones[1:] if str(p).strip()]
+            # ВАЖНО: если основной телефон уже был заполнен, все телефоны из phones идут в CompanyPhone
+            # Если основной телефон был пустой и мы его заполнили из phones[0], то остальные (phones[1:]) идут в CompanyPhone
+            if (comp.phone or "").strip():
+                # Основной телефон уже был заполнен - все телефоны из phones идут в CompanyPhone
+                extra_phones = [p for p in phones if str(p).strip()]
+            else:
+                # Основной телефон был пустой - первый телефон уже в comp.phone, остальные в CompanyPhone
+                extra_phones = [p for p in phones[1:] if str(p).strip()]
+            
             if extra_phones and not dry_run:
                 # Нормализуем телефоны перед сохранением
                 from ui.forms import _normalize_phone
