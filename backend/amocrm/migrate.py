@@ -1180,11 +1180,24 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
             
             # ОПТИМИЗАЦИЯ: функция для раннего прерывания пагинации
             def should_stop_pagination(current_contacts: list[dict]) -> bool:
-                """Проверяет, нужно ли прервать пагинацию - если уже нашли контакты для всех компаний в батче"""
-                # Фильтруем текущие контакты и проверяем, для каких компаний нашли контакты
-                for contact in current_contacts[-250:]:  # Проверяем только последние 250 (текущая страница)
+                """
+                Проверяет, нужно ли прервать пагинацию.
+                
+                Логика:
+                1. Проверяем ВСЕ накопленные контакты (не только последние 250)
+                2. Отслеживаем, для каких компаний уже нашли контакты
+                3. Прерываем, если:
+                   - Нашли контакты для ВСЕХ компаний (100%) И получили >= 100 контактов
+                   - ИЛИ получили >= 2000 контактов И нашли для 80%+ компаний
+                   - ИЛИ получили >= 5000 контактов И < 10% из них релевантны (для наших компаний)
+                """
+                # ОПТИМИЗАЦИЯ: проверяем ВСЕ накопленные контакты, а не только последние 250
+                # Это позволяет учитывать контакты, найденные на предыдущих страницах
+                relevant_contacts_count = 0
+                for contact in current_contacts:  # ✅ Проверяем все контакты
                     if not isinstance(contact, dict):
                         continue
+                    contact_is_relevant = False
                     embedded = contact.get("_embedded") or {}
                     companies_in_contact = embedded.get("companies") or []
                     if isinstance(companies_in_contact, list):
@@ -1196,22 +1209,36 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
                                 comp_id = comp_ref
                             if comp_id and comp_id in batch_company_ids_set:
                                 found_company_ids_during_pagination.add(comp_id)
+                                contact_is_relevant = True
                     # Fallback: проверяем company_id напрямую
-                    comp_id_direct = int(contact.get("company_id") or 0)
-                    if comp_id_direct and comp_id_direct in batch_company_ids_set:
-                        found_company_ids_during_pagination.add(comp_id_direct)
+                    if not contact_is_relevant:
+                        comp_id_direct = int(contact.get("company_id") or 0)
+                        if comp_id_direct and comp_id_direct in batch_company_ids_set:
+                            found_company_ids_during_pagination.add(comp_id_direct)
+                            contact_is_relevant = True
+                    if contact_is_relevant:
+                        relevant_contacts_count += 1
                 
-                # ОПТИМИЗАЦИЯ: прерываем пагинацию в двух случаях:
-                # 1. Нашли контакты для всех компаний в батче (минимум 100 контактов)
-                # 2. Получили слишком много контактов (2000+), но уже нашли контакты для большинства компаний (80%+)
+                # Условие 1: Нашли контакты для ВСЕХ компаний (100%) И получили достаточно контактов
                 if len(current_contacts) >= 100 and len(found_company_ids_during_pagination) == len(batch_company_ids_set):
+                    logger.info(f"fetch_contacts_bulk: прерываем пагинацию - найдены контакты для всех {len(batch_company_ids_set)} компаний (получено {len(current_contacts)} контактов)")
                     return True
-                # Прерываем, если получили много контактов, но нашли контакты для большинства компаний
+                
+                # Условие 2: Получили много контактов (2000+), но нашли для большинства компаний (80%+)
                 if len(current_contacts) >= 2000:
                     found_percentage = len(found_company_ids_during_pagination) / len(batch_company_ids_set) if batch_company_ids_set else 0
                     if found_percentage >= 0.8:  # 80% компаний
                         logger.info(f"fetch_contacts_bulk: прерываем пагинацию - получено {len(current_contacts)} контактов, найдено для {len(found_company_ids_during_pagination)}/{len(batch_company_ids_set)} компаний ({found_percentage*100:.1f}%)")
                         return True
+                
+                # Условие 3: Получили слишком много контактов (5000+), но < 10% из них релевантны
+                # Это означает, что API возвращает все контакты, а не только для наших компаний
+                if len(current_contacts) >= 5000:
+                    relevance_percentage = relevant_contacts_count / len(current_contacts) if current_contacts else 0
+                    if relevance_percentage < 0.1:  # Меньше 10% релевантных
+                        logger.warning(f"fetch_contacts_bulk: прерываем пагинацию - получено {len(current_contacts)} контактов, но только {relevant_contacts_count} ({relevance_percentage*100:.1f}%) релевантны для наших компаний")
+                        return True
+                
                 return False
             
             # Пробуем использовать filter[company_id][] с массивом
