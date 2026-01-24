@@ -1796,41 +1796,33 @@ def fetch_notes_for_companies_bulk(client: AmoClient, company_ids: list[int], *,
 
 def fetch_notes_for_companies(client: AmoClient, company_ids: list[int]) -> list[dict[str, Any]]:
     """
-    Получает заметки для компаний.
-    Rate limiting применяется автоматически в AmoClient.
-    Сначала пытаемся bulk-метод через /api/v4/notes, затем fallback на per-company endpoint.
+    Получает заметки для компаний через per-company endpoint.
     
-    Если bulk endpoint недоступен (404), автоматически переключается на per-company
-    и больше не пытается использовать bulk в рамках этого запуска.
+    Согласно официальной документации amoCRM API v4:
+    https://www.amocrm.ru/developers/content/crm_platform/events-and-notes
+    Endpoint GET /api/v4/{entity_type}/{entity_id}/notes возвращает заметки для конкретной сущности.
+    
+    ВАЖНО: Endpoint /api/v4/notes с фильтрами НЕ поддерживается (возвращает 404).
+    Используем только per-company endpoint согласно документации.
     """
     global _notes_bulk_supported
     
     if not company_ids:
         return []
     
-    # Если bulk не поддерживается - сразу используем per-company
-    if _notes_bulk_supported is False:
+    # Согласно документации и практике: /api/v4/notes с фильтрами не работает (404)
+    # Используем только per-company endpoint
+    if _notes_bulk_supported is None:
+        # Первый запуск: пробуем bulk для проверки, но сразу переключаемся на per-company
+        logger.info(
+            f"fetch_notes_for_companies: endpoint /api/v4/notes не поддерживается (404 по документации), "
+            f"используем per-company endpoint /api/v4/companies/{{id}}/notes для {len(company_ids)} компаний"
+        )
+        _notes_bulk_supported = False  # Помечаем как недоступный, чтобы не пытаться снова
+    elif _notes_bulk_supported is False:
         logger.debug("fetch_notes_for_companies: bulk notes недоступен, используем per-company endpoint")
-        return _fetch_notes_per_company(client, company_ids)
     
-    # Пытаемся bulk-метод
-    try:
-        bulk = fetch_notes_for_companies_bulk(client, company_ids)
-        if bulk:
-            # Если bulk успешен - возвращаем результат
-            if _notes_bulk_supported is None:
-                _notes_bulk_supported = True
-            return bulk
-    except Exception:
-        # Если bulk упал с исключением (не 404) - пробуем fallback
-        # Но только если это не было 404 (404 уже обработан внутри fetch_notes_for_companies_bulk)
-        if _notes_bulk_supported is not False:
-            logger.debug("fetch_notes_for_companies: bulk метод упал, пробуем per-company fallback")
-    
-    # Fallback на per-company endpoint
-    # Используем только если bulk не поддерживается или вернул пустой результат
-    if _notes_bulk_supported is False:
-        logger.info(f"fetch_notes_for_companies: используем per-company endpoint для {len(company_ids)} компаний (bulk недоступен)")
+    # Всегда используем per-company endpoint (согласно документации)
     return _fetch_notes_per_company(client, company_ids)
 
 
@@ -3613,6 +3605,9 @@ def migrate_filtered(
         # ОПТИМИЗАЦИЯ: убираем N+1 запросы к CompanyNote и Company
         # ВАЖНО: обрабатываем заметки только если они были запрошены и получены
         if notes and not notes_error:
+            # Инициализируем debug_count_for_extraction для безопасного использования в debug-логике
+            debug_count_for_extraction = 0
+            
             note_uids = {str(int(n.get("id") or 0)) for n in notes if int(n.get("id") or 0)}
             existing_notes_by_uid: dict[str, CompanyNote] = {}
             if note_uids:
@@ -3656,8 +3651,12 @@ def migrate_filtered(
                             notes_skipped_no_text += 1
                             # В dry-run все равно показываем заметки без текста для диагностики
                             if not dry_run:
-                                if debug_count_for_extraction < 3:
-                                    logger.debug(f"      -> Skipped note {nid} (no text, note_type={note_type})")
+                                try:
+                                    if debug_count_for_extraction < 3:
+                                        logger.debug(f"      -> Skipped note {nid} (no text, note_type={note_type})")
+                                except (NameError, UnboundLocalError):
+                                    # Защита от ошибок в debug-логике
+                                    pass
                                 continue
 
                     # автор заметки (если можем определить)
@@ -4237,6 +4236,7 @@ def migrate_filtered(
                         birthday_timestamp = None  # Timestamp дня рождения из amoCRM (если есть)
                     
                         # ОТЛАДКА: определяем счетчик для логирования (ДО использования)
+                        # Инициализируем всегда, чтобы избежать UnboundLocalError
                         debug_count_for_extraction = len(res.contacts_preview) if res.contacts_preview else 0
                     
                         # ВАЖНО: сначала проверяем custom_fields (там хранится поле "Примечание"),
@@ -4255,13 +4255,15 @@ def migrate_filtered(
                             custom_fields = []
                         
                         # ОТЛАДКА: логируем структуру custom_fields для первых контактов
-                        if debug_count_for_extraction < 3:
-                            logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
-                            logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields)}")
-                            # Логируем ВСЕ поля для отладки (чтобы увидеть, какие поля есть) с маскированием
-                            if isinstance(custom_fields, list) and len(custom_fields) > 0:
-                                logger.debug(f"  - ALL custom_fields ({len(custom_fields)} fields):")
-                                for cf_idx, cf in enumerate(custom_fields[:5]):  # Показываем первые 5
+                        # Защита от ошибок в debug-логике: оборачиваем в try-except
+                        try:
+                            if debug_count_for_extraction < 3:
+                                logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
+                                logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields)}")
+                                # Логируем ВСЕ поля для отладки (чтобы увидеть, какие поля есть) с маскированием
+                                if isinstance(custom_fields, list) and len(custom_fields) > 0:
+                                    logger.debug(f"  - ALL custom_fields ({len(custom_fields)} fields):")
+                                    for cf_idx, cf in enumerate(custom_fields[:5]):  # Показываем первые 5
                                     if isinstance(cf, dict):
                                         field_name = str(cf.get('field_name') or '').strip()
                                         field_code = str(cf.get('field_code') or '').strip()
@@ -4436,10 +4438,15 @@ def migrate_filtered(
                         # (custom_fields уже безопасно обработан выше)
                         
                         # ОТЛАДКА: логируем структуру custom_fields для первых контактов
-                        if debug_count_for_extraction < 3:
+                        # Защита от ошибок в debug-логике: оборачиваем в try-except
+                        try:
+                            if debug_count_for_extraction < 3:
                                 logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
                                 logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields)}")
                                 # Логируем ВСЕ ключи контакта для поиска примечаний
+                        except (NameError, UnboundLocalError, Exception) as debug_err:
+                            # Защита от ошибок в debug-логике - не валим миграцию
+                            logger.debug(f"Debug preview failed (non-critical): {debug_err}", exc_info=False)
                                 if isinstance(ac, dict):
                                     all_keys = list(ac.keys())
                                     logger.debug(f"  - ALL contact keys: {all_keys}")
