@@ -3584,28 +3584,46 @@ def migrate_filtered(
                     res.skip_reasons = []
                 res.warnings.append(f"Импорт заметок компаний прерван из-за rate limit (429): {e}")
                 notes = []  # Продолжаем с пустым списком заметок
-            else:
-                # В dry-run без import_notes или если import_notes=False - не запрашиваем, но логируем
-                if dry_run:
-                    logger.info(f"migrate_filtered: заметки НЕ запрашиваются (dry_run={dry_run}, import_notes={import_notes})")
+            except Exception as e:
+                # Любая другая ошибка при получении заметок - логируем, но продолжаем миграцию
+                notes_error = f"{type(e).__name__}: {e}"
+                logger.error(
+                    f"migrate_filtered: ошибка при получении заметок компаний: {e}. "
+                    f"Импорт заметок пропущен, продолжаем миграцию контактов.",
+                    exc_info=True,  # Полный traceback для диагностики
+                )
+                res.notes_seen = 0
+                res.notes_created = 0
+                res.notes_skipped_existing = 0
+                if res.warnings is None:
+                    res.warnings = []
+                if res.skip_reasons is None:
+                    res.skip_reasons = []
+                res.warnings.append(f"Импорт заметок компаний пропущен из-за ошибки: {notes_error}")
+                notes = []  # Продолжаем с пустым списком заметок
+        else:
+            # В dry-run без import_notes или если import_notes=False - не запрашиваем, но логируем
+            if dry_run:
+                logger.info(f"migrate_filtered: заметки НЕ запрашиваются (dry_run={dry_run}, import_notes={import_notes})")
             res.notes_seen = 0
             notes = []
         
         # ОПТИМИЗАЦИЯ: убираем N+1 запросы к CompanyNote и Company
         # ВАЖНО: обрабатываем заметки только если они были запрошены и получены
         if notes and not notes_error:
-                existing_notes_by_uid: dict[str, CompanyNote] = {}
-                if note_uids:
-                    for nn in CompanyNote.objects.filter(external_source="amo_api", external_uid__in=note_uids):
-                        if nn.external_uid:
-                            existing_notes_by_uid[str(nn.external_uid)] = nn
-                
-                notes_processed = 0
-                notes_skipped_amomail = 0
-                notes_skipped_no_text = 0
-                notes_skipped_no_company = 0
-                
-                for n in notes:
+            note_uids = {str(int(n.get("id") or 0)) for n in notes if int(n.get("id") or 0)}
+            existing_notes_by_uid: dict[str, CompanyNote] = {}
+            if note_uids:
+                for nn in CompanyNote.objects.filter(external_source="amo_api", external_uid__in=note_uids):
+                    if nn.external_uid:
+                        existing_notes_by_uid[str(nn.external_uid)] = nn
+            
+            notes_processed = 0
+            notes_skipped_amomail = 0
+            notes_skipped_no_text = 0
+            notes_skipped_no_company = 0
+            
+            for n in notes:
                     nid = int(n.get("id") or 0)
                     existing_note = existing_notes_by_uid.get(str(nid)) if nid else None
 
