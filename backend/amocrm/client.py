@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 import logging
 import os
+import random
 import time
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Callable
 
 from django.utils import timezone
 
@@ -17,6 +18,11 @@ logger = logging.getLogger(__name__)
 
 
 class AmoApiError(RuntimeError):
+    pass
+
+
+class RateLimitError(AmoApiError):
+    """Исключение при исчерпании попыток retry для rate limit (429)"""
     pass
 
 
@@ -230,9 +236,20 @@ class AmoClient:
             raise AmoApiError(str(e))
 
     def get(self, path: str, *, params: dict[str, Any] | None = None, retry_on_429: bool = True) -> Any:
+        """
+        Выполняет GET запрос с обработкой rate limit (429) и retry логикой.
+        
+        При 429:
+        - Использует Retry-After header если есть (с лимитом 60s)
+        - Иначе экспоненциальный backoff с jitter
+        - Максимум 8 попыток
+        - Если все попытки исчерпаны - поднимает RateLimitError
+        """
         url = f"{self.base}{path}"
-        max_retries = 3
-        retry_delay = 2  # начальная задержка в секундах
+        max_retries = 8  # Увеличиваем количество попыток
+        base_delay = 0.5  # Базовая задержка в секундах
+        max_retry_after = 60  # Максимальное значение Retry-After (секунды)
+        jitter_range = 0.25  # ±25% jitter
         
         for attempt in range(max_retries):
             res = self._request("GET", url, params=params, auth=True)
@@ -262,10 +279,49 @@ class AmoClient:
                 raise AmoApiError(error_msg)
             
             # Обработка 429 - Too Many Requests (rate limit)
-            if res.status == 429 and retry_on_429 and attempt < max_retries - 1:
-                # Экспоненциальная задержка: 2, 4, 8 секунд
-                delay = retry_delay * (2 ** attempt)
-                logger.warning(f"Rate limit (429) для {path}, повтор через {delay} сек (попытка {attempt + 1}/{max_retries})")
+            if res.status == 429 and retry_on_429:
+                if attempt >= max_retries - 1:
+                    # Все попытки исчерпаны - поднимаем исключение
+                    error_msg = f"GET {path} failed (429): Rate limit exceeded after {max_retries} attempts"
+                    logger.error(f"{error_msg}. Получено элементов: 0")
+                    raise RateLimitError(error_msg)
+                
+                # Определяем задержку: сначала проверяем Retry-After header
+                delay = None
+                retry_after_header = res.headers.get("retry-after") or res.headers.get("Retry-After")
+                if retry_after_header:
+                    try:
+                        delay = int(float(retry_after_header))
+                        # Ограничиваем максимальное значение
+                        delay = min(delay, max_retry_after)
+                        logger.info(f"Rate limit (429) для {path}: используем Retry-After={delay}s")
+                    except (ValueError, TypeError):
+                        pass
+                
+                # Если Retry-After не указан или невалиден - используем экспоненциальный backoff
+                if delay is None:
+                    delay = base_delay * (2 ** attempt)
+                
+                # Добавляем jitter (±25%)
+                jitter = delay * jitter_range * (2 * random.random() - 1)  # от -25% до +25%
+                delay = max(0.1, delay + jitter)  # Минимум 0.1 секунды
+                
+                logger.warning(
+                    f"Rate limit (429) для {path}, повтор через {delay:.2f}s "
+                    f"(попытка {attempt + 1}/{max_retries}, endpoint={path})"
+                )
+                time.sleep(delay)
+                continue
+            
+            # Обработка 5xx ошибок - тоже делаем retry с backoff
+            if res.status >= 500 and attempt < max_retries - 1:
+                delay = base_delay * (2 ** attempt)
+                jitter = delay * jitter_range * (2 * random.random() - 1)
+                delay = max(0.1, delay + jitter)
+                logger.warning(
+                    f"Server error ({res.status}) для {path}, повтор через {delay:.2f}s "
+                    f"(попытка {attempt + 1}/{max_retries})"
+                )
                 time.sleep(delay)
                 continue
             
@@ -274,8 +330,8 @@ class AmoClient:
             
             return res.data
         
-        # Если все попытки исчерпаны
-        raise AmoApiError(f"GET {path} failed (429): Rate limit exceeded after {max_retries} attempts")
+        # Если все попытки исчерпаны (для 5xx)
+        raise AmoApiError(f"GET {path} failed: Max retries ({max_retries}) exceeded")
 
     def get_all_pages(
         self,
@@ -286,6 +342,7 @@ class AmoClient:
         max_pages: int = 100,
         embedded_key: str | None = None,
         early_stop_callback: Callable[[list[dict]], bool] | None = None,
+        extra_delay: float = 0.0,  # Дополнительная задержка между страницами (для заметок)
     ) -> list[dict]:
         """
         Возвращает склеенный список элементов из _embedded (v4).
@@ -294,11 +351,13 @@ class AmoClient:
         Args:
             early_stop_callback: Функция, которая принимает текущий список элементов и возвращает True,
                                 если нужно прервать пагинацию. Вызывается после каждой страницы.
+            extra_delay: Дополнительная задержка между страницами в секундах (для снижения нагрузки на API).
         """
         out: list[dict] = []
         page = 1
         while True:
             if page > max_pages:
+                logger.info(f"get_all_pages: достигнут max_pages={max_pages} для {path}, получено элементов: {len(out)}")
                 break
             p = dict(params or {})
             p["page"] = page
@@ -307,11 +366,20 @@ class AmoClient:
             try:
                 # Rate limiting применяется автоматически в self.get() -> self._request() -> self._rate_limit()
                 data = self.get(path, params=p, retry_on_429=True) or {}
+                logger.debug(f"get_all_pages: endpoint={path}, page={page}, получено элементов на странице: {len(data.get('_embedded', {}).get(embedded_key or 'items', [])) if isinstance(data, dict) else 0}")
+            except RateLimitError as e:
+                # При 429 после всех retry - поднимаем исключение, НЕ возвращаем пустой список
+                logger.error(
+                    f"get_all_pages: Rate limit достигнут при получении страницы {page} для {path}. "
+                    f"Получено элементов: {len(out)}. Прерываем импорт."
+                )
+                raise
             except AmoApiError as e:
-                # Если получили 429 после всех retry, логируем и прерываем
-                if "429" in str(e) or "Rate limit" in str(e):
-                    logger.warning(f"Rate limit достигнут при получении страницы {page} для {path}. Получено элементов: {len(out)}")
-                    break
+                # Для других ошибок API - тоже поднимаем исключение
+                logger.error(
+                    f"get_all_pages: API ошибка при получении страницы {page} для {path}: {e}. "
+                    f"Получено элементов: {len(out)}"
+                )
                 raise
             
             embedded = (data.get("_embedded") or {}) if isinstance(data, dict) else {}
@@ -325,17 +393,26 @@ class AmoClient:
                         items = v
                         break
             if not items:
+                logger.debug(f"get_all_pages: нет элементов на странице {page} для {path}, завершаем пагинацию")
                 break
             out.extend(items)
             
             # ОПТИМИЗАЦИЯ: проверяем, нужно ли прервать пагинацию
             if early_stop_callback and early_stop_callback(out):
-                logger.info(f"Раннее прерывание пагинации для {path} на странице {page} (получено элементов: {len(out)})")
+                logger.info(f"get_all_pages: раннее прерывание пагинации для {path} на странице {page} (получено элементов: {len(out)})")
                 break
             
             if len(items) < limit:
+                logger.debug(f"get_all_pages: получено меньше limit ({len(items)} < {limit}) для {path}, завершаем пагинацию")
                 break
+            
+            # Дополнительная задержка между страницами (для заметок и других тяжелых endpoints)
+            if extra_delay > 0:
+                time.sleep(extra_delay)
+            
             page += 1
+        
+        logger.info(f"get_all_pages: завершена пагинация для {path}, всего страниц: {page - 1}, элементов: {len(out)}")
         return out
     
     def get_metrics(self) -> dict[str, Any]:

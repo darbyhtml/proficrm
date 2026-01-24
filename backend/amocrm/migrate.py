@@ -17,7 +17,7 @@ from accounts.models import User
 from companies.models import Company, CompanyNote, CompanySphere, Contact, ContactEmail, ContactPhone, CompanyPhone, CompanyEmail
 from tasksapp.models import Task
 
-from .client import AmoClient, AmoApiError
+from .client import AmoClient, AmoApiError, RateLimitError
 
 logger = logging.getLogger(__name__)
 
@@ -923,6 +923,7 @@ def fetch_notes_for_companies_bulk(client: AmoClient, company_ids: list[int], *,
     for i in range(0, len(company_ids), batch_size):
         batch_ids = company_ids[i : i + batch_size]
         try:
+            # Добавляем extra_delay=0.2s между страницами для снижения нагрузки на API
             notes = client.get_all_pages(
                 "/api/v4/notes",
                 params={
@@ -932,8 +933,16 @@ def fetch_notes_for_companies_bulk(client: AmoClient, company_ids: list[int], *,
                 embedded_key="notes",
                 limit=250,
                 max_pages=100,
+                extra_delay=0.2,  # Дополнительная задержка 0.2s между страницами заметок
             )
             out.extend([n for n in notes if isinstance(n, dict)])
+        except RateLimitError as e:
+            # Rate limit после всех retry - поднимаем исключение, не пропускаем тихо
+            logger.error(
+                f"fetch_notes_for_companies_bulk: Rate limit исчерпан для батча компаний ({len(batch_ids)}). "
+                f"Получено заметок: {len(out)}. Импорт заметок компаний прерван."
+            )
+            raise
         except Exception as e:
             logger.warning(
                 f"fetch_notes_for_companies_bulk: ошибка для батча компаний ({len(batch_ids)}): {e}",
@@ -1908,6 +1917,14 @@ def fetch_notes_for_contacts_bulk(client: AmoClient, contact_ids: list[int], *, 
             
             logger.info(f"fetch_notes_for_contacts_bulk: получено {len(notes)} заметок для батча {batch_num}")
             
+        except RateLimitError as e:
+            # Rate limit после всех retry - поднимаем исключение, не пропускаем тихо
+            logger.error(
+                f"fetch_notes_for_contacts_bulk: Rate limit исчерпан для батча {batch_num}/{total_batches}. "
+                f"Получено заметок для {len(out)} контактов из {len(contact_ids)}. "
+                f"Импорт заметок контактов прерван."
+            )
+            raise
         except Exception as e:
             # ОПТИМИЗАЦИЯ: 404 ошибка для заметок - это нормально (API может не поддерживать этот endpoint)
             # Не логируем как критическую ошибку, просто пропускаем
@@ -2594,6 +2611,21 @@ def migrate_filtered(
             try:
                 notes = fetch_notes_for_companies(client, amo_ids)
                 res.notes_seen = len(notes)
+            except RateLimitError as e:
+                # Rate limit при получении заметок - останавливаем импорт заметок с явной ошибкой
+                logger.error(
+                    f"migrate_filtered: Rate limit исчерпан при получении заметок компаний. "
+                    f"Импорт заметок прерван. Ошибка: {e}"
+                )
+                res.notes_seen = 0
+                res.notes_created = 0
+                res.notes_skipped_existing = 0
+                # Не поднимаем исключение дальше - продолжаем импорт компаний/контактов
+                # Но явно помечаем, что заметки не импортированы из-за rate limit
+                if res.warnings is None:
+                    res.warnings = []
+                res.warnings.append(f"Импорт заметок компаний прерван из-за rate limit (429): {e}")
+                notes = []  # Продолжаем с пустым списком заметок
                 # ОПТИМИЗАЦИЯ: убираем N+1 запросы к CompanyNote и Company
                 note_uids = {str(int(n.get("id") or 0)) for n in notes if int(n.get("id") or 0)}
                 existing_notes_by_uid: dict[str, CompanyNote] = {}
@@ -2831,6 +2863,17 @@ def migrate_filtered(
                         try:
                             contact_notes_map = fetch_notes_for_contacts_bulk(client, contact_ids_for_notes)
                             logger.info(f"migrate_filtered: получено заметок для {len(contact_notes_map)} контактов")
+                        except RateLimitError as e:
+                            # Rate limit при получении заметок контактов - останавливаем импорт заметок с явной ошибкой
+                            logger.error(
+                                f"migrate_filtered: Rate limit исчерпан при получении заметок контактов. "
+                                f"Импорт заметок контактов прерван. Ошибка: {e}"
+                            )
+                            contact_notes_map = {}
+                            # Помечаем в warnings
+                            if res.warnings is None:
+                                res.warnings = []
+                            res.warnings.append(f"Импорт заметок контактов прерван из-за rate limit (429): {e}")
                         except Exception as e:
                             # ОПТИМИЗАЦИЯ: не прерываем импорт при ошибке получения заметок (часто 404)
                             logger.warning(f"migrate_filtered: ошибка при получении заметок контактов (пропускаем): {e}")
