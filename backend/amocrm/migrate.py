@@ -21,6 +21,10 @@ from .client import AmoClient, AmoApiError, RateLimitError
 
 logger = logging.getLogger(__name__)
 
+# Глобальный флаг поддержки bulk-получения заметок
+# None = еще не проверяли, True = поддерживается, False = не поддерживается
+_notes_bulk_supported: bool | None = None
+
 
 def _mask_phone(phone: str) -> str:
     """Маскирует телефон для безопасного логирования (оставляет последние 2-3 цифры)."""
@@ -1666,22 +1670,47 @@ def fetch_tasks_for_companies(client: AmoClient, company_ids: list[int]) -> list
     Получает задачи для компаний.
     Rate limiting применяется автоматически в AmoClient.
     ОПТИМИЗАЦИЯ: увеличен размер батча до 20 для уменьшения количества запросов.
+    
+    Согласно официальной документации amoCRM API v4:
+    https://www.amocrm.ru/developers/content/crm_platform/tasks-api
+    Endpoint /api/v4/tasks поддерживает фильтры filter[entity_type] и filter[entity_id][]
     """
     if not company_ids:
+        logger.debug("fetch_tasks_for_companies: company_ids пуст, возвращаем []")
         return []
+    
     out: list[dict[str, Any]] = []
     batch_size = 50  # ОПТИМИЗАЦИЯ: увеличен до максимума API (50) для ускорения (меньше запросов)
+    
+    logger.info(f"fetch_tasks_for_companies: запрашиваем задачи для {len(company_ids)} компаний (batch_size={batch_size})")
+    
     for i in range(0, len(company_ids), batch_size):
         ids = company_ids[i : i + batch_size]
-        out.extend(
-            client.get_all_pages(
+        logger.debug(f"fetch_tasks_for_companies: батч {i//batch_size + 1}, компаний: {len(ids)}, IDs: {ids[:5]}...")
+        
+        try:
+            # Согласно документации: filter[entity_type]=companies, filter[entity_id][]=[id1, id2, ...]
+            # AmoClient должен обработать filter[entity_id] как filter[entity_id][]
+            tasks_batch = client.get_all_pages(
                 "/api/v4/tasks",
-                params={f"filter[entity_type]": "companies", f"filter[entity_id][]": ids},
+                params={
+                    "filter[entity_type]": "companies",
+                    "filter[entity_id]": ids,  # AmoClient обработает как filter[entity_id][]=...
+                },
                 embedded_key="tasks",
                 limit=50,
                 max_pages=20,
             )
-        )
+            out.extend(tasks_batch)
+            logger.debug(f"fetch_tasks_for_companies: получено {len(tasks_batch)} задач для батча {i//batch_size + 1}")
+        except Exception as e:
+            logger.warning(
+                f"fetch_tasks_for_companies: ошибка при получении задач для батча компаний ({len(ids)}): {e}",
+                exc_info=False,
+            )
+            continue
+    
+    logger.info(f"fetch_tasks_for_companies: всего получено {len(out)} задач для {len(company_ids)} компаний")
     return out
 
 
@@ -1694,7 +1723,13 @@ def fetch_notes_for_companies_bulk(client: AmoClient, company_ids: list[int], *,
 
     Важно: в некоторых аккаунтах/тарифах/правах endpoint может быть недоступен —
     тогда вызывающая сторона должна сделать fallback на fetch_notes_for_companies (legacy).
+    
+    Согласно официальной документации amoCRM API v4:
+    https://www.amocrm.ru/developers/content/crm_platform/events-and-notes
+    Endpoint /api/v4/notes поддерживает фильтры filter[entity_type] и filter[entity_id][]
     """
+    global _notes_bulk_supported
+    
     if not company_ids:
         return []
 
@@ -1703,6 +1738,7 @@ def fetch_notes_for_companies_bulk(client: AmoClient, company_ids: list[int], *,
         batch_ids = company_ids[i : i + batch_size]
         try:
             # Добавляем extra_delay=0.2s между страницами для снижения нагрузки на API
+            # Согласно документации: filter[entity_type]=companies, filter[entity_id][]=[id1, id2, ...]
             notes = client.get_all_pages(
                 "/api/v4/notes",
                 params={
@@ -1803,10 +1839,17 @@ def _fetch_notes_per_company(client: AmoClient, company_ids: list[int]) -> list[
     Получает заметки для компаний поштучно через per-company endpoint.
     
     Используется как fallback когда bulk endpoint недоступен.
+    
+    Согласно официальной документации amoCRM API v4:
+    https://www.amocrm.ru/developers/content/crm_platform/events-and-notes
+    Endpoint GET /api/v4/{entity_type}/{entity_id}/notes возвращает заметки для конкретной сущности.
     """
     out: list[dict[str, Any]] = []
+    logger.info(f"_fetch_notes_per_company: получаем заметки для {len(company_ids)} компаний через per-company endpoint")
+    
     for cid in company_ids:
         try:
+            # Согласно документации: GET /api/v4/companies/{id}/notes
             notes = client.get_all_pages(
                 f"/api/v4/companies/{int(cid)}/notes",
                 params={},
@@ -1814,10 +1857,18 @@ def _fetch_notes_per_company(client: AmoClient, company_ids: list[int]) -> list[
                 limit=50,
                 max_pages=10,
             )
-            out.extend([n for n in notes if isinstance(n, dict)])
+            notes_list = [n for n in notes if isinstance(n, dict)]
+            out.extend(notes_list)
+            if notes_list:
+                logger.debug(f"_fetch_notes_per_company: получено {len(notes_list)} заметок для компании {cid}")
         except Exception as e:
-            logger.debug(f"Error fetching notes for company {cid}: {e}", exc_info=True)
+            logger.warning(
+                f"_fetch_notes_per_company: ошибка при получении заметок для компании {cid}: {e}",
+                exc_info=False,
+            )
             continue
+    
+    logger.info(f"_fetch_notes_per_company: всего получено {len(out)} заметок для {len(company_ids)} компаний")
     return out
 
 
@@ -3537,10 +3588,12 @@ def migrate_filtered(
                 # В dry-run без import_notes или если import_notes=False - не запрашиваем, но логируем
                 if dry_run:
                     logger.info(f"migrate_filtered: заметки НЕ запрашиваются (dry_run={dry_run}, import_notes={import_notes})")
-                res.notes_seen = 0
-                notes = []
-                # ОПТИМИЗАЦИЯ: убираем N+1 запросы к CompanyNote и Company
-                note_uids = {str(int(n.get("id") or 0)) for n in notes if int(n.get("id") or 0)}
+            res.notes_seen = 0
+            notes = []
+        
+        # ОПТИМИЗАЦИЯ: убираем N+1 запросы к CompanyNote и Company
+        # ВАЖНО: обрабатываем заметки только если они были запрошены и получены
+        if notes and not notes_error:
                 existing_notes_by_uid: dict[str, CompanyNote] = {}
                 if note_uids:
                     for nn in CompanyNote.objects.filter(external_source="amo_api", external_uid__in=note_uids):
