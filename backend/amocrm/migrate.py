@@ -3555,7 +3555,6 @@ def migrate_filtered(
             try:
                 notes = fetch_notes_for_companies(client, amo_ids)
                 res.notes_seen = len(notes)
-                logger.info(f"migrate_filtered: получено заметок из API: {res.notes_seen} для {len(amo_ids)} компаний")
                 # Сохраняем режим получения заметок
                 global _notes_bulk_supported
                 if _notes_bulk_supported is False:
@@ -3567,6 +3566,7 @@ def migrate_filtered(
                 else:
                     res.notes_bulk_supported = None
                     res.notes_fetch_mode = "unknown"
+                logger.info(f"migrate_filtered: получено заметок из API: {res.notes_seen} для {len(amo_ids)} компаний (режим: {res.notes_fetch_mode})")
                 notes_error = None  # Успешно получено, ошибок нет
             except RateLimitError as e:
                 # Rate limit при получении заметок - останавливаем импорт заметок с явной ошибкой
