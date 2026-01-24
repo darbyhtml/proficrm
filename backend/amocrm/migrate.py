@@ -1608,23 +1608,57 @@ def _field_options(field: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
-def fetch_companies_by_responsible(client: AmoClient, responsible_user_id: int, *, limit_pages: int = 100, with_contacts: bool = False) -> list[dict[str, Any]]:
+def fetch_companies_by_responsible(
+    client: AmoClient, 
+    responsible_user_id: int, 
+    *, 
+    limit_pages: int | None = None,  # None = безлимитно (с safety cap), int = ограничение
+    with_contacts: bool = False,
+    return_meta: bool = False
+) -> list[dict[str, Any]] | tuple[list[dict[str, Any]], dict[str, Any]]:
     """
     Получает компании по ответственному пользователю.
     Rate limiting применяется автоматически в AmoClient.
     ВСЕГДА запрашиваем БЕЗ контактов (with_contacts=False) - контакты получаем отдельно.
+    
+    Args:
+        limit_pages: Максимальное количество страниц. None = безлимитно (с safety cap 10_000).
+        return_meta: Если True, возвращает tuple (companies, pagination_meta).
+        
+    Returns:
+        list[dict] или tuple[list[dict], dict]: Список компаний или (список, метаданные)
+        Метаданные содержат: pages_fetched, elements_fetched, truncated, limit
     """
     params = {f"filter[responsible_user_id]": responsible_user_id, "with": "custom_fields"}
     # НЕ запрашиваем contacts здесь - это создает огромные ответы и вызывает 504
     # Контакты получаем отдельно через filter[company_id][]
+    
+    # Для компаний используем увеличенный max_pages или None (безлимитно с safety cap)
+    # Safety cap: 10_000 страниц (примерно 250_000 компаний при limit=25)
+    max_pages_value = limit_pages if limit_pages is not None else 10_000
+    
     result = client.get_all_pages(
         "/api/v4/companies",
         params=params,
-        return_meta=True,
         embedded_key="companies",
         limit=25,  # Оптимальный размер: не слишком большой (504), не слишком маленький
-        max_pages=limit_pages,
+        max_pages=max_pages_value,
+        return_meta=return_meta,
     )
+    
+    if return_meta:
+        companies, pagination_meta = result
+        # Логируем метаданные пагинации
+        if pagination_meta.get("truncated"):
+            logger.warning(
+                f"fetch_companies_by_responsible: пагинация обрезана (truncated=True). "
+                f"Страниц: {pagination_meta['pages_fetched']}, элементов: {pagination_meta['elements_fetched']}, "
+                f"лимит: {pagination_meta['limit']}"
+            )
+        return companies, pagination_meta
+    else:
+        companies = result
+        return companies
 
 
 def fetch_tasks_for_companies(client: AmoClient, company_ids: list[int]) -> list[dict[str, Any]]:
@@ -1682,6 +1716,9 @@ def fetch_notes_for_companies_bulk(client: AmoClient, company_ids: list[int], *,
                 return_meta=False,
             )
             out.extend([n for n in notes if isinstance(n, dict)])
+            # Если успешно получили данные - bulk поддерживается
+            if _notes_bulk_supported is None:
+                _notes_bulk_supported = True
         except RateLimitError as e:
             # Rate limit после всех retry - поднимаем исключение, не пропускаем тихо
             logger.error(
@@ -1689,10 +1726,33 @@ def fetch_notes_for_companies_bulk(client: AmoClient, company_ids: list[int], *,
                 f"Получено заметок: {len(out)}. Импорт заметок компаний прерван."
             )
             raise
+        except AmoApiError as e:
+            # Проверяем, это 404 или 405? (endpoint не поддерживается)
+            error_str = str(e)
+            is_404_or_405 = "404" in error_str or "405" in error_str or "Not Found" in error_str or "Method Not Allowed" in error_str
+            
+            if is_404_or_405:
+                # Bulk endpoint недоступен - устанавливаем флаг и логируем один раз
+                if _notes_bulk_supported is None:
+                    _notes_bulk_supported = False
+                    logger.warning(
+                        f"fetch_notes_for_companies_bulk: bulk notes endpoint недоступен (404/405), "
+                        f"переключаюсь на per-company endpoint. Батч компаний: {len(batch_ids)}"
+                    )
+                # Не поднимаем исключение - продолжаем с fallback
+                break
+            else:
+                # Другие ошибки API - логируем и продолжаем для следующих батчей
+                logger.warning(
+                    f"fetch_notes_for_companies_bulk: API ошибка для батча компаний ({len(batch_ids)}): {e}",
+                    exc_info=False,  # Не спамим traceback, только сообщение
+                )
+                continue
         except Exception as e:
+            # Неожиданные ошибки - логируем без traceback (только в debug режиме)
             logger.warning(
                 f"fetch_notes_for_companies_bulk: ошибка для батча компаний ({len(batch_ids)}): {e}",
-                exc_info=True,
+                exc_info=False,
             )
             continue
     return out
@@ -1721,12 +1781,20 @@ def fetch_notes_for_companies(client: AmoClient, company_ids: list[int]) -> list
     try:
         bulk = fetch_notes_for_companies_bulk(client, company_ids)
         if bulk:
+            # Если bulk успешен - возвращаем результат
+            if _notes_bulk_supported is None:
+                _notes_bulk_supported = True
             return bulk
     except Exception:
-        # fallback below
-        pass
+        # Если bulk упал с исключением (не 404) - пробуем fallback
+        # Но только если это не было 404 (404 уже обработан внутри fetch_notes_for_companies_bulk)
+        if _notes_bulk_supported is not False:
+            logger.debug("fetch_notes_for_companies: bulk метод упал, пробуем per-company fallback")
     
     # Fallback на per-company endpoint
+    # Используем только если bulk не поддерживается или вернул пустой результат
+    if _notes_bulk_supported is False:
+        logger.info(f"fetch_notes_for_companies: используем per-company endpoint для {len(company_ids)} компаний (bulk недоступен)")
     return _fetch_notes_per_company(client, company_ids)
 
 

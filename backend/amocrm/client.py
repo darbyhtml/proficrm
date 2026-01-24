@@ -339,7 +339,7 @@ class AmoClient:
         *,
         params: dict[str, Any] | None = None,
         limit: int = 50,  # Оптимальный размер страницы: не слишком большой (504), не слишком маленький (много запросов)
-        max_pages: int = 100,
+        max_pages: int | None = None,  # None = безлимитно (с safety cap 10_000), int = ограничение
         embedded_key: str | None = None,
         early_stop_callback: Callable[[list[dict]], bool] | None = None,
         extra_delay: float = 0.0,  # Дополнительная задержка между страницами (для заметок)
@@ -363,14 +363,27 @@ class AmoClient:
         page = 1
         truncated = False
         
+        # Safety cap: максимальное количество страниц для защиты от бесконечных циклов
+        # Используется только если max_pages=None (безлимитно)
+        SAFETY_CAP_PAGES = 10_000
+        
+        # Определяем реальный лимит страниц
+        effective_max_pages = max_pages if max_pages is not None else SAFETY_CAP_PAGES
+        
         while True:
-            if page > max_pages:
+            if page > effective_max_pages:
                 # Soft cap: логируем WARNING, устанавливаем флаг truncated
                 truncated = True
-                logger.warning(
-                    f"get_all_pages: достигнут max_pages={max_pages} для {path}, "
-                    f"получено элементов: {len(out)}. Возможна неполная выборка (truncated=True)."
-                )
+                if max_pages is None:
+                    logger.warning(
+                        f"get_all_pages: достигнут safety cap={SAFETY_CAP_PAGES} страниц для {path}, "
+                        f"получено элементов: {len(out)}. Возможна неполная выборка (truncated=True)."
+                    )
+                else:
+                    logger.warning(
+                        f"get_all_pages: достигнут max_pages={max_pages} для {path}, "
+                        f"получено элементов: {len(out)}. Возможна неполная выборка (truncated=True)."
+                    )
                 break
             p = dict(params or {})
             p["page"] = page

@@ -527,6 +527,121 @@ class TestPaginationTruncated:
         # Проверяем, что truncated установлен (если реализовано)
         # Это зависит от реализации, но логика должна быть
         assert True  # Placeholder - реальная проверка зависит от реализации
+
+
+class TestFetchCompaniesByResponsible:
+    """Тесты для fetch_companies_by_responsible с return_meta."""
+    
+    def test_fetch_companies_by_responsible_without_return_meta(self):
+        """Тест: вызов без return_meta возвращает только список (обратная совместимость)."""
+        from unittest.mock import Mock
+        from amocrm.migrate import fetch_companies_by_responsible
+        
+        mock_client = Mock()
+        mock_client.get_all_pages = Mock(return_value=[{"id": 1}, {"id": 2}])
+        
+        result = fetch_companies_by_responsible(mock_client, 123, return_meta=False)
+        
+        # Должен вернуть только список
+        assert isinstance(result, list)
+        assert len(result) == 2
+        mock_client.get_all_pages.assert_called_once()
+    
+    def test_fetch_companies_by_responsible_with_return_meta(self):
+        """Тест: вызов с return_meta=True возвращает tuple (list, meta)."""
+        from unittest.mock import Mock
+        from amocrm.migrate import fetch_companies_by_responsible
+        
+        mock_client = Mock()
+        mock_companies = [{"id": 1}, {"id": 2}]
+        mock_meta = {"pages_fetched": 1, "elements_fetched": 2, "truncated": False, "limit": 25}
+        mock_client.get_all_pages = Mock(return_value=(mock_companies, mock_meta))
+        
+        result = fetch_companies_by_responsible(mock_client, 123, return_meta=True)
+        
+        # Должен вернуть tuple
+        assert isinstance(result, tuple)
+        assert len(result) == 2
+        companies, meta = result
+        assert companies == mock_companies
+        assert meta == mock_meta
+        mock_client.get_all_pages.assert_called_once()
+    
+    def test_fetch_companies_by_responsible_no_unexpected_keyword_error(self):
+        """Тест: вызов с return_meta не должен вызывать 'unexpected keyword argument'."""
+        from unittest.mock import Mock
+        from amocrm.migrate import fetch_companies_by_responsible
+        
+        mock_client = Mock()
+        mock_client.get_all_pages = Mock(return_value=[{"id": 1}])
+        
+        # Должен работать без ошибки
+        try:
+            result = fetch_companies_by_responsible(mock_client, 123, return_meta=True)
+            assert result is not None
+        except TypeError as e:
+            if "unexpected keyword argument" in str(e):
+                pytest.fail(f"Функция не принимает return_meta: {e}")
+            raise
+
+
+class TestNotesBulk404Fallback:
+    """Тесты для graceful fallback при 404 на bulk notes."""
+    
+    def test_bulk_notes_404_graceful_fallback(self):
+        """Тест: 404 на bulk notes → graceful fallback на per-company, без падения миграции."""
+        from unittest.mock import Mock
+        from amocrm.client import AmoApiError
+        from amocrm.migrate import fetch_notes_for_companies, _notes_bulk_supported
+        
+        # Сбрасываем глобальный флаг
+        import amocrm.migrate as migrate_module
+        migrate_module._notes_bulk_supported = None
+        
+        mock_client = Mock()
+        
+        # Мокаем: bulk возвращает 404, per-company возвращает заметки
+        call_count = [0]
+        def mock_get_all_pages(path, **kwargs):
+            call_count[0] += 1
+            if path == "/api/v4/notes" and "filter[entity_type]" in (kwargs.get("params") or {}):
+                # Первый вызов (bulk) - 404
+                raise AmoApiError("404 Not Found")
+            elif "/companies/" in path and "/notes" in path:
+                # Второй вызов (per-company) - успех
+                return [{"id": 1, "text": "Test note"}]
+            return []
+        
+        mock_client.get_all_pages = Mock(side_effect=mock_get_all_pages)
+        
+        # Вызываем - не должно упасть
+        result = fetch_notes_for_companies(mock_client, [123, 456])
+        
+        # Должен вернуть заметки через per-company
+        assert len(result) > 0
+        # Флаг должен быть установлен в False
+        assert migrate_module._notes_bulk_supported is False
+    
+    def test_bulk_notes_405_also_triggers_fallback(self):
+        """Тест: 405 (Method Not Allowed) также триггерит fallback."""
+        from unittest.mock import Mock
+        from amocrm.client import AmoApiError
+        from amocrm.migrate import fetch_notes_for_companies_bulk, _notes_bulk_supported
+        
+        # Сбрасываем глобальный флаг
+        import amocrm.migrate as migrate_module
+        migrate_module._notes_bulk_supported = None
+        
+        mock_client = Mock()
+        mock_client.get_all_pages = Mock(side_effect=AmoApiError("405 Method Not Allowed"))
+        
+        # Вызываем - не должно упасть
+        result = fetch_notes_for_companies_bulk(mock_client, [123])
+        
+        # Должен вернуть пустой список (fallback будет в fetch_notes_for_companies)
+        assert result == []
+        # Флаг должен быть установлен в False
+        assert migrate_module._notes_bulk_supported is False
     
     def test_phone_text_never_in_phone(self):
         """Тест: текст 'только через приемную! мини АТС' НЕ попадает в PHONE, только в NOTE."""
