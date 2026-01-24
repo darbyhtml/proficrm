@@ -2491,8 +2491,8 @@ def migrate_filtered(
                         note_text = ""  # "Примечание"/"Комментарий" контакта (одно на все номера)
                         birthday_timestamp = None  # Timestamp дня рождения из amoCRM (если есть)
                     
-                            # ОТЛАДКА: определяем счетчик для логирования (ДО использования)
-                            debug_count_for_extraction = len(res.contacts_preview) if res.contacts_preview else 0
+                        # ОТЛАДКА: определяем счетчик для логирования (ДО использования)
+                        debug_count_for_extraction = len(res.contacts_preview) if res.contacts_preview else 0
                     
                             # ВАЖНО: сначала проверяем custom_fields (там хранится поле "Примечание"),
                             # потом заметки (там могут быть служебные заметки типа call_out)
