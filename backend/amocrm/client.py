@@ -285,10 +285,15 @@ class AmoClient:
         limit: int = 50,  # Оптимальный размер страницы: не слишком большой (504), не слишком маленький (много запросов)
         max_pages: int = 100,
         embedded_key: str | None = None,
+        early_stop_callback: Callable[[list[dict]], bool] | None = None,
     ) -> list[dict]:
         """
         Возвращает склеенный список элементов из _embedded (v4).
         Rate limiting применяется автоматически через _rate_limit() в _request().
+        
+        Args:
+            early_stop_callback: Функция, которая принимает текущий список элементов и возвращает True,
+                                если нужно прервать пагинацию. Вызывается после каждой страницы.
         """
         out: list[dict] = []
         page = 1
@@ -322,6 +327,12 @@ class AmoClient:
             if not items:
                 break
             out.extend(items)
+            
+            # ОПТИМИЗАЦИЯ: проверяем, нужно ли прервать пагинацию
+            if early_stop_callback and early_stop_callback(out):
+                logger.info(f"Раннее прерывание пагинации для {path} на странице {page} (получено элементов: {len(out)})")
+                break
+            
             if len(items) < limit:
                 break
             page += 1

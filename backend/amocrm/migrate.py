@@ -1163,6 +1163,9 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
     # Используем filter[company_id][] для фильтрации по компаниям (если API поддерживает)
     # Если нет - получаем все и фильтруем локально
     
+    # ОПТИМИЗАЦИЯ: отслеживаем, для каких компаний уже нашли контакты, чтобы прервать пагинацию раньше
+    found_company_ids_during_pagination: set[int] = set()
+    
     # Способ 1: Пробуем получить контакты через filter[company_id][] (массив)
     # AmoCRM API v4 может поддерживать filter[company_id][]=id1&filter[company_id][]=id2
     try:
@@ -1170,7 +1173,39 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
         batch_size = 50
         for i in range(0, len(company_ids), batch_size):
             batch_company_ids = company_ids[i:i + batch_size]
+            batch_company_ids_set = set(batch_company_ids)
+            found_company_ids_during_pagination.clear()  # Сбрасываем для каждого батча
+            
             logger.info(f"fetch_contacts_bulk: запрашиваем контакты для батча компаний {i//batch_size + 1} ({len(batch_company_ids)} компаний)")
+            
+            # ОПТИМИЗАЦИЯ: функция для раннего прерывания пагинации
+            def should_stop_pagination(current_contacts: list[dict]) -> bool:
+                """Проверяет, нужно ли прервать пагинацию - если уже нашли контакты для всех компаний в батче"""
+                # Фильтруем текущие контакты и проверяем, для каких компаний нашли контакты
+                for contact in current_contacts[-250:]:  # Проверяем только последние 250 (текущая страница)
+                    if not isinstance(contact, dict):
+                        continue
+                    embedded = contact.get("_embedded") or {}
+                    companies_in_contact = embedded.get("companies") or []
+                    if isinstance(companies_in_contact, list):
+                        for comp_ref in companies_in_contact:
+                            comp_id = None
+                            if isinstance(comp_ref, dict):
+                                comp_id = int(comp_ref.get("id") or 0)
+                            elif isinstance(comp_ref, int):
+                                comp_id = comp_ref
+                            if comp_id and comp_id in batch_company_ids_set:
+                                found_company_ids_during_pagination.add(comp_id)
+                    # Fallback: проверяем company_id напрямую
+                    comp_id_direct = int(contact.get("company_id") or 0)
+                    if comp_id_direct and comp_id_direct in batch_company_ids_set:
+                        found_company_ids_during_pagination.add(comp_id_direct)
+                
+                # Прерываем, если нашли контакты для всех компаний в батче
+                # Но только если получили достаточно контактов (минимум 100, чтобы не пропустить)
+                if len(current_contacts) >= 100 and len(found_company_ids_during_pagination) == len(batch_company_ids_set):
+                    return True
+                return False
             
             # Пробуем использовать filter[company_id][] с массивом
             # ОПТИМИЗАЦИЯ: получаем контакты с прерыванием, если уже нашли достаточно
@@ -1183,14 +1218,12 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
                 embedded_key="contacts",
                 limit=250,  # Максимальный limit для уменьшения числа запросов
                 max_pages=100,
+                early_stop_callback=should_stop_pagination,  # ОПТИМИЗАЦИЯ: раннее прерывание
             )
             
             if contacts_batch:
-                logger.info(f"fetch_contacts_bulk: получено {len(contacts_batch)} контактов для батча компаний")
+                logger.info(f"fetch_contacts_bulk: получено {len(contacts_batch)} контактов для батча компаний (найдено контактов для {len(found_company_ids_during_pagination)}/{len(batch_company_ids)} компаний)")
                 all_contacts.extend(contacts_batch)
-                
-                # ОПТИМИЗАЦИЯ: если получили меньше контактов, чем limit, значит это последняя страница
-                # Можно прервать, если уже получили достаточно данных (но не прерываем, т.к. нужны все контакты)
     except Exception as e:
         logger.warning(f"fetch_contacts_bulk: ошибка при bulk-запросе контактов: {e}, пробуем альтернативный способ")
         # Fallback: получаем все контакты и фильтруем локально
