@@ -2566,8 +2566,8 @@ def migrate_filtered(
                     
                         # 3. В _embedded.notes (если есть) - это заметки контакта из amoCRM (служебные, не примечания)
                         if isinstance(ac, dict) and "_embedded" in ac:
-                                embedded = ac.get("_embedded") or {}
-                                if isinstance(embedded, dict) and "notes" in embedded:
+                            embedded = ac.get("_embedded") or {}
+                            if isinstance(embedded, dict) and "notes" in embedded:
                                     notes_list = embedded.get("notes") or []
                                     if isinstance(notes_list, list) and notes_list:
                                         if debug_count_for_extraction < 3:
@@ -2642,13 +2642,14 @@ def migrate_filtered(
                                             elif pv not in note_text:
                                                 combined = f"{note_text}; {pv[:200]}"
                                                 note_text = combined[:255]
-                            if ac.get("email"):
-                                ev = str(ac.get("email")).strip()
-                                if ev:
-                                    emails.append((ContactEmail.EmailType.OTHER, ev))
+                        if ac.get("email"):
+                            ev = str(ac.get("email")).strip()
+                            if ev:
+                                emails.append((ContactEmail.EmailType.OTHER, ev))
                     
-                            # custom_fields_values для телефонов/почт/должности/примечаний
-                            custom_fields = ac.get("custom_fields_values") or []
+                        # custom_fields_values для телефонов/почт/должности/примечаний
+                        # Переменная custom_fields уже определена выше, но переопределяем для ясности
+                        custom_fields = ac.get("custom_fields_values") or []
                             # ОТЛАДКА: логируем структуру custom_fields для первых контактов
                             if debug_count_for_extraction < 3:
                                 logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
