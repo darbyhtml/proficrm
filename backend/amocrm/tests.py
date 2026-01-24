@@ -8,7 +8,7 @@ import pytest
 from amocrm.client import AmoClient, AmoApiError, RateLimitError, AmoResponse
 from amocrm.migrate import (
     normalize_phone, sanitize_name, looks_like_phone_for_position,
-    NormalizedPhone
+    NormalizedPhone, is_valid_phone, extract_phone_from_text
 )
 from ui.models import AmoApiConfig
 
