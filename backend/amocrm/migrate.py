@@ -2304,6 +2304,7 @@ def fetch_contacts_via_links(client: AmoClient, company_ids: list[int]) -> tuple
                     links_skipped_no_company = 0
                     links_skipped_no_contact = 0
                     links_skipped_wrong_type = 0
+                    skipped_types: dict[str, int] = {}  # Счетчик типов, которые пропускаем
                     
                     for link in links:
                         if not isinstance(link, dict):
@@ -2373,8 +2374,6 @@ def fetch_contacts_via_links(client: AmoClient, company_ids: list[int]) -> tuple
                             links_processed += 1
                     
                     logger.info(f"fetch_contacts_via_links: обработано связей: processed={links_processed}, skipped_no_company={links_skipped_no_company}, skipped_no_contact={links_skipped_no_contact}, skipped_wrong_type={links_skipped_wrong_type}")
-                    if skipped_types:
-                        logger.info(f"fetch_contacts_via_links: пропущенные типы связей: {dict(skipped_types)}")
                     if skipped_types:
                         logger.info(f"fetch_contacts_via_links: пропущенные типы связей: {dict(skipped_types)}")
                 else:
