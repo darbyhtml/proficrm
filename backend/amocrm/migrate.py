@@ -1648,6 +1648,7 @@ class AmoMigrateResult:
     position_phone_detected: int = 0  # сколько раз телефон обнаружен в POSITION
     position_rejected_as_phone: int = 0  # сколько должностей распознано как телефон (устаревшее, используем position_phone_detected)
     name_cleaned_extension_moved_to_note: int = 0  # сколько раз "доб./ext" вынесено из имени
+    name_instructions_moved_to_note: int = 0  # алиас к name_cleaned_extension_moved_to_note (инструкции из имени в note)
     unknown_phone_enum_code_count: int = 0  # сколько раз встречен неизвестный enum_code телефона
     emails_rejected_invalid_format: int = 0  # сколько email отклонено из-за невалидного формата
     fields_skipped_to_prevent_blank_overwrite: int = 0  # сколько полей пропущено, чтобы не затереть непустые значения
@@ -1773,6 +1774,7 @@ class AmoMigrateResult:
                 "phones_rejected_invalid": self.phones_rejected_invalid,
                 "position_rejected_as_phone": self.position_rejected_as_phone,
                 "name_cleaned_extension_moved_to_note": self.name_cleaned_extension_moved_to_note,
+                "name_instructions_moved_to_note": self.name_instructions_moved_to_note,
                 "skipped_writes_dry_run": self.skipped_writes_dry_run,
             },
             "pagination": {
@@ -3375,14 +3377,42 @@ def migrate_filtered(
                     # ВАЖНО: сохраняем исходное значение основного телефона ДО обработки
                     # чтобы правильно определить, какие телефоны идут в CompanyPhone
                     original_main_phone = (comp.phone or "").strip()
+                    first_phone_comment = None  # комментарий/доб. из разбора первого телефона для comp.phone_comment
                     
-                    # основной телефон/почта — в "Данные", остальные — в отдельный контакт (даже без ФИО/должности)
+                    # основной телефон/почта — в "Данные". comp.phone — только E.164; доб./комментарий — в phone_comment.
                     if phones and not original_main_phone:
-                        new_phone = str(phones[0])[:50]
-                        comp.phone = new_phone
-                        changed = True
-                        if dry_run:
-                            company_updates_diff["phone"] = {"old": "", "new": new_phone}
+                        raw_first = str(phones[0]).strip()
+                        parsed = parse_phone_value(raw_first)
+                        if parsed.phones and is_valid_phone(parsed.phones[0]):
+                            new_phone = parsed.phones[0][:50]
+                            parts = []
+                            if parsed.extension:
+                                parts.append(f"доб. {parsed.extension}")
+                            if parsed.comment:
+                                parts.append(parsed.comment)
+                            first_phone_comment = "; ".join(parts)[:255] if parts else None
+                        else:
+                            norm = normalize_phone(raw_first)
+                            if norm.isValid and norm.phone_e164 and is_valid_phone(norm.phone_e164):
+                                new_phone = norm.phone_e164[:50]
+                                parts = []
+                                if norm.ext:
+                                    parts.append(f"доб. {norm.ext}")
+                                if norm.note:
+                                    parts.append(norm.note)
+                                first_phone_comment = "; ".join(parts)[:255] if parts else None
+                                comp.phone = new_phone
+                                changed = True
+                                if dry_run:
+                                    company_updates_diff["phone"] = {"old": "", "new": new_phone}
+                            else:
+                                # Не записываем в comp.phone (требование: только E.164); текст — в comment
+                                first_phone_comment = (parsed.comment or ("Комментарий к телефону: " + raw_first))[:255]
+                        if parsed.phones and is_valid_phone(parsed.phones[0]):
+                            comp.phone = new_phone
+                            changed = True
+                            if dry_run:
+                                company_updates_diff["phone"] = {"old": "", "new": new_phone}
                     if emails and not (comp.email or "").strip():
                         new_email = str(emails[0])[:254]
                         comp.email = new_email
@@ -3395,15 +3425,16 @@ def migrate_filtered(
                         changed = True
                         if dry_run:
                             company_updates_diff["website"] = {"old": "", "new": new_website}
-                    # Комментарий к основному телефону компании: импортируем "Примечание" из amoCRM
-                    # Логика: если примечание одно, пишем его к первому телефону (в Company.phone_comment), не затирая ручное.
-                    if company_note and not (comp.phone_comment or "").strip():
-                        # Если основной телефон уже есть/будет — сохраняем комментарий
+                    # Комментарий к основному телефону: первый телефон (доб./комментарий) + общее примечание компании.
+                    # Не затираем вручную внесённый phone_comment.
+                    if not (comp.phone_comment or "").strip():
                         if (comp.phone or "").strip() or (phones and str(phones[0]).strip()):
-                            comp.phone_comment = company_note[:255]
-                            changed = True
-                            if dry_run:
-                                company_updates_diff["phone_comment"] = {"old": "", "new": company_note[:255]}
+                            parts = [p for p in [first_phone_comment, company_note] if p]
+                            if parts:
+                                comp.phone_comment = "; ".join(parts)[:255]
+                                changed = True
+                                if dry_run:
+                                    company_updates_diff["phone_comment"] = {"old": "", "new": comp.phone_comment}
                     if extra.get("activity_kind") and can_update("activity_kind"):
                         ak = str(extra.get("activity_kind") or "").strip()[:255]
                         old_ak = (comp.activity_kind or "").strip()
@@ -3562,28 +3593,34 @@ def migrate_filtered(
                         # Нормализуем основной телефон один раз
                         main_phone_normalized = _normalize_phone(comp.phone) if (comp.phone or "").strip() else ""
                         
-                        # Собираем телефоны для bulk_create
+                        # Собираем телефоны для bulk_create. value — только E.164; доб./комментарий — в comment.
                         phones_to_create = []
                         for p in extra_phones:
                             v = str(p).strip()[:50]
                             if not v:
                                 continue
-                            # Нормализуем телефон
-                            normalized = _normalize_phone(v) if v else ""
-                            if not normalized:
-                                normalized = v  # Если нормализация не удалась, используем исходное значение
-                            
+                            parsed = parse_phone_value(p)
+                            if parsed.phones and is_valid_phone(parsed.phones[0]):
+                                normalized = parsed.phones[0][:50]
+                                c_parts = []
+                                if parsed.extension:
+                                    c_parts.append(f"доб. {parsed.extension}")
+                                if parsed.comment:
+                                    c_parts.append(parsed.comment)
+                                ph_comment = "; ".join(c_parts)[:255] if c_parts else ""
+                            else:
+                                normalized = _normalize_phone(v) if v else ""
+                                if not normalized:
+                                    normalized = v
+                                ph_comment = ""
                             # Проверяем, что такого телефона еще нет (ни в основном, ни в дополнительных)
                             if main_phone_normalized and main_phone_normalized == normalized:
                                 logger.debug(f"Company {comp.name}: skipping phone {v} (normalized: {normalized}) - same as main phone")
                                 continue
-                            
                             if normalized in existing_phones_normalized:
                                 logger.debug(f"Company {comp.name}: skipping phone {v} (normalized: {normalized}) - duplicate")
                                 continue
-                            
-                            # Добавляем в список для bulk_create
-                            phones_to_create.append(CompanyPhone(company=comp, value=normalized, order=next_order))
+                            phones_to_create.append(CompanyPhone(company=comp, value=normalized, order=next_order, comment=ph_comment))
                             existing_phones_normalized.add(normalized)  # Предотвращаем дубликаты в этом батче
                             next_order += 1
                         
@@ -4398,6 +4435,7 @@ def migrate_filtered(
                             extracted_text = ', '.join(all_extracted)
                             # Увеличиваем счетчик метрики
                             res.name_cleaned_extension_moved_to_note += 1
+                            res.name_instructions_moved_to_note += 1
                             if not note_text:
                                 note_text = extracted_text[:255]
                             elif extracted_text not in note_text:
