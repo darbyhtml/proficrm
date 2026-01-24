@@ -2541,31 +2541,31 @@ def migrate_filtered(
                         # В amoCRM примечание может быть в разных полях
                         direct_note_keys = ["note", "notes", "comment", "comments", "remark", "remarks", "text", "description", "description_text"]
                         for note_key in direct_note_keys:
-                                note_val_raw = ac.get(note_key)
-                                if note_val_raw:
-                                    # Может быть строка или список
-                                    if isinstance(note_val_raw, list):
-                                        note_val = " ".join([str(v) for v in note_val_raw if v]).strip()
+                            note_val_raw = ac.get(note_key)
+                            if note_val_raw:
+                                # Может быть строка или список
+                                if isinstance(note_val_raw, list):
+                                    note_val = " ".join([str(v) for v in note_val_raw if v]).strip()
+                                else:
+                                    note_val = str(note_val_raw).strip()
+                                # Пропускаем ID и очень короткие значения
+                                if note_val and len(note_val) > 3 and not note_val.isdigit():
+                                    if not note_text:
+                                        note_text = note_val[:255]
+                                        if debug_count_for_extraction < 3:
+                                            logger.debug(f"  -> ✅ Found note_text in direct field '{note_key}': {note_text[:100]}")
                                     else:
-                                        note_val = str(note_val_raw).strip()
-                                    # Пропускаем ID и очень короткие значения
-                                    if note_val and len(note_val) > 3 and not note_val.isdigit():
-                                        if not note_text:
-                                            note_text = note_val[:255]
-                                            if debug_count_for_extraction < 3:
-                                                logger.debug(f"  -> ✅ Found note_text in direct field '{note_key}': {note_text[:100]}")
-                                        else:
-                                            # Объединяем, если уже есть
-                                            combined = f"{note_text}; {note_val[:100]}"
-                                            note_text = combined[:255]
-                                            if debug_count_for_extraction < 3:
-                                                logger.debug(f"  -> Appended note_text from direct field '{note_key}': {note_val[:100]}")
+                                        # Объединяем, если уже есть
+                                        combined = f"{note_text}; {note_val[:100]}"
+                                        note_text = combined[:255]
+                                        if debug_count_for_extraction < 3:
+                                            logger.debug(f"  -> Appended note_text from direct field '{note_key}': {note_val[:100]}")
                     
-                            # 2. В custom_fields_values - ПРИОРИТЕТ! Здесь хранится поле "Примечание"
-                            # (обработка будет ниже в цикле по custom_fields)
+                        # 2. В custom_fields_values - ПРИОРИТЕТ! Здесь хранится поле "Примечание"
+                        # (обработка будет ниже в цикле по custom_fields)
                     
-                            # 3. В _embedded.notes (если есть) - это заметки контакта из amoCRM (служебные, не примечания)
-                            if isinstance(ac, dict) and "_embedded" in ac:
+                        # 3. В _embedded.notes (если есть) - это заметки контакта из amoCRM (служебные, не примечания)
+                        if isinstance(ac, dict) and "_embedded" in ac:
                                 embedded = ac.get("_embedded") or {}
                                 if isinstance(embedded, dict) and "notes" in embedded:
                                     notes_list = embedded.get("notes") or []
