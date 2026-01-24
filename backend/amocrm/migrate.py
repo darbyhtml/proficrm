@@ -1652,13 +1652,20 @@ def migrate_filtered(
             if extra.get("employees_count") and can_update("employees_count"):
                 try:
                     ec = int("".join(ch for ch in str(extra.get("employees_count") or "") if ch.isdigit()) or "0")
+                    # PositiveIntegerField в PostgreSQL имеет максимум 2147483647
+                    # Ограничиваем значение, чтобы избежать ошибки "integer out of range"
+                    MAX_EMPLOYEES_COUNT = 2147483647
+                    if ec > MAX_EMPLOYEES_COUNT:
+                        logger.warning(f"Company {comp.name}: employees_count {ec} exceeds maximum {MAX_EMPLOYEES_COUNT}, capping to maximum")
+                        ec = MAX_EMPLOYEES_COUNT
                     old_ec = comp.employees_count
                     if ec > 0 and comp.employees_count != ec:
                         comp.employees_count = ec
                         changed = True
                         if dry_run:
                             company_updates_diff["employees_count"] = {"old": str(old_ec) if old_ec else "", "new": str(ec)}
-                except Exception:
+                except (ValueError, OverflowError) as e:
+                    logger.warning(f"Company {comp.name}: failed to parse employees_count '{extra.get('employees_count')}': {e}")
                     pass
             if extra.get("work_timezone") and can_update("work_timezone"):
                 tzv = str(extra.get("work_timezone") or "").strip()[:64]
