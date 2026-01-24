@@ -351,3 +351,31 @@ class TestNormalizePhone:
         phone, cleaned = extract_phone_from_text("Ольга Юрьевна +7 495 632-21-97")
         assert phone == "+74956322197"
         assert "Ольга" in cleaned or len(cleaned) < 3  # Имя должно быть удалено или остаться минимально
+    
+    def test_phone_text_never_in_phone(self):
+        """Тест: текст 'только через приемную! мини АТС' НЕ попадает в PHONE, только в NOTE."""
+        from amocrm.migrate import normalize_phone, is_valid_phone
+        
+        # Проверяем, что текст не валиден как телефон
+        text = "только через приемную! мини АТС"
+        normalized = normalize_phone(text)
+        assert not normalized.isValid
+        assert not is_valid_phone(text)
+        assert normalized.phone_e164 is None
+        
+        # Проверяем, что текст сохраняется в note
+        assert normalized.note == text
+        
+        # Проверяем, что текст не попадет в PHONE (симуляция логики)
+        phones = []
+        note_text = ""
+        
+        # Логика из кода: если не валиден - не добавляем в phones, добавляем в note_text
+        if not is_valid_phone(text):
+            note_text = f"Комментарий к телефону: {text}"
+        else:
+            phones.append(("OTHER", text, ""))
+        
+        # Проверяем результат
+        assert len(phones) == 0  # PHONE пустой
+        assert "только через приемную" in note_text  # NOTE содержит исходный текст

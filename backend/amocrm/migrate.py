@@ -3876,37 +3876,53 @@ def migrate_filtered(
                                                 elif is_service_note and debug_count_for_extraction < 3:
                                                     logger.debug(f"  -> Skipped service note type '{note_type_val}' (not a real note)")
                     
-                            # Стандартные поля (если есть)
-                            # Обработка телефонов с нормализацией
-                            if ac.get("phone"):
-                                for pv in _split_multi(str(ac.get("phone"))):
-                                    if pv:
-                                        normalized = normalize_phone(pv)
-                                        if normalized.isValid:
-                                            # Используем нормализованный номер
-                                            phone_value = normalized.phone_e164 or pv
-                                            comment_parts = []
-                                            if normalized.ext:
-                                                comment_parts.append(f"доб. {normalized.ext}")
-                                            if normalized.note:
-                                                comment_parts.append(normalized.note)
-                                            comment = "; ".join(comment_parts) if comment_parts else ""
-                                            phones.append((ContactPhone.PhoneType.OTHER, phone_value, comment[:255]))
+                        # Стандартные поля (если есть)
+                        # Обработка телефонов с нормализацией
+                        # СТРОГАЯ ПРОВЕРКА: только валидные телефоны попадают в PHONE
+                        if ac.get("phone"):
+                            for pv in _split_multi(str(ac.get("phone"))):
+                                if pv:
+                                    normalized = normalize_phone(pv)
+                                    # Двойная проверка: normalized.isValid И normalized.phone_e164 И is_valid_phone
+                                    if normalized.isValid and normalized.phone_e164 and is_valid_phone(normalized.phone_e164):
+                                        # Используем ТОЛЬКО нормализованный номер (phone_e164)
+                                        phone_value = normalized.phone_e164
+                                        comment_parts = []
+                                        if normalized.ext:
+                                            comment_parts.append(f"доб. {normalized.ext}")
+                                        if normalized.note:
+                                            comment_parts.append(normalized.note)
+                                        comment = "; ".join(comment_parts) if comment_parts else ""
+                                        phones.append((ContactPhone.PhoneType.OTHER, phone_value, comment[:255]))
+                                    else:
+                                        # Если значение не валидно как телефон - НЕ добавляем в PHONE
+                                        # ВЕСЬ исходный текст переносим в NOTE
+                                        note_to_add = normalized.note or pv
+                                        note_text_to_add = f"Комментарий к телефону: {note_to_add}"
+                                        
+                                        # Логируем причину пропуска
+                                        if res.skip_reasons is None:
+                                            res.skip_reasons = []
+                                        res.skip_reasons.append({
+                                            "type": "skip_PHONE_non_numeric",
+                                            "reason": "move_to_NOTE",
+                                            "value": pv[:100] if len(pv) <= 100 else pv[:50] + "...",
+                                            "original_value": pv[:100],
+                                            "contact_id": amo_contact_id,
+                                            "field_name": "phone (standard field)",
+                                        })
+                                        
+                                        # Увеличиваем счетчик метрики
+                                        if normalized.note:
+                                            res.phones_rejected_as_note += 1
                                         else:
-                                            # Если значение не похоже на телефон - НЕ добавляем в PHONE
-                                            # Добавляем в примечание как "Комментарий к телефону"
-                                            note_to_add = normalized.note or pv
-                                            note_text_to_add = f"Комментарий к телефону: {note_to_add}"
-                                            # Увеличиваем счетчик метрики
-                                            if normalized.note:
-                                                res.phones_rejected_as_note += 1
-                                            else:
-                                                res.phones_rejected_invalid += 1
-                                            if not note_text:
-                                                note_text = note_text_to_add[:255]
-                                            elif note_text_to_add not in note_text:
-                                                combined = f"{note_text}; {note_text_to_add[:200]}"
-                                                note_text = combined[:255]
+                                            res.phones_rejected_invalid += 1
+                                        
+                                        if not note_text:
+                                            note_text = note_text_to_add[:255]
+                                        elif note_text_to_add not in note_text:
+                                            combined = f"{note_text}; {note_text_to_add[:200]}"
+                                            note_text = combined[:255]
                         if ac.get("email"):
                             ev = str(ac.get("email")).strip()
                             if ev:
@@ -4104,14 +4120,43 @@ def migrate_filtered(
                                                     logger.debug(f"      -> Skipped non-phone value as note: '{phone_number[:50]}' (normalized.isValid=False, reason={reason_text})")
                                                 continue
                                             
-                                            # ВАЖНО: используем ТОЛЬКО нормализованный номер (phone_e164)
+                                            # СТРОГАЯ ПРОВЕРКА: используем ТОЛЬКО нормализованный номер (phone_e164)
                                             # НЕ используем исходный phone_number, если он не валиден
-                                            if not normalized.phone_e164:
-                                                # Если нормализация не дала phone_e164 - это не телефон
+                                            if not normalized.phone_e164 or not is_valid_phone(normalized.phone_e164):
+                                                # Если нормализация не дала phone_e164 или номер не валиден - это не телефон
+                                                # Переносим в NOTE
+                                                note_to_add = normalized.note or phone_number
+                                                note_text_to_add = f"Комментарий к телефону: {note_to_add}"
+                                                
+                                                # Логируем причину пропуска
+                                                if res.skip_reasons is None:
+                                                    res.skip_reasons = []
+                                                res.skip_reasons.append({
+                                                    "type": "skip_PHONE_non_numeric",
+                                                    "reason": "move_to_NOTE",
+                                                    "value": phone_number[:100] if len(phone_number) <= 100 else phone_number[:50] + "...",
+                                                    "original_value": phone_number[:100],
+                                                    "contact_id": amo_contact_id,
+                                                    "field_name": field_name,
+                                                })
+                                                
+                                                if not note_text:
+                                                    note_text = note_text_to_add[:255]
+                                                elif note_text_to_add not in note_text:
+                                                    combined = f"{note_text}; {note_text_to_add[:200]}"
+                                                    note_text = combined[:255]
+                                                
+                                                # Увеличиваем счетчик метрики
+                                                if normalized.note:
+                                                    res.phones_rejected_as_note += 1
+                                                else:
+                                                    res.phones_rejected_invalid += 1
+                                                
                                                 if debug_count_for_extraction < 3:
-                                                    logger.debug(f"      -> Skipped: normalized phone has no phone_e164: {phone_number[:50]}")
+                                                    logger.debug(f"      -> Skipped: normalized phone has no phone_e164 or not valid: '{phone_number[:50]}'")
                                                 continue
                                             
+                                            # Используем ТОЛЬКО нормализованный номер
                                             phone_number = normalized.phone_e164
                                             
                                             # Остальные строки - комментарий (регион/город)
@@ -4144,32 +4189,54 @@ def migrate_filtered(
                                                     phone_comment = normalized.note
                                     
                                             # Разбиваем номер на несколько, если есть запятые/точки с запятой
-                                            # ВАЖНО: проверяем валидность каждого номера перед добавлением
+                                            # СТРОГАЯ ПРОВЕРКА: проверяем валидность каждого номера перед добавлением
                                             for pv in _split_multi(phone_number):
                                                 if pv:
-                                                    # Строгая проверка: используем is_valid_phone
+                                                    # Двойная проверка: is_valid_phone для строгой валидации
                                                     if is_valid_phone(pv):
+                                                        # Используем ТОЛЬКО валидный нормализованный номер
                                                         phones.append((ptype, pv, phone_comment[:255]))
                                                     else:
-                                                        # Если значение не валидно как телефон, добавляем в примечание
+                                                        # Если значение не валидно как телефон - НЕ добавляем в PHONE
+                                                        # ВЕСЬ исходный текст переносим в NOTE
                                                         note_to_add = f"Комментарий к телефону: {pv}"
+                                                        
+                                                        # Логируем причину пропуска
+                                                        if res.skip_reasons is None:
+                                                            res.skip_reasons = []
+                                                        res.skip_reasons.append({
+                                                            "type": "skip_PHONE_non_numeric",
+                                                            "reason": "move_to_NOTE",
+                                                            "value": pv[:100] if len(pv) <= 100 else pv[:50] + "...",
+                                                            "original_value": pv[:100],
+                                                            "contact_id": amo_contact_id,
+                                                            "field_name": field_name,
+                                                        })
+                                                        
                                                         if not note_text:
                                                             note_text = note_to_add[:255]
                                                         elif note_to_add not in note_text:
                                                             combined = f"{note_text}; {note_to_add[:200]}"
                                                             note_text = combined[:255]
+                                                        
+                                                        # Увеличиваем счетчик метрики
+                                                        res.phones_rejected_invalid += 1
+                                                        
                                                         if debug_count_for_extraction < 3:
-                                                            logger.debug(f"      -> Skipped non-phone value as note: {pv[:50]}")
+                                                            logger.debug(f"      -> Skipped non-phone value as note: '{pv[:50]}' (not valid phone)")
                                     
                                             if debug_count_for_extraction < 3:
                                                 logger.debug(f"      -> Added phone: {phone_number} (type={ptype}, comment='{phone_comment}')")
                                         else:
                                             # Fallback: если нет строк, используем normalize_phone
+                                            # СТРОГАЯ ПРОВЕРКА: только валидные телефоны попадают в PHONE
                                             for pv in _split_multi(val):
                                                 if pv:
                                                     normalized = normalize_phone(pv)
-                                                    if normalized.isValid:
-                                                        phone_value = normalized.phone_e164 or pv
+                                                    # ВАЖНО: проверяем и isValid, и phone_e164, и is_valid_phone для двойной защиты
+                                                    if normalized.isValid and normalized.phone_e164 and is_valid_phone(normalized.phone_e164):
+                                                        # Используем ТОЛЬКО нормализованный номер (phone_e164)
+                                                        phone_value = normalized.phone_e164
                                                         comment_parts = [str(enum_code or "")] if enum_code else []
                                                         if normalized.ext:
                                                             comment_parts.append(f"доб. {normalized.ext}")
@@ -4180,15 +4247,37 @@ def migrate_filtered(
                                                         if debug_count_for_extraction < 3:
                                                             logger.debug(f"      -> Added phone (fallback): {phone_value} (type={ptype}, comment='{comment}')")
                                                     else:
-                                                        # Если значение не похоже на телефон, добавляем в примечание
+                                                        # Если значение не валидно как телефон - НЕ добавляем в PHONE
+                                                        # ВЕСЬ исходный текст переносим в NOTE
                                                         note_to_add = normalized.note or pv
+                                                        note_text_to_add = f"Комментарий к телефону: {note_to_add}"
+                                                        
+                                                        # Логируем причину пропуска
+                                                        if res.skip_reasons is None:
+                                                            res.skip_reasons = []
+                                                        res.skip_reasons.append({
+                                                            "type": "skip_PHONE_non_numeric",
+                                                            "reason": "move_to_NOTE",
+                                                            "value": pv[:100] if len(pv) <= 100 else pv[:50] + "...",
+                                                            "original_value": pv[:100],
+                                                            "contact_id": amo_contact_id,
+                                                            "field_name": field_name,
+                                                        })
+                                                        
                                                         if not note_text:
-                                                            note_text = note_to_add[:255]
-                                                        elif note_to_add not in note_text:
-                                                            combined = f"{note_text}; {note_to_add[:200]}"
+                                                            note_text = note_text_to_add[:255]
+                                                        elif note_text_to_add not in note_text:
+                                                            combined = f"{note_text}; {note_text_to_add[:200]}"
                                                             note_text = combined[:255]
+                                                        
+                                                        # Увеличиваем счетчик метрики
+                                                        if normalized.note:
+                                                            res.phones_rejected_as_note += 1
+                                                        else:
+                                                            res.phones_rejected_invalid += 1
+                                                        
                                                         if debug_count_for_extraction < 3:
-                                                            logger.debug(f"      -> Skipped non-phone value as note (fallback): {pv[:50]}")
+                                                            logger.debug(f"      -> Skipped non-phone value as note (fallback): '{pv[:50]}' (not valid phone)")
                                     elif is_email:
                                         # Определяем тип email:
                                         # 1. По enum_code (WORK/PRIV/...)
@@ -4228,8 +4317,10 @@ def migrate_filtered(
                                             })
                                             # Если позиция похожа на телефон - пытаемся интерпретировать как телефон
                                             normalized = normalize_phone(val)
-                                            if normalized.isValid and normalized.phone_e164:
+                                            # СТРОГАЯ ПРОВЕРКА: только валидные телефоны попадают в PHONE
+                                            if normalized.isValid and normalized.phone_e164 and is_valid_phone(normalized.phone_e164):
                                                 # Переносим в телефоны с пометкой source=POSITION
+                                                # Используем ТОЛЬКО нормализованный номер (phone_e164)
                                                 phone_value = normalized.phone_e164
                                                 comment_parts = ["из поля должности (POSITION)"]
                                                 if normalized.ext:
