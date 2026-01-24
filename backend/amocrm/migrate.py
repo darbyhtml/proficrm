@@ -4281,9 +4281,10 @@ def migrate_filtered(
                                                 elif field_code == "EMAIL" or "email" in field_name.lower() or "почта" in field_name.lower():
                                                     first_val = _mask_email(first_val)
                                             logger.debug(f"    [{cf_idx}] {field_name} ({field_code}): {first_val[:50]}")
-                        except (NameError, UnboundLocalError, Exception) as debug_err:
-                            # Защита от ошибок в debug-логике - не валим миграцию
-                            logger.debug(f"Debug preview failed (non-critical): {debug_err}", exc_info=False)
+                                elif len(custom_fields) == 0:
+                                    logger.debug(f"  - ⚠️ custom_fields is empty list (no custom fields found)")
+                                else:
+                                    logger.debug(f"  - ⚠️ custom_fields is not a list: {type(custom_fields)}")
                         except (NameError, UnboundLocalError, Exception) as debug_err:
                             # Защита от ошибок в debug-логике - не валим миграцию
                             logger.debug(f"Debug preview failed (non-critical): {debug_err}", exc_info=False)
@@ -4458,13 +4459,6 @@ def migrate_filtered(
                         except (NameError, UnboundLocalError, Exception) as debug_err:
                             # Защита от ошибок в debug-логике - не валим миграцию
                             logger.debug(f"Debug preview failed (non-critical): {debug_err}", exc_info=False)
-                                if isinstance(ac, dict):
-                                    all_keys = list(ac.keys())
-                                    logger.debug(f"  - ALL contact keys: {all_keys}")
-                                    # Проверяем наличие полей, которые могут содержать примечания
-                                    for key in ["note", "notes", "comment", "comments", "remark", "remarks", "_embedded"]:
-                                        if key in ac:
-                                            val = ac.get(key)
                                             if isinstance(val, str):
                                                 logger.debug(f"  - Found key '{key}': {val[:200]}")
                                             elif isinstance(val, list):
