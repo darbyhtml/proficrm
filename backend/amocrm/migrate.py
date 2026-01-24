@@ -4284,28 +4284,6 @@ def migrate_filtered(
                         except (NameError, UnboundLocalError, Exception) as debug_err:
                             # Защита от ошибок в debug-логике - не валим миграцию
                             logger.debug(f"Debug preview failed (non-critical): {debug_err}", exc_info=False)
-                                        field_name = str(cf.get('field_name') or '').strip()
-                                        field_code = str(cf.get('field_code') or '').strip()
-                                        values = cf.get('values') or []
-                                        first_val = ""
-                                        if values and isinstance(values, list) and len(values) > 0:
-                                            v = values[0]
-                                            if isinstance(v, dict):
-                                                first_val = str(v.get('value', ''))
-                                            else:
-                                                first_val = str(v)
-                                            # Маскируем телефоны и емейлы
-                                            if field_code == "PHONE" or "телефон" in field_name.lower():
-                                                first_val = _mask_phone(first_val)
-                                            elif field_code == "EMAIL" or "email" in field_name.lower() or "почта" in field_name.lower():
-                                                first_val = _mask_email(first_val)
-                                            else:
-                                                first_val = first_val[:100]  # Ограничиваем длину
-                                            logger.debug(f"    [{cf_idx}] id={cf.get('field_id')}, code='{field_code}', name='{field_name}', type={cf.get('field_type')}, first_value='{first_val}'")
-                                elif len(custom_fields) == 0:
-                                    logger.debug(f"  - ⚠️ custom_fields is empty list (no custom fields found)")
-                                else:
-                                    logger.debug(f"  - ⚠️ custom_fields is not a list: {type(custom_fields)}")
                         except (NameError, UnboundLocalError, Exception) as debug_err:
                             # Защита от ошибок в debug-логике - не валим миграцию
                             logger.debug(f"Debug preview failed (non-critical): {debug_err}", exc_info=False)
