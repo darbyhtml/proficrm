@@ -3555,7 +3555,7 @@ def migrate_filtered(
             try:
                 notes = fetch_notes_for_companies(client, amo_ids)
                 res.notes_seen = len(notes)
-                logger.info(f"migrate_filtered: получено заметок из API: {res.notes_seen} для {len(amo_ids)} компаний (режим: {res.notes_fetch_mode})")
+                logger.info(f"migrate_filtered: получено заметок из API: {res.notes_seen} для {len(amo_ids)} компаний")
                 # Сохраняем режим получения заметок
                 global _notes_bulk_supported
                 if _notes_bulk_supported is False:
@@ -3567,6 +3567,7 @@ def migrate_filtered(
                 else:
                     res.notes_bulk_supported = None
                     res.notes_fetch_mode = "unknown"
+                notes_error = None  # Успешно получено, ошибок нет
             except RateLimitError as e:
                 # Rate limit при получении заметок - останавливаем импорт заметок с явной ошибкой
                 logger.error(
@@ -3584,6 +3585,7 @@ def migrate_filtered(
                     res.skip_reasons = []
                 res.warnings.append(f"Импорт заметок компаний прерван из-за rate limit (429): {e}")
                 notes = []  # Продолжаем с пустым списком заметок
+                notes_error = f"Rate limit (429): {e}"
             except Exception as e:
                 # Любая другая ошибка при получении заметок - логируем, но продолжаем миграцию
                 notes_error = f"{type(e).__name__}: {e}"
