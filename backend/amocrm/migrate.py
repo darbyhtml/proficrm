@@ -4459,15 +4459,6 @@ def migrate_filtered(
                         except (NameError, UnboundLocalError, Exception) as debug_err:
                             # Защита от ошибок в debug-логике - не валим миграцию
                             logger.debug(f"Debug preview failed (non-critical): {debug_err}", exc_info=False)
-                                            if isinstance(val, str):
-                                                logger.debug(f"  - Found key '{key}': {val[:200]}")
-                                            elif isinstance(val, list):
-                                                logger.debug(f"  - Found key '{key}': list with {len(val)} items")
-                                            else:
-                                                logger.debug(f"  - Found key '{key}': {type(val)}")
-                                # Логируем уже найденное примечание (если есть)
-                                if note_text:
-                                    logger.debug(f"  - Already found note_text from direct fields: {note_text[:100]}")
                     
                         for cf_idx, cf in enumerate(custom_fields):
                                 if not isinstance(cf, dict):
