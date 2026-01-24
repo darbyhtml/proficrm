@@ -2303,6 +2303,19 @@ def migrate_filtered(
                     if ac_idx < 5 or contacts_processed % 10 == 0:
                         logger.info(f"migrate_filtered: обработка контакта {ac_idx + 1}/{len(full_contacts)} (processed: {contacts_processed}, skipped: {contacts_skipped}, errors: {contacts_errors})")
                     
+                    # Инициализируем переменные ДО блока try, чтобы они были доступны после блока try/except
+                    amo_contact_id = 0
+                    local_company = None
+                    existing_contact = None
+                    phones: list[tuple[str, str, str]] = []
+                    emails: list[tuple[str, str]] = []
+                    position = ""
+                    cold_call_timestamp = None
+                    note_text = ""
+                    birthday_timestamp = None
+                    first_name = ""
+                    last_name = ""
+                    
                     try:
                         # ОТЛАДКА: логируем сырую структуру контакта для первых 3
                         if structure_logged_count < 3:
@@ -2483,7 +2496,7 @@ def migrate_filtered(
                         # 2. В custom_fields_values с field_code="PHONE"/"EMAIL" или по field_name
                         # 3. В custom_fields_values по названию поля
                         # phones/emails: сохраняем тип и комментарий (enum_code) для корректного отображения
-                        # Переменные уже инициализированы ДО блока try, сбрасываем их значения
+                        # Переменные уже инициализированы ДО блока try, сбрасываем их значения для текущего контакта
                         phones = []
                         emails = []
                         position = ""
@@ -2499,8 +2512,8 @@ def migrate_filtered(
                     
                         # custom_fields_values для телефонов/почт/должности/примечаний
                         custom_fields = ac.get("custom_fields_values") or []
-                            # ОТЛАДКА: логируем структуру custom_fields для первых контактов
-                            if debug_count_for_extraction < 3:
+                        # ОТЛАДКА: логируем структуру custom_fields для первых контактов
+                        if debug_count_for_extraction < 3:
                                 logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
                                 logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}")
                                 logger.debug(f"  - ac.get('custom_fields_values'): {ac.get('custom_fields_values')}")
