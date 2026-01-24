@@ -22,6 +22,63 @@ from .client import AmoClient, AmoApiError, RateLimitError
 logger = logging.getLogger(__name__)
 
 
+def _mask_phone(phone: str) -> str:
+    """Маскирует телефон для безопасного логирования (оставляет последние 2-3 цифры)."""
+    if not phone or not isinstance(phone, str):
+        return "***"
+    digits = ''.join(c for c in phone if c.isdigit())
+    if len(digits) <= 3:
+        return "***"
+    return "*" * (len(digits) - 3) + digits[-3:]
+
+
+def _mask_email(email: str) -> str:
+    """Маскирует email для безопасного логирования (оставляет первые 2 символа и домен)."""
+    if not email or not isinstance(email, str):
+        return "***"
+    if "@" not in email:
+        return "***"
+    parts = email.split("@")
+    if len(parts) != 2:
+        return "***"
+    local, domain = parts
+    if len(local) <= 2:
+        masked_local = "*" * len(local)
+    else:
+        masked_local = local[:2] + "*" * (len(local) - 2)
+    return f"{masked_local}@{domain}"
+
+
+# Константы для валидации телефонов
+MIN_PHONE_DIGITS = 6  # Минимум цифр для валидного телефона
+MAX_PHONE_DIGITS = 15  # Максимум цифр (E.164 стандарт)
+
+# Ключевые фразы, которые указывают на инструкции, а не на телефон
+PHONE_INSTRUCTION_KEYWORDS = [
+    "только через", "приемн", "мини атс", "миниатс", "атс", "перевести",
+    "доб.", "доб ", "внутр.", "внутр ", "extension", "ext ", "ext.",
+    "затем", "доп.", "доп ", "через", "через ", "call", "звонок",
+    "добавочный", "внутренний", "попросить", "соединить", "приемная",
+    "вн.", "вн ", "добав.", "добав ",
+]
+
+# Паттерны для извлечения extension/доб из телефона
+EXTENSION_PATTERNS = [
+    r'доб\.?\s*(\d+)',
+    r'доб\s+(\d+)',
+    r'внутр\.?\s*(\d+)',
+    r'внутр\s+(\d+)',
+    r'ext\.?\s*(\d+)',
+    r'ext\s+(\d+)',
+    r'extension\s+(\d+)',
+    r'затем\s+(\d+)',
+    r'доп\.?\s*(\d+)',
+    r'доп\s+(\d+)',
+    r'#(\d+)',  # #123
+    r'x(\d+)',  # x123
+]
+
+
 def _norm(s: str) -> str:
     return (s or "").strip().lower()
 
@@ -35,7 +92,7 @@ class NormalizedPhone:
     isValid: bool = False  # Валидный ли телефон
 
 
-def normalize_phone(raw: str) -> NormalizedPhone:
+def normalize_phone(raw: str | None) -> NormalizedPhone:
     """
     Валидация и нормализация телефона.
     
@@ -46,14 +103,19 @@ def normalize_phone(raw: str) -> NormalizedPhone:
     Если строка содержит валидный номер + дополнение ("доб. 4", "затем 1") - 
     номер идёт в phone_e164, а дополнение в note/ext.
     
+    Безопасно обрабатывает None, пустые строки, не-строки.
+    
     Args:
-        raw: Исходная строка с телефоном
+        raw: Исходная строка с телефоном (может быть None)
         
     Returns:
         NormalizedPhone: Результат нормализации
     """
-    if not raw or not isinstance(raw, str):
+    if raw is None:
         return NormalizedPhone(isValid=False)
+    
+    if not isinstance(raw, str):
+        return NormalizedPhone(isValid=False, note=str(raw) if raw else None)
     
     original = raw.strip()
     if not original:
@@ -3386,13 +3448,49 @@ def migrate_filtered(
                         # Парсим очищенные имена
                         last_name, first_name = _parse_fio(name_cleaned, first_name_cleaned, last_name_cleaned)
                     
-                        # ОТЛАДКА: логируем начало обработки контакта
+                        # ОТЛАДКА: логируем начало обработки контакта с улучшенным выводом
                         preview_count_before = len(res.contacts_preview) if res.contacts_preview else 0
                         if preview_count_before < 3:
                             logger.debug(f"Processing contact {amo_contact_id} (parsed: last_name={last_name}, first_name={first_name})")
                             logger.debug(f"  - raw: name={name_str}, first_name={first_name_raw}, last_name={last_name_raw}")
                             logger.debug(f"  - local_company: {local_company.id if local_company else None}")
-                            logger.debug(f"  - has custom_fields_values: {'custom_fields_values' in ac if isinstance(ac, dict) else False}")
+                            
+                            # Улучшенный debug: показываем структуру контакта
+                            if isinstance(ac, dict):
+                                all_keys = list(ac.keys())
+                                logger.debug(f"  - Ключи контакта: {all_keys}")
+                                logger.debug(f"  - id: {ac.get('id')}, name: {ac.get('name')}, first_name: {ac.get('first_name')}, last_name: {ac.get('last_name')}")
+                                
+                                # Показываем custom_fields_values с маскированием
+                                custom_fields_debug = ac.get("custom_fields_values")
+                                if custom_fields_debug is None:
+                                    logger.debug(f"  - custom_fields_values: None")
+                                elif isinstance(custom_fields_debug, list):
+                                    logger.debug(f"  - custom_fields_values: list, length={len(custom_fields_debug)}")
+                                    # Показываем первые 2 поля с маскированием
+                                    for cf_idx, cf in enumerate(custom_fields_debug[:2]):
+                                        if isinstance(cf, dict):
+                                            field_name = str(cf.get('field_name') or '').strip()
+                                            field_code = str(cf.get('field_code') or '').strip()
+                                            values = cf.get('values') or []
+                                            if values and isinstance(values, list) and len(values) > 0:
+                                                v = values[0]
+                                                if isinstance(v, dict):
+                                                    val = str(v.get('value', ''))
+                                                else:
+                                                    val = str(v)
+                                                # Маскируем телефоны и емейлы
+                                                if field_code == "PHONE" or "телефон" in field_name.lower():
+                                                    val_masked = _mask_phone(val)
+                                                elif field_code == "EMAIL" or "email" in field_name.lower() or "почта" in field_name.lower():
+                                                    val_masked = _mask_email(val)
+                                                else:
+                                                    val_masked = val[:50]  # Ограничиваем длину
+                                                logger.debug(f"    [{cf_idx}] field_id={cf.get('field_id')}, code='{field_code}', name='{field_name}', value='{val_masked}'")
+                                else:
+                                    logger.debug(f"  - custom_fields_values: {type(custom_fields_debug)} (not list)")
+                            else:
+                                logger.debug(f"  - contact is not dict: {type(ac)}")
                             if isinstance(ac, dict) and 'custom_fields_values' in ac:
                                 cfv = ac.get('custom_fields_values')
                                 logger.debug(f"  - custom_fields_values: type={type(cfv)}, length={len(cfv) if isinstance(cfv, list) else 'not_list'}")
@@ -3426,16 +3524,25 @@ def migrate_filtered(
                         # потом заметки (там могут быть служебные заметки типа call_out)
                     
                         # custom_fields_values для телефонов/почт/должности/примечаний
-                        custom_fields = ac.get("custom_fields_values") or []
+                        # Безопасная обработка: custom_fields_values может быть None/[]/не список
+                        custom_fields_raw = ac.get("custom_fields_values")
+                        if custom_fields_raw is None:
+                            custom_fields = []
+                        elif isinstance(custom_fields_raw, list):
+                            custom_fields = custom_fields_raw
+                        else:
+                            # Если не список - пытаемся преобразовать или игнорируем
+                            logger.warning(f"Contact {amo_contact_id}: custom_fields_values is not a list: {type(custom_fields_raw)}, ignoring")
+                            custom_fields = []
+                        
                         # ОТЛАДКА: логируем структуру custom_fields для первых контактов
                         if debug_count_for_extraction < 3:
                             logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
-                            logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}")
-                            logger.debug(f"  - ac.get('custom_fields_values'): {ac.get('custom_fields_values')}")
-                            # Логируем ВСЕ поля для отладки (чтобы увидеть, какие поля есть)
-                            if isinstance(custom_fields, list):
+                            logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields)}")
+                            # Логируем ВСЕ поля для отладки (чтобы увидеть, какие поля есть) с маскированием
+                            if isinstance(custom_fields, list) and len(custom_fields) > 0:
                                 logger.debug(f"  - ALL custom_fields ({len(custom_fields)} fields):")
-                                for cf_idx, cf in enumerate(custom_fields):
+                                for cf_idx, cf in enumerate(custom_fields[:5]):  # Показываем первые 5
                                     if isinstance(cf, dict):
                                         field_name = str(cf.get('field_name') or '').strip()
                                         field_code = str(cf.get('field_code') or '').strip()
@@ -3444,10 +3551,19 @@ def migrate_filtered(
                                         if values and isinstance(values, list) and len(values) > 0:
                                             v = values[0]
                                             if isinstance(v, dict):
-                                                first_val = str(v.get('value', ''))[:100]
+                                                first_val = str(v.get('value', ''))
                                             else:
-                                                first_val = str(v)[:100]
+                                                first_val = str(v)
+                                            # Маскируем телефоны и емейлы
+                                            if field_code == "PHONE" or "телефон" in field_name.lower():
+                                                first_val = _mask_phone(first_val)
+                                            elif field_code == "EMAIL" or "email" in field_name.lower() or "почта" in field_name.lower():
+                                                first_val = _mask_email(first_val)
+                                            else:
+                                                first_val = first_val[:100]  # Ограничиваем длину
                                         logger.debug(f"    [{cf_idx}] id={cf.get('field_id')}, code='{field_code}', name='{field_name}', type={cf.get('field_type')}, first_value='{first_val}'")
+                            elif len(custom_fields) == 0:
+                                logger.debug(f"  - ⚠️ custom_fields is empty list (no custom fields found)")
                             else:
                                 logger.debug(f"  - ⚠️ custom_fields is not a list: {type(custom_fields)}")
                     
@@ -3574,13 +3690,13 @@ def migrate_filtered(
                                 emails.append((ContactEmail.EmailType.OTHER, ev))
                     
                         # custom_fields_values для телефонов/почт/должности/примечаний
-                        # Переменная custom_fields уже определена выше, но переопределяем для ясности
-                        custom_fields = ac.get("custom_fields_values") or []
+                        # Переменная custom_fields уже определена выше, используем её
+                        # (custom_fields уже безопасно обработан выше)
+                        
                         # ОТЛАДКА: логируем структуру custom_fields для первых контактов
                         if debug_count_for_extraction < 3:
                                 logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
-                                logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields) if isinstance(custom_fields, list) else 'not_list'}")
-                                logger.debug(f"  - ac.get('custom_fields_values'): {ac.get('custom_fields_values')}")
+                                logger.debug(f"  - custom_fields type: {type(custom_fields)}, length: {len(custom_fields)}")
                                 # Логируем ВСЕ ключи контакта для поиска примечаний
                                 if isinstance(ac, dict):
                                     all_keys = list(ac.keys())
@@ -3588,7 +3704,13 @@ def migrate_filtered(
                                     # Проверяем наличие полей, которые могут содержать примечания
                                     for key in ["note", "notes", "comment", "comments", "remark", "remarks", "_embedded"]:
                                         if key in ac:
-                                            logger.debug(f"  - Found key '{key}': {str(ac.get(key))[:200]}")
+                                            val = ac.get(key)
+                                            if isinstance(val, str):
+                                                logger.debug(f"  - Found key '{key}': {val[:200]}")
+                                            elif isinstance(val, list):
+                                                logger.debug(f"  - Found key '{key}': list with {len(val)} items")
+                                            else:
+                                                logger.debug(f"  - Found key '{key}': {type(val)}")
                                 # Логируем уже найденное примечание (если есть)
                                 if note_text:
                                     logger.debug(f"  - Already found note_text from direct fields: {note_text[:100]}")
