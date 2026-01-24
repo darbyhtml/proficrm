@@ -2494,11 +2494,11 @@ def migrate_filtered(
                         # ОТЛАДКА: определяем счетчик для логирования (ДО использования)
                         debug_count_for_extraction = len(res.contacts_preview) if res.contacts_preview else 0
                     
-                            # ВАЖНО: сначала проверяем custom_fields (там хранится поле "Примечание"),
-                            # потом заметки (там могут быть служебные заметки типа call_out)
+                        # ВАЖНО: сначала проверяем custom_fields (там хранится поле "Примечание"),
+                        # потом заметки (там могут быть служебные заметки типа call_out)
                     
-                            # custom_fields_values для телефонов/почт/должности/примечаний
-                            custom_fields = ac.get("custom_fields_values") or []
+                        # custom_fields_values для телефонов/почт/должности/примечаний
+                        custom_fields = ac.get("custom_fields_values") or []
                             # ОТЛАДКА: логируем структуру custom_fields для первых контактов
                             if debug_count_for_extraction < 3:
                                 logger.debug(f"Extracting data from custom_fields for contact {amo_contact_id}:")
