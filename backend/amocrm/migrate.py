@@ -1425,42 +1425,16 @@ def fetch_contacts_via_links(client: AmoClient, company_ids: list[int]) -> tuple
         logger.info(f"fetch_contacts_via_links: запрашиваем связи для батча компаний {i//batch_size + 1} ({len(batch_company_ids)} компаний)")
         
         try:
-            # Получаем связи через Entity Links API
+            # Используем только /api/v4/companies/links с фильтрами
             # Согласно документации AmoCRM API v4:
-            # GET /api/v4/companies/{id}/links - получаем связи для конкретной компании
-            # Или можно использовать /api/v4/entity_links с фильтрами
-            
-            # Пробуем использовать /api/v4/entity_links с фильтрами по компаниям
-            # Если не работает, используем запрос для каждой компании отдельно
-            links_data = None
-            try:
-                # Вариант 1: Пробуем получить все связи через entity_links
-                links_data = client.get(
-                    "/api/v4/entity_links",
-                    params={
-                        "filter[from_entity_type]": "company",
-                        "filter[from_entity_id]": batch_company_ids,  # Массив ID компаний
-                        "filter[to_entity_type]": "contact",  # Связи к контактам
-                    }
-                )
-            except Exception as e:
-                logger.debug(f"fetch_contacts_via_links: entity_links не сработал, пробуем через companies/{id}/links: {e}")
-                # Вариант 2: Получаем связи для каждой компании отдельно
-                links_list = []
-                for company_id in batch_company_ids:
-                    try:
-                        company_links = client.get(f"/api/v4/companies/{company_id}/links")
-                        if isinstance(company_links, dict):
-                            embedded = company_links.get("_embedded") or {}
-                            company_links_list = embedded.get("links") or []
-                            if isinstance(company_links_list, list):
-                                links_list.extend(company_links_list)
-                    except Exception as e2:
-                        logger.warning(f"fetch_contacts_via_links: ошибка при получении связей для компании {company_id}: {e2}")
-                        continue
-                
-                if links_list:
-                    links_data = {"_embedded": {"links": links_list}}
+            # GET /api/v4/companies/links?filter[from_entity_id][]=123&filter[from_entity_id][]=456&filter[to_entity_type]=contact
+            links_data = client.get(
+                "/api/v4/companies/links",
+                params={
+                    "filter[from_entity_id]": batch_company_ids,  # Массив ID компаний
+                    "filter[to_entity_type]": "contact",  # Связи к контактам
+                }
+            )
             
             if isinstance(links_data, dict):
                 embedded = links_data.get("_embedded") or {}
@@ -1468,35 +1442,65 @@ def fetch_contacts_via_links(client: AmoClient, company_ids: list[int]) -> tuple
                 if isinstance(links, list):
                     logger.info(f"fetch_contacts_via_links: получено {len(links)} связей для батча компаний")
                     
-                    # Обрабатываем связи: from_entity_id (company) -> to_entity_id (contact)
+                    # Логируем первые 3 объекта links для отладки
+                    if links:
+                        import json
+                        try:
+                            links_sample = links[:3]
+                            links_json = json.dumps(links_sample, ensure_ascii=False, indent=2)
+                            logger.info(f"fetch_contacts_via_links: первые 3 объекта links:\n{links_json}")
+                        except Exception as e:
+                            logger.warning(f"fetch_contacts_via_links: ошибка при логировании links: {e}")
+                    
+                    # Обрабатываем связи с устойчивым парсингом
                     for link in links:
                         if not isinstance(link, dict):
                             continue
                         
-                        from_entity_id = int(link.get("from_entity_id") or 0)
-                        to_entity_id = int(link.get("to_entity_id") or 0)
+                        # Устойчивый парсинг company_id: может быть entity_id или from_entity_id
+                        company_id = (
+                            int(link.get("from_entity_id") or 0) or
+                            int(link.get("entity_id") or 0)
+                        )
                         
-                        if not from_entity_id or not to_entity_id:
+                        # Устойчивый парсинг contact_id: может быть to_entity_id или to_entity.id
+                        contact_id = 0
+                        to_entity = link.get("to_entity")
+                        if isinstance(to_entity, dict):
+                            contact_id = int(to_entity.get("id") or 0)
+                        if not contact_id:
+                            contact_id = int(link.get("to_entity_id") or 0)
+                        
+                        # Устойчивый парсинг типа: может быть to_entity_type или to_entity.type
+                        entity_type = ""
+                        if isinstance(to_entity, dict):
+                            entity_type = str(to_entity.get("type") or "").lower()
+                        if not entity_type:
+                            entity_type = str(link.get("to_entity_type") or "").lower()
+                        
+                        # Фильтрация по типу: допускаем "contacts" и "contact"
+                        if entity_type not in ("contact", "contacts"):
+                            continue
+                        
+                        if not company_id or not contact_id:
                             continue
                         
                         # Проверяем, что компания в нашем списке
-                        if from_entity_id not in batch_company_ids:
+                        if company_id not in batch_company_ids:
                             continue
                         
                         # Если контакт уже связан с другой компанией - используем первую (логируем warning)
-                        if to_entity_id in contact_id_to_company_map:
-                            existing_company_id = contact_id_to_company_map[to_entity_id]
-                            if existing_company_id != from_entity_id:
-                                warning_msg = f"Контакт {to_entity_id} связан с несколькими компаниями ({existing_company_id}, {from_entity_id}) — использована первая ({existing_company_id})"
+                        if contact_id in contact_id_to_company_map:
+                            existing_company_id = contact_id_to_company_map[contact_id]
+                            if existing_company_id != company_id:
+                                warning_msg = f"Контакт {contact_id} связан с несколькими компаниями ({existing_company_id}, {company_id}) — использована первая ({existing_company_id})"
                                 if warning_msg not in warnings:
                                     warnings.append(warning_msg)
                                     logger.warning(warning_msg)
-                                    # Сохраняем предупреждение в результат (если доступен)
-                                    # Это будет использовано в dry-run отчёте
                         else:
                             # Первая компания для этого контакта
-                            contact_id_to_company_map[to_entity_id] = from_entity_id
-                            all_contact_ids.add(to_entity_id)
+                            contact_id_to_company_map[contact_id] = company_id
+                            all_contact_ids.add(contact_id)
                 else:
                     logger.warning(f"fetch_contacts_via_links: неожиданный тип links в ответе: {type(links)}")
             else:
