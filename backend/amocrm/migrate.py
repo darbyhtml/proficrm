@@ -3375,10 +3375,18 @@ def migrate_filtered(
                 if cobj.amocrm_company_id:
                     companies_db_by_amo_id[int(cobj.amocrm_company_id)] = cobj
 
-        # Задачи: запрашиваем только если нужно импортировать (не для dry-run без задач)
+        # Задачи: запрашиваем только если нужно импортировать
+        # ВАЖНО: в dry-run запрашиваем задачи для диагностики, даже если import_tasks=False
         if import_tasks and amo_ids and not (dry_run and not import_tasks):
+            logger.info(f"migrate_filtered: запрашиваем задачи для {len(amo_ids)} компаний (import_tasks={import_tasks}, dry_run={dry_run})")
             tasks = fetch_tasks_for_companies(client, amo_ids)
             res.tasks_seen = len(tasks)
+            logger.info(f"migrate_filtered: получено задач из API: {res.tasks_seen} для {len(amo_ids)} компаний")
+        else:
+            # В dry-run без import_tasks или если import_tasks=False - не запрашиваем, но логируем
+            if dry_run:
+                logger.info(f"migrate_filtered: задачи НЕ запрашиваются (dry_run={dry_run}, import_tasks={import_tasks})")
+            res.tasks_seen = 0
             # ОПТИМИЗАЦИЯ: убираем N+1 запросы к Task (проверка существования/обновление)
             task_uids = {str(int(t.get("id") or 0)) for t in tasks if int(t.get("id") or 0)}
             existing_tasks_by_uid: dict[str, Task] = {}
@@ -3386,11 +3394,21 @@ def migrate_filtered(
                 for tsk in Task.objects.filter(external_source="amo_api", external_uid__in=task_uids):
                     if tsk.external_uid:
                         existing_tasks_by_uid[str(tsk.external_uid)] = tsk
+            tasks_processed = 0
+            tasks_skipped_no_company = 0
+            tasks_skipped_old_count = 0
+            
+            logger.info(f"migrate_filtered: обрабатываем {len(tasks)} задач (до фильтрации по дедлайну/компании)")
+            
             for t in tasks:
                 tid = int(t.get("id") or 0)
                 existing = existing_tasks_by_uid.get(str(tid)) if tid else None
                 entity_id = int((t.get("entity_id") or 0) or 0)
                 company = companies_db_by_amo_id.get(entity_id) if entity_id else None
+                if not company:
+                    tasks_skipped_no_company += 1
+                    continue
+                
                 title = str(t.get("text") or t.get("result") or t.get("name") or "Задача (amo)").strip()[:255]
                 due_at = None
                 # важно: не используем "or", потому что 0/"" могут скрыть реальные значения
@@ -3404,6 +3422,7 @@ def migrate_filtered(
                 # Фильтрация: импортируем только задачи с дедлайном на 2026 год и позже
                 if due_at and due_at.year < 2026:
                     res.tasks_skipped_old += 1
+                    tasks_skipped_old_count += 1
                     continue
                 
                 if res.tasks_preview is not None and len(res.tasks_preview) < 5:
@@ -3468,12 +3487,24 @@ def migrate_filtered(
                     )
                     task.save()
                     res.tasks_created += 1
+                
+                tasks_processed += 1
+            
+            # Логируем статистику обработки задач
+            logger.info(
+                f"migrate_filtered: задачи обработаны: processed={tasks_processed}, "
+                f"skipped_no_company={tasks_skipped_no_company}, skipped_old={tasks_skipped_old_count}, "
+                f"created={res.tasks_created}, updated={res.tasks_updated}, skipped_existing={res.tasks_skipped_existing}"
+            )
 
-        # Заметки: запрашиваем только если нужно импортировать (не для dry-run без заметок)
+        # Заметки: запрашиваем только если нужно импортировать
+        # ВАЖНО: в dry-run запрашиваем заметки для диагностики, даже если import_notes=False
         if import_notes and amo_ids and not (dry_run and not import_notes):
+            logger.info(f"migrate_filtered: запрашиваем заметки для {len(amo_ids)} компаний (import_notes={import_notes}, dry_run={dry_run})")
             try:
                 notes = fetch_notes_for_companies(client, amo_ids)
                 res.notes_seen = len(notes)
+                logger.info(f"migrate_filtered: получено заметок из API: {res.notes_seen} для {len(amo_ids)} компаний (режим: {res.notes_fetch_mode})")
                 # Сохраняем режим получения заметок
                 global _notes_bulk_supported
                 if _notes_bulk_supported is False:
@@ -3502,6 +3533,12 @@ def migrate_filtered(
                     res.skip_reasons = []
                 res.warnings.append(f"Импорт заметок компаний прерван из-за rate limit (429): {e}")
                 notes = []  # Продолжаем с пустым списком заметок
+            else:
+                # В dry-run без import_notes или если import_notes=False - не запрашиваем, но логируем
+                if dry_run:
+                    logger.info(f"migrate_filtered: заметки НЕ запрашиваются (dry_run={dry_run}, import_notes={import_notes})")
+                res.notes_seen = 0
+                notes = []
                 # ОПТИМИЗАЦИЯ: убираем N+1 запросы к CompanyNote и Company
                 note_uids = {str(int(n.get("id") or 0)) for n in notes if int(n.get("id") or 0)}
                 existing_notes_by_uid: dict[str, CompanyNote] = {}
@@ -3509,6 +3546,12 @@ def migrate_filtered(
                     for nn in CompanyNote.objects.filter(external_source="amo_api", external_uid__in=note_uids):
                         if nn.external_uid:
                             existing_notes_by_uid[str(nn.external_uid)] = nn
+                
+                notes_processed = 0
+                notes_skipped_amomail = 0
+                notes_skipped_no_text = 0
+                notes_skipped_no_company = 0
+                
                 for n in notes:
                     nid = int(n.get("id") or 0)
                     existing_note = existing_notes_by_uid.get(str(nid)) if nid else None
@@ -3537,6 +3580,12 @@ def migrate_filtered(
                             text = ""
                         if not text:
                             text = f"(без текста) note_type={note_type}"
+                            notes_skipped_no_text += 1
+                            # В dry-run все равно показываем заметки без текста для диагностики
+                            if not dry_run:
+                                if debug_count_for_extraction < 3:
+                                    logger.debug(f"      -> Skipped note {nid} (no text, note_type={note_type})")
+                                continue
 
                     # автор заметки (если можем определить)
                     author = None
@@ -3562,6 +3611,9 @@ def migrate_filtered(
                     # amomail_message — это по сути история почты; пропускаем такие заметки
                     if note_type.lower().startswith("amomail"):
                         # Пропускаем импорт писем из amoCRM
+                        notes_skipped_amomail += 1
+                        if debug_count_for_extraction < 3:
+                            logger.debug(f"      -> Skipped note type '{note_type}' (amomail)")
                         continue
                         incoming = bool(params.get("income")) if isinstance(params, dict) else False
                         subj = str(params.get("subject") or "").strip()
@@ -4708,14 +4760,16 @@ def migrate_filtered(
                                                 phones.append((ContactPhone.PhoneType.OTHER, phone_value, comment[:255]))
                                                 
                                                 # ВАЖНО: очищаем POSITION только если это 100% телефон (нет текста после извлечения)
+                                                # Используем extract_phone_from_text для извлечения телефона и очистки текста
                                                 phone_extracted, position_cleaned = extract_phone_from_text(val)
                                                 if phone_extracted:
                                                     # Если после извлечения телефона остался только мусор (< 3 символов или только цифры) - очищаем
                                                     if len(position_cleaned) < 3 or position_cleaned.strip().isdigit() or not position_cleaned.strip():
                                                         position_cleaned = ""
-                                                    # Устанавливаем очищенную должность только если она не пустая и не была установлена ранее
-                                                    if position_cleaned and not position:
-                                                        position = position_cleaned
+                                                    
+                                                    # ВАЖНО: ОЧИЩАЕМ POSITION, даже если он был установлен ранее
+                                                    # Потому что мы нашли телефон в POSITION, значит исходное значение было неправильным
+                                                    position = position_cleaned  # Очищаем должность (может быть пустой строкой)
                                                     
                                                     # Логируем извлечение телефона из POSITION
                                                     if res.skip_reasons is None:
@@ -4725,15 +4779,16 @@ def migrate_filtered(
                                                         "reason": "phone extracted from position field",
                                                         "phone": _mask_phone(phone_extracted),
                                                         "original_position": val[:50],
-                                                        "cleaned_position": position_cleaned[:50] if position_cleaned else "",
+                                                        "cleaned_position": position_cleaned[:50] if position_cleaned else "(пусто)",
                                                         "contact_id": amo_contact_id,
                                                         "source": "POSITION",
                                                     })
                                                     
                                                     if debug_count_for_extraction < 3:
-                                                        logger.debug(f"      -> Position '{val}' recognized as phone, extracted '{phone_extracted}', position cleared to '{position_cleaned}'")
+                                                        logger.debug(f"      -> Position '{val}' recognized as phone, extracted '{phone_extracted}', position cleared to '{position_cleaned or '(пусто)'}'")
                                                 else:
                                                     # Если не удалось извлечь телефон - оставляем POSITION как есть
+                                                    # Но это странно, т.к. looks_like_phone_for_position вернул True
                                                     if not position:
                                                         position = val
                                                     if debug_count_for_extraction < 3:
@@ -4745,7 +4800,7 @@ def migrate_filtered(
                                                 if debug_count_for_extraction < 3:
                                                     logger.debug(f"      -> Position '{val}' not valid phone, keeping original position")
                                         else:
-                                            # Нормальная должность - не трогаем
+                                            # Нормальная должность - устанавливаем, если еще не установлена
                                             if not position:
                                                 position = val
                                                 if debug_count_for_extraction < 3:
@@ -5468,6 +5523,9 @@ def migrate_filtered(
                         # Обновляем должность только если можно
                         if position and c_can_update("position"):
                             contact.position = position[:255]
+                        # Обновляем примечание только если можно
+                        if note_text and c_can_update("note"):
+                            contact.note = note_text[:8000]  # TextField может быть длинным
                         # Обновляем данные о холодном звонке из amoCRM
                         if cold_marked_at_dt:
                             contact.is_cold_call = True
@@ -5488,6 +5546,7 @@ def migrate_filtered(
                             "first_name": contact.first_name,
                             "last_name": contact.last_name,
                             "position": contact.position,
+                            "note": contact.note,
                         })
                         crf["amo_values"] = cprev
                         contact.raw_fields = crf
@@ -5518,6 +5577,7 @@ def migrate_filtered(
                             contact.first_name != old_first_name or
                             contact.last_name != old_last_name or
                             contact.position != old_position or
+                            contact.note != old_note or
                             contact.is_cold_call != old_is_cold_call or
                             contact.cold_marked_at != old_cold_marked_at or
                             birthday_timestamp is not None  # raw_fields всегда обновляем
@@ -5684,6 +5744,7 @@ def migrate_filtered(
                             first_name=first_name[:120],
                             last_name=last_name[:120],
                             position=position[:255],
+                            note=note_text[:8000] if note_text else "",  # Устанавливаем примечание при создании
                             amocrm_contact_id=amo_contact_id,
                             raw_fields=debug_data,
                         )
