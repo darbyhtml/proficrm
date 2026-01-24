@@ -4284,7 +4284,6 @@ def migrate_filtered(
                         except (NameError, UnboundLocalError, Exception) as debug_err:
                             # Защита от ошибок в debug-логике - не валим миграцию
                             logger.debug(f"Debug preview failed (non-critical): {debug_err}", exc_info=False)
-                                    if isinstance(cf, dict):
                                         field_name = str(cf.get('field_name') or '').strip()
                                         field_code = str(cf.get('field_code') or '').strip()
                                         values = cf.get('values') or []
