@@ -419,9 +419,21 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
         tokens = _tokenize_search_query(q)
         
         # Базовые фильтры по полям компании (обычный поиск)
+        # Для ИНН: ищем как подстроку в поле, а также по каждому отдельному ИНН из строки
+        inn_filters = Q(inn__icontains=q)
+        # Если запрос похож на ИНН (только цифры, 10-12 символов), ищем по каждому ИНН отдельно
+        if q.isdigit() and 10 <= len(q) <= 12:
+            from companies.inn_utils import parse_inns
+            # Парсим все ИНН из запроса (на случай, если введено несколько)
+            query_inns = parse_inns(q)
+            if query_inns:
+                # Ищем компании, у которых любой из ИНН в поле совпадает с запросом
+                for query_inn in query_inns:
+                    inn_filters |= Q(inn__icontains=query_inn)
+        
         base_filters = (
             Q(name__icontains=q)
-            | Q(inn__icontains=q)
+            | inn_filters
             | Q(kpp__icontains=q)
             | Q(legal_name__icontains=q)
             | Q(address__icontains=q)
@@ -436,11 +448,20 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
         # Используем простой icontains вместо regex для производительности
         # Ограничиваем количество вариантов для ускорения запроса
         if normalized_q and len(normalized_q) >= 2:  # Минимум 2 символа для нормализованного поиска
+            # Для ИНН: ищем как подстроку, а также по каждому отдельному ИНН
+            normalized_inn_filters = Q(inn__icontains=normalized_q)
+            if normalized_q.isdigit() and 10 <= len(normalized_q) <= 12:
+                from companies.inn_utils import parse_inns
+                query_inns = parse_inns(normalized_q)
+                if query_inns:
+                    for query_inn in query_inns:
+                        normalized_inn_filters |= Q(inn__icontains=query_inn)
+            
             # Основной поиск по нормализованному запросу (самый быстрый)
             normalized_simple_filters = (
                 Q(name__icontains=normalized_q)
                 | Q(legal_name__icontains=normalized_q)
-                | Q(inn__icontains=normalized_q)
+                | normalized_inn_filters
                 | Q(address__icontains=normalized_q)
             )
             
@@ -472,10 +493,19 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
         if len(tokens) >= 2:
             token_filters = Q()
             for tok in tokens:
+                # Для ИНН: ищем как подстроку, а также по каждому отдельному ИНН
+                tok_inn_filters = Q(inn__icontains=tok)
+                if tok.isdigit() and 10 <= len(tok) <= 12:
+                    from companies.inn_utils import parse_inns
+                    query_inns = parse_inns(tok)
+                    if query_inns:
+                        for query_inn in query_inns:
+                            tok_inn_filters |= Q(inn__icontains=query_inn)
+                
                 per_tok = (
                     Q(name__icontains=tok)
                     | Q(legal_name__icontains=tok)
-                    | Q(inn__icontains=tok)
+                    | tok_inn_filters
                     | Q(kpp__icontains=tok)
                     | Q(address__icontains=tok)
                     | Q(phone__icontains=tok)

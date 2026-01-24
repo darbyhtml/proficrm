@@ -221,7 +221,7 @@ class CompanyCreateForm(forms.ModelForm):
                 attrs={
                     "rows": 2,
                     "class": "w-full rounded-lg border px-3 py-2 font-mono",
-                    "placeholder": "Можно несколько ИНН: через пробел, запятую или с новой строки",
+                    "placeholder": "Можно несколько ИНН: через /, запятую, пробел или с новой строки",
                 }
             ),
             "kpp": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
@@ -363,7 +363,7 @@ class CompanyEditForm(forms.ModelForm):
                 attrs={
                     "rows": 2,
                     "class": "w-full rounded-lg border px-3 py-2 font-mono",
-                    "placeholder": "Можно несколько ИНН: через пробел, запятую или с новой строки",
+                    "placeholder": "Можно несколько ИНН: через /, запятую, пробел или с новой строки",
                 }
             ),
             "kpp": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),

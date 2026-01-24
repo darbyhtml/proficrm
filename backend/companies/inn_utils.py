@@ -31,7 +31,7 @@ def parse_inns(value: str | None) -> List[str]:
 def format_inns(inns: Iterable[str]) -> str:
     """
     Приводит список ИНН к строке хранения.
-    Разделитель выбран так, чтобы в UI читалось и легко копировалось.
+    Разделитель "/" для единообразия с КПП и удобства чтения.
     """
     cleaned: List[str] = []
     seen = set()
@@ -42,7 +42,7 @@ def format_inns(inns: Iterable[str]) -> str:
         if v not in seen:
             cleaned.append(v)
             seen.add(v)
-    return ", ".join(cleaned)
+    return " / ".join(cleaned)
 
 
 def normalize_inn_string(value: str | None) -> str:
