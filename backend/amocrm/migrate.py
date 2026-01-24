@@ -2258,6 +2258,10 @@ def migrate_filtered(
                 contacts_skipped = 0  # Сброс перед обработкой контактов
                 contacts_errors = 0  # Сброс перед обработкой контактов
                 
+                # ОПТИМИЗАЦИЯ: собираем контакты для bulk_update
+                contacts_to_update: list[Contact] = []
+                contacts_to_create: list[Contact] = []
+                
                 # ОПТИМИЗАЦИЯ: предзагружаем существующие контакты, телефоны и почты для всей пачки
                 # Это убирает N+1 запросы в цикле
                 if not dry_run and full_contacts:
@@ -2465,16 +2469,16 @@ def migrate_filtered(
                                 cfv = ac.get('custom_fields_values')
                                 logger.debug(f"  - custom_fields_values: type={type(cfv)}, length={len(cfv) if isinstance(cfv, list) else 'not_list'}")
                     
-                            # Проверяем, не импортировали ли уже этот контакт
-                            # ОПТИМИЗАЦИЯ: используем предзагруженную карту вместо запроса к БД
-                            if not dry_run:
-                                company_id_for_key = local_company.id if local_company else None
-                                existing_contact = existing_contacts_map.get((amo_contact_id, company_id_for_key))
-                            else:
-                                # В dry-run все равно делаем запрос (компании могут быть в памяти)
-                                existing_contact = Contact.objects.filter(amocrm_contact_id=amo_contact_id, company=local_company).first()
+                        # Проверяем, не импортировали ли уже этот контакт
+                        # ОПТИМИЗАЦИЯ: используем предзагруженную карту вместо запроса к БД
+                        company_id_for_key = local_company.id if local_company and hasattr(local_company, 'id') else None
+                        existing_contact = existing_contacts_map.get((amo_contact_id, company_id_for_key))
+                        
+                        # Если не найдено в предзагруженных и это dry-run, делаем запрос (только для dry-run)
+                        if not existing_contact and dry_run and local_company and hasattr(local_company, 'id'):
+                            existing_contact = Contact.objects.filter(amocrm_contact_id=amo_contact_id, company=local_company).first()
                     
-                            # В amoCRM телефоны и email могут быть:
+                        # В amoCRM телефоны и email могут быть:
                             # 1. В стандартных полях (phone, email) - если они есть
                             # 2. В custom_fields_values с field_code="PHONE"/"EMAIL" или по field_name
                             # 3. В custom_fields_values по названию поля
@@ -3508,8 +3512,43 @@ def migrate_filtered(
                         crf["amo_values"] = cprev
                         contact.raw_fields = crf
                         
+                        # ОПТИМИЗАЦИЯ: проверяем, изменились ли данные контакта ДО применения изменений
+                        # Сохраняем старые значения для сравнения
+                        old_first_name = contact.first_name
+                        old_last_name = contact.last_name
+                        old_position = contact.position
+                        old_is_cold_call = contact.is_cold_call
+                        old_cold_marked_at = contact.cold_marked_at
+                        old_raw_fields = dict(contact.raw_fields or {})
+                        
+                        # Применяем изменения
+                        if first_name and c_can_update("first_name"):
+                            contact.first_name = first_name[:120]
+                        if last_name and c_can_update("last_name"):
+                            contact.last_name = last_name[:120]
+                        if position and c_can_update("position"):
+                            contact.position = position[:255]
+                        if cold_marked_at_dt:
+                            contact.is_cold_call = True
+                            contact.cold_marked_at = cold_marked_at_dt
+                            contact.cold_marked_by = cold_marked_by_user
+                        
+                        # Проверяем, действительно ли что-то изменилось
+                        contact_changed = (
+                            contact.first_name != old_first_name or
+                            contact.last_name != old_last_name or
+                            contact.position != old_position or
+                            contact.is_cold_call != old_is_cold_call or
+                            contact.cold_marked_at != old_cold_marked_at or
+                            birthday_timestamp is not None  # raw_fields всегда обновляем
+                        )
+                        
                         if not dry_run:
-                            contact.save()
+                            # ОПТИМИЗАЦИЯ: сохраняем контакт сразу, если изменился (для телефонов/email нужен сохраненный контакт)
+                            # Если ничего не изменилось, пропускаем сохранение (ускоряет импорт при обновлении)
+                            if contact_changed:
+                                contact.save()
+                                contacts_to_update.append(contact)  # Для статистики
                             res.contacts_created += 1  # Используем тот же счётчик для обновлённых
                             
                             # Телефоны: мягкий upsert (не удаляем вручную добавленные)
@@ -3631,12 +3670,10 @@ def migrate_filtered(
                             contact.cold_marked_by = cold_marked_by_user
                             # cold_marked_call оставляем NULL, т.к. в amoCRM нет связи с CallRequest
                         if not dry_run:
+                            # ОПТИМИЗАЦИЯ: сохраняем контакт сразу (для телефонов/email нужен сохраненный контакт)
                             contact.save()
+                            contacts_to_create.append(contact)  # Для статистики
                             res.contacts_created += 1
-                            
-                            # ОПТИМИЗАЦИЯ: обновляем предзагруженные карты после сохранения контакта
-                            company_id_for_key = contact.company_id if contact.company else None
-                            existing_contacts_map[(amo_contact_id, company_id_for_key)] = contact
                             
                             # ОПТИМИЗАЦИЯ: используем bulk_create для телефонов и почт новых контактов
                             phones_added = 0
@@ -3700,6 +3737,26 @@ def migrate_filtered(
                                 logger.debug(f"  - Saved: phones={phones_added}, emails={emails_added}, position={bool(position)}")
                         else:
                             res.contacts_created += 1
+                
+                # ОПТИМИЗАЦИЯ: bulk создание новых контактов (обновления уже сохранены выше)
+                if not dry_run:
+                    if contacts_to_create:
+                        try:
+                            Contact.objects.bulk_create(contacts_to_create, ignore_conflicts=True)
+                            logger.info(f"migrate_filtered: bulk created {len(contacts_to_create)} contacts")
+                            # Обновляем предзагруженные карты после создания
+                            for contact in contacts_to_create:
+                                if contact.amocrm_contact_id and hasattr(contact, 'id') and contact.id:
+                                    company_id_for_key = contact.company_id if contact.company else None
+                                    existing_contacts_map[(contact.amocrm_contact_id, company_id_for_key)] = contact
+                        except Exception as e:
+                            logger.error(f"migrate_filtered: ошибка при bulk_create контактов: {e}", exc_info=True)
+                    
+                    # Логируем статистику (контакты уже сохранены выше для обработки телефонов/email)
+                    if contacts_to_create:
+                        logger.info(f"migrate_filtered: created {len(contacts_to_create)} new contacts")
+                    if contacts_to_update:
+                        logger.info(f"migrate_filtered: updated {len(contacts_to_update)} existing contacts")
             except Exception as e:
                 # Если контакты недоступны — не валим всю миграцию
                 contacts_errors += 1  # Увеличиваем счетчик ошибок при исключении
