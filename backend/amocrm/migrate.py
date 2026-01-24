@@ -1096,13 +1096,18 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
                 # ОПТИМИЗАЦИЯ: логируем только каждую 10-ю компанию
                 if idx % 10 == 0:
                     logger.info(f"fetch_contacts_for_companies: запрашиваем контакты через filter[company_id]={company_id} ({idx + 1}/{len(company_ids)})")
-                contacts_data = client.get(
+                # ОПТИМИЗАЦИЯ: используем get_all_pages для получения всех контактов компании
+                contacts = client.get_all_pages(
                     "/api/v4/contacts",
                     params={
                         "filter[company_id]": company_id,  # БЕЗ [] - для одного ID
                         "with": "custom_fields",
-                    }
+                    },
+                    embedded_key="contacts",
+                    limit=250,
+                    max_pages=10,  # Обычно у компании не более 10 страниц контактов
                 )
+                contacts_data = {"_embedded": {"contacts": contacts}} if contacts else {}
                 
                 if isinstance(contacts_data, dict):
                     embedded = contacts_data.get("_embedded") or {}
@@ -1133,9 +1138,80 @@ def fetch_contacts_for_companies(client: AmoClient, company_ids: list[int]) -> l
     return out
 
 
+def fetch_contacts_per_company_precise(client: AmoClient, company_ids: list[int]) -> tuple[list[dict[str, Any]], dict[int, int]]:
+    """
+    Получает контакты компаний через точный запрос для каждой компании.
+    Использует filter[company_id]=ID для каждой компании отдельно.
+    
+    ОПТИМИЗАЦИЯ: Используется для небольших батчей (≤10 компаний).
+    Возвращает только релевантные контакты, не требует фильтрации.
+    
+    Args:
+        client: AmoClient для запросов
+        company_ids: список ID компаний, для которых нужны контакты
+        
+    Returns:
+        tuple[list[dict], dict[int, int]]: 
+            - список контактов с полными данными (custom_fields, _embedded.companies)
+            - словарь contact_id -> company_id для маппинга
+    """
+    if not company_ids:
+        logger.info("fetch_contacts_per_company_precise: company_ids пуст, возвращаем []")
+        return [], {}
+    
+    all_contacts: list[dict[str, Any]] = []
+    contact_id_to_company_map: dict[int, int] = {}
+    
+    logger.info(f"fetch_contacts_per_company_precise: начинаем точное получение контактов для {len(company_ids)} компаний")
+    
+    for idx, company_id in enumerate(company_ids):
+        try:
+            # Используем filter[company_id]=ID (БЕЗ []) для точного запроса
+            # Это возвращает только контакты для этой конкретной компании
+            contacts = client.get_all_pages(
+                "/api/v4/contacts",
+                params={
+                    "filter[company_id]": company_id,  # БЕЗ [] - для одного ID
+                    "with": "custom_fields",  # Получаем custom_fields сразу
+                },
+                embedded_key="contacts",
+                limit=250,  # Максимальный limit
+                max_pages=10,  # Обычно у компании не более 10 страниц контактов
+            )
+            
+            if contacts:
+                logger.info(f"fetch_contacts_per_company_precise: компания {company_id}: найдено {len(contacts)} контактов")
+                # Добавляем company_id к каждому контакту
+                for contact in contacts:
+                    if isinstance(contact, dict):
+                        contact_id = int(contact.get("id") or 0)
+                        if contact_id:
+                            # Убеждаемся, что _embedded.companies заполнен
+                            if "_embedded" not in contact:
+                                contact["_embedded"] = {}
+                            if "companies" not in contact["_embedded"] or not contact["_embedded"]["companies"]:
+                                contact["_embedded"]["companies"] = [{"id": company_id}]
+                            
+                            all_contacts.append(contact)
+                            contact_id_to_company_map[contact_id] = company_id
+            else:
+                logger.debug(f"fetch_contacts_per_company_precise: компания {company_id}: контакты не найдены")
+                
+        except Exception as e:
+            logger.warning(f"fetch_contacts_per_company_precise: ошибка при получении контактов для компании {company_id}: {e}", exc_info=True)
+            continue
+    
+    logger.info(f"fetch_contacts_per_company_precise: ИТОГО найдено {len(all_contacts)} контактов для {len(company_ids)} компаний")
+    return all_contacts, contact_id_to_company_map
+
+
 def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list[dict[str, Any]], dict[int, int]]:
     """
     ОПТИМИЗИРОВАННАЯ версия получения контактов компаний через bulk-запросы.
+    
+    ГИБРИДНЫЙ ПОДХОД:
+    - Для небольших батчей (≤10 компаний): использует точный запрос для каждой компании
+    - Для больших батчей (>10 компаний): использует bulk-запрос с ранним прерыванием
     
     Получает все контакты через пагинацию /api/v4/contacts с фильтром по компаниям,
     затем фильтрует по принадлежности к компаниям из списка.
@@ -1152,6 +1228,12 @@ def fetch_contacts_bulk(client: AmoClient, company_ids: list[int]) -> tuple[list
     if not company_ids:
         logger.info("fetch_contacts_bulk: company_ids пуст, возвращаем []")
         return [], {}
+    
+    # ОПТИМИЗАЦИЯ: для небольших батчей используем точный запрос для каждой компании
+    # Это быстрее и точнее, чем bulk-запрос с фильтрацией
+    if len(company_ids) <= 10:
+        logger.info(f"fetch_contacts_bulk: используем точный запрос для {len(company_ids)} компаний (небольшой батч)")
+        return fetch_contacts_per_company_precise(client, company_ids)
     
     company_ids_set = set(company_ids)
     all_contacts: list[dict[str, Any]] = []
