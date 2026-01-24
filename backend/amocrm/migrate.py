@@ -26,6 +26,247 @@ def _norm(s: str) -> str:
     return (s or "").strip().lower()
 
 
+@dataclass
+class NormalizedPhone:
+    """Результат нормализации телефона."""
+    phone_e164: str | None = None  # Номер в формате E.164 (+7XXXXXXXXXX)
+    ext: str | None = None  # Дополнительный номер (доб.)
+    note: str | None = None  # Дополнительная информация (инструкции)
+    isValid: bool = False  # Валидный ли телефон
+
+
+def normalize_phone(raw: str) -> NormalizedPhone:
+    """
+    Валидация и нормализация телефона.
+    
+    Удаляет пробелы/скобки/дефисы, распознает +7/8 для РФ, приводит к E.164.
+    Если после очистки цифр < MIN_PHONE_DIGITS - считает НЕ телефоном.
+    Если строка содержит ключевые фразы-инструкции и НЕ содержит валидного номера - 
+    возвращает isValid=False, note=исходная строка.
+    Если строка содержит валидный номер + дополнение ("доб. 4", "затем 1") - 
+    номер идёт в phone_e164, а дополнение в note/ext.
+    
+    Args:
+        raw: Исходная строка с телефоном
+        
+    Returns:
+        NormalizedPhone: Результат нормализации
+    """
+    if not raw or not isinstance(raw, str):
+        return NormalizedPhone(isValid=False)
+    
+    original = raw.strip()
+    if not original:
+        return NormalizedPhone(isValid=False)
+    
+    # Проверяем на инструкции (если нет валидного номера)
+    original_lower = original.lower()
+    has_instruction_keywords = any(kw in original_lower for kw in PHONE_INSTRUCTION_KEYWORDS)
+    
+    # Извлекаем только цифры и + (для международного формата)
+    digits_only = ''.join(c for c in original if c.isdigit() or c == '+')
+    
+    # Если цифр меньше минимума - это не телефон
+    digit_count = len([c for c in digits_only if c.isdigit()])
+    if digit_count < MIN_PHONE_DIGITS:
+        # Если есть ключевые слова инструкций - это точно инструкция
+        if has_instruction_keywords:
+            return NormalizedPhone(isValid=False, note=original)
+        return NormalizedPhone(isValid=False)
+    
+    # Если слишком много цифр - тоже не телефон
+    if digit_count > MAX_PHONE_DIGITS:
+        return NormalizedPhone(isValid=False, note=original if has_instruction_keywords else None)
+    
+    # Извлекаем extension/доб из исходной строки
+    ext_value = None
+    note_parts = []
+    cleaned_phone = original
+    
+    for pattern in EXTENSION_PATTERNS:
+        match = re.search(pattern, original, re.IGNORECASE)
+        if match:
+            ext_value = match.group(1)
+            # Удаляем extension из строки телефона
+            cleaned_phone = re.sub(pattern, '', cleaned_phone, flags=re.IGNORECASE).strip()
+            break
+    
+    # Если есть "затем" или другие инструкции после номера - извлекаем в note
+    # Паттерн: номер + пробел + "затем"/"доб"/"внутр" + число
+    instruction_patterns = [
+        r'(.+?)\s+(затем|доб\.?|доб|внутр\.?|внутр|ext\.?|ext|extension|доп\.?|доп)\s+(\d+)',
+    ]
+    for pattern in instruction_patterns:
+        match = re.search(pattern, original, re.IGNORECASE)
+        if match:
+            phone_part = match.group(1).strip()
+            instruction = match.group(2).strip()
+            ext_num = match.group(3).strip()
+            if not ext_value:
+                ext_value = ext_num
+            note_parts.append(f"{instruction} {ext_num}")
+            cleaned_phone = phone_part
+            break
+    
+    # Нормализуем номер телефона
+    # Удаляем все нецифровые символы кроме +
+    phone_digits = ''.join(c for c in cleaned_phone if c.isdigit() or c == '+')
+    
+    # Если номер начинается с 8 - заменяем на +7
+    if phone_digits.startswith('8') and len(phone_digits) >= 11:
+        phone_digits = '+7' + phone_digits[1:]
+    # Если номер начинается с 7 и нет + - добавляем +
+    elif phone_digits.startswith('7') and not phone_digits.startswith('+7'):
+        phone_digits = '+' + phone_digits
+    # Если номер не начинается с + и достаточно цифр - добавляем +7 для РФ
+    elif not phone_digits.startswith('+') and 10 <= len([c for c in phone_digits if c.isdigit()]) <= 11:
+        # Предполагаем российский номер
+        if len([c for c in phone_digits if c.isdigit()]) == 10:
+            phone_digits = '+7' + phone_digits
+        elif len([c for c in phone_digits if c.isdigit()]) == 11 and phone_digits[0] == '7':
+            phone_digits = '+' + phone_digits
+    
+    # Проверяем финальную валидность
+    final_digits = [c for c in phone_digits if c.isdigit()]
+    if len(final_digits) < MIN_PHONE_DIGITS or len(final_digits) > MAX_PHONE_DIGITS:
+        # Если есть ключевые слова инструкций - это инструкция
+        if has_instruction_keywords:
+            return NormalizedPhone(isValid=False, note=original)
+        return NormalizedPhone(isValid=False)
+    
+    # Если номер валиден, но есть инструкции без extension - добавляем в note
+    if has_instruction_keywords and not ext_value:
+        # Ищем инструкции в исходной строке
+        for kw in PHONE_INSTRUCTION_KEYWORDS:
+            if kw in original_lower:
+                # Извлекаем контекст вокруг ключевого слова
+                idx = original_lower.find(kw)
+                context_start = max(0, idx - 20)
+                context_end = min(len(original), idx + len(kw) + 20)
+                context = original[context_start:context_end].strip()
+                if context and context not in note_parts:
+                    note_parts.append(context)
+                break
+    
+    note_text = '; '.join(note_parts) if note_parts else None
+    
+    return NormalizedPhone(
+        phone_e164=phone_digits if phone_digits.startswith('+') else None,
+        ext=ext_value,
+        note=note_text,
+        isValid=True
+    )
+
+
+def sanitize_name(name: str) -> tuple[str, str]:
+    """
+    Очищает имя от "доб." и инструкций.
+    
+    Перед разбором ФИО удаляет хвосты вида: ", доб. 4", "доб.4", "затем 1", 
+    "внутр. 123", "ext 12", "доп. 7" и т.п.
+    
+    Args:
+        name: Исходное имя
+        
+    Returns:
+        tuple[str, str]: (очищенное_имя, извлеченные_инструкции)
+    """
+    if not name or not isinstance(name, str):
+        return ("", "")
+    
+    original = name.strip()
+    if not original:
+        return ("", "")
+    
+    # Паттерны для извлечения extension/инструкций из имени
+    extension_patterns = [
+        r',\s*доб\.?\s*\d+',
+        r',\s*доб\s+\d+',
+        r',\s*внутр\.?\s*\d+',
+        r',\s*внутр\s+\d+',
+        r',\s*ext\.?\s*\d+',
+        r',\s*ext\s+\d+',
+        r',\s*extension\s+\d+',
+        r',\s*затем\s+\d+',
+        r',\s*доп\.?\s*\d+',
+        r',\s*доп\s+\d+',
+        r'\s+доб\.?\s*\d+',
+        r'\s+доб\s+\d+',
+        r'\s+внутр\.?\s*\d+',
+        r'\s+внутр\s+\d+',
+        r'\s+ext\.?\s*\d+',
+        r'\s+ext\s+\d+',
+        r'\s+затем\s+\d+',
+        r'\s+доп\.?\s*\d+',
+        r'\s+доп\s+\d+',
+    ]
+    
+    extracted_parts = []
+    cleaned = original
+    
+    for pattern in extension_patterns:
+        matches = re.finditer(pattern, cleaned, re.IGNORECASE)
+        for match in matches:
+            extracted = match.group(0).strip().lstrip(',').strip()
+            if extracted:
+                extracted_parts.append(extracted)
+            cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE)
+    
+    # Очищаем от лишних пробелов и запятых
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
+    cleaned = re.sub(r',+', ',', cleaned).strip(',').strip()
+    
+    extracted_text = ', '.join(extracted_parts) if extracted_parts else ""
+    
+    return (cleaned, extracted_text)
+
+
+def looks_like_phone_for_position(value: str) -> bool:
+    """
+    Проверяет, похоже ли значение должности на телефон.
+    
+    Если значение содержит много цифр, начинается на +/8/7, содержит телефонные разделители -
+    вероятно, это телефон, а не должность.
+    
+    Args:
+        value: Значение для проверки
+        
+    Returns:
+        bool: True если похоже на телефон
+    """
+    if not value or not isinstance(value, str):
+        return False
+    
+    value = value.strip()
+    if not value:
+        return False
+    
+    # Извлекаем цифры
+    digits = ''.join(c for c in value if c.isdigit())
+    digit_count = len(digits)
+    
+    # Если цифр слишком много (>= 7) - похоже на телефон
+    if digit_count >= 7:
+        return True
+    
+    # Если начинается с +, 8, 7 - похоже на телефон
+    if value.startswith(('+', '8', '7')) and digit_count >= 6:
+        return True
+    
+    # Если содержит телефонные разделители и достаточно цифр
+    phone_separators = ['-', '(', ')', ' ', '.', '/']
+    has_separators = any(sep in value for sep in phone_separators)
+    if has_separators and digit_count >= 6:
+        return True
+    
+    # Нормализуем и проверяем через normalize_phone
+    normalized = normalize_phone(value)
+    if normalized.isValid:
+        return True
+    
+    return False
+
+
 def _parse_fio(name_str: str, first_name_str: str = "", last_name_str: str = "") -> tuple[str, str]:
     """
     Парсит ФИО из строк amoCRM в (last_name, first_name).
@@ -488,24 +729,12 @@ def _custom_values_text(company: dict[str, Any], field_id: int) -> list[str]:
 def _looks_like_phone(value: str) -> bool:
     """
     Проверяет, похоже ли значение на номер телефона.
-    Телефон должен содержать достаточно цифр (минимум 7-10 цифр).
+    Использует normalize_phone для более точной проверки.
     """
     if not value or not isinstance(value, str):
         return False
-    # Извлекаем только цифры
-    digits = ''.join(c for c in value if c.isdigit())
-    # Телефон должен содержать минимум 7 цифр (короткие номера) или больше
-    # Но не слишком много (максимум 15 цифр для международных номеров)
-    if len(digits) < 7 or len(digits) > 15:
-        return False
-    # Если значение содержит только буквы и пробелы - это не телефон
-    if not any(c.isdigit() for c in value):
-        return False
-    # Если значение начинается с букв и содержит мало цифр - вероятно, это не телефон
-    # Например, "внутр. 22-067" содержит только 5 цифр - это примечание, а не телефон
-    if len(digits) < 7:
-        return False
-    return True
+    normalized = normalize_phone(value)
+    return normalized.isValid
 
 
 def _split_multi(s: str) -> list[str]:
@@ -754,6 +983,12 @@ class AmoMigrateResult:
     # Для структурированного dry-run отчёта
     warnings: list[str] = None  # предупреждения (например, контакт связан с несколькими компаниями)
     
+    # Метрики для валидации данных
+    phones_rejected_as_note: int = 0  # сколько "телефонных" строк ушло в NOTE
+    phones_rejected_invalid: int = 0  # не прошло порог валидации
+    position_rejected_as_phone: int = 0  # сколько должностей распознано как телефон
+    name_cleaned_extension_moved_to_note: int = 0  # сколько раз "доб./ext" вынесено из имени
+    
     def get_dry_run_report(self) -> dict[str, Any]:
         """
         Возвращает структурированный dry-run отчёт в формате JSON.
@@ -820,6 +1055,12 @@ class AmoMigrateResult:
                 "contact": sorted(list(contact_fields)),
             },
             "warnings": self.warnings or [],
+            "metrics": {
+                "phones_rejected_as_note": self.phones_rejected_as_note,
+                "phones_rejected_invalid": self.phones_rejected_invalid,
+                "position_rejected_as_phone": self.position_rejected_as_phone,
+                "name_cleaned_extension_moved_to_note": self.name_cleaned_extension_moved_to_note,
+            },
         }
 
 
@@ -3120,10 +3361,30 @@ def migrate_filtered(
                             continue
                         # Извлекаем данные контакта (делаем это ДО проверки на existing, чтобы всегда было в preview)
                         # Парсим ФИО с помощью функции _parse_fio
+                        # Сначала очищаем имена от "доб." и инструкций
                         name_str = str(ac.get("name") or "").strip()
                         first_name_raw = str(ac.get("first_name") or "").strip()
                         last_name_raw = str(ac.get("last_name") or "").strip()
-                        last_name, first_name = _parse_fio(name_str, first_name_raw, last_name_raw)
+                        
+                        # Очищаем имена от extension/инструкций
+                        name_cleaned, name_extracted = sanitize_name(name_str)
+                        first_name_cleaned, first_name_extracted = sanitize_name(first_name_raw)
+                        last_name_cleaned, last_name_extracted = sanitize_name(last_name_raw)
+                        
+                        # Объединяем извлеченные инструкции
+                        all_extracted = [e for e in [name_extracted, first_name_extracted, last_name_extracted] if e]
+                        if all_extracted:
+                            extracted_text = ', '.join(all_extracted)
+                            # Увеличиваем счетчик метрики
+                            res.name_cleaned_extension_moved_to_note += 1
+                            if not note_text:
+                                note_text = extracted_text[:255]
+                            elif extracted_text not in note_text:
+                                combined = f"{note_text}; {extracted_text[:200]}"
+                                note_text = combined[:255]
+                        
+                        # Парсим очищенные имена
+                        last_name, first_name = _parse_fio(name_cleaned, first_name_cleaned, last_name_cleaned)
                     
                         # ОТЛАДКА: логируем начало обработки контакта
                         preview_count_before = len(res.contacts_preview) if res.contacts_preview else 0
@@ -3284,17 +3545,28 @@ def migrate_filtered(
                                                     logger.debug(f"  -> Skipped service note type '{note_type_val}' (not a real note)")
                     
                             # Стандартные поля (если есть)
+                            # Обработка телефонов с нормализацией
                             if ac.get("phone"):
                                 for pv in _split_multi(str(ac.get("phone"))):
                                     if pv:
-                                        if _looks_like_phone(pv):  # ИСПРАВЛЕНИЕ: проверяем, что это телефон
-                                            phones.append((ContactPhone.PhoneType.OTHER, pv, ""))
+                                        normalized = normalize_phone(pv)
+                                        if normalized.isValid:
+                                            # Используем нормализованный номер
+                                            phone_value = normalized.phone_e164 or pv
+                                            comment_parts = []
+                                            if normalized.ext:
+                                                comment_parts.append(f"доб. {normalized.ext}")
+                                            if normalized.note:
+                                                comment_parts.append(normalized.note)
+                                            comment = "; ".join(comment_parts) if comment_parts else ""
+                                            phones.append((ContactPhone.PhoneType.OTHER, phone_value, comment))
                                         else:
                                             # Если значение не похоже на телефон, добавляем в примечание
+                                            note_to_add = normalized.note or pv
                                             if not note_text:
-                                                note_text = pv[:255]
-                                            elif pv not in note_text:
-                                                combined = f"{note_text}; {pv[:200]}"
+                                                note_text = note_to_add[:255]
+                                            elif note_to_add not in note_text:
+                                                combined = f"{note_text}; {note_to_add[:200]}"
                                                 note_text = combined[:255]
                         if ac.get("email"):
                             ev = str(ac.get("email")).strip()
@@ -3497,20 +3769,28 @@ def migrate_filtered(
                                             if debug_count_for_extraction < 3:
                                                 logger.debug(f"      -> Added phone: {phone_number} (type={ptype}, comment='{phone_comment}')")
                                         else:
-                                            # Fallback: если нет строк, используем старое поведение
+                                            # Fallback: если нет строк, используем normalize_phone
                                             for pv in _split_multi(val):
                                                 if pv:
-                                                    if _looks_like_phone(pv):  # ИСПРАВЛЕНИЕ: проверяем, что это телефон
-                                                        comment = str(enum_code or "")
-                                                        phones.append((ptype, pv, comment))
+                                                    normalized = normalize_phone(pv)
+                                                    if normalized.isValid:
+                                                        phone_value = normalized.phone_e164 or pv
+                                                        comment_parts = [str(enum_code or "")] if enum_code else []
+                                                        if normalized.ext:
+                                                            comment_parts.append(f"доб. {normalized.ext}")
+                                                        if normalized.note:
+                                                            comment_parts.append(normalized.note)
+                                                        comment = "; ".join([c for c in comment_parts if c])
+                                                        phones.append((ptype, phone_value, comment[:255]))
                                                         if debug_count_for_extraction < 3:
-                                                            logger.debug(f"      -> Added phone (fallback): {pv} (type={ptype}, comment='{comment}')")
+                                                            logger.debug(f"      -> Added phone (fallback): {phone_value} (type={ptype}, comment='{comment}')")
                                                     else:
                                                         # Если значение не похоже на телефон, добавляем в примечание
+                                                        note_to_add = normalized.note or pv
                                                         if not note_text:
-                                                            note_text = pv[:255]
-                                                        elif pv not in note_text:
-                                                            combined = f"{note_text}; {pv[:200]}"
+                                                            note_text = note_to_add[:255]
+                                                        elif note_to_add not in note_text:
+                                                            combined = f"{note_text}; {note_to_add[:200]}"
                                                             note_text = combined[:255]
                                                         if debug_count_for_extraction < 3:
                                                             logger.debug(f"      -> Skipped non-phone value as note (fallback): {pv[:50]}")
@@ -3535,10 +3815,40 @@ def migrate_filtered(
                                                 if debug_count_for_extraction < 3:
                                                     logger.debug(f"      -> Added email: {ev} (type={etype})")
                                     elif is_position:
-                                        if not position:
-                                            position = val
-                                            if debug_count_for_extraction < 3:
-                                                logger.debug(f"      -> Set position: {val}")
+                                        # Защита POSITION от телефонов
+                                        if looks_like_phone_for_position(val):
+                                            # Увеличиваем счетчик метрики
+                                            res.position_rejected_as_phone += 1
+                                            # Если позиция похожа на телефон - пытаемся интерпретировать как телефон
+                                            normalized = normalize_phone(val)
+                                            if normalized.isValid:
+                                                # Переносим в телефоны
+                                                phone_value = normalized.phone_e164 or val
+                                                comment_parts = []
+                                                if normalized.ext:
+                                                    comment_parts.append(f"доб. {normalized.ext}")
+                                                if normalized.note:
+                                                    comment_parts.append(normalized.note)
+                                                comment = "; ".join(comment_parts) if comment_parts else "из поля должности"
+                                                phones.append((ContactPhone.PhoneType.OTHER, phone_value, comment[:255]))
+                                                if debug_count_for_extraction < 3:
+                                                    logger.debug(f"      -> Position '{val}' recognized as phone, moved to phones")
+                                            else:
+                                                # Если не валидный телефон - переносим в примечание
+                                                note_to_add = normalized.note or val
+                                                if not note_text:
+                                                    note_text = f"Должность (не валидна): {note_to_add}"[:255]
+                                                elif note_to_add not in note_text:
+                                                    combined = f"{note_text}; Должность: {note_to_add[:200]}"
+                                                    note_text = combined[:255]
+                                                if debug_count_for_extraction < 3:
+                                                    logger.debug(f"      -> Position '{val}' not valid phone, moved to note")
+                                        else:
+                                            # Нормальная должность
+                                            if not position:
+                                                position = val
+                                                if debug_count_for_extraction < 3:
+                                                    logger.debug(f"      -> Set position: {val}")
                                     elif is_note:
                                         # ВАЖНО: примечание из custom_fields имеет ПРИОРИТЕТ над заметками
                                         # Если уже есть note_text из заметок - проверяем, не служебная ли это заметка
@@ -3742,11 +4052,15 @@ def migrate_filtered(
                                 logger.debug(f"  -> ⚠️ No note fields found in custom_fields. All fields: {all_custom_field_names}")
                     
                         # Обрабатываем данные о холодном звонке из amoCRM (ДО использования в contact_debug)
+                        # Нормализуем timestamp: если дата без времени - устанавливаем на 00:00 UTC
                         cold_marked_at_dt = None
                         if cold_call_timestamp:
                             try:
                                 UTC = getattr(timezone, "UTC", dt_timezone.utc)
+                                # Конвертируем timestamp в datetime
                                 cold_marked_at_dt = timezone.datetime.fromtimestamp(cold_call_timestamp, tz=UTC)
+                                # Если время 00:00:00 - это может быть дата без времени, оставляем как есть
+                                # (amoCRM может передавать дату как timestamp начала дня)
                             except Exception:
                                 cold_marked_at_dt = None
                     

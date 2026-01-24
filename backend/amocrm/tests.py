@@ -1,10 +1,15 @@
 """
 Unit-тесты для AmoClient, особенно для обработки rate limit (429).
+А также тесты для нормализации телефонов и валидации данных контактов.
 """
 from unittest.mock import Mock, patch
 import pytest
 
 from amocrm.client import AmoClient, AmoApiError, RateLimitError, AmoResponse
+from amocrm.migrate import (
+    normalize_phone, sanitize_name, looks_like_phone_for_position,
+    NormalizedPhone
+)
 from ui.models import AmoApiConfig
 
 
@@ -87,3 +92,84 @@ class TestAmoClientRateLimit:
             with patch('time.sleep'):  # Мокаем sleep для ускорения теста
                 result = client.get("/api/v4/test")
                 assert result == {"result": "ok"}
+
+
+class TestNormalizePhone:
+    """Тесты для функции normalize_phone."""
+    
+    def test_instruction_only_not_phone(self):
+        """Тест: 'только через приемную! мини АТС' -> NOTE, не PHONE."""
+        result = normalize_phone("только через приемную! мини АТС")
+        assert not result.isValid
+        assert result.note == "только через приемную! мини АТС"
+        assert result.phone_e164 is None
+    
+    def test_valid_phone_with_extension(self):
+        """Тест: '+7 495 632-21-97 доб. 4' -> PHONE + ext."""
+        result = normalize_phone("+7 495 632-21-97 доб. 4")
+        assert result.isValid
+        assert result.phone_e164 == "+74956322197"
+        assert result.ext == "4"
+    
+    def test_phone_with_instruction(self):
+        """Тест: '+7 345 2540415 (WORK) +79829481568 (MOB)' -> два телефона."""
+        # Первый номер
+        result1 = normalize_phone("+7 345 2540415 (WORK)")
+        assert result1.isValid
+        assert result1.phone_e164 == "+73452540415"
+        
+        # Второй номер
+        result2 = normalize_phone("+79829481568 (MOB)")
+        assert result2.isValid
+        assert result2.phone_e164 == "+79829481568"
+    
+    def test_position_looks_like_phone(self):
+        """Тест: '+7 495 632-21-97' в POSITION -> распознается как телефон."""
+        assert looks_like_phone_for_position("+7 495 632-21-97")
+        assert looks_like_phone_for_position("84956322197")
+        assert not looks_like_phone_for_position("Менеджер по продажам")
+        assert not looks_like_phone_for_position("Директор")
+    
+    def test_sanitize_name_removes_extension(self):
+        """Тест: 'Павлович, доб. 4, затем 1 Андрей' -> name 'Андрей Павлович', NOTE содержит 'доб. 4, затем 1'."""
+        cleaned, extracted = sanitize_name("Павлович, доб. 4, затем 1 Андрей")
+        assert "доб. 4" in extracted
+        assert "затем 1" in extracted
+        assert "Андрей" in cleaned
+        assert "Павлович" in cleaned
+    
+    def test_sanitize_name_simple(self):
+        """Тест: простое имя без extension."""
+        cleaned, extracted = sanitize_name("Иванов Иван")
+        assert cleaned == "Иванов Иван"
+        assert extracted == ""
+    
+    def test_normalize_phone_russian_format(self):
+        """Тест: нормализация российских номеров."""
+        # 8 -> +7
+        result = normalize_phone("84951234567")
+        assert result.isValid
+        assert result.phone_e164 == "+74951234567"
+        
+        # 7 -> +7
+        result = normalize_phone("74951234567")
+        assert result.isValid
+        assert result.phone_e164 == "+74951234567"
+        
+        # 10 цифр -> +7
+        result = normalize_phone("4951234567")
+        assert result.isValid
+        assert result.phone_e164 == "+74951234567"
+    
+    def test_normalize_phone_too_short(self):
+        """Тест: слишком короткий номер -> не валиден."""
+        result = normalize_phone("12345")
+        assert not result.isValid
+    
+    def test_normalize_phone_with_multiple_extensions(self):
+        """Тест: номер с несколькими extension."""
+        result = normalize_phone("+7 495 123-45-67 доб. 4 затем 1")
+        assert result.isValid
+        assert result.phone_e164 == "+74951234567"
+        # Должен извлечь первое extension
+        assert result.ext is not None
