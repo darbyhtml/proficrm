@@ -171,8 +171,30 @@ def normalize_phone(raw: str | None) -> NormalizedPhone:
             break
     
     # Нормализуем номер телефона
-    # Удаляем все нецифровые символы кроме +
-    phone_digits = ''.join(c for c in cleaned_phone if c.isdigit() or c == '+')
+    # Поддержка форматов: "+7 345 2540415", "8-816-565-49-58", "8923-...", "(38473)3-33-92"
+    # Сначала извлекаем все цифры и +, сохраняя структуру для парсинга скобок
+    # Формат (38473)3-33-92 означает: код города 38473, затем номер 3-33-92
+    # Это российский номер, поэтому добавляем +7
+    
+    # Удаляем все нецифровые символы кроме + и скобок (для парсинга формата (38473)3-33-92)
+    # Но сначала проверяем, есть ли скобки - это может быть формат (код)номер
+    has_brackets = '(' in cleaned_phone and ')' in cleaned_phone
+    
+    if has_brackets:
+        # Формат (38473)3-33-92 или (495)123-45-67
+        # Извлекаем код города из скобок и номер после скобок
+        bracket_match = re.search(r'\((\d+)\)(.+)', cleaned_phone)
+        if bracket_match:
+            city_code = bracket_match.group(1)
+            number_part = bracket_match.group(2)
+            # Объединяем код города и номер
+            phone_digits = city_code + ''.join(c for c in number_part if c.isdigit())
+        else:
+            # Если не удалось распарсить - просто извлекаем цифры
+            phone_digits = ''.join(c for c in cleaned_phone if c.isdigit() or c == '+')
+    else:
+        # Обычный формат - просто извлекаем цифры и +
+        phone_digits = ''.join(c for c in cleaned_phone if c.isdigit() or c == '+')
     
     # Если номер начинается с 8 - заменяем на +7
     if phone_digits.startswith('8') and len(phone_digits) >= 11:
@@ -1078,6 +1100,9 @@ class AmoMigrateResult:
     position_rejected_as_phone: int = 0  # сколько должностей распознано как телефон
     name_cleaned_extension_moved_to_note: int = 0  # сколько раз "доб./ext" вынесено из имени
     
+    # Детальные причины для dry-run логирования
+    skip_reasons: list[dict[str, Any]] = None  # список причин пропуска/изменений: [{"type": "skip_POSITION", "reason": "looks like phone", "value": "...", "contact_id": ...}, ...]
+    
     # Счетчики для dry-run (would_* вместо created/updated)
     companies_would_create: int = 0
     companies_would_update: int = 0
@@ -1111,7 +1136,19 @@ class AmoMigrateResult:
           },
           "warnings": [
             "Контакт 123456 связан с несколькими компаниями — использована первая"
-          ]
+          ],
+          "skip_reasons": [
+            {"type": "skip_POSITION", "reason": "looks like phone", "value": "...", "contact_id": 123456},
+            {"type": "skip_PHONE", "reason": "invalid after normalization", "value": "...", "contact_id": 123456},
+            {"type": "move_PHONE_text_to_NOTE", "reason": "contains instruction keywords", "value": "...", "contact_id": 123456},
+            {"type": "dedup_PHONE", "reason": "already exists", "value": "...", "contact_id": 123456}
+          ],
+          "metrics": {
+            "phones_rejected_as_note": 0,
+            "phones_rejected_invalid": 0,
+            "position_rejected_as_phone": 0,
+            "name_cleaned_extension_moved_to_note": 0
+          }
         }
         """
         # Собираем уникальные поля компаний из custom_fields_values
@@ -1164,6 +1201,7 @@ class AmoMigrateResult:
                 "contact": sorted(list(contact_fields)),
             },
             "warnings": self.warnings or [],
+            "skip_reasons": self.skip_reasons or [],
             "metrics": {
                 "phones_rejected_as_note": self.phones_rejected_as_note,
                 "phones_rejected_invalid": self.phones_rejected_invalid,
@@ -3011,6 +3049,8 @@ def migrate_filtered(
                 # Но явно помечаем, что заметки не импортированы из-за rate limit
                 if res.warnings is None:
                     res.warnings = []
+                if res.skip_reasons is None:
+                    res.skip_reasons = []
                 res.warnings.append(f"Импорт заметок компаний прерван из-за rate limit (429): {e}")
                 notes = []  # Продолжаем с пустым списком заметок
                 # ОПТИМИЗАЦИЯ: убираем N+1 запросы к CompanyNote и Company
@@ -3960,8 +4000,23 @@ def migrate_filtered(
                                                 # Увеличиваем счетчик метрики
                                                 if normalized.note:
                                                     res.phones_rejected_as_note += 1
+                                                    reason_type = "move_PHONE_text_to_NOTE"
+                                                    reason_text = "contains instruction keywords"
                                                 else:
                                                     res.phones_rejected_invalid += 1
+                                                    reason_type = "skip_PHONE"
+                                                    reason_text = "invalid after normalization"
+                                                
+                                                # Логируем причину пропуска
+                                                if res.skip_reasons is None:
+                                                    res.skip_reasons = []
+                                                res.skip_reasons.append({
+                                                    "type": reason_type,
+                                                    "reason": reason_text,
+                                                    "value": phone_number[:100] if len(phone_number) <= 100 else phone_number[:50] + "...",
+                                                    "contact_id": amo_contact_id,
+                                                    "field_name": field_name,
+                                                })
                                                 
                                                 if debug_count_for_extraction < 3:
                                                     logger.debug(f"      -> Skipped non-phone value as note: {phone_number[:50]} (normalized.isValid=False)")
@@ -4054,6 +4109,16 @@ def migrate_filtered(
                                         if looks_like_phone_for_position(val):
                                             # Увеличиваем счетчик метрики
                                             res.position_rejected_as_phone += 1
+                                            # Логируем причину пропуска
+                                            if res.skip_reasons is None:
+                                                res.skip_reasons = []
+                                            res.skip_reasons.append({
+                                                "type": "skip_POSITION",
+                                                "reason": "looks like phone",
+                                                "value": _mask_phone(val) if len(val) > 10 else val[:50],
+                                                "contact_id": amo_contact_id,
+                                                "field_name": field_name,
+                                            })
                                             # Если позиция похожа на телефон - пытаемся интерпретировать как телефон
                                             normalized = normalize_phone(val)
                                             if normalized.isValid:
@@ -4164,16 +4229,36 @@ def migrate_filtered(
                                                 birthday_timestamp = None
                     
                         # Убираем дубликаты
-                        # Дедуп
+                        # Дедуп по нормализованному виду (сравниваем E.164 номера)
                         dedup_phones: list[tuple[str, str, str]] = []
-                        seen_p = set()
+                        seen_p = set()  # Множество нормализованных номеров
+                        seen_p_raw = set()  # Множество исходных номеров (для логирования)
                         for pt, pv, pc in phones:
                             pv2 = str(pv or "").strip()
                             if not pv2:
                                 continue
-                            if pv2 in seen_p:
+                            
+                            # Нормализуем для сравнения
+                            normalized_for_dedup = normalize_phone(pv2)
+                            if normalized_for_dedup.isValid and normalized_for_dedup.phone_e164:
+                                phone_key = normalized_for_dedup.phone_e164
+                            else:
+                                phone_key = pv2.lower()
+                            
+                            if phone_key in seen_p:
+                                # Логируем причину дедупа
+                                if res.skip_reasons is None:
+                                    res.skip_reasons = []
+                                res.skip_reasons.append({
+                                    "type": "dedup_PHONE",
+                                    "reason": "already exists",
+                                    "value": _mask_phone(pv2) if len(pv2) > 10 else pv2[:50],
+                                    "contact_id": amo_contact_id,
+                                    "normalized": phone_key if normalized_for_dedup.isValid else None,
+                                })
                                 continue
-                            seen_p.add(pv2)
+                            seen_p.add(phone_key)
+                            seen_p_raw.add(pv2)
                             dedup_phones.append((pt, pv2, str(pc or "")))
                         phones = dedup_phones
 
