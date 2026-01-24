@@ -60,6 +60,19 @@
 | `phones_rejected_as_note` | есть |
 | `position_rejected_as_phone` | есть |
 | `name_cleaned_extension_moved_to_note` | есть (по сути «инструкции из имени в note») |
-| `name_instructions_moved_to_note` | **нет** (семантически близка к `name_cleaned_extension_moved_to_note`; при необходимости можно добавить алиас или отдельный счётчик) |
+| `name_instructions_moved_to_note` | есть (алиас) |
+| `skynet_phone_values_rejected` | есть — значения из Skynet-поля, не распознанные как телефон |
+| `company_phones_rejected_invalid` | есть — пропуск добавления в CompanyPhone при невалидном номере |
 
 Остальные: `phones_rejected_invalid`, `phones_extracted_with_extension`, `position_phone_detected`, `emails_rejected_invalid_format`, `fields_skipped_to_prevent_blank_overwrite` — присутствуют.
+
+---
+
+## 7) Skynet phone field (список телефонов Скайнет)
+
+- **Проблема**: поле могло содержать произвольный текст; `list_vals`/`_split_multi` режут по запятой/точке с запятой, и слова («сотовой», «телефонной» и т.п.) попадали в список «телефонов».
+- **Исправление**:
+  - Skynet обрабатывается отдельно: сырые строки из `_custom_values_text` (без `_split_multi` по запятой).
+  - Каждая строка прогоняется через `parse_phone_value`; в `phones` попадают только валидные E.164.
+  - Не-номера считаются в `skynet_phone_values_rejected`; при `> 0` пишется `logger.warning` с `company_id` и `name`.
+- **CompanyPhone**: добавление только при `is_valid_phone(normalized)`; иначе `company_phones_rejected_invalid += 1` и запись не создаётся.
