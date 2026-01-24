@@ -1519,372 +1519,372 @@ def migrate_filtered(
             # Каждая под-транзакция обрабатывает до SUB_TRANSACTION_SIZE компаний
             with transaction.atomic():
                 for amo_c in sub_batch:
-            extra = _extract_company_fields(amo_c, field_meta) if field_meta else {}
-            comp, created = _upsert_company_from_amo(amo_company=amo_c, actor=actor, responsible=responsible_local, dry_run=dry_run)
-            # заполнение "Данные" (только если поле пустое, чтобы не затереть уже заполненное вручную)
-            # ВАЖНО: всегда обрезаем значения до max_length, даже если поле уже заполнено (защита от длинных значений)
-            changed = False
-            
-            # Для dry-run: собираем diff изменений
-            company_updates_diff = {} if dry_run else None
-            
-            # Мягкий режим update: если поле уже меняли руками, не перезаписываем.
-            try:
-                rf = dict(comp.raw_fields or {})
-            except Exception:
-                rf = {}
-            prev = rf.get("amo_values") or {}
-            if not isinstance(prev, dict):
-                prev = {}
-            
-            # Сохраняем старые значения для diff (только при dry_run)
-            if dry_run:
-                old_values = {
-                    "legal_name": comp.legal_name or "",
-                    "inn": comp.inn or "",
-                    "kpp": comp.kpp or "",
-                    "address": comp.address or "",
-                    "phone": comp.phone or "",
-                    "email": comp.email or "",
-                    "website": comp.website or "",
-                    "contact_name": comp.contact_name or "",
-                    "activity_kind": comp.activity_kind or "",
-                    "employees_count": comp.employees_count,
-                    "workday_start": str(comp.workday_start) if comp.workday_start else "",
-                    "workday_end": str(comp.workday_end) if comp.workday_end else "",
-                    "work_timezone": comp.work_timezone or "",
-                }
+                    extra = _extract_company_fields(amo_c, field_meta) if field_meta else {}
+                    comp, created = _upsert_company_from_amo(amo_company=amo_c, actor=actor, responsible=responsible_local, dry_run=dry_run)
+                    # заполнение "Данные" (только если поле пустое, чтобы не затереть уже заполненное вручную)
+                    # ВАЖНО: всегда обрезаем значения до max_length, даже если поле уже заполнено (защита от длинных значений)
+                    changed = False
+                    
+                    # Для dry-run: собираем diff изменений
+                    company_updates_diff = {} if dry_run else None
+                    
+                    # Мягкий режим update: если поле уже меняли руками, не перезаписываем.
+                    try:
+                        rf = dict(comp.raw_fields or {})
+                    except Exception:
+                        rf = {}
+                    prev = rf.get("amo_values") or {}
+                    if not isinstance(prev, dict):
+                        prev = {}
+                    
+                    # Сохраняем старые значения для diff (только при dry_run)
+                    if dry_run:
+                        old_values = {
+                            "legal_name": comp.legal_name or "",
+                            "inn": comp.inn or "",
+                            "kpp": comp.kpp or "",
+                            "address": comp.address or "",
+                            "phone": comp.phone or "",
+                            "email": comp.email or "",
+                            "website": comp.website or "",
+                            "contact_name": comp.contact_name or "",
+                            "activity_kind": comp.activity_kind or "",
+                            "employees_count": comp.employees_count,
+                            "workday_start": str(comp.workday_start) if comp.workday_start else "",
+                            "workday_end": str(comp.workday_end) if comp.workday_end else "",
+                            "work_timezone": comp.work_timezone or "",
+                        }
 
-            def can_update(field: str) -> bool:
-                cur = getattr(comp, field)
-                if cur in ("", None):
-                    return True
-                if field in prev and prev.get(field) == cur:
-                    return True
-                return False
-            if extra.get("legal_name"):
-                new_legal = str(extra["legal_name"]).strip()[:255]  # сначала strip, потом обрезка до max_length=255
-                old_legal = (comp.legal_name or "").strip()
-                if not old_legal:
-                    comp.legal_name = new_legal
-                    changed = True
-                    if dry_run and new_legal:
-                        company_updates_diff["legal_name"] = {"old": "", "new": new_legal}
-                elif len(comp.legal_name) > 255:  # защита: если уже заполнено, но слишком длинное
-                    comp.legal_name = comp.legal_name.strip()[:255]
-                    changed = True
-                    if dry_run:
-                        company_updates_diff["legal_name"] = {"old": old_legal, "new": comp.legal_name}
-            if extra.get("inn"):
-                from companies.inn_utils import merge_inn_strings
+                    def can_update(field: str) -> bool:
+                        cur = getattr(comp, field)
+                        if cur in ("", None):
+                            return True
+                        if field in prev and prev.get(field) == cur:
+                            return True
+                        return False
+                    if extra.get("legal_name"):
+                        new_legal = str(extra["legal_name"]).strip()[:255]  # сначала strip, потом обрезка до max_length=255
+                        old_legal = (comp.legal_name or "").strip()
+                        if not old_legal:
+                            comp.legal_name = new_legal
+                            changed = True
+                            if dry_run and new_legal:
+                                company_updates_diff["legal_name"] = {"old": "", "new": new_legal}
+                        elif len(comp.legal_name) > 255:  # защита: если уже заполнено, но слишком длинное
+                            comp.legal_name = comp.legal_name.strip()[:255]
+                            changed = True
+                            if dry_run:
+                                company_updates_diff["legal_name"] = {"old": old_legal, "new": comp.legal_name}
+                    if extra.get("inn"):
+                        from companies.inn_utils import merge_inn_strings
 
-                old_inn = (comp.inn or "").strip()
-                incoming = str(extra["inn"])
+                        old_inn = (comp.inn or "").strip()
+                        incoming = str(extra["inn"])
 
-                # Импорт из amoCRM: не затираем вручную внесённые ИНН,
-                # но если в amo пришли новые — аккуратно добавляем (уникально).
-                merged = merge_inn_strings(old_inn, incoming)[:255]
-                if merged and merged != old_inn:
-                    comp.inn = merged
-                    changed = True
-                    if dry_run:
-                        company_updates_diff["inn"] = {"old": old_inn, "new": merged}
-            if extra.get("kpp"):
-                new_kpp = str(extra["kpp"]).strip()[:20]  # сначала strip, потом обрезка до max_length=20
-                old_kpp = (comp.kpp or "").strip()
-                if not old_kpp:
-                    comp.kpp = new_kpp
-                    changed = True
-                    if dry_run and new_kpp:
-                        company_updates_diff["kpp"] = {"old": "", "new": new_kpp}
-                elif len(comp.kpp) > 20:  # защита: если уже заполнено, но слишком длинное
-                    comp.kpp = comp.kpp.strip()[:20]
-                    changed = True
-                    if dry_run:
-                        company_updates_diff["kpp"] = {"old": old_kpp, "new": comp.kpp}
-            if extra.get("address"):
-                new_addr = str(extra["address"]).strip()[:500]  # сначала strip, потом обрезка до max_length=500
-                old_addr = (comp.address or "").strip()
-                if not old_addr:
-                    comp.address = new_addr
-                    changed = True
-                    if dry_run and new_addr:
-                        company_updates_diff["address"] = {"old": "", "new": new_addr}
-                elif len(comp.address) > 500:  # защита: если уже заполнено, но слишком длинное
-                    comp.address = comp.address.strip()[:500]
-                    changed = True
-                    if dry_run:
-                        company_updates_diff["address"] = {"old": old_addr, "new": comp.address}
-            phones = extra.get("phones") or []
-            emails = extra.get("emails") or []
-            company_note = str(extra.get("note") or "").strip()[:255]
-            
-            # ВАЖНО: сохраняем исходное значение основного телефона ДО обработки
-            # чтобы правильно определить, какие телефоны идут в CompanyPhone
-            original_main_phone = (comp.phone or "").strip()
-            
-            # основной телефон/почта — в "Данные", остальные — в отдельный контакт (даже без ФИО/должности)
-            if phones and not original_main_phone:
-                new_phone = str(phones[0])[:50]
-                comp.phone = new_phone
-                changed = True
-                if dry_run:
-                    company_updates_diff["phone"] = {"old": "", "new": new_phone}
-            if emails and not (comp.email or "").strip():
-                new_email = str(emails[0])[:254]
-                comp.email = new_email
-                changed = True
-                if dry_run:
-                    company_updates_diff["email"] = {"old": "", "new": new_email}
-            if extra.get("website") and not (comp.website or "").strip():
-                new_website = extra["website"][:255]
-                comp.website = new_website
-                changed = True
-                if dry_run:
-                    company_updates_diff["website"] = {"old": "", "new": new_website}
-            # Комментарий к основному телефону компании: импортируем "Примечание" из amoCRM
-            # Логика: если примечание одно, пишем его к первому телефону (в Company.phone_comment), не затирая ручное.
-            if company_note and not (comp.phone_comment or "").strip():
-                # Если основной телефон уже есть/будет — сохраняем комментарий
-                if (comp.phone or "").strip() or (phones and str(phones[0]).strip()):
-                    comp.phone_comment = company_note[:255]
-                    changed = True
-                    if dry_run:
-                        company_updates_diff["phone_comment"] = {"old": "", "new": company_note[:255]}
-            if extra.get("activity_kind") and can_update("activity_kind"):
-                ak = str(extra.get("activity_kind") or "").strip()[:255]
-                old_ak = (comp.activity_kind or "").strip()
-                if ak and comp.activity_kind != ak:
-                    comp.activity_kind = ak
-                    changed = True
-                    if dry_run:
-                        company_updates_diff["activity_kind"] = {"old": old_ak, "new": ak}
-            if extra.get("employees_count") and can_update("employees_count"):
-                try:
-                    ec = int("".join(ch for ch in str(extra.get("employees_count") or "") if ch.isdigit()) or "0")
-                    # PositiveIntegerField в PostgreSQL имеет максимум 2147483647
-                    # Ограничиваем значение, чтобы избежать ошибки "integer out of range"
-                    MAX_EMPLOYEES_COUNT = 2147483647
-                    if ec > MAX_EMPLOYEES_COUNT:
-                        logger.warning(f"Company {comp.name}: employees_count {ec} exceeds maximum {MAX_EMPLOYEES_COUNT}, capping to maximum")
-                        ec = MAX_EMPLOYEES_COUNT
-                    old_ec = comp.employees_count
-                    if ec > 0 and comp.employees_count != ec:
-                        comp.employees_count = ec
+                        # Импорт из amoCRM: не затираем вручную внесённые ИНН,
+                        # но если в amo пришли новые — аккуратно добавляем (уникально).
+                        merged = merge_inn_strings(old_inn, incoming)[:255]
+                        if merged and merged != old_inn:
+                            comp.inn = merged
+                            changed = True
+                            if dry_run:
+                                company_updates_diff["inn"] = {"old": old_inn, "new": merged}
+                    if extra.get("kpp"):
+                        new_kpp = str(extra["kpp"]).strip()[:20]  # сначала strip, потом обрезка до max_length=20
+                        old_kpp = (comp.kpp or "").strip()
+                        if not old_kpp:
+                            comp.kpp = new_kpp
+                            changed = True
+                            if dry_run and new_kpp:
+                                company_updates_diff["kpp"] = {"old": "", "new": new_kpp}
+                        elif len(comp.kpp) > 20:  # защита: если уже заполнено, но слишком длинное
+                            comp.kpp = comp.kpp.strip()[:20]
+                            changed = True
+                            if dry_run:
+                                company_updates_diff["kpp"] = {"old": old_kpp, "new": comp.kpp}
+                    if extra.get("address"):
+                        new_addr = str(extra["address"]).strip()[:500]  # сначала strip, потом обрезка до max_length=500
+                        old_addr = (comp.address or "").strip()
+                        if not old_addr:
+                            comp.address = new_addr
+                            changed = True
+                            if dry_run and new_addr:
+                                company_updates_diff["address"] = {"old": "", "new": new_addr}
+                        elif len(comp.address) > 500:  # защита: если уже заполнено, но слишком длинное
+                            comp.address = comp.address.strip()[:500]
+                            changed = True
+                            if dry_run:
+                                company_updates_diff["address"] = {"old": old_addr, "new": comp.address}
+                    phones = extra.get("phones") or []
+                    emails = extra.get("emails") or []
+                    company_note = str(extra.get("note") or "").strip()[:255]
+                    
+                    # ВАЖНО: сохраняем исходное значение основного телефона ДО обработки
+                    # чтобы правильно определить, какие телефоны идут в CompanyPhone
+                    original_main_phone = (comp.phone or "").strip()
+                    
+                    # основной телефон/почта — в "Данные", остальные — в отдельный контакт (даже без ФИО/должности)
+                    if phones and not original_main_phone:
+                        new_phone = str(phones[0])[:50]
+                        comp.phone = new_phone
                         changed = True
                         if dry_run:
-                            company_updates_diff["employees_count"] = {"old": str(old_ec) if old_ec else "", "new": str(ec)}
-                except (ValueError, OverflowError) as e:
-                    logger.warning(f"Company {comp.name}: failed to parse employees_count '{extra.get('employees_count')}': {e}")
-                    pass
-            if extra.get("work_timezone") and can_update("work_timezone"):
-                tzv = str(extra.get("work_timezone") or "").strip()[:64]
-                old_tz = (comp.work_timezone or "").strip()
-                if tzv and comp.work_timezone != tzv:
-                    comp.work_timezone = tzv
-                    changed = True
-                    if dry_run:
-                        company_updates_diff["work_timezone"] = {"old": old_tz, "new": tzv}
-            if extra.get("worktime"):
-                # поддерживаем форматы: "09:00-18:00", "09:00–18:00", "с 9:00 до 18:00"
-                import re
-                s = str(extra.get("worktime") or "").replace("–", "-").strip()
-                m = re.search(r"(\d{1,2})[:.](\d{2})\s*-\s*(\d{1,2})[:.](\d{2})", s)
-                if m:
-                    try:
-                        h1, m1, h2, m2 = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
-                        if 0 <= h1 <= 23 and 0 <= h2 <= 23 and 0 <= m1 <= 59 and 0 <= m2 <= 59:
-                            old_start = str(comp.workday_start) if comp.workday_start else ""
-                            old_end = str(comp.workday_end) if comp.workday_end else ""
-                            if can_update("workday_start") and comp.workday_start != time(h1, m1):
-                                comp.workday_start = time(h1, m1)
+                            company_updates_diff["phone"] = {"old": "", "new": new_phone}
+                    if emails and not (comp.email or "").strip():
+                        new_email = str(emails[0])[:254]
+                        comp.email = new_email
+                        changed = True
+                        if dry_run:
+                            company_updates_diff["email"] = {"old": "", "new": new_email}
+                    if extra.get("website") and not (comp.website or "").strip():
+                        new_website = extra["website"][:255]
+                        comp.website = new_website
+                        changed = True
+                        if dry_run:
+                            company_updates_diff["website"] = {"old": "", "new": new_website}
+                    # Комментарий к основному телефону компании: импортируем "Примечание" из amoCRM
+                    # Логика: если примечание одно, пишем его к первому телефону (в Company.phone_comment), не затирая ручное.
+                    if company_note and not (comp.phone_comment or "").strip():
+                        # Если основной телефон уже есть/будет — сохраняем комментарий
+                        if (comp.phone or "").strip() or (phones and str(phones[0]).strip()):
+                            comp.phone_comment = company_note[:255]
+                            changed = True
+                            if dry_run:
+                                company_updates_diff["phone_comment"] = {"old": "", "new": company_note[:255]}
+                    if extra.get("activity_kind") and can_update("activity_kind"):
+                        ak = str(extra.get("activity_kind") or "").strip()[:255]
+                        old_ak = (comp.activity_kind or "").strip()
+                        if ak and comp.activity_kind != ak:
+                            comp.activity_kind = ak
+                            changed = True
+                            if dry_run:
+                                company_updates_diff["activity_kind"] = {"old": old_ak, "new": ak}
+                    if extra.get("employees_count") and can_update("employees_count"):
+                        try:
+                            ec = int("".join(ch for ch in str(extra.get("employees_count") or "") if ch.isdigit()) or "0")
+                            # PositiveIntegerField в PostgreSQL имеет максимум 2147483647
+                            # Ограничиваем значение, чтобы избежать ошибки "integer out of range"
+                            MAX_EMPLOYEES_COUNT = 2147483647
+                            if ec > MAX_EMPLOYEES_COUNT:
+                                logger.warning(f"Company {comp.name}: employees_count {ec} exceeds maximum {MAX_EMPLOYEES_COUNT}, capping to maximum")
+                                ec = MAX_EMPLOYEES_COUNT
+                            old_ec = comp.employees_count
+                            if ec > 0 and comp.employees_count != ec:
+                                comp.employees_count = ec
                                 changed = True
                                 if dry_run:
-                                    company_updates_diff["workday_start"] = {"old": old_start, "new": str(time(h1, m1))}
-                            if can_update("workday_end") and comp.workday_end != time(h2, m2):
-                                comp.workday_end = time(h2, m2)
-                                changed = True
-                                if dry_run:
-                                    company_updates_diff["workday_end"] = {"old": old_end, "new": str(time(h2, m2))}
-                    except Exception:
-                        pass
-            # Руководитель (contact_name) — заполняем из amo, если пусто
-            if extra.get("director") and not (comp.contact_name or "").strip():
-                new_director = extra["director"][:255]
-                comp.contact_name = new_director
-                changed = True
-                if dry_run:
-                    company_updates_diff["contact_name"] = {"old": "", "new": new_director}
+                                    company_updates_diff["employees_count"] = {"old": str(old_ec) if old_ec else "", "new": str(ec)}
+                        except (ValueError, OverflowError) as e:
+                            logger.warning(f"Company {comp.name}: failed to parse employees_count '{extra.get('employees_count')}': {e}")
+                            pass
+                    if extra.get("work_timezone") and can_update("work_timezone"):
+                        tzv = str(extra.get("work_timezone") or "").strip()[:64]
+                        old_tz = (comp.work_timezone or "").strip()
+                        if tzv and comp.work_timezone != tzv:
+                            comp.work_timezone = tzv
+                            changed = True
+                            if dry_run:
+                                company_updates_diff["work_timezone"] = {"old": old_tz, "new": tzv}
+                    if extra.get("worktime"):
+                        # поддерживаем форматы: "09:00-18:00", "09:00–18:00", "с 9:00 до 18:00"
+                        import re
+                        s = str(extra.get("worktime") or "").replace("–", "-").strip()
+                        m = re.search(r"(\d{1,2})[:.](\d{2})\s*-\s*(\d{1,2})[:.](\d{2})", s)
+                        if m:
+                            try:
+                                h1, m1, h2, m2 = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
+                                if 0 <= h1 <= 23 and 0 <= h2 <= 23 and 0 <= m1 <= 59 and 0 <= m2 <= 59:
+                                    old_start = str(comp.workday_start) if comp.workday_start else ""
+                                    old_end = str(comp.workday_end) if comp.workday_end else ""
+                                    if can_update("workday_start") and comp.workday_start != time(h1, m1):
+                                        comp.workday_start = time(h1, m1)
+                                        changed = True
+                                        if dry_run:
+                                            company_updates_diff["workday_start"] = {"old": old_start, "new": str(time(h1, m1))}
+                                    if can_update("workday_end") and comp.workday_end != time(h2, m2):
+                                        comp.workday_end = time(h2, m2)
+                                        changed = True
+                                        if dry_run:
+                                            company_updates_diff["workday_end"] = {"old": old_end, "new": str(time(h2, m2))}
+                            except Exception:
+                                pass
+                    # Руководитель (contact_name) — заполняем из amo, если пусто
+                    if extra.get("director") and not (comp.contact_name or "").strip():
+                        new_director = extra["director"][:255]
+                        comp.contact_name = new_director
+                        changed = True
+                        if dry_run:
+                            company_updates_diff["contact_name"] = {"old": "", "new": new_director}
 
-            if changed:
-                prev.update(
-                    {
-                        "legal_name": comp.legal_name,
-                        "inn": comp.inn,
-                        "kpp": comp.kpp,
-                        "address": comp.address,
-                        "phone": comp.phone,
-                        "email": comp.email,
-                        "website": comp.website,
-                        "director": comp.contact_name,
-                        "activity_kind": comp.activity_kind,
-                        "employees_count": comp.employees_count,
-                        "workday_start": comp.workday_start,
-                        "workday_end": comp.workday_end,
-                        "work_timezone": comp.work_timezone,
-                    }
-                )
-                rf["amo_values"] = prev
-                comp.raw_fields = rf
-            
-            # Сохраняем diff изменений для dry-run
-            if dry_run and company_updates_diff:
-                if res.companies_updates_preview is None:
-                    res.companies_updates_preview = []
-                res.companies_updates_preview.append({
-                    "company_name": comp.name,
-                    "company_id": comp.id if comp.id else None,
-                    "amo_id": comp.amocrm_company_id,
-                    "is_new": created,
-                    "updates": company_updates_diff,
-                })
-            
-            if changed and not dry_run:
-                try:
-                    comp.save()
-                except Exception as e:
-                    # Если ошибка при сохранении - логируем и пропускаем эту компанию
-                    logger.error(f"Failed to save company {comp.name} (amo_id={comp.amocrm_company_id}): {e}", exc_info=True)
-                    # Пропускаем эту компанию, продолжаем со следующей
-                    continue
+                    if changed:
+                        prev.update(
+                            {
+                                "legal_name": comp.legal_name,
+                                "inn": comp.inn,
+                                "kpp": comp.kpp,
+                                "address": comp.address,
+                                "phone": comp.phone,
+                                "email": comp.email,
+                                "website": comp.website,
+                                "director": comp.contact_name,
+                                "activity_kind": comp.activity_kind,
+                                "employees_count": comp.employees_count,
+                                "workday_start": comp.workday_start,
+                                "workday_end": comp.workday_end,
+                                "work_timezone": comp.work_timezone,
+                            }
+                        )
+                        rf["amo_values"] = prev
+                        comp.raw_fields = rf
+                    
+                    # Сохраняем diff изменений для dry-run
+                    if dry_run and company_updates_diff:
+                        if res.companies_updates_preview is None:
+                            res.companies_updates_preview = []
+                        res.companies_updates_preview.append({
+                            "company_name": comp.name,
+                            "company_id": comp.id if comp.id else None,
+                            "amo_id": comp.amocrm_company_id,
+                            "is_new": created,
+                            "updates": company_updates_diff,
+                        })
+                    
+                    if changed and not dry_run:
+                        try:
+                            comp.save()
+                        except Exception as e:
+                            # Если ошибка при сохранении - логируем и пропускаем эту компанию
+                            logger.error(f"Failed to save company {comp.name} (amo_id={comp.amocrm_company_id}): {e}", exc_info=True)
+                            # Пропускаем эту компанию, продолжаем со следующей
+                            continue
 
-            # Нормализация уже заполненных значений (часто там "номер1, номер2"):
-            # оставляем в "Данные" только первый, остальные переносим в служебный контакт.
-            norm_phone_parts = _split_multi(comp.phone or "")
-            norm_email_parts = _split_multi(comp.email or "")
-            if len(norm_phone_parts) > 1 and not dry_run:
-                try:
-                    comp.phone = norm_phone_parts[0][:50]
-                    comp.save(update_fields=["phone"])
-                    # добавим остальные как контактные телефоны
-                    phones = list(dict.fromkeys([*phones, *norm_phone_parts]))
-                except Exception as e:
-                    logger.error(f"Failed to save phone for company {comp.name}: {e}", exc_info=True)
-            if len(norm_email_parts) > 1 and not dry_run:
-                try:
-                    comp.email = norm_email_parts[0][:254]
-                    comp.save(update_fields=["email"])
-                    emails = list(dict.fromkeys([*emails, *norm_email_parts]))
-                except Exception as e:
-                    logger.error(f"Failed to save email for company {comp.name}: {e}", exc_info=True)
+                    # Нормализация уже заполненных значений (часто там "номер1, номер2"):
+                    # оставляем в "Данные" только первый, остальные переносим в служебный контакт.
+                    norm_phone_parts = _split_multi(comp.phone or "")
+                    norm_email_parts = _split_multi(comp.email or "")
+                    if len(norm_phone_parts) > 1 and not dry_run:
+                        try:
+                            comp.phone = norm_phone_parts[0][:50]
+                            comp.save(update_fields=["phone"])
+                            # добавим остальные как контактные телефоны
+                            phones = list(dict.fromkeys([*phones, *norm_phone_parts]))
+                        except Exception as e:
+                            logger.error(f"Failed to save phone for company {comp.name}: {e}", exc_info=True)
+                    if len(norm_email_parts) > 1 and not dry_run:
+                        try:
+                            comp.email = norm_email_parts[0][:254]
+                            comp.save(update_fields=["email"])
+                            emails = list(dict.fromkeys([*emails, *norm_email_parts]))
+                        except Exception as e:
+                            logger.error(f"Failed to save email for company {comp.name}: {e}", exc_info=True)
 
-            # Дополнительные телефоны сохраняем в CompanyPhone (а не в ContactPhone)
-            # ВАЖНО: используем original_main_phone (до обработки), чтобы правильно определить логику
-            # Если основной телефон уже был заполнен ДО импорта, все телефоны из phones идут в CompanyPhone
-            # Если основной телефон был пустой и мы его заполнили из phones[0], то остальные (phones[1:]) идут в CompanyPhone
-            if original_main_phone:
-                # Основной телефон уже был заполнен ДО импорта - все телефоны из phones идут в CompanyPhone
-                extra_phones = [p for p in phones if str(p).strip()]
-            else:
-                # Основной телефон был пустой - первый телефон уже в comp.phone, остальные в CompanyPhone
-                extra_phones = [p for p in phones[1:] if str(p).strip()]
-            
-            # ОПТИМИЗАЦИЯ: bulk операции для CompanyPhone
-            if extra_phones and not dry_run:
-                from ui.forms import _normalize_phone
-                from django.db.models import Max
-                
-                # Получаем максимальный order для существующих телефонов
-                max_order = CompanyPhone.objects.filter(company=comp).aggregate(m=Max("order")).get("m")
-                next_order = int(max_order) + 1 if max_order is not None else 0
-                
-                # ОПТИМИЗАЦИЯ: загружаем все существующие телефоны одним запросом
-                existing_phones_raw = list(CompanyPhone.objects.filter(company=comp).values_list('value', flat=True))
-                existing_phones_normalized = set()
-                for existing in existing_phones_raw:
-                    existing_norm = _normalize_phone(existing) if existing else ""
-                    if existing_norm:
-                        existing_phones_normalized.add(existing_norm)
-                
-                # Нормализуем основной телефон один раз
-                main_phone_normalized = _normalize_phone(comp.phone) if (comp.phone or "").strip() else ""
-                
-                # Собираем телефоны для bulk_create
-                phones_to_create = []
-                for p in extra_phones:
-                    v = str(p).strip()[:50]
-                    if not v:
-                        continue
-                    # Нормализуем телефон
-                    normalized = _normalize_phone(v) if v else ""
-                    if not normalized:
-                        normalized = v  # Если нормализация не удалась, используем исходное значение
+                    # Дополнительные телефоны сохраняем в CompanyPhone (а не в ContactPhone)
+                    # ВАЖНО: используем original_main_phone (до обработки), чтобы правильно определить логику
+                    # Если основной телефон уже был заполнен ДО импорта, все телефоны из phones идут в CompanyPhone
+                    # Если основной телефон был пустой и мы его заполнили из phones[0], то остальные (phones[1:]) идут в CompanyPhone
+                    if original_main_phone:
+                        # Основной телефон уже был заполнен ДО импорта - все телефоны из phones идут в CompanyPhone
+                        extra_phones = [p for p in phones if str(p).strip()]
+                    else:
+                        # Основной телефон был пустой - первый телефон уже в comp.phone, остальные в CompanyPhone
+                        extra_phones = [p for p in phones[1:] if str(p).strip()]
                     
-                    # Проверяем, что такого телефона еще нет (ни в основном, ни в дополнительных)
-                    if main_phone_normalized and main_phone_normalized == normalized:
-                        logger.debug(f"Company {comp.name}: skipping phone {v} (normalized: {normalized}) - same as main phone")
-                        continue
+                    # ОПТИМИЗАЦИЯ: bulk операции для CompanyPhone
+                    if extra_phones and not dry_run:
+                        from ui.forms import _normalize_phone
+                        from django.db.models import Max
+                        
+                        # Получаем максимальный order для существующих телефонов
+                        max_order = CompanyPhone.objects.filter(company=comp).aggregate(m=Max("order")).get("m")
+                        next_order = int(max_order) + 1 if max_order is not None else 0
+                        
+                        # ОПТИМИЗАЦИЯ: загружаем все существующие телефоны одним запросом
+                        existing_phones_raw = list(CompanyPhone.objects.filter(company=comp).values_list('value', flat=True))
+                        existing_phones_normalized = set()
+                        for existing in existing_phones_raw:
+                            existing_norm = _normalize_phone(existing) if existing else ""
+                            if existing_norm:
+                                existing_phones_normalized.add(existing_norm)
+                        
+                        # Нормализуем основной телефон один раз
+                        main_phone_normalized = _normalize_phone(comp.phone) if (comp.phone or "").strip() else ""
+                        
+                        # Собираем телефоны для bulk_create
+                        phones_to_create = []
+                        for p in extra_phones:
+                            v = str(p).strip()[:50]
+                            if not v:
+                                continue
+                            # Нормализуем телефон
+                            normalized = _normalize_phone(v) if v else ""
+                            if not normalized:
+                                normalized = v  # Если нормализация не удалась, используем исходное значение
+                            
+                            # Проверяем, что такого телефона еще нет (ни в основном, ни в дополнительных)
+                            if main_phone_normalized and main_phone_normalized == normalized:
+                                logger.debug(f"Company {comp.name}: skipping phone {v} (normalized: {normalized}) - same as main phone")
+                                continue
+                            
+                            if normalized in existing_phones_normalized:
+                                logger.debug(f"Company {comp.name}: skipping phone {v} (normalized: {normalized}) - duplicate")
+                                continue
+                            
+                            # Добавляем в список для bulk_create
+                            phones_to_create.append(CompanyPhone(company=comp, value=normalized, order=next_order))
+                            existing_phones_normalized.add(normalized)  # Предотвращаем дубликаты в этом батче
+                            next_order += 1
+                        
+                        # Bulk создание телефонов
+                        if phones_to_create:
+                            try:
+                                CompanyPhone.objects.bulk_create(phones_to_create, ignore_conflicts=True)
+                                logger.info(f"Company {comp.name}: bulk created {len(phones_to_create)} CompanyPhone records")
+                            except Exception as e:
+                                logger.error(f"Failed to bulk_create CompanyPhone for company {comp.name}: {e}", exc_info=True)
                     
-                    if normalized in existing_phones_normalized:
-                        logger.debug(f"Company {comp.name}: skipping phone {v} (normalized: {normalized}) - duplicate")
-                        continue
+                    # Дополнительные email сохраняем в CompanyEmail
+                    extra_emails = [e for e in emails[1:] if str(e).strip()]
+                    # ОПТИМИЗАЦИЯ: bulk операции для CompanyEmail
+                    if extra_emails and not dry_run:
+                        # ОПТИМИЗАЦИЯ: загружаем все существующие email одним запросом
+                        existing_emails = set(
+                            CompanyEmail.objects.filter(company=comp)
+                            .values_list('value', flat=True)
+                        )
+                        main_email_lower = (comp.email or "").strip().lower()
+                        
+                        # Собираем email для bulk_create
+                        emails_to_create = []
+                        for e in extra_emails:
+                            v = str(e).strip()[:254]
+                            if not v:
+                                continue
+                            v_lower = v.lower()
+                            # Проверяем, что такого email еще нет (ни в основном, ни в дополнительных)
+                            if main_email_lower and main_email_lower == v_lower:
+                                continue  # Пропускаем, если это основной email
+                            if v_lower in existing_emails:
+                                continue  # Пропускаем дубликаты
+                            
+                            # Добавляем в список для bulk_create
+                            emails_to_create.append(CompanyEmail(company=comp, value=v))
+                            existing_emails.add(v_lower)  # Предотвращаем дубликаты в этом батче
+                        
+                        # Bulk создание email
+                        if emails_to_create:
+                            try:
+                                CompanyEmail.objects.bulk_create(emails_to_create, ignore_conflicts=True)
+                                logger.info(f"Company {comp.name}: bulk created {len(emails_to_create)} CompanyEmail records")
+                            except Exception as e:
+                                logger.error(f"Failed to bulk_create CompanyEmail for company {comp.name}: {e}", exc_info=True)
                     
-                    # Добавляем в список для bulk_create
-                    phones_to_create.append(CompanyPhone(company=comp, value=normalized, order=next_order))
-                    existing_phones_normalized.add(normalized)  # Предотвращаем дубликаты в этом батче
-                    next_order += 1
-                
-                # Bulk создание телефонов
-                if phones_to_create:
-                    try:
-                        CompanyPhone.objects.bulk_create(phones_to_create, ignore_conflicts=True)
-                        logger.info(f"Company {comp.name}: bulk created {len(phones_to_create)} CompanyPhone records")
-                    except Exception as e:
-                        logger.error(f"Failed to bulk_create CompanyPhone for company {comp.name}: {e}", exc_info=True)
-            
-            # Дополнительные email сохраняем в CompanyEmail
-            extra_emails = [e for e in emails[1:] if str(e).strip()]
-            # ОПТИМИЗАЦИЯ: bulk операции для CompanyEmail
-            if extra_emails and not dry_run:
-                # ОПТИМИЗАЦИЯ: загружаем все существующие email одним запросом
-                existing_emails = set(
-                    CompanyEmail.objects.filter(company=comp)
-                    .values_list('value', flat=True)
-                )
-                main_email_lower = (comp.email or "").strip().lower()
-                
-                # Собираем email для bulk_create
-                emails_to_create = []
-                for e in extra_emails:
-                    v = str(e).strip()[:254]
-                    if not v:
-                        continue
-                    v_lower = v.lower()
-                    # Проверяем, что такого email еще нет (ни в основном, ни в дополнительных)
-                    if main_email_lower and main_email_lower == v_lower:
-                        continue  # Пропускаем, если это основной email
-                    if v_lower in existing_emails:
-                        continue  # Пропускаем дубликаты
-                    
-                    # Добавляем в список для bulk_create
-                    emails_to_create.append(CompanyEmail(company=comp, value=v))
-                    existing_emails.add(v_lower)  # Предотвращаем дубликаты в этом батче
-                
-                # Bulk создание email
-                if emails_to_create:
-                    try:
-                        CompanyEmail.objects.bulk_create(emails_to_create, ignore_conflicts=True)
-                        logger.info(f"Company {comp.name}: bulk created {len(emails_to_create)} CompanyEmail records")
-                    except Exception as e:
-                        logger.error(f"Failed to bulk_create CompanyEmail for company {comp.name}: {e}", exc_info=True)
-            
-            # Остальные телефоны/почты, которые не удалось сохранить в CompanyPhone/CompanyEmail,
-            # сохраняем в "Контакты" отдельной записью (stub) - это fallback для совместимости
-            # (оставляем эту логику для обратной совместимости, но приоритет - CompanyPhone/CompanyEmail)
-            if created:
-                res.companies_created += 1
-            else:
-                res.companies_updated += 1
+                    # Остальные телефоны/почты, которые не удалось сохранить в CompanyPhone/CompanyEmail,
+                    # сохраняем в "Контакты" отдельной записью (stub) - это fallback для совместимости
+                    # (оставляем эту логику для обратной совместимости, но приоритет - CompanyPhone/CompanyEmail)
+                    if created:
+                        res.companies_created += 1
+                    else:
+                        res.companies_updated += 1
                     # Сферы: исключаем "Новая CRM" (она только для фильтра), но ставим остальные
                     _apply_spheres_from_custom(amo_company=amo_c, company=comp, field_id=sphere_field_id, dry_run=dry_run, exclude_label="Новая CRM")
                     local_companies.append(comp)
