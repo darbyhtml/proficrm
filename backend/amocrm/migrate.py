@@ -584,7 +584,20 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
     fid_addr = _find_field_id(field_meta, codes=["address"], name_contains=["адрес"])
     # Ищем все поля с телефонами: основное поле телефона и поле "Список телефонов (Скайнет)"
     fid_phone = _find_field_id(field_meta, codes=["phone"], name_contains=["телефон"])
-    fid_phone_skynet = _find_field_id(field_meta, name_contains=["скайнет", "список телефонов"])
+    # Ищем поле "Список телефонов (Скайнет)" - пробуем разные варианты названия
+    fid_phone_skynet = _find_field_id(field_meta, name_contains=["скайнет", "список телефонов", "список"])
+    
+    # Логируем все поля с телефонами для диагностики
+    if field_meta:
+        phone_fields = []
+        for fid, m in field_meta.items():
+            name = str(m.get("name") or "").lower()
+            code = str(m.get("code") or "").lower()
+            if "телефон" in name or "phone" in code or "скайнет" in name or "список" in name:
+                phone_fields.append(f"ID:{fid} name:'{m.get('name')}' code:'{m.get('code')}'")
+        if phone_fields:
+            logger.debug(f"_extract_company_fields: phone-related fields found: {phone_fields}")
+    
     # Если найдено поле Скайнет и оно отличается от основного поля телефона, объединяем телефоны из обоих полей
     fid_email = _find_field_id(field_meta, codes=["email"], name_contains=["email", "e-mail", "почта"])
     fid_web = _find_field_id(field_meta, codes=["web"], name_contains=["сайт", "web"])
@@ -599,9 +612,15 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
     phones_list = list_vals(fid_phone)
     if fid_phone_skynet and fid_phone_skynet != fid_phone:
         skynet_phones = list_vals(fid_phone_skynet)
+        logger.info(f"_extract_company_fields: found Skynet phone field (ID: {fid_phone_skynet}), extracted {len(skynet_phones)} phones: {skynet_phones[:5]}")
         # Объединяем, убирая дубликаты
         all_phones = phones_list + skynet_phones
         phones_list = list(dict.fromkeys(all_phones))  # Сохраняем порядок, убираем дубликаты
+        logger.info(f"_extract_company_fields: combined phones: {len(phones_list)} total (main: {len(list_vals(fid_phone))}, skynet: {len(skynet_phones)})")
+    elif fid_phone_skynet:
+        logger.debug(f"_extract_company_fields: Skynet phone field found but same as main phone field (ID: {fid_phone_skynet})")
+    else:
+        logger.debug(f"_extract_company_fields: Skynet phone field not found")
     
     # ИНН может приходить как строка с несколькими значениями (через /, запятую, пробел)
     # Используем list_vals для извлечения всех значений, затем нормализуем через inn_utils
@@ -1589,8 +1608,13 @@ def migrate_filtered(
             phones = extra.get("phones") or []
             emails = extra.get("emails") or []
             company_note = str(extra.get("note") or "").strip()[:255]
+            
+            # ВАЖНО: сохраняем исходное значение основного телефона ДО обработки
+            # чтобы правильно определить, какие телефоны идут в CompanyPhone
+            original_main_phone = (comp.phone or "").strip()
+            
             # основной телефон/почта — в "Данные", остальные — в отдельный контакт (даже без ФИО/должности)
-            if phones and not (comp.phone or "").strip():
+            if phones and not original_main_phone:
                 new_phone = str(phones[0])[:50]
                 comp.phone = new_phone
                 changed = True
@@ -1738,14 +1762,19 @@ def migrate_filtered(
                     logger.error(f"Failed to save email for company {comp.name}: {e}", exc_info=True)
 
             # Дополнительные телефоны сохраняем в CompanyPhone (а не в ContactPhone)
-            # ВАЖНО: если основной телефон уже был заполнен, все телефоны из phones идут в CompanyPhone
+            # ВАЖНО: используем original_main_phone (до обработки), чтобы правильно определить логику
+            # Если основной телефон уже был заполнен ДО импорта, все телефоны из phones идут в CompanyPhone
             # Если основной телефон был пустой и мы его заполнили из phones[0], то остальные (phones[1:]) идут в CompanyPhone
-            if (comp.phone or "").strip():
-                # Основной телефон уже был заполнен - все телефоны из phones идут в CompanyPhone
+            if original_main_phone:
+                # Основной телефон уже был заполнен ДО импорта - все телефоны из phones идут в CompanyPhone
                 extra_phones = [p for p in phones if str(p).strip()]
             else:
                 # Основной телефон был пустой - первый телефон уже в comp.phone, остальные в CompanyPhone
                 extra_phones = [p for p in phones[1:] if str(p).strip()]
+            
+            # Логируем для диагностики
+            if phones and not dry_run:
+                logger.info(f"Company {comp.name} (ID: {comp.id}): phones from amoCRM: {phones}, extra_phones to save: {extra_phones}, main phone: '{comp.phone}'")
             
             if extra_phones and not dry_run:
                 # Нормализуем телефоны перед сохранением
@@ -1766,13 +1795,27 @@ def migrate_filtered(
                         normalized = v  # Если нормализация не удалась, используем исходное значение
                     
                     # Проверяем, что такого телефона еще нет (ни в основном, ни в дополнительных)
-                    if (comp.phone or "").strip() == normalized:
+                    main_phone_normalized = _normalize_phone(comp.phone) if (comp.phone or "").strip() else ""
+                    if main_phone_normalized and main_phone_normalized == normalized:
+                        logger.debug(f"Company {comp.name}: skipping phone {v} (normalized: {normalized}) - same as main phone")
                         continue  # Пропускаем, если это основной телефон
-                    if CompanyPhone.objects.filter(company=comp, value=normalized).exists():
+                    
+                    # Проверяем дубликаты в CompanyPhone (с нормализацией)
+                    existing_phones = CompanyPhone.objects.filter(company=comp).values_list('value', flat=True)
+                    is_duplicate = False
+                    for existing in existing_phones:
+                        existing_normalized = _normalize_phone(existing) if existing else ""
+                        if existing_normalized and existing_normalized == normalized:
+                            logger.debug(f"Company {comp.name}: skipping phone {v} (normalized: {normalized}) - duplicate")
+                            is_duplicate = True
+                            break
+                    
+                    if is_duplicate:
                         continue  # Пропускаем дубликаты
                     
                     try:
                         CompanyPhone.objects.create(company=comp, value=normalized, order=next_order)
+                        logger.info(f"Company {comp.name}: created CompanyPhone {v} -> {normalized} (order: {next_order})")
                         next_order += 1
                     except Exception as e:
                         logger.error(f"Failed to create CompanyPhone for company {comp.name}: {e}", exc_info=True)
