@@ -1499,6 +1499,7 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
     # Берём сырые строки, прогоняем parse_phone_value; в phones только валидные E.164.
     phones_list = list_vals(fid_phone)
     skynet_rejected = 0
+    skynet_rejected_example: str | None = None
     if fid_phone_skynet and fid_phone_skynet != fid_phone:
         skynet_raws = _custom_values_text(amo_company, fid_phone_skynet)
         skynet_extracted: list[str] = []
@@ -1512,6 +1513,8 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
                         skynet_extracted.append(ph)
             else:
                 skynet_rejected += 1
+                if skynet_rejected_example is None:
+                    skynet_rejected_example = (s.strip() or s)[:80]
         if skynet_extracted or skynet_rejected > 0:
             logger.info(
                 f"_extract_company_fields: Skynet phone field (ID: {fid_phone_skynet}): "
@@ -1552,6 +1555,7 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
         "note": first(fid_note),
     }
     result["skynet_phone_values_rejected"] = skynet_rejected
+    result["skynet_rejected_example"] = skynet_rejected_example
     return result
 
 
@@ -3301,9 +3305,11 @@ def migrate_filtered(
                     n_skynet = int(extra.get("skynet_phone_values_rejected") or 0)
                     res.skynet_phone_values_rejected += n_skynet
                     if n_skynet > 0:
+                        ex = (extra.get("skynet_rejected_example") or "")[:80]
                         logger.warning(
-                            "Skynet phone field: rejected %s non-phone value(s), company_id=%s name=%s",
+                            "Skynet phone field: rejected %s non-phone value(s), company_id=%s name=%s%s",
                             n_skynet, amo_c.get("id"), (amo_c.get("name") or "")[:80],
+                            f", example={ex!r}" if ex else "",
                         )
                     comp, created = _upsert_company_from_amo(amo_company=amo_c, actor=actor, responsible=responsible_local, dry_run=dry_run)
                     # заполнение "Данные" (только если поле пустое, чтобы не затереть уже заполненное вручную)
@@ -3645,6 +3651,11 @@ def migrate_filtered(
                                 ph_comment = ""
                             if not is_valid_phone(normalized):
                                 res.company_phones_rejected_invalid += 1
+                                if res.company_phones_rejected_invalid <= 3:
+                                    logger.debug(
+                                        "company_phones_rejected_invalid: пример value (не E.164), company=%s: %s",
+                                        comp.name, (v[:60] + "…" if len(v) > 60 else v),
+                                    )
                                 continue
                             # Проверяем, что такого телефона еще нет (ни в основном, ни в дополнительных)
                             if main_phone_normalized and main_phone_normalized == normalized:
@@ -3736,11 +3747,6 @@ def migrate_filtered(
             tasks = fetch_tasks_for_companies(client, amo_ids)
             res.tasks_seen = len(tasks)
             logger.info(f"migrate_filtered: получено задач из API: {res.tasks_seen} для {len(amo_ids)} компаний")
-        else:
-            # В dry-run без import_tasks или если import_tasks=False - не запрашиваем, но логируем
-            if dry_run:
-                logger.info(f"migrate_filtered: задачи НЕ запрашиваются (dry_run={dry_run}, import_tasks={import_tasks})")
-            res.tasks_seen = 0
             # ОПТИМИЗАЦИЯ: убираем N+1 запросы к Task (проверка существования/обновление)
             task_uids = {str(int(t.get("id") or 0)) for t in tasks if int(t.get("id") or 0)}
             existing_tasks_by_uid: dict[str, Task] = {}
@@ -3751,9 +3757,7 @@ def migrate_filtered(
             tasks_processed = 0
             tasks_skipped_no_company = 0
             tasks_skipped_old_count = 0
-            
             logger.info(f"migrate_filtered: обрабатываем {len(tasks)} задач (до фильтрации по дедлайну/компании)")
-            
             for t in tasks:
                 tid = int(t.get("id") or 0)
                 existing = existing_tasks_by_uid.get(str(tid)) if tid else None
@@ -3843,13 +3847,18 @@ def migrate_filtered(
                     res.tasks_created += 1
                 
                 tasks_processed += 1
-            
-            # Логируем статистику обработки задач
+            # Логируем статистику обработки задач (в dry-run: would_create, would_update вместо created/updated)
             logger.info(
                 f"migrate_filtered: задачи обработаны: processed={tasks_processed}, "
                 f"skipped_no_company={tasks_skipped_no_company}, skipped_old={tasks_skipped_old_count}, "
-                f"created={res.tasks_created}, updated={res.tasks_updated}, skipped_existing={res.tasks_skipped_existing}"
+                f"created={res.tasks_created}, updated={res.tasks_updated}, "
+                f"would_create={res.tasks_would_create}, would_update={res.tasks_would_update}, "
+                f"skipped_existing={res.tasks_skipped_existing}"
             )
+        else:
+            if dry_run:
+                logger.info(f"migrate_filtered: задачи НЕ запрашиваются (dry_run={dry_run}, import_tasks={import_tasks})")
+            res.tasks_seen = 0
 
         # Заметки: запрашиваем только если нужно импортировать
         # ВАЖНО: в dry-run запрашиваем заметки для диагностики, даже если import_notes=False
@@ -3939,6 +3948,7 @@ def migrate_filtered(
                     entity_id = int((n.get("entity_id") or 0) or 0)
                     company = companies_db_by_amo_id.get(entity_id) if entity_id else None
                     if not company:
+                        notes_skipped_no_company += 1
                         continue
 
                     # В разных типах notes текст может лежать по-разному
@@ -3959,14 +3969,13 @@ def migrate_filtered(
                             text = ""
                         if not text:
                             text = f"(без текста) note_type={note_type}"
-                            notes_skipped_no_text += 1
-                            # В dry-run все равно показываем заметки без текста для диагностики
+                            # В dry-run не скипаем: обрабатываем с подставленным текстом для диагностики
                             if not dry_run:
+                                notes_skipped_no_text += 1
                                 try:
                                     if debug_count_for_extraction < 3:
                                         logger.debug(f"      -> Skipped note {nid} (no text, note_type={note_type})")
                                 except (NameError, UnboundLocalError):
-                                    # Защита от ошибок в debug-логике
                                     pass
                                 continue
 
@@ -4035,6 +4044,7 @@ def migrate_filtered(
                         text = _format_call_note(note_type, params)
                         author = None
                         prefix = "Импорт из amo"
+                    notes_processed += 1
                     meta_bits = []
                     if author_amo_name:
                         meta_bits.append(f"автор: {author_amo_name}")
@@ -4110,12 +4120,12 @@ def migrate_filtered(
                         note.save()
                         res.notes_created += 1
             
-            # Логируем статистику обработки заметок
+            # Логируем статистику (skipped_* взаимоисключающие по одной заметке; processed = дошли до create/update/skip_existing)
             logger.info(
                 f"migrate_filtered: заметки обработаны: processed={notes_processed}, "
                 f"skipped_amomail={notes_skipped_amomail}, skipped_no_text={notes_skipped_no_text}, "
                 f"skipped_no_company={notes_skipped_no_company}, created={res.notes_created}, "
-                f"updated={res.notes_updated}, skipped_existing={res.notes_skipped_existing}"
+                f"updated={res.notes_updated}, would_add={res.notes_would_add}, skipped_existing={res.notes_skipped_existing}"
             )
         elif notes_error:
             # Если была ошибка при получении заметок - логируем, но не обрабатываем

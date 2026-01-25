@@ -76,3 +76,18 @@
   - Каждая строка прогоняется через `parse_phone_value`; в `phones` попадают только валидные E.164.
   - Не-номера считаются в `skynet_phone_values_rejected`; при `> 0` пишется `logger.warning` с `company_id` и `name`.
 - **CompanyPhone**: добавление только при `is_valid_phone(normalized)`; иначе `company_phones_rejected_invalid += 1` и запись не создаётся.
+- При первом–третьем срабатывании `company_phones_rejected_invalid` в DEBUG логируется пример значения. В WARN по Skynet в лог добавляется `example=<первое отброшенное значение>`.
+
+---
+
+## 8) Задачи и заметки: счётчики и баг с циклом задач
+
+### Задачи
+- **Баг**: цикл обработки задач (task_uids, existing_tasks_by_uid, `for t in tasks`) был в ветке `else` (когда задачи не запрашиваются). При успешном `fetch` он не выполнялся, поэтому `created=0`, `updated=0`, `would_create=0`, `would_update=0` при 893 полученных.
+- **Исправление**: цикл и все related-счётчики перенесены в ветку `if` (когда задачи запрашиваются). В `else` остаются только `res.tasks_seen = 0` и при dry_run — лог «задачи НЕ запрашиваются».
+- В лог по задачам добавлены `would_create`, `would_update` для интерпретации dry-run.
+
+### Заметки
+- **notes_processed** не инкрементировался — учитывается при достижении create/update/skip_existing (после прохождения amomail).
+- **notes_skipped_no_company** не учитывался — добавлен инкремент перед `continue` при `not company`.
+- **Взаимоисключаемость**: `notes_skipped_no_text` увеличивается только при реальном `continue` (в non–dry_run), чтобы одна заметка не попадала и в `skipped_no_text`, и в `skipped_amomail`. В лог добавлен `would_add`; в комментарии указано, что `skipped_*` взаимно исключают друг друга по одной заметке.
