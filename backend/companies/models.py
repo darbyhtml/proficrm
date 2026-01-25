@@ -136,9 +136,12 @@ class Company(models.Model):
         ]
 
     def save(self, *args, **kwargs):
-        if self.branch_id is None and self.responsible_id is not None:
-            # Филиал компании по умолчанию = филиалу ответственного (если не задан явно).
-            self.branch = getattr(self.responsible, "branch", None)
+        # Филиал компании = филиалу ответственного, если у ответственного задан филиал.
+        # Не только при пустом branch: исправляем и ошибочные (филиал не ответственного).
+        if self.responsible_id is not None:
+            resp_branch = getattr(self.responsible, "branch", None)
+            if resp_branch is not None:
+                self.branch = resp_branch
         # Защита от длинных значений (особенно важно при импорте из amoCRM)
         # ВАЖНО: обрезаем ВСЕГДА, даже если значение уже установлено (защита от любых источников данных)
         if self.inn:
