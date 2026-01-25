@@ -1026,7 +1026,7 @@
     </div>
 
     {# Глобальный прогресс рассылки (показывается только если есть активная отправка) #}
-    <a id="mailProgressWidget" href="#" class="hidden fixed bottom-5 right-5 z-50 bg-white border border-brand-soft rounded-2xl shadow-lg px-3 py-2 flex items-center gap-3 hover:bg-brand-soft/20 mail-progress is-collapsed" style="min-width:210px; position:fixed;">
+    <a id="mailProgressWidget" href="#" class="hidden fixed bottom-5 left-5 z-50 bg-white border border-brand-soft rounded-2xl shadow-lg px-3 py-2 flex items-center gap-3 hover:bg-brand-soft/20 mail-progress is-collapsed" style="min-width:165px;">
       <div id="mailProgressCircle" class="w-10 h-10 rounded-full flex items-center justify-center text-xs font-semibold" style="background:conic-gradient(var(--brand-teal) 0deg, rgba(194,226,222,.6) 0deg); color:var(--brand-dark); border:1px solid rgba(194,226,222,.9)">
         <span id="mailProgressPct">0%</span>
       </div>
@@ -2123,6 +2123,7 @@
             if (status === 'paused') prefix = 'Пауза';
             if (status === 'sent') prefix = 'Готово';
             if (status === 'sending') prefix = 'Отправка';
+            if (status === 'ready') prefix = 'В очереди';
             const reason = (a.reason_text || '').trim();
             const mainBits = [];
             mainBits.push(`${prefix}: ${name}`);
@@ -2134,6 +2135,9 @@
               if (Number(a.failed || 0) > 0) mainBits.push(`ош ${a.failed}`);
               if (reason) mainBits.push(reason);
               else if (Number(a.pending || 0) > 0) mainBits.push(`оч ${a.pending}`);
+              if (status === 'ready' && a.next_run_at) {
+                try { mainBits.push('старт ' + new Date(a.next_run_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })); } catch(_) {}
+              }
             }
             countsShort.textContent = mainBits.join(' · ');
             // Подсказка по наведению (полный текст, без увеличения размеров)

@@ -1190,12 +1190,22 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
     user: User = request.user
     enforce(user=request.user, resource_type="action", resource="ui:mail:progress:poll", context={"path": request.path, "method": request.method})
 
-    # Берём ближайшую "активную" кампанию пользователя:
+    # Берём "активную" кампанию по приоритету (чтобы READY в очереди не перекрывала старая SENT):
     # - SENDING — во время отправки
-    # - PAUSED  — пауза из-за лимитов/времени/вложений и т.п. (показываем, чтобы было понятно почему "не идёт")
-    # - SENT    — сразу после завершения (чтобы менеджер увидел результат, даже если писем было мало)
-    qs = Campaign.objects.filter(created_by=user).order_by("-updated_at")
-    active = qs.filter(status__in=[Campaign.Status.SENDING, Campaign.Status.PAUSED, Campaign.Status.SENT]).first()
+    # - READY с CampaignQueue PENDING/PROCESSING — в очереди (отложенный старт и т.п.)
+    # - PAUSED  — пауза из-за лимитов/времени/вложений
+    # - SENT    — сразу после завершения
+    qs = Campaign.objects.filter(created_by=user).order_by("-updated_at").select_related("queue_entry")
+    active = qs.filter(status=Campaign.Status.SENDING).first()
+    if not active:
+        active = qs.filter(
+            status=Campaign.Status.READY,
+            queue_entry__status__in=[CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING],
+        ).first()
+    if not active:
+        active = qs.filter(status=Campaign.Status.PAUSED).first()
+    if not active:
+        active = qs.filter(status=Campaign.Status.SENT).first()
     if not active:
         return JsonResponse({"ok": True, "active": None})
 
