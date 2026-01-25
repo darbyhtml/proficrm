@@ -10,7 +10,22 @@
 - `BACKUP_RETENTION_DAYS` — хранить N дней (по умолчанию 14)
 - `BACKUP_GPG_KEY` или `GPG_KEY_ID` — ID ключа gpg для шифрования (если пусто — без gpg)
 
-## Cron
+## Systemd timer (предпочтительно)
+
+Юниты в репозитории: `config/systemd/proficrm-backup.service`, `config/systemd/proficrm-backup.timer`.
+
+Установка (подставить проект и пользователя):
+
+```bash
+sudo cp /opt/proficrm/config/systemd/proficrm-backup.service /etc/systemd/system/
+sudo cp /opt/proficrm/config/systemd/proficrm-backup.timer /etc/systemd/system/
+# Отредактировать User= и пути /opt/proficrm в .service при необходимости
+sudo systemctl daemon-reload
+sudo systemctl enable --now proficrm-backup.timer
+sudo systemctl list-timers | grep proficrm
+```
+
+## Cron (fallback, если systemd недоступен)
 
 ```bash
 # Ежедневно в 03:15 (подставить путь к проекту)
@@ -25,41 +40,20 @@
 
 (заменить `appuser` на нужного; для `/var/log/...` нужны права на запись или отдельный лог-файл.)
 
-## Systemd timer (альтернатива cron)
+## Автоматический тест восстановления
 
+`scripts/restore_postgres_test.sh` — создаёт временную БД `crm_restore_test`, восстанавливает **последний** бэкап (`.sql.gz` или `.sql.gz.gpg`), выполняет sanity-check (`\dt`, `SELECT 1`), удаляет тестовую БД. При `.gpg` требуется ключ в ключерке gpg.
+
+**Как часто:** раз в 1–2 недели (после смены процедуры бэкапов — обязательно).
+
+**Команда:**
 ```bash
-# /etc/systemd/system/proficrm-backup.service
-[Unit]
-Description=Proficrm Postgres backup
-After=docker.service
-
-[Service]
-Type=oneshot
-User=appuser
-WorkingDirectory=/opt/proficrm
-ExecStart=/opt/proficrm/scripts/backup_postgres.sh
+cd /opt/proficrm && ./scripts/restore_postgres_test.sh
 ```
 
-```bash
-# /etc/systemd/system/proficrm-backup.timer
-[Unit]
-Description=Run Proficrm backup daily
+**Интерпретация:** `restore_postgres_test: OK` и exit 0 — бэкап восстанавливается. Иначе — проверить бэкапы и при необходимости пересоздать скрипт/расписание.
 
-[Timer]
-OnCalendar=*-*-* 03:15:00
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-```
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now proficrm-backup.timer
-sudo systemctl list-timers | grep proficrm
-```
-
-## Проверка восстановления
+## Ручная проверка восстановления
 
 Восстановление в отдельную БД (не трогая prod):
 

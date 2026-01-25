@@ -1,0 +1,11 @@
+[Unit]
+Description=Proficrm Postgres backup
+After=docker.service
+
+[Service]
+Type=oneshot
+User=appuser
+WorkingDirectory=/opt/proficrm
+ExecStart=/opt/proficrm/scripts/backup_postgres.sh
+
+# При установке: заменить /opt/proficrm на корень проекта, appuser — на пользователя, под которым крутится docker compose.

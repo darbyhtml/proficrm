@@ -15,12 +15,17 @@
    - Копировать nginx/production.conf в /etc/nginx/sites-available/crm.production
    - ln -s /etc/nginx/sites-available/crm.production /etc/nginx/sites-enabled/
    - Basic Auth для /admin/: sudo apt install apache2-utils && sudo htpasswd -c /etc/nginx/.htpasswd admin
+   - Перед nginx -t: выполнить п.4 (HSTS) хотя бы один раз — создать snippet.
    - nginx -t && sudo systemctl reload nginx
 
-4) HSTS STRICT (опционально)
-   По умолчанию HSTS_SAFE (max-age=3600). Для STRICT (1 год + includeSubDomains): в nginx/production.conf
-   закомментировать строку add_header Strict-Transport-Security "max-age=3600" always;
-   и раскомментировать add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+4) HSTS (управляемое переключение SAFE/STRICT без правки конфига)
+   Snippet /etc/nginx/snippets/proficrm-hsts.conf генерируется из nginx/snippets/hsts.conf.template.
+   Перед первым reload nginx выполнить один раз:
+     HSTS_HEADER="max-age=3600" ./scripts/nginx_hsts_apply.sh
+   SAFE (по умолчанию):  HSTS_HEADER="max-age=3600" ./scripts/nginx_hsts_apply.sh
+   STRICT (1 год + includeSubDomains, без preload):
+     HSTS_HEADER="max-age=31536000; includeSubDomains" ./scripts/nginx_hsts_apply.sh
+   Скрипт при STRICT выводит предупреждение: убедитесь, что все поддомены имеют HTTPS.
    Затем: sudo systemctl reload nginx
 
 5) SSL (Let's Encrypt)
@@ -35,9 +40,15 @@
 
 8) Бэкапы Postgres
    - docs/ops/backups.md. Скрипт: scripts/backup_postgres.sh. Каталог: /opt/proficrm/backups.
+   - Systemd: config/systemd/proficrm-backup.service, proficrm-backup.timer. Fallback: cron.
    - Cron: 15 3 * * * cd /opt/proficrm && ./scripts/backup_postgres.sh >> /var/log/proficrm-backup.log 2>&1
+   - Тест восстановления: ./scripts/restore_postgres_test.sh (раз в 1–2 нед., docs/ops/backups.md).
 
-9) Откат
+9) Мониторинг (опционально)
+   - docs/ops/monitoring.md. scripts/health_check.sh. TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID в .env.
+   - Cron: */5 * * * * cd /opt/proficrm && ./scripts/health_check.sh >> /var/log/proficrm-health.log 2>&1
+
+10) Откат
    git log -1 --oneline  # сохранить коммит перед деплоем
    git checkout <prev_commit>
    docker compose -f docker-compose.prod.yml build --no-cache web celery celery-beat
@@ -45,7 +56,10 @@
    docker compose -f docker-compose.prod.yml run --rm web python manage.py collectstatic --noinput
    docker compose -f docker-compose.prod.yml up -d
 
-10) Проверки (копипаст)
+11) Проверки (копипаст)
+   ./scripts/smoke_check.sh
+   # или по отдельности:
+
    docker compose -f docker-compose.prod.yml config
 
    docker compose -f docker-compose.prod.yml exec web id

@@ -1,0 +1,4 @@
+# HSTS: генерируется через envsubst. Не редактировать вручную.
+# SAFE:  HSTS_HEADER="max-age=3600"
+# STRICT: HSTS_HEADER="max-age=31536000; includeSubDomains"  (preload не используется)
+add_header Strict-Transport-Security "${HSTS_HEADER}" always;
