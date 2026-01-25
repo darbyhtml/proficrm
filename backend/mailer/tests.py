@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import uuid
+from unittest.mock import patch
 
 from django.test import TestCase
 from django.test.utils import override_settings
@@ -11,8 +12,18 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 
 from accounts.models import User
 from mailer.forms import CampaignForm, EmailSignatureForm
-from mailer.models import Campaign, CampaignQueue, CampaignRecipient, Unsubscribe, UnsubscribeToken
-from mailer.utils import sanitize_email_html
+from mailer.models import (
+    Campaign,
+    CampaignQueue,
+    CampaignRecipient,
+    GlobalMailAccount,
+    SendLog,
+    SmtpBzQuota,
+    Unsubscribe,
+    UnsubscribeToken,
+)
+from mailer.utils import sanitize_email_html, get_next_send_window_start, msk_day_bounds
+from mailer.constants import DEFER_REASON_DAILY_LIMIT
 
 
 @override_settings(SECURE_SSL_REDIRECT=False)
@@ -218,3 +229,105 @@ class MailerAttachmentRecoveryTests(TestCase):
                 self.assertIsNone(content)
                 self.assertIsNone(name)
                 self.assertTrue(err)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class MailerDeferDailyLimitTests(TestCase):
+    """Тесты DEFER вместо PAUSE при дневном лимите: кампания не ставится в PAUSED, очередь получает deferred_until."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="defer_u", password="pass", role=User.Role.MANAGER, email="defer@example.com"
+        )
+        GlobalMailAccount.objects.update_or_create(
+            id=1,
+            defaults={"is_enabled": True, "per_user_daily_limit": 100},
+        )
+        cfg = SmtpBzQuota.load()
+        cfg.emails_available = 500
+        cfg.max_per_hour = 100
+        cfg.emails_limit = 500
+        cfg.sync_error = ""
+        cfg.save()
+
+    def test_get_next_send_window_start_tomorrow(self):
+        from zoneinfo import ZoneInfo
+        from datetime import datetime
+        # 20:00 МСК -> завтра 09:00
+        msk = ZoneInfo("Europe/Moscow")
+        evening = datetime(2026, 1, 15, 20, 0, 0, tzinfo=msk)
+        next_run = get_next_send_window_start(now=evening, always_tomorrow=True)
+        self.assertEqual(next_run.hour, 9)
+        self.assertEqual(next_run.day, 16)
+
+    def test_campaign_resume_when_daily_limit_exhausted(self):
+        """Resume при исчерпанном лимите: не READY «сейчас», deferred_until на завтра, сообщение."""
+        self.client.force_login(self.user)
+        camp = Campaign.objects.create(
+            created_by=self.user,
+            name="Defer Camp",
+            subject="S",
+            body_html="<p>x</p>",
+            body_text="x",
+            sender_name="X",
+            status=Campaign.Status.PAUSED,
+        )
+        for i in range(3):
+            CampaignRecipient.objects.create(campaign=camp, email=f"r{i}@ex.com", status=CampaignRecipient.Status.PENDING)
+        start, end, _ = msk_day_bounds(timezone.now())
+        for i in range(100):
+            SendLog.objects.create(
+                campaign=camp,
+                recipient=None,
+                account=None,
+                provider="smtp_global",
+                status="sent",
+                created_at=start,
+            )
+        resp = self.client.post(reverse("campaign_resume", kwargs={"campaign_id": camp.id}))
+        self.assertEqual(resp.status_code, 302)
+        camp.refresh_from_db()
+        self.assertEqual(camp.status, Campaign.Status.READY)
+        q = getattr(camp, "queue_entry", None)
+        self.assertIsNotNone(q)
+        self.assertIsNotNone(q.deferred_until)
+        self.assertEqual((q.defer_reason or "").strip(), DEFER_REASON_DAILY_LIMIT)
+
+    @patch("mailer.tasks.cache.add", return_value=True)
+    @patch("mailer.tasks.cache.delete")
+    def test_send_pending_emails_defers_on_daily_limit_not_paused(self, _del, _add):
+        """При достижении дневного лимита: Campaign не PAUSED, CampaignQueue.deferred_until и defer_reason."""
+        camp = Campaign.objects.create(
+            created_by=self.user,
+            name="Defer Camp 2",
+            subject="S",
+            body_html="<p>x</p>",
+            body_text="x",
+            sender_name="X",
+            status=Campaign.Status.READY,
+        )
+        for i in range(196):
+            CampaignRecipient.objects.create(campaign=camp, email=f"r{i}@ex.com", status=CampaignRecipient.Status.PENDING)
+        CampaignQueue.objects.create(campaign=camp, status=CampaignQueue.Status.PENDING, priority=0)
+        start, end, _ = msk_day_bounds(timezone.now())
+        for i in range(100):
+            SendLog.objects.create(
+                campaign=camp,
+                recipient=None,
+                account=None,
+                provider="smtp_global",
+                status="sent",
+                created_at=start,
+            )
+        from mailer.tasks import send_pending_emails
+        with patch("mailer.tasks._is_working_hours", return_value=True):
+            with patch("mailer.tasks.open_smtp_connection"):
+                with patch("mailer.tasks.send_via_smtp"):
+                    send_pending_emails.run(batch_size=50)
+        camp.refresh_from_db()
+        self.assertNotEqual(camp.status, Campaign.Status.PAUSED)
+        self.assertIn(camp.status, (Campaign.Status.READY, Campaign.Status.SENDING))
+        q = CampaignQueue.objects.get(campaign=camp)
+        self.assertIsNotNone(q.deferred_until)
+        self.assertEqual((q.defer_reason or "").strip(), DEFER_REASON_DAILY_LIMIT)
+        self.assertEqual(q.status, CampaignQueue.Status.PENDING)

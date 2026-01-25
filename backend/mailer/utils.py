@@ -46,6 +46,47 @@ def msk_day_bounds(now: datetime | None = None) -> tuple[datetime, datetime, dat
     return start_msk.astimezone(ZoneInfo("UTC")), end_msk.astimezone(ZoneInfo("UTC")), now_msk
 
 
+def get_next_send_window_start(
+    now: datetime | None = None,
+    *,
+    use_working_hours: bool = True,
+    always_tomorrow: bool = False,
+) -> datetime:
+    """
+    Начало следующего окна отправки (timezone-aware).
+
+    - use_working_hours=True: 9–18 МСК. always_tomorrow=False — 09:00 сегодня если
+      сейчас до 09:00, иначе 09:00 завтра. always_tomorrow=True — всегда 09:00 завтра.
+    - use_working_hours=False: 00:05 завтра в TIME_ZONE проекта.
+
+    Для дневного лимита: always_tomorrow=True (продолжим завтра).
+    Для "вне рабочего времени": always_tomorrow=False (следующее 09:00).
+    """
+    if now is None:
+        now = dj_timezone.now()
+    try:
+        from django.conf import settings
+        tz = ZoneInfo(getattr(settings, "TIME_ZONE", "Europe/Moscow"))
+    except Exception:
+        tz = ZoneInfo("Europe/Moscow")
+    now_local = now.astimezone(tz)
+
+    if use_working_hours:
+        from mailer.constants import WORKING_HOURS_START
+        if always_tomorrow:
+            return (now_local + timedelta(days=1)).replace(
+                hour=WORKING_HOURS_START, minute=0, second=0, microsecond=0
+            )
+        today_start = now_local.replace(hour=WORKING_HOURS_START, minute=0, second=0, microsecond=0)
+        if now_local < today_start:
+            return today_start
+        return (now_local + timedelta(days=1)).replace(
+            hour=WORKING_HOURS_START, minute=0, second=0, microsecond=0
+        )
+    next_day = (now_local + timedelta(days=1)).replace(hour=0, minute=5, second=0, microsecond=0)
+    return next_day
+
+
 _RE_SCRIPT_TAG = re.compile(r"<\s*script\b[^>]*>[\s\S]*?<\s*/\s*script\s*>", re.IGNORECASE)
 _RE_ON_ATTR_DQ = re.compile(r'\son\w+\s*=\s*"[^"]*"',
                             re.IGNORECASE)

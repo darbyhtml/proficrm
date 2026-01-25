@@ -127,10 +127,20 @@
         </div>
       </div>
       
+      {# Баннер: отложено из-за дневного лимита (не пауза — продолжим завтра) #}
+      {% if is_deferred_daily_limit and deferred_until and per_user_daily_limit %}
+        <div class="mt-3 p-3 rounded-lg border border-amber-200 bg-amber-50/80 text-amber-900 text-sm flex items-center gap-2">
+          <span>Дневной лимит {{ per_user_daily_limit }} достигнут. Продолжим завтра в {{ deferred_until|time:"H:i" }} ({{ deferred_until|date:"d.m" }}).</span>
+        </div>
+      {% endif %}
+
       {# Дополнительная информация #}
       <div class="mt-3 pt-3 border-t border-brand-soft">
         <div class="text-sm text-brand-dark/70">
           <span>Тема: <b>{{ campaign.subject }}</b></span>
+          {% if per_user_daily_limit and sent_today_user is not None %}
+            <span class="ml-3">Отправлено сегодня: <b>{{ sent_today_user }}/{{ per_user_daily_limit }}</b></span>
+          {% endif %}
         </div>
         <details class="mt-2">
           <summary class="text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors">Технические детали</summary>

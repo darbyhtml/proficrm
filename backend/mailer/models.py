@@ -282,7 +282,17 @@ class CampaignQueue(models.Model):
     queued_at = models.DateTimeField("Поставлено в очередь", auto_now_add=True)
     started_at = models.DateTimeField("Начало обработки", null=True, blank=True)
     completed_at = models.DateTimeField("Завершено", null=True, blank=True)
-    
+
+    # Отложенное продолжение: не обрабатывать до указанного времени (автодосыл на след. день/час)
+    deferred_until = models.DateTimeField("Продолжить не ранее", null=True, blank=True)
+    defer_reason = models.CharField(
+        "Причина отложения",
+        max_length=24,
+        blank=True,
+        default="",
+        help_text="daily_limit, quota_exhausted, outside_hours, rate_per_hour",
+    )
+
     class Meta:
         ordering = ["-priority", "queued_at"]
         indexes = [

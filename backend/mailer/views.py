@@ -1079,7 +1079,10 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "recent_errors": recent_errors,
             "error_types": error_types,
             "quota": quota,
-            "queue_entry": getattr(camp, "queue_entry", None),
+            "queue_entry": (qe := getattr(camp, "queue_entry", None)),
+            "deferred_until": (du := getattr(qe, "deferred_until", None) if qe else None),
+            "defer_reason": (getattr(qe, "defer_reason", None) or "") if qe else "",
+            "is_deferred_daily_limit": bool(qe and (getattr(qe, "defer_reason", None) or "") == "daily_limit" and du and du > timezone.now()),
             "emails_available": emails_available,
             "rate_per_hour": max_per_hour,
             "attachment_ext": (
@@ -1227,6 +1230,8 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
 
     q = getattr(active, "queue_entry", None)
     queue_status = (getattr(q, "status", None) if q else None)
+    deferred_until = getattr(q, "deferred_until", None)
+    defer_reason = (getattr(q, "defer_reason", None) or "") if q else ""
 
     return JsonResponse(
         {
@@ -1247,6 +1252,9 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
                 "reason_code": reason_code,
                 "reason_text": reason_text,
                 "queue_status": queue_status,
+                "deferred_until": deferred_until.isoformat() if deferred_until else None,
+                "defer_reason": defer_reason,
+                "next_run_at": deferred_until.isoformat() if deferred_until else None,
             },
         }
     )
@@ -2081,6 +2089,45 @@ def campaign_resume(request: HttpRequest, campaign_id) -> HttpResponse:
             if not ((camp.created_by.email if camp.created_by else "") or "").strip():
                 messages.error(request, "У создателя кампании не задан email (Reply-To). Укажите email в профиле создателя кампании.")
                 return redirect("campaign_detail", campaign_id=camp.id)
+
+            # Если дневной лимит уже исчерпан сегодня — не стартуем сейчас, ставим deferred_until на завтра.
+            smtp_cfg = GlobalMailAccount.load()
+            per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT_DEFAULT
+            start_day_utc, end_day_utc, _ = msk_day_bounds(timezone.now())
+            sent_today_user = SendLog.objects.filter(
+                provider="smtp_global",
+                status="sent",
+                campaign__created_by=camp.created_by,
+                created_at__gte=start_day_utc,
+                created_at__lt=end_day_utc,
+            ).count()
+            if per_user_daily_limit and sent_today_user >= per_user_daily_limit:
+                from mailer.utils import get_next_send_window_start
+                from mailer.constants import DEFER_REASON_DAILY_LIMIT
+                next_run = get_next_send_window_start(always_tomorrow=True)
+                next_run_str = next_run.strftime("%H:%M")
+                next_run_date = next_run.strftime("%d.%m")
+                queue_entry, _ = CampaignQueue.objects.get_or_create(
+                    campaign=camp,
+                    defaults={"status": CampaignQueue.Status.PENDING, "priority": 0},
+                )
+                queue_entry.status = CampaignQueue.Status.PENDING
+                queue_entry.started_at = None
+                queue_entry.completed_at = None
+                queue_entry.queued_at = timezone.now()
+                queue_entry.deferred_until = next_run
+                queue_entry.defer_reason = DEFER_REASON_DAILY_LIMIT
+                queue_entry.save(update_fields=["status", "started_at", "completed_at", "queued_at", "deferred_until", "defer_reason"])
+                camp.status = Campaign.Status.READY
+                camp.save(update_fields=["status", "updated_at"])
+                messages.info(
+                    request,
+                    f"Сегодня лимит исчерпан ({sent_today_user}/{per_user_daily_limit}). "
+                    f"Продолжим завтра в {next_run_str} ({next_run_date}).",
+                )
+                log_event(actor=user, verb=ActivityEvent.Verb.UPDATE, entity_type="campaign", entity_id=camp.id, message="Resume: лимит исчерпан, отложено на завтра")
+                return redirect("campaign_detail", campaign_id=camp.id)
+
             camp.status = Campaign.Status.READY
             camp.save(update_fields=["status", "updated_at"])
             
