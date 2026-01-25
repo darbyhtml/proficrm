@@ -7,6 +7,7 @@ from urllib.parse import urlencode
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
+from django.core.files.storage import default_storage
 from django.core.paginator import Paginator
 from django.db.models import Count, Q, Exists, OuterRef
 from django.http import HttpRequest, HttpResponse, Http404
@@ -785,6 +786,7 @@ def campaign_edit(request: HttpRequest, campaign_id) -> HttpResponse:
 
     attachment_filename = ""
     attachment_ext = ""
+    attachment_size = None
     if getattr(camp, "attachment", None):
         try:
             attachment_filename = (camp.attachment_original_name or (camp.attachment.name.split("/")[-1] if camp.attachment and camp.attachment.name else "")).strip()
@@ -792,6 +794,11 @@ def campaign_edit(request: HttpRequest, campaign_id) -> HttpResponse:
                 attachment_ext = attachment_filename.split(".")[-1].upper()
             else:
                 attachment_ext = ""
+            if camp.attachment and camp.attachment.name and default_storage.exists(camp.attachment.name):
+                try:
+                    attachment_size = camp.attachment.size
+                except OSError:
+                    pass
         except Exception:
             attachment_filename = ""
             attachment_ext = ""
@@ -805,6 +812,7 @@ def campaign_edit(request: HttpRequest, campaign_id) -> HttpResponse:
             "smtp_from_email": (smtp_cfg.from_email or smtp_cfg.smtp_username or "").strip(),
             "attachment_ext": attachment_ext,
             "attachment_filename": attachment_filename,
+            "attachment_size": attachment_size,
         },
     )
 
@@ -1028,6 +1036,14 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
                 "time": error_log.created_at,
             })
 
+    # Размер вложения: только если файл есть на диске (иначе .size -> FileNotFoundError)
+    attachment_size = None
+    if camp.attachment and camp.attachment.name and default_storage.exists(camp.attachment.name):
+        try:
+            attachment_size = camp.attachment.size
+        except OSError:
+            pass
+
     # Подготовка HTML для предпросмотра с подписью
     preview_html = camp.body_html or ""
     if preview_html:
@@ -1091,6 +1107,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
                 else ""
             ),
             "attachment_filename": (camp.attachment_original_name or (camp.attachment.name.split("/")[-1] if camp.attachment and camp.attachment.name else "")),
+            "attachment_size": attachment_size,
         },
     )
 

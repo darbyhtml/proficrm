@@ -234,7 +234,7 @@
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="font-medium text-sm truncate">{{ attachment_filename|default:"Вложение" }}</div>
-                  <div class="text-xs text-gray-500 mt-0.5">{{ campaign.attachment.size|filesizeformat }}</div>
+                  <div class="text-xs text-gray-500 mt-0.5">{% if attachment_size is not None %}{{ attachment_size|filesizeformat }}{% else %}—{% endif %}</div>
                 </div>
               </div>
               <div class="mt-2">

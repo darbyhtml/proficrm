@@ -13,16 +13,16 @@ logger = logging.getLogger(__name__)
 # Базовый URL API smtp.bz (api_documentation_smtpbz.txt, Swagger)
 SMTP_BZ_API_BASE = "https://api.smtp.bz/v1"
 SMTP_BZ_TIMEOUT = 10
-# По локальной документации: Authorization в заголовке; формат не указан. Используем Bearer.
+# По документации smtp.bz: ключ передаётся в заголовке Authorization (без указания схемы Bearer).
+# https://docs.smtp.bz, раздел «Авторизация»: «Ключ необходимо передавать в каждом запросе в заголовке Authorization».
 SMTP_BZ_AUTH_HEADER = "Authorization"
-SMTP_BZ_AUTH_VALUE_TMPL = "Bearer {}"
 
 
 def _smtp_bz_request(
     api_key: str, endpoint: str, *, timeout: int = SMTP_BZ_TIMEOUT, params: Optional[Dict[str, Any]] = None
 ) -> tuple[int, Optional[dict], Optional[str]]:
     """
-    Один GET-запрос к API smtp.bz. Authorization: Bearer {api_key}.
+    Один GET-запрос к API smtp.bz. Authorization: {api_key} (ключ как значение заголовка, без Bearer).
     Returns: (status_code, json_data or None, error_message or None).
     """
     if not (api_key or "").strip():
@@ -32,7 +32,7 @@ def _smtp_bz_request(
     url = f"{base}{path}"
     headers = {
         "Accept": "application/json",
-        SMTP_BZ_AUTH_HEADER: SMTP_BZ_AUTH_VALUE_TMPL.format((api_key or "").strip()),
+        SMTP_BZ_AUTH_HEADER: (api_key or "").strip(),
     }
     try:
         r = requests.get(url, headers=headers, timeout=timeout, params=params or None)
@@ -70,7 +70,7 @@ def _smtp_bz_request(
 def get_quota_info(api_key: str) -> Optional[Dict[str, Any]]:
     """
     Получает информацию о тарифе и квоте через API smtp.bz.
-    Один формат auth: Authorization: Bearer {api_key}. Эндпоинты: /user, /user/stats.
+    Один формат auth: Authorization: {api_key} (ключ как значение заголовка, без Bearer, по доке smtp.bz). Эндпоинты: /user, /user/stats.
     Обработка: 401/403/404/429/5xx, таймаут, не-JSON. Retry для 429/5xx (до 2 повторов, backoff 1–2 с).
     Не логируем ключ и полное тело ответа на INFO.
     """
