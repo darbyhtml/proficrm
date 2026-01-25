@@ -1,0 +1,148 @@
+# Production: один сервер, Docker, Nginx на хосте (проксирует на 127.0.0.1:8001).
+# Секреты только из .env, без дефолтов. Миграции — отдельной командой деплоя.
+# Пути: ./data/staticfiles и ./data/media (создать и chown 1000:1000 перед первым деплоем).
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-crm}
+      POSTGRES_USER: ${POSTGRES_USER:-crm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-crm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redisdata:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.staging
+    working_dir: /app/backend
+    volumes:
+      - ./data/staticfiles:/app/backend/staticfiles
+      - ./data/media:/app/backend/media
+    ports:
+      - "127.0.0.1:8001:8000"
+    env_file:
+      - .env
+    environment:
+      DB_ENGINE: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-crm}
+      POSTGRES_USER: ${POSTGRES_USER:-crm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      DJANGO_DEBUG: "0"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-}
+      MAILER_FERNET_KEY: ${MAILER_FERNET_KEY:-}
+      SECURITY_CONTACT_EMAIL: ${SECURITY_CONTACT_EMAIL:-}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      gunicorn crm.wsgi:application
+      --bind 0.0.0.0:8000
+      --workers 2
+      --timeout 120
+      --access-logfile -
+      --error-logfile -
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile.staging
+    working_dir: /app/backend
+    volumes:
+      - ./data/media:/app/backend/media
+    env_file:
+      - .env
+    environment:
+      DB_ENGINE: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-crm}
+      POSTGRES_USER: ${POSTGRES_USER:-crm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      DJANGO_DEBUG: "0"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A crm worker --loglevel=info --concurrency=2
+    security_opt:
+      - no-new-privileges:true
+    # cap_drop: ALL не ставим — задачи могут вызывать subprocess
+    restart: unless-stopped
+
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.staging
+    working_dir: /app/backend
+    volumes:
+      - ./data/media:/app/backend/media
+    env_file:
+      - .env
+    environment:
+      DB_ENGINE: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-crm}
+      POSTGRES_USER: ${POSTGRES_USER:-crm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      DJANGO_DEBUG: "0"
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/1
+      CELERY_RESULT_BACKEND: redis://redis:6379/2
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A crm beat --loglevel=info
+    security_opt:
+      - no-new-privileges:true
+    # cap_drop: ALL не ставим — beat/задачи могут использовать subprocess
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  redisdata:

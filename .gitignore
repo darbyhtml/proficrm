@@ -15,6 +15,7 @@ coverage.xml
 # Django / local runtime
 backend/.env
 .env
+data/
 *.env
 *.log
 backend/db.sqlite3

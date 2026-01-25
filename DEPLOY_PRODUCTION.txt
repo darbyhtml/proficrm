@@ -1,0 +1,41 @@
+=== Production: crm.groupprofi.ru (Docker + Nginx на хосте) ===
+
+1) .env
+   cp env.template .env
+   Заполнить: POSTGRES_PASSWORD, DJANGO_SECRET_KEY, DJANGO_ALLOWED_HOSTS=crm.groupprofi.ru, DJANGO_CSRF_TRUSTED_ORIGINS=https://crm.groupprofi.ru
+
+2) Каталоги и права (если проект в /opt/crm)
+   sudo mkdir -p /opt/crm/data/staticfiles /opt/crm/data/media
+   sudo chown 1000:1000 /opt/crm/data/staticfiles /opt/crm/data/media
+   В nginx/production.conf заменить /opt/crm на свой PROJECT_ROOT в alias для /static/ и /media/.
+
+3) Nginx
+   - limit_req_zone в production.conf уже в начале файла (попадают в http при include).
+   - Копировать nginx/production.conf в /etc/nginx/sites-available/crm.production
+   - ln -s /etc/nginx/sites-available/crm.production /etc/nginx/sites-enabled/
+   - Basic Auth для /admin/:
+     sudo apt install apache2-utils
+     sudo htpasswd -c /etc/nginx/.htpasswd admin
+   - nginx -t && sudo systemctl reload nginx
+
+4) SSL (Let's Encrypt)
+   sudo apt install certbot python3-certbot-nginx
+   sudo certbot --nginx -d crm.groupprofi.ru
+
+5) Деплой
+   ./deploy_production.sh
+
+6) Откат
+   git log -1 --oneline  # сохранить текущий коммит перед деплоем
+   git checkout <prev_commit>
+   docker compose -f docker-compose.prod.yml build --no-cache web celery celery-beat
+   docker compose -f docker-compose.prod.yml run --rm web python manage.py migrate --noinput
+   docker compose -f docker-compose.prod.yml run --rm web python manage.py collectstatic --noinput
+   docker compose -f docker-compose.prod.yml up -d
+
+7) Проверки
+   nginx -t
+   docker compose -f docker-compose.prod.yml config
+   # migrate не в celery/beat: в выводе config не должно быть "migrate" в command для celery и celery-beat:
+   docker compose -f docker-compose.prod.yml config 2>/dev/null | grep -E "command:" -A1
+   curl -sI https://crm.groupprofi.ru  # заголовки, в т.ч. X-Content-Type-Options, X-Frame-Options

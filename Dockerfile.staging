@@ -12,8 +12,7 @@ WORKDIR /app
 
 # Копирование requirements и установка зависимостей
 COPY backend/requirements.txt /app/backend/requirements.txt
-RUN pip install --no-cache-dir -r /app/backend/requirements.txt && \
-    pip install --no-cache-dir gunicorn
+RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 
 # Копирование кода приложения
 COPY backend /app/backend
@@ -29,4 +28,4 @@ USER crmuser
 EXPOSE 8000
 
 # Команда по умолчанию (переопределяется в docker-compose)
-CMD ["gunicorn", "crm.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2"]
+CMD ["gunicorn", "crm.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]
