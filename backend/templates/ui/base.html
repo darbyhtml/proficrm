@@ -83,15 +83,28 @@
       .company-row-cold:hover{background:rgba(253,173,58,.15)!important}
       .wrap-anywhere{overflow-wrap:anywhere; word-break:break-word}
 
-      /* Прогресс рассылки: компактный, не перекрывает кнопки */
+      /* Прогресс рассылки: по умолчанию только % в квадратике, при наведении — подробности */
       .mail-progress{
         max-width:min(360px, calc(100vw - 32px));
+        padding: 8px;
       }
       .mail-progress__body{
-        min-width:0;
-        display:flex;
-        flex-direction:column;
-        gap:2px;
+        min-width: 0;
+        max-width: 0;
+        overflow: hidden;
+        opacity: 0;
+        margin-left: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        transition: max-width .2s ease, opacity .2s ease, margin-left .2s ease;
+      }
+      .mail-progress:hover .mail-progress__body{
+        max-width: 280px;
+        opacity: 1;
+        margin-left: 10px;
+        padding: 0 1.25rem 0 0;
       }
       .mail-progress__title,
       .mail-progress__counts{
@@ -101,23 +114,18 @@
         white-space: nowrap;
       }
       .mail-progress__counts-short{
-        display:none;
+        display: none !important;
         max-width: 240px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
-      .mail-progress.is-collapsed .mail-progress__title,
-      .mail-progress.is-collapsed .mail-progress__counts{ display:none; }
-      .mail-progress.is-collapsed .mail-progress__counts-short{ display:block; }
       .mail-progress__limit{ display:none; }
       .mail-progress--limit .mail-progress__limit{ display:block; }
-      .mail-progress.is-collapsed.mail-progress--limit .mail-progress__limit{ display:none; }
-      .mail-progress.is-collapsed{ padding: 8px 10px; gap: 8px; }
       /* На совсем узких экранах поднимаем выше кнопок/панелей */
       @media (max-width: 480px){
         .mail-progress{ left: 12px; right: 12px; bottom: 76px; max-width:none; }
-        .mail-progress__title, .mail-progress__counts, .mail-progress__counts-short{ max-width: 180px; }
+        .mail-progress__title, .mail-progress__counts{ max-width: 180px; }
       }
       
       /* Глобальные стили скроллбаров (как в календаре) */
@@ -1025,13 +1033,13 @@
       </div>
     </div>
 
-    {# Глобальный прогресс рассылки (показывается только если есть активная отправка) #}
-    <a id="mailProgressWidget" href="#" class="hidden fixed bottom-5 left-5 z-50 bg-white border border-brand-soft rounded-2xl shadow-lg px-3 py-2 flex items-center gap-3 hover:bg-brand-soft/20 mail-progress is-collapsed" style="min-width:165px;">
-      <div id="mailProgressCircle" class="w-10 h-10 rounded-full flex items-center justify-center text-xs font-semibold" style="background:conic-gradient(var(--brand-teal) 0deg, rgba(194,226,222,.6) 0deg); color:var(--brand-dark); border:1px solid rgba(194,226,222,.9)">
+    {# Глобальный прогресс рассылки: по умолчанию только % в квадратике; при наведении — подробности; клик — страница кампании #}
+    <a id="mailProgressWidget" href="#" class="hidden fixed bottom-5 left-5 z-50 bg-white border border-brand-soft rounded-2xl shadow-lg p-2 flex items-center hover:bg-brand-soft/20 mail-progress">
+      <div id="mailProgressCircle" class="w-10 h-10 flex-shrink-0 rounded-lg flex items-center justify-center text-xs font-semibold" style="background:conic-gradient(var(--brand-teal) 0deg, rgba(194,226,222,.6) 0deg); color:var(--brand-dark); border:1px solid rgba(194,226,222,.9)">
         <span id="mailProgressPct">0%</span>
       </div>
-      <div class="leading-tight relative pr-5 mail-progress__body">
-        <div class="text-xs muted">Рассылка</div>
+      <div class="leading-tight relative mail-progress__body">
+        <span id="mailProgressPrefix" class="text-xs muted">Рассылка</span>
         <div id="mailProgressText" class="text-sm font-medium mail-progress__title">—</div>
         <div id="mailProgressCounts" class="muted-2 mail-progress__counts" style="font-size:0.6875rem;">—</div>
         <div id="mailProgressCountsShort" class="muted-2 mail-progress__counts-short" style="font-size:0.6875rem;">—</div>
@@ -2041,7 +2049,8 @@
         const countsShort = document.getElementById('mailProgressCountsShort');
         const limitNote = document.getElementById('mailProgressLimit');
         const closeBtn = document.getElementById('mailProgressClose');
-        if (!widget || !circle || !pct || !text || !counts || !countsShort || !limitNote || !closeBtn) return;
+        const prefixEl = document.getElementById('mailProgressPrefix');
+        if (!widget || !circle || !pct || !text || !counts || !countsShort || !limitNote || !closeBtn || !prefixEl) return;
 
         const STORAGE_KEY = 'mail_progress_dismissed_campaign';
         const STORAGE_UNTIL_KEY = 'mail_progress_dismissed_until';
@@ -2124,6 +2133,7 @@
             if (status === 'sent') prefix = 'Готово';
             if (status === 'sending') prefix = 'Отправка';
             if (status === 'ready') prefix = 'В очереди';
+            prefixEl.textContent = prefix;
             const reason = (a.reason_text || '').trim();
             const mainBits = [];
             mainBits.push(`${prefix}: ${name}`);
@@ -2140,10 +2150,7 @@
               }
             }
             countsShort.textContent = mainBits.join(' · ');
-            // Подсказка по наведению (полный текст, без увеличения размеров)
-            try {
-              countsShort.title = counts.textContent + (reason ? (` · ${reason}`) : '');
-            } catch (_e) {}
+            circle.title = countsShort.textContent || 'Нажмите — страница кампании';
             circle.style.background = `conic-gradient(var(--brand-teal) ${deg}deg, rgba(194,226,222,.6) ${deg}deg)`;
 
             // Лимит на сегодня
@@ -2166,6 +2173,7 @@
 
         closeBtn.addEventListener('click', function(e) {
           e.preventDefault();
+          e.stopPropagation();
           widget.classList.add('hidden');
           // Если рассылка уже завершена — запоминаем кампанию (как раньше).
           // Если в процессе — скрываем только на время, чтобы не мешало работе в CRM.
@@ -2179,9 +2187,6 @@
             }
           } catch (_e) {}
         });
-
-        // Всегда показываем в компактном режиме; клик ведёт сразу в кампанию
-        widget.classList.add('is-collapsed');
 
         // Первичный запуск + периодический polling
         poll();
