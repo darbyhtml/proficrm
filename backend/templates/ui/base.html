@@ -86,7 +86,7 @@
       /* Прогресс рассылки: по умолчанию только % в квадратике, при наведении — подробности */
       .mail-progress{
         max-width:min(360px, calc(100vw - 32px));
-        padding: 4px 6px; /* компактно в свернутом виде, без лишнего белого поля */
+        padding: 5px; /* равные отступы — зелёный квадрат не в прямоугольнике */
       }
       .mail-progress__body{
         min-width: 0;
@@ -101,7 +101,7 @@
         transition: max-width .2s ease, opacity .2s ease, margin-left .2s ease;
       }
       .mail-progress:hover .mail-progress__body{
-        max-width: 280px;
+        max-width: 260px; /* уже на 20px, чтобы не залезать на контент */
         opacity: 1;
         margin-left: 10px;
         padding: 0 1.25rem 0 0;
@@ -1036,7 +1036,7 @@
 
     {# Глобальный прогресс рассылки: по умолчанию только % в квадратике; при наведении — подробности; клик — страница кампании #}
     <a id="mailProgressWidget" href="#" class="hidden fixed bottom-5 left-5 z-50 bg-white border border-brand-soft rounded-2xl shadow-lg flex items-center hover:bg-brand-soft/20 mail-progress">
-      <div id="mailProgressCircle" class="w-10 h-10 flex-shrink-0 rounded-lg flex items-center justify-center text-xs font-semibold" style="background:conic-gradient(var(--brand-teal) 0deg, rgba(194,226,222,.6) 0deg); color:var(--brand-dark); border:1px solid rgba(194,226,222,.9)">
+      <div id="mailProgressCircle" class="w-10 h-10 flex-shrink-0 rounded-lg flex items-center justify-center text-xs font-semibold" style="background:conic-gradient(var(--brand-teal) 0deg, rgba(194,226,222,.6) 0deg); color:var(--brand-dark); border:1.5px solid rgba(1,148,142,.45); box-sizing:border-box;">
         <span id="mailProgressPct">0%</span>
       </div>
       <div class="leading-tight relative mail-progress__body">
@@ -2054,20 +2054,12 @@
         if (!widget || !circle || !pct || !text || !counts || !countsShort || !limitNote || !closeBtn || !prefixEl) return;
 
         const STORAGE_KEY = 'mail_progress_dismissed_campaign';
-        const STORAGE_UNTIL_KEY = 'mail_progress_dismissed_until';
         let dismissedForCampaignId = null;
-        let dismissedUntil = 0;
-        let lastStatus = '';
         let lastCampaignId = '';
         try {
           dismissedForCampaignId = window.localStorage.getItem(STORAGE_KEY) || null;
         } catch (_e) {
           dismissedForCampaignId = null;
-        }
-        try {
-          dismissedUntil = Number(window.localStorage.getItem(STORAGE_UNTIL_KEY) || '0') || 0;
-        } catch (_e) {
-          dismissedUntil = 0;
         }
 
         function isBlockingOverlayOpen(){
@@ -2092,30 +2084,14 @@
             const data = await res.json();
             if (!data || !data.ok || !data.active) {
               widget.classList.add('hidden');
-              dismissedForCampaignId = null;
               return;
             }
-            // Временное скрытие (если пользователь закрыл виджет во время отправки)
-            try {
-              if (dismissedUntil && Date.now() < dismissedUntil) {
-                widget.classList.add('hidden');
-                return;
-              }
-            } catch (_e) {}
             const a = data.active;
-            const status = (a.status || '').toLowerCase();
-            lastStatus = status;
             lastCampaignId = String(a.id || '');
+            const status = (a.status || '').toLowerCase();
 
-            // Как только начинается отправка любой кампании — сбрасываем прежний dismiss,
-            // чтобы прогресс новой отправки всегда был виден.
-            if (status === 'sending') {
-              dismissedForCampaignId = null;
-              try { window.localStorage.removeItem(STORAGE_KEY); } catch (_e) {}
-            }
-
-            // Если пользователь закрыл виджет для этой завершённой кампании — не показываем
-            if (status === 'sent' && dismissedForCampaignId === a.id) {
+            // Закрыли по крестику — не показываем эту кампанию нигде, пока не начнётся новая (другой id)
+            if (dismissedForCampaignId === a.id) {
               widget.classList.add('hidden');
               return;
             }
@@ -2177,15 +2153,11 @@
           e.preventDefault();
           e.stopPropagation();
           widget.classList.add('hidden');
-          // Если рассылка уже завершена — запоминаем кампанию (как раньше).
-          // Если в процессе — скрываем только на время, чтобы не мешало работе в CRM.
+          // Закрыли по крестику — скрывать везде до новой рассылки (другой id)
           try {
-            if ((lastStatus || '') === 'sent' && lastCampaignId) {
+            if (lastCampaignId) {
               dismissedForCampaignId = lastCampaignId;
               window.localStorage.setItem(STORAGE_KEY, dismissedForCampaignId);
-            } else {
-              dismissedUntil = Date.now() + (10 * 60 * 1000); // 10 минут
-              window.localStorage.setItem(STORAGE_UNTIL_KEY, String(dismissedUntil));
             }
           } catch (_e) {}
         });
