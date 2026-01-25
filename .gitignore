@@ -36,6 +36,9 @@ Desktop.ini
 export_columns.txt
 export_schema.json
 
+# Справочная документация (внешние API)
+api_documentation_smtpbz.txt
+
 # Local helper binaries
 cloudflared.exe
 

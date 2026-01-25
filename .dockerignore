@@ -46,7 +46,7 @@ Desktop.ini
 
 # Documentation (not needed in runtime)
 *.md
-!backend/README.md
+api_documentation_smtpbz.txt
 
 # Local scripts / helpers
 count_types.py
@@ -54,16 +54,6 @@ debug_types*.py
 inspect_*.py
 scan_rows.py
 cloudflared.exe
-
-# Temporary / review files
-CODE_REVIEW*.md
-DEPLOY_*.md
-FIX_*.md
-TROUBLESHOOT_*.md
-REPOSITORY_*.md
-PROJECT_EVALUATION.md
-SECURITY_ENHANCEMENTS.md
-DELETE_*.md
 
 # Data exports
 *.csv

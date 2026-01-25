@@ -4,8 +4,6 @@ package ru.groupprofi.crmprofi.dialer.domain
  * Контракт для синхронизации данных о звонках между Android и CRM Backend.
  * ЭТАП 1: Константы и enum для подготовки к отправке новых полей.
  * Реальная отправка новых полей начнётся в ЭТАП 2.
- * 
- * Документация: docs/CALL_EVENT_CONTRACT.md
  */
 
 /**
