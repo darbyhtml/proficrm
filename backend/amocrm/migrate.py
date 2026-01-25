@@ -3868,6 +3868,9 @@ def migrate_filtered(
 
         # Заметки: запрашиваем только если нужно импортировать
         # ВАЖНО: в dry-run запрашиваем заметки для диагностики, даже если import_notes=False
+        # Инициализируем notes_error до веток, чтобы elif notes_error: не вызывал UnboundLocalError,
+        # когда блок if import_notes and amo_ids... не выполняется (import_notes=False или not amo_ids).
+        notes_error = None
         if import_notes and amo_ids and not (dry_run and not import_notes):
             logger.info(f"migrate_filtered: запрашиваем заметки для {len(amo_ids)} компаний (import_notes={import_notes}, dry_run={dry_run})")
             try:
