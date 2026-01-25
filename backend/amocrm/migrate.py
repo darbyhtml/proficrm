@@ -11,7 +11,7 @@ from uuid import UUID
 from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime, parse_date
-from datetime import datetime, time as dt_time, timezone as dt_timezone
+from datetime import date as dt_date, datetime, time as dt_time, timezone as dt_timezone
 
 from accounts.models import User
 from companies.models import Company, CompanyNote, CompanySphere, Contact, ContactEmail, ContactPhone, CompanyPhone, CompanyEmail
@@ -1586,6 +1586,22 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
     return result
 
 
+def _json_sanitize(obj: Any) -> Any:
+    """
+    Рекурсивно заменяет datetime/date/time на str для надёжной записи в JSONField.
+    Устраняет «Object of type time is not JSON serializable» при любом источнике.
+    """
+    if obj is None or isinstance(obj, (bool, int, float, str)):
+        return obj
+    if isinstance(obj, (dt_time, dt_date, datetime)):
+        return obj.isoformat()
+    if isinstance(obj, dict):
+        return {k: _json_sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_json_sanitize(v) for v in obj]
+    return obj
+
+
 def _parse_amo_due(ts: Any) -> timezone.datetime | None:
     """
     amo может отдавать дедлайн как:
@@ -1632,7 +1648,7 @@ def _parse_amo_due(ts: Any) -> timezone.datetime | None:
             return dt
         d = parse_date(s)
         if d:
-            dt2 = datetime.combine(d, time(12, 0))
+            dt2 = datetime.combine(d, dt_time(12, 0))
             return timezone.make_aware(dt2, timezone=UTC)
     return None
 
@@ -3161,7 +3177,7 @@ def _upsert_company_from_amo(
     if "amo" not in rf:
         rf["amo"] = {}
     rf["amo"]["custom_fields_values"] = amo_company.get("custom_fields_values") or []
-    company.raw_fields = rf
+    company.raw_fields = _json_sanitize(rf)
     if responsible and company.responsible_id != responsible.id:
         company.responsible = responsible
     
@@ -3557,16 +3573,16 @@ def migrate_filtered(
                                 if 0 <= h1 <= 23 and 0 <= h2 <= 23 and 0 <= m1 <= 59 and 0 <= m2 <= 59:
                                     old_start = str(comp.workday_start) if comp.workday_start else ""
                                     old_end = str(comp.workday_end) if comp.workday_end else ""
-                                    if can_update("workday_start") and comp.workday_start != time(h1, m1):
-                                        comp.workday_start = time(h1, m1)
+                                    if can_update("workday_start") and comp.workday_start != dt_time(h1, m1):
+                                        comp.workday_start = dt_time(h1, m1)
                                         changed = True
                                         if dry_run:
-                                            company_updates_diff["workday_start"] = {"old": old_start, "new": str(time(h1, m1))}
-                                    if can_update("workday_end") and comp.workday_end != time(h2, m2):
-                                        comp.workday_end = time(h2, m2)
+                                            company_updates_diff["workday_start"] = {"old": old_start, "new": str(dt_time(h1, m1))}
+                                    if can_update("workday_end") and comp.workday_end != dt_time(h2, m2):
+                                        comp.workday_end = dt_time(h2, m2)
                                         changed = True
                                         if dry_run:
-                                            company_updates_diff["workday_end"] = {"old": old_end, "new": str(time(h2, m2))}
+                                            company_updates_diff["workday_end"] = {"old": old_end, "new": str(dt_time(h2, m2))}
                             except Exception:
                                 pass
                     # Руководитель (contact_name) — заполняем из amo, если пусто
@@ -3597,7 +3613,7 @@ def migrate_filtered(
                             }
                         )
                         rf["amo_values"] = prev
-                        comp.raw_fields = rf
+                        comp.raw_fields = _json_sanitize(rf)
                     
                     # Сохраняем diff изменений для dry-run
                     if dry_run and company_updates_diff:
