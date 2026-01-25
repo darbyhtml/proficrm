@@ -17,9 +17,14 @@ RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 # Копирование кода приложения
 COPY backend /app/backend
 
+# Entrypoint: fail-fast проверка обязательных env (web/celery/beat, migrate, collectstatic)
+COPY docker/entrypoint.sh /app/docker/entrypoint.sh
+RUN chmod +x /app/docker/entrypoint.sh
+ENTRYPOINT ["/app/docker/entrypoint.sh"]
+
 WORKDIR /app/backend
 
-# Создание пользователя для безопасности (опционально, но рекомендуется)
+# Создание пользователя для безопасности
 RUN useradd -m -u 1000 crmuser && \
     chown -R crmuser:crmuser /app
 USER crmuser

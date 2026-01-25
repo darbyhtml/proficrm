@@ -2,40 +2,64 @@
 
 1) .env
    cp env.template .env
-   Заполнить: POSTGRES_PASSWORD, DJANGO_SECRET_KEY, DJANGO_ALLOWED_HOSTS=crm.groupprofi.ru, DJANGO_CSRF_TRUSTED_ORIGINS=https://crm.groupprofi.ru
+   Обязательно (entrypoint fail-fast): POSTGRES_PASSWORD, DJANGO_SECRET_KEY, POSTGRES_USER, POSTGRES_DB,
+   PUBLIC_BASE_URL, MAILER_FERNET_KEY, DJANGO_ALLOWED_HOSTS, DJANGO_CSRF_TRUSTED_ORIGINS.
 
-2) Каталоги и права (если проект в /opt/crm)
-   sudo mkdir -p /opt/crm/data/staticfiles /opt/crm/data/media
-   sudo chown 1000:1000 /opt/crm/data/staticfiles /opt/crm/data/media
-   В nginx/production.conf заменить /opt/crm на свой PROJECT_ROOT в alias для /static/ и /media/.
+2) Каталоги и права (проект в /opt/proficrm или /opt/crm)
+   sudo mkdir -p /opt/proficrm/data/staticfiles /opt/proficrm/data/media /opt/proficrm/backups
+   sudo chown 1000:1000 /opt/proficrm/data/staticfiles /opt/proficrm/data/media
+   В nginx/production.conf заменить /opt/crm на свой PROJECT_ROOT (например /opt/proficrm) в alias для /static/ и /media/.
 
 3) Nginx
-   - limit_req_zone в production.conf уже в начале файла (попадают в http при include).
+   - limit_req_zone в production.conf уже в начале файла.
    - Копировать nginx/production.conf в /etc/nginx/sites-available/crm.production
    - ln -s /etc/nginx/sites-available/crm.production /etc/nginx/sites-enabled/
-   - Basic Auth для /admin/:
-     sudo apt install apache2-utils
-     sudo htpasswd -c /etc/nginx/.htpasswd admin
+   - Basic Auth для /admin/: sudo apt install apache2-utils && sudo htpasswd -c /etc/nginx/.htpasswd admin
    - nginx -t && sudo systemctl reload nginx
 
-4) SSL (Let's Encrypt)
+4) HSTS STRICT (опционально)
+   По умолчанию HSTS_SAFE (max-age=3600). Для STRICT (1 год + includeSubDomains): в nginx/production.conf
+   закомментировать строку add_header Strict-Transport-Security "max-age=3600" always;
+   и раскомментировать add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+   Затем: sudo systemctl reload nginx
+
+5) SSL (Let's Encrypt)
    sudo apt install certbot python3-certbot-nginx
    sudo certbot --nginx -d crm.groupprofi.ru
 
-5) Деплой
+6) Деплой
    ./deploy_production.sh
 
-6) Откат
-   git log -1 --oneline  # сохранить текущий коммит перед деплоем
+7) Логи и ротация
+   - docs/ops/logging.md: logrotate для nginx, max-size для docker (daemon.json: "log-opts": {"max-size":"10m","max-file":"3"}).
+
+8) Бэкапы Postgres
+   - docs/ops/backups.md. Скрипт: scripts/backup_postgres.sh. Каталог: /opt/proficrm/backups.
+   - Cron: 15 3 * * * cd /opt/proficrm && ./scripts/backup_postgres.sh >> /var/log/proficrm-backup.log 2>&1
+
+9) Откат
+   git log -1 --oneline  # сохранить коммит перед деплоем
    git checkout <prev_commit>
    docker compose -f docker-compose.prod.yml build --no-cache web celery celery-beat
    docker compose -f docker-compose.prod.yml run --rm web python manage.py migrate --noinput
    docker compose -f docker-compose.prod.yml run --rm web python manage.py collectstatic --noinput
    docker compose -f docker-compose.prod.yml up -d
 
-7) Проверки
-   nginx -t
+10) Проверки (копипаст)
    docker compose -f docker-compose.prod.yml config
-   # migrate не в celery/beat: в выводе config не должно быть "migrate" в command для celery и celery-beat:
-   docker compose -f docker-compose.prod.yml config 2>/dev/null | grep -E "command:" -A1
-   curl -sI https://crm.groupprofi.ru  # заголовки, в т.ч. X-Content-Type-Options, X-Frame-Options
+
+   docker compose -f docker-compose.prod.yml exec web id
+   # ожидаем: uid=1000(crmuser) gid=1000(crmuser)
+
+   curl -sI https://crm.groupprofi.ru | grep -i strict-transport-security
+   # ожидаем: Strict-Transport-Security: max-age=3600 (или 31536000 при STRICT)
+
+   # При пустом DJANGO_SECRET_KEY контейнер падает с ошибкой:
+   docker compose -f docker-compose.prod.yml run --rm -e DJANGO_SECRET_KEY= web python -c "pass"
+   # ожидаем: ERROR: DJANGO_SECRET_KEY is required and must not be empty. Set it in .env
+
+   # celery/beat с cap_drop ALL:
+   docker compose -f docker-compose.prod.yml ps -q celery | xargs -I{} docker inspect {} --format '{{.HostConfig.CapDrop}}'
+   # ожидаем: [ALL] или [CAP_... CAP_... ...] (все сброшены = ALL)
+
+   nginx -t

@@ -16,6 +16,7 @@ coverage.xml
 backend/.env
 .env
 data/
+backups/
 *.env
 *.log
 backend/db.sqlite3

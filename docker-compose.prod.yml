@@ -64,17 +64,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: >
-      gunicorn crm.wsgi:application
-      --bind 0.0.0.0:8000
-      --workers 2
-      --timeout 120
-      --access-logfile -
-      --error-logfile -
+    command: ["gunicorn", "crm.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    mem_limit: ${WEB_MEM:-512m}
+    cpus: ${WEB_CPUS:-1}
+    ulimits:
+      nofile: { soft: 65536, hard: 65536 }
     restart: unless-stopped
 
   celery:
@@ -104,10 +102,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: celery -A crm worker --loglevel=info --concurrency=2
+    command: ["celery", "-A", "crm", "worker", "--loglevel=info", "--concurrency=2"]
     security_opt:
       - no-new-privileges:true
-    # cap_drop: ALL не ставим — задачи могут вызывать subprocess
+    cap_drop:
+      - ALL
+    mem_limit: ${CELERY_MEM:-384m}
+    cpus: ${CELERY_CPUS:-0.5}
+    ulimits:
+      nofile: { soft: 65536, hard: 65536 }
     restart: unless-stopped
 
   celery-beat:
@@ -137,10 +140,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: celery -A crm beat --loglevel=info
+    command: ["celery", "-A", "crm", "beat", "--loglevel=info"]
     security_opt:
       - no-new-privileges:true
-    # cap_drop: ALL не ставим — beat/задачи могут использовать subprocess
+    cap_drop:
+      - ALL
+    mem_limit: ${CELERY_BEAT_MEM:-128m}
+    cpus: ${CELERY_BEAT_CPUS:-0.25}
+    ulimits:
+      nofile: { soft: 65536, hard: 65536 }
     restart: unless-stopped
 
 volumes:
