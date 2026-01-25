@@ -2,8 +2,13 @@
 Unit-тесты для AmoClient, особенно для обработки rate limit (429).
 А также тесты для нормализации телефонов и валидации данных контактов.
 """
+import unittest
 from unittest.mock import Mock, patch
-import pytest
+
+try:
+    import pytest
+except ImportError:
+    pytest = None
 
 from amocrm.client import AmoClient, AmoApiError, RateLimitError, AmoResponse
 from amocrm.migrate import (
@@ -13,6 +18,7 @@ from amocrm.migrate import (
 from ui.models import AmoApiConfig
 
 
+@unittest.skipIf(pytest is None, "pytest not installed")
 class TestAmoClientRateLimit:
     """Тесты для обработки rate limit (429) в AmoClient."""
     
@@ -665,7 +671,7 @@ class TestFetchCompaniesByResponsible:
             assert result is not None
         except TypeError as e:
             if "unexpected keyword argument" in str(e):
-                pytest.fail(f"Функция не принимает return_meta: {e}")
+                self.fail(f"Функция не принимает return_meta: {e}")
             raise
 
 
