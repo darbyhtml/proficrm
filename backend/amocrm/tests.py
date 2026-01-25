@@ -8,7 +8,7 @@ import pytest
 from amocrm.client import AmoClient, AmoApiError, RateLimitError, AmoResponse
 from amocrm.migrate import (
     normalize_phone, sanitize_name, looks_like_phone_for_position,
-    NormalizedPhone, is_valid_phone, extract_phone_from_text
+    NormalizedPhone, is_valid_phone, extract_phone_from_text, parse_skynet_phones,
 )
 from ui.models import AmoApiConfig
 
@@ -351,6 +351,90 @@ class TestNormalizePhone:
         phone, cleaned = extract_phone_from_text("Ольга Юрьевна +7 495 632-21-97")
         assert phone == "+74956322197"
         assert "Ольга" in cleaned or len(cleaned) < 3  # Имя должно быть удалено или остаться минимально
+
+
+class TestParseSkynetPhones:
+    """Тесты для parse_skynet_phones (поле 309609 «Список телефонов (Скайнет)»)."""
+
+    def test_split_newline_comma_semicolon(self):
+        """Разделение по \\n, запятой, точке с запятой; нормализация 8/7 -> +7."""
+        phones, rejected, examples = parse_skynet_phones("8 (919) 305-55-10,\n+7 919 337-77-55")
+        assert len(phones) == 2
+        assert "+79193055510" in phones
+        assert "+79193377755" in phones
+        assert rejected == 0
+        assert len(examples) == 0
+
+    def test_single_phone_8_prefix(self):
+        """Один номер: 8 919 111-11-11 -> +79191111111."""
+        phones, rejected, examples = parse_skynet_phones("8 919 111-11-11")
+        assert phones == ["+79191111111"]
+        assert rejected == 0
+
+    def test_single_phone_7_prefix(self):
+        """7XXXXXXXXXX -> +7XXXXXXXXXX."""
+        phones, rejected, examples = parse_skynet_phones("7 919 222-22-22")
+        assert phones == ["+79192222222"]
+        assert rejected == 0
+
+    def test_rejects_garbage(self):
+        """Мусорные строки отбрасываются, rejected и examples заполняются."""
+        phones, rejected, examples = parse_skynet_phones("Обслуживание радио-, сотовой, телефонной")
+        assert phones == []
+        assert rejected >= 1
+        assert len(examples) >= 1
+
+    def test_mixed_valid_and_garbage(self):
+        """Смесь: валидные номера и мусор."""
+        phones, rejected, examples = parse_skynet_phones("+7 919 111-11-11; мусор; 8 (495) 123-45-67")
+        assert len(phones) == 2
+        assert "+79191111111" in phones
+        assert "+74951234567" in phones
+        assert rejected == 1
+        assert "мусор" in examples[0] or "мусор" in str(examples)
+
+    def test_empty_and_none(self):
+        """Пустая строка и None -> ([], 0, [])."""
+        for v in (None, "", "   "):
+            phones, rejected, examples = parse_skynet_phones(v)
+            assert phones == []
+            assert rejected == 0
+            assert examples == []
+
+    def test_dedup_same_number(self):
+        """Один и тот же номер в разных форматах — один в результате."""
+        phones, rejected, examples = parse_skynet_phones("8 (919) 111-11-11, +7 919 111 11 11")
+        assert len(phones) == 1
+        assert phones[0] == "+79191111111"
+        assert rejected == 0
+
+
+class TestExtractCompanyFieldsSkynet:
+    """Тест: поле 309609 (Скайнет) -> skynet_phones в результате _extract_company_fields."""
+
+    def test_field_309609_extracts_skynet_phones(self):
+        from amocrm.migrate import _extract_company_fields
+
+        # field_meta: отдельное поле «Телефон» (999) и 309609 «Скайнет», чтобы fid_phone != fid_phone_skynet
+        field_meta = {
+            999: {"id": 999, "name": "Телефон", "code": "PHONE", "type": "text"},
+            309609: {"id": 309609, "name": "Список телефонов (Скайнет)", "code": "", "type": "textarea"},
+        }
+        amo_company = {
+            "custom_fields_values": [
+                {"field_id": 309609, "values": [{"value": "8 (919) 305-55-10,\n+7 919 337-77-55"}]},
+            ],
+        }
+        result = _extract_company_fields(amo_company, field_meta)
+        assert "skynet_phones" in result
+        assert len(result["skynet_phones"]) == 2
+        assert "+79193055510" in result["skynet_phones"]
+        assert "+79193377755" in result["skynet_phones"]
+        assert "phones" in result
+        # Скайнет не должен попасть в phones (только в skynet_phones)
+        main_phones = result.get("phones") or []
+        assert "+79193055510" not in main_phones
+        assert "+79193377755" not in main_phones
 
 
 class TestContactDataQuality:

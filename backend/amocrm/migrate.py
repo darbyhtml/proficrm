@@ -1418,6 +1418,36 @@ def _split_multi(s: str) -> list[str]:
     return out
 
 
+def parse_skynet_phones(text: str | None) -> tuple[list[str], int, list[str]]:
+    """
+    Парсит строку с телефонами из поля «Список телефонов (Скайнет)» (field_id 309609).
+    Разделяет по \\n, запятой, точке с запятой. Каждый фрагмент нормализует к E.164.
+    Игнорирует мусорные строки (не номера).
+
+    Returns:
+        (phones_e164, rejected_count, rejected_examples)
+    """
+    if not text or not isinstance(text, str):
+        return ([], 0, [])
+    parts = _split_multi(text)
+    phones: list[str] = []
+    seen: set[str] = set()
+    rejected = 0
+    examples: list[str] = []
+    for p in parts:
+        norm = normalize_phone(p)
+        if norm.isValid and norm.phone_e164 and is_valid_phone(norm.phone_e164):
+            e164 = norm.phone_e164
+            if e164 not in seen:
+                seen.add(e164)
+                phones.append(e164)
+        else:
+            rejected += 1
+            if len(examples) < 5:
+                examples.append((p.strip() or p)[:80])
+    return (phones, rejected, examples)
+
+
 def _find_field_id(field_meta: dict[int, dict[str, Any]], *, codes: list[str] | None = None, name_contains: list[str] | None = None) -> int | None:
     codes_l = [c.lower() for c in (codes or [])]
     name_l = [n.lower() for n in (name_contains or [])]
@@ -1470,8 +1500,9 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
     fid_addr = _find_field_id(field_meta, codes=["address"], name_contains=["адрес"])
     # Ищем все поля с телефонами: основное поле телефона и поле "Список телефонов (Скайнет)"
     fid_phone = _find_field_id(field_meta, codes=["phone"], name_contains=["телефон"])
-    # Ищем поле "Список телефонов (Скайнет)" - пробуем разные варианты названия
-    fid_phone_skynet = _find_field_id(field_meta, name_contains=["скайнет", "список телефонов", "список"])
+    # Поле 309609 = «Список телефонов (Скайнет)»; 291409 — иное поле, по имени не выбираем один «список»
+    SKYNET_PHONE_FIELD_ID = 309609
+    fid_phone_skynet = (SKYNET_PHONE_FIELD_ID if (field_meta and SKYNET_PHONE_FIELD_ID in field_meta) else None) or _find_field_id(field_meta, name_contains=["скайнет", "список телефонов"])
     
     # Логируем все поля с телефонами для диагностики
     if field_meta:
@@ -1494,39 +1525,34 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
     fid_tz = _find_field_id(field_meta, name_contains=["часовой пояс", "таймзона", "timezone"])
     fid_note = _find_field_id(field_meta, name_contains=["примеч", "комментар", "коммент", "заметк"])
 
-    # Объединяем телефоны из основного поля и поля Скайнет (если найдено и отличается).
-    # Skynet-поле часто содержит произвольный текст (не номера): НЕ режем по запятым/точке с запятой.
-    # Берём сырые строки, прогоняем parse_phone_value; в phones только валидные E.164.
+    # Телефоны из основного поля. Скайнет (309609) — отдельно в skynet_phones, идут только в CompanyPhone с comment=SKYNET.
     phones_list = list_vals(fid_phone)
+    skynet_phones: list[str] = []
     skynet_rejected = 0
     skynet_rejected_example: str | None = None
     if fid_phone_skynet and fid_phone_skynet != fid_phone:
         skynet_raws = _custom_values_text(amo_company, fid_phone_skynet)
-        skynet_extracted: list[str] = []
+        seen_skynet: set[str] = set()
         for s in skynet_raws:
             if not s or not isinstance(s, str):
                 continue
-            parsed = parse_phone_value(s.strip())
-            if parsed.phones and all(is_valid_phone(ph) for ph in parsed.phones):
-                for ph in parsed.phones:
-                    if ph not in skynet_extracted:
-                        skynet_extracted.append(ph)
-            else:
-                skynet_rejected += 1
-                if skynet_rejected_example is None:
-                    skynet_rejected_example = (s.strip() or s)[:80]
-        if skynet_extracted or skynet_rejected > 0:
+            phs, rej, exs = parse_skynet_phones(s)
+            for ph in phs:
+                if ph not in seen_skynet:
+                    seen_skynet.add(ph)
+                    skynet_phones.append(ph)
+            skynet_rejected += rej
+            if exs and skynet_rejected_example is None:
+                skynet_rejected_example = exs[0]
+        if skynet_phones or skynet_rejected > 0:
             logger.info(
                 f"_extract_company_fields: Skynet phone field (ID: {fid_phone_skynet}): "
-                f"extracted {len(skynet_extracted)} valid phone(s), rejected {skynet_rejected} non-phone value(s)"
+                f"extracted {len(skynet_phones)} valid phone(s), rejected {skynet_rejected} non-phone value(s)"
             )
-        if skynet_extracted:
-            all_phones = phones_list + skynet_extracted
-            phones_list = list(dict.fromkeys(all_phones))
     elif fid_phone_skynet:
         logger.debug(f"_extract_company_fields: Skynet phone field found but same as main phone field (ID: {fid_phone_skynet})")
     else:
-        logger.debug(f"_extract_company_fields: Skynet phone field not found")
+        logger.debug(f"_extract_company_fields: Skynet phone field (309609 or by name) not found")
     
     # ИНН может приходить как строка с несколькими значениями (через /, запятую, пробел)
     # Используем list_vals для извлечения всех значений, затем нормализуем через inn_utils
@@ -1554,6 +1580,7 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
         "work_timezone": first(fid_tz),
         "note": first(fid_note),
     }
+    result["skynet_phones"] = skynet_phones
     result["skynet_phone_values_rejected"] = skynet_rejected
     result["skynet_rejected_example"] = skynet_rejected_example
     return result
@@ -1678,6 +1705,7 @@ class AmoMigrateResult:
     emails_rejected_invalid_format: int = 0  # сколько email отклонено из-за невалидного формата
     fields_skipped_to_prevent_blank_overwrite: int = 0  # сколько полей пропущено, чтобы не затереть непустые значения
     skynet_phone_values_rejected: int = 0  # Skynet-поле: значения, не распознанные как телефон (произвольный текст)
+    skynet_phones_added: int = 0  # CompanyPhone: добавлено номеров из поля 309609 с comment=SKYNET
     company_phones_rejected_invalid: int = 0  # CompanyPhone: пропущено добавление из-за невалидного номера (не E.164)
     
     # Детальные причины для dry-run логирования
@@ -1803,6 +1831,7 @@ class AmoMigrateResult:
                 "name_cleaned_extension_moved_to_note": self.name_cleaned_extension_moved_to_note,
                 "name_instructions_moved_to_note": self.name_instructions_moved_to_note,
                 "skynet_phone_values_rejected": self.skynet_phone_values_rejected,
+                "skynet_phones_added": self.skynet_phones_added,
                 "company_phones_rejected_invalid": self.company_phones_rejected_invalid,
                 "skipped_writes_dry_run": self.skipped_writes_dry_run,
             },
@@ -3615,8 +3644,9 @@ def migrate_filtered(
                         # Основной телефон был пустой - первый телефон уже в comp.phone, остальные в CompanyPhone
                         extra_phones = [p for p in phones[1:] if str(p).strip()]
                     
-                    # ОПТИМИЗАЦИЯ: bulk операции для CompanyPhone
-                    if extra_phones and not dry_run:
+                    # ОПТИМИЗАЦИЯ: bulk операции для CompanyPhone (основные телефоны + Скайнет 309609)
+                    skynet_phones = extra.get("skynet_phones") or []
+                    if (extra_phones or skynet_phones) and not dry_run:
                         from ui.forms import _normalize_phone
                         from django.db.models import Max
                         
@@ -3674,11 +3704,40 @@ def migrate_filtered(
                             existing_phones_normalized.add(normalized)  # Предотвращаем дубликаты в этом батче
                             next_order += 1
                         
+                        # Скайнет (поле 309609): только в CompanyPhone с comment=SKYNET, без дубликатов
+                        skynet_added = 0
+                        skynet_skipped_dup = 0
+                        for p in skynet_phones:
+                            if not is_valid_phone(p):  # защита: parse_skynet_phones уже отфильтровал
+                                res.company_phones_rejected_invalid += 1
+                                continue
+                            norm = _normalize_phone(p) if p else ""
+                            if not norm:
+                                norm = p
+                            if main_phone_normalized and main_phone_normalized == norm:
+                                skynet_skipped_dup += 1
+                                continue
+                            if norm in existing_phones_normalized:
+                                skynet_skipped_dup += 1
+                                continue
+                            phones_to_create.append(CompanyPhone(company=comp, value=norm, order=next_order, comment="SKYNET"))
+                            existing_phones_normalized.add(norm)
+                            next_order += 1
+                            skynet_added += 1
+                        if skynet_added:
+                            res.skynet_phones_added += skynet_added
+                        if skynet_added or skynet_skipped_dup:
+                            logger.info(
+                                f"Company {comp.name} (amo_id={comp.amocrm_company_id}, inn={comp.inn or '-'}): "
+                                f"skynet_phones: added={skynet_added}, skipped_duplicate={skynet_skipped_dup}"
+                            )
+                        
                         # Bulk создание телефонов
                         if phones_to_create:
                             try:
                                 CompanyPhone.objects.bulk_create(phones_to_create, ignore_conflicts=True)
-                                logger.info(f"Company {comp.name}: bulk created {len(phones_to_create)} CompanyPhone records")
+                                suf = f" ({skynet_added} from Skynet)" if skynet_added else ""
+                                logger.info(f"Company {comp.name}: bulk created {len(phones_to_create)} CompanyPhone records{suf}")
                             except Exception as e:
                                 logger.error(f"Failed to bulk_create CompanyPhone for company {comp.name}: {e}", exc_info=True)
                     
@@ -6207,6 +6266,7 @@ def migrate_filtered(
     logger.info(f"  Задач: seen={res.tasks_seen}, created={res.tasks_created}, updated={res.tasks_updated}")
     logger.info(f"  Заметок: seen={res.notes_seen}, created={res.notes_created}, updated={res.notes_updated}")
     logger.info(f"  Контактов: seen={res.contacts_seen}, created={res.contacts_created}")
+    logger.info(f"  CompanyPhone: skynet_added={res.skynet_phones_added}, skynet_rejected={res.skynet_phone_values_rejected}, rejected_invalid={res.company_phones_rejected_invalid}")
     logger.info(f"migrate_filtered: ===== КОНЕЦ МЕТРИК =====")
     
     return res
