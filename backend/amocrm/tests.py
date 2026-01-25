@@ -2,6 +2,7 @@
 Unit-тесты для AmoClient, особенно для обработки rate limit (429).
 А также тесты для нормализации телефонов и валидации данных контактов.
 """
+import unittest
 from unittest.mock import Mock, patch
 
 try:
@@ -89,7 +90,7 @@ if pytest is not None:
                     assert result == {"result": "ok"}
 
 
-class TestNormalizePhone:
+class TestNormalizePhone(unittest.TestCase):
     """Тесты для функции normalize_phone."""
     
     def test_instruction_only_not_phone(self):
@@ -348,7 +349,7 @@ class TestNormalizePhone:
         assert "Ольга" in cleaned or len(cleaned) < 3  # Имя должно быть удалено или остаться минимально
 
 
-class TestParseSkynetPhones:
+class TestParseSkynetPhones(unittest.TestCase):
     """Тесты для parse_skynet_phones (поле 309609 «Список телефонов (Скайнет)»)."""
 
     def test_split_newline_comma_semicolon(self):
@@ -404,7 +405,7 @@ class TestParseSkynetPhones:
         assert rejected == 0
 
 
-class TestExtractCompanyFieldsSkynet:
+class TestExtractCompanyFieldsSkynet(unittest.TestCase):
     """Тест: поле 309609 (Скайнет) -> skynet_phones в результате _extract_company_fields."""
 
     def test_field_309609_extracts_skynet_phones(self):
@@ -432,7 +433,7 @@ class TestExtractCompanyFieldsSkynet:
         assert "+79193377755" not in main_phones
 
 
-class TestContactDataQuality:
+class TestContactDataQuality(unittest.TestCase):
     """Тесты для качества данных контактов."""
     
     def test_position_phone_salvaged(self):
@@ -516,7 +517,7 @@ class TestContactDataQuality:
         assert normalized.minute == 0
 
 
-class TestNotesBulkFallback:
+class TestNotesBulkFallback(unittest.TestCase):
     """Тесты для fallback bulk notes на per-company endpoint."""
     
     def test_bulk_notes_404_fallback(self):
@@ -576,7 +577,7 @@ class TestNotesBulkFallback:
         assert migrate_module._notes_bulk_supported is False
 
 
-class TestPaginationTruncated:
+class TestPaginationTruncated(unittest.TestCase):
     """Тесты для пагинации с флагом truncated."""
     
     def test_pagination_truncated_flag(self):
@@ -608,7 +609,7 @@ class TestPaginationTruncated:
         assert True  # Placeholder - реальная проверка зависит от реализации
 
 
-class TestFetchCompaniesByResponsible:
+class TestFetchCompaniesByResponsible(unittest.TestCase):
     """Тесты для fetch_companies_by_responsible с return_meta."""
     
     def test_fetch_companies_by_responsible_without_return_meta(self):
@@ -664,7 +665,7 @@ class TestFetchCompaniesByResponsible:
             raise
 
 
-class TestNotesBulk404Fallback:
+class TestNotesBulk404Fallback(unittest.TestCase):
     """Тесты для graceful fallback при 404 на bulk notes."""
     
     def test_bulk_notes_404_graceful_fallback(self):
