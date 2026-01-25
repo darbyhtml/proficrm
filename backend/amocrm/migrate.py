@@ -3385,7 +3385,13 @@ def migrate_filtered(
                         cur = getattr(comp, field)
                         if cur in ("", None):
                             return True
-                        if field in prev and prev.get(field) == cur:
+                        if field not in prev:
+                            return False
+                        p = prev.get(field)
+                        # workday_start/end в prev хранятся как str (JSON не поддерживает datetime.time)
+                        if field in ("workday_start", "workday_end"):
+                            return (str(cur) if cur else "") == (str(p) if p is not None else "")
+                        if p == cur:
                             return True
                         return False
                     if extra.get("legal_name"):
@@ -3584,8 +3590,9 @@ def migrate_filtered(
                                 "director": comp.contact_name,
                                 "activity_kind": comp.activity_kind,
                                 "employees_count": comp.employees_count,
-                                "workday_start": comp.workday_start,
-                                "workday_end": comp.workday_end,
+                                # time → str, иначе json.dumps в JSONField падает: Object of type time is not JSON serializable
+                                "workday_start": str(comp.workday_start) if comp.workday_start else None,
+                                "workday_end": str(comp.workday_end) if comp.workday_end else None,
                                 "work_timezone": comp.work_timezone,
                             }
                         )
