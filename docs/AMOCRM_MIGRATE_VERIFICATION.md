@@ -91,3 +91,4 @@
 - **notes_processed** не инкрементировался — учитывается при достижении create/update/skip_existing (после прохождения amomail).
 - **notes_skipped_no_company** не учитывался — добавлен инкремент перед `continue` при `not company`.
 - **Взаимоисключаемость**: `notes_skipped_no_text` увеличивается только при реальном `continue` (в non–dry_run), чтобы одна заметка не попадала и в `skipped_no_text`, и в `skipped_amomail`. В лог добавлен `would_add`; в комментарии указано, что `skipped_*` взаимно исключают друг друга по одной заметке.
+- **Сумма в processed-ветке** (как у задач): `processed = would_add + would_update + skipped_existing` (dry) или `= created + updated + skipped_existing` (real). Добавлены: `would_update`, `skipped_no_changes` (alias к `skipped_existing` — «существует, нечего менять»), `notes_processed` в `res` и в отчёте. Так можно проверить, куда делись все fetched, попавшие в processed.

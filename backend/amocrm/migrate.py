@@ -1642,8 +1642,10 @@ class AmoMigrateResult:
     tasks_preview: list[dict] | None = None
 
     notes_seen: int = 0
+    notes_processed: int = 0  # дошли до create/update/skip; сумма: would_add+would_update+skipped_existing (dry) или created+updated+skipped_existing (real)
     notes_created: int = 0
     notes_skipped_existing: int = 0
+    notes_skipped_no_changes: int = 0  # существующая заметка, обновление не требуется (= skipped_existing)
     notes_updated: int = 0
     notes_preview: list[dict] | None = None
 
@@ -1821,9 +1823,11 @@ class AmoMigrateResult:
             result["companies"]["would_update"] = self.companies_would_update
             result["contacts"]["would_create"] = self.contacts_would_create
             result["contacts"]["would_update"] = self.contacts_would_update
+            result["notes"]["processed"] = self.notes_processed
             result["notes"]["would_add"] = self.notes_would_add
             result["notes"]["would_update"] = self.notes_would_update
             result["notes"]["skipped_already_present"] = self.notes_skipped_existing
+            result["notes"]["skipped_no_changes"] = self.notes_skipped_no_changes
             result["tasks"]["would_create"] = self.tasks_would_create
             result["tasks"]["would_update"] = self.tasks_would_update
         else:
@@ -1832,9 +1836,11 @@ class AmoMigrateResult:
             result["companies"]["updated"] = self.companies_updated
             result["contacts"]["created"] = self.contacts_created
             result["contacts"]["updated"] = self.contacts_updated
+            result["notes"]["processed"] = self.notes_processed
             result["notes"]["added"] = self.notes_created
             result["notes"]["updated"] = self.notes_updated
             result["notes"]["skipped_already_present"] = self.notes_skipped_existing
+            result["notes"]["skipped_no_changes"] = self.notes_skipped_no_changes
             result["tasks"]["created"] = self.tasks_created
             result["tasks"]["updated"] = self.tasks_updated
         
@@ -3887,8 +3893,10 @@ def migrate_filtered(
                     f"Импорт заметок прерван. Ошибка: {e}"
                 )
                 res.notes_seen = 0
+                res.notes_processed = 0
                 res.notes_created = 0
                 res.notes_skipped_existing = 0
+                res.notes_skipped_no_changes = 0
                 # Не поднимаем исключение дальше - продолжаем импорт компаний/контактов
                 # Но явно помечаем, что заметки не импортированы из-за rate limit
                 if res.warnings is None:
@@ -3907,8 +3915,10 @@ def migrate_filtered(
                     exc_info=True,  # Полный traceback для диагностики
                 )
                 res.notes_seen = 0
+                res.notes_processed = 0
                 res.notes_created = 0
                 res.notes_skipped_existing = 0
+                res.notes_skipped_no_changes = 0
                 if res.warnings is None:
                     res.warnings = []
                 if res.skip_reasons is None:
@@ -4100,8 +4110,9 @@ def migrate_filtered(
                                 existing_note.save()
                                 res.notes_updated += 1
                         else:
-                            # Заметка уже существует и не требует обновления
+                            # Заметка уже существует и не требует обновления (no changes to apply)
                             res.notes_skipped_existing += 1
+                            res.notes_skipped_no_changes += 1
                         continue
 
                     # Новая заметка
@@ -4119,13 +4130,17 @@ def migrate_filtered(
                         )
                         note.save()
                         res.notes_created += 1
-            
-            # Логируем статистику (skipped_* взаимоисключающие по одной заметке; processed = дошли до create/update/skip_existing)
+
+            res.notes_processed = notes_processed
+            # Логируем статистику. В processed-ветке: processed = would_add + would_update + skipped_existing
+            # (skipped_no_changes == skipped_existing). skipped_amomail/no_text/no_company — до processed.
             logger.info(
                 f"migrate_filtered: заметки обработаны: processed={notes_processed}, "
                 f"skipped_amomail={notes_skipped_amomail}, skipped_no_text={notes_skipped_no_text}, "
-                f"skipped_no_company={notes_skipped_no_company}, created={res.notes_created}, "
-                f"updated={res.notes_updated}, would_add={res.notes_would_add}, skipped_existing={res.notes_skipped_existing}"
+                f"skipped_no_company={notes_skipped_no_company}, "
+                f"would_add={res.notes_would_add}, would_update={res.notes_would_update}, "
+                f"skipped_existing={res.notes_skipped_existing}, skipped_no_changes={res.notes_skipped_no_changes}, "
+                f"created={res.notes_created}, updated={res.notes_updated}"
             )
         elif notes_error:
             # Если была ошибка при получении заметок - логируем, но не обрабатываем
