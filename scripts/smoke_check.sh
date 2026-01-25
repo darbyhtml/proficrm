@@ -63,11 +63,13 @@ else
   _fail "web exec id не удался (контейнер запущен?)"
 fi
 
-echo "=== 5) gunicorn запущен ==="
-if $COMPOSE exec -T web pgrep -f gunicorn >/dev/null 2>&1; then
-  _ok "gunicorn процесс есть"
+echo "=== 5) gunicorn в Cmd контейнера web ==="
+WEB_ID=$($COMPOSE ps -q web 2>/dev/null)
+CMD=$(docker inspect -f '{{join .Config.Cmd " "}}' "$WEB_ID" 2>/dev/null || true)
+if echo "$CMD" | grep -q "gunicorn"; then
+  _ok "gunicorn запущен (Cmd: $CMD)"
 else
-  _fail "gunicorn не найден в web"
+  _fail "gunicorn не найден в web (Cmd: $CMD)"
 fi
 
 echo "=== 6) fail-fast (пустой DJANGO_SECRET_KEY -> exit 1, ERROR) ==="

@@ -24,7 +24,7 @@
 | ID | Сделано | Не сделано | Почему |
 |----|---------|------------|--------|
 | **P0.1** HSTS STRICT без ручного редактирования | ✓ | — | Snippet `hsts.conf.template` + `nginx_hsts_apply.sh` (envsubst). SAFE/STRICT переключение. Предупреждение про поддомены при STRICT. preload не используется. |
-| **P0.2** Smoke-check одной командой | ✓ | — | `scripts/smoke_check.sh`: HTTPS, HSTS, security headers, web uid 1000, gunicorn, fail-fast, cap_drop ALL (web, celery, beat). PASS/FAIL, exit 0 только если все OK. |
+| **P0.2** Smoke-check одной командой | ✓ | — | `scripts/smoke_check.sh`: HTTPS, HSTS, security headers, web uid 1000, gunicorn (через `Config.Cmd`), fail-fast, cap_drop ALL. PASS/FAIL, exit 0 только если все OK. |
 | **P1.1** Тест восстановления бэкапа | ✓ | — | `scripts/restore_postgres_test.sh`. Дока: частота, команда (docs/ops/backups.md). |
 | **P1.2** Systemd timers (fallback cron) | ✓ | — | `config/systemd/proficrm-backup.service`, `proficrm-backup.timer`. В backups.md: systemd предпочтительно, cron — fallback. |
 | **P1.3** Мониторинг без SaaS (health + Telegram) | ✓ | — | `scripts/health_check.sh`, `docs/ops/monitoring.md`. Токены только из env. |
@@ -83,3 +83,16 @@ nginx -t
 - Systemd: скопировать `config/systemd/proficrm-backup.*` в `/etc/systemd/system/`, поправить `User=` и пути при необходимости, `daemon-reload`, `enable --now` таймера
 - Мониторинг: добавить `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID` в .env; настроить cron (или timer) для `health_check.sh`
 - Restore-test: раз в 1–2 недели запускать `./scripts/restore_postgres_test.sh`
+
+---
+
+## 6. Инфраструктура хоста (для 100% по безопасности хоста)
+
+Пока не закрыто — не 100% по инфраструктурной безопасности:
+
+- **PermitRootLogin yes** — вход root по SSH
+- **PasswordAuthentication yes** — пароли по SSH
+- **Postgres 0.0.0.0:5432** — порт наружу (если есть)
+- **ufw выключен**
+
+Пошаговый безопасный план (без потери доступа): **`docs/ops/host_hardening_plan.md`** — отключить root и пароли, закрыть 5432, включить ufw в правильном порядке.
