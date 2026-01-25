@@ -9,7 +9,10 @@
     </div>
 
     <div class="card card-pad space-y-3">
-      <form method="post" id="migrate-form" class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div id="import-running-status" class="hidden rounded-xl border border-amber-500/60 bg-amber-500/20 px-4 py-3 text-sm text-amber-800 mb-2">
+        <b>Импорт выполняется.</b> Дождитесь завершения. Кнопка «Запустить» будет снова доступна после окончания.
+      </div>
+      <form method="post" id="migrate-form" class="grid grid-cols-1 md:grid-cols-2 gap-3" data-progress-url="{% url 'settings_amocrm_migrate_progress' %}">
         {% csrf_token %}
         <input type="hidden" name="offset" value="{{ form.offset.value|default:0 }}" />
 
@@ -30,27 +33,17 @@
         </div>
 
         <div class="md:col-span-2">
-          <label class="block text-sm text-brand-dark/80 mb-1">Ответственный (amo) - можно выбрать несколько</label>
-          <select class="select w-full" name="responsible_user_id" multiple size="8" required>
-            {% regroup users by branch as branches_list %}
-            {% for branch_group in branches_list %}
-              {% if branch_group.grouper %}
-                <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
-              {% else %}
-                <optgroup label="Филиал: Без филиала">
-              {% endif %}
-                {% for u in branch_group.list %}
-                  {% with user_id_str=u.id|stringformat:"s" %}
-                    <option value="{{ u.id }}" 
-                      {% if request.POST.responsible_user_id %}
-                        {% if user_id_str in request.POST.responsible_user_id %}selected{% endif %}
-                      {% elif form.responsible_user_id.value %}
-                        {% if form.responsible_user_id.value|stringformat:"s" == user_id_str %}selected{% endif %}
-                      {% endif %}
-                    >{{ u.name }} (id={{ u.id }})</option>
-                  {% endwith %}
-                {% endfor %}
-              </optgroup>
+          <label class="block text-sm text-brand-dark/80 mb-1">Ответственный (amo) — выберите одного</label>
+          <select class="select w-full" name="responsible_user_id" id="migrate-responsible-select" required>
+            <option value="">— выберите менеджера —</option>
+            {% for u in users %}
+              <option value="{{ u.id }}"
+                {% if request.POST.responsible_user_id %}
+                  {% if request.POST.responsible_user_id == u.id|stringformat:"s" %}selected{% endif %}
+                {% elif form.responsible_user_id.value %}
+                  {% if form.responsible_user_id.value|stringformat:"s" == u.id|stringformat:"s" %}selected{% endif %}
+                {% endif %}
+              >{{ u.name }} (id={{ u.id }})</option>
             {% endfor %}
           </select>
         </div>
@@ -104,7 +97,7 @@
         </div>
 
         <div class="md:col-span-2 flex gap-2">
-          <button class="btn btn-primary" type="submit">Запустить</button>
+          <button class="btn btn-primary" type="submit" id="migrate-start-btn">Запустить</button>
           <a class="btn btn-outline" href="/settings/amocrm/contacts-dry-run/?responsible_user_id={{ form.responsible_user_id.value|default:'' }}&limit_companies={{ form.limit_companies.value|default:250 }}&offset={{ form.offset.value|default:0 }}" target="_blank">📇 Dry-run контактов</a>
           <a class="btn btn-outline" href="/settings/amocrm/debug-contacts/?limit=250{% if form.responsible_user_id.value %}&responsible_user_id={{ form.responsible_user_id.value }}{% endif %}" target="_blank">🔍 Отладка контактов (250)</a>
           <a class="btn btn-outline" href="/settings/amocrm/">Назад</a>
@@ -653,7 +646,7 @@
               <input type="hidden" name="dry_run" value="" />
               <input type="hidden" name="limit_companies" value="{{ form.limit_companies.value|default:10 }}" />
               <input type="hidden" name="offset" value="{{ result.companies_next_offset }}" />
-              <input type="hidden" name="responsible_user_id" value="{{ form.responsible_user_id.value }}" />
+              <input type="hidden" name="responsible_user_id" value="{{ migrate_responsible_user_id|default:form.responsible_user_id.value }}" />
               <input type="hidden" name="custom_field_id" value="{{ form.custom_field_id.value }}" />
               <input type="hidden" name="custom_value_label" value="{{ form.custom_value_label.value }}" />
               <input type="hidden" name="custom_value_enum_id" value="{{ form.custom_value_enum_id.value }}" />
@@ -747,17 +740,76 @@
       
       if (migrateForm && resultContainer) {
         migrateForm.addEventListener('submit', function(e) {
-          // Проверяем, что offset равен 0 или пустой (новый импорт, а не продолжение)
           const offsetInput = migrateForm.querySelector('input[name="offset"]');
           const offsetValue = offsetInput ? offsetInput.value : '0';
-          
-          // Если offset = 0, значит это новый импорт через основную форму - всегда скрываем результаты
-          // Форма продолжения (continue-form) имеет другой ID и не затронется
           if (offsetValue === '0' || offsetValue === '') {
             resultContainer.style.display = 'none';
           }
         });
       }
+
+      // Прогресс импорта: опрос, блокировка «Запустить» при active_run, сброс при active_run: null.
+      // Polling на каждый onload; после POST (перезагрузка) — снова onload.
+      (function() {
+        var statusEl = document.getElementById('import-running-status');
+        var btn = document.getElementById('migrate-start-btn');
+        var form = document.getElementById('migrate-form');
+        if (!statusEl || !btn || !form) return;
+        var progressUrl = form.getAttribute('data-progress-url');
+        if (!progressUrl) return;
+        var pollTimer = null;
+        var RUNNING_HTML = '<b>Импорт выполняется.</b> Дождитесь завершения. Кнопка «Запустить» будет снова доступна после окончания.';
+        var RUNNING_CLASS = 'rounded-xl border border-amber-500/60 bg-amber-500/20 px-4 py-3 text-sm text-amber-800 mb-2';
+
+        function setRunning(active) {
+          if (active) {
+            statusEl.innerHTML = RUNNING_HTML;
+            statusEl.className = RUNNING_CLASS;
+            statusEl.classList.remove('hidden');
+            btn.disabled = true;
+          } else {
+            statusEl.classList.add('hidden');
+            btn.disabled = false;
+          }
+        }
+
+        function showCompleted() {
+          statusEl.className = 'rounded-xl border border-green-500/60 bg-green-500/20 px-4 py-3 text-sm text-green-800 mb-2';
+          statusEl.innerHTML = '<b>Импорт завершён.</b> Можно запускать следующий.';
+          statusEl.classList.remove('hidden');
+          btn.disabled = false;
+          setTimeout(function() {
+            statusEl.innerHTML = RUNNING_HTML;
+            statusEl.className = RUNNING_CLASS;
+            statusEl.classList.add('hidden');
+          }, 2500);
+        }
+
+        function check() {
+          fetch(progressUrl, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+              if (d && d.active_run) {
+                setRunning(true);
+                if (!pollTimer) pollTimer = setInterval(check, 3000);
+              } else {
+                if (pollTimer) {
+                  clearInterval(pollTimer);
+                  pollTimer = null;
+                  showCompleted();
+                } else {
+                  setRunning(false);
+                }
+              }
+            })
+            .catch(function() {
+              if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+              setRunning(false);
+            });
+        }
+
+        check();
+      })();
     })();
   </script>
 {% endblock %}

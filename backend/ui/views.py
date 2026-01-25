@@ -37,11 +37,15 @@ from tasksapp.models import Task, TaskType
 from notifications.models import Notification
 from notifications.service import notify
 from phonebridge.models import CallRequest, PhoneDevice, MobileAppBuild, MobileAppQrToken
+import json
+import logging
 import mimetypes
 import os
 import re
-import logging
+import uuid
 from datetime import date as _date
+
+from django.core.cache import cache
 
 from .forms import (
     CompanyCreateForm,
@@ -7980,19 +7984,9 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                 "Миграция будет работать, но выбор ответственного пользователя может быть ограничен."
             )
         else:
-            # Сопоставляем пользователей AmoCRM с нашими пользователями для определения филиалов
-            from amocrm.migrate import _map_amo_user_to_local
-            users_with_branches = []
-            for amo_user in amo_users_raw:
-                local_user = _map_amo_user_to_local(amo_user)
-                # Добавляем информацию о филиале, если найден локальный пользователь
-                amo_user_copy = dict(amo_user)
-                if local_user and local_user.branch:
-                    amo_user_copy['branch'] = local_user.branch
-                else:
-                    amo_user_copy['branch'] = None
-                users_with_branches.append(amo_user_copy)
-            users = users_with_branches
+            # Список пользователей amoCRM для выбора ответственного (без филиалов).
+            # fetch_amo_users(client) не принимает branch — всегда полный список; фильтрации по филиалу нет.
+            users = [{"id": u.get("id"), "name": u.get("name")} for u in (amo_users_raw or [])]
         fields = fetch_company_custom_fields(client)
         cfg.last_error = ""
         cfg.save(update_fields=["last_error", "updated_at"])
@@ -8036,6 +8030,8 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
     guessed_field_id = _find_field_id(["Сферы деятельности", "Статусы", "Сферы"]) or 0
 
     result = None
+    run_id = None
+    migrate_responsible_user_id = None
     if request.method == "POST":
         form = AmoMigrateFilterForm(request.POST)
         # Если offset = 0, это новый импорт - очищаем результаты предыдущего импорта
@@ -8065,130 +8061,64 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                     migrate_all = bool(form.cleaned_data.get("migrate_all_companies", False))
                     custom_field_id = form.cleaned_data.get("custom_field_id") or 0
                     
-                    # Обрабатываем множественный выбор пользователей
-                    # Для select multiple Django передает список через request.POST.getlist()
-                    responsible_user_ids_raw = request.POST.getlist("responsible_user_id")
-                    if not responsible_user_ids_raw:
-                        # Если список пуст, пробуем получить из cleaned_data (может быть строка для обратной совместимости)
-                        responsible_user_ids_str = form.cleaned_data.get("responsible_user_id", "")
-                        if responsible_user_ids_str:
-                            responsible_user_ids = [int(uid.strip()) for uid in str(responsible_user_ids_str).split(',') if uid.strip()]
-                        else:
-                            responsible_user_ids = []
+                    # Ответственный — только один (single select); при массиве — 400
+                    raw_ids = request.POST.getlist("responsible_user_id")
+                    if len(raw_ids) > 1:
+                        messages.error(request, "Выберите только одного менеджера. Передан массив.")
                     else:
-                        responsible_user_ids = [int(uid) for uid in responsible_user_ids_raw if uid]
-                    
-                    if not responsible_user_ids:
-                        messages.error(request, "Выберите хотя бы одного ответственного пользователя.")
-                    else:
-                        # Если выбран один пользователь - работаем как раньше
-                        if len(responsible_user_ids) == 1:
-                            result = migrate_filtered(
-                                client=client,
-                                actor=request.user,
-                                responsible_user_id=responsible_user_ids[0],
-                                sphere_field_id=int(custom_field_id),
-                                sphere_option_id=form.cleaned_data.get("custom_value_enum_id") or None,
-                                sphere_label=form.cleaned_data.get("custom_value_label") or None,
-                                limit_companies=batch_size,
-                                offset=int(form.cleaned_data.get("offset") or 0),
-                                dry_run=dry_run,
-                                import_tasks=bool(form.cleaned_data.get("import_tasks")),
-                                import_notes=bool(form.cleaned_data.get("import_notes")),
-                                import_contacts=bool(form.cleaned_data.get("import_contacts")),
-                                company_fields_meta=fields,
-                                skip_field_filter=migrate_all,
-                            )
+                        val = request.POST.get("responsible_user_id") or (form.cleaned_data.get("responsible_user_id") if form.cleaned_data else None)
+                        if not val:
+                            messages.error(request, "Выберите ответственного пользователя.")
                         else:
-                            # Если выбрано несколько пользователей - обрабатываем каждого отдельно и объединяем результаты
-                            from amocrm.migrate import AmoMigrateResult
-                            combined_result = AmoMigrateResult(
-                                preview=[],
-                                tasks_preview=[],
-                                notes_preview=[],
-                                contacts_preview=[],
-                                companies_updates_preview=[] if dry_run else None,
-                                contacts_updates_preview=[] if dry_run else None,
-                            )
-                            
-                            for user_id in responsible_user_ids:
-                                user_result = migrate_filtered(
-                                    client=client,
-                                    actor=request.user,
-                                    responsible_user_id=user_id,
-                                    sphere_field_id=int(custom_field_id),
-                                    sphere_option_id=form.cleaned_data.get("custom_value_enum_id") or None,
-                                    sphere_label=form.cleaned_data.get("custom_value_label") or None,
-                                    limit_companies=batch_size,
-                                    offset=int(form.cleaned_data.get("offset") or 0),
-                                    dry_run=dry_run,
-                                    import_tasks=bool(form.cleaned_data.get("import_tasks")),
-                                    import_notes=bool(form.cleaned_data.get("import_notes")),
-                                    import_contacts=bool(form.cleaned_data.get("import_contacts")),
-                                    company_fields_meta=fields,
-                                    skip_field_filter=migrate_all,
-                                )
-                                # Объединяем результаты
-                                combined_result.companies_seen += user_result.companies_seen
-                                combined_result.companies_matched += user_result.companies_matched
-                                combined_result.companies_batch += user_result.companies_batch
-                                combined_result.companies_created += user_result.companies_created
-                                combined_result.companies_updated += user_result.companies_updated
-                                combined_result.tasks_seen += user_result.tasks_seen
-                                combined_result.tasks_created += user_result.tasks_created
-                                combined_result.tasks_skipped_existing += user_result.tasks_skipped_existing
-                                combined_result.tasks_skipped_old += user_result.tasks_skipped_old
-                                combined_result.tasks_updated += user_result.tasks_updated
-                                combined_result.notes_seen += user_result.notes_seen
-                                combined_result.notes_created += user_result.notes_created
-                                combined_result.notes_skipped_existing += user_result.notes_skipped_existing
-                                combined_result.notes_updated += user_result.notes_updated
-                                combined_result.contacts_seen += user_result.contacts_seen
-                                combined_result.contacts_created += user_result.contacts_created
-                                
-                                # Объединяем preview списки
-                                if user_result.preview:
-                                    combined_result.preview.extend(user_result.preview)
-                                if user_result.tasks_preview:
-                                    if combined_result.tasks_preview is None:
-                                        combined_result.tasks_preview = []
-                                    combined_result.tasks_preview.extend(user_result.tasks_preview)
-                                if user_result.notes_preview:
-                                    if combined_result.notes_preview is None:
-                                        combined_result.notes_preview = []
-                                    combined_result.notes_preview.extend(user_result.notes_preview)
-                                if user_result.contacts_preview:
-                                    if combined_result.contacts_preview is None:
-                                        combined_result.contacts_preview = []
-                                    combined_result.contacts_preview.extend(user_result.contacts_preview)
-                                if user_result.companies_updates_preview:
-                                    if combined_result.companies_updates_preview is None:
-                                        combined_result.companies_updates_preview = []
-                                    combined_result.companies_updates_preview.extend(user_result.companies_updates_preview)
-                                if user_result.contacts_updates_preview:
-                                    if combined_result.contacts_updates_preview is None:
-                                        combined_result.contacts_updates_preview = []
-                                    combined_result.contacts_updates_preview.extend(user_result.contacts_updates_preview)
-                                
-                                # Если была ошибка в одном из результатов, сохраняем её
-                                if user_result.error:
-                                    if combined_result.error:
-                                        combined_result.error += f"\n\nПользователь {user_id}: {user_result.error}"
-                                    else:
-                                        combined_result.error = f"Пользователь {user_id}: {user_result.error}"
-                            
-                            result = combined_result
-                            if form.cleaned_data.get("dry_run"):
-                                messages.success(request, f"Проверка (dry-run) выполнена для {len(responsible_user_ids)} пользователей.")
+                            try:
+                                responsible_user_id = int(val) if isinstance(val, (int, str)) else int(str(val).strip().split(",")[0])
+                            except (ValueError, TypeError):
+                                responsible_user_id = None
+                            if not responsible_user_id:
+                                messages.error(request, "Некорректный идентификатор ответственного.")
                             else:
-                                messages.success(request, f"Импорт выполнен для {len(responsible_user_ids)} пользователей.")
-                        
-                        # Для одного пользователя выводим сообщение
-                        if len(responsible_user_ids) == 1:
-                            if dry_run:
-                                messages.success(request, "Проверка (dry-run) выполнена.")
-                            else:
-                                messages.success(request, "Импорт выполнен.")
+                                # Запрет параллельного импорта: блокировка per-user (два админа не мешали друг другу).
+                                # migrate_filtered синхронный, не пишет промежуточный прогресс; общее состояние — ключ amocrm_import_run.
+                                # Внимание: request держится всё время импорта — проверьте nginx/gunicorn timeouts. Для долгих
+                                # импортов предпочтительнее background job (Celery), иначе обрывы и «упал до finally».
+                                lock_key = f"amocrm_import_run:{request.user.id}"
+                                run_id = str(uuid.uuid4())
+                                lock_payload = json.dumps({
+                                    "run_id": run_id,
+                                    "status": "running",
+                                    "started_at": datetime.now().isoformat(),
+                                })
+                                lock_acquired = cache.add(lock_key, lock_payload, timeout=3600)
+                                if not lock_acquired:
+                                    messages.error(request, "Импорт уже выполняется. Дождитесь завершения.")
+                                    result = None
+                                    run_id = None
+                                else:
+                                    try:
+                                        result = migrate_filtered(
+                                            client=client,
+                                            actor=request.user,
+                                            responsible_user_id=responsible_user_id,
+                                            sphere_field_id=int(custom_field_id),
+                                            sphere_option_id=form.cleaned_data.get("custom_value_enum_id") or None,
+                                            sphere_label=form.cleaned_data.get("custom_value_label") or None,
+                                            limit_companies=batch_size,
+                                            offset=int(form.cleaned_data.get("offset") or 0),
+                                            dry_run=dry_run,
+                                            import_tasks=bool(form.cleaned_data.get("import_tasks")),
+                                            import_notes=bool(form.cleaned_data.get("import_notes")),
+                                            import_contacts=bool(form.cleaned_data.get("import_contacts")),
+                                            company_fields_meta=fields,
+                                            skip_field_filter=migrate_all,
+                                        )
+                                        migrate_responsible_user_id = responsible_user_id
+                                        if dry_run:
+                                            messages.success(request, "Проверка (dry-run) выполнена.")
+                                        else:
+                                            messages.success(request, "Импорт выполнен.")
+                                    finally:
+                                        # Удаляем ключ только если lock реально взяли (мы в ветке else при lock_acquired=True).
+                                        cache.delete(lock_key)
                 except AmoApiError as e:
                     messages.error(request, f"Ошибка миграции: {e}")
                 except Exception as e:
@@ -8235,7 +8165,15 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
         return render(
             request,
             "ui/settings/amocrm_migrate.html",
-            {"cfg": cfg, "form": form, "users": users, "fields": fields, "result": result},
+            {
+                "cfg": cfg,
+                "form": form,
+                "users": users,
+                "fields": fields,
+                "result": result,
+                "run_id": run_id,
+                "migrate_responsible_user_id": migrate_responsible_user_id,
+            },
         )
     except Exception as e:
         import traceback
@@ -8244,6 +8182,43 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
         # Возвращаем простую страницу с ошибкой
         from django.http import HttpResponse
         return HttpResponse(f"Ошибка рендеринга страницы миграции: {str(e)}. Проверьте логи сервера для деталей.", status=500)
+
+
+@login_required
+def settings_amocrm_migrate_progress(request: HttpRequest) -> HttpResponse:
+    """
+    GET: прогресс импорта amoCRM по текущему пользователю.
+    active_run только при status=running; done/failed/canceled → active_run: null.
+    При не-running — self-clean. Парсинг: dict как есть; str/bytes → json.loads;
+    delete только если str/bytes не парсится (чтобы не стереть валидный ключ из-за типа).
+    """
+    if not require_admin(request.user):
+        return JsonResponse({"error": "Forbidden", "active_run": None}, status=403)
+    lock_key = f"amocrm_import_run:{request.user.id}"
+    raw = cache.get(lock_key)
+    if raw is None:
+        return JsonResponse({"active_run": None})
+
+    if isinstance(raw, dict):
+        data = raw
+    elif isinstance(raw, (str, bytes)):
+        s = raw.decode("utf-8") if isinstance(raw, bytes) else raw
+        try:
+            data = json.loads(s)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            cache.delete(lock_key)  # не парсится — мусор, не валидный run
+            return JsonResponse({"active_run": None})
+    else:
+        # Неожиданный тип (артефакт бэкенда) — не удаляем, чтобы не стереть валидный ключ
+        return JsonResponse({"active_run": None})
+
+    status = (data.get("status") or "").lower()
+    if status not in ("running",):
+        cache.delete(lock_key)
+        return JsonResponse({"active_run": None})
+    return JsonResponse({
+        "active_run": {"run_id": data.get("run_id"), "status": data.get("status", "running")},
+    })
 
 
 @login_required
