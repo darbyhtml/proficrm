@@ -86,7 +86,7 @@
       /* Прогресс рассылки: по умолчанию только % в квадратике, при наведении — подробности */
       .mail-progress{
         max-width:min(360px, calc(100vw - 32px));
-        padding: 8px;
+        padding: 4px 6px; /* компактно в свернутом виде, без лишнего белого поля */
       }
       .mail-progress__body{
         min-width: 0;
@@ -105,6 +105,7 @@
         opacity: 1;
         margin-left: 10px;
         padding: 0 1.25rem 0 0;
+        overflow: visible; /* крестик (-top-1 -right-1) не обрезается */
       }
       .mail-progress__title,
       .mail-progress__counts{
@@ -1034,7 +1035,7 @@
     </div>
 
     {# Глобальный прогресс рассылки: по умолчанию только % в квадратике; при наведении — подробности; клик — страница кампании #}
-    <a id="mailProgressWidget" href="#" class="hidden fixed bottom-5 left-5 z-50 bg-white border border-brand-soft rounded-2xl shadow-lg p-2 flex items-center hover:bg-brand-soft/20 mail-progress">
+    <a id="mailProgressWidget" href="#" class="hidden fixed bottom-5 left-5 z-50 bg-white border border-brand-soft rounded-2xl shadow-lg flex items-center hover:bg-brand-soft/20 mail-progress">
       <div id="mailProgressCircle" class="w-10 h-10 flex-shrink-0 rounded-lg flex items-center justify-center text-xs font-semibold" style="background:conic-gradient(var(--brand-teal) 0deg, rgba(194,226,222,.6) 0deg); color:var(--brand-dark); border:1px solid rgba(194,226,222,.9)">
         <span id="mailProgressPct">0%</span>
       </div>
@@ -2087,6 +2088,7 @@
               return;
             }
             const res = await fetch('/mail/progress/poll/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+            if (!res.ok) return; /* 403/500 и т.п. — не ломаем, не парсим HTML как JSON */
             const data = await res.json();
             if (!data || !data.ok || !data.active) {
               widget.classList.add('hidden');
