@@ -4,6 +4,7 @@
 progress API (active_run: null при отсутствии активного), один менеджер.
 """
 import re
+from contextlib import contextmanager
 from unittest.mock import patch
 
 from django.test import TestCase, Client, override_settings
@@ -60,14 +61,15 @@ class AmocrmMigrateViewTestCase(TestCase):
         cfg.long_lived_token = "test_token"
         cfg.save()
 
+    @contextmanager
     def _migrate_patchers(self, result=None):
         if result is None:
             result = _make_result()
-        return (
-            patch("ui.views.fetch_amo_users", return_value=[{"id": 1, "name": "M1"}, {"id": 2, "name": "M2"}]),
-            patch("ui.views.fetch_company_custom_fields", return_value=[]),
-            patch("ui.views.migrate_filtered", return_value=result),
-        )
+        p1 = patch("ui.views.fetch_amo_users", return_value=[{"id": 1, "name": "M1"}, {"id": 2, "name": "M2"}])
+        p2 = patch("ui.views.fetch_company_custom_fields", return_value=[])
+        p3 = patch("ui.views.migrate_filtered", return_value=result)
+        with p1, p2, p3 as m3:
+            yield (None, None, m3)
 
     def test_progress_active_run_null_when_no_import(self):
         """GET progress: active_run: null, если активного импорта нет."""
