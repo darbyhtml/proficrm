@@ -290,7 +290,13 @@ class CampaignQueue(models.Model):
         max_length=24,
         blank=True,
         default="",
-        help_text="daily_limit, quota_exhausted, outside_hours, rate_per_hour",
+        help_text="daily_limit, quota_exhausted, outside_hours, rate_per_hour, transient_error",
+    )
+    # ENTERPRISE: Счетчик последовательных transient ошибок для circuit breaker
+    consecutive_transient_errors = models.IntegerField(
+        "Последовательные transient ошибки",
+        default=0,
+        help_text="Используется для автоматической паузы при множественных ошибках SMTP"
     )
 
     class Meta:

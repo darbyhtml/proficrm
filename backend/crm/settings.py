@@ -460,6 +460,9 @@ LOGGING = {
             "format": "{levelname} {message}",
             "style": "{",
         },
+        "json": {
+            "()": "crm.json_formatter.JSONFormatter",
+        },
     },
     "filters": {
         "require_debug_false": {
@@ -470,7 +473,8 @@ LOGGING = {
         "console": {
             "level": "INFO" if not DEBUG else "DEBUG",
             "class": "logging.StreamHandler",
-            "formatter": "verbose",
+            # ENTERPRISE: JSON formatter в production для structured logging
+            "formatter": "json" if not DEBUG else "verbose",
         },
         "file": {
             "level": "INFO",
@@ -507,6 +511,12 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        # ENTERPRISE: JSON formatter для mailer в production (structured logging)
+        "mailer.tasks": {
+            "handlers": ["console", "file"] if not DEBUG else ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
         "phonebridge": {
             "handlers": ["console", "file"] if not DEBUG else ["console"],
             "level": "INFO",
@@ -525,3 +535,36 @@ LOGGING = {
 # "Your models in app(s) ... have changes that are not yet reflected in a migration"
 # когда миграции создавались с BigAutoField, а настройка отсутствовала.
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# ============================================================================
+# ENTERPRISE: Mailer configuration (конфигурируемые лимиты)
+# ============================================================================
+
+# Максимальное количество получателей в одной кампании
+# Предотвращает блокировку очереди одной большой кампанией
+MAILER_MAX_CAMPAIGN_RECIPIENTS = int(os.getenv("MAILER_MAX_CAMPAIGN_RECIPIENTS", "10000"))
+
+# Throttling rates (запросов в час на пользователя)
+MAILER_THROTTLE_CAMPAIGN_START_PER_HOUR = int(os.getenv("MAILER_THROTTLE_CAMPAIGN_START_PER_HOUR", "10"))
+MAILER_THROTTLE_TEST_EMAIL_PER_HOUR = int(os.getenv("MAILER_THROTTLE_TEST_EMAIL_PER_HOUR", "5"))
+
+# Circuit breaker threshold (количество последовательных transient ошибок до паузы)
+MAILER_CIRCUIT_BREAKER_THRESHOLD = int(os.getenv("MAILER_CIRCUIT_BREAKER_THRESHOLD", "10"))
+
+# Retry delay для transient errors (минуты)
+MAILER_TRANSIENT_RETRY_DELAY_MINUTES = int(os.getenv("MAILER_TRANSIENT_RETRY_DELAY_MINUTES", "5"))
+
+# PII logging policy
+# "INFO" - только domain/masked/hash в INFO
+# "WARNING" - можно masked в WARNING+
+# "ERROR" - можно masked в ERROR+
+MAILER_LOG_PII_LEVEL = os.getenv("MAILER_LOG_PII_LEVEL", "ERROR")
+
+# Разрешить полный email в DEBUG логах (только для отладки)
+MAILER_LOG_FULL_EMAILS = os.getenv("MAILER_LOG_FULL_EMAILS", "False").lower() == "true"
+
+# Соль для хэширования email в логах
+# ⚠️ ВАЖНО: Дефолтный salt НЕ должен использоваться в production!
+# Установите уникальный MAILER_LOG_HASH_SALT через environment variable.
+# Пример: MAILER_LOG_HASH_SALT=$(openssl rand -hex 32)
+MAILER_LOG_HASH_SALT = os.getenv("MAILER_LOG_HASH_SALT", "default-salt-change-in-production")

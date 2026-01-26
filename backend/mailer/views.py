@@ -25,10 +25,12 @@ from companies.models import Company
 from companies.permissions import get_users_for_lists
 from accounts.models import Branch
 from companies.models import CompanySphere, CompanyStatus, ContactEmail, Contact
-from mailer.constants import COOLDOWN_DAYS_DEFAULT, PER_USER_DAILY_LIMIT_DEFAULT
+from mailer.constants import COOLDOWN_DAYS_DEFAULT, PER_USER_DAILY_LIMIT_DEFAULT, MAX_CAMPAIGN_RECIPIENTS
+from mailer.throttle import is_user_throttled
 from mailer.forms import CampaignForm, CampaignGenerateRecipientsForm, CampaignRecipientAddForm, MailAccountForm, GlobalMailAccountForm, EmailSignatureForm
 from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, UnsubscribeToken, EmailCooldown, SmtpBzQuota, CampaignQueue
-from mailer.smtp_sender import build_message, send_via_smtp
+from mailer.smtp_sender import build_message
+# send_via_smtp удален: тестовые письма теперь отправляются через Celery task send_test_email
 from mailer.mail_content import apply_signature
 from mailer.utils import html_to_text, msk_day_bounds
 from crm.utils import require_admin
@@ -232,13 +234,25 @@ def mail_settings(request: HttpRequest) -> HttpResponse:
                     from_name=(cfg.from_name or "CRM ПРОФИ").strip(),
                     reply_to=to_email,
                 )
-                if unsub_url:
-                    msg["List-Unsubscribe"] = f"<{unsub_url}>"
-                    msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
-                    msg["X-Tag"] = "test:mail_settings"
+                # Отправка тестового письма через Celery task (соблюдение лимитов)
+                from mailer.tasks import send_test_email
+                result = send_test_email.delay(
+                    to_email=to_email,
+                    subject="CRM ПРОФИ: тест отправки",
+                    body_html=body_html,
+                    body_text=body_text,
+                    from_email=((cfg.from_email or "").strip() or (cfg.smtp_username or "").strip()),
+                    from_name=(cfg.from_name or "CRM ПРОФИ").strip(),
+                    reply_to=to_email,
+                    x_tag="test:mail_settings",
+                )
+                # Ждем результат (для синхронного UX в админке)
                 try:
-                    send_via_smtp(cfg, msg)
-                    messages.success(request, f"Тестовое письмо отправлено на {to_email}.")
+                    task_result = result.get(timeout=30)
+                    if task_result.get("success"):
+                        messages.success(request, f"Тестовое письмо отправлено на {to_email}.")
+                    else:
+                        messages.error(request, f"Ошибка отправки: {task_result.get('error', 'Неизвестная ошибка')}")
                 except Exception as ex:
                     messages.error(request, f"Ошибка отправки: {ex}")
                 return redirect("mail_settings")
@@ -1186,6 +1200,8 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
     """
     Лёгкий polling для глобального виджета прогресса рассылки.
     Возвращает активную кампанию пользователя (если есть) и процент.
+    
+    ВАЖНО: reason_code и next_run_at берутся из CampaignQueue (единый источник правды).
     """
     user: User = request.user
     enforce(user=request.user, resource_type="action", resource="ui:mail:progress:poll", context={"path": request.path, "method": request.method})
@@ -1206,8 +1222,49 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
         active = qs.filter(status=Campaign.Status.PAUSED).first()
     if not active:
         active = qs.filter(status=Campaign.Status.SENT).first()
+    
+    # Получаем информацию об очереди (активная кампания, количество в очереди)
+    active_campaign = None
+    queued_count = 0
+    next_campaign_at = None
+    
+    # Активная кампания в очереди (PROCESSING)
+    processing_queue = CampaignQueue.objects.filter(
+        status=CampaignQueue.Status.PROCESSING
+    ).select_related("campaign", "campaign__created_by").first()
+    
+    if processing_queue and processing_queue.campaign.created_by == user:
+        active_campaign = {
+            "id": str(processing_queue.campaign.id),
+            "name": processing_queue.campaign.name,
+        }
+    
+    # Количество кампаний в очереди (PENDING) для этого пользователя
+    queued_count = CampaignQueue.objects.filter(
+        status=CampaignQueue.Status.PENDING,
+        campaign__created_by=user,
+        campaign__recipients__status=CampaignRecipient.Status.PENDING,
+    ).count()
+    
+    # Время начала следующей кампании (первая PENDING с deferred_until)
+    next_pending = CampaignQueue.objects.filter(
+        status=CampaignQueue.Status.PENDING,
+        campaign__created_by=user,
+        campaign__recipients__status=CampaignRecipient.Status.PENDING,
+        deferred_until__isnull=False,
+    ).order_by("deferred_until").first()
+    
+    if next_pending:
+        next_campaign_at = next_pending.deferred_until
+    
     if not active:
-        return JsonResponse({"ok": True, "active": None})
+        return JsonResponse({
+            "ok": True,
+            "active": None,
+            "active_campaign": active_campaign,
+            "queued_count": queued_count,
+            "next_campaign_at": next_campaign_at.isoformat() if next_campaign_at else None,
+        })
 
     agg = active.recipients.aggregate(
         pending=Count("id", filter=Q(status=CampaignRecipient.Status.PENDING)),
@@ -1224,41 +1281,35 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
     if total > 0:
         percent = int(round((done / total) * 100))
 
-    # Мини-пояснение "почему не идёт": дневной лимит / вне времени / SMTP выключен
-    from django.utils import timezone as _tz
-    from mailer.tasks import _is_working_hours
-
-    now = _tz.now()
-    start_day_utc, end_day_utc, _now_msk = msk_day_bounds(now)
-    smtp_cfg = GlobalMailAccount.load()
-    sent_today_user = SendLog.objects.filter(
-        provider="smtp_global",
-        status="sent",
-        campaign__created_by=user,
-        created_at__gte=start_day_utc,
-        created_at__lt=end_day_utc,
-    ).count()
-    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT_DEFAULT
-    limit_reached = False
-    if per_user_daily_limit and sent_today_user >= per_user_daily_limit and pending > 0:
-        limit_reached = True
-
+    # Получаем информацию из CampaignQueue (единый источник правды)
+    q = getattr(active, "queue_entry", None)
+    queue_status = (getattr(q, "status", None) if q else None)
+    deferred_until = getattr(q, "deferred_until", None) if q else None
+    defer_reason = (getattr(q, "defer_reason", None) or "") if q else ""
+    
+    # reason_code и reason_text берутся из CampaignQueue.defer_reason
+    # Дополнительно проверяем только глобальный случай smtp_disabled
     reason_code = None
     reason_text = ""
+    
+    smtp_cfg = GlobalMailAccount.load()
     if not getattr(smtp_cfg, "is_enabled", True):
         reason_code = "smtp_disabled"
         reason_text = "SMTP отключен администратором"
-    elif not _is_working_hours(now) and pending > 0:
-        reason_code = "outside_working_hours"
-        reason_text = "Вне рабочего времени (МСК)"
-    elif limit_reached:
-        reason_code = "user_daily_limit"
-        reason_text = "Дневной лимит исчерпан"
-
-    q = getattr(active, "queue_entry", None)
-    queue_status = (getattr(q, "status", None) if q else None)
-    deferred_until = getattr(q, "deferred_until", None)
-    defer_reason = (getattr(q, "defer_reason", None) or "") if q else ""
+    elif defer_reason:
+        # Причина из CampaignQueue
+        reason_code = defer_reason
+        reason_texts = {
+            "daily_limit": "Дневной лимит достигнут",
+            "quota_exhausted": "Квота smtp.bz исчерпана",
+            "outside_hours": "Вне рабочего времени",
+            "rate_per_hour": "Лимит в час достигнут",
+            "transient_error": "Временная ошибка отправки",
+        }
+        reason_text = reason_texts.get(defer_reason, defer_reason)
+    
+    # next_run_at берется из deferred_until
+    next_run_at = deferred_until.isoformat() if deferred_until else None
 
     return JsonResponse(
         {
@@ -1273,16 +1324,16 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
                 "total": total,
                 "percent": max(0, min(100, percent)),
                 "url": f"/mail/campaigns/{active.id}/",
-                "limit_reached": limit_reached,
-                "per_user_daily_limit": per_user_daily_limit,
-                "sent_today_user": sent_today_user,
                 "reason_code": reason_code,
                 "reason_text": reason_text,
                 "queue_status": queue_status,
                 "deferred_until": deferred_until.isoformat() if deferred_until else None,
                 "defer_reason": defer_reason,
-                "next_run_at": deferred_until.isoformat() if deferred_until else None,
+                "next_run_at": next_run_at,
             },
+            "active_campaign": active_campaign,
+            "queued_count": queued_count,
+            "next_campaign_at": next_campaign_at.isoformat() if next_campaign_at else None,
         }
     )
 
@@ -1991,6 +2042,46 @@ def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
         messages.error(request, "Нет писем в очереди для отправки.")
         return redirect("campaign_detail", campaign_id=camp.id)
     
+    # ENTERPRISE: Throttling на запуск кампаний (конфигурируемый лимит)
+    from django.conf import settings
+    throttle_limit = getattr(settings, "MAILER_THROTTLE_CAMPAIGN_START_PER_HOUR", 10)
+    is_throttled, current_count, throttle_reason = is_user_throttled(user.id, "campaign_start", max_requests=throttle_limit, window_seconds=3600)
+    if is_throttled:
+        if throttle_reason == "throttle_backend_unavailable":
+            messages.error(
+                request,
+                "Сервис временно недоступен. Попробуйте позже."
+            )
+        else:
+            messages.error(
+                request,
+                f"Превышен лимит запуска кампаний ({throttle_limit} запусков в час). "
+                f"Текущее количество: {current_count}. Попробуйте позже."
+            )
+        return redirect("campaign_detail", campaign_id=camp.id)
+    
+    # ENTERPRISE: Проверка размера кампании
+    total_recipients = camp.recipients.count()
+    if total_recipients > MAX_CAMPAIGN_RECIPIENTS:
+        messages.error(
+            request,
+            f"Кампания слишком большая ({total_recipients} получателей). "
+            f"Максимум: {max_recipients} получателей. "
+            f"Разбейте кампанию на несколько частей."
+        )
+        return redirect("campaign_detail", campaign_id=camp.id)
+    
+    # ENTERPRISE: Проверка квоты перед стартом (предупреждение, но не блокируем)
+    from mailer.services.rate_limiter import get_effective_quota_available
+    emails_available = get_effective_quota_available()
+    if emails_available <= 0:
+        messages.warning(
+            request,
+            f"Внимание: глобальная квота исчерпана ({emails_available}). "
+            f"Кампания будет отложена до пополнения квоты. "
+            f"Администратор может пополнить квоту через настройки SMTP."
+        )
+    
     # Устанавливаем статус READY
     if camp.status in (Campaign.Status.DRAFT, Campaign.Status.PAUSED, Campaign.Status.STOPPED):
         camp.status = Campaign.Status.READY
@@ -2254,6 +2345,24 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
     if not to_email:
         messages.error(request, "Некуда отправить тест (не задан email).")
         return redirect("campaign_detail", campaign_id=camp.id)
+    
+    # ENTERPRISE: Throttling на тестовые письма (конфигурируемый лимит)
+    from django.conf import settings
+    throttle_limit = getattr(settings, "MAILER_THROTTLE_TEST_EMAIL_PER_HOUR", 5)
+    is_throttled, current_count, throttle_reason = is_user_throttled(user.id, "send_test_email", max_requests=throttle_limit, window_seconds=3600)
+    if is_throttled:
+        if throttle_reason == "throttle_backend_unavailable":
+            messages.error(
+                request,
+                "Сервис временно недоступен. Попробуйте позже."
+            )
+        else:
+            messages.error(
+                request,
+                f"Превышен лимит отправки тестовых писем ({throttle_limit} писем в час). "
+                f"Текущее количество: {current_count}. Попробуйте позже."
+            )
+        return redirect("campaign_detail", campaign_id=camp.id)
 
     # ВАЖНО: Сохраняем текущие статусы получателей, чтобы убедиться, что они не изменятся
     # (хотя в этой функции мы их не трогаем, это дополнительная защита)
@@ -2274,28 +2383,38 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
     if unsub_url:
         base_html, base_text = append_unsubscribe_footer(body_html=base_html, body_text=base_text, unsubscribe_url=unsub_url)
 
-    msg = build_message(
-        account=MailAccount.objects.get_or_create(user=creator)[0],
+    # Отправка тестового письма через Celery task (соблюдение лимитов)
+    from mailer.tasks import send_test_email
+    
+    # Подготовка данных для вложения
+    attachment_path = None
+    attachment_original_name = None
+    if camp.attachment:
+        attachment_path = camp.attachment.name
+        attachment_original_name = camp.attachment_original_name or camp.attachment.name.split("/")[-1]
+    
+    result = send_test_email.delay(
         to_email=to_email,
         subject=f"[ТЕСТ] {camp.subject}",
-        body_text=(base_text or ""),
-        body_html=(base_html or ""),
+        body_html=base_html,
+        body_text=base_text,
         from_email=((smtp_cfg.from_email or "").strip() or (smtp_cfg.smtp_username or "").strip()),
         from_name=((camp.sender_name or "").strip() or (smtp_cfg.from_name or "CRM ПРОФИ").strip()),
         reply_to=creator_email,
-        attachment=camp.attachment if camp.attachment else None,
+        x_tag=f"test:campaign:{camp.id}",
+        campaign_id=str(camp.id),
+        attachment_path=attachment_path,
+        attachment_original_name=attachment_original_name,
     )
-    if unsub_url:
-        msg["List-Unsubscribe"] = f"<{unsub_url}>"
-        msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
-    msg["X-Tag"] = f"test:campaign:{camp.id}"
+    
+    # Ждем результат (для синхронного UX)
     try:
-        send_via_smtp(smtp_cfg, msg)
-        # ВАЖНО: Создаем SendLog БЕЗ recipient, чтобы не было связи с получателями
-        SendLog.objects.create(campaign=camp, recipient=None, account=None, provider="smtp_global", status="sent", message_id=str(msg["Message-ID"]))
-        messages.success(request, f"Тестовое письмо отправлено на {to_email}.")
+        task_result = result.get(timeout=30)
+        if task_result.get("success"):
+            messages.success(request, f"Тестовое письмо отправлено на {to_email}.")
+        else:
+            messages.error(request, f"Ошибка тестовой отправки: {task_result.get('error', 'Неизвестная ошибка')}")
     except Exception as ex:
-        SendLog.objects.create(campaign=camp, recipient=None, account=None, provider="smtp_global", status="failed", error=str(ex))
         messages.error(request, f"Ошибка тестовой отправки: {ex}")
     
     # ВАЖНО: Проверяем, что статусы получателей не изменились (дополнительная защита)

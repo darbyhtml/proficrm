@@ -17,13 +17,20 @@ from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAc
 from mailer.smtp_sender import build_message, open_smtp_connection, send_via_smtp
 from mailer.utils import html_to_text, msk_day_bounds, get_next_send_window_start
 from mailer.smtp_bz_api import get_quota_info, get_message_info, get_message_logs
+from mailer.logging_utils import get_pii_log_fields
 from mailer.constants import (
     PER_USER_DAILY_LIMIT_DEFAULT,
     WORKING_HOURS_START,
     WORKING_HOURS_END,
     DEFER_REASON_DAILY_LIMIT,
+    DEFER_REASON_QUOTA,
+    DEFER_REASON_OUTSIDE_HOURS,
+    DEFER_REASON_RATE_HOUR,
+    DEFER_REASON_TRANSIENT_ERROR,
 )
 from mailer.mail_content import apply_signature, append_unsubscribe_footer, build_unsubscribe_url, ensure_unsubscribe_tokens
+from mailer.services.queue import defer_queue
+from mailer.services.rate_limiter import reserve_rate_limit_token, get_effective_quota_available
 
 logger = logging.getLogger(__name__)
 
@@ -407,9 +414,13 @@ def send_pending_emails(self, batch_size: int = 50):
                 camp = processing_queue.campaign
                 if not camp.recipients.filter(status=CampaignRecipient.Status.PENDING).exists():
                     # Ставим статус кампании SENT (если была в процессе/готова) и закрываем очередь
+                    # ENTERPRISE: Проверяем failed получателей перед SENT
+                    has_failed = camp.recipients.filter(status=CampaignRecipient.Status.FAILED).exists()
                     if camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
-                        camp.status = Campaign.Status.SENT
-                        camp.save(update_fields=["status", "updated_at"])
+                        if not has_failed:
+                            camp.status = Campaign.Status.SENT
+                            camp.save(update_fields=["status", "updated_at"])
+                        # Если есть failed, оставляем SENDING для видимости проблем
                     processing_queue.status = CampaignQueue.Status.COMPLETED
                     processing_queue.completed_at = timezone.now()
                     processing_queue.save(update_fields=["status", "completed_at"])
@@ -421,76 +432,21 @@ def send_pending_emails(self, batch_size: int = 50):
         if not processing_queue:
             # Вне рабочего времени не начинаем обработку очереди (и не шлём уведомления).
             if not _is_working_hours():
-                logger.debug("Outside working hours (9:00-18:00 MSK), skipping email sending")
-                CampaignQueue.objects.filter(status=CampaignQueue.Status.PROCESSING).update(
-                    status=CampaignQueue.Status.PENDING,
-                    started_at=None,
-                )
-
-                # UX: единоразовое уведомление пользователям, что рассылка на паузе до 09:00 МСК.
-                # Не спамим: троттлим через cache и доп. дедупликацию в notify().
-                try:
-                    msk_now = timezone.now().astimezone(ZoneInfo("Europe/Moscow"))
-                    next_start = msk_now.replace(hour=WORKING_HOURS_START, minute=0, second=0, microsecond=0)
-                    if msk_now.hour >= WORKING_HOURS_END:
-                        next_start = next_start + timezone.timedelta(days=1)
-                    if msk_now.hour < WORKING_HOURS_START:
-                        # сегодня в 09:00
-                        pass
-
-                    throttle_key = f"mailer:notify:outside_hours:{msk_now.date().isoformat()}"
-                    if cache.add(throttle_key, "1", timeout=60 * 60):  # максимум раз в час
-                        # Берём кампании в очереди (ограниченно), группируем по создателю
-                        qs = (
-                            CampaignQueue.objects.filter(
-                                status=CampaignQueue.Status.PENDING,
-                                campaign__status__in=(Campaign.Status.READY, Campaign.Status.SENDING),
-                                campaign__recipients__status=CampaignRecipient.Status.PENDING,
-                            )
-                            .select_related("campaign", "campaign__created_by")
-                            .order_by("-priority", "queued_at")
-                        )
-
-                        per_user: dict[int, dict[str, object]] = {}
-                        for q in qs[:200]:
-                            u = getattr(getattr(q, "campaign", None), "created_by", None)
-                            if not u:
-                                continue
-                            uid = int(u.id)
-                            d = per_user.get(uid)
-                            if not d:
-                                per_user[uid] = {"user": u, "count": 1, "first_name": q.campaign.name, "first_id": q.campaign.id}
-                            else:
-                                d["count"] = int(d.get("count", 0)) + 1
-
-                        if per_user:
-                            from notifications.service import notify
-                            from notifications.models import Notification
-
-                            time_str = next_start.strftime("%H:%M")
-                            date_str = next_start.strftime("%d.%m")
-                            for d in per_user.values():
-                                u = d["user"]
-                                n = int(d["count"])
-                                first_name = str(d.get("first_name") or "—")
-                                body = (
-                                    f"Сейчас вне рабочего времени. Отправка возобновится в {time_str} МСК ({date_str}). "
-                                    f"В очереди: {n} камп."
-                                )
-                                # Если кампаний мало — покажем название первой
-                                if first_name and first_name != "—":
-                                    body += f" Первая: «{first_name}»."
-
-                                notify(
-                                    user=u,
-                                    kind=Notification.Kind.SYSTEM,
-                                    title="Рассылка на паузе: вне рабочего времени",
-                                    body=body,
-                                    url="/mail/campaigns/",
-                                    dedupe_seconds=6 * 3600,
-                                )
-                except Exception:
-                    pass
+                logger.debug("Outside working hours (9:00-18:00 MSK), deferring campaigns")
+                # Откладываем все PROCESSING кампании с фиксацией причины через defer_queue
+                msk_now = timezone.now().astimezone(ZoneInfo("Europe/Moscow"))
+                next_start = msk_now.replace(hour=WORKING_HOURS_START, minute=0, second=0, microsecond=0)
+                if msk_now.hour >= WORKING_HOURS_END:
+                    next_start = next_start + timezone.timedelta(days=1)
+                
+                # Откладываем все PROCESSING кампании через defer_queue
+                processing_to_defer = CampaignQueue.objects.filter(
+                    status=CampaignQueue.Status.PROCESSING,
+                    campaign__recipients__status=CampaignRecipient.Status.PENDING,
+                ).select_related("campaign")
+                
+                for q in processing_to_defer:
+                    defer_queue(q, DEFER_REASON_OUTSIDE_HOURS, next_start, notify=True)
 
                 return {"processed": False, "campaigns": 0, "reason": "outside_working_hours"}
 
@@ -561,30 +517,20 @@ def send_pending_emails(self, batch_size: int = 50):
             if quota.last_synced_at and not quota.sync_error:
                 # Лимиты из API
                 max_per_hour = quota.max_per_hour or 100
-                emails_available = quota.emails_available or 0
                 emails_limit = quota.emails_limit or 15000
             else:
                 # Дефолтные значения, если API не подключено
                 max_per_hour = 100
-                emails_available = 15000
                 emails_limit = 15000
+
+            # Эффективная доступная квота (с учетом локальных отправок)
+            emails_available = get_effective_quota_available()
 
             # Лимит писем/день на пользователя — из глобальных настроек (или дефолт)
             per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT_DEFAULT
 
             now = timezone.now()
             start_day_utc, end_day_utc, now_msk = msk_day_bounds(now)
-            sent_last_hour = SendLog.objects.filter(
-                provider="smtp_global",
-                status="sent",
-                created_at__gte=now - timezone.timedelta(hours=1)
-            ).count()
-            sent_today = SendLog.objects.filter(
-                provider="smtp_global",
-                status="sent",
-                created_at__gte=start_day_utc,
-                created_at__lt=end_day_utc,
-            ).count()
 
             # Лимит писем/день на пользователя (создателя кампании)
             sent_today_user = SendLog.objects.filter(
@@ -594,6 +540,8 @@ def send_pending_emails(self, batch_size: int = 50):
                 created_at__gte=start_day_utc,
                 created_at__lt=end_day_utc,
             ).count()
+            
+            # Проверяем rate limit через Redis (атомарно) - будет использоваться при резервации токена
             
             # Отслеживание лимита для уведомлений
             today_date = now_msk.date()
@@ -621,63 +569,62 @@ def send_pending_emails(self, batch_size: int = 50):
                     limit_status.last_limit_reached_date = None  # Сбрасываем, так как лимит снова доступен
                     limit_status.save(update_fields=["last_notified_date", "last_limit_reached_date"])
             
+            # Получаем queue_entry для defer операций
+            queue_entry = getattr(camp, "queue_entry", None)
+            if not queue_entry:
+                logger.warning(f"Campaign {camp.id} has no queue_entry, skipping")
+                continue
+            
             # Проверка дневного лимита: DEFER (не PAUSE) — продолжим завтра автоматически.
             if per_user_daily_limit and sent_today_user >= per_user_daily_limit:
                 next_run = get_next_send_window_start(always_tomorrow=True)
-                next_run_str = next_run.strftime("%H:%M")
-                next_run_date = next_run.strftime("%d.%m")
                 logger.info(
                     f"Campaign {camp.id}: user daily limit ({sent_today_user}/{per_user_daily_limit}), "
-                    f"deferring until {next_run_str} {next_run_date}"
+                    f"deferring until {next_run}",
+                    extra={
+                        "campaign_id": str(camp.id),
+                        "queue_id": str(queue_entry.id) if queue_entry else None,
+                        "defer_reason": DEFER_REASON_DAILY_LIMIT,
+                        "deferred_until": next_run.isoformat(),
+                        "sent_today_user": sent_today_user,
+                        "per_user_daily_limit": per_user_daily_limit,
+                    }
                 )
-                # НЕ ставим PAUSED, НЕ отменяем очередь. Откладываем до next_run.
-                queue_entry = getattr(camp, "queue_entry", None)
-                if queue_entry and queue_entry.status in (CampaignQueue.Status.PROCESSING, CampaignQueue.Status.PENDING):
-                    queue_entry.status = CampaignQueue.Status.PENDING
-                    queue_entry.started_at = None
-                    queue_entry.deferred_until = next_run
-                    queue_entry.defer_reason = DEFER_REASON_DAILY_LIMIT
-                    queue_entry.save(update_fields=["status", "started_at", "deferred_until", "defer_reason"])
-                try:
-                    from notifications.service import notify
-                    from notifications.models import Notification
-
-                    notify(
-                        user=user,
-                        kind=Notification.Kind.SYSTEM,
-                        title="Дневной лимит достигнут — продолжим завтра",
-                        body=f"Достигнут дневной лимит {per_user_daily_limit}. Продолжим завтра в {next_run_str} ({next_run_date}).",
-                        url=f"/mail/campaigns/{camp.id}/",
-                        dedupe_seconds=3600,
-                    )
-                except Exception:
-                    pass
+                defer_queue(queue_entry, DEFER_REASON_DAILY_LIMIT, next_run, notify=True)
                 continue
             
             # Проверка доступных писем из квоты
             if emails_available <= 0:
-                logger.info(f"Campaign {camp.id} skipped: quota exhausted ({emails_available}/{emails_limit}), staying in queue")
-                # Глобальная блокировка: не держим PROCESSING, чтобы UI/очередь не выглядели "зависшими".
-                CampaignQueue.objects.filter(status=CampaignQueue.Status.PROCESSING).update(
-                    status=CampaignQueue.Status.PENDING,
-                    started_at=None,
+                logger.info(
+                    f"Campaign {camp.id}: quota exhausted ({emails_available}/{emails_limit}), deferring",
+                    extra={
+                        "campaign_id": str(camp.id),
+                        "queue_id": str(queue_entry.id) if queue_entry else None,
+                        "defer_reason": DEFER_REASON_QUOTA,
+                        "deferred_until": next_check.isoformat(),
+                        "emails_available": emails_available,
+                        "emails_limit": emails_limit,
+                    }
                 )
-                return {"processed": False, "campaigns": 0, "reason": "quota_exhausted"}
+                # Вычисляем время следующей проверки (через час или после следующего sync)
+                from datetime import timedelta
+                next_check = timezone.now() + timedelta(hours=1)
+                if quota.last_synced_at:
+                    # Если есть sync, проверяем после следующего sync (примерно через 30 минут)
+                    next_check = quota.last_synced_at + timedelta(minutes=30)
+                defer_queue(queue_entry, DEFER_REASON_QUOTA, next_check, notify=True)
+                continue
             
-            if sent_last_hour >= max_per_hour:
-                # Лимит в час достигнут - пропускаем эту итерацию
-                CampaignQueue.objects.filter(status=CampaignQueue.Status.PROCESSING).update(
-                    status=CampaignQueue.Status.PENDING,
-                    started_at=None,
-                )
-                return {"processed": False, "campaigns": 0, "reason": "rate_per_hour_reached"}
-
             # Вычисляем, сколько писем можно отправить
+            # Учитываем: batch_size, квоту, дневной лимит пользователя
+            # Rate limit проверяется атомарно при резервации токена для каждого письма
+            remaining_quota = emails_available
+            remaining_daily = (per_user_daily_limit - sent_today_user) if per_user_daily_limit else batch_size
+            
             allowed = max(1, min(
                 batch_size,
-                max_per_hour - sent_last_hour,
-                emails_available,
-                (per_user_daily_limit - sent_today_user) if per_user_daily_limit else batch_size,
+                remaining_quota,
+                remaining_daily,
             ))
 
             # Блокировка строк при взятии батча: защита от дубль-отправки при ретраях/гонках.
@@ -835,11 +782,46 @@ def send_pending_emails(self, batch_size: int = 50):
                     msg["X-Tag"] = f"camp:{camp.id};rcpt:{r.id}"
 
                     try:
+                        # Атомарно резервируем токен rate limit ДО отправки (reserve → send → commit)
+                        token_reserved, token_count, rate_reset_at = reserve_rate_limit_token(max_per_hour)
+                        # ENTERPRISE: Structured logging для rate limit reserve outcome
+                        logger.debug(
+                            "Rate limit token reserve",
+                            extra={
+                                "campaign_id": str(camp.id),
+                                "allowed": token_reserved,
+                                "current_count": token_count,
+                                "max_per_hour": max_per_hour,
+                                "key_hour": timezone.now().strftime("%Y-%m-%d:%H"),
+                            }
+                        )
+                        if not token_reserved:
+                            # Лимит достигнут - откладываем кампанию
+                            logger.info(
+                                f"Campaign {camp.id}: rate limit reached ({token_count}/{max_per_hour}), deferring until {rate_reset_at}",
+                                extra={
+                                    "campaign_id": str(camp.id),
+                                    "queue_id": str(queue_entry.id) if queue_entry else None,
+                                    "defer_reason": DEFER_REASON_RATE_HOUR,
+                                    "deferred_until": rate_reset_at.isoformat() if rate_reset_at else None,
+                                    "token_count": token_count,
+                                    "max_per_hour": max_per_hour,
+                                }
+                            )
+                            defer_queue(queue_entry, DEFER_REASON_RATE_HOUR, rate_reset_at, notify=True)
+                            transient_blocked = True
+                            break
+                        
+                        # Токен зарезервирован - отправляем письмо
+                        send_start_time = timezone.now()
                         send_via_smtp(smtp_cfg, msg, smtp=smtp)
+                        send_duration_ms = int((timezone.now() - send_start_time).total_seconds() * 1000)
+                        # Токен уже засчитан при резервации, дополнительный increment не нужен
                         r.status = CampaignRecipient.Status.SENT
                         r.last_error = ""
                         r.updated_at = timezone.now()
                         recipients_to_update.append(r)
+                        message_id = str(msg.get("Message-ID", ""))
                         logs_to_create.append(
                             SendLog(
                                 campaign=camp,
@@ -847,15 +829,55 @@ def send_pending_emails(self, batch_size: int = 50):
                                 account=None,
                                 provider="smtp_global",
                                 status="sent",
-                                message_id=str(msg["Message-ID"]),
+                                message_id=message_id,
                             )
                         )
+                        # ENTERPRISE: Structured logging для успешной отправки (метрики)
+                        # PII-safe: не логируем полный email в INFO
+                        email_fields = get_pii_log_fields(r.email, log_level=logging.INFO)
+                        logger.info(
+                            "Email sent successfully",
+                            extra={
+                                "campaign_id": str(camp.id),
+                                "queue_id": str(queue_entry.id) if queue_entry else None,
+                                "recipient_id": str(r.id),
+                                **email_fields,  # email_domain, email_masked, email_hash
+                                "smtp_message_id": message_id,
+                                "provider": "smtp_global",
+                                "took_ms": send_duration_ms,
+                                "rate_limit_count": token_count,
+                            }
+                        )
+                        # ENTERPRISE: Сбрасываем счетчик transient ошибок при успешной отправке
+                        if queue_entry and queue_entry.consecutive_transient_errors > 0:
+                            queue_entry.consecutive_transient_errors = 0
+                            queue_entry.save(update_fields=["consecutive_transient_errors"])
                     except Exception as ex:
                         err = str(ex)
+                        # PII-safe: в ERROR логируем только masked email
+                        email_fields = get_pii_log_fields(r.email, log_level=logging.ERROR)
                         if hasattr(ex, "original_error"):
-                            logger.error(f"Failed to send email {r.email}: {ex.original_error}", exc_info=True)
+                            logger.error(
+                                f"Failed to send email {email_fields['email_masked']}: {ex.original_error}",
+                                exc_info=True,
+                                extra={
+                                    "campaign_id": str(camp.id),
+                                    "recipient_id": str(r.id),
+                                    **email_fields,  # email_domain, email_masked, email_hash
+                                    "error_type": "smtp_error",
+                                }
+                            )
                         else:
-                            logger.error(f"Failed to send email {r.email}: {ex}", exc_info=True)
+                            logger.error(
+                                f"Failed to send email {email_fields['email_masked']}: {ex}",
+                                exc_info=True,
+                                extra={
+                                    "campaign_id": str(camp.id),
+                                    "recipient_id": str(r.id),
+                                    **email_fields,  # email_domain, email_masked, email_hash
+                                    "error_type": "smtp_error",
+                                }
+                            )
 
                         # Если ошибка похожа на временную/системную — не превращаем всю кампанию в FAILED.
                         # Ставим текущего получателя обратно в PENDING и выходим из батча (ретрай позже).
@@ -913,19 +935,74 @@ def send_pending_emails(self, batch_size: int = 50):
                 except Exception:
                     pass
 
-            # Если упёрлись во временную ошибку — освобождаем очередь, чтобы не блокировать другие кампании.
+            # Если упёрлись во временную ошибку или rate limit — откладываем кампанию
             if transient_blocked:
                 queue_entry = getattr(camp, "queue_entry", None)
                 if queue_entry and queue_entry.status == CampaignQueue.Status.PROCESSING:
-                    queue_entry.status = CampaignQueue.Status.PENDING
-                    queue_entry.started_at = None
-                    queue_entry.save(update_fields=["status", "started_at"])
+                    # ENTERPRISE: Circuit breaker — пауза при множественных ошибках
+                    from django.conf import settings
+                    circuit_breaker_threshold = getattr(settings, "MAILER_CIRCUIT_BREAKER_THRESHOLD", 10)
+                    queue_entry.consecutive_transient_errors = (queue_entry.consecutive_transient_errors or 0) + 1
+                    if queue_entry.consecutive_transient_errors >= circuit_breaker_threshold:
+                        logger.error(
+                            f"Campaign {camp.id}: too many transient errors ({queue_entry.consecutive_transient_errors}), pausing",
+                            extra={
+                                "campaign_id": str(camp.id),
+                                "queue_id": str(queue_entry.id),
+                                "consecutive_errors": queue_entry.consecutive_transient_errors,
+                            }
+                        )
+                        camp.status = Campaign.Status.PAUSED
+                        camp.save(update_fields=["status", "updated_at"])
+                        queue_entry.status = CampaignQueue.Status.PENDING
+                        queue_entry.save(update_fields=["status", "consecutive_transient_errors"])
+                        # TODO: Уведомить администратора
+                    else:
+                        # Используем defer_queue для фиксации причины и времени возобновления
+                        from datetime import timedelta
+                        from django.conf import settings
+                        retry_delay_minutes = getattr(settings, "MAILER_TRANSIENT_RETRY_DELAY_MINUTES", 5)
+                        next_retry = timezone.now() + timedelta(minutes=retry_delay_minutes)
+                        defer_queue(queue_entry, DEFER_REASON_TRANSIENT_ERROR, next_retry, notify=False)
+                        queue_entry.save(update_fields=["consecutive_transient_errors"])
 
-            # Если очередь пустая — помечаем как SENT (если уже было SENDING)
+            # Если очередь пустая — помечаем как завершенную
+            # Учитываем failed: если есть failed, статус кампании должен это отражать
             if not camp.recipients.filter(status=CampaignRecipient.Status.PENDING).exists():
+                # Проверяем наличие failed получателей
+                has_failed = camp.recipients.filter(status=CampaignRecipient.Status.FAILED).exists()
+                has_sent = camp.recipients.filter(status=CampaignRecipient.Status.SENT).exists()
+                
                 if camp.status == Campaign.Status.SENDING:
-                    camp.status = Campaign.Status.SENT
+                    # Если есть отправленные и нет failed - SENT, иначе оставляем SENDING для видимости проблем
+                    if has_sent and not has_failed:
+                        camp.status = Campaign.Status.SENT
+                    # Если есть failed, оставляем SENDING чтобы менеджер видел проблему
+                    # (можно добавить отдельный статус PARTIALLY_SENT в будущем)
                     camp.save(update_fields=["status", "updated_at"])
+                    
+                    # ENTERPRISE: Structured logging для завершения кампании (метрики)
+                    sent_count = camp.recipients.filter(status=CampaignRecipient.Status.SENT).count()
+                    failed_count = camp.recipients.filter(status=CampaignRecipient.Status.FAILED).count()
+                    total_count = camp.recipients.count()
+                    campaign_duration = None
+                    if queue_entry and queue_entry.started_at:
+                        campaign_duration = int((timezone.now() - queue_entry.started_at).total_seconds())
+                    logger.info(
+                        "Campaign finished",
+                        extra={
+                            "campaign_id": str(camp.id),
+                            "queue_id": str(queue_entry.id) if queue_entry else None,
+                            "campaign_status": camp.status,
+                            "totals": {
+                                "sent": sent_count,
+                                "failed": failed_count,
+                                "total": total_count,
+                            },
+                            "duration_seconds": campaign_duration,
+                            "finished_with_errors": failed_count > 0,
+                        }
+                    )
                 
                 # Обновляем статус в очереди
                 queue_entry = getattr(camp, "queue_entry", None)
@@ -971,7 +1048,28 @@ def reconcile_campaign_queue():
     if len(processing) > 1:
         keep_id = processing[0]
         CampaignQueue.objects.filter(id__in=processing[1:]).update(status=CampaignQueue.Status.PENDING, started_at=None)
-        logger.warning(f"Queue reconcile: multiple PROCESSING detected, kept {keep_id}, reset {len(processing)-1} to PENDING")
+        logger.warning(
+            f"Queue reconcile: multiple PROCESSING detected, kept {keep_id}, reset {len(processing)-1} to PENDING",
+            extra={"kept_queue_id": str(keep_id), "reset_count": len(processing) - 1}
+        )
+    
+    # ENTERPRISE: Мониторинг "зависших" PROCESSING кампаний (>30 минут)
+    from datetime import timedelta
+    processing_stuck = CampaignQueue.objects.filter(
+        status=CampaignQueue.Status.PROCESSING,
+        started_at__lt=now - timedelta(minutes=30)
+    ).select_related("campaign")
+    if processing_stuck.exists():
+        stuck_ids = [str(q.campaign_id) for q in processing_stuck]
+        logger.warning(
+            f"Stuck PROCESSING campaigns detected: {stuck_ids}",
+            extra={
+                "stuck_count": processing_stuck.count(),
+                "campaign_ids": stuck_ids,
+                "threshold_minutes": 30,
+            }
+        )
+        # TODO: Alert через monitoring system (Prometheus, Sentry, etc.)
 
     # 2) Закрываем очереди, где pending уже нет / или кампания не должна быть в очереди
     for q in CampaignQueue.objects.filter(status__in=(CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING)).select_related("campaign").iterator():
@@ -980,8 +1078,11 @@ def reconcile_campaign_queue():
 
         if not has_pending:
             if camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
-                camp.status = Campaign.Status.SENT
-                camp.save(update_fields=["status", "updated_at"])
+                # Проверяем наличие failed получателей перед установкой SENT
+                has_failed = camp.recipients.filter(status=CampaignRecipient.Status.FAILED).exists()
+                if not has_failed:
+                    camp.status = Campaign.Status.SENT
+                    camp.save(update_fields=["status", "updated_at"])
             q.status = CampaignQueue.Status.COMPLETED
             q.completed_at = now
             q.save(update_fields=["status", "completed_at"])
@@ -1054,6 +1155,151 @@ def sync_smtp_bz_quota():
         quota.sync_error = str(e)
         quota.save(update_fields=["sync_error", "updated_at"])
         return {"status": "error", "error": str(e)}
+
+
+@shared_task(name="mailer.tasks.send_test_email")
+def send_test_email(to_email: str, subject: str, body_html: str, body_text: str, from_email: str = None, from_name: str = None, reply_to: str = None, x_tag: str = None, campaign_id: str = None, attachment_path: str = None, attachment_original_name: str = None):
+    """
+    Celery task для отправки тестового письма.
+    Используется вместо прямых вызовов send_via_smtp в views.py.
+    
+    Args:
+        to_email: Email получателя
+        subject: Тема письма
+        body_html: HTML тело письма
+        body_text: Plain text тело письма
+        from_email: Email отправителя (опционально)
+        from_name: Имя отправителя (опционально)
+        reply_to: Reply-To адрес (опционально)
+        x_tag: X-Tag для идентификации (опционально)
+        campaign_id: ID кампании для SendLog (опционально)
+        attachment_path: Путь к вложению (опционально)
+        attachment_original_name: Оригинальное имя вложения (опционально)
+    
+    Returns:
+        dict с результатом отправки
+    """
+    from mailer.models import GlobalMailAccount, MailAccount, SendLog, Campaign
+    from mailer.smtp_sender import build_message, send_via_smtp
+    from mailer.services.rate_limiter import reserve_rate_limit_token
+    from mailer.tasks import _get_campaign_attachment_bytes
+    
+    smtp_cfg = GlobalMailAccount.load()
+    if not smtp_cfg.is_enabled:
+        return {"success": False, "error": "SMTP отключен"}
+    
+    # Резервируем токен rate limit (тестовые письма тоже учитываются в лимите)
+    # Используем max_per_hour из SmtpBzQuota или дефолт
+    from mailer.models import SmtpBzQuota
+    quota = SmtpBzQuota.load()
+    if quota.last_synced_at and not quota.sync_error:
+        max_per_hour = quota.max_per_hour or 100
+    else:
+        max_per_hour = smtp_cfg.rate_per_minute * 60 if smtp_cfg.rate_per_minute else 100
+    
+    token_reserved, token_count, rate_reset_at = reserve_rate_limit_token(max_per_hour)
+    if not token_reserved:
+        return {"success": False, "error": f"Лимит отправки достигнут ({token_count}/{max_per_hour}). Попробуйте позже."}
+    
+    try:
+        # Создаем временный MailAccount для build_message
+        temp_account = MailAccount()
+        temp_account.from_email = from_email or smtp_cfg.from_email or smtp_cfg.smtp_username
+        temp_account.from_name = from_name or smtp_cfg.from_name
+        
+        # Читаем вложение, если указано
+        attachment_bytes = None
+        attachment_filename = None
+        if attachment_path:
+            # Если передан campaign_id, используем _get_campaign_attachment_bytes
+            if campaign_id:
+                try:
+                    camp = Campaign.objects.get(id=campaign_id)
+                    attachment_bytes, attachment_filename, att_err = _get_campaign_attachment_bytes(camp)
+                    if att_err:
+                        return {"success": False, "error": f"Ошибка чтения вложения: {att_err}"}
+                    if attachment_original_name:
+                        attachment_filename = attachment_original_name
+                except Campaign.DoesNotExist:
+                    return {"success": False, "error": "Кампания не найдена"}
+        
+        msg = build_message(
+            account=temp_account,
+            to_email=to_email,
+            subject=subject,
+            body_text=body_text,
+            body_html=body_html,
+            from_email=from_email or smtp_cfg.from_email or smtp_cfg.smtp_username,
+            from_name=from_name or smtp_cfg.from_name,
+            reply_to=reply_to,
+            attachment_content=attachment_bytes,
+            attachment_filename=attachment_filename,
+        )
+        
+        if x_tag:
+            msg["X-Tag"] = x_tag
+        
+        # Отправляем письмо
+        send_via_smtp(smtp_cfg, msg)
+        
+        # Создаем SendLog для учета
+        campaign_obj = None
+        if campaign_id:
+            try:
+                campaign_obj = Campaign.objects.get(id=campaign_id)
+            except Campaign.DoesNotExist:
+                pass
+        
+        SendLog.objects.create(
+            campaign=campaign_obj,
+            recipient=None,
+            account=None,
+            provider="smtp_global",
+            status="sent",
+            message_id=str(msg["Message-ID"]),
+        )
+        
+        # ENTERPRISE: Structured logging для тестового письма (PII-safe)
+        email_fields = get_pii_log_fields(to_email, log_level=logging.INFO)
+        logger.info(
+            "Test email sent successfully",
+            extra={
+                "test_email": True,
+                "email_domain": email_fields.get("email_domain"),
+                "email_masked": email_fields.get("email_masked"),
+                "smtp_message_id": str(msg.get("Message-ID", "")),
+                "campaign_id": campaign_id,
+            }
+        )
+        return {"success": True, "message_id": str(msg["Message-ID"])}
+    except Exception as e:
+        # PII-safe: в ERROR логируем только masked email
+        email_fields = get_pii_log_fields(to_email, log_level=logging.ERROR)
+        logger.error(
+            f"Error sending test email to {email_fields.get('email_masked', '***')}: {e}",
+            exc_info=True,
+            extra={
+                "test_email": True,
+                **email_fields,
+                "campaign_id": campaign_id,
+                "error_type": "test_email_error",
+            }
+        )
+        # Создаем SendLog с ошибкой, если есть campaign_id
+        if campaign_id:
+            try:
+                campaign_obj = Campaign.objects.get(id=campaign_id)
+                SendLog.objects.create(
+                    campaign=campaign_obj,
+                    recipient=None,
+                    account=None,
+                    provider="smtp_global",
+                    status="failed",
+                    error=str(e)[:500],
+                )
+            except Campaign.DoesNotExist:
+                pass
+        return {"success": False, "error": str(e)}
 
 
 @shared_task(name="mailer.tasks.sync_smtp_bz_unsubscribes")
