@@ -145,8 +145,14 @@ class CompanyAPITestCase(TestCase):
         response = self.client.post("/api/companies/", data, format="json")
         
         # Если редирект, следуем ему с теми же данными
-        if response.status_code == status.HTTP_301_MOVED_PERMANENTLY:
-            redirect_url = response.get("Location", "/api/companies/")
+        while response.status_code == status.HTTP_301_MOVED_PERMANENTLY:
+            redirect_url = response.get("Location")
+            if not redirect_url:
+                break
+            # Убираем домен, если он есть
+            if redirect_url.startswith("http"):
+                from urllib.parse import urlparse
+                redirect_url = urlparse(redirect_url).path
             response = self.client.post(redirect_url, data, format="json")
         
         # Проверяем успешность создания
@@ -169,8 +175,14 @@ class CompanyAPITestCase(TestCase):
         response = self.client.post("/api/companies/", data, format="json")
         
         # Если редирект, следуем ему с теми же данными
-        if response.status_code == status.HTTP_301_MOVED_PERMANENTLY:
-            redirect_url = response.get("Location", "/api/companies/")
+        while response.status_code == status.HTTP_301_MOVED_PERMANENTLY:
+            redirect_url = response.get("Location")
+            if not redirect_url:
+                break
+            # Убираем домен, если он есть
+            if redirect_url.startswith("http"):
+                from urllib.parse import urlparse
+                redirect_url = urlparse(redirect_url).path
             response = self.client.post(redirect_url, data, format="json")
         
         # Проверяем успешность создания
@@ -192,8 +204,14 @@ class CompanyAPITestCase(TestCase):
         response = self.client.post("/api/companies/", data, format="json")
         
         # Если редирект, следуем ему с теми же данными
-        if response.status_code == status.HTTP_301_MOVED_PERMANENTLY:
-            redirect_url = response.get("Location", "/api/companies/")
+        while response.status_code == status.HTTP_301_MOVED_PERMANENTLY:
+            redirect_url = response.get("Location")
+            if not redirect_url:
+                break
+            # Убираем домен, если он есть
+            if redirect_url.startswith("http"):
+                from urllib.parse import urlparse
+                redirect_url = urlparse(redirect_url).path
             response = self.client.post(redirect_url, data, format="json")
         
         # Проверяем успешность создания
@@ -296,8 +314,14 @@ class CompanyAPITestCase(TestCase):
         response = self.client.patch(f"/api/companies/{self.company1.id}/", data, format="json")
         
         # Если редирект, следуем ему
-        if response.status_code == status.HTTP_301_MOVED_PERMANENTLY:
-            redirect_url = response.get("Location", f"/api/companies/{self.company1.id}/")
+        while response.status_code == status.HTTP_301_MOVED_PERMANENTLY:
+            redirect_url = response.get("Location")
+            if not redirect_url:
+                break
+            # Убираем домен, если он есть
+            if redirect_url.startswith("http"):
+                from urllib.parse import urlparse
+                redirect_url = urlparse(redirect_url).path
             response = self.client.patch(redirect_url, data, format="json")
         
         # Проверяем успешность обновления
