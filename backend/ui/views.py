@@ -6478,7 +6478,10 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
             (task.created_by_id and task.created_by_id == user.id)
         )
     elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
-        if task.assigned_to_id == user.id:
+        # Директор/РОП может просматривать задачи, которые он создал
+        if task.created_by_id == user.id:
+            can_view = True
+        elif task.assigned_to_id == user.id:
             can_view = True
         elif task.company_id and getattr(task.company, "branch_id", None) == user.branch_id:
             can_view = True

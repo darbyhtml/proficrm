@@ -3401,7 +3401,15 @@
             const res = await fetch(`/tasks/${taskId}/`, {
               headers: { 'X-Requested-With': 'XMLHttpRequest' }
             });
-            if (!res.ok) throw new Error('Ошибка загрузки задачи');
+            if (!res.ok) {
+              let errorMsg = 'Ошибка загрузки задачи';
+              if (res.status === 403) {
+                errorMsg = 'Нет прав на просмотр этой задачи';
+              } else if (res.status === 404) {
+                errorMsg = 'Задача не найдена';
+              }
+              throw new Error(errorMsg);
+            }
             const html = await res.text();
             
             const parser = new DOMParser();
@@ -3512,8 +3520,9 @@
             }
           } catch (error) {
             console.error('Error loading task:', error);
-            if (modalContent) modalContent.innerHTML = '<div class="text-center py-8 text-red-600">Ошибка загрузки задачи</div>';
-            if (window.uiToast) window.uiToast('Ошибка загрузки задачи', 'error');
+            const errorMsg = error.message || 'Ошибка загрузки задачи';
+            if (modalContent) modalContent.innerHTML = `<div class="text-center py-8 text-red-600">${errorMsg}</div>`;
+            if (window.uiToast) window.uiToast(errorMsg, 'error');
           }
         });
       });
