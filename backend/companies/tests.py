@@ -66,10 +66,10 @@ class NormalizersTestCase(TestCase):
         result = normalize_phone(long_phone)
         self.assertLessEqual(len(result), 50)
         
-        # Тест 11: Edge case - номер с большим количеством форматирования
+        # Тест 11: Edge case - номер с большим количеством форматирования и хвостом
+        # "+7 (999) 123-45-67-89-01" содержит 13 цифр (799912345678901), хвост "8901" должен быть отброшен
         result = normalize_phone("+7 (999) 123-45-67-89-01")
-        self.assertTrue(result.startswith("+7"))
-        self.assertIn("9991234567", result.replace("+", "").replace("-", "").replace(" ", ""))
+        self.assertEqual(result, "+79991234567")  # Хвост "8901" отброшен
 
     def test_normalize_inn(self):
         """Тест нормализации ИНН"""

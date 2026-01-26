@@ -57,8 +57,8 @@ class MailerBaseTestCase(TestCase):
         self._patches.append(patch('mailer.services.rate_limiter.reserve_rate_limit_token', return_value=(True, 1, None)))
         self._patches.append(patch('mailer.services.rate_limiter.check_rate_limit_per_hour', return_value=(True, 1, None)))
         
-        # Отключаем daily limit
-        self._patches.append(patch('mailer.throttle.is_user_throttled', return_value=False))
+        # Отключаем daily limit (возвращаем tuple для совместимости с тестами)
+        self._patches.append(patch('mailer.throttle.is_user_throttled', return_value=(False, 0, None)))
         
         # Отключаем quota check
         # Патчим и wrapper в tasks, и оригинальную функцию (views импортирует напрямую)

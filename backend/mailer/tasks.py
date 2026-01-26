@@ -397,7 +397,12 @@ def send_pending_emails(self, batch_size: int = 50):
             for q in stale_qs:
                 camp = q.campaign
                 if camp and camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
-                    camp.status = Campaign.Status.SENT
+                    # Проверяем наличие failed получателей перед установкой SENT
+                    has_failed = camp.recipients.filter(status=CampaignRecipient.Status.FAILED).exists()
+                    if has_failed:
+                        camp.status = Campaign.Status.SENDING
+                    else:
+                        camp.status = Campaign.Status.SENT
                     camp.save(update_fields=["status", "updated_at"])
                 q.status = CampaignQueue.Status.COMPLETED
                 q.completed_at = now
@@ -661,7 +666,12 @@ def send_pending_emails(self, batch_size: int = 50):
                 # когда письма могли быть отправлены не этим воркером).
                 if not camp.recipients.filter(status=CampaignRecipient.Status.PENDING).exists():
                     if camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
-                        camp.status = Campaign.Status.SENT
+                        # Проверяем наличие failed получателей перед установкой SENT
+                        has_failed = camp.recipients.filter(status=CampaignRecipient.Status.FAILED).exists()
+                        if has_failed:
+                            camp.status = Campaign.Status.SENDING
+                        else:
+                            camp.status = Campaign.Status.SENT
                         camp.save(update_fields=["status", "updated_at"])
 
                     queue_entry = getattr(camp, "queue_entry", None)
@@ -995,11 +1005,12 @@ def send_pending_emails(self, batch_size: int = 50):
                 has_sent = camp.recipients.filter(status=CampaignRecipient.Status.SENT).exists()
                 
                 if camp.status == Campaign.Status.SENDING:
-                    # Если есть отправленные и нет failed - SENT, иначе оставляем SENDING для видимости проблем
-                    if has_sent and not has_failed:
+                    # Если есть failed - оставляем SENDING для видимости проблем
+                    # Если нет failed - переводим в SENT
+                    if has_failed:
+                        camp.status = Campaign.Status.SENDING
+                    else:
                         camp.status = Campaign.Status.SENT
-                    # Если есть failed, оставляем SENDING чтобы менеджер видел проблему
-                    # (можно добавить отдельный статус PARTIALLY_SENT в будущем)
                     camp.save(update_fields=["status", "updated_at"])
                     
                     # ENTERPRISE: Structured logging для завершения кампании (метрики)
