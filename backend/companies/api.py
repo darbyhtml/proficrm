@@ -1,17 +1,19 @@
 from rest_framework import serializers, viewsets
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
 
 from accounts.models import User
 from .permissions import can_edit_company
 from .models import Company, Contact, CompanyNote
+from .normalizers import normalize_phone, normalize_inn, normalize_work_schedule
 from policy.drf import PolicyPermission
 
 
 class CompanySerializer(serializers.ModelSerializer):
     # Валидация полей с ограничением длины (защита от StringDataRightTruncation)
-    inn = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    inn = serializers.CharField(max_length=255, required=False, allow_blank=True)
     kpp = serializers.CharField(max_length=20, required=False, allow_blank=True)
     legal_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
     address = serializers.CharField(max_length=500, required=False, allow_blank=True)
@@ -22,6 +24,26 @@ class CompanySerializer(serializers.ModelSerializer):
     name = serializers.CharField(max_length=255)
     phone = serializers.CharField(max_length=50, required=False, allow_blank=True)
     email = serializers.EmailField(max_length=254, required=False, allow_blank=True)
+    work_schedule = serializers.CharField(required=False, allow_blank=True)
+    work_timezone = serializers.CharField(max_length=64, required=False, allow_blank=True)
+    
+    def validate_phone(self, value):
+        """Нормализует телефон используя единый нормализатор"""
+        if value:
+            return normalize_phone(value)
+        return value
+    
+    def validate_inn(self, value):
+        """Нормализует ИНН используя единый нормализатор"""
+        if value:
+            return normalize_inn(value)
+        return value
+    
+    def validate_work_schedule(self, value):
+        """Нормализует расписание работы используя единый нормализатор"""
+        if value:
+            return normalize_work_schedule(value)
+        return value
     
     class Meta:
         model = Company
@@ -41,6 +63,8 @@ class CompanySerializer(serializers.ModelSerializer):
             "email",
             "contact_name",
             "contact_position",
+            "work_schedule",
+            "work_timezone",
             "status",
             "spheres",
             "responsible",
@@ -55,7 +79,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
     serializer_class = CompanySerializer
     permission_classes = [IsAuthenticated, PolicyPermission]
     policy_resource_prefix = "api:companies"
-    filter_backends = (DjangoFilterBackend,)
+    filter_backends = (DjangoFilterBackend, SearchFilter, OrderingFilter)
     filterset_fields = ("branch", "responsible", "status", "contract_type", "is_cold_call")
     search_fields = ("name", "inn", "legal_name", "address", "phone", "email", "contact_name", "contact_position")
     ordering_fields = ("updated_at", "created_at", "name")
@@ -156,7 +180,7 @@ class ContactSerializer(serializers.ModelSerializer):
 
 class ContactViewSet(viewsets.ModelViewSet):
     serializer_class = ContactSerializer
-    filter_backends = (DjangoFilterBackend,)
+    filter_backends = (DjangoFilterBackend, SearchFilter, OrderingFilter)
     filterset_fields = ("company",)
     search_fields = ("first_name", "last_name", "position", "company__name")
     ordering_fields = ("updated_at", "created_at", "last_name")
@@ -194,7 +218,7 @@ class CompanyNoteSerializer(serializers.ModelSerializer):
 
 class CompanyNoteViewSet(viewsets.ModelViewSet):
     serializer_class = CompanyNoteSerializer
-    filter_backends = (DjangoFilterBackend,)
+    filter_backends = (DjangoFilterBackend, OrderingFilter)
     filterset_fields = ("company",)
     ordering_fields = ("created_at",)
 

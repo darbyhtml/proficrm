@@ -1,6 +1,6 @@
 import mimetypes
 from ui.timezone_utils import RUS_TZ_CHOICES, guess_ru_timezone_from_address
-from ui.work_schedule_utils import normalize_work_schedule
+from companies.normalizers import normalize_phone, normalize_inn, normalize_work_schedule
 from uuid import UUID
 from django import forms
 from django.forms import inlineformset_factory, BaseInlineFormSet, ValidationError
@@ -187,9 +187,7 @@ class CompanyCreateForm(forms.ModelForm):
         return cleaned
 
     def clean_inn(self):
-        from companies.inn_utils import normalize_inn_string
-
-        return normalize_inn_string(self.cleaned_data.get("inn"))
+        return normalize_inn(self.cleaned_data.get("inn"))
     
     class Meta:
         model = Company
@@ -303,9 +301,7 @@ class CompanyEditForm(forms.ModelForm):
         return cleaned
 
     def clean_inn(self):
-        from companies.inn_utils import normalize_inn_string
-
-        return normalize_inn_string(self.cleaned_data.get("inn"))
+        return normalize_inn(self.cleaned_data.get("inn"))
 
     def clean_head_company(self):
         hc = self.cleaned_data.get("head_company")
@@ -425,9 +421,7 @@ class CompanyInlineEditForm(forms.ModelForm):
         return (self.cleaned_data.get("legal_name") or "").strip()
 
     def clean_inn(self):
-        from companies.inn_utils import normalize_inn_string
-
-        return normalize_inn_string(self.cleaned_data.get("inn"))
+        return normalize_inn(self.cleaned_data.get("inn"))
 
     def clean_kpp(self):
         return (self.cleaned_data.get("kpp") or "").strip()
@@ -1024,35 +1018,8 @@ class _BaseEmailFormSet(BaseInlineFormSet):
 
 
 def _normalize_phone(phone: str) -> str:
-    """Нормализует номер телефона так же, как в ContactPhone.save()"""
-    if not phone:
-        return ""
-    phone = str(phone).strip()
-    # Убираем все нецифровые символы, кроме + в начале
-    digits = ''.join(c for c in phone if c.isdigit() or (c == '+' and phone.startswith('+')))
-    # Если начинается с +7, проверяем следующую цифру
-    if digits.startswith('+7'):
-        digits_only = digits[2:]  # Убираем +7
-        # Если после +7 идет 8, убираем её (например +78XXXXXXXXX -> +7XXXXXXXXX)
-        if digits_only.startswith('8') and len(digits_only) > 10:
-            digits_only = digits_only[1:]
-        # Если осталось 10 цифр, формируем +7XXXXXXXXXX
-        if len(digits_only) == 10:
-            return '+7' + digits_only[:50]
-        else:
-            return phone[:50]
-    # Если начинается с 8 и 11 цифр, заменяем на +7
-    elif digits.startswith('8') and len(digits) == 11:
-        return '+7' + digits[1:][:50]
-    # Если начинается с 7 и 11 цифр, добавляем +
-    elif digits.startswith('7') and len(digits) == 11:
-        return '+' + digits[:50]
-    # Если 10 цифр, добавляем +7
-    elif len(digits) == 10:
-        return '+7' + digits[:50]
-    # Иначе обрезаем до 50 символов
-    else:
-        return phone[:50]
+    """Нормализует номер телефона используя единый нормализатор"""
+    return normalize_phone(phone)
 
 
 class _BasePhoneFormSet(BaseInlineFormSet):

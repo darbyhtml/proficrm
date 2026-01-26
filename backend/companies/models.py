@@ -145,10 +145,9 @@ class Company(models.Model):
         # Защита от длинных значений (особенно важно при импорте из amoCRM)
         # ВАЖНО: обрезаем ВСЕГДА, даже если значение уже установлено (защита от любых источников данных)
         if self.inn:
-            from .inn_utils import normalize_inn_string
-
-            # Нормализуем множественный ИНН (поддерживаем вставку "как есть": с пробелами/переносами и т.п.)
-            self.inn = normalize_inn_string(self.inn)[:255]
+            # Используем единый нормализатор ИНН
+            from .normalizers import normalize_inn
+            self.inn = normalize_inn(self.inn)[:255]
         if self.kpp:
             self.kpp = str(self.kpp).strip()[:20]
         if self.legal_name:
@@ -166,38 +165,17 @@ class Company(models.Model):
         if self.name:
             self.name = str(self.name).strip()[:255]
         if self.phone:
-            # Нормализуем номер телефона: убираем форматирование, оставляем только цифры и +7
-            phone = str(self.phone).strip()
-            # Убираем все нецифровые символы, кроме + в начале
-            digits = ''.join(c for c in phone if c.isdigit() or (c == '+' and phone.startswith('+')))
-            # Если начинается с +7, проверяем следующую цифру
-            if digits.startswith('+7'):
-                digits_only = digits[2:]  # Убираем +7
-                # Если после +7 идет 8, убираем её (например +78XXXXXXXXX -> +7XXXXXXXXX)
-                if digits_only.startswith('8') and len(digits_only) > 10:
-                    digits_only = digits_only[1:]
-                # Если осталось 10 цифр, формируем +7XXXXXXXXXX
-                if len(digits_only) == 10:
-                    self.phone = '+7' + digits_only[:50]
-                else:
-                    self.phone = phone[:50]
-            # Если начинается с 8 и 11 цифр, заменяем на +7
-            elif digits.startswith('8') and len(digits) == 11:
-                self.phone = '+7' + digits[1:][:50]
-            # Если начинается с 7 и 11 цифр, добавляем +
-            elif digits.startswith('7') and len(digits) == 11:
-                self.phone = '+' + digits[:50]
-            # Если 10 цифр, добавляем +7
-            elif len(digits) == 10:
-                self.phone = '+7' + digits[:50]
-            # Иначе обрезаем до 50 символов
-            else:
-                self.phone = phone[:50]
+            # Используем единый нормализатор телефонов
+            from .normalizers import normalize_phone
+            self.phone = normalize_phone(self.phone)
         if self.email:
             self.email = str(self.email).strip()[:254]
         if self.work_schedule:
+            # Используем единый нормализатор расписания работы
+            from .normalizers import normalize_work_schedule
+            normalized = normalize_work_schedule(self.work_schedule)
             # TextField не имеет ограничения по длине в БД, но обрезаем до разумного лимита (5000 символов)
-            self.work_schedule = str(self.work_schedule).strip()[:5000]
+            self.work_schedule = normalized[:5000] if normalized else ""
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:
@@ -411,33 +389,9 @@ class ContactPhone(models.Model):
 
     def save(self, *args, **kwargs):
         if self.value:
-            # Нормализуем номер телефона: убираем форматирование, оставляем только цифры и +7
-            phone = str(self.value).strip()
-            # Убираем все нецифровые символы, кроме + в начале
-            digits = ''.join(c for c in phone if c.isdigit() or (c == '+' and phone.startswith('+')))
-            # Если начинается с +7, проверяем следующую цифру
-            if digits.startswith('+7'):
-                digits_only = digits[2:]  # Убираем +7
-                # Если после +7 идет 8, убираем её (например +78XXXXXXXXX -> +7XXXXXXXXX)
-                if digits_only.startswith('8') and len(digits_only) > 10:
-                    digits_only = digits_only[1:]
-                # Если осталось 10 цифр, формируем +7XXXXXXXXXX
-                if len(digits_only) == 10:
-                    self.value = '+7' + digits_only[:50]
-                else:
-                    self.value = phone[:50]
-            # Если начинается с 8 и 11 цифр, заменяем на +7
-            elif digits.startswith('8') and len(digits) == 11:
-                self.value = '+7' + digits[1:][:50]
-            # Если начинается с 7 и 11 цифр, добавляем +
-            elif digits.startswith('7') and len(digits) == 11:
-                self.value = '+' + digits[:50]
-            # Если 10 цифр, добавляем +7
-            elif len(digits) == 10:
-                self.value = '+7' + digits[:50]
-            # Иначе обрезаем до 50 символов
-            else:
-                self.value = phone[:50]
+            # Используем единый нормализатор телефонов
+            from .normalizers import normalize_phone
+            self.value = normalize_phone(self.value)
         super().save(*args, **kwargs)
 
     def __str__(self) -> str:

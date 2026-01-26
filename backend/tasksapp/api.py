@@ -1,6 +1,7 @@
 from rest_framework import serializers, viewsets
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.filters import SearchFilter, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 
@@ -74,7 +75,7 @@ class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TaskSerializer
     permission_classes = [IsAuthenticated, PolicyPermission]
     policy_resource_prefix = "api:tasks"
-    filter_backends = (DjangoFilterBackend,)
+    filter_backends = (DjangoFilterBackend, SearchFilter, OrderingFilter)
     filterset_fields = ("status", "assigned_to", "company", "type")
     search_fields = ("title", "description", "company__name")
     ordering_fields = ("created_at", "due_at")
