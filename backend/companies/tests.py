@@ -141,8 +141,8 @@ class CompanyAPITestCase(TestCase):
             "name": "Новая компания",
             "phone": "8 (999) 123-45-69"
         }
-        # Пробуем с URL без trailing slash (DRF обычно требует trailing slash)
-        response = self.client.post("/api/companies", data, format="json")
+        # Используем URL с trailing slash сразу (DRF требует trailing slash)
+        response = self.client.post("/api/companies/", data, format="json")
         
         # Если редирект, следуем ему с теми же данными
         max_redirects = 5
@@ -158,13 +158,22 @@ class CompanyAPITestCase(TestCase):
             response = self.client.post(redirect_url, data, format="json")
             redirect_count += 1
         
-        # Проверяем успешность создания (либо через статус, либо через наличие в БД)
-        if response.status_code not in [status.HTTP_201_CREATED, status.HTTP_200_OK]:
-            # Если статус не успешный, проверяем, что компания все равно создана
+        # Проверяем успешность создания
+        # Если статус 301 после всех редиректов - значит редирект не обработался, но компания может быть создана
+        if response.status_code == status.HTTP_301_MOVED_PERMANENTLY:
+            # Проверяем, что компания создана несмотря на редирект
             company = Company.objects.filter(name="Новая компания").first()
-            self.assertIsNotNone(company, f"Company should be created. Response status: {response.status_code}")
+            if company:
+                # Компания создана - проверяем нормализацию
+                self.assertTrue(company.phone.startswith("+7"))
+                self.assertIn("9991234569", company.phone)
+                return
+            else:
+                self.fail(f"Company not created after redirect. Response status: {response.status_code}, Location: {response.get('Location')}")
         else:
-            # Если успешно, проверяем через БД
+            # Ожидаем успешный статус
+            self.assertIn(response.status_code, [status.HTTP_201_CREATED, status.HTTP_200_OK],
+                         f"Expected 201 or 200, got {response.status_code}")
             company = Company.objects.get(name="Новая компания")
         
         # Проверяем, что телефон нормализован
@@ -177,8 +186,8 @@ class CompanyAPITestCase(TestCase):
             "name": "Компания с ИНН",
             "inn": "1234 5678 90"
         }
-        # Пробуем с URL без trailing slash
-        response = self.client.post("/api/companies", data, format="json")
+        # Используем URL с trailing slash
+        response = self.client.post("/api/companies/", data, format="json")
         
         # Если редирект, следуем ему с теми же данными
         max_redirects = 5
@@ -193,11 +202,17 @@ class CompanyAPITestCase(TestCase):
             response = self.client.post(redirect_url, data, format="json")
             redirect_count += 1
         
-        # Проверяем успешность создания (либо через статус, либо через наличие в БД)
-        if response.status_code not in [status.HTTP_201_CREATED, status.HTTP_200_OK]:
+        # Проверяем успешность создания
+        if response.status_code == status.HTTP_301_MOVED_PERMANENTLY:
             company = Company.objects.filter(name="Компания с ИНН").first()
-            self.assertIsNotNone(company, f"Company should be created. Response status: {response.status_code}")
+            if company:
+                self.assertEqual(company.inn, "1234567890")
+                return
+            else:
+                self.fail(f"Company not created after redirect. Response status: {response.status_code}")
         else:
+            self.assertIn(response.status_code, [status.HTTP_201_CREATED, status.HTTP_200_OK],
+                         f"Expected 201 or 200, got {response.status_code}")
             company = Company.objects.get(name="Компания с ИНН")
         
         # Проверяем, что ИНН нормализован
@@ -209,8 +224,8 @@ class CompanyAPITestCase(TestCase):
             "name": "Компания с расписанием",
             "work_schedule": "пн-пт 9.00-18.00"
         }
-        # Пробуем с URL без trailing slash
-        response = self.client.post("/api/companies", data, format="json")
+        # Используем URL с trailing slash
+        response = self.client.post("/api/companies/", data, format="json")
         
         # Если редирект, следуем ему с теми же данными
         max_redirects = 5
@@ -225,11 +240,18 @@ class CompanyAPITestCase(TestCase):
             response = self.client.post(redirect_url, data, format="json")
             redirect_count += 1
         
-        # Проверяем успешность создания (либо через статус, либо через наличие в БД)
-        if response.status_code not in [status.HTTP_201_CREATED, status.HTTP_200_OK]:
+        # Проверяем успешность создания
+        if response.status_code == status.HTTP_301_MOVED_PERMANENTLY:
             company = Company.objects.filter(name="Компания с расписанием").first()
-            self.assertIsNotNone(company, f"Company should be created. Response status: {response.status_code}")
+            if company:
+                self.assertIn("09:00", company.work_schedule)
+                self.assertIn("18:00", company.work_schedule)
+                return
+            else:
+                self.fail(f"Company not created after redirect. Response status: {response.status_code}")
         else:
+            self.assertIn(response.status_code, [status.HTTP_201_CREATED, status.HTTP_200_OK],
+                         f"Expected 201 or 200, got {response.status_code}")
             company = Company.objects.get(name="Компания с расписанием")
         
         # Проверяем, что расписание нормализовано
@@ -321,9 +343,9 @@ class CompanyAPITestCase(TestCase):
         # Сохраняем исходный телефон для проверки изменения
         original_phone = self.company1.phone
         
-        # Обновляем телефон - пробуем без trailing slash
+        # Обновляем телефон - используем URL с trailing slash
         data = {"phone": "8 (888) 777-66-55"}
-        response = self.client.patch(f"/api/companies/{self.company1.id}", data, format="json")
+        response = self.client.patch(f"/api/companies/{self.company1.id}/", data, format="json")
         
         # Если редирект, следуем ему
         max_redirects = 5
@@ -338,11 +360,22 @@ class CompanyAPITestCase(TestCase):
             response = self.client.patch(redirect_url, data, format="json")
             redirect_count += 1
         
-        # Проверяем успешность обновления (либо через статус, либо через изменение в БД)
+        # Проверяем успешность обновления
         # Обновляем объект из БД в любом случае
         self.company1.refresh_from_db()
         
         # Проверяем, что телефон нормализован и изменился
+        # Если статус был 301, но телефон изменился - значит обновление прошло
+        if response.status_code == status.HTTP_301_MOVED_PERMANENTLY:
+            # Проверяем, что телефон изменился (значит обновление прошло)
+            if self.company1.phone == original_phone:
+                self.fail(f"Phone not updated after redirect. Response status: {response.status_code}")
+        else:
+            # Ожидаем успешный статус
+            self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_201_CREATED],
+                         f"Expected 200 or 201, got {response.status_code}")
+        
+        # Проверяем нормализацию
         self.assertTrue(self.company1.phone.startswith("+7"))
         # Нормализованный телефон должен быть +78887776655
         normalized_phone = self.company1.phone.replace("+7", "").replace("-", "").replace(" ", "").replace("(", "").replace(")", "")
