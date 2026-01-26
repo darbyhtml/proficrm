@@ -33,9 +33,54 @@ def _mem_hit(key: str, window_seconds: int) -> int:
         return len(arr)
 
 
+def _hit(key: str, window_seconds: int) -> int:
+    """
+    Выполняет hit (инкремент счетчика) и возвращает новое значение.
+    Пробует cache, при ошибке переключается на in-memory fallback.
+    
+    Returns:
+        Новое значение счетчика (1, 2, 3, ...)
+    """
+    try:
+        # Сначала пытаемся создать ключ, если его нет
+        cache.add(key, 0, timeout=window_seconds)
+        
+        # Инкрементируем счетчик
+        try:
+            count = cache.incr(key)
+        except ValueError:
+            # Ключ не найден (хотя мы делали add) - создаем через set
+            cache.set(key, 1, timeout=window_seconds)
+            count = 1
+        
+        # ВАЖНО: некоторые бекенды "успешно" возвращают 0/None — это считаем нерабочим cache
+        # count <= 0 должен форсировать fallback
+        if not isinstance(count, int) or count <= 0:
+            raise RuntimeError(f"cache.incr returned invalid count={count!r}")
+        
+        # Обновляем TTL на случай, если ключ уже существовал
+        cache.touch(key, timeout=window_seconds)
+        
+        return count
+    
+    except Exception as e:
+        # Fallback in-memory (для DummyCache / неподдержки incr / тестов)
+        logger.debug(
+            f"Cache backend unavailable for throttle hit, using in-memory fallback: {e}",
+            extra={
+                "cache_key": key,
+                "error_type": "throttle_backend_fallback",
+            }
+        )
+        return _mem_hit(key, window_seconds)
+
+
 def is_user_throttled(user_id: int | str, action: str, max_requests: int, window_seconds: int = 3600) -> tuple[bool, int, str | None]:
     """
     Проверка throttling по пользователю (не по IP).
+    
+    КРИТИЧНО: Каждый вызов этой функции = hit (инкремент счетчика).
+    Сначала увеличиваем счетчик, потом проверяем лимит.
     
     FAIL-CLOSED POLICY: При ошибке Redis возвращаем throttled=True (безопаснее заблокировать, чем разрешить DoS).
     
@@ -47,76 +92,28 @@ def is_user_throttled(user_id: int | str, action: str, max_requests: int, window
     
     Returns:
         (is_throttled, current_count, reason)
-        - is_throttled: True если лимит превышен или Redis недоступен
-        - current_count: Текущее количество запросов в окне (0 если Redis error)
-        - reason: None если норма, "throttle_backend_unavailable" если Redis error
+        - is_throttled: True если лимит превышен
+        - current_count: Текущее количество запросов в окне (1, 2, 3, ...)
+        - reason: None если норма, "throttled" если лимит превышен
     """
     cache_key = f"mailer:throttle:{action}:user:{user_id}"
     
-    # 1) Пытаемся использовать cache с атомарным инкрементом
-    try:
-        # Сначала пытаемся создать ключ, если его нет
-        cache.add(cache_key, 0, timeout=window_seconds)
-        
-        # Инкрементируем счетчик
-        try:
-            new_value = cache.incr(cache_key)
-        except ValueError:
-            # Ключ не найден (хотя мы делали add) - создаем через set
-            cache.set(cache_key, 1, timeout=window_seconds)
-            new_value = 1
-        
-        # ВАЖНО: некоторые бекенды "успешно" возвращают 0/None — это считаем нерабочим cache
-        # count <= 0 должен форсировать fallback
-        if not isinstance(new_value, int) or new_value <= 0:
-            raise RuntimeError(f"cache.incr returned invalid count={new_value!r}")
-        
-        # Обновляем TTL на случай, если ключ уже существовал
-        cache.touch(cache_key, timeout=window_seconds)
-        
-        is_throttled = new_value > max_requests
-        reason = "throttled" if is_throttled else None
-        
-        if is_throttled:
-            logger.warning(
-                f"User {user_id} throttled for action {action}: {new_value}/{max_requests}",
-                extra={
-                    "user_id": str(user_id),
-                    "action": action,
-                    "current_count": new_value,
-                    "max_requests": max_requests,
-                }
-            )
-        
-        return is_throttled, new_value, reason
+    # 1) Сначала увеличиваем счётчик (hit) - всегда выполняется
+    count = _hit(cache_key, window_seconds)
     
-    except Exception as e:
-        # 2) Fallback in-memory (для DummyCache / неподдержки incr / тестов)
-        # Сюда попадаем если:
-        # - cache.incr вернул <= 0 или не int
-        # - cache.incr бросил исключение
-        # - cache.add/cache.set не работает
-        logger.debug(
-            f"Cache backend unavailable for throttle, using in-memory fallback: {e}",
+    # 2) Потом проверяем, превышен ли лимит
+    is_throttled = count > max_requests
+    reason = "throttled" if is_throttled else None
+    
+    if is_throttled:
+        logger.warning(
+            f"User {user_id} throttled for action {action}: {count}/{max_requests}",
             extra={
                 "user_id": str(user_id),
                 "action": action,
-                "error_type": "throttle_backend_fallback",
+                "current_count": count,
+                "max_requests": max_requests,
             }
         )
-        count = _mem_hit(cache_key, window_seconds)
-        is_throttled = count > max_requests
-        reason = "throttled" if is_throttled else None
-        
-        if is_throttled:
-            logger.warning(
-                f"User {user_id} throttled for action {action} (in-memory): {count}/{max_requests}",
-                extra={
-                    "user_id": str(user_id),
-                    "action": action,
-                    "current_count": count,
-                    "max_requests": max_requests,
-                }
-            )
-        
-        return is_throttled, count, reason
+    
+    return is_throttled, count, reason
