@@ -18,6 +18,7 @@ def parse_inns(value: str | None) -> List[str]:
     if not s:
         return []
 
+    # Сначала пробуем найти ИНН через regex (для случаев, когда ИНН уже отделены)
     inns: List[str] = []
     seen = set()
     for m in _INN_RE.finditer(s):
@@ -25,6 +26,22 @@ def parse_inns(value: str | None) -> List[str]:
         if inn not in seen:
             inns.append(inn)
             seen.add(inn)
+    
+    # Если не нашли через regex, убираем все нецифровые символы и ищем последовательности
+    if not inns:
+        digits_only = ''.join(c for c in s if c.isdigit())
+        # Ищем последовательности из 10 или 12 цифр
+        for length in [12, 10]:  # Сначала 12, потом 10 (чтобы не находить часть 12-значного как 10-значный)
+            i = 0
+            while i <= len(digits_only) - length:
+                candidate = digits_only[i:i + length]
+                if candidate not in seen:
+                    inns.append(candidate)
+                    seen.add(candidate)
+                    i += length  # Пропускаем найденный ИНН
+                else:
+                    i += 1
+    
     return inns
 
 

@@ -141,7 +141,7 @@ class CompanyAPITestCase(TestCase):
             "name": "Новая компания",
             "phone": "8 (999) 123-45-69"
         }
-        response = self.client.post("/api/companies/", data, format="json")
+        response = self.client.post("/api/companies/", data, format="json", follow=True)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         
         # Проверяем, что телефон нормализован
@@ -155,7 +155,7 @@ class CompanyAPITestCase(TestCase):
             "name": "Компания с ИНН",
             "inn": "1234 5678 90"
         }
-        response = self.client.post("/api/companies/", data, format="json")
+        response = self.client.post("/api/companies/", data, format="json", follow=True)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         
         # Проверяем, что ИНН нормализован
@@ -168,7 +168,7 @@ class CompanyAPITestCase(TestCase):
             "name": "Компания с расписанием",
             "work_schedule": "пн-пт 9.00-18.00"
         }
-        response = self.client.post("/api/companies/", data, format="json")
+        response = self.client.post("/api/companies/", data, format="json", follow=True)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         
         # Проверяем, что расписание нормализовано
@@ -179,7 +179,7 @@ class CompanyAPITestCase(TestCase):
     def test_api_search_filter(self):
         """Тест работы SearchFilter в API"""
         # Поиск по названию
-        response = self.client.get("/api/companies/?search=Тестовая")
+        response = self.client.get("/api/companies/?search=Тестовая", follow=True)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertGreaterEqual(len(response.data["results"]), 1)
         self.assertEqual(response.data["results"][0]["name"], "Тестовая компания 1")
@@ -190,14 +190,14 @@ class CompanyAPITestCase(TestCase):
         self.assertGreaterEqual(len(response.data["results"]), 1)
         
         # Поиск по телефону
-        response = self.client.get("/api/companies/?search=9991234567")
+        response = self.client.get("/api/companies/?search=9991234567", follow=True)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertGreaterEqual(len(response.data["results"]), 1)
 
     def test_api_ordering_filter(self):
         """Тест работы OrderingFilter в API"""
         # Сортировка по названию (по возрастанию)
-        response = self.client.get("/api/companies/?ordering=name")
+        response = self.client.get("/api/companies/?ordering=name", follow=True)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         results = response.data["results"]
         if len(results) >= 2:
@@ -215,7 +215,7 @@ class CompanyAPITestCase(TestCase):
         """Тест нормализации данных при обновлении через API"""
         # Обновляем телефон
         data = {"phone": "8 (888) 777-66-55"}
-        response = self.client.patch(f"/api/companies/{self.company1.id}/", data, format="json")
+        response = self.client.patch(f"/api/companies/{self.company1.id}/", data, format="json", follow=True)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
         # Проверяем, что телефон нормализован
