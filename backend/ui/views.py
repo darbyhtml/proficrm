@@ -4569,6 +4569,7 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
 
 
 @login_required
+@transaction.atomic
 def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
@@ -4593,10 +4594,22 @@ def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company.id)
 
     old_resp = company.responsible
-    company.responsible = new_resp
+    old_resp_id = company.responsible_id
+    
     # При передаче обновляем филиал компании под филиал нового ответственного (может быть другой регион).
+    company.responsible = new_resp
     company.branch = new_resp.branch
-    company.save()
+    company.save(update_fields=["responsible", "branch", "updated_at"])
+    
+    # Логируем для отладки
+    import logging
+    logger = logging.getLogger(__name__)
+    logger.info(
+        f"Company transferred: company_id={company.id}, "
+        f"old_responsible_id={old_resp_id}, new_responsible_id={new_resp.id}, "
+        f"transferred_by_user_id={user.id}"
+    )
+    
     _invalidate_company_count_cache()  # Инвалидируем кэш при передаче компании
 
     messages.success(request, f"Ответственный обновлён: {new_resp}.")
@@ -6525,62 +6538,6 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
             return redirect("task_list")
     
     # Если дошли сюда, значит есть доступ - продолжаем
-    
-    # Проверяем права на просмотр (ТЗ):
-    # - менеджер: только свои (создатель или исполнитель)
-    # - РОП/директор: свои + задачи филиала
-    # - админ/управляющий: все
-    # - Ответственный за компанию может просматривать задачи по своей компании
-    can_view = False
-    if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
-        can_view = True
-    elif user.role == User.Role.MANAGER:
-        # Менеджер может просматривать задачи, которые он создал или которые назначены ему
-        can_view = bool(
-            (task.assigned_to_id and task.assigned_to_id == user.id) or
-            (task.created_by_id and task.created_by_id == user.id)
-        )
-        # Также менеджер может просматривать задачи по компаниям, за которые он ответственный
-        if not can_view and task.company_id:
-            try:
-                company = getattr(task, "company", None)
-                if company and company.responsible_id == user.id:
-                    can_view = True
-            except Exception:
-                pass
-    elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
-        # Директор/РОП может просматривать задачи, которые он создал
-        if task.created_by_id == user.id:
-            can_view = True
-        elif task.assigned_to_id == user.id:
-            can_view = True
-        elif task.company_id and getattr(task.company, "branch_id", None) == user.branch_id:
-            can_view = True
-        elif task.assigned_to_id and getattr(task.assigned_to, "branch_id", None) == user.branch_id:
-            can_view = True
-    
-    # Ответственный за компанию может просматривать задачи по своей компании (для всех ролей)
-    if not can_view and task.company_id:
-        try:
-            company = getattr(task, "company", None)
-            if company and company.responsible_id == user.id:
-                can_view = True
-        except Exception:
-            pass
-    
-    if not can_view:
-        # Логируем для отладки (временно)
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning(
-            f"Task view denied: user_id={user.id}, role={user.role}, "
-            f"task_id={task.id}, created_by_id={task.created_by_id}, "
-            f"assigned_to_id={task.assigned_to_id}, company_id={task.company_id}"
-        )
-        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            return JsonResponse({"ok": False, "error": "Нет прав на просмотр этой задачи."}, status=403)
-        messages.error(request, "Нет прав на просмотр этой задачи.")
-        return redirect("task_list")
     
     # Вычисляем просрочку в днях (только если известны дедлайн и время завершения)
     view_task_overdue_days = None
