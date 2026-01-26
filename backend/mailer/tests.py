@@ -48,10 +48,12 @@ class MailerBaseTestCase(TestCase):
         
         # Отключаем проверку рабочего времени
         from unittest.mock import patch
+        # Патчим там, где функция используется (views импортирует из tasks)
         self._patches.append(patch('mailer.tasks._is_working_hours', return_value=True))
-        self._patches.append(patch('mailer.utils._is_working_hours', return_value=True))
         
         # Отключаем rate limit (всегда резервируем токен)
+        # Патчим и wrapper в tasks, и оригинальную функцию (views импортирует напрямую)
+        self._patches.append(patch('mailer.tasks.reserve_rate_limit_token', return_value=(True, 1, None)))
         self._patches.append(patch('mailer.services.rate_limiter.reserve_rate_limit_token', return_value=(True, 1, None)))
         self._patches.append(patch('mailer.services.rate_limiter.check_rate_limit_per_hour', return_value=(True, 1, None)))
         
@@ -59,6 +61,8 @@ class MailerBaseTestCase(TestCase):
         self._patches.append(patch('mailer.throttle.is_user_throttled', return_value=False))
         
         # Отключаем quota check
+        # Патчим и wrapper в tasks, и оригинальную функцию (views импортирует напрямую)
+        self._patches.append(patch('mailer.tasks.get_effective_quota_available', return_value=10000))
         self._patches.append(patch('mailer.services.rate_limiter.get_effective_quota_available', return_value=10000))
         
         for p in self._patches:

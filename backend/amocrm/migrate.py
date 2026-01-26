@@ -86,7 +86,7 @@ EXTENSION_PATTERNS = [
 # Поддерживаемые типы: WORK, MOB (MOBILE), HOME, OTHER
 PHONE_ENUM_ALLOWLIST = {
     "WORK": ContactPhone.PhoneType.WORK,
-    "WORKDD": ContactPhone.PhoneType.WORK,  # Work Direct Dial
+    # WORKDD убран из allowlist - теперь мапится в OTHER (неизвестный тип)
     "WORK_DIRECT": ContactPhone.PhoneType.WORK,
     "MOBILE": ContactPhone.PhoneType.MOBILE,
     "MOB": ContactPhone.PhoneType.MOBILE,
