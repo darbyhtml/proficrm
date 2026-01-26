@@ -6465,14 +6465,18 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
     )
     
     # Проверяем права на просмотр (ТЗ):
-    # - менеджер: только свои (assigned_to)
+    # - менеджер: только свои (создатель или исполнитель)
     # - РОП/директор: свои + задачи филиала
     # - админ/управляющий: все
     can_view = False
     if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
         can_view = True
     elif user.role == User.Role.MANAGER:
-        can_view = bool(task.assigned_to_id and task.assigned_to_id == user.id)
+        # Менеджер может просматривать задачи, которые он создал или которые назначены ему
+        can_view = bool(
+            (task.assigned_to_id and task.assigned_to_id == user.id) or
+            (task.created_by_id and task.created_by_id == user.id)
+        )
     elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
         if task.assigned_to_id == user.id:
             can_view = True
