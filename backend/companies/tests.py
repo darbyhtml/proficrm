@@ -141,27 +141,22 @@ class CompanyAPITestCase(TestCase):
             "name": "Новая компания",
             "phone": "8 (999) 123-45-69"
         }
-        # Следуем редиректу, если он есть
-        response = self.client.post("/api/companies/", data, format="json", follow=True)
-        # Проверяем, что запрос успешен
-        if response.status_code not in [status.HTTP_201_CREATED, status.HTTP_200_OK]:
-            # Если ошибка, выводим детали для отладки
-            print(f"Response status: {response.status_code}")
-            print(f"Response data: {response.data}")
-        self.assertIn(response.status_code, [status.HTTP_201_CREATED, status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
+        # Пробуем без follow сначала
+        response = self.client.post("/api/companies/", data, format="json")
         
-        # Проверяем, что компания создана (может быть через response.data или через БД)
-        if response.status_code in [status.HTTP_201_CREATED, status.HTTP_200_OK]:
-            # Если успешно, проверяем через БД
-            company = Company.objects.get(name="Новая компания")
-            self.assertTrue(company.phone.startswith("+7"))
-            self.assertIn("9991234569", company.phone)
-        else:
-            # Если ошибка, проверяем, что компания все равно создана (может быть частичная валидация)
-            company = Company.objects.filter(name="Новая компания").first()
-            if company:
-                self.assertTrue(company.phone.startswith("+7"))
-                self.assertIn("9991234569", company.phone)
+        # Если редирект, следуем ему с теми же данными
+        if response.status_code == status.HTTP_301_MOVED_PERMANENTLY:
+            redirect_url = response.get("Location", "/api/companies/")
+            response = self.client.post(redirect_url, data, format="json")
+        
+        # Проверяем успешность создания
+        self.assertIn(response.status_code, [status.HTTP_201_CREATED, status.HTTP_200_OK], 
+                     f"Expected 201 or 200, got {response.status_code}. Response: {response.data}")
+        
+        # Проверяем, что телефон нормализован
+        company = Company.objects.get(name="Новая компания")
+        self.assertTrue(company.phone.startswith("+7"))
+        self.assertIn("9991234569", company.phone)
 
     def test_api_normalize_inn_on_create(self):
         """Тест нормализации ИНН при создании через API"""
@@ -169,22 +164,21 @@ class CompanyAPITestCase(TestCase):
             "name": "Компания с ИНН",
             "inn": "1234 5678 90"
         }
-        # Следуем редиректу, если он есть
-        response = self.client.post("/api/companies/", data, format="json", follow=True)
-        # Проверяем, что запрос успешен
-        if response.status_code not in [status.HTTP_201_CREATED, status.HTTP_200_OK]:
-            print(f"Response status: {response.status_code}")
-            print(f"Response data: {response.data}")
-        self.assertIn(response.status_code, [status.HTTP_201_CREATED, status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
+        # Пробуем без follow сначала
+        response = self.client.post("/api/companies/", data, format="json")
+        
+        # Если редирект, следуем ему с теми же данными
+        if response.status_code == status.HTTP_301_MOVED_PERMANENTLY:
+            redirect_url = response.get("Location", "/api/companies/")
+            response = self.client.post(redirect_url, data, format="json")
+        
+        # Проверяем успешность создания
+        self.assertIn(response.status_code, [status.HTTP_201_CREATED, status.HTTP_200_OK],
+                     f"Expected 201 or 200, got {response.status_code}. Response: {response.data}")
         
         # Проверяем, что ИНН нормализован
-        if response.status_code in [status.HTTP_201_CREATED, status.HTTP_200_OK]:
-            company = Company.objects.get(name="Компания с ИНН")
-            self.assertEqual(company.inn, "1234567890")
-        else:
-            company = Company.objects.filter(name="Компания с ИНН").first()
-            if company:
-                self.assertEqual(company.inn, "1234567890")
+        company = Company.objects.get(name="Компания с ИНН")
+        self.assertEqual(company.inn, "1234567890")
 
     def test_api_normalize_work_schedule_on_create(self):
         """Тест нормализации расписания при создании через API"""
@@ -192,24 +186,22 @@ class CompanyAPITestCase(TestCase):
             "name": "Компания с расписанием",
             "work_schedule": "пн-пт 9.00-18.00"
         }
-        # Следуем редиректу, если он есть
-        response = self.client.post("/api/companies/", data, format="json", follow=True)
-        # Проверяем, что запрос успешен
-        if response.status_code not in [status.HTTP_201_CREATED, status.HTTP_200_OK]:
-            print(f"Response status: {response.status_code}")
-            print(f"Response data: {response.data}")
-        self.assertIn(response.status_code, [status.HTTP_201_CREATED, status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST])
+        # Пробуем без follow сначала
+        response = self.client.post("/api/companies/", data, format="json")
+        
+        # Если редирект, следуем ему с теми же данными
+        if response.status_code == status.HTTP_301_MOVED_PERMANENTLY:
+            redirect_url = response.get("Location", "/api/companies/")
+            response = self.client.post(redirect_url, data, format="json")
+        
+        # Проверяем успешность создания
+        self.assertIn(response.status_code, [status.HTTP_201_CREATED, status.HTTP_200_OK],
+                     f"Expected 201 or 200, got {response.status_code}. Response: {response.data}")
         
         # Проверяем, что расписание нормализовано
-        if response.status_code in [status.HTTP_201_CREATED, status.HTTP_200_OK]:
-            company = Company.objects.get(name="Компания с расписанием")
-            self.assertIn("09:00", company.work_schedule)
-            self.assertIn("18:00", company.work_schedule)
-        else:
-            company = Company.objects.filter(name="Компания с расписанием").first()
-            if company:
-                self.assertIn("09:00", company.work_schedule)
-                self.assertIn("18:00", company.work_schedule)
+        company = Company.objects.get(name="Компания с расписанием")
+        self.assertIn("09:00", company.work_schedule)
+        self.assertIn("18:00", company.work_schedule)
 
     def test_api_search_filter(self):
         """Тест работы SearchFilter в API"""
