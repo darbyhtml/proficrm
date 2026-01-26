@@ -140,40 +140,38 @@ def normalize_phone(raw: str | None) -> str:
             tail = digits_only[11:]
             if 1 <= len(tail) <= 6:
                 # Короткий хвост - считаем extension, отбрасываем
-                # Используем только main (11 цифр), игнорируем форматирование
-                phone_digits = main
-                # Обновляем digits_only для дальнейшей обработки
                 digits_only = main
     
-    # Если номер начинается с 8 - заменяем на +7
-    if phone_digits.startswith('8') and len(phone_digits) >= 11:
-        phone_digits = '+7' + phone_digits[1:]
-    # Если номер начинается с 7 и нет + - добавляем +
-    elif phone_digits.startswith('7') and not phone_digits.startswith('+7'):
-        phone_digits = '+' + phone_digits
+    # КРИТИЧНО: RU-нормализация (применяем правила после обрезки хвоста)
+    # digits = только цифры (без форматирования)
+    digits = digits_only
     
-    # Если номер не начинается с + и достаточно цифр - добавляем +7 для РФ
-    phone_digit_count = len(digits_only)
-    if not phone_digits.startswith('+') and 10 <= phone_digit_count <= 11:
-        if phone_digit_count == 10:
-            phone_digits = '+7' + phone_digits
-        elif phone_digit_count == 11 and phone_digits[0] == '7':
-            phone_digits = '+' + phone_digits
+    if not digits:
+        return original[:50]
+    
+    # 8XXXXXXXXXX... -> 7XXXXXXXXXX (берем первые 11)
+    if digits.startswith("8") and len(digits) >= 11:
+        digits = "7" + digits[1:11]
+    
+    # 7XXXXXXXXXX... -> берем первые 11
+    elif digits.startswith("7") and len(digits) >= 11:
+        digits = digits[:11]
+    
+    # 9XXXXXXXXX... (часто вводят без 7/8) -> берем первые 10 и префиксуем 7
+    elif digits.startswith("9") and len(digits) >= 10:
+        digits = "7" + digits[:10]
+    
+    # ровно 10 цифр -> префиксуем 7
+    elif len(digits) == 10:
+        digits = "7" + digits
     
     # Проверяем финальную валидность
-    final_digits = [c for c in phone_digits if c.isdigit()]
-    if len(final_digits) < MIN_PHONE_DIGITS or len(final_digits) > MAX_PHONE_DIGITS:
+    if len(digits) < MIN_PHONE_DIGITS or len(digits) > MAX_PHONE_DIGITS:
         # Если невалидный номер - возвращаем исходную строку (обрезанную)
         return original[:50]
     
     # КРИТИЧНО: Возвращаем только E.164 формат (+ и цифры, без форматирования)
-    # Извлекаем только цифры и добавляем +
-    e164_digits = ''.join(c for c in phone_digits if c.isdigit())
-    if not e164_digits:
-        return original[:50]
-    
-    # Формируем E.164: +{digits}
-    e164 = '+' + e164_digits
+    e164 = f"+{digits}"
     
     # Обрезаем до 50 символов (максимальная длина поля phone в модели)
     return e164[:50]
