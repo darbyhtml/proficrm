@@ -20,7 +20,7 @@ def get_max_campaign_recipients() -> int:
 
 MAX_CAMPAIGN_RECIPIENTS = get_max_campaign_recipients()  # Для обратной совместимости
 
-# Рабочее время (МСК), когда разрешена отправка авто-рассылок
+# Рабочее время (МСК, Europe/Moscow), когда разрешена отправка авто-рассылок
 WORKING_HOURS_START = 9
 WORKING_HOURS_END = 18  # не включительно
 

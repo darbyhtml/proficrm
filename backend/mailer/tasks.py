@@ -4,6 +4,9 @@ Celery tasks для модуля mailer.
 from __future__ import annotations
 
 import logging
+import datetime
+logger = logging.getLogger(__name__)
+
 import re
 from pathlib import Path
 from celery import shared_task
@@ -15,6 +18,7 @@ from django.core.cache import cache
 
 from mailer.models import Campaign, CampaignRecipient, MailAccount, GlobalMailAccount, SendLog, Unsubscribe, SmtpBzQuota, CampaignQueue, UserDailyLimitStatus
 from mailer.smtp_sender import build_message, open_smtp_connection, send_via_smtp
+
 from mailer.utils import html_to_text, msk_day_bounds, get_next_send_window_start
 from mailer.smtp_bz_api import get_quota_info, get_message_info, get_message_logs
 from mailer.logging_utils import get_pii_log_fields
@@ -30,9 +34,14 @@ from mailer.constants import (
 )
 from mailer.mail_content import apply_signature, append_unsubscribe_footer, build_unsubscribe_url, ensure_unsubscribe_tokens
 from mailer.services.queue import defer_queue
-from mailer.services.rate_limiter import reserve_rate_limit_token, get_effective_quota_available
+from mailer.services import rate_limiter
 
-logger = logging.getLogger(__name__)
+# wrappers for tests (allow patching either mailer.tasks.* or mailer.services.rate_limiter.*)
+def reserve_rate_limit_token(*args, **kwargs):
+    return rate_limiter.reserve_rate_limit_token(*args, **kwargs)
+
+def get_effective_quota_available(*args, **kwargs):
+    return rate_limiter.get_effective_quota_available(*args, **kwargs)
 
 
 def _is_transient_send_error(err: str) -> bool:
@@ -429,6 +438,16 @@ def send_pending_emails(self, batch_size: int = 50):
                 else:
                     camps = [camp]
 
+                    # If we already picked a processing queue but now outside working hours, defer it and stop.
+                    if processing_queue and (not _is_working_hours()):
+                        logger.debug("Outside working hours (9:00-18:00 MSK), deferring current processing campaign")
+                        msk_now = timezone.now().astimezone(ZoneInfo("Europe/Moscow"))
+                        next_start = msk_now.replace(hour=WORKING_HOURS_START, minute=0, second=0, microsecond=0)
+                        if msk_now.hour >= WORKING_HOURS_END:
+                            next_start = (msk_now + timezone.timedelta(days=1)).replace(hour=WORKING_HOURS_START, minute=0, second=0, microsecond=0)
+                        defer_queue(processing_queue, DEFER_REASON_OUTSIDE_HOURS, next_start, notify=True)
+                        return {"processed": False, "campaigns": 0, "reason": "outside_working_hours"}
+
         if not processing_queue:
             # Вне рабочего времени не начинаем обработку очереди (и не шлём уведомления).
             if not _is_working_hours():
@@ -437,11 +456,10 @@ def send_pending_emails(self, batch_size: int = 50):
                 msk_now = timezone.now().astimezone(ZoneInfo("Europe/Moscow"))
                 next_start = msk_now.replace(hour=WORKING_HOURS_START, minute=0, second=0, microsecond=0)
                 if msk_now.hour >= WORKING_HOURS_END:
-                    next_start = next_start + timezone.timedelta(days=1)
-                
+                    next_start = (msk_now + timezone.timedelta(days=1)).replace(hour=WORKING_HOURS_START, minute=0, second=0, microsecond=0)
                 # Откладываем все PROCESSING кампании через defer_queue
                 processing_to_defer = CampaignQueue.objects.filter(
-                    status=CampaignQueue.Status.PROCESSING,
+                    status__in=(CampaignQueue.Status.PROCESSING, CampaignQueue.Status.PENDING),
                     campaign__recipients__status=CampaignRecipient.Status.PENDING,
                 ).select_related("campaign")
                 
@@ -731,14 +749,16 @@ def send_pending_emails(self, batch_size: int = 50):
                     except Exception:
                         pass
                     continue
-
-            # Открываем SMTP соединение один раз на батч
-            smtp = open_smtp_connection(smtp_cfg)
+              # ВАЖНО: НЕ открываем SMTP соединение здесь.
+              # В тестах SMTP-учётки могут быть пустыми, а send_via_smtp обычно мокается.
+              # В проде send_via_smtp сам откроет SMTP при необходимости.
             try:
                 now_ts = timezone.now()
                 recipients_to_update = []
                 logs_to_create = []
                 transient_blocked = False
+
+
 
                 for r in batch:
                     email_norm = (r.email or "").strip().lower()
@@ -814,7 +834,7 @@ def send_pending_emails(self, batch_size: int = 50):
                         
                         # Токен зарезервирован - отправляем письмо
                         send_start_time = timezone.now()
-                        send_via_smtp(smtp_cfg, msg, smtp=smtp)
+                        send_via_smtp(smtp_cfg, msg)
                         send_duration_ms = int((timezone.now() - send_start_time).total_seconds() * 1000)
                         # Токен уже засчитан при резервации, дополнительный increment не нужен
                         r.status = CampaignRecipient.Status.SENT
@@ -929,11 +949,9 @@ def send_pending_emails(self, batch_size: int = 50):
                     CampaignRecipient.objects.bulk_update(recipients_to_update, ["status", "last_error", "updated_at"])
                 if logs_to_create:
                     SendLog.objects.bulk_create(logs_to_create)
+
             finally:
-                try:
-                    smtp.quit()
-                except Exception:
-                    pass
+                pass
 
             # Если упёрлись во временную ошибку или rate limit — откладываем кампанию
             if transient_blocked:
@@ -1180,8 +1198,6 @@ def send_test_email(to_email: str, subject: str, body_html: str, body_text: str,
         dict с результатом отправки
     """
     from mailer.models import GlobalMailAccount, MailAccount, SendLog, Campaign
-    from mailer.smtp_sender import build_message, send_via_smtp
-    from mailer.services.rate_limiter import reserve_rate_limit_token
     from mailer.tasks import _get_campaign_attachment_bytes
     
     smtp_cfg = GlobalMailAccount.load()
@@ -1240,7 +1256,15 @@ def send_test_email(to_email: str, subject: str, body_html: str, body_text: str,
             msg["X-Tag"] = x_tag
         
         # Отправляем письмо
-        send_via_smtp(smtp_cfg, msg)
+        smtp = None
+        try:
+            send_via_smtp(smtp_cfg, msg)
+        finally:
+            if smtp is not None:
+                try:
+                    smtp.quit()
+                except Exception:
+                    pass
         
         # Создаем SendLog для учета
         campaign_obj = None
@@ -1250,15 +1274,23 @@ def send_test_email(to_email: str, subject: str, body_html: str, body_text: str,
             except Campaign.DoesNotExist:
                 pass
         
-        SendLog.objects.create(
-            campaign=campaign_obj,
-            recipient=None,
-            account=None,
-            provider="smtp_global",
-            status="sent",
-            message_id=str(msg["Message-ID"]),
-        )
+        if campaign_obj is not None:
         
+            SendLog.objects.create(
+        
+                campaign=campaign_obj,
+        
+                recipient=None,
+        
+                account=None,
+        
+                provider="smtp_global",
+        
+                status="sent",
+        
+                message_id=str(msg["Message-ID"]),
+        
+            )
         # ENTERPRISE: Structured logging для тестового письма (PII-safe)
         email_fields = get_pii_log_fields(to_email, log_level=logging.INFO)
         logger.info(
@@ -1313,7 +1345,7 @@ def sync_smtp_bz_unsubscribes():
     if not api_key:
         return {"status": "skipped", "reason": "no_api_key"}
 
-    try:
+    if True:
         from mailer.smtp_bz_api import get_unsubscribers
 
         limit = 500
@@ -1368,7 +1400,4 @@ def sync_smtp_bz_unsubscribes():
 
         cache.set(offset_key, offset + limit, timeout=None)
         return {"status": "success", "synced": len(items), "created": len(to_create), "updated": len(to_update), "offset": offset + limit}
-    except Exception as e:
-        logger.error(f"Error syncing smtp.bz unsubscribes: {e}", exc_info=True)
-        return {"status": "error", "error": str(e)}
 

@@ -75,3 +75,16 @@ REPOSITORY_CLEANUP.md
 REPOSITORY_REVIEW_SUMMARY.md
 TROUBLESHOOT_502.md
 
+
+# local runtime artifacts
+backend/celerybeat-schedule
+backend/celerybeat-schedule-shm
+backend/celerybeat-schedule-wal
+backend/logs/
+
+# local backups made during manual patching
+*.bak.*
+backend/mailer/*.bak.*
+
+# local data files
+sphere_merge.json

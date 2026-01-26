@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import logging
+import datetime
 from django.utils import timezone
 from django.core.cache import cache
 from mailer.models import CampaignQueue, Campaign
@@ -56,7 +57,7 @@ def defer_queue(
             "campaign_id": str(queue_entry.campaign_id),
             "queue_id": str(queue_entry.id),
             "defer_reason": reason,
-            "deferred_until": until.isoformat(),
+            "deferred_until": until.isoformat() if until else None,
         }
     )
     

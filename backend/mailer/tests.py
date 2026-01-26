@@ -704,10 +704,9 @@ class MailerOutsideHoursDeferTests(TestCase):
         self.assertEqual(q.defer_reason, DEFER_REASON_OUTSIDE_HOURS)
         self.assertIsNotNone(q.deferred_until)
         # deferred_until должен быть следующим днем в 09:00 МСК
-        self.assertEqual(q.deferred_until.hour, 9)
-        self.assertEqual(q.deferred_until.day, 16)
-
-
+        msk_dt = timezone.localtime(q.deferred_until, ZoneInfo("Europe/Moscow"))
+        self.assertEqual(msk_dt.hour, 9)
+        self.assertEqual(msk_dt.day, 16)
 @override_settings(SECURE_SSL_REDIRECT=False)
 class MailerTransientErrorDeferTests(TestCase):
     """Тесты для transient_error: использование defer_queue."""
