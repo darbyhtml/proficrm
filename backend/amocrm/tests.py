@@ -505,7 +505,7 @@ class TestContactDataQuality(unittest.TestCase):
         
         # Тест для timestamp около полуночи (проверка сдвига)
         # 2024-01-15 23:30:00 UTC -> должно стать 2024-01-15 00:00:00 UTC
-        timestamp = 1705368600  # 2024-01-15 23:30:00 UTC
+        timestamp = 1705361400  # 2024-01-15 23:30:00 UTC (исправлено: было 1705368600 = 2024-01-16 01:30 UTC)
         
         UTC = getattr(timezone, "UTC", dt_timezone.utc)
         dt_utc = timezone.datetime.fromtimestamp(timestamp, tz=UTC)

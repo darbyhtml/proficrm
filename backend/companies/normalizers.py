@@ -14,7 +14,9 @@ import re
 
 # Импортируем существующие утилиты
 from .inn_utils import normalize_inn_string as _normalize_inn_string
-from ui.work_schedule_utils import normalize_work_schedule as _normalize_work_schedule
+# Импорт из core/ для избежания циклических зависимостей
+# (companies -> ui -> companies может вызвать цикл)
+from core.work_schedule_utils import normalize_work_schedule as _normalize_work_schedule
 
 # Константы для валидации телефонов (из amocrm/migrate.py)
 MIN_PHONE_DIGITS = 10  # Минимум цифр для валидного телефона (для РФ номеров: 10 цифр без кода страны)
@@ -54,13 +56,20 @@ def normalize_phone(raw: str | None) -> str:
     Если после очистки цифр < MIN_PHONE_DIGITS - возвращает исходную строку (обрезанную до 50 символов).
     Если строка содержит валидный номер + дополнение ("доб. 4") - извлекает только номер.
     
+    ВАЖНО: Extension (доб./ext.) извлекается из строки, но НЕ возвращается в результате.
+    Текущая реализация хранит только основной номер в поле `phone` (max_length=50).
+    Если нужно хранить extension отдельно, рассмотрите:
+    - Добавление поля `phone_ext` в модель
+    - Или хранение в JSON поле как `{e164: "...", ext: "..."}`
+    - Или использование поля `phone_comment` для extension
+    
     Безопасно обрабатывает None, пустые строки, не-строки.
     
     Args:
         raw: Исходная строка с телефоном (может быть None)
         
     Returns:
-        str: Нормализованный номер в формате E.164 или исходная строка (обрезанная до 50 символов)
+        str: Нормализованный номер в формате E.164 (без extension) или исходная строка (обрезанная до 50 символов)
     """
     if raw is None:
         return ""

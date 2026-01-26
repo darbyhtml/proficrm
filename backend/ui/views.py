@@ -2991,7 +2991,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     try:
         from zoneinfo import ZoneInfo
         from ui.timezone_utils import guess_ru_timezone_from_address
-        from ui.work_schedule_utils import get_worktime_status_from_schedule
+        from core.work_schedule_utils import get_worktime_status_from_schedule
 
         guessed = guess_ru_timezone_from_address(company.address or "")
         # приоритет: сохранённый вручную, затем авто по адресу

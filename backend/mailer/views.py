@@ -2061,12 +2061,13 @@ def campaign_start(request: HttpRequest, campaign_id) -> HttpResponse:
         return redirect("campaign_detail", campaign_id=camp.id)
     
     # ENTERPRISE: Проверка размера кампании
+    from mailer.constants import MAX_CAMPAIGN_RECIPIENTS
     total_recipients = camp.recipients.count()
     if total_recipients > MAX_CAMPAIGN_RECIPIENTS:
         messages.error(
             request,
             f"Кампания слишком большая ({total_recipients} получателей). "
-            f"Максимум: {max_recipients} получателей. "
+            f"Максимум: {MAX_CAMPAIGN_RECIPIENTS} получателей. "
             f"Разбейте кампанию на несколько частей."
         )
         return redirect("campaign_detail", campaign_id=camp.id)

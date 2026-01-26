@@ -102,7 +102,7 @@ def map_phone_enum_code(enum_code: str | None, field_name: str = "", result: Amo
     Маппинг enum_code из amoCRM в PhoneType нашей CRM.
     
     Использует allowlist: WORK, MOB, HOME, OTHER.
-    Неизвестные типы (например WORKDD) → маппятся в WORK (или дефолтный), 
+    Неизвестные типы (например WORKDD) → маппятся в OTHER (не WORK, чтобы не портить аналитику), 
     и увеличивается счетчик unknown_phone_enum_code_count.
     
     Args:
@@ -121,8 +121,8 @@ def map_phone_enum_code(enum_code: str | None, field_name: str = "", result: Amo
             # Неизвестный enum_code - логируем и увеличиваем счетчик
             if result is not None:
                 result.unknown_phone_enum_code_count += 1
-            logger.debug(f"Unknown phone enum_code '{enum_code}', mapping to WORK")
-            return ContactPhone.PhoneType.WORK  # Дефолт для неизвестных
+            logger.debug(f"Unknown phone enum_code '{enum_code}', mapping to OTHER")
+            return ContactPhone.PhoneType.OTHER  # Дефолт для неизвестных (не WORK, чтобы не портить аналитику)
     
     # Fallback: определяем по названию поля
     field_name_lower = str(field_name).lower()
@@ -1971,8 +1971,13 @@ def fetch_companies_by_responsible(
         return_meta=return_meta,
     )
     
+    # Tolerant unpack: обрабатываем как tuple, так и list для обратной совместимости
     if return_meta:
-        companies, pagination_meta = result
+        if isinstance(result, tuple) and len(result) == 2:
+            companies, pagination_meta = result
+        else:
+            # Если пришел list вместо tuple - возвращаем с пустой мета
+            companies, pagination_meta = result, {}
         # Логируем метаданные пагинации
         if pagination_meta.get("truncated"):
             logger.warning(
@@ -1982,8 +1987,11 @@ def fetch_companies_by_responsible(
             )
         return companies, pagination_meta
     else:
-        companies = result
-        return companies
+        # return_meta == False: если пришел tuple, берем только список
+        if isinstance(result, tuple) and len(result) == 2:
+            companies, _meta = result
+            return companies
+        return result
 
 
 def fetch_tasks_for_companies(client: AmoClient, company_ids: list[int]) -> list[dict[str, Any]]:

@@ -136,6 +136,20 @@ class Company(models.Model):
         ]
 
     def save(self, *args, **kwargs):
+        """
+        Сохранение компании с нормализацией данных.
+        
+        ВАЖНО: Нормализация в save() работает только при вызове через .save().
+        Операции типа Company.objects.filter(...).update(phone="...") или bulk_update()
+        ОБХОДЯТ save() и не применяют нормализацию!
+        
+        Для гарантированной нормализации используйте:
+        - UI формы (CompanyCreateForm, CompanyEditForm) - применяют нормализацию
+        - DRF API (CompanySerializer) - применяет нормализацию в validate_* методах
+        - Или service-слой (companies/services.py) - рекомендуется для массовых операций
+        
+        save() здесь - это "последняя линия обороны", а не единственный путь нормализации.
+        """
         # Филиал компании = филиалу ответственного, если у ответственного задан филиал.
         # Не только при пустом branch: исправляем и ошибочные (филиал не ответственного).
         if self.responsible_id is not None:
@@ -388,6 +402,13 @@ class ContactPhone(models.Model):
         ]
 
     def save(self, *args, **kwargs):
+        """
+        Сохранение телефона контакта с нормализацией.
+        
+        ВАЖНО: Нормализация работает только при вызове через .save().
+        Операции типа ContactPhone.objects.filter(...).update(value="...") или bulk_update()
+        ОБХОДЯТ save() и не применяют нормализацию!
+        """
         if self.value:
             # Используем единый нормализатор телефонов
             from .normalizers import normalize_phone

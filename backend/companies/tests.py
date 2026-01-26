@@ -27,10 +27,12 @@ class NormalizersTestCase(TestCase):
         self.assertEqual(normalize_phone("89991234567"), "+79991234567")
         self.assertEqual(normalize_phone("8 (999) 123-45-67"), "+79991234567")
         
-        # Тест 2: "+7 (999) 123-45-67 доб. 123" -> "+79991234567" (extension извлекается)
+        # Тест 2: "+7 (999) 123-45-67 доб. 123" -> "+79991234567" (extension извлекается, но не возвращается)
         result = normalize_phone("+7 (999) 123-45-67 доб. 123")
         self.assertTrue(result.startswith("+7"))
         self.assertIn("9991234567", result.replace("+", "").replace("-", "").replace(" ", ""))
+        # Extension удаляется из результата (не хранится отдельно)
+        self.assertNotIn("123", result)
         
         # Тест 3: "7XXXXXXXXXX" -> "+7XXXXXXXXXX"
         self.assertEqual(normalize_phone("79991234567"), "+79991234567")
@@ -57,6 +59,16 @@ class NormalizersTestCase(TestCase):
         # Тест 9: Мусор с валидным номером внутри
         result = normalize_phone("тел. +7 999 123 45 67")
         self.assertIn("9991234567", result.replace("+", "").replace("-", "").replace(" ", ""))
+        
+        # Тест 10: Edge case - слишком длинный номер (обрезается до 50 символов)
+        long_phone = "+7" + "9" * 60
+        result = normalize_phone(long_phone)
+        self.assertLessEqual(len(result), 50)
+        
+        # Тест 11: Edge case - номер с большим количеством форматирования
+        result = normalize_phone("+7 (999) 123-45-67-89-01")
+        self.assertTrue(result.startswith("+7"))
+        self.assertIn("9991234567", result.replace("+", "").replace("-", "").replace(" ", ""))
 
     def test_normalize_inn(self):
         """Тест нормализации ИНН"""
@@ -79,6 +91,12 @@ class NormalizersTestCase(TestCase):
         
         # Тест 5: ИНН 12 цифр (для ИП)
         self.assertEqual(normalize_inn("123456789012"), "123456789012")
+        
+        # Тест 6: Edge case - строка с "слишком многим мусором" не превращается в ложный ИНН
+        # Если в строке нет валидного ИНН (10 или 12 цифр), результат должен быть пустым или исходным
+        result = normalize_inn("abc def ghi")
+        # Результат зависит от реализации, но не должен быть случайным числом
+        self.assertNotIn("1234567890", result)  # Не должно быть ложного ИНН
 
     def test_normalize_work_schedule(self):
         """Тест нормализации расписания работы"""
@@ -104,6 +122,17 @@ class NormalizersTestCase(TestCase):
         result = normalize_work_schedule("пн-пт 9.00-18.00")
         self.assertIn("09:00", result)
         self.assertIn("18:00", result)
+        
+        # Тест 6: Edge case - расписание с "непонятными словами" остается как есть, но не падает
+        result = normalize_work_schedule("какая-то непонятная строка без времени")
+        # Результат может быть пустым или исходным, но не должен вызывать ошибку
+        self.assertIsInstance(result, str)
+        
+        # Тест 7: Edge case - очень длинное расписание (обрезается до 5000 символов в модели)
+        long_schedule = "пн-пт 09:00-18:00\n" * 1000
+        result = normalize_work_schedule(long_schedule)
+        self.assertIsInstance(result, str)
+        # Проверяем, что нормализация не падает на длинных строках
 
 
 class CompanyAPITestCase(TestCase):
