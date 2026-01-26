@@ -1345,7 +1345,7 @@ def sync_smtp_bz_unsubscribes():
     if not api_key:
         return {"status": "skipped", "reason": "no_api_key"}
 
-    if True:
+    try:
         from mailer.smtp_bz_api import get_unsubscribers
 
         limit = 500
@@ -1400,4 +1400,7 @@ def sync_smtp_bz_unsubscribes():
 
         cache.set(offset_key, offset + limit, timeout=None)
         return {"status": "success", "synced": len(items), "created": len(to_create), "updated": len(to_update), "offset": offset + limit}
+    except Exception as e:
+        logger.error(f"Error syncing smtp.bz unsubscribes: {e}", exc_info=True)
+        return {"status": "error", "error": str(e)}
 
