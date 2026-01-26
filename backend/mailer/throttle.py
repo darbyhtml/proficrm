@@ -57,11 +57,19 @@ def is_user_throttled(user_id: int | str, action: str, max_requests: int, window
     try:
         # Сначала пытаемся создать ключ, если его нет
         cache.add(cache_key, 0, timeout=window_seconds)
+        
         # Инкрементируем счетчик
-        new_value = cache.incr(cache_key)
-        # Некоторые бекенды могут вернуть None/0 — подстрахуемся
+        try:
+            new_value = cache.incr(cache_key)
+        except ValueError:
+            # Ключ не найден (хотя мы делали add) - создаем через set
+            cache.set(cache_key, 1, timeout=window_seconds)
+            new_value = 1
+        
+        # ВАЖНО: некоторые бекенды "успешно" возвращают 0/None — это считаем нерабочим cache
+        # count <= 0 должен форсировать fallback
         if not isinstance(new_value, int) or new_value <= 0:
-            raise RuntimeError("cache.incr returned non-int/<=0")
+            raise RuntimeError(f"cache.incr returned invalid count={new_value!r}")
         
         # Обновляем TTL на случай, если ключ уже существовал
         cache.touch(cache_key, timeout=window_seconds)
@@ -84,6 +92,10 @@ def is_user_throttled(user_id: int | str, action: str, max_requests: int, window
     
     except Exception as e:
         # 2) Fallback in-memory (для DummyCache / неподдержки incr / тестов)
+        # Сюда попадаем если:
+        # - cache.incr вернул <= 0 или не int
+        # - cache.incr бросил исключение
+        # - cache.add/cache.set не работает
         logger.debug(
             f"Cache backend unavailable for throttle, using in-memory fallback: {e}",
             extra={
