@@ -77,6 +77,7 @@ from amocrm.client import AmoApiError, AmoClient
 from amocrm.migrate import fetch_amo_users, fetch_company_custom_fields, migrate_filtered
 from crm.utils import require_admin, get_effective_user
 from policy.engine import enforce
+from django.core.exceptions import PermissionDenied
 from ui.templatetags.ui_extras import format_phone
 
 # Константы для фильтров
@@ -6451,7 +6452,7 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
     Возвращает только HTML модального окна без всей страницы task_list.
     """
     user: User = request.user
-    enforce(user=user, resource_type="page", resource="ui:tasks:detail", context={"path": request.path})
+    # Сначала загружаем задачу, чтобы проверить права на конкретную задачу
     task = get_object_or_404(
         Task.objects.select_related("company", "assigned_to", "created_by", "type").only(
             "id", "title", "description", "status", "due_at", "created_at", "completed_at",
@@ -6463,6 +6464,67 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
         ),
         id=task_id
     )
+    
+    # Проверяем права на просмотр конкретной задачи ПЕРЕД проверкой policy
+    # Это позволяет пользователям видеть задачи, к которым у них есть доступ по бизнес-логике
+    can_view = False
+    if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
+        can_view = True
+    elif user.role == User.Role.MANAGER:
+        # Менеджер может просматривать задачи, которые он создал или которые назначены ему
+        can_view = bool(
+            (task.assigned_to_id and task.assigned_to_id == user.id) or
+            (task.created_by_id and task.created_by_id == user.id)
+        )
+        # Также менеджер может просматривать задачи по компаниям, за которые он ответственный
+        if not can_view and task.company_id:
+            try:
+                company = getattr(task, "company", None)
+                if company and company.responsible_id == user.id:
+                    can_view = True
+            except Exception:
+                pass
+    elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+        # Директор/РОП может просматривать задачи, которые он создал
+        if task.created_by_id == user.id:
+            can_view = True
+        elif task.assigned_to_id == user.id:
+            can_view = True
+        elif task.company_id and getattr(task.company, "branch_id", None) == user.branch_id:
+            can_view = True
+        elif task.assigned_to_id and getattr(task.assigned_to, "branch_id", None) == user.branch_id:
+            can_view = True
+    
+    # Ответственный за компанию может просматривать задачи по своей компании (для всех ролей)
+    if not can_view and task.company_id:
+        try:
+            company = getattr(task, "company", None)
+            if company and company.responsible_id == user.id:
+                can_view = True
+        except Exception:
+            pass
+    
+    # Если у пользователя есть доступ по бизнес-логике, разрешаем просмотр
+    # Иначе проверяем policy (которая может иметь более строгие правила)
+    if not can_view:
+        # Проверяем policy только если нет доступа по бизнес-логике
+        try:
+            enforce(user=user, resource_type="page", resource="ui:tasks:detail", context={"path": request.path})
+        except PermissionDenied:
+            # Логируем для отладки
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"Task view denied by policy: user_id={user.id}, role={user.role}, "
+                f"task_id={task.id}, created_by_id={task.created_by_id}, "
+                f"assigned_to_id={task.assigned_to_id}, company_id={task.company_id}"
+            )
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return JsonResponse({"ok": False, "error": "Нет прав на просмотр этой задачи."}, status=403)
+            messages.error(request, "Нет прав на просмотр этой задачи.")
+            return redirect("task_list")
+    
+    # Если дошли сюда, значит есть доступ - продолжаем
     
     # Проверяем права на просмотр (ТЗ):
     # - менеджер: только свои (создатель или исполнитель)
