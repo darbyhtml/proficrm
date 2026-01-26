@@ -6016,11 +6016,14 @@ def _can_manage_task_status_ui(user: User, task: Task) -> bool:
     # Исполнитель может менять статус назначенной ему задачи
     if task.assigned_to_id and task.assigned_to_id == user.id:
         return True
-    # По ТЗ: менеджер управляет статусом только своих задач (создатель или исполнитель).
-    # Проверка создателя и исполнителя уже выполнена выше, поэтому здесь просто блокируем доступ
-    # для менеджеров к чужим задачам (если они не создатель и не исполнитель)
-    if user.role == User.Role.MANAGER:
-        return False
+    # Ответственный за компанию может менять статус задач по своей компании
+    if task.company_id:
+        try:
+            company = getattr(task, "company", None)
+            if company and company.responsible_id == user.id:
+                return True
+        except Exception:
+            pass
     if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
         branch_id = None
         if task.company_id and getattr(task, "company", None):
@@ -6046,11 +6049,6 @@ def _can_edit_task_ui(user: User, task: Task) -> bool:
     # Исполнитель может редактировать назначенную ему задачу
     if task.assigned_to_id and task.assigned_to_id == user.id:
         return True
-    # По ТЗ: менеджер работает только со своими задачами (создатель или исполнитель).
-    # Проверка создателя и исполнителя уже выполнена выше, поэтому здесь просто блокируем доступ
-    # для менеджеров к чужим задачам (если они не создатель и не исполнитель)
-    if user.role == User.Role.MANAGER:
-        return False
     # Админ/управляющий — любые задачи
     if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
         return True
@@ -6091,11 +6089,6 @@ def _can_delete_task_ui(user: User, task: Task) -> bool:
     # Исполнитель может удалять назначенную ему задачу
     if task.assigned_to_id and task.assigned_to_id == user.id:
         return True
-    # По ТЗ: менеджер удаляет только свои задачи (создатель или исполнитель).
-    # Проверка создателя и исполнителя уже выполнена выше, поэтому здесь просто блокируем доступ
-    # для менеджеров к чужим задачам (если они не создатель и не исполнитель)
-    if user.role == User.Role.MANAGER:
-        return False
     # Ответственный за компанию
     if task.company_id and getattr(task, "company", None):
         try:
@@ -6470,7 +6463,7 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
         Task.objects.select_related("company", "assigned_to", "created_by", "type").only(
             "id", "title", "description", "status", "due_at", "created_at", "completed_at",
             "company_id", "assigned_to_id", "created_by_id", "type_id",
-            "company__id", "company__name",
+            "company__id", "company__name", "company__responsible_id",
             "assigned_to__id", "assigned_to__first_name", "assigned_to__last_name",
             "created_by__id", "created_by__first_name", "created_by__last_name",
             "type__id", "type__name", "type__color", "type__icon"
@@ -6516,6 +6509,23 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
                 can_view = True
         except Exception:
             pass
+
+    # Диагностика: что именно посчитали (оставим как info, чтобы быстро понять причину 403)
+    try:
+        logger = logging.getLogger(__name__)
+        logger.info(
+            "Task view access check: user_id=%s role=%s task_id=%s created_by_id=%s assigned_to_id=%s company_id=%s company_responsible_id=%s can_view=%s",
+            getattr(user, "id", None),
+            getattr(user, "role", None),
+            getattr(task, "id", None),
+            getattr(task, "created_by_id", None),
+            getattr(task, "assigned_to_id", None),
+            getattr(task, "company_id", None),
+            getattr(getattr(task, "company", None), "responsible_id", None),
+            can_view,
+        )
+    except Exception:
+        pass
     
     # Если у пользователя есть доступ по бизнес-логике, разрешаем просмотр
     # Иначе проверяем policy (которая может иметь более строгие правила)
