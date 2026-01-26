@@ -16,8 +16,17 @@ def _can_manage_task_status_api(user: User, task: Task) -> bool:
         return False
     if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
         return True
+    # Создатель всегда может менять статус своей задачи (проверяем ПЕРВЫМ)
+    if task.created_by_id and task.created_by_id == user.id:
+        return True
+    # Исполнитель может менять статус назначенной ему задачи
     if task.assigned_to_id and task.assigned_to_id == user.id:
         return True
+    # По ТЗ: менеджер управляет статусом только своих задач (создатель или исполнитель).
+    # Проверка создателя и исполнителя уже выполнена выше, поэтому здесь просто блокируем доступ
+    # для менеджеров к чужим задачам (если они не создатель и не исполнитель)
+    if user.role == User.Role.MANAGER:
+        return False
     if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
         # По задачам работаем по "филиалу компании" (карточка) в первую очередь.
         branch_id = None

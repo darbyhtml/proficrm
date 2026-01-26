@@ -5996,11 +5996,17 @@ def _can_manage_task_status_ui(user: User, task: Task) -> bool:
         return False
     if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
         return True
-    # По ТЗ: менеджер управляет статусом только своих задач (исполнитель).
-    if user.role == User.Role.MANAGER:
-        return bool(task.assigned_to_id and task.assigned_to_id == user.id)
+    # Создатель всегда может менять статус своей задачи (проверяем ПЕРВЫМ)
+    if task.created_by_id and task.created_by_id == user.id:
+        return True
+    # Исполнитель может менять статус назначенной ему задачи
     if task.assigned_to_id and task.assigned_to_id == user.id:
         return True
+    # По ТЗ: менеджер управляет статусом только своих задач (создатель или исполнитель).
+    # Проверка создателя и исполнителя уже выполнена выше, поэтому здесь просто блокируем доступ
+    # для менеджеров к чужим задачам (если они не создатель и не исполнитель)
+    if user.role == User.Role.MANAGER:
+        return False
     if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
         branch_id = None
         if task.company_id and getattr(task, "company", None):
@@ -6020,15 +6026,17 @@ def _can_edit_task_ui(user: User, task: Task) -> bool:
     - Ответственный за карточку компании (company.responsible)
     - Директор филиала / РОП — задачи своего филиала
     """
-    # По ТЗ: менеджер работает только со своими задачами (исполнитель).
-    if user.role == User.Role.MANAGER:
-        return bool(task.assigned_to_id and task.assigned_to_id == user.id)
-    # Создатель всегда может редактировать свою задачу
+    # Создатель всегда может редактировать свою задачу (проверяем ПЕРВЫМ)
     if task.created_by_id and task.created_by_id == user.id:
         return True
     # Исполнитель может редактировать назначенную ему задачу
     if task.assigned_to_id and task.assigned_to_id == user.id:
         return True
+    # По ТЗ: менеджер работает только со своими задачами (создатель или исполнитель).
+    # Проверка создателя и исполнителя уже выполнена выше, поэтому здесь просто блокируем доступ
+    # для менеджеров к чужим задачам (если они не создатель и не исполнитель)
+    if user.role == User.Role.MANAGER:
+        return False
     # Админ/управляющий — любые задачи
     if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
         return True
@@ -6054,6 +6062,8 @@ def _can_delete_task_ui(user: User, task: Task) -> bool:
     """
     Право на удаление задачи:
     - Администратор / управляющий — любые задачи;
+    - Создатель может удалять свои задачи;
+    - Исполнитель может удалять назначенные ему задачи;
     - Ответственный за карточку компании (company.responsible);
     - Директор филиала / РОП — задачи своего филиала.
     """
@@ -6061,9 +6071,17 @@ def _can_delete_task_ui(user: User, task: Task) -> bool:
         return False
     if user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
         return True
-    # По ТЗ: менеджер удаляет только свои задачи (исполнитель).
+    # Создатель всегда может удалять свою задачу (проверяем ПЕРВЫМ)
+    if task.created_by_id and task.created_by_id == user.id:
+        return True
+    # Исполнитель может удалять назначенную ему задачу
+    if task.assigned_to_id and task.assigned_to_id == user.id:
+        return True
+    # По ТЗ: менеджер удаляет только свои задачи (создатель или исполнитель).
+    # Проверка создателя и исполнителя уже выполнена выше, поэтому здесь просто блокируем доступ
+    # для менеджеров к чужим задачам (если они не создатель и не исполнитель)
     if user.role == User.Role.MANAGER:
-        return bool(task.assigned_to_id and task.assigned_to_id == user.id)
+        return False
     # Ответственный за компанию
     if task.company_id and getattr(task, "company", None):
         try:
@@ -6309,12 +6327,14 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
         messages.error(request, "Некорректный статус.")
         return redirect("task_list")
 
-    # Менеджер может менять статус только своих задач (явно, на случай будущих изменений правил)
-    if user.role == User.Role.MANAGER and task.assigned_to_id != user.id:
-        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            return JsonResponse({"error": "Менеджер может менять статус только своих задач."}, status=403)
-        messages.error(request, "Менеджер может менять статус только своих задач.")
-        return redirect("task_list")
+    # Дополнительная проверка для менеджера: может менять статус только если он создатель или исполнитель
+    # (основная проверка уже выполнена в _can_manage_task_status_ui выше)
+    if user.role == User.Role.MANAGER:
+        if task.created_by_id != user.id and task.assigned_to_id != user.id:
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return JsonResponse({"error": "Менеджер может менять статус только своих задач (созданных им или назначенных ему)."}, status=403)
+            messages.error(request, "Менеджер может менять статус только своих задач (созданных им или назначенных ему).")
+            return redirect("task_list")
 
     # Если статус меняется на "Выполнено", проверяем, нужно ли перенести в заметки
     save_to_notes = False
