@@ -6458,6 +6458,9 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
     Возвращает только HTML модального окна без всей страницы task_list.
     """
     user: User = request.user
+    # Логируем начало функции для диагностики
+    logger = logging.getLogger(__name__)
+    logger.info(f"Task view called: user_id={user.id}, role={user.role}, task_id={task_id}")
     # Сначала загружаем задачу, чтобы проверить права на конкретную задачу
     task = get_object_or_404(
         Task.objects.select_related("company", "assigned_to", "created_by", "type").only(
@@ -6471,6 +6474,19 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
         id=task_id
     )
     
+    # Загружаем responsible_id компании напрямую, если company не загружен
+    company_responsible_id = None
+    if task.company_id:
+        try:
+            company = getattr(task, "company", None)
+            if company:
+                company_responsible_id = getattr(company, "responsible_id", None)
+            # Если company не загружен через select_related, загружаем напрямую
+            if company_responsible_id is None:
+                company_responsible_id = Company.objects.filter(id=task.company_id).values_list("responsible_id", flat=True).first()
+        except Exception:
+            pass
+    
     # Проверяем права на просмотр конкретной задачи ПЕРЕД проверкой policy
     # Это позволяет пользователям видеть задачи, к которым у них есть доступ по бизнес-логике
     can_view = False
@@ -6483,13 +6499,8 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
             (task.created_by_id and task.created_by_id == user.id)
         )
         # Также менеджер может просматривать задачи по компаниям, за которые он ответственный
-        if not can_view and task.company_id:
-            try:
-                company = getattr(task, "company", None)
-                if company and company.responsible_id == user.id:
-                    can_view = True
-            except Exception:
-                pass
+        if not can_view and company_responsible_id == user.id:
+            can_view = True
     elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
         # Директор/РОП может просматривать задачи, которые он создал
         if task.created_by_id == user.id:
@@ -6502,30 +6513,22 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
             can_view = True
     
     # Ответственный за компанию может просматривать задачи по своей компании (для всех ролей)
-    if not can_view and task.company_id:
-        try:
-            company = getattr(task, "company", None)
-            if company and company.responsible_id == user.id:
-                can_view = True
-        except Exception:
-            pass
+    if not can_view and company_responsible_id == user.id:
+        can_view = True
 
     # Диагностика: что именно посчитали (оставим как info, чтобы быстро понять причину 403)
-    try:
-        logger = logging.getLogger(__name__)
-        logger.info(
-            "Task view access check: user_id=%s role=%s task_id=%s created_by_id=%s assigned_to_id=%s company_id=%s company_responsible_id=%s can_view=%s",
-            getattr(user, "id", None),
-            getattr(user, "role", None),
-            getattr(task, "id", None),
-            getattr(task, "created_by_id", None),
-            getattr(task, "assigned_to_id", None),
-            getattr(task, "company_id", None),
-            getattr(getattr(task, "company", None), "responsible_id", None),
-            can_view,
-        )
-    except Exception:
-        pass
+    logger = logging.getLogger(__name__)
+    logger.info(
+        "Task view access check: user_id=%s role=%s task_id=%s created_by_id=%s assigned_to_id=%s company_id=%s company_responsible_id=%s can_view=%s",
+        user.id,
+        user.role,
+        task.id,
+        task.created_by_id,
+        task.assigned_to_id,
+        task.company_id,
+        company_responsible_id,
+        can_view,
+    )
     
     # Если у пользователя есть доступ по бизнес-логике, разрешаем просмотр
     # Иначе проверяем policy (которая может иметь более строгие правила)
@@ -6535,8 +6538,6 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
             enforce(user=user, resource_type="page", resource="ui:tasks:detail", context={"path": request.path})
         except PermissionDenied:
             # Логируем для отладки
-            import logging
-            logger = logging.getLogger(__name__)
             logger.warning(
                 f"Task view denied by policy: user_id={user.id}, role={user.role}, "
                 f"task_id={task.id}, created_by_id={task.created_by_id}, "
