@@ -6468,6 +6468,7 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
     # - менеджер: только свои (создатель или исполнитель)
     # - РОП/директор: свои + задачи филиала
     # - админ/управляющий: все
+    # - Ответственный за компанию может просматривать задачи по своей компании
     can_view = False
     if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
         can_view = True
@@ -6477,6 +6478,14 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
             (task.assigned_to_id and task.assigned_to_id == user.id) or
             (task.created_by_id and task.created_by_id == user.id)
         )
+        # Также менеджер может просматривать задачи по компаниям, за которые он ответственный
+        if not can_view and task.company_id:
+            try:
+                company = getattr(task, "company", None)
+                if company and company.responsible_id == user.id:
+                    can_view = True
+            except Exception:
+                pass
     elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
         # Директор/РОП может просматривать задачи, которые он создал
         if task.created_by_id == user.id:
@@ -6488,7 +6497,24 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
         elif task.assigned_to_id and getattr(task.assigned_to, "branch_id", None) == user.branch_id:
             can_view = True
     
+    # Ответственный за компанию может просматривать задачи по своей компании (для всех ролей)
+    if not can_view and task.company_id:
+        try:
+            company = getattr(task, "company", None)
+            if company and company.responsible_id == user.id:
+                can_view = True
+        except Exception:
+            pass
+    
     if not can_view:
+        # Логируем для отладки (временно)
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            f"Task view denied: user_id={user.id}, role={user.role}, "
+            f"task_id={task.id}, created_by_id={task.created_by_id}, "
+            f"assigned_to_id={task.assigned_to_id}, company_id={task.company_id}"
+        )
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return JsonResponse({"ok": False, "error": "Нет прав на просмотр этой задачи."}, status=403)
         messages.error(request, "Нет прав на просмотр этой задачи.")
