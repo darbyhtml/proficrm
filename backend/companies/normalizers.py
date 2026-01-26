@@ -130,30 +130,16 @@ def normalize_phone(raw: str | None) -> str:
     else:
         phone_digits = ''.join(c for c in cleaned_phone if c.isdigit() or c == '+')
     
-    # Если есть "хвост" без слов ext/доб, но он короткий — считаем его extension и отбрасываем.
-    # Пример: 7 999 123 45 67 8901 -> основной номер 11 цифр + ext 8901
-    digits_only = ''.join(c for c in phone_digits if c.isdigit())
-    if len(digits_only) > 11:
-        if (digits_only.startswith("7") and len(digits_only) >= 11) or (digits_only.startswith("8") and len(digits_only) >= 11):
-            main = digits_only[:11]
-            tail = digits_only[11:]
-            if 1 <= len(tail) <= 6:
-                # Короткий хвост - считаем extension, отбрасываем
-                # Пересобираем phone_digits с учетом + если был
-                if phone_digits.startswith('+'):
-                    phone_digits = '+' + main
-                else:
-                    phone_digits = main
-    
     # Если номер начинается с 8 - заменяем на +7
     if phone_digits.startswith('8') and len(phone_digits) >= 11:
         phone_digits = '+7' + phone_digits[1:]
     # Если номер начинается с 7 и нет + - добавляем +
     elif phone_digits.startswith('7') and not phone_digits.startswith('+7'):
         phone_digits = '+' + phone_digits
+    
     # Если есть "хвост" без слов ext/доб, но он короткий — считаем его extension и отбрасываем.
     # Пример: 7 999 123 45 67 8901 -> основной номер 11 цифр + ext 8901
-    # Применяем после всех преобразований, но до финальной проверки
+    # Применяем после обработки 8->+7 и 7->+7, но до финальной проверки
     digits_only = ''.join(c for c in phone_digits if c.isdigit())
     if len(digits_only) > 11:
         if (digits_only.startswith("7") and len(digits_only) >= 11) or (digits_only.startswith("8") and len(digits_only) >= 11):
