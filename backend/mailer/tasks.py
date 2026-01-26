@@ -426,10 +426,13 @@ def send_pending_emails(self, batch_size: int = 50):
                     # ENTERPRISE: Проверяем failed получателей перед SENT
                     has_failed = camp.recipients.filter(status=CampaignRecipient.Status.FAILED).exists()
                     if camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
-                        if not has_failed:
+                        if has_failed:
+                            # Если есть failed, оставляем SENDING для видимости проблем
+                            camp.status = Campaign.Status.SENDING
+                            camp.save(update_fields=["status", "updated_at"])
+                        else:
                             camp.status = Campaign.Status.SENT
                             camp.save(update_fields=["status", "updated_at"])
-                        # Если есть failed, оставляем SENDING для видимости проблем
                     processing_queue.status = CampaignQueue.Status.COMPLETED
                     processing_queue.completed_at = timezone.now()
                     processing_queue.save(update_fields=["status", "completed_at"])
@@ -1098,7 +1101,11 @@ def reconcile_campaign_queue():
             if camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
                 # Проверяем наличие failed получателей перед установкой SENT
                 has_failed = camp.recipients.filter(status=CampaignRecipient.Status.FAILED).exists()
-                if not has_failed:
+                if has_failed:
+                    # Если есть failed, оставляем SENDING для видимости проблем
+                    camp.status = Campaign.Status.SENDING
+                    camp.save(update_fields=["status", "updated_at"])
+                else:
                     camp.status = Campaign.Status.SENT
                     camp.save(update_fields=["status", "updated_at"])
             q.status = CampaignQueue.Status.COMPLETED
