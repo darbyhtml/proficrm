@@ -58,7 +58,9 @@ class MailerBaseTestCase(TestCase):
         self._patches.append(patch('mailer.services.rate_limiter.check_rate_limit_per_hour', return_value=(True, 1, None)))
         
         # Отключаем daily limit (возвращаем tuple для совместимости с тестами)
-        self._patches.append(patch('mailer.throttle.is_user_throttled', return_value=(False, 0, None)))
+        # Сохраняем ссылку на патч, чтобы можно было остановить в дочерних классах
+        self._throttle_patch = patch('mailer.throttle.is_user_throttled', return_value=(False, 0, None))
+        self._patches.append(self._throttle_patch)
         
         # Отключаем quota check
         # Патчим и wrapper в tasks, и оригинальную функцию (views импортирует напрямую)
@@ -864,6 +866,13 @@ class MailerEnterpriseFinishingTests(MailerBaseTestCase):
 
     def setUp(self):
         super().setUp()
+        # КРИТИЧНО: Для тестов throttling нужно использовать реальную функцию, а не мок
+        # Останавливаем патч is_user_throttled из MailerBaseTestCase
+        if hasattr(self, '_throttle_patch'):
+            self._throttle_patch.stop()
+            if self._throttle_patch in self._patches:
+                self._patches.remove(self._throttle_patch)
+        
         self.user = User.objects.create_user(
             username="enterprise_u", password="pass", role=User.Role.MANAGER, email="enterprise@example.com"
         )
