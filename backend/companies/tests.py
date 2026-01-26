@@ -32,10 +32,8 @@ class NormalizersTestCase(TestCase):
         # Extension удаляется из результата (не хранится отдельно)
         # Проверяем точное значение, а не substring (123 может быть частью номера)
         self.assertEqual(result, "+79991234567")
-        # Дополнительно проверяем, что нет ключевых слов extension
-        self.assertNotIn("доб", result.lower())
-        self.assertNotIn("ext", result.lower())
-        self.assertNotIn("внутр", result.lower())
+        # Дополнительно проверяем, что нет ключевых слов extension (regex для надежности)
+        self.assertNotRegex(result.lower(), r"(доб|внутр|ext)")
         
         # Тест 3: "7XXXXXXXXXX" -> "+7XXXXXXXXXX"
         self.assertEqual(normalize_phone("79991234567"), "+79991234567")
