@@ -140,12 +140,8 @@ def normalize_phone(raw: str | None) -> str:
             tail = digits_only[11:]
             if 1 <= len(tail) <= 6:
                 # Короткий хвост - считаем extension, отбрасываем
-                phone_digits = phone_digits.replace(tail, '', 1) if tail in phone_digits else main
-                # Пересобираем phone_digits с учетом + если был
-                if phone_digits.startswith('+'):
-                    phone_digits = '+' + main
-                else:
-                    phone_digits = main
+                # Используем только main (11 цифр), игнорируем форматирование
+                phone_digits = main
                 # Обновляем digits_only для дальнейшей обработки
                 digits_only = main
     
@@ -170,11 +166,17 @@ def normalize_phone(raw: str | None) -> str:
         # Если невалидный номер - возвращаем исходную строку (обрезанную)
         return original[:50]
     
-    # Возвращаем нормализованный номер (E.164 формат)
-    result = phone_digits if phone_digits.startswith('+') else original[:50]
+    # КРИТИЧНО: Возвращаем только E.164 формат (+ и цифры, без форматирования)
+    # Извлекаем только цифры и добавляем +
+    e164_digits = ''.join(c for c in phone_digits if c.isdigit())
+    if not e164_digits:
+        return original[:50]
+    
+    # Формируем E.164: +{digits}
+    e164 = '+' + e164_digits
     
     # Обрезаем до 50 символов (максимальная длина поля phone в модели)
-    return result[:50]
+    return e164[:50]
 
 
 def normalize_inn(value: str | None) -> str:

@@ -34,36 +34,28 @@ def is_user_throttled(user_id: int | str, action: str, max_requests: int, window
     cache_key = f"mailer:throttle:{action}:user:{user_id}"
     
     try:
-        current = cache.get(cache_key, 0)
+        # Атомарно увеличиваем счетчик (check + record)
+        # Сначала пытаемся создать ключ, если его нет
+        if cache.add(cache_key, 0, timeout=window_seconds):
+            # Ключ создан, теперь инкрементируем
+            new_value = cache.incr(cache_key)
+        else:
+            # Ключ уже существует, инкрементируем
+            new_value = cache.incr(cache_key)
+            # Обновляем TTL на случай, если ключ уже существовал
+            cache.touch(cache_key, timeout=window_seconds)
         
-        if current >= max_requests:
+        if new_value >= max_requests:
             logger.warning(
-                f"User {user_id} throttled for action {action}: {current}/{max_requests}",
+                f"User {user_id} throttled for action {action}: {new_value}/{max_requests}",
                 extra={
                     "user_id": str(user_id),
                     "action": action,
-                    "current_count": current,
+                    "current_count": new_value,
                     "max_requests": max_requests,
                 }
             )
-            return True, current, None
-        
-        # Атомарно увеличиваем счетчик
-        try:
-            new_value = cache.incr(cache_key)
-            if new_value == 1:
-                # Первый запрос - устанавливаем TTL
-                cache.touch(cache_key, timeout=window_seconds)
-            else:
-                # Обновляем TTL на случай, если ключ уже существовал
-                cache.touch(cache_key, timeout=window_seconds)
-        except (ValueError, AttributeError):
-            # Fallback для backends, которые не поддерживают incr
-            if cache.add(cache_key, 1, timeout=window_seconds):
-                new_value = 1
-            else:
-                new_value = cache.incr(cache_key)
-                cache.touch(cache_key, timeout=window_seconds)
+            return True, new_value, None
         
         return False, new_value, None
     
