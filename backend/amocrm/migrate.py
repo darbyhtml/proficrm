@@ -577,6 +577,21 @@ def parse_phone_value(raw: str | None) -> ParsedPhoneValue:
             comment_parts.insert(0, f"доб. {extension}")
         if normalized.note:
             comment_parts.append(normalized.note)
+
+        # ДОПОЛНИТЕЛЬНО: захватываем произвольный остаток текста вокруг номера
+        # (например "временно не доступен", "неправ. номер", "секретарь"),
+        # чтобы он не терялся, даже если не попал в normalized.note.
+        try:
+            extracted_phone, rest_text = extract_phone_from_text(original)
+        except Exception:
+            extracted_phone, rest_text = None, ""
+        if extracted_phone and extracted_phone == normalized.phone_e164:
+            rest_text = (rest_text or "").strip()
+            if rest_text:
+                # Добавляем только если ещё не добавили этот фрагмент
+                low_rest = rest_text.lower()
+                if not any((cp or "").lower() == low_rest for cp in comment_parts):
+                    comment_parts.append(rest_text)
         
         comment = "; ".join(comment_parts) if comment_parts else None
         
