@@ -60,6 +60,13 @@ class DeviceHeartbeatSerializer(serializers.Serializer):
     last_poll_code = serializers.IntegerField(required=False, allow_null=True)
     last_poll_at = serializers.DateTimeField(required=False, allow_null=True)
     encryption_enabled = serializers.BooleanField(required=False, default=True)
+    # Диагностика "очередь застряла" (может прилетать из мобильного приложения).
+    # Если поля не описаны в serializer — DRF выкинет их из validated_data.
+    queue_stuck = serializers.BooleanField(required=False, default=False)
+    stuck_items = serializers.JSONField(required=False, allow_null=True)
+    stuck_count = serializers.IntegerField(required=False, allow_null=True)
+    oldest_stuck_age_sec = serializers.IntegerField(required=False, allow_null=True)
+    stuck_by_type = serializers.JSONField(required=False, allow_null=True)
 
 
 class DeviceHeartbeatView(APIView):
