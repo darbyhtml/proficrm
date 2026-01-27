@@ -459,3 +459,51 @@ class CompanyModelNormalizationTestCase(TestCase):
         # Проверяем, что расписание нормализовано
         self.assertIn("09:00", company.work_schedule)
         self.assertIn("18:00", company.work_schedule)
+
+
+class CompanyAutocompleteOrgFlagsTestCase(TestCase):
+    """Тесты автокомплита компаний: is_branch / has_branches."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="auto",
+            email="auto@example.com",
+            password="testpass123",
+            role=User.Role.ADMIN,
+        )
+        self.client.force_authenticate(user=self.user)
+
+        # Одиночная компания
+        self.single = Company.objects.create(name="Solo Co")
+
+        # Организация: головная + филиал
+        self.head = Company.objects.create(name="Head Org")
+        self.branch = Company.objects.create(name="Head Org Branch", head_company=self.head)
+
+    def _autocomplete(self, q: str):
+        resp = self.client.get(f"/companies/autocomplete/?q={q}", follow=True)
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        data = getattr(resp, "data", None) or resp.json()
+        return data.get("items", [])
+
+    def test_single_company_flags(self):
+        items = self._autocomplete("Solo")
+        solo = next((i for i in items if i["id"] == str(self.single.id)), None)
+        self.assertIsNotNone(solo)
+        self.assertFalse(solo.get("is_branch"))
+        self.assertFalse(solo.get("has_branches"))
+
+    def test_head_with_branch_flags(self):
+        items = self._autocomplete("Head Org")
+        head = next((i for i in items if i["id"] == str(self.head.id)), None)
+        self.assertIsNotNone(head)
+        self.assertFalse(head.get("is_branch"))
+        self.assertTrue(head.get("has_branches"))
+
+    def test_branch_flags(self):
+        items = self._autocomplete("Head Org Branch")
+        br = next((i for i in items if i["id"] == str(self.branch.id)), None)
+        self.assertIsNotNone(br)
+        self.assertTrue(br.get("is_branch"))
+        # Для ветки наличие своих под‑филиалов не проверяем здесь

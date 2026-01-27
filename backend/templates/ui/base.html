@@ -1566,6 +1566,25 @@
           const list = root.querySelector('.ms-list');
           const clearBtn = root.querySelector('[data-ms-clear]');
 
+          // Хелпер: обновить видимость галки "на всю организацию" в модалке, если она есть рядом.
+          function updateApplyToOrgForModal(){
+            const applyBox = document.getElementById('applyToOrgBranchesBoxModal');
+            const applyCheckbox = document.getElementById('id_apply_to_org_branches');
+            if (!applyBox || !applyCheckbox) return;
+
+            const opt = select.options[select.selectedIndex] || null;
+            const isBranch = opt && opt.dataset && opt.dataset.isBranch === '1';
+            const hasBranches = opt && opt.dataset && opt.dataset.hasBranches === '1';
+
+            const show = Boolean(isBranch || hasBranches);
+            if (show) {
+              applyBox.classList.remove('hidden');
+            } else {
+              applyBox.classList.add('hidden');
+              applyCheckbox.checked = false;
+            }
+          }
+
           function selectedText(){
             const o = select.options[select.selectedIndex];
             const txt = (o && (o.text || '').trim()) || '';
@@ -1576,6 +1595,8 @@
           function renderValue(){
             const txt = selectedText();
             valueEl.textContent = txt || (root.getAttribute('data-placeholder') || 'Выберите…');
+            // При любом обновлении выбранного значения в single-select — синхронизируем галку в модалке (если есть).
+            updateApplyToOrgForModal();
           }
           function renderList(filter){
             const f = (filter || '').toLowerCase().trim();
