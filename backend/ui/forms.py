@@ -218,7 +218,7 @@ class CompanyQuickEditForm(forms.ModelForm):
         widgets = {
             "status": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "spheres": forms.SelectMultiple(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "region": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "region": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2", "data-inline-input": "1"}),
         }
 
 

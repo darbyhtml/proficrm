@@ -224,7 +224,7 @@
             {% if can_edit_company %}
               <div class="inline-field-wrapper mt-1" data-inline-field="region" data-company-id="{{ company.id }}">
                 <div class="inline-field-display cursor-pointer hover:text-brand-dark/80 transition-colors" data-inline-edit>
-                  {{ company.region|default:"—" }}
+                  {{ company.region.name|default:"—" }}
                 </div>
                 <div class="inline-field-edit hidden mt-1">
                   {{ quick_form.region }}
@@ -2731,7 +2731,7 @@
 
         // Автосохранение для поля "region": как только выбрали значение в селекте — сразу сохраняем
         document.addEventListener('change', function(e) {
-          const select = e.target.closest('select');
+          const select = e.target.closest('select[data-inline-input]');
           if (!select) return;
           const wrapper = select.closest('.inline-field-wrapper');
           if (!wrapper) return;
