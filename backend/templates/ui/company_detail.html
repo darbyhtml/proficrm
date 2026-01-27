@@ -513,8 +513,8 @@
           <div>
             <div class="flex items-center justify-between gap-2">
               <button type="button" class="flex items-center gap-2 text-brand-dark/50 hover:text-brand-dark/70 transition-colors cursor-pointer" data-toggle-additional-phones aria-expanded="false">
-                <svg class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" style="transform: rotate(0deg);">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                <svg class="w-5 h-5 text-orange-500 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" style="transform: rotate(0deg); stroke-width: 3;">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
                 </svg>
                 <span>Дополнительные телефоны</span>
                 {% if company.phones.all %}
@@ -881,9 +881,9 @@
           {% endif %}
         </div>
         {% if contacts %}
-          <div class="space-y-2">
+          <div class="space-y-3">
             {% for c in contacts %}
-              <div class="rounded-lg border border-brand-soft/30 overflow-hidden transition-all hover:border-brand-soft/50" data-contact-accordion>
+              <div class="rounded-lg border overflow-hidden" data-contact-accordion>
                 <button type="button" class="w-full flex items-center justify-between gap-3 p-3 hover:bg-brand-soft/10 transition-colors text-left" data-contact-toggle aria-expanded="false" data-contact-id="{{ c.id }}">
                   <div class="flex-1 min-w-0">
                     <div class="text-sm font-semibold text-brand-dark">{{ c.last_name }} {{ c.first_name }}</div>
@@ -891,45 +891,45 @@
                   <div class="flex items-center gap-2 shrink-0">
                     <div class="hidden flex items-center gap-2" data-contact-actions>
                       {% if can_edit_company %}
-                        <a class="btn btn-outline btn-xs" href="/contacts/{{ c.id }}/edit/" title="Редактировать" aria-label="Редактировать" onclick="event.stopPropagation();">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <a class="btn btn-outline btn-sm" href="/contacts/{{ c.id }}/edit/" title="Редактировать" aria-label="Редактировать" onclick="event.stopPropagation();">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                             <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                             <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                           </svg>
                         </a>
                         <form method="post" action="/contacts/{{ c.id }}/delete/" onsubmit="return confirm('Удалить контакт?');" style="display:inline" onclick="event.stopPropagation();">
                           {% csrf_token %}
-                          <button class="btn btn-outline btn-xs btn-danger" title="Удалить контакт" aria-label="Удалить контакт">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                          <button class="btn btn-outline btn-sm btn-danger" title="Удалить контакт" aria-label="Удалить контакт">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                               <path d="M6 7h12M10 11v6M14 11v6M9 7l1-3h4l1 3M19 7l-1 12H6L5 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                             </svg>
                           </button>
                         </form>
                       {% endif %}
                     </div>
-                    <svg class="w-5 h-5 text-orange-500 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 3;">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                    <svg class="w-4 h-4 text-brand-dark/40 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                     </svg>
                   </div>
                 </button>
                 <div class="hidden overflow-hidden transition-all duration-300 ease-in-out" data-contact-content style="max-height: 0;">
                   <div class="px-3 pb-3">
-                  <div class="pt-2 border-t border-brand-soft/20">
-                    <div class="text-xs text-brand-dark/70 mb-3">
-                      {{ c.position|default:"—" }}
-                    </div>
-                    {% if c.is_cold_call or c.cold_marked_at %}
-                      <div class="mb-3 text-xs text-brand-dark/70">
-                        <span class="font-medium">Холодный звонок:</span>
-                        {% if c.cold_marked_at %}
-                          <span>{{ c.cold_marked_at|date:"d.m.Y H:i" }}</span>
-                        {% endif %}
-                        {% if c.cold_marked_by %}
-                          <span>({{ c.cold_marked_by.first_name }} {{ c.cold_marked_by.last_name|default:"" }})</span>
-                        {% endif %}
+                    <div class="pt-2 border-t border-brand-soft/20">
+                      <div class="text-xs text-brand-dark/70 mb-3">
+                        {{ c.position|default:"—" }}
                       </div>
-                    {% endif %}
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                      {% if c.is_cold_call or c.cold_marked_at %}
+                        <div class="mb-3 text-xs text-brand-dark/70">
+                          <span class="font-medium">Холодный звонок:</span>
+                          {% if c.cold_marked_at %}
+                            <span>{{ c.cold_marked_at|date:"d.m.Y H:i" }}</span>
+                          {% endif %}
+                          {% if c.cold_marked_by %}
+                            <span>({{ c.cold_marked_by.first_name }} {{ c.cold_marked_by.last_name|default:"" }})</span>
+                          {% endif %}
+                        </div>
+                      {% endif %}
+                      <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
                   <div>
                     <div class="text-brand-dark/50 text-xs">Email</div>
                     {% for e in c.emails.all %}
@@ -1071,6 +1071,7 @@
                     </div>
                   </div>
                 </div>
+              </div>
             {% endfor %}
           </div>
         {% else %}
@@ -3780,10 +3781,12 @@
       
       contactToggles.forEach(toggle => {
         // Инициализация: по умолчанию свернуто
-        const content = toggle.closest('[data-contact-accordion]').querySelector('[data-contact-content]');
+        const accordion = toggle.closest('[data-contact-accordion]');
+        const content = accordion.querySelector('[data-contact-content]');
         const actions = toggle.querySelector('[data-contact-actions]');
         if (content) {
           content.style.maxHeight = '0';
+          content.classList.add('hidden');
         }
         if (actions) {
           actions.classList.add('hidden');
@@ -3795,10 +3798,11 @@
             return;
           }
           
-          const contactId = toggle.getAttribute('data-contact-id');
+          e.preventDefault();
+          e.stopPropagation();
+          
           const accordion = toggle.closest('[data-contact-accordion]');
           const content = accordion.querySelector('[data-contact-content]');
-          const contentInner = content?.querySelector('div');
           const icon = toggle.querySelector('svg:last-child');
           const actions = toggle.querySelector('[data-contact-actions]');
           const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
@@ -3808,13 +3812,13 @@
             if (otherToggle !== toggle) {
               const otherAccordion = otherToggle.closest('[data-contact-accordion]');
               const otherContent = otherAccordion.querySelector('[data-contact-content]');
-              const otherContentInner = otherContent?.querySelector('div');
               const otherIcon = otherToggle.querySelector('svg:last-child');
               const otherActions = otherToggle.querySelector('[data-contact-actions]');
               
               otherToggle.setAttribute('aria-expanded', 'false');
               if (otherContent) {
-                otherContent.style.maxHeight = otherContent.scrollHeight + 'px';
+                const currentHeight = otherContent.scrollHeight;
+                otherContent.style.maxHeight = currentHeight + 'px';
                 otherContent.offsetHeight;
                 otherContent.style.maxHeight = '0';
                 setTimeout(() => {
@@ -3852,12 +3856,7 @@
               const targetHeight = content.scrollHeight;
               content.style.maxHeight = targetHeight + 'px';
               setTimeout(() => {
-                // Убираем ограничение после анимации для корректного отображения при изменении содержимого
-                if (content.scrollHeight > targetHeight) {
-                  content.style.maxHeight = content.scrollHeight + 'px';
-                } else {
-                  content.style.maxHeight = 'none';
-                }
+                content.style.maxHeight = 'none';
               }, 300);
             }
           }
