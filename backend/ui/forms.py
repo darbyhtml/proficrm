@@ -369,6 +369,7 @@ class CompanyInlineEditForm(forms.ModelForm):
         "activity_kind",
         "work_timezone",
         "work_schedule",
+        "region",
     )
 
     def __init__(self, *args, **kwargs):
@@ -425,6 +426,10 @@ class CompanyInlineEditForm(forms.ModelForm):
             return ""
         return normalize_work_schedule(v)
 
+    def clean_region(self):
+        # Разрешаем пустое значение (region = None) или валидный регион справочника.
+        return self.cleaned_data.get("region")
+
     class Meta:
         model = Company
         fields = [
@@ -437,6 +442,7 @@ class CompanyInlineEditForm(forms.ModelForm):
             "activity_kind",
             "work_timezone",
             "work_schedule",
+            "region",
         ]
 
 

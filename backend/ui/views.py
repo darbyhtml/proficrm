@@ -4851,7 +4851,12 @@ def company_inline_update(request: HttpRequest, company_id) -> HttpResponse:
         return JsonResponse({"ok": False, "errors": form.errors, "error": "Проверь значение поля."}, status=400)
 
     form.save()
-    updated_value = getattr(company, field, "")
+
+    # Для внешних ключей и спец-полей приводим значение к строке для JSON.
+    if field == "region":
+        updated_value = company.region.name if company.region else ""
+    else:
+        updated_value = getattr(company, field, "")
 
     log_event(
         actor=user,

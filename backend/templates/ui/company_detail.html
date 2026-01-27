@@ -222,12 +222,15 @@
           <div>
             <div class="text-brand-dark/50">Область</div>
             {% if can_edit_company %}
-              <div class="mt-1">
-                <form method="post" action="/companies/{{ company.id }}/update/">
-                  {% csrf_token %}
-                  {{ quick_form.region }}
-                  <button class="btn btn-outline btn-sm mt-2 w-full" type="submit">Сохранить</button>
-                </form>
+              <div class="inline-field-wrapper mt-1" data-inline-field="region" data-company-id="{{ company.id }}">
+                <div class="inline-field-display cursor-pointer hover:text-brand-dark/80 transition-colors" data-inline-edit>
+                  {{ company.region|default:"—" }}
+                </div>
+                <div class="inline-field-edit hidden mt-1">
+                  {{ quick_form.region.as_widget(attrs={"class": "w-full rounded-lg border px-3 py-2", "data-inline-input": "1"}) }}
+                  <button type="button" class="btn btn-primary btn-sm hidden" data-inline-save>Сохранить</button>
+                  <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
+                </div>
               </div>
             {% else %}
               <div>{{ company.region|default:"—" }}</div>
@@ -2724,6 +2727,19 @@
           .catch(err => {
             showError(wrapper, 'Ошибка: ' + err.message);
           });
+        });
+
+        // Автосохранение для поля "region": как только выбрали значение в селекте — сразу сохраняем
+        document.addEventListener('change', function(e) {
+          const select = e.target.closest('select[data-inline-input]');
+          if (!select) return;
+          const wrapper = select.closest('.inline-field-wrapper');
+          if (!wrapper) return;
+          if ((wrapper.dataset.inlineField || '').trim() !== 'region') return;
+          const saveBtn = wrapper.querySelector('[data-inline-save]');
+          if (saveBtn) {
+            saveBtn.click();
+          }
         });
 
         // Быстрые клавиши: Ctrl/Cmd+Enter сохранить, Esc отмена
