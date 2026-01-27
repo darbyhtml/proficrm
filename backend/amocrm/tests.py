@@ -355,22 +355,27 @@ class SkynetParsePhonesTests(unittest.TestCase):
     def test_split_newline_comma_semicolon(self):
         """Разделение по \\n, запятой, точке с запятой; нормализация 8/7 -> +7."""
         phones, rejected, examples = parse_skynet_phones("8 (919) 305-55-10,\n+7 919 337-77-55")
-        assert len(phones) == 2
-        assert "+79193055510" in phones
-        assert "+79193377755" in phones
+        values = [p["value"] for p in phones]
+        comments = [(p.get("comment") or "").strip() for p in phones]
+        assert len(values) == 2
+        assert "+79193055510" in values
+        assert "+79193377755" in values
+        assert all(c == "" for c in comments)
         assert rejected == 0
         assert len(examples) == 0
 
     def test_single_phone_8_prefix(self):
         """Один номер: 8 919 111-11-11 -> +79191111111."""
         phones, rejected, examples = parse_skynet_phones("8 919 111-11-11")
-        assert phones == ["+79191111111"]
+        values = [p["value"] for p in phones]
+        assert values == ["+79191111111"]
         assert rejected == 0
 
     def test_single_phone_7_prefix(self):
         """7XXXXXXXXXX -> +7XXXXXXXXXX."""
         phones, rejected, examples = parse_skynet_phones("7 919 222-22-22")
-        assert phones == ["+79192222222"]
+        values = [p["value"] for p in phones]
+        assert values == ["+79192222222"]
         assert rejected == 0
 
     def test_rejects_garbage(self):
@@ -383,9 +388,10 @@ class SkynetParsePhonesTests(unittest.TestCase):
     def test_mixed_valid_and_garbage(self):
         """Смесь: валидные номера и мусор."""
         phones, rejected, examples = parse_skynet_phones("+7 919 111-11-11; мусор; 8 (495) 123-45-67")
-        assert len(phones) == 2
-        assert "+79191111111" in phones
-        assert "+74951234567" in phones
+        values = [p["value"] for p in phones]
+        assert len(values) == 2
+        assert "+79191111111" in values
+        assert "+74951234567" in values
         assert rejected == 1
         assert "мусор" in examples[0] or "мусор" in str(examples)
 
@@ -401,8 +407,42 @@ class SkynetParsePhonesTests(unittest.TestCase):
         """Один и тот же номер в разных форматах — один в результате."""
         phones, rejected, examples = parse_skynet_phones("8 (919) 111-11-11, +7 919 111 11 11")
         assert len(phones) == 1
-        assert phones[0] == "+79191111111"
+        assert phones[0]["value"] == "+79191111111"
         assert rejected == 0
+
+    def test_number_with_instruction_comment(self):
+        """Номер с текстом вокруг превращается в SkynetPhone с value и comment без потерь."""
+        phones, rejected, examples = parse_skynet_phones(" +7 (912) 384-49-85 временно не доступен ")
+        assert len(phones) == 1
+        assert phones[0]["value"] == "+79123844985"
+        comment = (phones[0].get("comment") or "")
+        assert "временно не доступен" in comment
+
+    def test_number_with_short_text_comment(self):
+        """'+73453522095 неправ. номер' -> value +73453522095, comment 'неправ. номер'."""
+        phones, rejected, examples = parse_skynet_phones("+73453522095 неправ. номер")
+        assert len(phones) == 1
+        assert phones[0]["value"] == "+73453522095"
+        comment = (phones[0].get("comment") or "")
+        assert "неправ. номер" in comment
+
+    def test_dedup_same_number_keeps_first_comment(self):
+        """Одинаковый номер с разными comment -> сохраняем один, с первым comment."""
+        phones, rejected, examples = parse_skynet_phones(
+            "+7 912 384 49 85 секретарь; 8 (912) 384-49-85 другой комментарий"
+        )
+        assert len(phones) == 1
+        assert phones[0]["value"] == "+79123844985"
+        comment = (phones[0].get("comment") or "")
+        assert "секретарь" in comment
+        assert "другой комментарий" not in comment
+
+    def test_only_text_no_digits_is_rejected(self):
+        """Текст без цифр не создаёт SkynetPhone, идёт в rejected/examples."""
+        phones, rejected, examples = parse_skynet_phones("временно не доступен")
+        assert phones == []
+        assert rejected >= 1
+        assert any("временно не доступен" in ex for ex in examples)
 
 
 class SkynetExtractCompanyFieldsTests(unittest.TestCase):
@@ -423,9 +463,11 @@ class SkynetExtractCompanyFieldsTests(unittest.TestCase):
         }
         result = _extract_company_fields(amo_company, field_meta)
         assert "skynet_phones" in result
-        assert len(result["skynet_phones"]) == 2
-        assert "+79193055510" in result["skynet_phones"]
-        assert "+79193377755" in result["skynet_phones"]
+        skynet_phones = result["skynet_phones"]
+        values = [p["value"] for p in skynet_phones]
+        assert len(values) == 2
+        assert "+79193055510" in values
+        assert "+79193377755" in values
         assert "phones" in result
         # Скайнет не должен попасть в phones (только в skynet_phones)
         main_phones = result.get("phones") or []
