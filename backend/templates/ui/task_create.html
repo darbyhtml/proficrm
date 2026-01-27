@@ -44,10 +44,10 @@
         </div>
       </div>
 
-      <div class="rounded-xl border border-brand-soft bg-brand-soft/15 px-4 py-3">
+      <div id="applyToOrgBranchesBox" class="rounded-xl border border-brand-soft bg-brand-soft/15 px-4 py-3 hidden">
         <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
           {{ form.apply_to_org_branches }}
-          <span>Поставить задачу на <b>все филиалы организации</b></span>
+          <span>Поставить задачу на <b>всю организацию (головная + филиалы)</b></span>
         </label>
         <div class="text-xs muted-2 mt-1">Полезно, если у клиента несколько филиалов и задача должна быть видна в каждой карточке.</div>
       </div>
@@ -87,7 +87,24 @@
     document.addEventListener('DOMContentLoaded', () => {
       const searchInput = document.getElementById('task-company-search');
       const companySelect = document.getElementById('id_company');
+      const applyBox = document.getElementById('applyToOrgBranchesBox');
+      const applyCheckbox = document.getElementById('id_apply_to_org_branches');
       if (!searchInput || !companySelect) return;
+
+      const updateApplyToOrgVisibility = () => {
+        if (!applyBox || !applyCheckbox) return;
+        const opt = companySelect.options[companySelect.selectedIndex] || null;
+        const isBranch = opt && opt.dataset && opt.dataset.isBranch === '1';
+        const hasBranches = opt && opt.dataset && opt.dataset.hasBranches === '1';
+
+        const show = Boolean(isBranch || hasBranches);
+        if (show) {
+          applyBox.classList.remove('hidden');
+        } else {
+          applyBox.classList.add('hidden');
+          applyCheckbox.checked = false;
+        }
+      };
 
       let searchTimeout = null;
       let currentAbortController = null;
@@ -149,6 +166,12 @@
                 opt.value = item.id;
                 opt.textContent = item.name;
                 if (item.inn) opt.textContent += ` (ИНН: ${item.inn})`;
+                if (item.is_branch) {
+                  opt.dataset.isBranch = '1';
+                }
+                if (item.has_branches) {
+                  opt.dataset.hasBranches = '1';
+                }
                 companySelect.appendChild(opt);
               });
               
@@ -161,6 +184,8 @@
               if (companySelect.options.length > 1) {
                 companySelect.value = companySelect.options[1].value;
               }
+
+              updateApplyToOrgVisibility();
             }
           })
           .catch(err => {

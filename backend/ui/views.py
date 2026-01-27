@@ -25,6 +25,7 @@ from accounts.models import Branch, User, MagicLinkToken
 from audit.models import ActivityEvent
 from audit.service import log_event
 from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactEmail, ContactPhone, CompanyDeletionRequest, CompanyEmail, CompanyPhone, CompanyPhone
+from companies.services import resolve_target_companies
 from companies.permissions import (
     can_edit_company as can_edit_company_perm,
     editable_company_qs as editable_company_qs_perm,
@@ -2903,6 +2904,12 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
                     matched_email = email_obj.value
                     break
         
+        # Признаки структуры организации для UI:
+        # - is_branch: у компании есть головная (сама компания — филиал);
+        # - has_branches: у компании есть хотя бы один филиал.
+        is_branch = bool(c.head_company_id)
+        has_branches = Company.objects.filter(head_company_id=c.id).exists()
+
         items.append({
             "id": str(c.id),
             "name": c.name,
@@ -2913,6 +2920,8 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
             "url": f"/companies/{c.id}/",
             "phone": matched_phone if match_in_phone else None,
             "email": matched_email if match_in_email else None,
+            "is_branch": is_branch,
+            "has_branches": has_branches,
             "match_in": {
                 "name": match_in_name,
                 "inn": match_in_inn,
@@ -5652,7 +5661,7 @@ def task_create(request: HttpRequest) -> HttpResponse:
             task: Task = form.save(commit=False)
             task.created_by = user
             apply_to_org = bool(form.cleaned_data.get("apply_to_org_branches"))
-            comp = None
+            comp: Company | None = None
             if task.company_id:
                 comp = Company.objects.select_related("responsible", "branch", "head_company").filter(id=task.company_id).first()
                 if comp and not _can_edit_company(user, comp):
@@ -5684,23 +5693,27 @@ def task_create(request: HttpRequest) -> HttpResponse:
                 messages.error(request, "Нельзя назначать задачи администратору или управляющему компанией.")
                 return redirect("task_create")
 
-            # Если включено "на все филиалы организации" — создаём копии по всем карточкам организации
+            # Если включено "на все филиалы организации" — единый путь создания по целевому списку компаний
             if apply_to_org and comp:
-                head = comp.head_company or comp
-                org_companies = list(
-                    Company.objects.select_related("responsible", "branch", "head_company")
-                    .filter(Q(id=head.id) | Q(head_company_id=head.id))
-                    .distinct()
-                )
+                target_companies = resolve_target_companies(selected_company=comp, apply_to_org_branches=True)
+
+                # Доп. защита от дублей: seen_ids на уровне цикла
+                seen_ids: set = set()
                 created = 0
                 skipped = 0
-                for c in org_companies:
+
+                for c in target_companies:
+                    if not c or c.id in seen_ids:
+                        continue
+                    seen_ids.add(c.id)
+
                     if not _can_edit_company(user, c):
                         skipped += 1
                         continue
+
                     # Определяем статус: если создатель назначает задачу себе, то "В работе", иначе "Новая"
                     initial_status = Task.Status.IN_PROGRESS if task.assigned_to_id == user.id else Task.Status.NEW
-                    
+
                     t = Task(
                         created_by=user,
                         assigned_to=task.assigned_to,
@@ -5722,10 +5735,15 @@ def task_create(request: HttpRequest) -> HttpResponse:
                         company_id=c.id,
                         message=f"Создана задача (по организации): {t.title}",
                     )
+
                 if created:
-                    messages.success(request, f"Задача создана по организации: {created} карточек. Пропущено (нет прав): {skipped}.")
+                    messages.success(
+                        request,
+                        f"Задача создана по организации: {created} карточек. Пропущено (нет прав): {skipped}.",
+                    )
                 else:
                     messages.error(request, "Не удалось создать задачу по организации (нет прав).")
+
                 # уведомление назначенному (если это не создатель)
                 if task.assigned_to_id and task.assigned_to_id != user.id and created:
                     notify(

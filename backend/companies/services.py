@@ -10,6 +10,7 @@ from typing import Any, Callable
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from accounts.models import User
@@ -20,6 +21,64 @@ from companies.permissions import can_edit_company, can_transfer_company
 from crm.request_id_middleware import get_request_id
 
 logger = logging.getLogger(__name__)
+
+
+def get_org_root(company: Company) -> Company:
+    """
+    Возвращает "корень" организации для переданной компании.
+
+    Организация = головная компания + все её филиалы.
+    Если у компании есть head_company — она филиал, и корнем считается головная.
+    Иначе сама компания и есть головная.
+    """
+    if not company:
+        raise ValueError("company is required")
+    return company.head_company or company
+
+
+def get_org_companies(root: Company):
+    """
+    Возвращает queryset всех компаний организации:
+    - головная (root)
+    - все компании, у которых head_company_id = root.id
+
+    ВАЖНО: всегда .distinct() по БД, чтобы убрать возможные дубли.
+    """
+    if not root:
+        return Company.objects.none()
+    return Company.objects.filter(Q(id=root.id) | Q(head_company_id=root.id)).distinct()
+
+
+def resolve_target_companies(
+    selected_company: Company | None,
+    apply_to_org_branches: bool,
+) -> list[Company]:
+    """
+    Определяет целевые компании для создания задач.
+
+    Логика:
+    - если apply_to_org_branches = False → только выбранная компания;
+    - если True → вся организация (root + её филиалы).
+
+    Всегда возвращает список без дублей по id, порядок устойчивый.
+    """
+    if not selected_company:
+        return []
+
+    if not apply_to_org_branches:
+        return [selected_company]
+
+    root = get_org_root(selected_company)
+    qs = get_org_companies(root)
+
+    seen_ids: set = set()
+    targets: list[Company] = []
+    for c in qs:
+        if c.id in seen_ids:
+            continue
+        seen_ids.add(c.id)
+        targets.append(c)
+    return targets
 
 
 class CompanyService:
