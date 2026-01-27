@@ -45,13 +45,11 @@ class TaskOrgCreationTestCase(TestCase):
             "due_at": due_at,
             "apply_to_org_branches": apply_to_org,
         }
-        # Используем URL без trailing slash, чтобы избежать редиректа 301
-        # DRF роутер работает с обоими вариантами, но Django может редиректить
-        resp = self.client.post("/api/tasks", payload, format="json")
-        
-        # Если все еще получили 301, пробуем с trailing slash
-        if resp.status_code == status.HTTP_301_MOVED_PERMANENTLY:
-            resp = self.client.post("/api/tasks/", payload, format="json")
+        # DRF DefaultRouter создает URL с trailing slash: /api/tasks/
+        # Используем reverse для получения правильного URL
+        from django.urls import reverse
+        url = reverse("task-list")
+        resp = self.client.post(url, payload, format="json")
         
         # Проверяем успешный статус (201 Created или 200 OK)
         self.assertIn(
