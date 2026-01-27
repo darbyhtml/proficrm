@@ -3774,17 +3774,57 @@ def migrate_filtered(
                             if not norm:
                                 norm = raw_value
                             if main_phone_normalized and main_phone_normalized == norm:
+                                # Основной телефон компании: пока не трогаем его комментарий в этой ветке.
                                 skynet_skipped_dup += 1
                                 continue
-                            if norm in existing_phones_normalized:
-                                skynet_skipped_dup += 1
-                                continue
-                            # Собираем комментарий: источник (SKYNET) + текст вокруг номера, если есть
+
+                            # Собираем "входящий" комментарий для SKYNET-номера
                             comment_parts = ["SKYNET"]
                             extra_comment = (item.get("comment") or "").strip()
                             if extra_comment:
                                 comment_parts.append(extra_comment)
-                            skynet_comment = "; ".join(comment_parts)[:255]
+                            skynet_comment = "; ".join(comment_parts).strip()[:255]
+
+                            if norm in existing_phones_normalized:
+                                # Номер уже есть в CompanyPhone: обновляем comment, не создавая дубликат.
+                                skynet_skipped_dup += 1
+                                if not dry_run:
+                                    for cp in CompanyPhone.objects.filter(company=comp, value=norm):
+                                        current = (cp.comment or "").strip()
+                                        if not current:
+                                            # Просто ставим SKYNET / SKYNET; details
+                                            cp.comment = skynet_comment
+                                            cp.save(update_fields=["comment"])
+                                            continue
+
+                                        # Разбиваем comment на сегменты по " | " и нормализуем
+                                        segments = [seg.strip() for seg in current.split("|") if seg.strip()]
+
+                                        # Если такой сегмент уже есть — ничего не делаем
+                                        if skynet_comment in segments:
+                                            continue
+
+                                        new_segments: list[str] = []
+                                        replaced_plain_skynet = False
+                                        for seg in segments:
+                                            if (
+                                                seg == "SKYNET"
+                                                and skynet_comment.startswith("SKYNET;")
+                                                and not replaced_plain_skynet
+                                            ):
+                                                # Заменяем голый SKYNET на SKYNET; details
+                                                new_segments.append(skynet_comment)
+                                                replaced_plain_skynet = True
+                                            else:
+                                                new_segments.append(seg)
+
+                                        if not replaced_plain_skynet:
+                                            new_segments.append(skynet_comment)
+
+                                        cp.comment = " | ".join(new_segments)
+                                        cp.save(update_fields=["comment"])
+                                continue
+
                             phones_to_create.append(
                                 CompanyPhone(company=comp, value=norm, order=next_order, comment=skynet_comment)
                             )

@@ -108,6 +108,8 @@ class Command(BaseCommand):
                 continue
 
             main_norm = _normalize_phone(comp.phone) if (comp.phone or "").strip() else ""
+            # Существующие номера компании (нормализованные). Используем set для быстрого поиска,
+            # но при совпадении value не просто пропускаем, а обновляем comment (см. ниже).
             existing = set(
                 _normalize_phone(v) or v
                 for v in CompanyPhone.objects.filter(company=comp).values_list("value", flat=True)
@@ -122,19 +124,63 @@ class Command(BaseCommand):
                     continue
                 n = _normalize_phone(raw_value) or raw_value
                 if main_norm and main_norm == n:
+                    # Для основного номера компании обновление комментария пока не делаем здесь.
                     skipped_dup += 1
                     continue
-                if n in existing:
-                    skipped_dup += 1
-                    continue
-                # Собираем комментарий: источник (SKYNET) + текст вокруг номера, если есть
+
+                # Собираем "входящий" комментарий: SKYNET или SKYNET; <parsed_comment>
                 extra_comment = (item.get("comment") or "").strip()
                 if extra_comment:
-                    comment = f"SKYNET; {extra_comment}"
+                    incoming_comment = f"SKYNET; {extra_comment}".strip()
                 else:
-                    comment = "SKYNET"
+                    incoming_comment = "SKYNET"
+
+                if n in existing:
+                    # Номер уже есть в CompanyPhone: не создаём дубликат, а аккуратно дополняем comment.
+                    # Идея: "update, not overwrite":
+                    # - если incoming_comment уже содержится в existing.comment → ничего не делаем
+                    # - если existing.comment пустой → ставим incoming_comment
+                    # - иначе → дописываем через разделитель " | "
+                    if not dry_run:
+                        for cp in CompanyPhone.objects.filter(company=comp, value=n):
+                            current = (cp.comment or "").strip()
+                            if not current:
+                                # Просто ставим SKYNET/ SKNYET; details
+                                cp.comment = incoming_comment
+                                cp.save(update_fields=["comment"])
+                                continue
+
+                            # Разбиваем на сегменты по " | " и нормализуем пробелы
+                            segments = [seg.strip() for seg in current.split("|") if seg.strip()]
+
+                            # Если входящий сегмент уже есть — ничего не делаем
+                            if incoming_comment in segments:
+                                continue
+
+                            new_segments = []
+                            replaced_plain_skynet = False
+                            for seg in segments:
+                                if (
+                                    seg == "SKYNET"
+                                    and incoming_comment.startswith("SKYNET;")
+                                    and not replaced_plain_skynet
+                                ):
+                                    # Заменяем голый SKYNET на SKYNET; details
+                                    new_segments.append(incoming_comment)
+                                    replaced_plain_skynet = True
+                                else:
+                                    new_segments.append(seg)
+
+                            if not replaced_plain_skynet:
+                                new_segments.append(incoming_comment)
+
+                            cp.comment = " | ".join(new_segments)
+                            cp.save(update_fields=["comment"])
+                    skipped_dup += 1
+                    continue
+
                 if not dry_run:
-                    CompanyPhone.objects.create(company=comp, value=n, order=next_order, comment=comment)
+                    CompanyPhone.objects.create(company=comp, value=n, order=next_order, comment=incoming_comment)
                     existing.add(n)
                     next_order += 1
                 added += 1
