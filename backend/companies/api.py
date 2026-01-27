@@ -180,6 +180,8 @@ class ContactSerializer(serializers.ModelSerializer):
 
 class ContactViewSet(viewsets.ModelViewSet):
     serializer_class = ContactSerializer
+    permission_classes = [IsAuthenticated, PolicyPermission]
+    policy_resource_prefix = "api:contacts"
     filter_backends = (DjangoFilterBackend, SearchFilter, OrderingFilter)
     filterset_fields = ("company",)
     search_fields = ("first_name", "last_name", "position", "company__name")
@@ -218,6 +220,8 @@ class CompanyNoteSerializer(serializers.ModelSerializer):
 
 class CompanyNoteViewSet(viewsets.ModelViewSet):
     serializer_class = CompanyNoteSerializer
+    permission_classes = [IsAuthenticated, PolicyPermission]
+    policy_resource_prefix = "api:company_notes"
     filter_backends = (DjangoFilterBackend, OrderingFilter)
     filterset_fields = ("company",)
     ordering_fields = ("created_at",)

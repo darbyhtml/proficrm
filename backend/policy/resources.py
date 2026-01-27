@@ -111,6 +111,18 @@ RESOURCES: tuple[PolicyResource, ...] = (
     PolicyResource("api:companies:update", "action", "API: компании (update)", sensitive=True),
     PolicyResource("api:companies:delete", "action", "API: компании (delete)", sensitive=True),
 
+    PolicyResource("api:contacts:list", "action", "API: контакты (list)"),
+    PolicyResource("api:contacts:retrieve", "action", "API: контакты (retrieve)"),
+    PolicyResource("api:contacts:create", "action", "API: контакты (create)", sensitive=True),
+    PolicyResource("api:contacts:update", "action", "API: контакты (update)", sensitive=True),
+    PolicyResource("api:contacts:delete", "action", "API: контакты (delete)", sensitive=True),
+
+    PolicyResource("api:company_notes:list", "action", "API: заметки компаний (list)"),
+    PolicyResource("api:company_notes:retrieve", "action", "API: заметки компаний (retrieve)"),
+    PolicyResource("api:company_notes:create", "action", "API: заметки компаний (create)", sensitive=True),
+    PolicyResource("api:company_notes:update", "action", "API: заметки компаний (update)", sensitive=True),
+    PolicyResource("api:company_notes:delete", "action", "API: заметки компаний (delete)", sensitive=True),
+
     PolicyResource("api:tasks:list", "action", "API: задачи (list)"),
     PolicyResource("api:tasks:retrieve", "action", "API: задачи (retrieve)"),
     PolicyResource("api:tasks:create", "action", "API: задачи (create)"),

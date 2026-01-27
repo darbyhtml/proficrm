@@ -1832,9 +1832,9 @@ def cold_calls_report_last_7_days(request: HttpRequest) -> JsonResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:companies:list")
 def company_list(request: HttpRequest) -> HttpResponse:
     user: User = request.user
-    enforce(user=user, resource_type="page", resource="ui:companies:list", context={"path": request.path})
     now = timezone.now()
     # Просмотр компаний: всем доступна вся база (без ограничения по филиалу/scope).
     # Кэшируем общее количество компаний (TTL 10 минут)
@@ -2021,7 +2021,8 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
         if view_as_branch_id:
             qs = qs.filter(branch_id=view_as_branch_id)
         companies_total = qs.order_by().count()
-        cache.set(cache_key_total, companies_total, 600)
+        # Держим TTL консистентным с company_list (60 сек)
+        cache.set(cache_key_total, companies_total, 60)
     
     # Оптимизация: предзагружаем только необходимые связанные объекты
     # Используем only() для уменьшения объема загружаемых данных
