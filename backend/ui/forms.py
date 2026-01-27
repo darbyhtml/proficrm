@@ -8,7 +8,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.db.models import Q
 
 from accounts.models import Branch, User
-from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactEmail, ContactPhone, Region
+from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactEmail, ContactPhone, Region, ContractType
 from tasksapp.models import Task, TaskType
 from ui.models import UiGlobalConfig
 from ui.widgets import TaskTypeSelectWidget, UserSelectWithBranchWidget
@@ -685,6 +685,18 @@ class CompanySphereForm(forms.ModelForm):
         model = CompanySphere
         fields = ["name"]
         widgets = {"name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"})}
+
+
+class ContractTypeForm(forms.ModelForm):
+    class Meta:
+        model = ContractType
+        fields = ["name", "warning_days", "danger_days", "order"]
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "warning_days": forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "min": 1}),
+            "danger_days": forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "min": 1}),
+            "order": forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+        }
 
 
 class TaskTypeForm(forms.ModelForm):

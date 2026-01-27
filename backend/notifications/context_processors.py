@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from django.utils import timezone
+from django.db import models
 
 from notifications.models import Notification
 from notifications.models import CompanyContractReminder
@@ -69,15 +70,31 @@ def notifications_panel(request):
 
         contract_qs = (
             Company.objects.filter(responsible=user, contract_until__isnull=False)
-            .only("id", "name", "contract_until")
+            .select_related("contract_type")
+            .only("id", "name", "contract_until", "contract_type")
         )
 
-        # 1) UI-напоминания: ближайшие 10 в пределах 30 дней
-        soon_until = today_date + timedelta(days=30)
+        # 1) UI-напоминания: ближайшие 10 в пределах максимального warning_days
+        # Используем максимальный warning_days из всех типов договоров или 30 дней по умолчанию
+        max_warning_days = 30
+        try:
+            from companies.models import ContractType
+            from django.db.models import Max
+            max_warning = ContractType.objects.aggregate(max_warning=Max("warning_days"))
+            if max_warning["max_warning"]:
+                max_warning_days = max(max_warning["max_warning"], 30)
+        except Exception:
+            pass
+        
+        soon_until = today_date + timedelta(days=max_warning_days)
         soon = contract_qs.filter(contract_until__lte=soon_until).order_by("contract_until")[:10]
         for c in list(soon):
             days_left = (c.contract_until - today_date).days if c.contract_until else None
-            prefix = "Срочно: " if (days_left is not None and days_left < 14) else ""
+            if days_left is not None and c.contract_type:
+                danger_days = c.contract_type.danger_days
+                prefix = "Срочно: " if days_left <= danger_days else ""
+            else:
+                prefix = "Срочно: " if (days_left is not None and days_left < 14) else ""
             reminder_items.append(
                 {
                     "title": f"{prefix}Договор до {c.contract_until.strftime('%d.%m.%Y')}",
@@ -88,27 +105,37 @@ def notifications_panel(request):
             )
         reminder_count += soon.count()
 
-        # 2) Реальные уведомления (с дедупликацией)
+        # 2) Реальные уведомления (с дедупликацией) - используем настройки из ContractType
         if should_check:
-            thresholds = [30, 14]
-            for days_before in thresholds:
-                target = today_date + timedelta(days=days_before)
-                qs_hit = contract_qs.filter(contract_until=target)
-                for c in qs_hit:
+            for c in contract_qs:
+                if not c.contract_type or not c.contract_until:
+                    continue
+                warning_days = c.contract_type.warning_days
+                danger_days = c.contract_type.danger_days
+                days_left = (c.contract_until - today_date).days
+                
+                # Создаем уведомления на порогах warning_days и danger_days
+                for days_before in [warning_days, danger_days]:
+                    if days_before > days_left:
+                        continue
+                    target = c.contract_until - timedelta(days=days_before)
+                    if target.date() != today_date:
+                        continue
+                    
                     exists = CompanyContractReminder.objects.filter(
-                        user=user, company_id=c.id, contract_until=target, days_before=days_before
+                        user=user, company_id=c.id, contract_until=c.contract_until, days_before=days_before
                     ).exists()
                     if exists:
                         continue
                     CompanyContractReminder.objects.create(
-                        user=user, company_id=c.id, contract_until=target, days_before=days_before
+                        user=user, company_id=c.id, contract_until=c.contract_until, days_before=days_before
                     )
-                    if days_before == 30:
-                        title = "До окончания договора остался месяц"
-                        body = f"{c.name} · до {target.strftime('%d.%m.%Y')}"
+                    if days_before == danger_days:
+                        title = f"До окончания договора осталось {days_before} дней"
+                        body = f"{c.name} · до {c.contract_until.strftime('%d.%m.%Y')}"
                     else:
-                        title = "До окончания договора осталось 2 недели"
-                        body = f"{c.name} · до {target.strftime('%d.%m.%Y')}"
+                        title = f"До окончания договора осталось {days_before} дней"
+                        body = f"{c.name} · до {c.contract_until.strftime('%d.%m.%Y')}"
                     notify(
                         user=user,
                         kind=Notification.Kind.COMPANY,

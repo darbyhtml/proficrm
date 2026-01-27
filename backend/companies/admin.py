@@ -8,6 +8,7 @@ from .models import (
     CompanyNote,
     CompanySphere,
     CompanyStatus,
+    ContractType,
     Region,
     Contact,
     ContactEmail,
@@ -28,6 +29,13 @@ class CompanySphereAdmin(admin.ModelAdmin):
 @admin.register(Region)
 class RegionAdmin(admin.ModelAdmin):
     search_fields = ("name",)
+
+
+@admin.register(ContractType)
+class ContractTypeAdmin(admin.ModelAdmin):
+    list_display = ("name", "warning_days", "danger_days", "order")
+    search_fields = ("name",)
+    list_editable = ("warning_days", "danger_days", "order")
 
 
 class ContactEmailInline(admin.TabularInline):

@@ -127,17 +127,32 @@ def all_reminders(request: HttpRequest) -> HttpResponse:
     contract_reminders = []
     contract_qs = (
         Company.objects.filter(responsible=user, contract_until__isnull=False)
-        .only("id", "name", "contract_until")
+        .select_related("contract_type")
+        .only("id", "name", "contract_until", "contract_type")
         .order_by("contract_until")
     )
     
-    # Все договоры в пределах 30 дней
-    soon_until = today_date + timedelta(days=30)
+    # Все договоры в пределах максимального warning_days
+    max_warning_days = 30
+    try:
+        from companies.models import ContractType
+        from django.db.models import Max
+        max_warning = ContractType.objects.aggregate(max_warning=Max("warning_days"))
+        if max_warning["max_warning"]:
+            max_warning_days = max(max_warning["max_warning"], 30)
+    except Exception:
+        pass
+    
+    soon_until = today_date + timedelta(days=max_warning_days)
     contracts = contract_qs.filter(contract_until__lte=soon_until)
     
     for c in contracts:
         days_left = (c.contract_until - today_date).days if c.contract_until else None
-        prefix = "Срочно: " if (days_left is not None and days_left < 14) else ""
+        if days_left is not None and c.contract_type:
+            danger_days = c.contract_type.danger_days
+            prefix = "Срочно: " if days_left <= danger_days else ""
+        else:
+            prefix = "Срочно: " if (days_left is not None and days_left < 14) else ""
         contract_reminders.append(
             {
                 "title": f"{prefix}Договор до {c.contract_until.strftime('%d.%m.%Y')}",

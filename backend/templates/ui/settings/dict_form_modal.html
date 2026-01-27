@@ -15,6 +15,26 @@
       {{ form.name }}
     </div>
 
+    {% if form.warning_days %}
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Дней до желтого предупреждения</label>
+          {{ form.warning_days }}
+          <div class="text-xs text-brand-dark/60 mt-1">За сколько дней до окончания договора показывать желтое предупреждение</div>
+        </div>
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Дней до красного предупреждения</label>
+          {{ form.danger_days }}
+          <div class="text-xs text-brand-dark/60 mt-1">За сколько дней до окончания договора показывать красное предупреждение</div>
+        </div>
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Порядок сортировки</label>
+          {{ form.order }}
+          <div class="text-xs text-brand-dark/60 mt-1">Порядок отображения в списке</div>
+        </div>
+      </div>
+    {% endif %}
+
     {% if form.icon %}
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
         <div>

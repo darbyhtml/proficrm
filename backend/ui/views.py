@@ -25,6 +25,7 @@ from accounts.models import Branch, User, MagicLinkToken
 from audit.models import ActivityEvent
 from audit.service import log_event
 from companies.models import (
+    ContractType,
     Company,
     CompanyNote,
     CompanySphere,
@@ -79,6 +80,7 @@ from .forms import (
     BranchForm,
     CompanySphereForm,
     CompanyStatusForm,
+    ContractTypeForm,
     TaskTypeForm,
     UserCreateForm,
     UserEditForm,
@@ -752,7 +754,12 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
 
     contract_type = _get_str_param("contract_type")
     if contract_type:
-        qs = qs.filter(contract_type=contract_type)
+        try:
+            contract_type_id = int(contract_type)
+            qs = qs.filter(contract_type_id=contract_type_id)
+        except (ValueError, TypeError):
+            # Некорректный ID - пропускаем фильтр
+            pass
 
     region = _get_str_param("region")
     if region:
@@ -905,14 +912,29 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     contracts_soon_qs = (
         Company.objects.filter(responsible=user, contract_until__isnull=False)
         .filter(contract_until__gte=today_date, contract_until__lte=contract_until_30)
+        .select_related("contract_type")
         .only("id", "name", "contract_type", "contract_until")
         .order_by("contract_until", "name")[:50]
     )
     contracts_soon = []
     for c in contracts_soon_qs:
         days_left = (c.contract_until - today_date).days if c.contract_until else None
-        level = "danger" if (days_left is not None and days_left < 14) else "warn"
-        contracts_soon.append({"company": c, "days_left": days_left, "level": level})
+        if days_left is not None and c.contract_type:
+            # Используем настройки из ContractType
+            warning_days = c.contract_type.warning_days
+            danger_days = c.contract_type.danger_days
+            if days_left <= danger_days:
+                level = "danger"
+            elif days_left <= warning_days:
+                level = "warn"
+            else:
+                level = None  # Не показываем, если больше warning_days
+        else:
+            # Fallback на старую логику, если нет contract_type
+            level = "danger" if (days_left is not None and days_left < 14) else "warn" if days_left is not None else None
+        
+        if level:  # Добавляем только если есть предупреждение
+            contracts_soon.append({"company": c, "days_left": days_left, "level": level})
 
     # Сопоставляем задачи без типа с TaskType по точному совпадению названия
     # Загружаем все TaskType для сопоставления
@@ -1062,21 +1084,36 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
     contracts_soon_qs = (
         Company.objects.filter(responsible=user, contract_until__isnull=False)
         .filter(contract_until__gte=today_date, contract_until__lte=contract_until_30)
+        .select_related("contract_type")
         .only("id", "name", "contract_type", "contract_until")
         .order_by("contract_until", "name")[:50]
     )
     contracts_soon = []
     for c in contracts_soon_qs:
         days_left = (c.contract_until - today_date).days if c.contract_until else None
-        level = "danger" if (days_left is not None and days_left < 14) else "warn"
-        contracts_soon.append({
-            "company_id": str(c.id),
-            "company_name": c.name,
-            "contract_type": c.contract_type,
-            "contract_until": c.contract_until.isoformat() if c.contract_until else None,
-            "days_left": days_left,
-            "level": level,
-        })
+        if days_left is not None and c.contract_type:
+            # Используем настройки из ContractType
+            warning_days = c.contract_type.warning_days
+            danger_days = c.contract_type.danger_days
+            if days_left <= danger_days:
+                level = "danger"
+            elif days_left <= warning_days:
+                level = "warn"
+            else:
+                level = None  # Не показываем, если больше warning_days
+        else:
+            # Fallback на старую логику, если нет contract_type
+            level = "danger" if (days_left is not None and days_left < 14) else "warn" if days_left is not None else None
+        
+        if level:  # Добавляем только если есть предупреждение
+            contracts_soon.append({
+                "company_id": str(c.id),
+                "company_name": c.name,
+                "contract_type": c.contract_type.name if c.contract_type else "",
+                "contract_until": c.contract_until.isoformat() if c.contract_until else None,
+                "days_left": days_left,
+                "level": level,
+            })
 
     # Сопоставляем задачи без типа с TaskType по точному совпадению названия
     from tasksapp.models import TaskType
@@ -2001,7 +2038,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "spheres": CompanySphere.objects.order_by("name"),
             "branches": Branch.objects.order_by("name"),
             "regions": Region.objects.order_by("name"),
-            "contract_types": Company.ContractType.choices,
+            "contract_types": ContractType.objects.order_by("order", "name"),
             "company_list_columns": columns,
             "transfer_targets": get_transfer_targets(user),
             "per_page": per_page,
@@ -2559,7 +2596,7 @@ def company_export(request: HttpRequest) -> HttpResponse:
 
     def _contract_type_display(company: Company) -> str:
         try:
-            return company.get_contract_type_display() if company.contract_type else ""
+            return company.contract_type.name if company.contract_type else ""
         except Exception:
             return company.contract_type or ""
 
@@ -7490,6 +7527,7 @@ def settings_dicts(request: HttpRequest) -> HttpResponse:
         {
             "company_statuses": CompanyStatus.objects.order_by("name"),
             "company_spheres": CompanySphere.objects.order_by("name"),
+            "contract_types": ContractType.objects.order_by("order", "name"),
             "task_types": TaskType.objects.order_by("name"),
         },
     )
@@ -7611,6 +7649,40 @@ def settings_company_sphere_delete(request: HttpRequest, sphere_id: int) -> Http
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return JsonResponse({"ok": True})
     messages.success(request, "Сфера удалена.")
+    return redirect("settings_dicts")
+
+
+@login_required
+def settings_contract_type_edit(request: HttpRequest, contract_type_id: int) -> HttpResponse:
+    """Редактирование вида договора через модалку (AJAX)"""
+    if not require_admin(request.user):
+        return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
+    contract_type = get_object_or_404(ContractType, id=contract_type_id)
+    if request.method == "POST":
+        form = ContractTypeForm(request.POST, instance=contract_type)
+        if form.is_valid():
+            form.save()
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return JsonResponse({"ok": True, "id": contract_type.id, "name": contract_type.name})
+            messages.success(request, "Вид договора обновлён.")
+            return redirect("settings_dicts")
+    else:
+        form = ContractTypeForm(instance=contract_type)
+    return render(request, "ui/settings/dict_form_modal.html", {"form": form, "title": "Редактировать вид договора", "dict_type": "contract-type", "dict_id": contract_type.id})
+
+
+@login_required
+def settings_contract_type_delete(request: HttpRequest, contract_type_id: int) -> HttpResponse:
+    """Удаление вида договора"""
+    if not require_admin(request.user):
+        return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Method not allowed."}, status=405)
+    contract_type = get_object_or_404(ContractType, id=contract_type_id)
+    contract_type.delete()
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return JsonResponse({"ok": True})
+    messages.success(request, "Вид договора удалён.")
     return redirect("settings_dicts")
 
 

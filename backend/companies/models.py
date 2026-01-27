@@ -44,14 +44,34 @@ class Region(models.Model):
         return self.name
 
 
+class ContractType(models.Model):
+    """
+    Справочник видов договоров с настройками напоминаний.
+    """
+    name = models.CharField("Название", max_length=120, unique=True)
+    warning_days = models.PositiveIntegerField(
+        "Дней до желтого предупреждения",
+        default=14,
+        help_text="За сколько дней до окончания договора показывать желтое предупреждение"
+    )
+    danger_days = models.PositiveIntegerField(
+        "Дней до красного предупреждения",
+        default=7,
+        help_text="За сколько дней до окончания договора показывать красное предупреждение"
+    )
+    order = models.IntegerField("Порядок сортировки", default=0, db_index=True)
+
+    class Meta:
+        verbose_name = "Вид договора"
+        verbose_name_plural = "Виды договоров"
+        ordering = ["order", "name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Company(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-
-    class ContractType(models.TextChoices):
-        FRAME = "frame", "Рамочный"
-        TENDER = "tender", "Тендер"
-        LEGAL = "legal", "Юр. лицо"
-        INDIVIDUAL = "individual", "Физ. лицо"
 
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -97,12 +117,13 @@ class Company(models.Model):
         related_name="+",
     )
 
-    contract_type = models.CharField(
-        "Вид договора",
-        max_length=16,
-        choices=ContractType.choices,
+    contract_type = models.ForeignKey(
+        ContractType,
+        verbose_name="Вид договора",
+        null=True,
         blank=True,
-        default="",
+        on_delete=models.SET_NULL,
+        related_name="companies",
         db_index=True,
     )
     contract_until = models.DateField("Действует до", null=True, blank=True, db_index=True)

@@ -89,8 +89,8 @@
           <label class="block text-sm text-brand-dark/80 mb-1">Вид договора</label>
           <select name="contract_type" class="select w-full">
             <option value="">Любой</option>
-            {% for val, label in contract_types %}
-              <option value="{{ val }}" {% if contract_type == val %}selected{% endif %}>{{ label }}</option>
+            {% for ct in contract_types %}
+              <option value="{{ ct.id }}" {% if contract_type == ct.id|stringformat:"s" %}selected{% endif %}>{{ ct.name }}</option>
             {% endfor %}
           </select>
         </div>

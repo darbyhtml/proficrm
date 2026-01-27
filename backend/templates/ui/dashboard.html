@@ -354,7 +354,7 @@
                         {{ item.company.name }}
                       </div>
                       <div class="text-xs text-brand-dark/70 mt-1">
-                        {% if item.company.contract_type %}{{ item.company.get_contract_type_display }}{% else %}—{% endif %}
+                        {% if item.company.contract_type %}{{ item.company.contract_type.name }}{% else %}—{% endif %}
                         {% if item.company.contract_until %} · до <span class="{% if item.level == 'danger' %}text-red-700 font-medium{% endif %}">{{ item.company.contract_until|date:"d.m.Y" }}</span>{% endif %}
                       </div>
                     </div>

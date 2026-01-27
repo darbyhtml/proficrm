@@ -90,7 +90,7 @@ class CompanyViewSet(viewsets.ModelViewSet):
         # не меняя возвращаемые данные.
         return (
             visible_companies_qs(self.request.user)
-            .select_related("responsible", "branch", "status", "head_company")
+            .select_related("responsible", "branch", "status", "head_company", "contract_type")
             .prefetch_related("spheres")
             .order_by("-updated_at")
         )
