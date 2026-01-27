@@ -1552,13 +1552,26 @@
       (function(){
         const MAX_RENDER = 200;
 
-        // Глобальный хелпер: обновить видимость галки "на всю организацию" в модалке
-        // root — контейнер модалки (или любой другой корень, внутри которого ищем элементы).
+        // Глобальный хелпер: обновить видимость галки "на всю организацию" в модалке.
+        // root — контейнер .ms‑виджета или модалки; ищем элементы в пределах формы/модалки.
         window.updateApplyToOrgForModal = function(root){
-          const container = root || document;
-          const applyBox = container.querySelector('#applyToOrgBranchesBoxModal');
-          const applyCheckbox = container.querySelector('#id_apply_to_org_branches');
-          const companySelect = container.querySelector('select[name="company"], select#id_company');
+          // Поднимаемся до формы (если есть), иначе работаем по document.
+          const scope = (root && root.closest && root.closest('form'))
+            ? root.closest('form')
+            : document;
+
+          const applyBox = scope.querySelector('#applyToOrgBranchesBoxModal');
+          const applyCheckbox = scope.querySelector('#id_apply_to_org_branches');
+
+          // companySelect пробуем искать сначала внутри root (если это .ms), затем в scope.
+          let companySelect = null;
+          if (root && root.querySelector) {
+            companySelect = root.querySelector('select[name="company"], select#id_company');
+          }
+          if (!companySelect) {
+            companySelect = scope.querySelector('select[name="company"], select#id_company');
+          }
+
           if (!applyBox || !applyCheckbox || !companySelect) return;
 
           const opt = companySelect.options[companySelect.selectedIndex] || null;
@@ -1569,6 +1582,7 @@
           // уважаем это и показываем блок даже при отсутствии флагов на option.
           const isPrechecked = applyCheckbox.checked;
           const show = Boolean(isBranch || hasBranches || isPrechecked);
+
           if (show) {
             applyBox.classList.remove('hidden');
           } else {
