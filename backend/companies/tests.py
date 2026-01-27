@@ -483,7 +483,7 @@ class CompanyAutocompleteOrgFlagsTestCase(TestCase):
         self.branch = Company.objects.create(name="Head Org Branch", head_company=self.head)
 
     def _autocomplete(self, q: str):
-        resp = self.client.get(f"/companies/autocomplete/?q={q}")
+        resp = self.client.get(f"/companies/autocomplete/?q={q}", follow=True)
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
         return data.get("items", [])
