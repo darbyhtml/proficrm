@@ -48,7 +48,10 @@ class TaskOrgCreationTestCase(TestCase):
         # DRF DefaultRouter создает URL с trailing slash: /api/tasks/
         # Используем reverse для получения правильного URL
         from django.urls import reverse
-        url = reverse("task-list")
+        url = reverse("task-list")  # Должно вернуть "/api/tasks/"
+        # Убеждаемся, что URL заканчивается на slash (DRF DefaultRouter требует это)
+        if not url.endswith("/"):
+            url = url + "/"
         resp = self.client.post(url, payload, format="json")
         
         # Проверяем успешный статус (201 Created или 200 OK)
