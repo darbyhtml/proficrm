@@ -106,6 +106,7 @@ def notifications_panel(request):
         reminder_count += soon.count()
 
         # 2) Реальные уведомления (с дедупликацией) - используем настройки из ContractType
+        # Для обратной совместимости также создаем напоминание за 30 дней, если warning_days >= 30
         if should_check:
             for c in contract_qs:
                 if not c.contract_type or not c.contract_until:
@@ -114,8 +115,15 @@ def notifications_panel(request):
                 danger_days = c.contract_type.danger_days
                 days_left = (c.contract_until - today_date).days
                 
-                # Создаем уведомления на порогах warning_days и danger_days
-                for days_before in [warning_days, danger_days]:
+                # Формируем список порогов для напоминаний
+                # Если warning_days >= 30, добавляем отдельное напоминание за 30 дней для обратной совместимости
+                thresholds = [warning_days, danger_days]
+                if warning_days < 30:
+                    # Если warning_days меньше 30, добавляем напоминание за 30 дней для обратной совместимости
+                    thresholds.insert(0, 30)
+                
+                # Создаем уведомления на порогах
+                for days_before in thresholds:
                     if days_before > days_left:
                         continue
                     target = c.contract_until - timedelta(days=days_before)
@@ -130,7 +138,10 @@ def notifications_panel(request):
                     CompanyContractReminder.objects.create(
                         user=user, company_id=c.id, contract_until=c.contract_until, days_before=days_before
                     )
-                    if days_before == danger_days:
+                    if days_before == 30:
+                        title = "До окончания договора остался месяц"
+                        body = f"{c.name} · до {c.contract_until.strftime('%d.%m.%Y')}"
+                    elif days_before == danger_days:
                         title = f"До окончания договора осталось {days_before} дней"
                         body = f"{c.name} · до {c.contract_until.strftime('%d.%m.%Y')}"
                     else:
