@@ -544,7 +544,7 @@
               </div>
             {% endif %}
 
-            <div class="space-y-2 mt-2 hidden" data-company-phones-list>
+            <div class="space-y-2 mt-2 hidden overflow-hidden transition-all duration-300 ease-in-out" data-company-phones-list style="max-height: 0;">
               {% for phone in company.phones.all %}
                 <div>
                   <div class="flex items-center justify-between gap-2">
@@ -889,28 +889,31 @@
                     <div class="text-sm font-semibold text-brand-dark">{{ c.last_name }} {{ c.first_name }}</div>
                   </div>
                   <div class="flex items-center gap-2 shrink-0">
-                    {% if can_edit_company %}
-                      <a class="btn btn-outline btn-xs" href="/contacts/{{ c.id }}/edit/" title="Редактировать" aria-label="Редактировать" onclick="event.stopPropagation();">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                          <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                      </a>
-                      <form method="post" action="/contacts/{{ c.id }}/delete/" onsubmit="return confirm('Удалить контакт?');" style="display:inline" onclick="event.stopPropagation();">
-                        {% csrf_token %}
-                        <button class="btn btn-outline btn-xs btn-danger" title="Удалить контакт" aria-label="Удалить контакт">
+                    <div class="hidden flex items-center gap-2" data-contact-actions>
+                      {% if can_edit_company %}
+                        <a class="btn btn-outline btn-xs" href="/contacts/{{ c.id }}/edit/" title="Редактировать" aria-label="Редактировать" onclick="event.stopPropagation();">
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M6 7h12M10 11v6M14 11v6M9 7l1-3h4l1 3M19 7l-1 12H6L5 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                           </svg>
-                        </button>
-                      </form>
-                    {% endif %}
-                    <svg class="w-4 h-4 text-brand-dark/40 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                        </a>
+                        <form method="post" action="/contacts/{{ c.id }}/delete/" onsubmit="return confirm('Удалить контакт?');" style="display:inline" onclick="event.stopPropagation();">
+                          {% csrf_token %}
+                          <button class="btn btn-outline btn-xs btn-danger" title="Удалить контакт" aria-label="Удалить контакт">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path d="M6 7h12M10 11v6M14 11v6M9 7l1-3h4l1 3M19 7l-1 12H6L5 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                          </button>
+                        </form>
+                      {% endif %}
+                    </div>
+                    <svg class="w-5 h-5 text-orange-500 transition-transform shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" style="stroke-width: 3;">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
                     </svg>
                   </div>
                 </button>
-                <div class="hidden px-3 pb-3" data-contact-content>
+                <div class="hidden overflow-hidden transition-all duration-300 ease-in-out" data-contact-content style="max-height: 0;">
+                  <div class="px-3 pb-3">
                   <div class="pt-2 border-t border-brand-soft/20">
                     <div class="text-xs text-brand-dark/70 mb-3">
                       {{ c.position|default:"—" }}
@@ -3729,6 +3732,7 @@
       if (toggleBtn && phonesList) {
         // Инициализация: по умолчанию свернуто
         toggleBtn.setAttribute('aria-expanded', 'false');
+        phonesList.style.maxHeight = '0';
         phonesList.classList.add('hidden');
         
         toggleBtn.addEventListener('click', function(e) {
@@ -3736,13 +3740,35 @@
           e.stopPropagation();
           const isExpanded = toggleBtn.getAttribute('aria-expanded') === 'true';
           toggleBtn.setAttribute('aria-expanded', !isExpanded);
-          phonesList.classList.toggle('hidden', isExpanded);
+          
+          // Плавная анимация раскрытия/сворачивания
+          if (isExpanded) {
+            // Сворачиваем
+            const currentHeight = phonesList.scrollHeight;
+            phonesList.style.maxHeight = currentHeight + 'px';
+            phonesList.offsetHeight; // Принудительная перерисовка
+            phonesList.style.maxHeight = '0';
+            setTimeout(() => {
+              phonesList.classList.add('hidden');
+            }, 300);
+          } else {
+            // Разворачиваем
+            phonesList.classList.remove('hidden');
+            phonesList.style.maxHeight = '0';
+            phonesList.offsetHeight; // Принудительная перерисовка
+            const targetHeight = phonesList.scrollHeight;
+            phonesList.style.maxHeight = targetHeight + 'px';
+            setTimeout(() => {
+              // Убираем ограничение после анимации для корректного отображения
+              phonesList.style.maxHeight = 'none';
+            }, 300);
+          }
           
           // Обновляем иконку
           const icon = toggleBtn.querySelector('svg');
           if (icon) {
             icon.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(90deg)';
-            icon.style.transition = 'transform 0.2s ease';
+            icon.style.transition = 'transform 0.3s ease';
           }
         });
       }
@@ -3753,39 +3779,100 @@
       const contactToggles = document.querySelectorAll('[data-contact-toggle]');
       
       contactToggles.forEach(toggle => {
+        // Инициализация: по умолчанию свернуто
+        const content = toggle.closest('[data-contact-accordion]').querySelector('[data-contact-content]');
+        const actions = toggle.querySelector('[data-contact-actions]');
+        if (content) {
+          content.style.maxHeight = '0';
+        }
+        if (actions) {
+          actions.classList.add('hidden');
+        }
+        
         toggle.addEventListener('click', function(e) {
           // Предотвращаем клик, если кликнули на кнопки редактирования/удаления
-          if (e.target.closest('a[href*="/edit/"], button[type="submit"], form')) {
+          if (e.target.closest('a[href*="/edit/"], button[type="submit"], form, [data-contact-actions]')) {
             return;
           }
           
           const contactId = toggle.getAttribute('data-contact-id');
-          const content = toggle.closest('[data-contact-accordion]').querySelector('[data-contact-content]');
+          const accordion = toggle.closest('[data-contact-accordion]');
+          const content = accordion.querySelector('[data-contact-content]');
+          const contentInner = content?.querySelector('div');
           const icon = toggle.querySelector('svg:last-child');
+          const actions = toggle.querySelector('[data-contact-actions]');
           const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
           
           // Сворачиваем все остальные контакты
           contactToggles.forEach(otherToggle => {
             if (otherToggle !== toggle) {
-              const otherId = otherToggle.getAttribute('data-contact-id');
-              const otherContent = otherToggle.closest('[data-contact-accordion]').querySelector('[data-contact-content]');
+              const otherAccordion = otherToggle.closest('[data-contact-accordion]');
+              const otherContent = otherAccordion.querySelector('[data-contact-content]');
+              const otherContentInner = otherContent?.querySelector('div');
               const otherIcon = otherToggle.querySelector('svg:last-child');
+              const otherActions = otherToggle.querySelector('[data-contact-actions]');
               
               otherToggle.setAttribute('aria-expanded', 'false');
-              if (otherContent) otherContent.classList.add('hidden');
+              if (otherContent) {
+                otherContent.style.maxHeight = otherContent.scrollHeight + 'px';
+                otherContent.offsetHeight;
+                otherContent.style.maxHeight = '0';
+                setTimeout(() => {
+                  otherContent.classList.add('hidden');
+                }, 300);
+              }
               if (otherIcon) {
                 otherIcon.style.transform = 'rotate(0deg)';
+                otherIcon.style.transition = 'transform 0.3s ease';
+              }
+              if (otherActions) {
+                otherActions.classList.add('hidden');
               }
             }
           });
           
           // Переключаем текущий контакт
           toggle.setAttribute('aria-expanded', !isExpanded);
+          
           if (content) {
-            content.classList.toggle('hidden', isExpanded);
+            if (isExpanded) {
+              // Сворачиваем
+              const currentHeight = content.scrollHeight;
+              content.style.maxHeight = currentHeight + 'px';
+              content.offsetHeight; // Принудительная перерисовка
+              content.style.maxHeight = '0';
+              setTimeout(() => {
+                content.classList.add('hidden');
+              }, 300);
+            } else {
+              // Разворачиваем
+              content.classList.remove('hidden');
+              content.style.maxHeight = '0';
+              content.offsetHeight; // Принудительная перерисовка
+              const targetHeight = content.scrollHeight;
+              content.style.maxHeight = targetHeight + 'px';
+              setTimeout(() => {
+                // Убираем ограничение после анимации для корректного отображения при изменении содержимого
+                if (content.scrollHeight > targetHeight) {
+                  content.style.maxHeight = content.scrollHeight + 'px';
+                } else {
+                  content.style.maxHeight = 'none';
+                }
+              }, 300);
+            }
           }
+          
           if (icon) {
             icon.style.transform = isExpanded ? 'rotate(0deg)' : 'rotate(180deg)';
+            icon.style.transition = 'transform 0.3s ease';
+          }
+          
+          if (actions) {
+            if (isExpanded) {
+              actions.classList.add('hidden');
+            } else {
+              actions.classList.remove('hidden');
+            }
           }
         });
       });
