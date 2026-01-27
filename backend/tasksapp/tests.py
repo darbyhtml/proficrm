@@ -45,12 +45,15 @@ class TaskOrgCreationTestCase(TestCase):
             "due_at": due_at,
             "apply_to_org_branches": apply_to_org,
         }
-        # Пробуем сначала с trailing slash (стандартный DRF URL)
-        resp = self.client.post("/api/tasks/", payload, format="json")
-        # Если получили 301 редирект, пробуем без trailing slash
-        # (APIClient не следует редиректам автоматически)
-        if resp.status_code == status.HTTP_301_MOVED_PERMANENTLY:
-            resp = self.client.post("/api/tasks", payload, format="json")
+        # Пробуем оба варианта URL (с trailing slash и без)
+        # APIClient не следует редиректам автоматически, поэтому обрабатываем вручную
+        urls_to_try = ["/api/tasks/", "/api/tasks"]
+        resp = None
+        for url in urls_to_try:
+            resp = self.client.post(url, payload, format="json")
+            # Если получили успешный ответ или ошибку (не редирект), прекращаем
+            if resp.status_code not in [status.HTTP_301_MOVED_PERMANENTLY, status.HTTP_302_FOUND, status.HTTP_307_TEMPORARY_REDIRECT, status.HTTP_308_PERMANENT_REDIRECT]:
+                break
         self.assertIn(
             resp.status_code,
             (status.HTTP_201_CREATED, status.HTTP_200_OK),
