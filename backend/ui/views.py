@@ -47,6 +47,8 @@ from datetime import date as _date
 
 from django.core.cache import cache
 
+logger = logging.getLogger(__name__)
+
 from .forms import (
     CompanyCreateForm,
     CompanyQuickEditForm,
@@ -75,8 +77,9 @@ from ui.models import UiGlobalConfig, AmoApiConfig, UiUserPreference
 
 from amocrm.client import AmoApiError, AmoClient
 from amocrm.migrate import fetch_amo_users, fetch_company_custom_fields, migrate_filtered
-from crm.utils import require_admin, get_effective_user
+from crm.utils import require_admin, get_effective_user, get_view_as_user
 from policy.engine import enforce
+from policy.decorators import policy_required
 from django.core.exceptions import PermissionDenied
 from ui.templatetags.ui_extras import format_phone
 
@@ -750,11 +753,15 @@ def _qs_without_page(request: HttpRequest, *, page_key: str = "page") -> str:
     params = request.GET.copy()
     try:
         params.pop(page_key, None)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            f"Ошибка при удалении параметра '{page_key}' из URL: {e}",
+            exc_info=True,
+        )
     return params.urlencode()
 
 @login_required
+@policy_required(resource_type="page", resource="ui:dashboard")
 def dashboard(request: HttpRequest) -> HttpResponse:
     """
     Dashboard (Рабочий стол) с оптимизированными запросами и кэшированием.
@@ -917,6 +924,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:dashboard")
 def dashboard_poll(request: HttpRequest) -> JsonResponse:
     """
     AJAX polling endpoint для обновления dashboard.
@@ -941,8 +949,13 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
             )
             if not has_changes:
                 return JsonResponse({"updated": False})
-        except (ValueError, TypeError):
-            pass  # Если since некорректный, возвращаем полные данные
+        except (ValueError, TypeError) as e:
+            logger.warning(
+                f"Некорректный параметр 'since' в dashboard_poll: {since}",
+                exc_info=True,
+                extra={"user_id": user.id, "since": since},
+            )
+            # Если since некорректный, возвращаем полные данные
     
     # Возвращаем обновлённые данные (используем ту же логику, что и в dashboard)
     now = timezone.now()
@@ -1076,6 +1089,7 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:dashboard")
 def dashboard_sse(request: HttpRequest) -> StreamingHttpResponse:
     """
     Server-Sent Events endpoint для live updates dashboard.
@@ -1137,6 +1151,7 @@ def dashboard_sse(request: HttpRequest) -> StreamingHttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:analytics")
 def analytics(request: HttpRequest) -> HttpResponse:
     """
     Аналитика по звонкам/отметкам для руководителей:
@@ -1225,13 +1240,14 @@ def analytics(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
-@login_required
+@policy_required(resource_type="page", resource="ui:help")
 def help_page(request: HttpRequest) -> HttpResponse:
     """Страница помощи - ролики, FAQ, инструкции."""
     return render(request, "ui/help.html")
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:preferences")
 def preferences(request: HttpRequest) -> HttpResponse:
     """
     Настройки пользователя (не админские).
@@ -1798,10 +1814,28 @@ def company_list(request: HttpRequest) -> HttpResponse:
     # Просмотр компаний: всем доступна вся база (без ограничения по филиалу/scope).
     # Кэшируем общее количество компаний (TTL 10 минут)
     from django.core.cache import cache
-    cache_key_total = "companies_total_count"
+    
+    # Кэш-ключ должен учитывать пользователя и режим view_as
+    view_as_user = get_view_as_user(request)
+    effective_user_id = view_as_user.id if view_as_user else user.id
+    view_as_role = request.session.get("view_as_role")
+    view_as_branch_id = request.session.get("view_as_branch_id")
+    
+    # Создаем уникальный ключ кэша с учетом прав доступа
+    cache_key_parts = ["companies_total_count", str(effective_user_id)]
+    if view_as_role:
+        cache_key_parts.append(f"role_{view_as_role}")
+    if view_as_branch_id:
+        cache_key_parts.append(f"branch_{view_as_branch_id}")
+    cache_key_total = "_".join(cache_key_parts)
+    
     companies_total = cache.get(cache_key_total)
     if companies_total is None:
-        companies_total = Company.objects.all().order_by().count()
+        # Применяем те же фильтры, что могут быть в view_as
+        qs = Company.objects.all()
+        if view_as_branch_id:
+            qs = qs.filter(branch_id=view_as_branch_id)
+        companies_total = qs.order_by().count()
         cache.set(cache_key_total, companies_total, 600)  # 10 минут
     # Оптимизация: предзагружаем только необходимые связанные объекты
     qs = (
@@ -1927,6 +1961,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:companies:list")
 def company_list_ajax(request: HttpRequest) -> JsonResponse:
     """
     AJAX endpoint для получения списка компаний без перезагрузки страницы.
@@ -1937,10 +1972,29 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
     
     # Используем ту же логику, что и в company_list
     from django.core.cache import cache
-    cache_key_total = "companies_total_count"
+    
+    # Кэш-ключ должен учитывать пользователя и режим view_as
+    view_as_user = get_view_as_user(request)
+    effective_user_id = view_as_user.id if view_as_user else user.id
+    view_as_role = request.session.get("view_as_role")
+    view_as_branch_id = request.session.get("view_as_branch_id")
+    
+    # Создаем уникальный ключ кэша с учетом прав доступа
+    cache_key_parts = ["companies_total_count", str(effective_user_id)]
+    if view_as_role:
+        cache_key_parts.append(f"role_{view_as_role}")
+    if view_as_branch_id:
+        cache_key_parts.append(f"branch_{view_as_branch_id}")
+    cache_key_total = "_".join(cache_key_parts)
+    
     companies_total = cache.get(cache_key_total)
     if companies_total is None:
-        companies_total = Company.objects.all().order_by().count()
+        # Применяем те же фильтры, что и в company_list
+        qs = Company.objects.all()
+        # Если есть view_as, применяем соответствующие фильтры
+        if view_as_branch_id:
+            qs = qs.filter(branch_id=view_as_branch_id)
+        companies_total = qs.order_by().count()
         cache.set(cache_key_total, companies_total, 600)
     
     # Оптимизация: предзагружаем только необходимые связанные объекты
@@ -2120,6 +2174,7 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:bulk_transfer")
 def company_bulk_transfer_preview(request: HttpRequest) -> JsonResponse:
     """
     AJAX: превью массового переназначения компаний.
@@ -2225,6 +2280,7 @@ def company_bulk_transfer_preview(request: HttpRequest) -> JsonResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:bulk_transfer")
 @transaction.atomic
 def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
     """
@@ -3980,6 +4036,7 @@ def company_phone_cold_call_reset(request: HttpRequest, company_phone_id) -> Htt
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
 def company_main_phone_update(request: HttpRequest, company_id) -> HttpResponse:
     """Обновление основного телефона компании (AJAX)"""
     if request.method != "POST":
@@ -4027,6 +4084,7 @@ def company_main_phone_update(request: HttpRequest, company_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
 def company_phone_value_update(request: HttpRequest, company_phone_id) -> HttpResponse:
     """Обновление значения дополнительного телефона компании (AJAX)"""
     if request.method != "POST":
@@ -4077,6 +4135,7 @@ def company_phone_value_update(request: HttpRequest, company_phone_id) -> HttpRe
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
 def company_phone_create(request: HttpRequest, company_id) -> HttpResponse:
     """Создание дополнительного телефона компании (AJAX)"""
     if request.method != "POST":
@@ -4126,6 +4185,7 @@ def company_phone_create(request: HttpRequest, company_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
 def company_main_email_update(request: HttpRequest, company_id) -> HttpResponse:
     """Обновление основного email компании (AJAX)"""
     if request.method != "POST":
@@ -4168,6 +4228,7 @@ def company_main_email_update(request: HttpRequest, company_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
 def company_email_value_update(request: HttpRequest, company_email_id) -> HttpResponse:
     """Обновление значения дополнительного email компании (AJAX)"""
     if request.method != "POST":
@@ -4215,6 +4276,7 @@ def company_email_value_update(request: HttpRequest, company_email_id) -> HttpRe
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
 def company_main_phone_comment_update(request: HttpRequest, company_id) -> HttpResponse:
     """Обновление комментария к основному телефону компании (AJAX)"""
     if request.method != "POST":
@@ -4257,6 +4319,7 @@ def company_main_phone_comment_update(request: HttpRequest, company_id) -> HttpR
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
 def company_phone_comment_update(request: HttpRequest, company_phone_id) -> HttpResponse:
     """Обновление комментария к дополнительному телефону компании (AJAX)"""
     if request.method != "POST":
@@ -4300,6 +4363,7 @@ def company_phone_comment_update(request: HttpRequest, company_phone_id) -> Http
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
 def contact_phone_comment_update(request: HttpRequest, contact_phone_id) -> HttpResponse:
     """Обновление комментария к телефону контакта (AJAX)"""
     if request.method != "POST":
@@ -4350,6 +4414,7 @@ def contact_phone_comment_update(request: HttpRequest, contact_phone_id) -> Http
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
 def company_note_pin_toggle(request: HttpRequest, company_id, note_id: int) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
@@ -4398,6 +4463,7 @@ def company_note_pin_toggle(request: HttpRequest, company_id, note_id: int) -> H
     return redirect("company_detail", company_id=company.id)
 
 @login_required
+@policy_required(resource_type="page", resource="ui:companies:detail")
 def company_note_attachment_open(request: HttpRequest, company_id, note_id: int) -> HttpResponse:
     """
     Открыть вложение заметки в новом окне (inline). Доступ: всем пользователям (как просмотр компании).
@@ -4419,6 +4485,7 @@ def company_note_attachment_open(request: HttpRequest, company_id, note_id: int)
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:companies:detail")
 def company_note_attachment_download(request: HttpRequest, company_id, note_id: int) -> HttpResponse:
     """
     Скачать вложение заметки (attachment). Доступ: всем пользователям (как просмотр компании).
@@ -4440,6 +4507,7 @@ def company_note_attachment_download(request: HttpRequest, company_id, note_id: 
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
 def company_edit(request: HttpRequest, company_id) -> HttpResponse:
     user: User = request.user
     company = get_object_or_404(Company.objects.select_related("responsible", "branch", "status"), id=company_id)
@@ -4738,6 +4806,7 @@ def company_inline_update(request: HttpRequest, company_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
 def contact_create(request: HttpRequest, company_id) -> HttpResponse:
     user: User = request.user
     company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
@@ -4803,6 +4872,7 @@ def contact_create(request: HttpRequest, company_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
 def contact_edit(request: HttpRequest, contact_id) -> HttpResponse:
     user: User = request.user
     contact = get_object_or_404(Contact.objects.select_related("company", "company__responsible", "company__branch"), id=contact_id)
@@ -4870,6 +4940,7 @@ def contact_edit(request: HttpRequest, contact_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
 def contact_delete(request: HttpRequest, contact_id) -> HttpResponse:
     """
     Удалить контакт компании.
@@ -4905,6 +4976,7 @@ def contact_delete(request: HttpRequest, contact_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
 def company_note_add(request: HttpRequest, company_id) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
@@ -4924,8 +4996,12 @@ def company_note_add(request: HttpRequest, company_id) -> HttpResponse:
                 note.attachment_ext = (note.attachment_name.rsplit(".", 1)[-1].lower() if "." in note.attachment_name else "")[:16]
                 note.attachment_size = int(getattr(note.attachment, "size", 0) or 0)
                 note.attachment_content_type = (getattr(note.attachment, "content_type", "") or "").strip()[:120]
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    f"Ошибка при извлечении метаданных вложения заметки: {e}",
+                    exc_info=True,
+                    extra={"company_id": str(company.id), "note_id": note.id if hasattr(note, "id") else None},
+                )
         note.save()
         log_event(
             actor=user,
@@ -4949,6 +5025,7 @@ def company_note_add(request: HttpRequest, company_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
 def company_note_edit(request: HttpRequest, company_id, note_id: int) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
@@ -4994,8 +5071,12 @@ def company_note_edit(request: HttpRequest, company_id, note_id: int) -> HttpRes
             note.attachment_ext = (note.attachment_name.rsplit(".", 1)[-1].lower() if "." in note.attachment_name else "")[:16]
             note.attachment_size = int(getattr(new_file, "size", 0) or 0)
             note.attachment_content_type = (getattr(new_file, "content_type", "") or "").strip()[:120]
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                f"Ошибка при извлечении метаданных нового вложения заметки: {e}",
+                exc_info=True,
+                extra={"company_id": str(company.id), "note_id": note.id if hasattr(note, "id") else None},
+            )
 
     # Не даём превратить заметку в пустую (без текста и без файла)
     if not text and not note.attachment:
@@ -5012,8 +5093,12 @@ def company_note_edit(request: HttpRequest, company_id, note_id: int) -> HttpRes
         should_delete_old = bool(old_file and old_name and (remove_attachment or (new_file is not None)) and old_name != new_name)
         if should_delete_old:
             old_file.delete(save=False)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            f"Ошибка при удалении старого файла вложения заметки: {e}",
+            exc_info=True,
+            extra={"company_id": str(company.id), "note_id": note.id if hasattr(note, "id") else None},
+        )
 
     messages.success(request, "Заметка обновлена.")
     log_event(
@@ -5028,6 +5113,7 @@ def company_note_edit(request: HttpRequest, company_id, note_id: int) -> HttpRes
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
 def company_note_delete(request: HttpRequest, company_id, note_id: int) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
@@ -5053,8 +5139,12 @@ def company_note_delete(request: HttpRequest, company_id, note_id: int) -> HttpR
     try:
         if note.attachment:
             note.attachment.delete(save=False)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            f"Ошибка при удалении файла вложения заметки: {e}",
+            exc_info=True,
+            extra={"company_id": str(company.id), "note_id": note_id},
+        )
     note.delete()
 
     messages.success(request, "Заметка удалена.")
@@ -7375,8 +7465,12 @@ def settings_user_magic_link_generate(request: HttpRequest, user_id: int) -> Htt
             message=f"Создана ссылка входа для {user}",
             meta={"user_id": user.id, "expires_at": str(magic_link.expires_at)},
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            f"Ошибка при логировании генерации magic link: {e}",
+            exc_info=True,
+            extra={"admin_user_id": admin_user.id if admin_user else None, "target_user_id": user.id},
+        )
     
     # Возвращаем JSON с ссылкой (для AJAX) или редиректим с сообщением
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -7434,8 +7528,12 @@ def settings_user_logout(request: HttpRequest, user_id: int) -> HttpResponse:
                 message=f"Администратор {admin_user} разлогинил пользователя {target_user}",
                 meta={"target_user_id": target_user.id, "sessions_deleted": sessions_deleted},
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                f"Ошибка при логировании разлогинивания пользователя: {e}",
+                exc_info=True,
+                extra={"admin_user_id": admin_user.id if admin_user else None, "target_user_id": target_user.id},
+            )
         
         messages.success(request, f"Пользователь {target_user} разлогинен. Завершено сессий: {sessions_deleted}.")
         return redirect("settings_users")
@@ -9183,8 +9281,13 @@ def mobile_app_download(request: HttpRequest, build_id) -> HttpResponse:
                 "ip": get_client_ip(request),
             },
         )
-    except Exception:
-        pass  # Не критично, если логирование не удалось
+    except Exception as e:
+        logger.warning(
+            f"Ошибка при логировании статистики звонков: {e}",
+            exc_info=True,
+            extra={"user_id": request.user.id if request.user.is_authenticated else None},
+        )
+        # Не критично, если логирование не удалось, но фиксируем для отладки
     
     # Отдаем файл с правильным Content-Disposition
     response = FileResponse(build.file.open("rb"), content_type="application/vnd.android.package-archive")
