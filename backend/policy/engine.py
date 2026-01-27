@@ -8,6 +8,7 @@ from django.core.exceptions import PermissionDenied
 from accounts.models import User
 from core.input_cleaners import clean_int_id
 from tasksapp.policy import can_view_task_id
+from companies.policy import can_view_company_id
 from .models import PolicyConfig, PolicyRule
 from .resources import RESOURCE_INDEX, PolicyResource
 
@@ -24,7 +25,8 @@ class PolicyDecision:
 
 
 TASK_DETAIL_RESOURCE = "ui:tasks:detail"
-TASK_DETAIL_OVERRIDE_ROLES = (
+COMPANY_DETAIL_RESOURCE = "ui:companies:detail"
+_OVERRIDE_ROLES = (
     User.Role.ADMIN,
     User.Role.GROUP_MANAGER,
     User.Role.BRANCH_DIRECTOR,
@@ -32,11 +34,11 @@ TASK_DETAIL_OVERRIDE_ROLES = (
 )
 
 
-def _has_task_detail_override(user: User) -> bool:
+def _has_override_role(user: User) -> bool:
     if not user or not user.is_authenticated or not user.is_active:
         return False
     # Суперпользователь обрабатывается отдельно выше в decide()
-    return getattr(user, "role", None) in TASK_DETAIL_OVERRIDE_ROLES
+    return getattr(user, "role", None) in _OVERRIDE_ROLES
 
 
 def _default_allowed_for_task_detail(*, user: User, context: dict[str, Any] | None) -> bool:
@@ -46,7 +48,7 @@ def _default_allowed_for_task_detail(*, user: User, context: dict[str, Any] | No
     - разрешаем override-ролям (директора/управляющие/админы)
     - иначе запрещаем.
     """
-    if _has_task_detail_override(user):
+    if _has_override_role(user):
         return True
     ctx = context or {}
     task_id = clean_int_id(ctx.get("task_id"))
@@ -54,6 +56,23 @@ def _default_allowed_for_task_detail(*, user: User, context: dict[str, Any] | No
         # Без task_id безопаснее запретить доступ к detail.
         return False
     return can_view_task_id(user, task_id)
+
+
+def _default_allowed_for_company_detail(*, user: User, context: dict[str, Any] | None) -> bool:
+    """
+    Умный дефолт для ui:companies:detail:
+    - разрешаем, если компания видна через visible_companies_qs (can_view_company_id)
+    - разрешаем override-ролям (директора/управляющие/админы)
+    - иначе запрещаем.
+    """
+    if _has_override_role(user):
+        return True
+    ctx = context or {}
+    company_id = clean_int_id(ctx.get("company_id"))
+    if not company_id:
+        # Без company_id безопаснее запретить доступ к карточке.
+        return False
+    return can_view_company_id(user, company_id)
 
 
 def baseline_allowed_for_role(*, role: str, resource_type: str, resource_key: str, is_superuser: bool = False) -> bool:
@@ -302,9 +321,13 @@ def decide(*, user: User, resource_type: str, resource: str, context: dict[str, 
     # Нет правил — применяем дефолт по ресурсу
     default_allowed = _baseline_allowed(user=user, resource_type=resource_type, resource_key=resource)
 
-    # Для ui:tasks:detail используем "умный" дефолт, основанный на видимости задач и override-ролях.
-    if resource_type == PolicyRule.ResourceType.PAGE and resource == TASK_DETAIL_RESOURCE:
-        default_allowed = _default_allowed_for_task_detail(user=user, context=context)
+    # Для ui:tasks:detail и ui:companies:detail используем "умный" дефолт,
+    # основанный на видимости задач/компаний и override-ролях.
+    if resource_type == PolicyRule.ResourceType.PAGE:
+        if resource == TASK_DETAIL_RESOURCE:
+            default_allowed = _default_allowed_for_task_detail(user=user, context=context)
+        elif resource == COMPANY_DETAIL_RESOURCE:
+            default_allowed = _default_allowed_for_company_detail(user=user, context=context)
     return PolicyDecision(
         allowed=default_allowed,
         mode=mode,

@@ -45,6 +45,29 @@ def visible_contacts_qs(user: User) -> QuerySet[Contact]:
     return qs.filter(company__in=visible_companies_qs(user))
 
 
+def can_view_company(user: User, company: Company) -> bool:
+    """
+    Проверяет, может ли пользователь просматривать конкретную компанию.
+
+    Базируется на visible_companies_qs, чтобы UI и API использовали одинаковые правила.
+    Сейчас visible_companies_qs возвращает всю базу для всех ролей, но
+    в будущем сюда можно добавить ограничения по филиалу/роли.
+    """
+    if not user or not user.is_authenticated or not user.is_active:
+        return False
+    return visible_companies_qs(user).filter(pk=company.pk).exists()
+
+
+def can_view_company_id(user: User, company_id: int) -> bool:
+    """
+    То же, что can_view_company, но без предварительного get().
+    Удобно вызывать из policy-движка по company_id из контекста.
+    """
+    if not user or not user.is_authenticated or not user.is_active:
+        return False
+    return visible_companies_qs(user).filter(pk=company_id).exists()
+
+
 def visible_company_notes_qs(user: User) -> QuerySet[CompanyNote]:
     """
     Заметки компаний, видимые пользователю: через видимые компании.
