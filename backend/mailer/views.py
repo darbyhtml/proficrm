@@ -234,9 +234,10 @@ def mail_settings(request: HttpRequest) -> HttpResponse:
                     from_name=(cfg.from_name or "CRM ПРОФИ").strip(),
                     reply_to=to_email,
                 )
-                # Отправка тестового письма через Celery task (соблюдение лимитов)
+                # Отправка тестового письма через Celery task (асинхронно, без блокирующего ожидания)
                 from mailer.tasks import send_test_email
-                result = send_test_email.delay(
+
+                send_test_email.delay(
                     to_email=to_email,
                     subject="CRM ПРОФИ: тест отправки",
                     body_html=body_html,
@@ -246,15 +247,13 @@ def mail_settings(request: HttpRequest) -> HttpResponse:
                     reply_to=to_email,
                     x_tag="test:mail_settings",
                 )
-                # Ждем результат (для синхронного UX в админке)
-                try:
-                    task_result = result.get(timeout=30)
-                    if task_result.get("success"):
-                        messages.success(request, f"Тестовое письмо отправлено на {to_email}.")
-                    else:
-                        messages.error(request, f"Ошибка отправки: {task_result.get('error', 'Неизвестная ошибка')}")
-                except Exception as ex:
-                    messages.error(request, f"Ошибка отправки: {ex}")
+
+                # Не ждём result.get() здесь, чтобы не блокировать web-процесс.
+                # Показываем пользователю, что задача поставлена, а результат придёт на почту.
+                messages.success(
+                    request,
+                    f"Тестовое письмо поставлено в очередь на отправку. Проверьте ящик {to_email} через несколько секунд.",
+                )
                 return redirect("mail_settings")
             messages.success(request, "Настройки SMTP сохранены.")
             return redirect("mail_settings")

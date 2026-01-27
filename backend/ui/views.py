@@ -34,6 +34,7 @@ from companies.permissions import (
     can_transfer_companies,
 )
 from tasksapp.models import Task, TaskType
+from tasksapp.policy import visible_tasks_qs, can_manage_task_status
 from notifications.models import Notification
 from notifications.service import notify
 from phonebridge.models import CallRequest, PhoneDevice, MobileAppBuild, MobileAppQrToken
@@ -5311,24 +5312,9 @@ def task_list(request: HttpRequest) -> HttpResponse:
     today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow_start = today_start + timedelta(days=1)
 
-    qs = Task.objects.select_related("company", "assigned_to", "created_by", "type").order_by("-created_at")
-
-    # Базовая видимость задач в зависимости от роли:
-    # - Админ / управляющий: все задачи
-    # - Директор филиала / РОП: задачи своего филиала
-    # - Остальные: фильтрация дальше по assigned_to (см. mine)
-    if user.role == User.Role.MANAGER:
-        # По ТЗ: менеджер видит только свои задачи (исполнитель).
-        qs = qs.filter(assigned_to=user)
-    elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
-        # По ТЗ: директор/РОП видят задачи своего филиала + свои задачи.
-        qs = qs.filter(
-            Q(assigned_to__branch_id=user.branch_id)
-            | Q(company__branch_id=user.branch_id)
-            | Q(assigned_to=user)
-        )
-
-    qs = qs.distinct()
+    # Базовую видимость задач берём из domain policy слоя (tasksapp.policy),
+    # чтобы UI и API использовали одно и то же правило.
+    qs = visible_tasks_qs(user)
 
     # Справочник "Кому поставлена задача" (assigned_to) для фильтра:
     # - админ / управляющий: все сотрудники
@@ -5543,25 +5529,16 @@ def task_list(request: HttpRequest) -> HttpResponse:
                 id=view_task_id
             ).first()
             if view_task:
-                # Проверяем права на просмотр
-                can_view = False
-                if user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER):
-                    can_view = True
-                elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
-                    if view_task.company_id and getattr(view_task.company, "branch_id", None) == user.branch_id:
-                        can_view = True
-                    elif view_task.assigned_to_id and getattr(view_task.assigned_to, "branch_id", None) == user.branch_id:
-                        can_view = True
-                elif view_task.assigned_to_id == user.id or view_task.created_by_id == user.id:
-                    can_view = True
-                if not can_view:
+                # Проверяем права на просмотр через тот же visible_tasks_qs,
+                # чтобы UI и API были консистентны.
+                if not visible_tasks_qs(user).filter(id=view_task.id).exists():
                     view_task = None
                 else:
                     # Вычисляем просрочку в днях (только если известны дедлайн и время завершения)
                     if view_task.due_at and view_task.completed_at and view_task.completed_at > view_task.due_at:
                         delta = view_task.completed_at - view_task.due_at
                         view_task_overdue_days = delta.days
-                    # Добавляем флаг для прав на редактирование
+                    # Добавляем флаги прав
                     view_task.can_edit_task = _can_edit_task_ui(user, view_task)  # type: ignore[attr-defined]
         except (ValueError, TypeError):
             pass

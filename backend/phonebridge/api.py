@@ -107,11 +107,13 @@ class DeviceHeartbeatView(APIView):
                 type_list = [f"{k}:{v}" for k, v in stuck_by_type.items()]
                 error_message += f" (by type: {', '.join(type_list)})"
         
-        obj, created = PhoneDevice.objects.update_or_create(
+        # Сначала получаем/создаём устройство без использования obj в defaults,
+        # затем обновляем поля — так избегаем обращения к obj до присваивания.
+        obj, created = PhoneDevice.objects.get_or_create(
             user=request.user,
             device_id=device_id,
             defaults={
-                "device_name": device_name or None or "",
+                "device_name": device_name or "" or None,
                 "platform": "android",
                 "last_seen_at": timezone.now(),
                 "app_version": app_version,
@@ -119,9 +121,43 @@ class DeviceHeartbeatView(APIView):
                 "last_poll_at": last_poll_at or timezone.now(),
                 "last_ip": ip,
                 "encryption_enabled": encryption_enabled,
-                "last_error_code": "queue_stuck" if queue_stuck else obj.last_error_code if not created else "",
-                "last_error_message": error_message if queue_stuck else obj.last_error_message if not created else "",
+                "last_error_code": "",
+                "last_error_message": "",
             },
+        )
+
+        # Обновляем поля на основании текущего состояния и новых данных
+        obj.device_name = device_name or obj.device_name or ""
+        obj.platform = "android"
+        obj.last_seen_at = timezone.now()
+        obj.app_version = app_version or obj.app_version
+        obj.last_poll_code = last_poll_code if last_poll_code is not None else obj.last_poll_code
+        obj.last_poll_at = last_poll_at or obj.last_poll_at or timezone.now()
+        obj.last_ip = ip
+        obj.encryption_enabled = bool(encryption_enabled)
+
+        # Обновляем last_error_* только если очереди действительно застряли; иначе оставляем как есть
+        if queue_stuck and stuck_count:
+            obj.last_error_code = "queue_stuck"
+            obj.last_error_message = error_message
+        elif created:
+            # Для нового устройства без ошибок — очищаем поля
+            obj.last_error_code = ""
+            obj.last_error_message = ""
+
+        obj.save(
+            update_fields=[
+                "device_name",
+                "platform",
+                "last_seen_at",
+                "app_version",
+                "last_poll_code",
+                "last_poll_at",
+                "last_ip",
+                "encryption_enabled",
+                "last_error_code",
+                "last_error_message",
+            ]
         )
         
         # Логируем предупреждения
