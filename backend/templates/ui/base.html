@@ -2869,9 +2869,31 @@
 
           const schedule = {0:[],1:[],2:[],3:[],4:[],5:[],6:[]};
           let any = false;
+          let lastProcessedDays = [];
+          const lunchIntervals = {}; // dayIdx -> [start, end]
+          
           const lines = src.replace(/[|]/g,';').replace(/\r/g,'\n').split(/[\n;]+/).map(x => x.trim()).filter(Boolean);
           for (const line0 of lines) {
             const line = String(line0).replace(/[‐‑‒–—−]/g,'-');
+            const lineLower = line.toLowerCase();
+            
+            // Проверяем, является ли это строкой с перерывом/обедом без указания дней
+            const isLunchOnly = /^(обед|перерыв)\s*:/.test(lineLower) && !/^((?:пн|вт|ср|чт|пт|сб|вс)|будни|выходн|ежедневно|каждый\s+день|без\s+выходных)/i.test(line);
+            
+            if (isLunchOnly) {
+              // Парсим перерыв и применяем к последним обработанным дням
+              const lunchRe = /(обед|перерыв)\s*:\s*(\d{1,2})[:.\-](\d{2})\s*(?:-|до)\s*(\d{1,2})[:.\-](\d{2})/i;
+              const lm = lineLower.match(lunchRe);
+              if (lm) {
+                const a = toMin(lm[2], lm[3]);
+                const b = toMin(lm[4], lm[5]);
+                if (a >= 0 && a < b && b <= 1439) {
+                  lastProcessedDays.forEach(d => { lunchIntervals[d] = [a, b]; });
+                }
+              }
+              continue;
+            }
+            
             const off = (/(закрыт|не\s*работ)/i.test(line)) || (/(выходн)/i.test(line) && !/без\s+выходн/i.test(line));
             // Robust split: support both "пн-пт: 09:00-18:00" and "пн-пт 8:30-17:00"
             let dayPart = '';
@@ -2888,6 +2910,7 @@
             if (off) {
               days.forEach(d => { schedule[d] = []; });
               any = true;
+              lastProcessedDays = days.slice();
               continue;
             }
             const ranges = [];
@@ -2909,6 +2932,28 @@
             if (!ranges.length) continue;
             days.forEach(d => { schedule[d].push(...ranges); });
             any = true;
+            lastProcessedDays = days.slice();
+          }
+          
+          // Применяем перерывы: разбиваем интервалы на части до и после перерыва
+          for (const [dayIdx, [lunchStart, lunchEnd]] of Object.entries(lunchIntervals)) {
+            const d = parseInt(dayIdx, 10);
+            const intervals = schedule[d] || [];
+            if (!intervals.length) continue;
+            
+            const newIntervals = [];
+            intervals.forEach(([start, end]) => {
+              if (start < lunchStart && lunchEnd < end) {
+                // Перерыв внутри интервала - разбиваем на два
+                newIntervals.push([start, lunchStart]);
+                newIntervals.push([lunchEnd, end]);
+              } else {
+                // Перерыв не пересекается с интервалом - оставляем как есть
+                newIntervals.push([start, end]);
+              }
+            });
+            
+            schedule[d] = newIntervals.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
           }
           if (!any) {
             // Fallback: форматы без дней, вроде "с 08:00-17:00\nобед с 12:00-13:00" (ежедневно, с обедом)
