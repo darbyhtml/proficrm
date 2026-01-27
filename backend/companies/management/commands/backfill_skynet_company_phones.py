@@ -1,5 +1,6 @@
 """
-Backfill: разбирает поле 309609 «Список телефонов (Скайнет)» из raw_fields и создаёт CompanyPhone с comment=SKYNET.
+Backfill: разбирает поле 309609 «Список телефонов (Скайнет)» из raw_fields и создаёт CompanyPhone
+с comment, начинающимся с SKYNET (например "SKYNET; временно не доступен").
 
 Для компаний, у которых в raw_fields есть custom_fields_values с field_id=309609, но телефоны
 ещё не разнесены в CompanyPhone (например, импорт был до появления логики Скайнет).
@@ -47,7 +48,8 @@ def _texts_from_values(values: list) -> list[str]:
 
 class Command(BaseCommand):
     help = (
-        "Backfill: парсит поле 309609 (Скайнет) из raw_fields и создаёт CompanyPhone с comment=SKYNET. "
+        "Backfill: парсит поле 309609 (Скайнет) из raw_fields и создаёт CompanyPhone с comment, "
+        "начинающимся с SKYNET (например 'SKYNET; временно не доступен'). "
         "Используйте --dry-run для проверки."
     )
 
@@ -84,19 +86,23 @@ class Command(BaseCommand):
                 no_value += 1
                 continue
 
-            all_phones: list[str] = []
+            # all_phones: список структур от parse_skynet_phones: {"value": E.164, "comment": "..."}
+            all_phones: list[dict] = []
             for t in texts:
                 phs, rej, _ = parse_skynet_phones(t)
                 all_phones.extend(phs)
                 rejected += rej
-
+            
             # дедуп по E164
             seen = set()
             uniq = []
-            for p in all_phones:
-                if p not in seen:
-                    seen.add(p)
-                    uniq.append(p)
+            for item in all_phones:
+                v = (item.get("value") or "").strip()
+                if not v:
+                    continue
+                if v not in seen:
+                    seen.add(v)
+                    uniq.append(item)
 
             if not uniq:
                 continue
@@ -110,20 +116,32 @@ class Command(BaseCommand):
             max_order = CompanyPhone.objects.filter(company=comp).aggregate(m=Max("order")).get("m")
             next_order = int(max_order) + 1 if max_order is not None else 0
 
-            for p in uniq:
-                n = _normalize_phone(p) or p
+            for item in uniq:
+                raw_value = (item.get("value") or "").strip()
+                if not raw_value:
+                    continue
+                n = _normalize_phone(raw_value) or raw_value
                 if main_norm and main_norm == n:
                     skipped_dup += 1
                     continue
                 if n in existing:
                     skipped_dup += 1
                     continue
+                # Собираем комментарий: источник (SKYNET) + текст вокруг номера, если есть
+                extra_comment = (item.get("comment") or "").strip()
+                if extra_comment:
+                    comment = f"SKYNET; {extra_comment}"
+                else:
+                    comment = "SKYNET"
                 if not dry_run:
-                    CompanyPhone.objects.create(company=comp, value=n, order=next_order, comment="SKYNET")
+                    CompanyPhone.objects.create(company=comp, value=n, order=next_order, comment=comment)
                     existing.add(n)
                     next_order += 1
                 added += 1
-                self.stdout.write(f"  {comp.name} (inn={comp.inn or '-'}): +1 CompanyPhone SKYNET {n}")
+                self.stdout.write(
+                    f"  {comp.name} (inn={comp.inn or '-'}): +1 CompanyPhone SKYNET {n}"
+                    f"{' | ' + extra_comment if extra_comment else ''}"
+                )
 
         self.stdout.write(self.style.SUCCESS(
             f"Итого: added={added}, skipped_duplicate={skipped_dup}, rejected={rejected}, no_value={no_value}"

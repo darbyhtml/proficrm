@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypedDict
 import json
 import logging
 import re
@@ -173,6 +173,17 @@ class ParsedPhoneValue:
     def __post_init__(self):
         if self.phones is None:
             self.phones = []
+
+
+class SkynetPhone(TypedDict):
+    """
+    Структура для телефонов из поля «Список телефонов (Скайнет)» (309609).
+
+    value   — телефон в формате E.164 (+7XXXXXXXXXX)
+    comment — комментарий/инструкции, связанные с этим номером (может быть пустой строкой)
+    """
+    value: str
+    comment: str
 
 
 def normalize_phone(raw: str | None) -> NormalizedPhone:
@@ -1418,33 +1429,38 @@ def _split_multi(s: str) -> list[str]:
     return out
 
 
-def parse_skynet_phones(text: str | None) -> tuple[list[str], int, list[str]]:
+def parse_skynet_phones(text: str | None) -> tuple[list[SkynetPhone], int, list[str]]:
     """
     Парсит строку с телефонами из поля «Список телефонов (Скайнет)» (field_id 309609).
     Разделяет по \\n, запятой, точке с запятой. Каждый фрагмент нормализует к E.164.
     Игнорирует мусорные строки (не номера).
 
     Returns:
-        (phones_e164, rejected_count, rejected_examples)
+        (phones, rejected_count, rejected_examples)
+        
+        phones: list[SkynetPhone] — телефоны с комментариями
+        rejected_count: int      — сколько фрагментов не удалось распарсить как телефон
+        rejected_examples: list[str] — примеры отклонённых значений (до 5 штук)
     """
     if not text or not isinstance(text, str):
         return ([], 0, [])
     parts = _split_multi(text)
-    phones: list[str] = []
+    phones: list[SkynetPhone] = []
     seen: set[str] = set()
     rejected = 0
     examples: list[str] = []
     for p in parts:
-        norm = normalize_phone(p)
-        if norm.isValid and norm.phone_e164 and is_valid_phone(norm.phone_e164):
-            e164 = norm.phone_e164
+        parsed = parse_phone_value(p)
+        if parsed.phones and is_valid_phone(parsed.phones[0]):
+            e164 = parsed.phones[0]
             if e164 not in seen:
                 seen.add(e164)
-                phones.append(e164)
+                comment = (parsed.comment or "").strip()
+                phones.append({"value": e164, "comment": comment})
         else:
             rejected += 1
             if len(examples) < 5:
-                examples.append((p.strip() or p)[:80])
+                examples.append((str(p).strip() or str(p))[:80])
     return (phones, rejected, examples)
 
 
@@ -1525,9 +1541,10 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
     fid_tz = _find_field_id(field_meta, name_contains=["часовой пояс", "таймзона", "timezone"])
     fid_note = _find_field_id(field_meta, name_contains=["примеч", "комментар", "коммент", "заметк"])
 
-    # Телефоны из основного поля. Скайнет (309609) — отдельно в skynet_phones, идут только в CompanyPhone с comment=SKYNET.
+    # Телефоны из основного поля. Скайнет (309609) — отдельно в skynet_phones,
+    # идут только в CompanyPhone с comment, начинающимся с SKYNET.
     phones_list = list_vals(fid_phone)
-    skynet_phones: list[str] = []
+    skynet_phones: list[SkynetPhone] = []
     skynet_rejected = 0
     skynet_rejected_example: str | None = None
     if fid_phone_skynet and fid_phone_skynet != fid_phone:
@@ -1538,8 +1555,11 @@ def _extract_company_fields(amo_company: dict[str, Any], field_meta: dict[int, d
                 continue
             phs, rej, exs = parse_skynet_phones(s)
             for ph in phs:
-                if ph not in seen_skynet:
-                    seen_skynet.add(ph)
+                value = (ph.get("value") or "").strip()
+                if not value:
+                    continue
+                if value not in seen_skynet:
+                    seen_skynet.add(value)
                     skynet_phones.append(ph)
             skynet_rejected += rej
             if exs and skynet_rejected_example is None:
@@ -3735,23 +3755,39 @@ def migrate_filtered(
                             existing_phones_normalized.add(normalized)  # Предотвращаем дубликаты в этом батче
                             next_order += 1
                         
-                        # Скайнет (поле 309609): только в CompanyPhone с comment=SKYNET, без дубликатов
+                        # Скайнет (поле 309609): только в CompanyPhone с comment, начинающимся с SKYNET, без дубликатов
                         skynet_added = 0
                         skynet_skipped_dup = 0
-                        for p in skynet_phones:
-                            if not is_valid_phone(p):  # защита: parse_skynet_phones уже отфильтровал
-                                res.company_phones_rejected_invalid += 1
+                        for item in skynet_phones:
+                            raw_value = (item.get("value") or "").strip()
+                            if not raw_value:
                                 continue
-                            norm = _normalize_phone(p) if p else ""
+                            if not is_valid_phone(raw_value):  # защита: parse_skynet_phones уже отфильтровал
+                                res.company_phones_rejected_invalid += 1
+                                if res.company_phones_rejected_invalid <= 3:
+                                    logger.debug(
+                                        "company_phones_rejected_invalid (skynet): пример value (не E.164), company=%s: %s",
+                                        comp.name, (raw_value[:60] + "…" if len(raw_value) > 60 else raw_value),
+                                    )
+                                continue
+                            norm = _normalize_phone(raw_value) if raw_value else ""
                             if not norm:
-                                norm = p
+                                norm = raw_value
                             if main_phone_normalized and main_phone_normalized == norm:
                                 skynet_skipped_dup += 1
                                 continue
                             if norm in existing_phones_normalized:
                                 skynet_skipped_dup += 1
                                 continue
-                            phones_to_create.append(CompanyPhone(company=comp, value=norm, order=next_order, comment="SKYNET"))
+                            # Собираем комментарий: источник (SKYNET) + текст вокруг номера, если есть
+                            comment_parts = ["SKYNET"]
+                            extra_comment = (item.get("comment") or "").strip()
+                            if extra_comment:
+                                comment_parts.append(extra_comment)
+                            skynet_comment = "; ".join(comment_parts)[:255]
+                            phones_to_create.append(
+                                CompanyPhone(company=comp, value=norm, order=next_order, comment=skynet_comment)
+                            )
                             existing_phones_normalized.add(norm)
                             next_order += 1
                             skynet_added += 1

@@ -349,7 +349,7 @@ class TestNormalizePhone(unittest.TestCase):
         assert "Ольга" in cleaned or len(cleaned) < 3  # Имя должно быть удалено или остаться минимально
 
 
-class TestParseSkynetPhones(unittest.TestCase):
+class SkynetParsePhonesTests(unittest.TestCase):
     """Тесты для parse_skynet_phones (поле 309609 «Список телефонов (Скайнет)»)."""
 
     def test_split_newline_comma_semicolon(self):
@@ -405,7 +405,7 @@ class TestParseSkynetPhones(unittest.TestCase):
         assert rejected == 0
 
 
-class TestExtractCompanyFieldsSkynet(unittest.TestCase):
+class SkynetExtractCompanyFieldsTests(unittest.TestCase):
     """Тест: поле 309609 (Скайнет) -> skynet_phones в результате _extract_company_fields."""
 
     def test_field_309609_extracts_skynet_phones(self):
