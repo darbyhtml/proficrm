@@ -2868,6 +2868,7 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
 
     # Используем ту же логику поиска, что и в списке компаний,
     # чтобы поведение автодополнения и таблицы было полностью одинаковым
+    if not company_id_raw:
         base_qs = Company.objects.all()
         filtered = _apply_company_filters(qs=base_qs, params={"q": q}, default_responsible_id=None)
         qs = (
