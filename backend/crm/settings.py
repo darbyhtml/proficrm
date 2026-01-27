@@ -163,6 +163,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
+    'crm.request_id_middleware.RequestIdMiddleware',  # Добавляет request_id для корреляции логов
     'django.middleware.security.SecurityMiddleware',
     # Serve static files in production (admin CSS/JS) without relying on DEBUG=1.
     'whitenoise.middleware.WhiteNoiseMiddleware',

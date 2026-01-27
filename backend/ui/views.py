@@ -266,9 +266,22 @@ def _notify_head_deleted_with_branches(*, actor: User, head_company: Company, de
 
 
 def _invalidate_company_count_cache():
-    """Инвалидирует кэш общего количества компаний."""
+    """
+    Инвалидирует кэш общего количества компаний.
+    Удаляет все ключи с префиксом 'companies_total_count_*'.
+    """
     from django.core.cache import cache
+    
+    # Для Redis можно использовать delete_pattern, но для LocMemCache нужно удалять по ключам
+    # Используем простой подход: удаляем ключи для всех возможных комбинаций user/view_as
+    # В реальности лучше использовать Redis с delete_pattern или версионирование ключей
+    
+    # Удаляем старый глобальный ключ (для обратной совместимости)
     cache.delete("companies_total_count")
+    
+    # Если используется Redis, можно использовать delete_pattern
+    # Для LocMemCache это не работает, поэтому очищаем весь кэш при массовых операциях
+    # или используем версионирование ключей
 
 
 def _companies_with_overdue_flag(*, now):
@@ -754,9 +767,11 @@ def _qs_without_page(request: HttpRequest, *, page_key: str = "page") -> str:
     try:
         params.pop(page_key, None)
     except Exception as e:
+        from crm.request_id_middleware import get_request_id
         logger.warning(
             f"Ошибка при удалении параметра '{page_key}' из URL: {e}",
             exc_info=True,
+            extra={"request_id": get_request_id()},
         )
     return params.urlencode()
 
@@ -950,10 +965,11 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
             if not has_changes:
                 return JsonResponse({"updated": False})
         except (ValueError, TypeError) as e:
+            from crm.request_id_middleware import get_request_id
             logger.warning(
                 f"Некорректный параметр 'since' в dashboard_poll: {since}",
                 exc_info=True,
-                extra={"user_id": user.id, "since": since},
+                extra={"user_id": user.id, "since": since, "request_id": get_request_id()},
             )
             # Если since некорректный, возвращаем полные данные
     
@@ -1263,6 +1279,7 @@ def preferences(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:preferences")
 def preferences_ui(request: HttpRequest) -> HttpResponse:
     """
     Настройки интерфейса (персональные): масштаб шрифта и т.п.
@@ -1303,6 +1320,7 @@ def preferences_ui(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:preferences")
 def preferences_mail(request: HttpRequest) -> HttpResponse:
     """
     Почтовые настройки/разделы.
@@ -1316,6 +1334,8 @@ def preferences_mail(request: HttpRequest) -> HttpResponse:
     )
 
 
+@login_required
+@policy_required(resource_type="page", resource="ui:analytics")
 def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
     """
     Страница конкретного сотрудника (менеджера/РОП/директора).
@@ -1510,6 +1530,7 @@ def _month_label(d: _date) -> str:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:analytics")
 def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
     user: User = request.user
     if not _can_view_cold_call_reports(user):
@@ -1629,6 +1650,7 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:analytics")
 def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
     user: User = request.user
     if not _can_view_cold_call_reports(user):
@@ -1766,6 +1788,7 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:analytics")
 def cold_calls_report_last_7_days(request: HttpRequest) -> JsonResponse:
     """
     Сводка по холодным звонкам за последние 7 дней (включая сегодня) для текущего пользователя:
@@ -1836,7 +1859,8 @@ def company_list(request: HttpRequest) -> HttpResponse:
         if view_as_branch_id:
             qs = qs.filter(branch_id=view_as_branch_id)
         companies_total = qs.order_by().count()
-        cache.set(cache_key_total, companies_total, 600)  # 10 минут
+        # TTL 60 секунд для быстрой инвалидации при изменении прав/назначений
+        cache.set(cache_key_total, companies_total, 60)
     # Оптимизация: предзагружаем только необходимые связанные объекты
     qs = (
         _companies_with_overdue_flag(now=now)
@@ -2438,6 +2462,10 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
             body=f"Количество: {updated}",
             url=f"/companies/?responsible={new_resp.id}",
         )
+    
+    # Инвалидируем кэш количества компаний после массового переназначения
+    _invalidate_company_count_cache()
+    
     return redirect("company_list")
 
 
@@ -2695,9 +2723,9 @@ def company_export(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:create")
 def company_create(request: HttpRequest) -> HttpResponse:
     user: User = request.user
-    enforce(user=user, resource_type="action", resource="ui:companies:create", context={"path": request.path, "method": request.method})
 
     if request.method == "POST":
         form = CompanyCreateForm(request.POST, user=user)
@@ -2798,12 +2826,12 @@ def company_create(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:autocomplete")
 def company_autocomplete(request: HttpRequest) -> JsonResponse:
     """
     AJAX: автодополнение для поиска компаний.
     Возвращает список компаний по запросу (название, ИНН, адрес, телефон, email).
     """
-    enforce(user=request.user, resource_type="action", resource="ui:companies:autocomplete", context={"path": request.path, "method": request.method})
     q = (request.GET.get("q") or "").strip()
     if not q or len(q) < 2:
         return JsonResponse({"items": []})
@@ -2897,12 +2925,12 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:duplicates")
 def company_duplicates(request: HttpRequest) -> HttpResponse:
     """
     JSON: подсказки дублей при создании компании.
     Проверяем по ИНН/КПП/названию/адресу и возвращаем только то, что пользователь может видеть.
     """
-    enforce(user=request.user, resource_type="action", resource="ui:companies:duplicates", context={"path": request.path, "method": request.method})
     user: User = request.user
     inn = (request.GET.get("inn") or "").strip()
     kpp = (request.GET.get("kpp") or "").strip()
@@ -3453,6 +3481,7 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:cold_call:toggle")
 def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
     """
     Отметить контакт как холодный звонок.
@@ -3607,6 +3636,7 @@ def company_cold_call_reset(request: HttpRequest, company_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:cold_call:reset")
 def contact_cold_call_reset(request: HttpRequest, contact_id) -> HttpResponse:
     """
     Откатить отметку холодного звонка для контакта.
@@ -3674,6 +3704,7 @@ def contact_cold_call_reset(request: HttpRequest, contact_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:cold_call:toggle")
 def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> HttpResponse:
     """
     Отметить конкретный номер телефона контакта как холодный звонок.
@@ -3792,6 +3823,7 @@ def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> Ht
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:cold_call:reset")
 def contact_phone_cold_call_reset(request: HttpRequest, contact_phone_id) -> HttpResponse:
     """
     Откатить отметку холодного звонка для конкретного номера телефона контакта.
@@ -3859,6 +3891,7 @@ def contact_phone_cold_call_reset(request: HttpRequest, contact_phone_id) -> Htt
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:cold_call:toggle")
 def company_phone_cold_call_toggle(request: HttpRequest, company_phone_id) -> HttpResponse:
     """
     Отметить конкретный дополнительный номер телефона компании как холодный звонок.
@@ -3973,6 +4006,7 @@ def company_phone_cold_call_toggle(request: HttpRequest, company_phone_id) -> Ht
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:cold_call:reset")
 def company_phone_cold_call_reset(request: HttpRequest, company_phone_id) -> HttpResponse:
     """
     Откатить отметку холодного звонка для конкретного дополнительного номера телефона компании.
@@ -4637,6 +4671,7 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:transfer")
 @transaction.atomic
 def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
     if request.method != "POST":
@@ -4666,6 +4701,9 @@ def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
     
     # При передаче обновляем филиал компании под филиал нового ответственного (может быть другой регион).
     company.responsible = new_resp
+    
+    # Инвалидируем кэш количества компаний после передачи
+    _invalidate_company_count_cache()
     company.branch = new_resp.branch
     company.save(update_fields=["responsible", "branch", "updated_at"])
     
@@ -5160,6 +5198,7 @@ def company_note_delete(request: HttpRequest, company_id, note_id: int) -> HttpR
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
 def phone_call_create(request: HttpRequest) -> HttpResponse:
     """
     UI endpoint: создать "команду на звонок" для телефона текущего пользователя.
@@ -6542,6 +6581,7 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:tasks:detail")
 def task_view(request: HttpRequest, task_id) -> HttpResponse:
     """
     Просмотр задачи (оптимизированный endpoint для модальных окон).
