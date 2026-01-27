@@ -54,6 +54,29 @@ class TaskOrgCreationTestCase(TestCase):
             # Если получили успешный ответ или ошибку (не редирект), прекращаем
             if resp.status_code not in [status.HTTP_301_MOVED_PERMANENTLY, status.HTTP_302_FOUND, status.HTTP_307_TEMPORARY_REDIRECT, status.HTTP_308_PERMANENT_REDIRECT]:
                 break
+            # Если редирект, пытаемся извлечь Location и следовать ему
+            redirect_url = None
+            # Пробуем разные способы получить Location заголовок
+            if hasattr(resp, "_headers"):
+                # DRF Response может хранить заголовки в _headers
+                headers_dict = dict(resp._headers.values()) if hasattr(resp._headers, "values") else {}
+                redirect_url = headers_dict.get("location") or headers_dict.get("Location")
+            if not redirect_url and hasattr(resp, "headers"):
+                if isinstance(resp.headers, dict):
+                    redirect_url = resp.headers.get("Location") or resp.headers.get("location")
+                elif hasattr(resp.headers, "get"):
+                    redirect_url = resp.headers.get("Location") or resp.headers.get("location")
+            if not redirect_url:
+                redirect_url = resp.get("Location") or resp.get("location")
+            if redirect_url:
+                # Если полный URL, извлекаем только путь
+                if redirect_url.startswith("http"):
+                    from urllib.parse import urlparse
+                    redirect_url = urlparse(redirect_url).path
+                # Пробуем следовать редиректу
+                resp = self.client.post(redirect_url, payload, format="json")
+                if resp.status_code not in [status.HTTP_301_MOVED_PERMANENTLY, status.HTTP_302_FOUND, status.HTTP_307_TEMPORARY_REDIRECT, status.HTTP_308_PERMANENT_REDIRECT]:
+                    break
         self.assertIn(
             resp.status_code,
             (status.HTTP_201_CREATED, status.HTTP_200_OK),
