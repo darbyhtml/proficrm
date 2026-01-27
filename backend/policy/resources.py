@@ -35,6 +35,7 @@ RESOURCES: tuple[PolicyResource, ...] = (
     PolicyResource("ui:analytics", "page", "Аналитика"),
     PolicyResource("ui:help", "page", "Помощь"),
     PolicyResource("ui:preferences", "page", "Настройки пользователя"),
+    PolicyResource("ui:mobile_app", "page", "Мобильное приложение"),
     PolicyResource("ui:settings", "page", "Админка (раздел settings)", sensitive=True),
     PolicyResource("ui:mail", "page", "Почта (раздел)"),
     PolicyResource("ui:notifications", "page", "Уведомления (раздел)"),
@@ -96,6 +97,9 @@ RESOURCES: tuple[PolicyResource, ...] = (
     PolicyResource("ui:notifications:poll", "action", "Уведомления: poll"),
     PolicyResource("ui:notifications:mark_read", "action", "Уведомления: отметить прочитанным"),
     PolicyResource("ui:notifications:mark_all_read", "action", "Уведомления: отметить все прочитанными"),
+
+    PolicyResource("ui:mobile_app:download", "action", "Мобильное приложение: скачать APK", sensitive=True),
+    PolicyResource("ui:mobile_app:qr", "action", "Мобильное приложение: QR вход"),
 
     PolicyResource("ui:settings:view_as:update", "action", "Settings: режим просмотра (изменить)", sensitive=True),
     PolicyResource("ui:settings:view_as:reset", "action", "Settings: режим просмотра (сбросить)", sensitive=True),

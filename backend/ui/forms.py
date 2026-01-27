@@ -12,6 +12,7 @@ from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus,
 from tasksapp.models import Task, TaskType
 from ui.models import UiGlobalConfig
 from ui.widgets import TaskTypeSelectWidget, UserSelectWithBranchWidget
+from ui.cleaners import clean_int_id
 
 
 class FlexibleUserChoiceField(forms.ModelChoiceField):
@@ -33,38 +34,10 @@ class FlexibleUserChoiceField(forms.ModelChoiceField):
         
         # Очищаем значение, если оно пришло в неправильном формате
         cleaned_value = value
-        if isinstance(value, str):
-            # Импортируем функцию очистки из views
-            from ui.views import _clean_assigned_to_id
-            cleaned_id = _clean_assigned_to_id(value)
-            if cleaned_id:
+        if isinstance(value, str) or isinstance(value, (list, tuple)):
+            cleaned_id = clean_int_id(value)
+            if cleaned_id is not None:
                 cleaned_value = cleaned_id
-            else:
-                # Если очистка не удалась, пытаемся извлечь значение вручную
-                import ast
-                import json
-                try:
-                    # Пытаемся распарсить как JSON или Python список
-                    if value.startswith('[') and value.endswith(']'):
-                        try:
-                            parsed = json.loads(value)
-                            if isinstance(parsed, list) and parsed:
-                                cleaned_value = str(parsed[0])
-                        except (json.JSONDecodeError, ValueError):
-                            try:
-                                parsed = ast.literal_eval(value)
-                                if isinstance(parsed, list) and parsed:
-                                    cleaned_value = str(parsed[0])
-                            except (ValueError, SyntaxError):
-                                pass
-                except Exception:
-                    pass
-        
-        # Преобразуем в int, если это число (User использует Integer ID)
-        try:
-            cleaned_value = int(cleaned_value)
-        except (ValueError, TypeError):
-            pass
         
         # Вызываем стандартный метод to_python с очищенным значением
         return super().to_python(cleaned_value)
@@ -84,18 +57,16 @@ class FlexibleUserChoiceField(forms.ModelChoiceField):
             return super().clean(value)
         except forms.ValidationError as e:
             # Если валидация не прошла, пытаемся очистить значение и найти пользователя
-            from ui.views import _clean_assigned_to_id
-            cleaned_id = _clean_assigned_to_id(value)
-            if cleaned_id:
+            cleaned_id = clean_int_id(value)
+            if cleaned_id is not None:
                 try:
                     # Пытаемся найти пользователя по очищенному ID
-                    user_id = int(cleaned_id)
-                    user = User.objects.get(id=user_id, is_active=True)
+                    user = User.objects.get(id=cleaned_id, is_active=True)
                     # Проверяем, что пользователь в queryset (или добавляем его)
-                    if not self.queryset.filter(id=user_id).exists():
+                    if not self.queryset.filter(id=cleaned_id).exists():
                         # Временно расширяем queryset, чтобы валидация прошла
                         self.queryset = User.objects.filter(
-                            Q(id__in=self.queryset.values_list('id', flat=True)) | Q(id=user_id)
+                            Q(id__in=self.queryset.values_list('id', flat=True)) | Q(id=cleaned_id)
                         )
                     return user
                 except (User.DoesNotExist, ValueError, TypeError):

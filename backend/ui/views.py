@@ -82,6 +82,7 @@ from policy.engine import enforce
 from policy.decorators import policy_required
 from django.core.exceptions import PermissionDenied
 from ui.templatetags.ui_extras import format_phone
+from ui.cleaners import clean_int_id
 
 # Константы для фильтров
 RESPONSIBLE_FILTER_NONE = "none"  # Значение для фильтрации компаний без ответственного
@@ -5626,97 +5627,6 @@ def task_list(request: HttpRequest) -> HttpResponse:
     return response
 
 
-def _clean_assigned_to_id(value) -> str | None:
-    """
-    Очищает и извлекает валидный UUID из значения assigned_to.
-    Обрабатывает различные форматы: строки, списки, JSON-строки.
-    
-    Args:
-        value: Значение из POST/GET запроса
-        
-    Returns:
-        Очищенный UUID в виде строки или None, если значение невалидно
-    """
-    if not value:
-        return None
-    
-    # Если это список, берем первый элемент
-    if isinstance(value, list):
-        if not value:
-            return None
-        value = value[0]
-    
-    # Преобразуем в строку
-    value_str = str(value).strip()
-    
-    if not value_str:
-        return None
-    
-    # Пытаемся распарсить JSON, если это JSON-строка
-    import json
-    try:
-        parsed = json.loads(value_str)
-        if isinstance(parsed, list) and parsed:
-            value_str = str(parsed[0]).strip()
-        elif parsed:
-            value_str = str(parsed).strip()
-    except (json.JSONDecodeError, ValueError, TypeError):
-        pass
-    
-    # Если все еще выглядит как список в строке, пытаемся извлечь значение
-    if value_str.startswith('[') and value_str.endswith(']'):
-        try:
-            # Пытаемся распарсить как Python список
-            import ast
-            parsed = ast.literal_eval(value_str)
-            if isinstance(parsed, list) and parsed:
-                value_str = str(parsed[0]).strip()
-        except (ValueError, SyntaxError, TypeError):
-            pass
-    
-    # Убираем кавычки, если есть
-    value_str = value_str.strip("'\"")
-    
-    # Если значение все еще выглядит как список в строке (например, "['1']" или '["uuid"]')
-    # Пытаемся извлечь значение еще раз
-    if (value_str.startswith('[') and value_str.endswith(']')) or (value_str.startswith("['") and value_str.endswith("']")):
-        # Пытаемся найти UUID внутри строки
-        import re
-        uuid_pattern = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
-        matches = re.findall(uuid_pattern, value_str, re.IGNORECASE)
-        if matches:
-            value_str = matches[0]
-        else:
-            # Если UUID не найден, пытаемся извлечь значение из списка еще раз
-            try:
-                import ast
-                parsed = ast.literal_eval(value_str)
-                if isinstance(parsed, list) and parsed:
-                    value_str = str(parsed[0]).strip().strip("'\"")
-            except (ValueError, SyntaxError, TypeError):
-                pass
-    
-    # Проверяем, что это валидный UUID или Integer ID
-    # Сначала пытаемся как UUID
-    try:
-        from uuid import UUID
-        UUID(value_str)
-        return value_str
-    except (ValueError, TypeError):
-        # Если не UUID, проверяем, может быть это Integer ID
-        try:
-            # Пытаемся преобразовать в int
-            int_id = int(value_str)
-            # Проверяем, что это положительное число (ID не может быть отрицательным)
-            if int_id > 0:
-                # Возвращаем как строку, чтобы можно было использовать в фильтрах
-                return str(int_id)
-        except (ValueError, TypeError):
-            pass
-        # Если ни UUID, ни Integer - возвращаем None
-        return None
-
-
 @login_required
 def task_create(request: HttpRequest) -> HttpResponse:
     user: User = request.user
@@ -5730,7 +5640,7 @@ def task_create(request: HttpRequest) -> HttpResponse:
         # Получаем выбранного пользователя из POST данных ДО создания формы
         # assigned_to может прийти в различных форматах, используем функцию очистки
         assigned_to_raw = request.POST.get("assigned_to", "")
-        assigned_to_id = _clean_assigned_to_id(assigned_to_raw)
+        assigned_to_id = clean_int_id(assigned_to_raw)
         
         # Логирование для отладки
         import logging
@@ -5748,18 +5658,12 @@ def task_create(request: HttpRequest) -> HttpResponse:
         form.fields["assigned_to"].queryset = User.objects.filter(is_active=True).select_related("branch")
         
         # Если есть выбранное значение, убеждаемся, что оно в queryset
-        if assigned_to_id:
-            # User использует Integer ID, поэтому просто проверяем, что это число или UUID
+        if assigned_to_id is not None:
             # Добавляем выбранного пользователя в queryset, если его там нет
             if not form.fields["assigned_to"].queryset.filter(id=assigned_to_id).exists():
                 logger.warning(f"Selected user {assigned_to_id} not in queryset, adding it")
-                # Преобразуем в int, если это число (для User)
-                try:
-                    filter_id = int(assigned_to_id)
-                except (ValueError, TypeError):
-                    filter_id = assigned_to_id
                 form.fields["assigned_to"].queryset = User.objects.filter(
-                    Q(is_active=True) | Q(id=filter_id)
+                    Q(is_active=True) | Q(id=assigned_to_id)
                 ).select_related("branch")
         
         # Теперь валидируем форму
@@ -5767,9 +5671,9 @@ def task_create(request: HttpRequest) -> HttpResponse:
         if form.is_valid():
             # После валидации устанавливаем правильный queryset для отображения (если форма будет перерендерена)
             # Но сначала сохраняем выбранное значение
-            selected_assigned_to_id = None
+            selected_assigned_to_id: int | None = None
             if form.cleaned_data.get("assigned_to"):
-                selected_assigned_to_id = str(form.cleaned_data["assigned_to"].id)
+                selected_assigned_to_id = int(form.cleaned_data["assigned_to"].id)
             _set_assigned_to_queryset(form, user, assigned_to_id=selected_assigned_to_id)
             task: Task = form.save(commit=False)
             task.created_by = user
@@ -6015,7 +5919,7 @@ def task_create(request: HttpRequest) -> HttpResponse:
     return render(request, "ui/task_create.html", {"form": form})
 
 
-def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: str | None = None) -> None:
+def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: int | None = None) -> None:
     """
     Устанавливает queryset для поля assigned_to в зависимости от роли пользователя.
     Также убеждается, что выбранное значение (если есть) включено в queryset.
@@ -6026,12 +5930,11 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: str 
         assigned_to_id: ID выбранного пользователя (опционально, для POST запросов)
     """
     # Получаем текущее выбранное значение (если есть)
-    current_user_id = None
+    current_user_id: int | None = None
     
     # Если передан assigned_to_id (для POST запросов), используем его
-    if assigned_to_id:
-        # Очищаем значение, если оно еще не очищено
-        current_user_id = _clean_assigned_to_id(assigned_to_id)
+    if assigned_to_id is not None:
+        current_user_id = assigned_to_id
     
     # Если не передан, проверяем initial (для GET запросов)
     if not current_user_id and hasattr(form, 'initial') and 'assigned_to' in form.initial:
@@ -6039,15 +5942,13 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: str 
         if isinstance(assigned_to_value, User):
             current_user_id = str(assigned_to_value.id)
         elif assigned_to_value:
-            # Очищаем значение через _clean_assigned_to_id
-            current_user_id = _clean_assigned_to_id(assigned_to_value)
+            current_user_id = clean_int_id(assigned_to_value)
     
     # Если все еще нет, проверяем data (для POST запросов как fallback)
     if not current_user_id and hasattr(form, 'data') and form.data:
         assigned_to_value = form.data.get('assigned_to', '')
         if assigned_to_value:
-            # Очищаем значение через _clean_assigned_to_id
-            current_user_id = _clean_assigned_to_id(assigned_to_value)
+            current_user_id = clean_int_id(assigned_to_value)
     
     # Общие исключения для списков исполнителей:
     # - не показываем "Без филиала" (branch is null)
@@ -6085,39 +5986,16 @@ def _set_assigned_to_queryset(form: "TaskForm", user: User, assigned_to_id: str 
         )
     
     # Если есть выбранное значение и его нет в queryset, добавляем его
-    if current_user_id:
-        # Проверяем, что current_user_id является валидным ID (Integer или UUID)
-        # User использует Integer ID, поэтому проверяем оба варианта
-        try:
-            # Пытаемся как int (для User)
-            int(current_user_id)
-        except (ValueError, TypeError):
-            # Если не int, пытаемся как UUID (для других моделей)
-            try:
-                from uuid import UUID
-                UUID(current_user_id)
-            except (ValueError, TypeError):
-                # Если ни int, ни UUID - пропускаем проверку
-                current_user_id = None
-    
-    if current_user_id and not base_queryset.filter(id=current_user_id).exists():
+    if current_user_id is not None and not base_queryset.filter(id=current_user_id).exists():
         # Добавляем выбранного пользователя в queryset
         from django.db.models import Case, When, IntegerField
-        # Пытаемся преобразовать current_user_id в правильный тип (int для IntegerField)
-        try:
-            # User использует Integer ID, поэтому преобразуем в int
-            filter_id = int(current_user_id)
-        except (ValueError, TypeError):
-            # Если не int, оставляем как есть (на случай, если это UUID для других моделей)
-            filter_id = current_user_id
-        
         queryset = (
             User.objects.filter(
-                Q(id__in=base_queryset.values_list('id', flat=True)) | Q(id=filter_id)
+                Q(id__in=base_queryset.values_list('id', flat=True)) | Q(id=current_user_id)
             )
             .annotate(
                 custom_order=Case(
-                    When(id=filter_id, then=0),
+                    When(id=current_user_id, then=0),
                     default=1,
                     output_field=IntegerField(),
                 )
@@ -9272,6 +9150,7 @@ def settings_calls_manager_detail(request: HttpRequest, user_id: int) -> HttpRes
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:mobile_app")
 def mobile_app_page(request: HttpRequest) -> HttpResponse:
     """
     Страница мобильного приложения: скачивание APK и QR-вход.
@@ -9296,6 +9175,7 @@ def mobile_app_page(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mobile_app:download")
 def mobile_app_download(request: HttpRequest, build_id) -> HttpResponse:
     """
     Скачивание APK файла. Только для авторизованных пользователей.
@@ -9323,7 +9203,7 @@ def mobile_app_download(request: HttpRequest, build_id) -> HttpResponse:
         )
     except Exception as e:
         logger.warning(
-            f"Ошибка при логировании статистики звонков: {e}",
+            f"Ошибка при логировании скачивания мобильного приложения: {e}",
             exc_info=True,
             extra={"user_id": request.user.id if request.user.is_authenticated else None},
         )
@@ -9336,6 +9216,7 @@ def mobile_app_download(request: HttpRequest, build_id) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="action", resource="ui:mobile_app:qr")
 def mobile_app_qr_image(request: HttpRequest) -> HttpResponse:
     """
     Генерация QR-кода для входа в мобильное приложение.
