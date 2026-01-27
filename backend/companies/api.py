@@ -8,6 +8,7 @@ from accounts.models import User
 from .permissions import can_edit_company
 from .models import Company, Contact, CompanyNote
 from .normalizers import normalize_phone, normalize_inn, normalize_work_schedule
+from .policy import visible_companies_qs, visible_company_notes_qs, visible_contacts_qs
 from policy.drf import PolicyPermission
 
 
@@ -88,7 +89,8 @@ class CompanyViewSet(viewsets.ModelViewSet):
         # Используем select_related/prefetch_related, чтобы избежать N+1 и ускорить API,
         # не меняя возвращаемые данные.
         return (
-            Company.objects.select_related("responsible", "branch", "status", "head_company")
+            visible_companies_qs(self.request.user)
+            .select_related("responsible", "branch", "status", "head_company")
             .prefetch_related("spheres")
             .order_by("-updated_at")
         )
@@ -188,7 +190,11 @@ class ContactViewSet(viewsets.ModelViewSet):
     ordering_fields = ("updated_at", "created_at", "last_name")
 
     def get_queryset(self):
-        return Contact.objects.all().order_by("-updated_at")
+        return (
+            visible_contacts_qs(self.request.user)
+            .select_related("company")
+            .order_by("-updated_at")
+        )
 
     def perform_create(self, serializer):
         user: User = self.request.user
@@ -227,7 +233,11 @@ class CompanyNoteViewSet(viewsets.ModelViewSet):
     ordering_fields = ("created_at",)
 
     def get_queryset(self):
-        return CompanyNote.objects.all().order_by("-created_at")
+        return (
+            visible_company_notes_qs(self.request.user)
+            .select_related("company", "author")
+            .order_by("-created_at")
+        )
 
     def perform_create(self, serializer):
         user: User = self.request.user
