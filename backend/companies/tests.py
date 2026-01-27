@@ -465,14 +465,15 @@ class CompanyAutocompleteOrgFlagsTestCase(TestCase):
     """Тесты автокомплита компаний: is_branch / has_branches."""
 
     def setUp(self):
-        self.client = APIClient()
+        from django.test import Client
+        self.client = Client()
         self.user = User.objects.create_user(
             username="auto",
             email="auto@example.com",
             password="testpass123",
             role=User.Role.ADMIN,
         )
-        self.client.force_authenticate(user=self.user)
+        self.client.force_login(self.user)
 
         # Одиночная компания
         self.single = Company.objects.create(name="Solo Co")
@@ -482,9 +483,9 @@ class CompanyAutocompleteOrgFlagsTestCase(TestCase):
         self.branch = Company.objects.create(name="Head Org Branch", head_company=self.head)
 
     def _autocomplete(self, q: str):
-        resp = self.client.get(f"/companies/autocomplete/?q={q}", follow=True)
-        self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        data = getattr(resp, "data", None) or resp.json()
+        resp = self.client.get(f"/companies/autocomplete/?q={q}")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
         return data.get("items", [])
 
     def test_single_company_flags(self):

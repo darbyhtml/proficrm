@@ -20,7 +20,8 @@ class CallsStatsViewTemplateSafetyTest(TestCase):
         """Настройка тестовых данных."""
         self.user = User.objects.create_user(
             username="testuser",
-            password="testpass123"
+            password="testpass123",
+            role=User.Role.MANAGER
         )
         self.factory = RequestFactory()
         self.now = timezone.now()
@@ -88,12 +89,19 @@ class CallsStatsViewTemplateSafetyTest(TestCase):
     
     def test_view_with_unknown_status(self):
         """Тест: unknown статус корректно обрабатывается."""
+        # Используем текущее время для звонка, чтобы он точно попал в период "day"
+        from django.utils import timezone as tz
+        now = tz.now()
+        local_now = tz.localtime(now)
+        start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Создаем звонок с UNKNOWN статусом
         CallRequest.objects.create(
             user=self.user,
             phone_raw="+79991234567",
             status=CallRequest.Status.PENDING,
             call_status=CallRequest.CallStatus.UNKNOWN,
-            call_started_at=self.start + timedelta(hours=1)
+            call_started_at=start + timedelta(hours=1)
         )
         
         from django.test import Client
@@ -103,7 +111,11 @@ class CallsStatsViewTemplateSafetyTest(TestCase):
         
         # Проверяем, что страница рендерится без ошибок
         self.assertEqual(response.status_code, 200)
+        # Проверяем контекст - total_unknown должен быть > 0
+        self.assertIn("total_unknown", response.context)
+        self.assertGreater(response.context["total_unknown"], 0)
         # Проверяем, что unknown учитывается в статистике
+        # Текст "Не определено" показывается в общей статистике (строка 21 шаблона), если total_unknown > 0
         self.assertContains(response, "Не определено", status_code=200)
     
     def test_view_connect_rate_no_division_by_zero(self):

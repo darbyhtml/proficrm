@@ -10,7 +10,7 @@ from django.utils import timezone
 from django.core.cache import cache
 from datetime import timedelta, date
 from tasksapp.models import Task, TaskType
-from companies.models import Company
+from companies.models import Company, ContractType
 
 User = get_user_model()
 
@@ -217,13 +217,15 @@ class DashboardViewTestCase(TestCase):
 
     def test_contracts_soon_displayed(self):
         """Тест: договоры, которые скоро истекают, отображаются."""
+        # Создаём вид договора
+        contract_type = ContractType.objects.create(name="Рамочный договор")
         # Создаём компанию с договором, который истекает через 15 дней
         contract_until = self.today_date + timedelta(days=15)
         company = Company.objects.create(
             name="Компания с договором",
             responsible=self.user,
             contract_until=contract_until,
-            contract_type=Company.ContractType.FRAME
+            contract_type=contract_type
         )
 
         response = self.client.get("/")

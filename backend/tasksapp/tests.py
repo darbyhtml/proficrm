@@ -45,7 +45,7 @@ class TaskOrgCreationTestCase(TestCase):
             "due_at": due_at,
             "apply_to_org_branches": apply_to_org,
         }
-        resp = self.client.post("/api/tasks/", payload, format="json")
+        resp = self.client.post("/api/tasks", payload, format="json")
         self.assertIn(
             resp.status_code,
             (status.HTTP_201_CREATED, status.HTTP_200_OK),
