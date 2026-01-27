@@ -45,33 +45,13 @@ class TaskOrgCreationTestCase(TestCase):
             "due_at": due_at,
             "apply_to_org_branches": apply_to_org,
         }
-        # Пробуем сначала с trailing slash
-        resp = self.client.post("/api/tasks/", payload, format="json")
+        # Используем URL без trailing slash, чтобы избежать редиректа 301
+        # DRF роутер работает с обоими вариантами, но Django может редиректить
+        resp = self.client.post("/api/tasks", payload, format="json")
         
-        # Если получили 301 редирект, извлекаем Location и повторяем запрос
+        # Если все еще получили 301, пробуем с trailing slash
         if resp.status_code == status.HTTP_301_MOVED_PERMANENTLY:
-            # Пробуем извлечь Location из разных мест
-            redirect_url = None
-            # DRF Response хранит заголовки в _headers как список кортежей
-            if hasattr(resp, "_headers"):
-                for key, value in resp._headers.values():
-                    if key.lower() == "location":
-                        redirect_url = value
-                        break
-            
-            # Если не нашли, пробуем через response.get()
-            if not redirect_url:
-                redirect_url = resp.get("Location") or resp.get("location")
-            
-            # Если нашли redirect_url, извлекаем путь и повторяем запрос
-            if redirect_url:
-                if redirect_url.startswith("http"):
-                    from urllib.parse import urlparse
-                    redirect_url = urlparse(redirect_url).path
-                resp = self.client.post(redirect_url, payload, format="json")
-            else:
-                # Если не нашли Location, пробуем URL без trailing slash
-                resp = self.client.post("/api/tasks", payload, format="json")
+            resp = self.client.post("/api/tasks/", payload, format="json")
         
         # Проверяем успешный статус (201 Created или 200 OK)
         self.assertIn(
