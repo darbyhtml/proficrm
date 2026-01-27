@@ -138,14 +138,18 @@ def notifications_panel(request):
                     CompanyContractReminder.objects.create(
                         user=user, company_id=c.id, contract_until=c.contract_until, days_before=days_before
                     )
+                    # Используем реальное количество оставшихся дней для текста уведомления
                     if days_before == 30:
                         title = "До окончания договора остался месяц"
                         body = f"{c.name} · до {c.contract_until.strftime('%d.%m.%Y')}"
-                    elif days_before == danger_days:
-                        title = f"До окончания договора осталось {days_before} дней"
+                    elif days_left == 1:
+                        title = "До окончания договора остался 1 день"
+                        body = f"{c.name} · до {c.contract_until.strftime('%d.%m.%Y')}"
+                    elif days_left in [2, 3, 4]:
+                        title = f"До окончания договора осталось {days_left} дня"
                         body = f"{c.name} · до {c.contract_until.strftime('%d.%m.%Y')}"
                     else:
-                        title = f"До окончания договора осталось {days_before} дней"
+                        title = f"До окончания договора осталось {days_left} дней"
                         body = f"{c.name} · до {c.contract_until.strftime('%d.%m.%Y')}"
                     notify(
                         user=user,
