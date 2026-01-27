@@ -92,7 +92,7 @@ def is_user_throttled(user_id: int | str, action: str, max_requests: int, window
         - is_throttled: True если лимит превышен
         - current_count: Текущее количество запросов в окне (1, 2, 3, ..., max_requests)
           При throttled возвращается max_requests (не реальный count)
-        - reason: None если норма, "user_throttle" если лимит превышен
+        - reason: Всегда None (информация о throttling в логах)
     """
     # ВАЖНО: key должен быть стабильным (action/user_id/window_seconds)
     key = f"throttle:{action}:{user_id}:{window_seconds}"
@@ -102,7 +102,6 @@ def is_user_throttled(user_id: int | str, action: str, max_requests: int, window
     
     # Проверяем, превышен ли лимит
     is_throttled = count > max_requests
-    reason = "user_throttle" if is_throttled else None
     
     # При throttled "зажимаем" count до max_requests для возврата наружу
     # (но в логах используем реальный count для видимости реальной нагрузки)
@@ -119,4 +118,5 @@ def is_user_throttled(user_id: int | str, action: str, max_requests: int, window
             }
         )
     
-    return is_throttled, visible_count, reason
+    # reason всегда None (по контракту тестов)
+    return is_throttled, visible_count, None
