@@ -1,9 +1,9 @@
 from datetime import timedelta
-import json
 
-from django.test import TestCase, Client
+from django.test import TestCase
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+from rest_framework.test import APIClient
 from rest_framework import status
 
 from companies.models import Company
@@ -15,15 +15,14 @@ User = get_user_model()
 
 class TaskOrgCreationTestCase(TestCase):
     def setUp(self):
-        # Используем обычный Django Client, который автоматически следует редиректам
-        self.client = Client()
+        self.client = APIClient()
         self.user = User.objects.create_user(
             username="manager",
             email="manager@example.com",
             password="testpass123",
             role=User.Role.MANAGER,
         )
-        self.client.force_login(self.user)
+        self.client.force_authenticate(user=self.user)
 
         # Головная компания без филиалов
         self.root_single = Company.objects.create(name="Одиночная", responsible=self.user)
@@ -46,18 +45,39 @@ class TaskOrgCreationTestCase(TestCase):
             "due_at": due_at,
             "apply_to_org_branches": apply_to_org,
         }
-        # Django Client автоматически следует редиректам при follow=True
-        resp = self.client.post(
-            "/api/tasks/",
-            data=json.dumps(payload),
-            content_type="application/json",
-            follow=True
-        )
+        # Пробуем сначала с trailing slash
+        resp = self.client.post("/api/tasks/", payload, format="json")
+        
+        # Если получили 301 редирект, извлекаем Location и повторяем запрос
+        if resp.status_code == status.HTTP_301_MOVED_PERMANENTLY:
+            # Пробуем извлечь Location из разных мест
+            redirect_url = None
+            # DRF Response хранит заголовки в _headers как список кортежей
+            if hasattr(resp, "_headers"):
+                for key, value in resp._headers.values():
+                    if key.lower() == "location":
+                        redirect_url = value
+                        break
+            
+            # Если не нашли, пробуем через response.get()
+            if not redirect_url:
+                redirect_url = resp.get("Location") or resp.get("location")
+            
+            # Если нашли redirect_url, извлекаем путь и повторяем запрос
+            if redirect_url:
+                if redirect_url.startswith("http"):
+                    from urllib.parse import urlparse
+                    redirect_url = urlparse(redirect_url).path
+                resp = self.client.post(redirect_url, payload, format="json")
+            else:
+                # Если не нашли Location, пробуем URL без trailing slash
+                resp = self.client.post("/api/tasks", payload, format="json")
+        
         # Проверяем успешный статус (201 Created или 200 OK)
         self.assertIn(
             resp.status_code,
             (status.HTTP_201_CREATED, status.HTTP_200_OK),
-            f"Unexpected status: {resp.status_code}, response={resp.content[:200] if hasattr(resp, 'content') else None}",
+            f"Unexpected status: {resp.status_code}, data={getattr(resp, 'data', None)}",
         )
         return list(Task.objects.order_by("id"))
 
