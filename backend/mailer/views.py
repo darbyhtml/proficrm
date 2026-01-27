@@ -2408,26 +2408,25 @@ def campaign_test_send(request: HttpRequest, campaign_id) -> HttpResponse:
         attachment_path=attachment_path,
         attachment_original_name=attachment_original_name,
     )
-    
-    # Ждем результат (для синхронного UX)
-    try:
-        task_result = result.get(timeout=30)
-        if task_result.get("success"):
-            messages.success(request, f"Тестовое письмо отправлено на {to_email}.")
-        else:
-            messages.error(request, f"Ошибка тестовой отправки: {task_result.get('error', 'Неизвестная ошибка')}")
-    except Exception as ex:
-        messages.error(request, f"Ошибка тестовой отправки: {ex}")
-    
-    # ВАЖНО: Проверяем, что статусы получателей не изменились (дополнительная защита)
+
+    # Важно: не блокируем HTTP-запрос ожиданием результата Celery (result.get),
+    # иначе web-процесс может подвисать до 30 секунд и ловить таймауты.
+    messages.success(
+        request,
+        f"Тестовое письмо поставлено в очередь (task_id={result.id}). Проверьте {to_email} через несколько секунд.",
+    )
+
+    # Доп. страховка: убеждаемся, что этот endpoint не меняет статусы получателей синхронно.
+    # (Само письмо отправляется асинхронно воркером.)
     recipients_after = list(camp.recipients.values_list("id", "status"))
     if recipients_before != recipients_after:
-        # Если статусы изменились - это ошибка, логируем и восстанавливаем
         import logging
+
         logger = logging.getLogger(__name__)
-        logger.error(f"КРИТИЧЕСКАЯ ОШИБКА: Статусы получателей изменились при отправке тестового письма! Campaign: {camp.id}")
-        # Восстанавливаем статусы
+        logger.error(
+            f"CRITICAL: recipient statuses changed during test enqueue! Campaign: {camp.id}"
+        )
         for r_id, old_status in recipients_before:
             CampaignRecipient.objects.filter(id=r_id).update(status=old_status)
-    
+
     return redirect("campaign_detail", campaign_id=camp.id)
