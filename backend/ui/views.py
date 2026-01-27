@@ -3082,6 +3082,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "branch",
             "status",
             "head_company",
+            "contract_type",
             "primary_cold_marked_by",
             "primary_cold_marked_call",
         ).prefetch_related(
@@ -3218,16 +3219,27 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
 
     transfer_targets = get_transfer_targets(user)
 
-    # Подсветка договора: оранжевый <= 30 дней, красный < 14 дней (ежедневно)
+    # Подсветка договора: используем настройки из ContractType
     contract_alert = ""
     contract_days_left = None
     if company.contract_until:
         today_date = timezone.localdate(timezone.now())
         contract_days_left = (company.contract_until - today_date).days
-        if contract_days_left < 14:
-            contract_alert = "danger"
-        elif contract_days_left <= 30:
-            contract_alert = "warn"
+        if contract_days_left is not None:
+            if company.contract_type:
+                # Используем настройки из ContractType
+                warning_days = company.contract_type.warning_days
+                danger_days = company.contract_type.danger_days
+                if contract_days_left <= danger_days:
+                    contract_alert = "danger"
+                elif contract_days_left <= warning_days:
+                    contract_alert = "warn"
+            else:
+                # Fallback на старую логику, если нет contract_type
+                if contract_days_left < 14:
+                    contract_alert = "danger"
+                elif contract_days_left <= 30:
+                    contract_alert = "warn"
 
     # Принудительно загружаем телефоны, чтобы убедиться, что prefetch работает
     # Это гарантирует, что телефоны будут доступны в шаблоне
