@@ -175,6 +175,48 @@ class ParsedPhoneValue:
             self.phones = []
 
 
+def merge_comment_segments(current: str | None, incoming: str) -> str:
+    """
+    Аккуратное объединение комментариев к телефону по сегментам.
+
+    - current: существующая строка комментария (может быть пустой/None)
+    - incoming: новый сегмент (например "SKYNET" или "SKYNET; деталь")
+
+    Правила:
+    - если current пустой -> возвращаем incoming
+    - если incoming уже есть как сегмент -> возвращаем current (идемпотентность)
+    - если есть сегмент ровно "SKYNET" и incoming начинается с "SKYNET;" ->
+      заменяем этот сегмент на incoming (upgrade SKYNET -> SKYNET; detail)
+    - иначе добавляем incoming в конец через " | "
+    """
+    incoming = (incoming or "").strip()
+    if not incoming:
+        return (current or "").strip()
+
+    current_clean = (current or "").strip()
+    if not current_clean:
+        return incoming
+
+    segments = [seg.strip() for seg in current_clean.split("|") if seg.strip()]
+
+    if incoming in segments:
+        return " | ".join(segments)
+
+    new_segments: list[str] = []
+    replaced_plain_skynet = False
+    for seg in segments:
+        if seg == "SKYNET" and incoming.startswith("SKYNET;") and not replaced_plain_skynet:
+            new_segments.append(incoming)
+            replaced_plain_skynet = True
+        else:
+            new_segments.append(seg)
+
+    if not replaced_plain_skynet:
+        new_segments.append(incoming)
+
+    return " | ".join(new_segments)
+
+
 class SkynetPhone(TypedDict):
     """
     Структура для телефонов из поля «Список телефонов (Скайнет)» (309609).
@@ -3804,40 +3846,19 @@ def migrate_filtered(
                                 # Номер уже есть в CompanyPhone: обновляем comment, не создавая дубликат.
                                 skynet_skipped_dup += 1
                                 if not dry_run:
-                                    for cp in CompanyPhone.objects.filter(company=comp, value=norm):
-                                        current = (cp.comment or "").strip()
-                                        if not current:
-                                            # Просто ставим SKYNET / SKYNET; details
-                                            cp.comment = skynet_comment
+                                    qs = CompanyPhone.objects.filter(company=comp, value=norm)
+                                    if qs.count() > 1:
+                                        logger.warning(
+                                            "Skynet merge: company %s has %d CompanyPhone with same value %s",
+                                            comp.id,
+                                            qs.count(),
+                                            norm,
+                                        )
+                                    for cp in qs:
+                                        merged = merge_comment_segments(cp.comment, skynet_comment)
+                                        if merged != (cp.comment or ""):
+                                            cp.comment = merged
                                             cp.save(update_fields=["comment"])
-                                            continue
-
-                                        # Разбиваем comment на сегменты по " | " и нормализуем
-                                        segments = [seg.strip() for seg in current.split("|") if seg.strip()]
-
-                                        # Если такой сегмент уже есть — ничего не делаем
-                                        if skynet_comment in segments:
-                                            continue
-
-                                        new_segments: list[str] = []
-                                        replaced_plain_skynet = False
-                                        for seg in segments:
-                                            if (
-                                                seg == "SKYNET"
-                                                and skynet_comment.startswith("SKYNET;")
-                                                and not replaced_plain_skynet
-                                            ):
-                                                # Заменяем голый SKYNET на SKYNET; details
-                                                new_segments.append(skynet_comment)
-                                                replaced_plain_skynet = True
-                                            else:
-                                                new_segments.append(seg)
-
-                                        if not replaced_plain_skynet:
-                                            new_segments.append(skynet_comment)
-
-                                        cp.comment = " | ".join(new_segments)
-                                        cp.save(update_fields=["comment"])
                                 continue
 
                             phones_to_create.append(

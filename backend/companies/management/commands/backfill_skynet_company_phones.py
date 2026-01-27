@@ -7,9 +7,12 @@ Backfill: разбирает поле 309609 «Список телефонов (
 """
 from django.core.management.base import BaseCommand
 from django.db.models import Max
+import logging
 
 from companies.models import Company, CompanyPhone
 from ui.forms import _normalize_phone
+
+logger = logging.getLogger(__name__)
 
 # Поле «Список телефонов (Скайнет)» в AmoCRM
 SKYNET_FIELD_ID = 309609
@@ -142,40 +145,20 @@ class Command(BaseCommand):
                     # - если existing.comment пустой → ставим incoming_comment
                     # - иначе → дописываем через разделитель " | "
                     if not dry_run:
-                        for cp in CompanyPhone.objects.filter(company=comp, value=n):
-                            current = (cp.comment or "").strip()
-                            if not current:
-                                # Просто ставим SKYNET/ SKNYET; details
-                                cp.comment = incoming_comment
+                        from amocrm.migrate import merge_comment_segments
+                        qs = CompanyPhone.objects.filter(company=comp, value=n)
+                        if qs.count() > 1:
+                            logger.warning(
+                                "Backfill Skynet: company %s has %d CompanyPhone with same value %s",
+                                comp.id,
+                                qs.count(),
+                                n,
+                            )
+                        for cp in qs:
+                            merged = merge_comment_segments(cp.comment, incoming_comment)
+                            if merged != (cp.comment or ""):
+                                cp.comment = merged
                                 cp.save(update_fields=["comment"])
-                                continue
-
-                            # Разбиваем на сегменты по " | " и нормализуем пробелы
-                            segments = [seg.strip() for seg in current.split("|") if seg.strip()]
-
-                            # Если входящий сегмент уже есть — ничего не делаем
-                            if incoming_comment in segments:
-                                continue
-
-                            new_segments = []
-                            replaced_plain_skynet = False
-                            for seg in segments:
-                                if (
-                                    seg == "SKYNET"
-                                    and incoming_comment.startswith("SKYNET;")
-                                    and not replaced_plain_skynet
-                                ):
-                                    # Заменяем голый SKYNET на SKYNET; details
-                                    new_segments.append(incoming_comment)
-                                    replaced_plain_skynet = True
-                                else:
-                                    new_segments.append(seg)
-
-                            if not replaced_plain_skynet:
-                                new_segments.append(incoming_comment)
-
-                            cp.comment = " | ".join(new_segments)
-                            cp.save(update_fields=["comment"])
                     skipped_dup += 1
                     continue
 

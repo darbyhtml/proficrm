@@ -115,7 +115,28 @@ class Command(BaseCommand):
                 
                 if not dry_run:
                     try:
-                        CompanyPhone.objects.create(company=company, value=normalized, order=next_order)
+                        # Пытаемся вытащить комментарий вокруг номера (доб., инструкции, текст)
+                        try:
+                            from amocrm.migrate import parse_phone_value, is_valid_phone
+                            parsed = parse_phone_value(v)
+                            if parsed.phones and is_valid_phone(parsed.phones[0]):
+                                c_parts = []
+                                if parsed.extension:
+                                    c_parts.append(f"доб. {parsed.extension}")
+                                if parsed.comment:
+                                    c_parts.append(parsed.comment)
+                                ph_comment = "; ".join(c_parts)[:255] if c_parts else ""
+                            else:
+                                ph_comment = ""
+                        except Exception:
+                            ph_comment = ""
+
+                        CompanyPhone.objects.create(
+                            company=company,
+                            value=normalized,
+                            order=next_order,
+                            comment=ph_comment,
+                        )
                         migrated_phones.append(v)
                         next_order += 1
                     except Exception as e:
