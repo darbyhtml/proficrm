@@ -143,7 +143,7 @@
             Заметок: найдено <b>{{ result.notes_seen }}</b>, добавлено <b>{{ result.notes_created }}</b>, обновлено <b>{{ result.notes_updated|default:0 }}</b>, пропущено (уже было) <b>{{ result.notes_skipped_existing }}</b>
           {% endif %}
         </div>
-        {% if form.import_contacts.value or form.dry_run.value %}
+        {% if form.import_contacts.value %}
           <div class="text-sm text-brand-dark/80 mt-1">
             {% if form.dry_run.value %}
               Контактов: найдено <b>{{ result.contacts_seen|default:0 }}</b>, {% if result.contacts_would_create %}будет создано <b>{{ result.contacts_would_create }}</b>{% else %}создано <b>0</b>{% endif %}, {% if result.contacts_would_update %}будет обновлено <b>{{ result.contacts_would_update }}</b>{% else %}обновлено <b>0</b>{% endif %}
@@ -231,7 +231,7 @@
           </div>
         {% endif %}
 
-        {% if form.dry_run.value and result.contacts_updates_preview %}
+        {% if form.dry_run.value and form.import_contacts.value and result.contacts_updates_preview %}
           <div class="mt-4 border-t pt-4">
             <div class="font-medium mb-3">Что будет обновлено — контакты</div>
             <div class="space-y-3 text-sm">
@@ -374,7 +374,7 @@
                 </div>
               </div>
             {% endif %}
-            {% if result.contacts_preview %}
+            {% if form.import_contacts.value and result.contacts_preview %}
               <div class="text-sm text-brand-dark/80 mt-4">
                 <div class="font-medium">📇 Контакты компаний — отладка (dry-run)</div>
                 <div class="text-xs text-gray-600 mb-2">

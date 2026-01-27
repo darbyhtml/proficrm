@@ -3242,11 +3242,12 @@ def _upsert_company_from_amo(
     responsible: User | None,
     dry_run: bool,
     region_field_id: int | None = None,
-) -> tuple[Company, bool]:
+) -> tuple[Company, bool, dict[str, str] | None]:
     amo_id = int(amo_company.get("id") or 0)
     name = str(amo_company.get("name") or "").strip()[:255] or "(без названия)"  # обрезаем name сразу
     company = Company.objects.filter(amocrm_company_id=amo_id).first()
     created = False
+    region_diff: dict[str, str] | None = None
     if company is None:
         company = Company(name=name, created_by=actor, responsible=responsible, amocrm_company_id=amo_id, raw_fields={"source": "amo_api"})
         created = True
@@ -3304,7 +3305,14 @@ def _upsert_company_from_amo(
             pass  # Если не удалось распарсить timestamp - пропускаем
     
     # Мягкий импорт региона компании: только если поле пустое и настроено кастомное поле региона.
-    if region_field_id and not company.region_id:
+    # Если регион был выставлен вручную (raw_fields['region_source'] == 'manual'),
+    # не трогаем его даже при наличии данных из amo.
+    region_source = ""
+    try:
+        region_source = str(rf.get("region_source") or "").strip()
+    except Exception:
+        region_source = ""
+    if region_source != "manual" and region_field_id and not company.region_id:
         try:
             values = _extract_custom_values(amo_company, region_field_id)
         except Exception:
@@ -3322,7 +3330,20 @@ def _upsert_company_from_amo(
             # Ищем регион по имени (без создания новых, чтобы не нарушать справочник)
             region_obj = Region.objects.filter(name__iexact=region_name).first()
             if region_obj:
+                old_region_name = ""
+                if company.region_id and company.region:
+                    old_region_name = company.region.name or ""
                 company.region = region_obj
+                # Помечаем источник региона как amo, если не был задан ранее
+                if not region_source:
+                    rf["region_source"] = "amo"
+                # Для dry-run собираем diff для последующего отображения в превью
+                if dry_run:
+                    region_diff = {
+                        "old": old_region_name or "",
+                        "new": region_obj.name or "",
+                    }
+                company.raw_fields = _json_sanitize(rf)
 
     if not dry_run:
         try:
@@ -3331,7 +3352,7 @@ def _upsert_company_from_amo(
             # Если ошибка при сохранении - логируем, но не падаем (company уже создан в памяти)
             logger.error(f"Failed to save company in _upsert_company_from_amo (amo_id={amo_id}): {e}", exc_info=True)
             # Продолжаем - company уже создан в памяти, просто не сохранен в БД
-    return company, created
+    return company, created, region_diff
 
 
 def _apply_spheres_from_custom(
@@ -3470,7 +3491,7 @@ def migrate_filtered(
                             n_skynet, amo_c.get("id"), (amo_c.get("name") or "")[:80],
                             f", example={ex!r}" if ex else "",
                         )
-                    comp, created = _upsert_company_from_amo(
+                    comp, created, region_diff = _upsert_company_from_amo(
                         amo_company=amo_c,
                         actor=actor,
                         responsible=responsible_local,
@@ -3730,6 +3751,10 @@ def migrate_filtered(
                         comp.raw_fields = _json_sanitize(rf)
                     
                     # Сохраняем diff изменений для dry-run
+                    # Добавляем diff по региону, если он был изменён при импорте
+                    if dry_run and region_diff and company_updates_diff is not None:
+                        company_updates_diff["region"] = region_diff
+
                     if dry_run and company_updates_diff:
                         if res.companies_updates_preview is None:
                             res.companies_updates_preview = []
@@ -4389,29 +4414,24 @@ def migrate_filtered(
         res.contacts_seen = 0
         res.contacts_created = 0
         
-        # В DRY-RUN всегда показываем контакты (даже если import_contacts=False),
-        # чтобы пользователь мог увидеть, что будет импортировано
-        # В реальном импорте обрабатываем только если import_contacts=True
-        should_process_contacts = (dry_run or import_contacts) and amo_ids
+        # Контакты полностью управляются флагом import_contacts.
+        # dry_run влияет только на то, пишем ли в БД, но не на сам факт обработки контактов.
+        should_process_contacts = bool(import_contacts and amo_ids)
         
-        logger.info(f"migrate_filtered: проверка импорта контактов: import_contacts={import_contacts}, dry_run={dry_run}, should_process_contacts={should_process_contacts}, amo_ids={bool(amo_ids)}, len={len(amo_ids) if amo_ids else 0}")
+        logger.info(
+            f"migrate_filtered: проверка импорта контактов: import_contacts={import_contacts}, "
+            f"dry_run={dry_run}, should_process_contacts={should_process_contacts}, "
+            f"amo_ids={bool(amo_ids)}, len={len(amo_ids) if amo_ids else 0}"
+        )
         if should_process_contacts:
             # Инициализируем счетчики до блока try, чтобы они были доступны в finally
             contacts_processed = 0  # счетчик обработанных контактов
             contacts_skipped = 0  # счетчик пропущенных контактов
             contacts_errors = 0  # счетчик ошибок при обработке контактов
             
-            # ВАЖНО: в реальном импорте (не dry-run) обрабатываем контакты только если import_contacts=True
-            # В dry-run показываем контакты всегда для preview
-            if not dry_run and not import_contacts:
-                logger.info(f"migrate_filtered: реальный импорт, но import_contacts=False - пропускаем обработку контактов")
-                # Не обрабатываем контакты, но инициализируем счетчики
-                res.contacts_seen = 0
-                res.contacts_created = 0
-            else:
-                res._debug_contacts_logged = 0  # счетчик для отладки
-                logger.info(f"migrate_filtered: ===== НАЧАЛО ИМПОРТА КОНТАКТОВ для {len(amo_ids)} компаний =====")
-                logger.info(f"migrate_filtered: ID компаний для поиска контактов: {amo_ids[:10]}...")
+            res._debug_contacts_logged = 0  # счетчик для отладки
+            logger.info(f"migrate_filtered: ===== НАЧАЛО ИМПОРТА КОНТАКТОВ для {len(amo_ids)} компаний =====")
+            logger.info(f"migrate_filtered: ID компаний для поиска контактов: {amo_ids[:10]}...")
             try:
                 # ОПТИМИЗАЦИЯ: используем bulk-получение контактов вместо запроса для каждой компании
                 # Rate limiting применяется автоматически в AmoClient
