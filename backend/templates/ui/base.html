@@ -1760,6 +1760,9 @@
                         opt.value = item.id;
                         opt.textContent = item.name;
                         if (item.inn) opt.textContent += ` (ИНН: ${item.inn})`;
+                        // Проставляем флаги организации для дальнейшей работы галки
+                        opt.dataset.isBranch = item.is_branch ? '1' : '0';
+                        opt.dataset.hasBranches = item.has_branches ? '1' : '0';
                         select.appendChild(opt);
                       });
                       

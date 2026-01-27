@@ -1973,53 +1973,34 @@
                   if (companyId) {
                     const companySelect = createModalContent.querySelector('select[name="company"], select#id_company');
                     if (companySelect) {
-                      // Проверяем, есть ли опция с нужным значением
-                      const optionExists = Array.from(companySelect.options).some(opt => opt.value === companyId);
-                      if (optionExists) {
-                        companySelect.value = companyId;
-                        companySelect.dispatchEvent(new Event('change', { bubbles: true }));
-                        const msWidget = companySelect.closest('[data-ms-single="1"]');
-                        if (msWidget) {
-                          const valueEl = msWidget.querySelector('.ms-value');
-                          const selectedOption = companySelect.options[companySelect.selectedIndex];
-                          if (valueEl && selectedOption) {
-                            valueEl.textContent = selectedOption.textContent.trim();
-                          }
+                      // Проставляем выбранное значение и обновляем ms‑виджет
+                      companySelect.value = companyId;
+                      companySelect.dispatchEvent(new Event('change', { bubbles: true }));
+                      const msWidget = companySelect.closest('[data-ms-single="1"]');
+                      if (msWidget) {
+                        const valueEl = msWidget.querySelector('.ms-value');
+                        const selectedOption = companySelect.options[companySelect.selectedIndex];
+                        if (valueEl && selectedOption) {
+                          valueEl.textContent = selectedOption.textContent.trim();
                         }
+                      }
+                      // Гарантированно подтягиваем флаги is_branch / has_branches и обновляем галку
+                      fetch(`/companies/autocomplete/?id=${encodeURIComponent(companyId)}`, {
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                      })
+                      .then(res => res.json())
+                      .then(data => {
+                        const company = (data.items || [])[0];
+                        if (!company) return;
+                        const opt = Array.from(companySelect.options).find(o => o.value === companyId);
+                        if (!opt) return;
+                        opt.dataset.isBranch = company.is_branch ? '1' : '0';
+                        opt.dataset.hasBranches = company.has_branches ? '1' : '0';
                         if (window.updateApplyToOrgForModal) {
                           window.updateApplyToOrgForModal(createModalContent);
                         }
-                      } else {
-                        // Если опции нет в списке, загружаем компанию через режим autocomplete по id
-                        fetch(`/companies/autocomplete/?id=${encodeURIComponent(companyId)}`, {
-                          headers: { 'X-Requested-With': 'XMLHttpRequest' }
-                        })
-                        .then(res => res.json())
-                        .then(data => {
-                          const company = (data.items || [])[0];
-                          if (!company) return;
-                          const opt = document.createElement('option');
-                          opt.value = company.id;
-                          opt.textContent = company.name;
-                          if (company.inn) opt.textContent += ` (ИНН: ${company.inn})`;
-                          opt.dataset.isBranch = company.is_branch ? '1' : '0';
-                          opt.dataset.hasBranches = company.has_branches ? '1' : '0';
-                          companySelect.appendChild(opt);
-                          companySelect.value = companyId;
-                          companySelect.dispatchEvent(new Event('change', { bubbles: true }));
-                          const msWidget = companySelect.closest('[data-ms-single="1"]');
-                          if (msWidget) {
-                            const valueEl = msWidget.querySelector('.ms-value');
-                            if (valueEl) {
-                              valueEl.textContent = opt.textContent.trim();
-                            }
-                          }
-                          if (window.updateApplyToOrgForModal) {
-                            window.updateApplyToOrgForModal(createModalContent);
-                          }
-                        })
-                        .catch(err => console.error('Ошибка загрузки компании:', err));
-                      }
+                      })
+                      .catch(err => console.error('Ошибка загрузки компании:', err));
                     }
                   }
                 }
