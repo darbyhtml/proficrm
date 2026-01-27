@@ -886,7 +886,7 @@
               <div class="rounded-lg border overflow-hidden" data-contact-accordion>
                 <button type="button" class="w-full flex items-center justify-between gap-3 p-3 hover:bg-brand-soft/10 transition-colors text-left" data-contact-toggle aria-expanded="false" data-contact-id="{{ c.id }}">
                   <div class="flex-1 min-w-0">
-                    <div class="text-sm font-semibold text-brand-dark">{{ c.last_name }} {{ c.first_name }}</div>
+                    <div class="text-sm font-bold text-brand-dark">{{ c.last_name }} {{ c.first_name }}</div>
                   </div>
                   <div class="flex items-center gap-2 shrink-0">
                     <div class="hidden flex items-center gap-2" data-contact-actions>
@@ -3794,7 +3794,8 @@
         
         toggle.addEventListener('click', function(e) {
           // Предотвращаем клик, если кликнули на кнопки редактирования/удаления
-          if (e.target.closest('a[href*="/edit/"], button[type="submit"], form, [data-contact-actions]')) {
+          const clickedActions = e.target.closest('[data-contact-actions]');
+          if (e.target.closest('a[href*="/edit/"], button[type="submit"], form') || clickedActions) {
             return;
           }
           
@@ -3817,9 +3818,11 @@
               
               otherToggle.setAttribute('aria-expanded', 'false');
               if (otherContent) {
-                const currentHeight = otherContent.scrollHeight;
-                otherContent.style.maxHeight = currentHeight + 'px';
-                otherContent.offsetHeight;
+                if (!otherContent.classList.contains('hidden')) {
+                  const currentHeight = otherContent.scrollHeight;
+                  otherContent.style.maxHeight = currentHeight + 'px';
+                  otherContent.offsetHeight;
+                }
                 otherContent.style.maxHeight = '0';
                 setTimeout(() => {
                   otherContent.classList.add('hidden');
@@ -3841,7 +3844,7 @@
           if (content) {
             if (isExpanded) {
               // Сворачиваем
-              const currentHeight = content.scrollHeight;
+              const currentHeight = content.scrollHeight || content.offsetHeight;
               content.style.maxHeight = currentHeight + 'px';
               content.offsetHeight; // Принудительная перерисовка
               content.style.maxHeight = '0';
@@ -3851,9 +3854,11 @@
             } else {
               // Разворачиваем
               content.classList.remove('hidden');
+              // Временно убираем max-height для правильного расчета высоты
+              content.style.maxHeight = '';
+              const targetHeight = content.scrollHeight;
               content.style.maxHeight = '0';
               content.offsetHeight; // Принудительная перерисовка
-              const targetHeight = content.scrollHeight;
               content.style.maxHeight = targetHeight + 'px';
               setTimeout(() => {
                 content.style.maxHeight = 'none';
