@@ -4833,7 +4833,7 @@ def company_inline_update(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch", "region"), id=company_id)
     if not _can_edit_company(user, company):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return JsonResponse({"ok": False, "error": "Нет прав на редактирование этой компании."}, status=403)
