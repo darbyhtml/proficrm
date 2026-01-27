@@ -1565,7 +1565,10 @@
           const isBranch = opt && opt.dataset && opt.dataset.isBranch === '1';
           const hasBranches = opt && opt.dataset && opt.dataset.hasBranches === '1';
 
-          const show = Boolean(isBranch || hasBranches);
+          // Если чекбокс уже предустановлен на сервере (initial=True),
+          // уважаем это и показываем блок даже при отсутствии флагов на option.
+          const isPrechecked = applyCheckbox.checked;
+          const show = Boolean(isBranch || hasBranches || isPrechecked);
           if (show) {
             applyBox.classList.remove('hidden');
           } else {
