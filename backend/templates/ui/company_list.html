@@ -21,7 +21,7 @@
         <div class="flex gap-2">
           <a href="/companies/new/" class="btn btn-primary">+ Добавить компанию</a>
           {% if is_admin %}
-            <a href="/companies/export/?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}" class="btn btn-outline">Экспорт CSV</a>
+            <a href="/companies/export/?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}&region={{ region }}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}" class="btn btn-outline">Экспорт CSV</a>
           {% endif %}
         </div>
       </div>
@@ -38,7 +38,7 @@
         </div>
         <div class="text-xs text-brand-dark/60 mt-1">Результаты поиска отображаются в таблице ниже</div>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 items-end">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-end">
         <div>
           <label class="block text-sm text-brand-dark/80 mb-1">Ответственный</label>
           <select name="responsible" class="select w-full">
@@ -94,6 +94,15 @@
             {% endfor %}
           </select>
         </div>
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Область</label>
+          <select name="region" class="select w-full">
+            <option value="">Любая</option>
+            {% for r in regions %}
+              <option value="{{ r.id }}" {% if region == r.id|stringformat:"s" %}selected{% endif %}>{{ r.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
       </div>
       <div class="flex flex-col md:flex-row md:items-center md:flex-wrap gap-2 justify-between">
         <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
@@ -116,6 +125,7 @@
       <input type="hidden" name="branch" value="{{ branch }}" />
       <input type="hidden" name="sphere" value="{{ sphere }}" />
       <input type="hidden" name="contract_type" value="{{ contract_type }}" />
+      <input type="hidden" name="region" value="{{ region }}" />
       <input type="hidden" name="cold_call" value="{{ cold_call }}" />
       <input type="hidden" name="overdue" value="{{ overdue }}" />
 
@@ -154,7 +164,7 @@
       </div>
     </div>
 
-    <div class="card overflow-hidden">
+      <div class="card overflow-hidden">
       <div class="overflow-x-auto">
         <table class="table">
           <thead>
@@ -245,6 +255,21 @@
                   </a>
                 </th>
               {% endif %}
+              {% if "region" in company_list_columns %}
+                <th class="text-left px-4 py-3">
+                  <a href="#" data-sort="region" class="sort-link flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'region' %}text-brand-orange font-bold{% endif %}">
+                    Область
+                    <div class="flex flex-col gap-0.5">
+                      <svg class="w-3 h-3 {% if sort_field == 'region' and sort_dir == 'asc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                      </svg>
+                      <svg class="w-3 h-3 {% if sort_field == 'region' and sort_dir == 'desc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                      </svg>
+                    </div>
+                  </a>
+                </th>
+              {% endif %}
               {% if "updated_at" in company_list_columns %}
                 <th class="text-left px-4 py-3">
                   <a href="#" data-sort="updated_at" class="sort-link flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'updated_at' %}text-brand-orange font-bold{% endif %}">
@@ -306,6 +331,7 @@
                 {% endif %}
                 {% if "responsible" in company_list_columns %}<td>{{ c.responsible }}</td>{% endif %}
                 {% if "branch" in company_list_columns %}<td>{{ c.branch }}</td>{% endif %}
+                {% if "region" in company_list_columns %}<td>{{ c.region }}</td>{% endif %}
                 {% if "updated_at" in company_list_columns %}
                   <td class="muted">
                     <div>{{ c.updated_at|date:"d.m.Y H:i" }}</div>
@@ -336,6 +362,7 @@
             {% if branch %}<input type="hidden" name="branch" value="{{ branch }}" />{% endif %}
             {% if sphere %}<input type="hidden" name="sphere" value="{{ sphere }}" />{% endif %}
             {% if contract_type %}<input type="hidden" name="contract_type" value="{{ contract_type }}" />{% endif %}
+            {% if region %}<input type="hidden" name="region" value="{{ region }}" />{% endif %}
             {% if overdue %}<input type="hidden" name="overdue" value="{{ overdue }}" />{% endif %}
             {% if sort %}<input type="hidden" name="sort" value="{{ sort }}" />{% endif %}
             {% if dir %}<input type="hidden" name="dir" value="{{ dir }}" />{% endif %}

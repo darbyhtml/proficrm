@@ -8,6 +8,7 @@ from .models import (
     CompanyNote,
     CompanySphere,
     CompanyStatus,
+    Region,
     Contact,
     ContactEmail,
     ContactPhone,
@@ -21,6 +22,11 @@ class CompanyStatusAdmin(admin.ModelAdmin):
 
 @admin.register(CompanySphere)
 class CompanySphereAdmin(admin.ModelAdmin):
+    search_fields = ("name",)
+
+
+@admin.register(Region)
+class RegionAdmin(admin.ModelAdmin):
     search_fields = ("name",)
 
 

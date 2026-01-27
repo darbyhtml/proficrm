@@ -21,7 +21,7 @@ from django.views.decorators.csrf import csrf_exempt
 from accounts.models import User
 from audit.models import ActivityEvent
 from audit.service import log_event
-from companies.models import Company
+from companies.models import Company, Region
 from companies.permissions import get_users_for_lists
 from accounts.models import Branch
 from companies.models import CompanySphere, CompanyStatus, ContactEmail, Contact
@@ -1097,6 +1097,7 @@ def campaign_detail(request: HttpRequest, campaign_id) -> HttpResponse:
             "responsibles": get_users_for_lists(request.user),
             "statuses": CompanyStatus.objects.order_by("name"),
             "spheres": CompanySphere.objects.order_by("name"),
+            "regions": Region.objects.order_by("name"),
             "user": user,
             "recipients_by_company": recipients_by_company,
             "page": page,
@@ -1620,6 +1621,9 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
             except (ValueError, TypeError):
                 pass
     
+    # Регион (один)
+    region = (request.POST.get("region") or "").strip()
+
     # Применяем фильтры
     if branch:
         company_qs = company_qs.filter(branch_id=branch)
@@ -1632,6 +1636,12 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
         # Это означает, что компании с несколькими сферами будут обработаны, если хотя бы одна из их сфер выбрана
         # Используем distinct() для исключения дублей при фильтрации по M2M
         company_qs = company_qs.filter(spheres__id__in=sphere_ids).distinct()
+    if region:
+        try:
+            region_id = int(region)
+            company_qs = company_qs.filter(region_id=region_id)
+        except (ValueError, TypeError):
+            pass
     
     # Преобразуем QuerySet в список для использования в __in
     # distinct() уже применен выше, если были сферы
@@ -1639,7 +1649,7 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
     
     # "Защита от дурака": перепроверяем, что итоговый набор компаний соответствует ВСЕМ выбранным фильтрам.
     # Это страхует от неожиданных эффектов (M2M join, типы параметров, ручные правки в БД и т.п.)
-    if company_ids and (branch or responsible or statuses or sphere_ids):
+    if company_ids and (branch or responsible or statuses or sphere_ids or region):
         valid_qs = Company.objects.filter(id__in=company_ids)
         if branch:
             valid_qs = valid_qs.filter(branch_id=branch)
@@ -1649,6 +1659,12 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
             valid_qs = valid_qs.filter(status_id__in=statuses)
         if sphere_ids:
             valid_qs = valid_qs.filter(spheres__id__in=sphere_ids)
+        if region:
+            try:
+                region_id = int(region)
+                valid_qs = valid_qs.filter(region_id=region_id)
+            except (ValueError, TypeError):
+                pass
         valid_company_ids = list(valid_qs.values_list("id", flat=True).distinct())
         if len(valid_company_ids) != len(company_ids):
             logger.warning(
@@ -1776,6 +1792,7 @@ def campaign_generate_recipients(request: HttpRequest, campaign_id) -> HttpRespo
         "responsible": responsible,
         "status": statuses,
         "sphere": normalized_sphere_ids,  # Сохраняем список целых чисел
+        "region": region,
         "limit": limit,
         "include_company_email": include_company_email,
         "include_contact_emails": include_contact_emails,

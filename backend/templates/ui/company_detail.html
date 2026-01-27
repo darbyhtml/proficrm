@@ -220,6 +220,20 @@
             {% endif %}
           </div>
           <div>
+            <div class="text-brand-dark/50">Область</div>
+            {% if can_edit_company %}
+              <div class="mt-1">
+                <form method="post" action="/companies/{{ company.id }}/update/">
+                  {% csrf_token %}
+                  {{ quick_form.region }}
+                  <button class="btn btn-outline btn-sm mt-2 w-full" type="submit">Сохранить</button>
+                </form>
+              </div>
+            {% else %}
+              <div>{{ company.region|default:"—" }}</div>
+            {% endif %}
+          </div>
+          <div>
             <div class="text-brand-dark/50">Сайт</div>
             {% if can_edit_company %}
               <div class="inline-field-wrapper" data-inline-field="website" data-company-id="{{ company.id }}" data-inline-display-kind="website">

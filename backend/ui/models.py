@@ -21,6 +21,7 @@ class UiGlobalConfig(models.Model):
         ("spheres", "Сферы"),
         ("responsible", "Ответственный"),
         ("branch", "Филиал"),
+        ("region", "Область"),
         ("updated_at", "Обновлено"),
     ]
 
@@ -39,12 +40,34 @@ class UiGlobalConfig(models.Model):
         obj, _ = cls.objects.get_or_create(
             pk=1,
             defaults={
-                "company_list_columns": ["name", "address", "overdue", "inn", "status", "spheres", "responsible", "branch", "updated_at"]
+                "company_list_columns": [
+                    "name",
+                    "address",
+                    "overdue",
+                    "inn",
+                    "status",
+                    "spheres",
+                    "responsible",
+                    "branch",
+                    "region",
+                    "updated_at",
+                ]
             },
         )
         # если пусто (после ручных правок), вернём дефолт
         if not obj.company_list_columns:
-            obj.company_list_columns = ["name", "address", "overdue", "inn", "status", "spheres", "responsible", "branch", "updated_at"]
+            obj.company_list_columns = [
+                "name",
+                "address",
+                "overdue",
+                "inn",
+                "status",
+                "spheres",
+                "responsible",
+                "branch",
+                "region",
+                "updated_at",
+            ]
             obj.save(update_fields=["company_list_columns", "updated_at"])
         return obj
 
@@ -70,6 +93,12 @@ class AmoApiConfig(models.Model):
     expires_at = models.DateTimeField("Token expires at", null=True, blank=True)
 
     last_error = models.TextField("Последняя ошибка", blank=True, default="")
+    region_custom_field_id = models.IntegerField(
+        "ID кастомного поля региона (amoCRM)",
+        null=True,
+        blank=True,
+        help_text="Необязательно. Если задано — при импорте компаний из amoCRM будем пытаться заполнить регион по этому полю.",
+    )
     updated_at = models.DateTimeField("Обновлено", auto_now=True)
 
     class Meta:

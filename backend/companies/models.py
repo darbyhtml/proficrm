@@ -29,6 +29,21 @@ class CompanySphere(models.Model):
         return self.name
 
 
+class Region(models.Model):
+    """
+    Справочник регионов РФ.
+    """
+
+    name = models.CharField("Название", max_length=120, unique=True)
+
+    class Meta:
+        verbose_name = "Регион"
+        verbose_name_plural = "Регионы"
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Company(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
@@ -110,6 +125,16 @@ class Company(models.Model):
 
     status = models.ForeignKey(CompanyStatus, verbose_name="Статус", null=True, blank=True, on_delete=models.SET_NULL, related_name="companies")
     spheres = models.ManyToManyField(CompanySphere, verbose_name="Сферы", blank=True, related_name="companies")
+
+    region = models.ForeignKey(
+        Region,
+        verbose_name="Регион",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="companies",
+        db_index=True,
+    )
 
     responsible = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="Ответственный", null=True, blank=True, on_delete=models.SET_NULL, related_name="companies")
     branch = models.ForeignKey("accounts.Branch", verbose_name="Филиал", null=True, blank=True, on_delete=models.SET_NULL, related_name="companies")

@@ -14,7 +14,7 @@ from django.utils.dateparse import parse_datetime, parse_date
 from datetime import date as dt_date, datetime, time as dt_time, timezone as dt_timezone
 
 from accounts.models import User
-from companies.models import Company, CompanyNote, CompanySphere, Contact, ContactEmail, ContactPhone, CompanyPhone, CompanyEmail
+from companies.models import Company, CompanyNote, CompanySphere, Region, Contact, ContactEmail, ContactPhone, CompanyPhone, CompanyEmail
 from tasksapp.models import Task
 
 from .client import AmoClient, AmoApiError, RateLimitError
@@ -3241,6 +3241,7 @@ def _upsert_company_from_amo(
     actor: User,
     responsible: User | None,
     dry_run: bool,
+    region_field_id: int | None = None,
 ) -> tuple[Company, bool]:
     amo_id = int(amo_company.get("id") or 0)
     name = str(amo_company.get("name") or "").strip()[:255] or "(без названия)"  # обрезаем name сразу
@@ -3302,6 +3303,27 @@ def _upsert_company_from_amo(
         except Exception:
             pass  # Если не удалось распарсить timestamp - пропускаем
     
+    # Мягкий импорт региона компании: только если поле пустое и настроено кастомное поле региона.
+    if region_field_id and not company.region_id:
+        try:
+            values = _extract_custom_values(amo_company, region_field_id)
+        except Exception:
+            values = []
+        region_name = None
+        for v in values:
+            if isinstance(v, dict):
+                lab = str(v.get("value") or "").strip()
+            else:
+                lab = str(v or "").strip()
+            if lab:
+                region_name = lab
+                break
+        if region_name:
+            # Ищем регион по имени (без создания новых, чтобы не нарушать справочник)
+            region_obj = Region.objects.filter(name__iexact=region_name).first()
+            if region_obj:
+                company.region = region_obj
+
     if not dry_run:
         try:
             company.save()
@@ -3357,6 +3379,7 @@ def migrate_filtered(
     import_contacts: bool = False,  # по умолчанию выключено, т.к. может быть медленно
     company_fields_meta: list[dict[str, Any]] | None = None,
     skip_field_filter: bool = False,  # если True, мигрируем все компании ответственного без фильтра по полю
+    region_field_id: int | None = None,
 ) -> AmoMigrateResult:
     import time
     start_time = time.time()
@@ -3447,7 +3470,13 @@ def migrate_filtered(
                             n_skynet, amo_c.get("id"), (amo_c.get("name") or "")[:80],
                             f", example={ex!r}" if ex else "",
                         )
-                    comp, created = _upsert_company_from_amo(amo_company=amo_c, actor=actor, responsible=responsible_local, dry_run=dry_run)
+                    comp, created = _upsert_company_from_amo(
+                        amo_company=amo_c,
+                        actor=actor,
+                        responsible=responsible_local,
+                        dry_run=dry_run,
+                        region_field_id=region_field_id,
+                    )
                     # заполнение "Данные" (только если поле пустое, чтобы не затереть уже заполненное вручную)
                     # ВАЖНО: всегда обрезаем значения до max_length, даже если поле уже заполнено (защита от длинных значений)
                     changed = False

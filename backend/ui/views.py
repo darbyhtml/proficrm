@@ -24,7 +24,20 @@ from django.core.validators import validate_email
 from accounts.models import Branch, User, MagicLinkToken
 from audit.models import ActivityEvent
 from audit.service import log_event
-from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactEmail, ContactPhone, CompanyDeletionRequest, CompanyEmail, CompanyPhone, CompanyPhone
+from companies.models import (
+    Company,
+    CompanyNote,
+    CompanySphere,
+    CompanyStatus,
+    Region,
+    Contact,
+    ContactEmail,
+    ContactPhone,
+    CompanyDeletionRequest,
+    CompanyEmail,
+    CompanyPhone,
+    CompanyPhone,
+)
 from companies.services import resolve_target_companies
 from companies.permissions import (
     can_edit_company as can_edit_company_perm,
@@ -741,12 +754,20 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
     if contract_type:
         qs = qs.filter(contract_type=contract_type)
 
+    region = _get_str_param("region")
+    if region:
+        try:
+            region_id = int(region)
+            qs = qs.filter(region_id=region_id)
+        except (ValueError, TypeError):
+            # Некорректный ID региона — игнорируем фильтр
+            pass
 
     overdue = _get_str_param("overdue")
     if overdue == "1":
         qs = qs.filter(has_overdue=True)
 
-    filter_active = any([q, responsible, status, branch, sphere, contract_type, overdue == "1"])
+    filter_active = any([q, responsible, status, branch, sphere, contract_type, region, overdue == "1"])
     return {
         "qs": qs.distinct(),
         "q": q,
@@ -755,6 +776,7 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
         "branch": branch,
         "sphere": sphere,
         "contract_type": contract_type,
+        "region": region,
         "overdue": overdue,
         "filter_active": filter_active,
     }
@@ -1888,6 +1910,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
         "status": "status__name",
         "responsible": "responsible__last_name",
         "branch": "branch__name",
+        "region": "region__name",
     }
     sort_field = sort_map.get(sort, "updated_at")
     if sort == "responsible":
@@ -1964,6 +1987,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "branch": f["branch"],
             "sphere": f["sphere"],
             "contract_type": f["contract_type"],
+            "region": f["region"],
             "overdue": f["overdue"],
             "companies_total": companies_total,
             "companies_filtered": companies_filtered,
@@ -1976,6 +2000,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "statuses": CompanyStatus.objects.order_by("name"),
             "spheres": CompanySphere.objects.order_by("name"),
             "branches": Branch.objects.order_by("name"),
+            "regions": Region.objects.order_by("name"),
             "contract_types": Company.ContractType.choices,
             "company_list_columns": columns,
             "transfer_targets": get_transfer_targets(user),
@@ -2060,6 +2085,7 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
         "status": "status__name",
         "responsible": "responsible__last_name",
         "branch": "branch__name",
+        "region": "region__name",
     }
     sort_field = sort_map.get(sort, "updated_at")
     if sort == "responsible":
@@ -2427,6 +2453,7 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
             "branch": request.POST.get("branch", ""),
             "sphere": request.POST.get("sphere", ""),
             "contract_type": request.POST.get("contract_type", ""),
+            "region": request.POST.get("region", ""),
             "overdue": request.POST.get("overdue", ""),
         }
     
@@ -7905,7 +7932,18 @@ def settings_amocrm(request: HttpRequest) -> HttpResponse:
             if not ru:
                 ru = request.build_absolute_uri("/settings/amocrm/callback/")
             cfg.redirect_uri = ru
-            cfg.save(update_fields=["domain", "client_id", "client_secret", "redirect_uri", "long_lived_token", "updated_at"])
+            cfg.region_custom_field_id = form.cleaned_data.get("region_custom_field_id") or None
+            cfg.save(
+                update_fields=[
+                    "domain",
+                    "client_id",
+                    "client_secret",
+                    "redirect_uri",
+                    "long_lived_token",
+                    "region_custom_field_id",
+                    "updated_at",
+                ]
+            )
             messages.success(request, "Настройки amoCRM сохранены.")
             return redirect("settings_amocrm")
     else:
@@ -7916,6 +7954,7 @@ def settings_amocrm(request: HttpRequest) -> HttpResponse:
                 "client_secret": cfg.client_secret,
                 "redirect_uri": cfg.redirect_uri or request.build_absolute_uri("/settings/amocrm/callback/"),
                 "long_lived_token": cfg.long_lived_token,
+                "region_custom_field_id": getattr(cfg, "region_custom_field_id", None),
             }
         )
 
@@ -8197,6 +8236,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                                             import_contacts=bool(form.cleaned_data.get("import_contacts")),
                                             company_fields_meta=fields,
                                             skip_field_filter=migrate_all,
+                                            region_field_id=getattr(cfg, "region_custom_field_id", None) or None,
                                         )
                                         migrate_responsible_user_id = responsible_user_id
                                         if dry_run:

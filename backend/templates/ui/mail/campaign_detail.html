@@ -723,6 +723,16 @@
                 </div>
               </div>
             </div>
+            {# Область #}
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Область</label>
+              <select class="select w-full" name="region">
+                <option value="">Любая</option>
+                {% for r in regions %}
+                  <option value="{{ r.id }}">{{ r.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
           </div>
         </div>
 

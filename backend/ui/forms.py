@@ -214,10 +214,11 @@ class CompanyCreateForm(forms.ModelForm):
 class CompanyQuickEditForm(forms.ModelForm):
     class Meta:
         model = Company
-        fields = ["status", "spheres"]
+        fields = ["status", "spheres", "region"]
         widgets = {
             "status": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "spheres": forms.SelectMultiple(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "region": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
         }
 
 
@@ -900,6 +901,11 @@ class AmoApiConfigForm(forms.Form):
         required=False,
         widget=forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2"}),
         help_text="Можно использовать вместо OAuth. Скопируйте из amoCRM: Ключи и доступы → Долгосрочный токен.",
+    )
+    region_custom_field_id = forms.IntegerField(
+        label="ID кастомного поля региона (amoCRM)",
+        required=False,
+        help_text="Опционально. Если указать — при импорте компаний регион будет пытаться заполняться по этому полю.",
     )
 
 
