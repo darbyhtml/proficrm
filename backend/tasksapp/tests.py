@@ -1,9 +1,9 @@
 from datetime import timedelta
+import json
 
-from django.test import TestCase
+from django.test import TestCase, Client
 from django.utils import timezone
 from django.contrib.auth import get_user_model
-from rest_framework.test import APIClient
 from rest_framework import status
 
 from companies.models import Company
@@ -15,14 +15,15 @@ User = get_user_model()
 
 class TaskOrgCreationTestCase(TestCase):
     def setUp(self):
-        self.client = APIClient()
+        # Используем обычный Django Client, который автоматически следует редиректам
+        self.client = Client()
         self.user = User.objects.create_user(
             username="manager",
             email="manager@example.com",
             password="testpass123",
             role=User.Role.MANAGER,
         )
-        self.client.force_authenticate(user=self.user)
+        self.client.force_login(self.user)
 
         # Головная компания без филиалов
         self.root_single = Company.objects.create(name="Одиночная", responsible=self.user)
@@ -45,65 +46,19 @@ class TaskOrgCreationTestCase(TestCase):
             "due_at": due_at,
             "apply_to_org_branches": apply_to_org,
         }
-        # Сохраняем количество задач до запроса
-        initial_count = Task.objects.count()
-        
-        # Пробуем оба варианта URL (с trailing slash и без)
-        # APIClient не следует редиректам автоматически, поэтому обрабатываем вручную
-        urls_to_try = ["/api/tasks/", "/api/tasks"]
-        resp = None
-        for url in urls_to_try:
-            resp = self.client.post(url, payload, format="json")
-            # Если получили успешный ответ или ошибку (не редирект), прекращаем
-            if resp.status_code not in [status.HTTP_301_MOVED_PERMANENTLY, status.HTTP_302_FOUND, status.HTTP_307_TEMPORARY_REDIRECT, status.HTTP_308_PERMANENT_REDIRECT]:
-                break
-            # Если редирект, пытаемся извлечь Location и следовать ему
-            redirect_url = None
-            # Пробуем разные способы получить Location заголовок
-            if hasattr(resp, "_headers"):
-                # DRF Response может хранить заголовки в _headers
-                headers_dict = dict(resp._headers.values()) if hasattr(resp._headers, "values") else {}
-                redirect_url = headers_dict.get("location") or headers_dict.get("Location")
-            if not redirect_url and hasattr(resp, "headers"):
-                if isinstance(resp.headers, dict):
-                    redirect_url = resp.headers.get("Location") or resp.headers.get("location")
-                elif hasattr(resp.headers, "get"):
-                    redirect_url = resp.headers.get("Location") or resp.headers.get("location")
-            if not redirect_url:
-                redirect_url = resp.get("Location") or resp.get("location")
-            if redirect_url:
-                # Если полный URL, извлекаем только путь
-                if redirect_url.startswith("http"):
-                    from urllib.parse import urlparse
-                    redirect_url = urlparse(redirect_url).path
-                # Пробуем следовать редиректу
-                resp = self.client.post(redirect_url, payload, format="json")
-                if resp.status_code not in [status.HTTP_301_MOVED_PERMANENTLY, status.HTTP_302_FOUND, status.HTTP_307_TEMPORARY_REDIRECT, status.HTTP_308_PERMANENT_REDIRECT]:
-                    break
-        
-        # Проверяем, создалась ли задача в БД (даже если получили редирект)
-        # Это важно, так как APIClient может не следовать редиректам, но запрос может быть выполнен
-        final_count = Task.objects.count()
-        if final_count > initial_count:
-            # Задача создалась, даже если получили редирект - это нормально
-            # Проверяем, что статус либо успешный, либо редирект (301/302)
-            if resp.status_code in [status.HTTP_301_MOVED_PERMANENTLY, status.HTTP_302_FOUND, status.HTTP_307_TEMPORARY_REDIRECT, status.HTTP_308_PERMANENT_REDIRECT]:
-                # Редирект произошел, но задача создалась - это нормально для Django APPEND_SLASH
-                pass
-            else:
-                # Если не редирект, проверяем стандартные успешные статусы
-                self.assertIn(
-                    resp.status_code,
-                    (status.HTTP_201_CREATED, status.HTTP_200_OK),
-                    f"Unexpected status: {resp.status_code}, data={getattr(resp, 'data', None)}",
-                )
-        else:
-            # Задача не создалась - это ошибка
-            self.assertIn(
-                resp.status_code,
-                (status.HTTP_201_CREATED, status.HTTP_200_OK),
-                f"Task was not created. Status: {resp.status_code}, data={getattr(resp, 'data', None)}",
-            )
+        # Django Client автоматически следует редиректам при follow=True
+        resp = self.client.post(
+            "/api/tasks/",
+            data=json.dumps(payload),
+            content_type="application/json",
+            follow=True
+        )
+        # Проверяем успешный статус (201 Created или 200 OK)
+        self.assertIn(
+            resp.status_code,
+            (status.HTTP_201_CREATED, status.HTTP_200_OK),
+            f"Unexpected status: {resp.status_code}, response={resp.content[:200] if hasattr(resp, 'content') else None}",
+        )
         return list(Task.objects.order_by("id"))
 
     def test_single_root_no_branches_flag_off_creates_one_task(self):
