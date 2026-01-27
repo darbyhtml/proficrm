@@ -45,20 +45,12 @@ class TaskOrgCreationTestCase(TestCase):
             "due_at": due_at,
             "apply_to_org_branches": apply_to_org,
         }
+        # Пробуем сначала с trailing slash (стандартный DRF URL)
         resp = self.client.post("/api/tasks/", payload, format="json")
-        # Обрабатываем редирект вручную (APIClient не следует редиректам автоматически)
-        max_redirects = 5
-        redirect_count = 0
-        while resp.status_code in [status.HTTP_301_MOVED_PERMANENTLY, status.HTTP_302_FOUND, status.HTTP_307_TEMPORARY_REDIRECT, status.HTTP_308_PERMANENT_REDIRECT] and redirect_count < max_redirects:
-            redirect_url = resp.get("Location") or resp.get("location")
-            if not redirect_url:
-                break
-            # Если полный URL, извлекаем только путь
-            if redirect_url.startswith("http"):
-                from urllib.parse import urlparse
-                redirect_url = urlparse(redirect_url).path
-            resp = self.client.post(redirect_url, payload, format="json")
-            redirect_count += 1
+        # Если получили 301 редирект, пробуем без trailing slash
+        # (APIClient не следует редиректам автоматически)
+        if resp.status_code == status.HTTP_301_MOVED_PERMANENTLY:
+            resp = self.client.post("/api/tasks", payload, format="json")
         self.assertIn(
             resp.status_code,
             (status.HTTP_201_CREATED, status.HTTP_200_OK),
