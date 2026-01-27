@@ -8,7 +8,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.db.models import Q
 
 from accounts.models import Branch, User
-from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactEmail, ContactPhone
+from companies.models import Company, CompanyNote, CompanySphere, CompanyStatus, Contact, ContactEmail, ContactPhone, Region
 from tasksapp.models import Task, TaskType
 from ui.models import UiGlobalConfig
 from ui.widgets import TaskTypeSelectWidget, UserSelectWithBranchWidget
@@ -212,6 +212,11 @@ class CompanyCreateForm(forms.ModelForm):
         }
 
 class CompanyQuickEditForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Регионы выводим отсортированными по названию, без лишних полей.
+        self.fields["region"].queryset = Region.objects.only("id", "name").order_by("name")
+
     class Meta:
         model = Company
         fields = ["status", "spheres", "region"]
@@ -232,6 +237,9 @@ class CompanyEditForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         user = kwargs.pop("user", None)
         super().__init__(*args, **kwargs)
+        # Регионы также сортируем по названию в полной форме.
+        if "region" in self.fields:
+            self.fields["region"].queryset = Region.objects.only("id", "name").order_by("name")
         # Поле email необязательное (бывают ситуации, когда email еще неизвестен)
         self.fields["email"].required = False
 

@@ -1888,7 +1888,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
     # Оптимизация: предзагружаем только необходимые связанные объекты
     qs = (
         _companies_with_overdue_flag(now=now)
-        .select_related("responsible", "branch", "status")
+        .select_related("responsible", "branch", "status", "region")
         .prefetch_related("spheres")
     )
     # Ранее здесь были разные фильтры по умолчанию в зависимости от роли (ответственный/филиал).
@@ -2053,7 +2053,7 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
     # Используем only() для уменьшения объема загружаемых данных
     qs = (
         _companies_with_overdue_flag(now=now)
-        .select_related("responsible", "branch", "status")
+        .select_related("responsible", "branch", "status", "region")
         .prefetch_related(
             "spheres",
             # Предзагружаем только value для телефонов и email (не все поля)
