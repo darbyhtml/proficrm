@@ -2836,8 +2836,23 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
     Возвращает список компаний по запросу (название, ИНН, адрес, телефон, email).
     """
     q = (request.GET.get("q") or "").strip()
-    if not q or len(q) < 2:
-        return JsonResponse({"items": []})
+
+    # Режим получения одной компании по ID (для префилла модалок и т.п.).
+    company_id_raw = (request.GET.get("id") or "").strip()
+    if company_id_raw:
+        try:
+            company_uuid = UUID(company_id_raw)
+        except Exception:
+            return JsonResponse({"items": []})
+
+        qs = (
+            Company.objects.filter(id=company_uuid)
+            .select_related("responsible", "branch", "status")
+            .prefetch_related("phones", "emails", "contacts__phones", "contacts__emails")
+        )
+    else:
+        if not q or len(q) < 2:
+            return JsonResponse({"items": []})
 
     exclude_raw = (request.GET.get("exclude") or "").strip()
     exclude_id = None
@@ -2853,19 +2868,19 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
 
     # Используем ту же логику поиска, что и в списке компаний,
     # чтобы поведение автодополнения и таблицы было полностью одинаковым
-    base_qs = Company.objects.all()
-    filtered = _apply_company_filters(qs=base_qs, params={"q": q}, default_responsible_id=None)
-    qs = (
-        filtered["qs"]
-        .exclude(id=exclude_id) if exclude_id else filtered["qs"]
-    )
-    qs = (
-        qs
-        .select_related("responsible", "branch", "status")
-        .prefetch_related("phones", "emails", "contacts__phones", "contacts__emails")
-        .distinct()
-        .order_by("-updated_at")[:10]
-    )
+        base_qs = Company.objects.all()
+        filtered = _apply_company_filters(qs=base_qs, params={"q": q}, default_responsible_id=None)
+        qs = (
+            filtered["qs"]
+            .exclude(id=exclude_id) if exclude_id else filtered["qs"]
+        )
+        qs = (
+            qs
+            .select_related("responsible", "branch", "status")
+            .prefetch_related("phones", "emails", "contacts__phones", "contacts__emails")
+            .distinct()
+            .order_by("-updated_at")[:10]
+        )
     
     items = []
     for c in qs:
