@@ -3857,7 +3857,16 @@ def migrate_filtered(
                                 continue
                             # Проверяем, что такого телефона еще нет (ни в основном, ни в дополнительных)
                             if main_phone_normalized and main_phone_normalized == normalized:
-                                logger.debug(f"Company {comp.name}: skipping phone {v} (normalized: {normalized}) - same as main phone")
+                                # Если номер совпал с основным телефоном компании и есть комментарий - мержим в phone_comment
+                                if ph_comment and ph_comment.strip():
+                                    if not dry_run:
+                                        merged_comment = merge_comment_segments(comp.phone_comment, ph_comment)
+                                        if merged_comment != (comp.phone_comment or ""):
+                                            comp.phone_comment = merged_comment
+                                            comp.save(update_fields=["phone_comment"])
+                                    logger.debug(f"Company {comp.name}: merged comment for main phone {normalized}: {ph_comment[:50]}")
+                                else:
+                                    logger.debug(f"Company {comp.name}: skipping phone {v} (normalized: {normalized}) - same as main phone, no comment")
                                 continue
                             if normalized in existing_phones_normalized:
                                 logger.debug(f"Company {comp.name}: skipping phone {v} (normalized: {normalized}) - duplicate")
@@ -3884,17 +3893,25 @@ def migrate_filtered(
                             norm = _normalize_phone(raw_value) if raw_value else ""
                             if not norm:
                                 norm = raw_value
-                            if main_phone_normalized and main_phone_normalized == norm:
-                                # Основной телефон компании: пока не трогаем его комментарий в этой ветке.
-                                skynet_skipped_dup += 1
-                                continue
-
+                            
                             # Собираем "входящий" комментарий для SKYNET-номера
                             comment_parts = ["SKYNET"]
                             extra_comment = (item.get("comment") or "").strip()
                             if extra_comment:
                                 comment_parts.append(extra_comment)
                             skynet_comment = "; ".join(comment_parts).strip()[:255]
+                            
+                            if main_phone_normalized and main_phone_normalized == norm:
+                                # Если номер совпал с основным телефоном компании и есть комментарий - мержим в phone_comment
+                                if skynet_comment and skynet_comment.strip():
+                                    if not dry_run:
+                                        merged_comment = merge_comment_segments(comp.phone_comment, skynet_comment)
+                                        if merged_comment != (comp.phone_comment or ""):
+                                            comp.phone_comment = merged_comment
+                                            comp.save(update_fields=["phone_comment"])
+                                    logger.debug(f"Company {comp.name}: merged Skynet comment for main phone {norm}: {skynet_comment[:50]}")
+                                skynet_skipped_dup += 1
+                                continue
 
                             if norm in existing_phones_normalized:
                                 # Номер уже есть в CompanyPhone: обновляем comment, не создавая дубликат.

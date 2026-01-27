@@ -126,17 +126,29 @@ class Command(BaseCommand):
                 if not raw_value:
                     continue
                 n = _normalize_phone(raw_value) or raw_value
-                if main_norm and main_norm == n:
-                    # Для основного номера компании обновление комментария пока не делаем здесь.
-                    skipped_dup += 1
-                    continue
-
+                
                 # Собираем "входящий" комментарий: SKYNET или SKYNET; <parsed_comment>
                 extra_comment = (item.get("comment") or "").strip()
                 if extra_comment:
                     incoming_comment = f"SKYNET; {extra_comment}".strip()
                 else:
                     incoming_comment = "SKYNET"
+                
+                if main_norm and main_norm == n:
+                    # Если номер совпал с основным телефоном компании и есть комментарий - мержим в phone_comment
+                    if incoming_comment and incoming_comment.strip():
+                        if not dry_run:
+                            from amocrm.migrate import merge_comment_segments
+                            merged_comment = merge_comment_segments(comp.phone_comment, incoming_comment)
+                            if merged_comment != (comp.phone_comment or ""):
+                                comp.phone_comment = merged_comment
+                                comp.save(update_fields=["phone_comment"])
+                        self.stdout.write(
+                            f"  {comp.name} (inn={comp.inn or '-'}): merged Skynet comment for main phone {n}"
+                            f"{' | ' + extra_comment if extra_comment else ''}"
+                        )
+                    skipped_dup += 1
+                    continue
 
                 if n in existing:
                     # Номер уже есть в CompanyPhone: не создаём дубликат, а аккуратно дополняем comment.

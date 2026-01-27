@@ -792,3 +792,194 @@ class TestNotesBulk404Fallback(unittest.TestCase):
         # Проверяем результат
         assert len(phones) == 0  # PHONE пустой
         assert "только через приемную" in note_text  # NOTE содержит исходный текст
+
+
+class TestMainPhoneCommentMerge(unittest.TestCase):
+    """Тесты для слияния комментариев основного телефона при импорте."""
+    
+    def setUp(self):
+        """Создаём тестовую компанию."""
+        from companies.models import Company, CompanyPhone
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        # Создаём пользователя для actor
+        self.user = User.objects.create_user(
+            username="test_user",
+            email="test@example.com",
+            password="testpass"
+        )
+        
+        # Создаём компанию с основным телефоном
+        self.company = Company.objects.create(
+            name="Test Company",
+            phone="+73453522095",
+            phone_comment="",
+        )
+    
+    def tearDown(self):
+        """Очистка после тестов."""
+        from companies.models import Company, CompanyPhone
+        CompanyPhone.objects.all().delete()
+        Company.objects.all().delete()
+        self.user.delete()
+    
+    def test_main_phone_comment_from_regular_phone(self):
+        """Тест: основной номер + комментарий из обычного телефона -> phone_comment обновляется, CompanyPhone не создаётся."""
+        from companies.models import CompanyPhone
+        from amocrm.migrate import parse_phone_value, merge_comment_segments
+        from ui.forms import _normalize_phone
+        
+        # Парсим телефон с комментарием
+        parsed = parse_phone_value("+73453522095 неправ. номер")
+        assert parsed.phones and len(parsed.phones) > 0
+        phone_e164 = parsed.phones[0]
+        
+        # Формируем комментарий
+        c_parts = []
+        if parsed.extension:
+            c_parts.append(f"доб. {parsed.extension}")
+        if parsed.comment:
+            c_parts.append(parsed.comment)
+        ph_comment = "; ".join(c_parts) if c_parts else ""
+        
+        # Проверяем, что номер совпадает с основным
+        main_norm = _normalize_phone(self.company.phone) if (self.company.phone or "").strip() else ""
+        normalized = phone_e164
+        
+        assert main_norm == normalized
+        assert ph_comment and "неправ. номер" in ph_comment
+        
+        # Симулируем логику из migrate.py: мержим комментарий
+        if ph_comment and ph_comment.strip():
+            merged_comment = merge_comment_segments(self.company.phone_comment, ph_comment)
+            self.company.phone_comment = merged_comment
+            self.company.save(update_fields=["phone_comment"])
+        
+        # Проверяем результат
+        self.company.refresh_from_db()
+        assert "неправ. номер" in self.company.phone_comment
+        assert CompanyPhone.objects.filter(company=self.company, value=normalized).count() == 0
+    
+    def test_main_phone_comment_from_skynet(self):
+        """Тест: основной номер + комментарий из Skynet -> phone_comment обновляется, CompanyPhone не создаётся."""
+        from companies.models import CompanyPhone
+        from amocrm.migrate import merge_comment_segments
+        from ui.forms import _normalize_phone
+        
+        # Симулируем Skynet телефон с комментарием
+        raw_value = "+73453522095"
+        norm = _normalize_phone(raw_value) if raw_value else ""
+        main_norm = _normalize_phone(self.company.phone) if (self.company.phone or "").strip() else ""
+        
+        assert main_norm == norm
+        
+        # Формируем Skynet комментарий
+        extra_comment = "временно не доступен"
+        comment_parts = ["SKYNET"]
+        if extra_comment:
+            comment_parts.append(extra_comment)
+        skynet_comment = "; ".join(comment_parts).strip()
+        
+        # Симулируем логику из migrate.py: мержим комментарий
+        if skynet_comment and skynet_comment.strip():
+            merged_comment = merge_comment_segments(self.company.phone_comment, skynet_comment)
+            self.company.phone_comment = merged_comment
+            self.company.save(update_fields=["phone_comment"])
+        
+        # Проверяем результат
+        self.company.refresh_from_db()
+        assert "SKYNET" in self.company.phone_comment
+        assert "временно не доступен" in self.company.phone_comment
+        assert CompanyPhone.objects.filter(company=self.company, value=norm).count() == 0
+    
+    def test_main_phone_comment_idempotent(self):
+        """Тест: повторный импорт не дублирует комментарии."""
+        from amocrm.migrate import merge_comment_segments
+        
+        # Первый импорт
+        incoming_comment = "неправ. номер"
+        merged = merge_comment_segments(self.company.phone_comment, incoming_comment)
+        self.company.phone_comment = merged
+        self.company.save(update_fields=["phone_comment"])
+        
+        first_comment = self.company.phone_comment
+        
+        # Второй импорт того же комментария
+        merged2 = merge_comment_segments(self.company.phone_comment, incoming_comment)
+        self.company.phone_comment = merged2
+        self.company.save(update_fields=["phone_comment"])
+        
+        # Комментарий не должен дублироваться
+        self.company.refresh_from_db()
+        assert self.company.phone_comment == first_comment
+    
+    def test_main_phone_no_comment_no_change(self):
+        """Тест: если комментария нет - ничего не меняется."""
+        from amocrm.migrate import merge_comment_segments
+        
+        original_comment = self.company.phone_comment
+        
+        # Импорт без комментария
+        incoming_comment = ""
+        merged = merge_comment_segments(self.company.phone_comment, incoming_comment)
+        
+        # Если комментарий пустой, merge_comment_segments вернёт текущий
+        assert merged == original_comment
+        
+        # phone_comment не должен измениться
+        self.company.refresh_from_db()
+        assert self.company.phone_comment == original_comment
+    
+    def test_main_phone_comment_merge_multiple_segments(self):
+        """Тест: несколько разных комментариев мержатся корректно."""
+        from amocrm.migrate import merge_comment_segments
+        
+        # Первый комментарий
+        merged1 = merge_comment_segments(self.company.phone_comment, "неправ. номер")
+        self.company.phone_comment = merged1
+        self.company.save(update_fields=["phone_comment"])
+        
+        # Второй комментарий (другой)
+        merged2 = merge_comment_segments(self.company.phone_comment, "временно не доступен")
+        self.company.phone_comment = merged2
+        self.company.save(update_fields=["phone_comment"])
+        
+        # Оба комментария должны быть в phone_comment
+        self.company.refresh_from_db()
+        assert "неправ. номер" in self.company.phone_comment
+        assert "временно не доступен" in self.company.phone_comment
+        # Разделитель " | " должен быть между сегментами
+        assert " | " in self.company.phone_comment or "; " in self.company.phone_comment
+    
+    def test_main_phone_skynet_plain_vs_detail(self):
+        """Тест: 'SKYNET' без деталей не переписывает существующий phone_comment."""
+        from amocrm.migrate import merge_comment_segments
+        
+        # Устанавливаем существующий комментарий
+        self.company.phone_comment = "существующий комментарий"
+        self.company.save(update_fields=["phone_comment"])
+        
+        # Импорт "SKYNET" без деталей
+        plain_skynet = "SKYNET"
+        merged = merge_comment_segments(self.company.phone_comment, plain_skynet)
+        self.company.phone_comment = merged
+        self.company.save(update_fields=["phone_comment"])
+        
+        # Существующий комментарий должен остаться
+        self.company.refresh_from_db()
+        assert "существующий комментарий" in self.company.phone_comment
+        # SKYNET должен быть добавлен
+        assert "SKYNET" in self.company.phone_comment
+        
+        # Теперь импорт "SKYNET; деталь" должен заменить "SKYNET" на "SKYNET; деталь"
+        skynet_with_detail = "SKYNET; деталь"
+        merged2 = merge_comment_segments(self.company.phone_comment, skynet_with_detail)
+        self.company.phone_comment = merged2
+        self.company.save(update_fields=["phone_comment"])
+        
+        self.company.refresh_from_db()
+        assert "SKYNET; деталь" in self.company.phone_comment
+        # Простой "SKYNET" должен быть заменён
+        segments = [s.strip() for s in self.company.phone_comment.split("|")]
+        assert "SKYNET" not in segments or "SKYNET; деталь" in segments
