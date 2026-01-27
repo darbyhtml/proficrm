@@ -227,7 +227,7 @@
                   {{ company.region|default:"—" }}
                 </div>
                 <div class="inline-field-edit hidden mt-1">
-                  {{ quick_form.region.as_widget(attrs={"class": "w-full rounded-lg border px-3 py-2", "data-inline-input": "1"}) }}
+                  {{ quick_form.region }}
                   <button type="button" class="btn btn-primary btn-sm hidden" data-inline-save>Сохранить</button>
                   <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
                 </div>
@@ -2731,7 +2731,7 @@
 
         // Автосохранение для поля "region": как только выбрали значение в селекте — сразу сохраняем
         document.addEventListener('change', function(e) {
-          const select = e.target.closest('select[data-inline-input]');
+          const select = e.target.closest('select');
           if (!select) return;
           const wrapper = select.closest('.inline-field-wrapper');
           if (!wrapper) return;
