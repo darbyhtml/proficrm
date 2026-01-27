@@ -7566,6 +7566,22 @@ def settings_company_sphere_create(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+def settings_contract_type_create(request: HttpRequest) -> HttpResponse:
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+    if request.method == "POST":
+        form = ContractTypeForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Вид договора добавлен.")
+            return redirect("settings_dicts")
+    else:
+        form = ContractTypeForm()
+    return render(request, "ui/settings/dict_form.html", {"form": form, "title": "Новый вид договора"})
+
+
+@login_required
 def settings_task_type_create(request: HttpRequest) -> HttpResponse:
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
