@@ -6512,26 +6512,6 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
         can_view,
     )
     
-    # Если у пользователя есть доступ по бизнес-логике, разрешаем просмотр
-    # Иначе проверяем policy (которая может иметь более строгие правила)
-    if not can_view:
-        # Проверяем policy только если нет доступа по бизнес-логике
-        try:
-            enforce(user=user, resource_type="page", resource="ui:tasks:detail", context={"path": request.path})
-        except PermissionDenied:
-            # Логируем для отладки
-            logger.warning(
-                f"Task view denied by policy: user_id={user.id}, role={user.role}, "
-                f"task_id={task.id}, created_by_id={task.created_by_id}, "
-                f"assigned_to_id={task.assigned_to_id}, company_id={task.company_id}"
-            )
-            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-                return JsonResponse({"ok": False, "error": "Нет прав на просмотр этой задачи."}, status=403)
-            messages.error(request, "Нет прав на просмотр этой задачи.")
-            return redirect("task_list")
-    
-    # Если дошли сюда, значит есть доступ - продолжаем
-    
     # Вычисляем просрочку в днях (только если известны дедлайн и время завершения)
     view_task_overdue_days = None
     if task.due_at and task.completed_at and task.completed_at > task.due_at:

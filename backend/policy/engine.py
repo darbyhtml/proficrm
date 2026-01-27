@@ -6,6 +6,8 @@ from typing import Any
 from django.core.exceptions import PermissionDenied
 
 from accounts.models import User
+from core.input_cleaners import clean_int_id
+from tasksapp.policy import can_view_task_id
 from .models import PolicyConfig, PolicyRule
 from .resources import RESOURCE_INDEX, PolicyResource
 
@@ -19,6 +21,39 @@ class PolicyDecision:
     default_allowed: bool = True
     resource: str = ""
     resource_type: str = ""
+
+
+TASK_DETAIL_RESOURCE = "ui:tasks:detail"
+TASK_DETAIL_OVERRIDE_ROLES = (
+    User.Role.ADMIN,
+    User.Role.GROUP_MANAGER,
+    User.Role.BRANCH_DIRECTOR,
+    User.Role.SALES_HEAD,
+)
+
+
+def _has_task_detail_override(user: User) -> bool:
+    if not user or not user.is_authenticated or not user.is_active:
+        return False
+    # Суперпользователь обрабатывается отдельно выше в decide()
+    return getattr(user, "role", None) in TASK_DETAIL_OVERRIDE_ROLES
+
+
+def _default_allowed_for_task_detail(*, user: User, context: dict[str, Any] | None) -> bool:
+    """
+    Умный дефолт для ui:tasks:detail:
+    - разрешаем, если задача видна через visible_tasks_qs (can_view_task_id)
+    - разрешаем override-ролям (директора/управляющие/админы)
+    - иначе запрещаем.
+    """
+    if _has_task_detail_override(user):
+        return True
+    ctx = context or {}
+    task_id = clean_int_id(ctx.get("task_id"))
+    if not task_id:
+        # Без task_id безопаснее запретить доступ к detail.
+        return False
+    return can_view_task_id(user, task_id)
 
 
 def baseline_allowed_for_role(*, role: str, resource_type: str, resource_key: str, is_superuser: bool = False) -> bool:
@@ -266,6 +301,10 @@ def decide(*, user: User, resource_type: str, resource: str, context: dict[str, 
 
     # Нет правил — применяем дефолт по ресурсу
     default_allowed = _baseline_allowed(user=user, resource_type=resource_type, resource_key=resource)
+
+    # Для ui:tasks:detail используем "умный" дефолт, основанный на видимости задач и override-ролях.
+    if resource_type == PolicyRule.ResourceType.PAGE and resource == TASK_DETAIL_RESOURCE:
+        default_allowed = _default_allowed_for_task_detail(user=user, context=context)
     return PolicyDecision(
         allowed=default_allowed,
         mode=mode,

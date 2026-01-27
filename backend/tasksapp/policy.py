@@ -41,6 +41,27 @@ def visible_tasks_qs(user: User) -> QuerySet[Task]:
     return qs.distinct()
 
 
+def can_view_task(user: User, task: Task) -> bool:
+    """
+    Проверяет, может ли пользователь просматривать конкретную задачу.
+
+    Базируется на visible_tasks_qs, чтобы UI и API использовали одинаковые правила.
+    """
+    if not user or not user.is_authenticated or not user.is_active:
+        return False
+    return visible_tasks_qs(user).filter(pk=task.pk).exists()
+
+
+def can_view_task_id(user: User, task_id: int) -> bool:
+    """
+    То же, что can_view_task, но без предварительного get().
+    Удобно вызывать из policy-движка по task_id из контекста.
+    """
+    if not user or not user.is_authenticated or not user.is_active:
+        return False
+    return visible_tasks_qs(user).filter(pk=task_id).exists()
+
+
 def can_manage_task_status(user: User, task: Task) -> bool:
     """
     Единое правило управления статусом задачи (UI + API).
