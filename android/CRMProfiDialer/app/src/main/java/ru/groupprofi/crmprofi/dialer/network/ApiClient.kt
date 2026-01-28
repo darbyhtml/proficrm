@@ -115,8 +115,8 @@ class ApiClient private constructor(context: Context) {
                 val refresh = obj.optString("refresh", "")
                 val isAdmin = obj.optBoolean("is_admin", false)
                 
-                android.util.Log.d("ApiClient", "Login response: access=${access.take(20)}..., refresh=${refresh.take(20)}..., is_admin=$isAdmin")
-                android.util.Log.d("ApiClient", "Full login response JSON: $raw")
+                // Не логируем токены и полный ответ (безопасность).
+                android.util.Log.d("ApiClient", "Login response: is_admin=$isAdmin, payload size=${raw.length}")
                 
                 if (access.isBlank() || refresh.isBlank()) {
                     return@withContext Result.Error("Неверный формат ответа сервера")
@@ -382,6 +382,8 @@ class ApiClient private constructor(context: Context) {
         // Новые поля (ЭТАП 2, опциональные)
         direction: ru.groupprofi.crmprofi.dialer.domain.CallDirection? = null,
         resolveMethod: ru.groupprofi.crmprofi.dialer.domain.ResolveMethod? = null,
+        resolveReason: String? = null,
+        reasonIfUnknown: String? = null,
         attemptsCount: Int? = null,
         actionSource: ru.groupprofi.crmprofi.dialer.domain.ActionSource? = null,
         endedAt: Long? = null
@@ -403,13 +405,15 @@ class ApiClient private constructor(context: Context) {
                 callEndedAt = endedAt,
                 direction = direction?.apiValue,
                 resolveMethod = resolveMethod?.apiValue,
+                resolveReason = resolveReason,
+                reasonIfUnknown = reasonIfUnknown,
                 attemptsCount = attemptsCount,
                 actionSource = actionSource?.apiValue
             )
             
             // Логика: если есть хотя бы одно новое поле - отправляем extended, иначе legacy
-            val hasNewFields = direction != null || resolveMethod != null || attemptsCount != null || 
-                              actionSource != null || endedAt != null
+            val hasNewFields = direction != null || resolveMethod != null || resolveReason != null ||
+                    reasonIfUnknown != null || attemptsCount != null || actionSource != null || endedAt != null
             val bodyJson = if (hasNewFields) {
                 payload.toExtendedJson()
             } else {
@@ -428,18 +432,53 @@ class ApiClient private constructor(context: Context) {
                     scope.launch {
                         try {
                             callHistoryStore.markSent(callRequestId, System.currentTimeMillis())
-                        } catch (e: Exception) {
+                        } catch (_: Exception) {
                             // Игнорируем ошибки обновления истории (не критично)
                         }
                     }
-                    Result.Success(Unit)
-                } else {
-                    // При ошибке сервера (5xx) - добавляем в очередь для повторной отправки
-                    if (res.code in 500..599) {
-                        queueManager.enqueue("call_update", "/api/phone/calls/update/", bodyJson)
-                    }
-                    Result.Error("Ошибка отправки: HTTP ${res.code}", res.code)
+                    return@withContext Result.Success(Unit)
                 }
+                
+                // Fallback: сервер не принимает extended payload (строгие 400/415/422)
+                if (hasNewFields && res.code in setOf(400, 415, 422)) {
+                    val legacyPayload = CallEventPayload(
+                        callRequestId = callRequestId,
+                        callStatus = callStatus,
+                        callStartedAt = callStartedAt,
+                        callDurationSeconds = callDurationSeconds
+                    )
+                    val legacyJson = legacyPayload.toLegacyJson()
+                    res.close()
+                    
+                    val legacyReq = Request.Builder()
+                        .url(url)
+                        .post(legacyJson.toRequestBody(jsonMedia))
+                        .addHeader("Authorization", "Bearer $token")
+                        .build()
+                    
+                    httpClient.newCall(legacyReq).execute().use { legacyRes ->
+                        if (legacyRes.isSuccessful) {
+                            scope.launch {
+                                try {
+                                    callHistoryStore.markSent(callRequestId, System.currentTimeMillis())
+                                } catch (_: Exception) {
+                                }
+                            }
+                            return@withContext Result.Success(Unit)
+                        } else {
+                            return@withContext Result.Error(
+                                "Ошибка отправки (legacy): HTTP ${legacyRes.code}",
+                                legacyRes.code
+                            )
+                        }
+                    }
+                }
+                
+                // При ошибке сервера (5xx) - добавляем в очередь для повторной отправки
+                if (res.code in 500..599) {
+                    queueManager.enqueue("call_update", "/api/phone/calls/update/", bodyJson)
+                }
+                Result.Error("Ошибка отправки: HTTP ${res.code}", res.code)
             }
         } catch (e: UnknownHostException) {
             // Нет интернета - добавляем в очередь
@@ -451,11 +490,13 @@ class ApiClient private constructor(context: Context) {
                 callEndedAt = endedAt,
                 direction = direction?.apiValue,
                 resolveMethod = resolveMethod?.apiValue,
+                resolveReason = resolveReason,
+                reasonIfUnknown = reasonIfUnknown,
                 attemptsCount = attemptsCount,
                 actionSource = actionSource?.apiValue
             )
-            val hasNewFields = direction != null || resolveMethod != null || attemptsCount != null || 
-                              actionSource != null || endedAt != null
+            val hasNewFields = direction != null || resolveMethod != null || resolveReason != null ||
+                    reasonIfUnknown != null || attemptsCount != null || actionSource != null || endedAt != null
             val bodyJson = if (hasNewFields) {
                 payload.toExtendedJson()
             } else {
@@ -472,11 +513,13 @@ class ApiClient private constructor(context: Context) {
                 callEndedAt = endedAt,
                 direction = direction?.apiValue,
                 resolveMethod = resolveMethod?.apiValue,
+                resolveReason = resolveReason,
+                reasonIfUnknown = reasonIfUnknown,
                 attemptsCount = attemptsCount,
                 actionSource = actionSource?.apiValue
             )
-            val hasNewFields = direction != null || resolveMethod != null || attemptsCount != null || 
-                              actionSource != null || endedAt != null
+            val hasNewFields = direction != null || resolveMethod != null || resolveReason != null ||
+                    reasonIfUnknown != null || attemptsCount != null || actionSource != null || endedAt != null
             val bodyJson = if (hasNewFields) {
                 payload.toExtendedJson()
             } else {
@@ -493,11 +536,13 @@ class ApiClient private constructor(context: Context) {
                 callEndedAt = endedAt,
                 direction = direction?.apiValue,
                 resolveMethod = resolveMethod?.apiValue,
+                resolveReason = resolveReason,
+                reasonIfUnknown = reasonIfUnknown,
                 attemptsCount = attemptsCount,
                 actionSource = actionSource?.apiValue
             )
-            val hasNewFields = direction != null || resolveMethod != null || attemptsCount != null || 
-                              actionSource != null || endedAt != null
+            val hasNewFields = direction != null || resolveMethod != null || resolveReason != null ||
+                    reasonIfUnknown != null || attemptsCount != null || actionSource != null || endedAt != null
             val bodyJson = if (hasNewFields) {
                 payload.toExtendedJson()
             } else {

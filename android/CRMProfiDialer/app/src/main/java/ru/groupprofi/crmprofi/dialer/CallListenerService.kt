@@ -77,6 +77,8 @@ class CallListenerService : Service() {
     }
     private lateinit var logSender: LogSender
     private val random = java.util.Random()
+    private var foregroundStarted: Boolean = false
+    private var lastResolveTickMs: Long = 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -106,23 +108,30 @@ class CallListenerService : Service() {
 
         // Проверяем наличие токенов через TokenManager
         if (!tokenManager.hasTokens() || deviceId.isBlank()) {
+            // Не молча: сохраняем причину, чтобы UI показал статус
+            val reason = if (!tokenManager.hasTokens()) {
+                ru.groupprofi.crmprofi.dialer.domain.ServiceBlockReason.AUTH_MISSING
+            } else {
+                ru.groupprofi.crmprofi.dialer.domain.ServiceBlockReason.DEVICE_ID_MISSING
+            }
+            tokenManager.setServiceBlockReason(reason)
+            ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "Service start blocked: $reason")
             stopSelf()
             return START_NOT_STICKY
         }
 
-        // If notifications are disabled, foreground-service becomes pointless (user won't see anything).
-        if (!NotificationManagerCompat.from(this).areNotificationsEnabled()) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
-
-        // Android 13+ (targetSdk 33+) may crash/startForeground fail if notifications are not allowed.
-        if (Build.VERSION.SDK_INT >= 33) {
+        // НИКОГДА не "умираем молча" из-за уведомлений.
+        // Вместо stopSelf() — сохраняем причину и продолжаем запуск (best-effort).
+        val notificationsEnabled = NotificationManagerCompat.from(this).areNotificationsEnabled()
+        if (!notificationsEnabled) {
+            tokenManager.setServiceBlockReason(ru.groupprofi.crmprofi.dialer.domain.ServiceBlockReason.NOTIFICATIONS_DISABLED)
+            ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "Notifications disabled: service will run, but app is not ready for calls")
+        } else if (Build.VERSION.SDK_INT >= 33) {
             val perm = android.Manifest.permission.POST_NOTIFICATIONS
             val granted = ContextCompat.checkSelfPermission(this, perm) == android.content.pm.PackageManager.PERMISSION_GRANTED
             if (!granted) {
-                stopSelf()
-                return START_NOT_STICKY
+                tokenManager.setServiceBlockReason(ru.groupprofi.crmprofi.dialer.domain.ServiceBlockReason.NOTIFICATION_PERMISSION_MISSING)
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "POST_NOTIFICATIONS missing: service will run, but app is not ready for calls")
             }
         }
 
@@ -134,7 +143,20 @@ class CallListenerService : Service() {
         ensureForegroundChannel()
         try {
             startForeground(NOTIF_ID_FOREGROUND, buildForegroundNotification())
-        } catch (_: Throwable) {
+            foregroundStarted = true
+            tokenManager.markServiceForegroundOk()
+            // Если сервис смог успешно стать foreground — очищаем "жёсткие" причины блокировки foreground.
+            // Причины про уведомления остаются, пока пользователь не включит/разрешит.
+            val r = tokenManager.getServiceBlockReason()
+            if (r == ru.groupprofi.crmprofi.dialer.domain.ServiceBlockReason.FOREGROUND_START_FAILED) {
+                tokenManager.setServiceBlockReason(null)
+            }
+        } catch (t: Throwable) {
+            // Не падаем и не умираем молча — фиксируем причину для UI/диагностики
+            // и аккуратно останавливаем сервис.
+            tokenManager.setServiceBlockReason(ru.groupprofi.crmprofi.dialer.domain.ServiceBlockReason.FOREGROUND_START_FAILED)
+            ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("CallListenerService", "startForeground failed, stopping service", t)
+            foregroundStarted = false
             stopSelf()
             return START_NOT_STICKY
         }
@@ -156,8 +178,16 @@ class CallListenerService : Service() {
             loopJob = scope.launch {
                 while (true) {
                     try {
+                        // Если foreground не стартовал — не делаем агрессивную работу, чтобы избежать лишней нагрузки.
+                        if (Build.VERSION.SDK_INT >= 26 && !foregroundStarted) {
+                            delay(5000)
+                            continue
+                        }
+                        val pollStartMs = System.currentTimeMillis()
+                        val pollStartNano = System.nanoTime()
                         // Используем ApiClient для polling (внутри он использует TokenManager и обрабатывает refresh)
                         val pullResult = apiClient.pullCall(deviceId)
+                        val pollLatencyMs = ((System.nanoTime() - pollStartNano) / 1_000_000L).coerceAtLeast(0L)
                         val nowDate = Date()
                         val nowStr = timeFmt.format(nowDate)
                         
@@ -191,6 +221,7 @@ class CallListenerService : Service() {
                         
                         // Сохраняем last_poll_code/last_poll_at через TokenManager
                         tokenManager.saveLastPoll(code, nowStr)
+                        tokenManager.saveLastPollLatencyMs(pollLatencyMs)
                         
                         val phone = (pullResult as? ApiClient.Result.Success<ApiClient.PullCallResponse?>)?.data?.phone
                         val callRequestId = (pullResult as? ApiClient.Result.Success<ApiClient.PullCallResponse?>)?.data?.callRequestId
@@ -324,45 +355,46 @@ class CallListenerService : Service() {
                         // Убрано обновление foreground notification - оно тихое и не должно мешать
                         
                         if (!phone.isNullOrBlank() && !callRequestId.isNullOrBlank()) {
+                            // device_received_at + локальное сохранение call_request_id
+                            val receivedAt = System.currentTimeMillis()
+                            tokenManager.saveLastCallCommand(callRequestId, receivedAt)
+                            ru.groupprofi.crmprofi.dialer.logs.AppLogger.i(
+                                "CallListenerService",
+                                "COMMAND_RECEIVED id=$callRequestId pollLatencyMs=$pollLatencyMs"
+                            )
                             // Используем CallFlowCoordinator для обработки команды на звонок
                             callFlowCoordinator.handleCallCommand(phone, callRequestId)
                             } else {
                             ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallListenerService", "Номер или ID пустой, пропускаем")
                     }
+
+                        // Надёжный резолв pending calls: расширенные ретраи + таймаут
+                        maybeResolvePendingCalls()
                     
-                    // Адаптивная частота опроса с джиттером для предотвращения синхронизации устройств
-                        // Баланс между скоростью получения команд и безопасной нагрузкой на сервер
-                        val phoneNotNull = !phone.isNullOrBlank()
-                    val baseDelay = when {
-                            // При получении команды - быстрый возврат к активному опросу (для получения следующей команды)
-                            code == 200 && phoneNotNull -> 600L // 600ms - быстро, но безопасно для сервера
-                        // При rate limiting (429) - значительно увеличиваем задержку для снижения нагрузки
-                        code == 429 -> {
-                            when {
-                                consecutiveEmptyPolls < 5 -> 5000L // Первые 5 - 5 секунд
-                                consecutiveEmptyPolls < 15 -> 10000L // Следующие 10 - 10 секунд
-                                else -> 20000L // Дальше - 20 секунд (защита от блокировки)
+                        // ДВА РЕЖИМА polling:
+                        // - быстрый: 500–800мс, когда приложение активно/готово (не делаем агрессивный backoff)
+                        // - медленный: 5–15с, когда нет активных команд и приложение не активно (экономим батарею)
+                        val isFastMode = AppState.isForeground ||
+                                (AppContainer.pendingCallStore.hasActivePendingCallsFlow.value) ||
+                                (System.currentTimeMillis() - (tokenManager.getLastCallCommandReceivedAt() ?: 0L) < 2 * 60 * 1000L)
+
+                        val baseDelay = when {
+                            code == 429 -> 10_000L // rate limit: уважительный backoff
+                            !isFastMode -> {
+                                // 5..15 секунд (плавно увеличиваем от количества пустых ответов)
+                                val step = (consecutiveEmptyPolls / 10).coerceIn(0, 10) // 0..10
+                                (5_000L + step * 1_000L).coerceAtMost(15_000L)
                             }
-                        }
-                        // При пустых командах (204) - увеличиваем задержку постепенно
-                        // Начинаем с быстрой частоты для моментального получения команд, но не перегружаем сервер
-                        code == 204 -> {
-                            when {
-                                consecutiveEmptyPolls < 20 -> 600L // Первые 20 пустых - 600ms (быстро для моментального получения)
-                                consecutiveEmptyPolls < 50 -> 1500L // Следующие 30 - 1.5 секунды
-                                consecutiveEmptyPolls < 100 -> 3000L // Следующие 50 - 3 секунды
-                                else -> 5000L // Дальше - 5 секунд (экономим ресурсы)
-                            }
-                        }
-                        // Вне рабочего времени - медленная частота (экономим ресурсы)
-                        !isWorkingHours() -> 5000L // 5 секунд вне рабочего времени
-                        // В рабочее время - базовая частота (быстрая для моментального получения команд)
-                        else -> 600L // 600ms в рабочее время (быстро, но безопасно)
+                            else -> 650L // быстрый режим: 500–800мс с лёгким джиттером ниже
                         }
                         
-                        // Джиттер: добавляем случайную задержку ±100мс для предотвращения синхронизации устройств
-                        val jitter = random.nextInt(201) - 100 // -100..+100 мс
-                        val delayMs = (baseDelay + jitter).coerceAtLeast(500L) // Минимум 500ms (быстро, но безопасно)
+                        // Джиттер: быстрый режим ±150мс (попадаем в 500..800), медленный ±1s
+                        val jitter = if (baseDelay <= 1000L) {
+                            random.nextInt(301) - 150 // -150..+150
+                        } else {
+                            random.nextInt(2001) - 1000 // -1000..+1000
+                        }
+                        val delayMs = (baseDelay + jitter).coerceAtLeast(500L)
                     
                     delay(delayMs)
                     } catch (_: Exception) {
@@ -483,7 +515,8 @@ class CallListenerService : Service() {
      * Запланировать повторные проверки CallLog через 5, 10, 15 секунд.
      */
     private fun scheduleCallLogChecks(pendingCall: PendingCall) {
-        val delays = listOf(5000L, 10000L, 15000L) // 5, 10, 15 секунд
+        // Расширенная стратегия: 5 / 10 / 20 / 30 / 60 секунд, далее до 5 минут
+        val delays = listOf(5000L, 10000L, 20000L, 30000L, 60000L, 90000L, 120000L, 180000L, 240000L, 300000L)
         
         delays.forEachIndexed { index, delay ->
             scope.launch {
@@ -498,36 +531,57 @@ class CallListenerService : Service() {
                     return@launch
                 }
 
-                // Обновляем состояние на RESOLVING
-                AppContainer.pendingCallStore.updateCallState(
-                    pendingCall.callRequestId,
-                    PendingCall.PendingState.RESOLVING,
-                    incrementAttempts = true
-                )
+                // Атомарно помечаем как RESOLVING; если уже обрабатывается/обработан — выходим.
+                val marked = AppContainer.pendingCallStore.tryMarkResolving(pendingCall.callRequestId)
+                if (!marked) {
+                    return@launch
+                }
                 
                 // Пытаемся найти звонок в CallLog
                 try {
+                    // Если нет разрешения — это не ошибка: отправляем unknown с причиной и завершаем
+                    if (ContextCompat.checkSelfPermission(this@CallListenerService, android.Manifest.permission.READ_CALL_LOG)
+                        != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                        handleCallResultUnknown(
+                            pendingCall,
+                            resolveReason = "permission_missing",
+                            reasonIfUnknown = "READ_CALL_LOG not granted"
+                        )
+                        return@launch
+                    }
                     val callInfo = readCallLogForPhone(pendingCall.phoneNumber, pendingCall.startedAtMillis)
                 if (callInfo != null) {
                         // Найдено совпадение - обрабатываем результат
                         handleCallResult(pendingCall, callInfo)
                         return@launch
                 } else {
-                        // Не найдено - если это последняя попытка, помечаем как FAILED
+                        // Не найдено - если это последняя попытка, помечаем как UNKNOWN (timeout)
                         if (index == delays.size - 1) {
-                            handleCallResultFailed(pendingCall)
+                            handleCallResultUnknown(
+                                pendingCall,
+                                resolveReason = "timeout",
+                                reasonIfUnknown = "CallLog not matched within 5 minutes"
+                            )
                         }
                     }
                 } catch (e: SecurityException) {
                     ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "Нет разрешения на чтение CallLog: ${e.message}")
-                    // Если нет разрешения - помечаем как FAILED
+                    // Если нет разрешения - это нормальное состояние: UNKNOWN + permission_missing
                     if (index == delays.size - 1) {
-                        handleCallResultFailed(pendingCall)
+                        handleCallResultUnknown(
+                            pendingCall,
+                            resolveReason = "permission_missing",
+                            reasonIfUnknown = "READ_CALL_LOG not granted"
+                        )
                 }
             } catch (e: Exception) {
                     ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("CallListenerService", "Ошибка чтения CallLog: ${e.message}", e)
                     if (index == delays.size - 1) {
-                        handleCallResultFailed(pendingCall)
+                        handleCallResultUnknown(
+                            pendingCall,
+                            resolveReason = "error",
+                            reasonIfUnknown = e.message ?: "read_call_log_error"
+                        )
                     }
                 }
             }
@@ -693,28 +747,31 @@ class CallListenerService : Service() {
      * Обработать случай, когда результат не удалось определить.
      * ЭТАП 2: Отправляем статус "unknown" в CRM.
      */
-    private suspend fun handleCallResultFailed(pendingCall: PendingCall) {
-        // Помечаем как FAILED
+    private suspend fun handleCallResultUnknown(
+        pendingCall: PendingCall,
+        resolveReason: String,
+        reasonIfUnknown: String
+    ) {
+        // Не считаем это "ошибкой": это нормальное состояние UNKNOWN
         AppContainer.pendingCallStore.updateCallState(
             pendingCall.callRequestId,
-            PendingCall.PendingState.FAILED
+            PendingCall.PendingState.RESOLVED
         )
-        
-        // ЭТАП 2: Отправляем статус "unknown" в CRM
+
         val result = apiClient.sendCallUpdate(
             callRequestId = pendingCall.callRequestId,
             callStatus = CallStatusApi.UNKNOWN.apiValue,
             callStartedAt = pendingCall.startedAtMillis,
             callDurationSeconds = null,
-            // Новые поля (ЭТАП 2)
-            direction = null, // Неизвестно, так как звонок не найден в CallLog
+            direction = null,
             resolveMethod = ResolveMethod.UNKNOWN,
+            resolveReason = resolveReason,
+            reasonIfUnknown = reasonIfUnknown,
             attemptsCount = pendingCall.attempts,
             actionSource = pendingCall.actionSource ?: ActionSource.UNKNOWN,
             endedAt = null
         )
-        
-        // Сохраняем в историю с статусом "Не удалось определить"
+
         val historyItem = CallHistoryItem(
             id = pendingCall.callRequestId,
             phone = pendingCall.phoneNumber,
@@ -724,24 +781,97 @@ class CallListenerService : Service() {
             startedAt = pendingCall.startedAtMillis,
             sentToCrm = result is ApiClient.Result.Success,
             sentToCrmAt = if (result is ApiClient.Result.Success) System.currentTimeMillis() else null,
-            // Новые поля (ЭТАП 2)
             direction = null,
             resolveMethod = ResolveMethod.UNKNOWN,
             attemptsCount = pendingCall.attempts,
             actionSource = pendingCall.actionSource ?: ActionSource.UNKNOWN,
             endedAt = null
         )
-        
+
         AppContainer.callHistoryStore.addOrUpdate(historyItem)
-        
-        // Удаляем из ожидаемых
         AppContainer.pendingCallStore.removePendingCall(pendingCall.callRequestId)
-        
-        val masked = ru.groupprofi.crmprofi.dialer.domain.PhoneNumberNormalizer.normalize(pendingCall.phoneNumber)
-        ru.groupprofi.crmprofi.dialer.logs.AppLogger.w(
-            "CallListenerService", 
-            "Не удалось определить результат звонка: ${masked.take(3)}*** (attempts=${pendingCall.attempts})"
+
+        ru.groupprofi.crmprofi.dialer.logs.AppLogger.i(
+            "CallListenerService",
+            "CALL_TIMEOUT/UNKNOWN id=${pendingCall.callRequestId} resolveReason=$resolveReason attempts=${pendingCall.attempts}"
         )
+    }
+
+    private suspend fun maybeResolvePendingCalls() {
+        val now = System.currentTimeMillis()
+        if (now - lastResolveTickMs < 1000L) return
+        lastResolveTickMs = now
+
+        val activeCalls = AppContainer.pendingCallStore.getActivePendingCalls()
+        if (activeCalls.isEmpty()) return
+
+        // Стратегия ретраев до 5 минут
+        val scheduleSec = listOf(5, 10, 20, 30, 60, 90, 120, 180, 240, 300)
+        val maxMs = 5 * 60 * 1000L
+
+        val hasCallLogPermission =
+            ContextCompat.checkSelfPermission(this, android.Manifest.permission.READ_CALL_LOG) ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+
+        for (pendingCall in activeCalls) {
+            val elapsed = now - pendingCall.startedAtMillis
+            if (!hasCallLogPermission) {
+                handleCallResultUnknown(
+                    pendingCall,
+                    resolveReason = "permission_missing",
+                    reasonIfUnknown = "READ_CALL_LOG not granted"
+                )
+                continue
+            }
+
+            if (elapsed >= maxMs) {
+                handleCallResultUnknown(
+                    pendingCall,
+                    resolveReason = "timeout",
+                    reasonIfUnknown = "CallLog not matched within 5 minutes"
+                )
+                continue
+            }
+
+            val attemptIndex = pendingCall.attempts.coerceIn(0, scheduleSec.lastIndex)
+            val dueMs = scheduleSec[attemptIndex] * 1000L
+            if (elapsed < dueMs) continue
+
+            // Пытаемся матчить: атомарно берём право на резолв, иначе пропускаем
+            val marked = AppContainer.pendingCallStore.tryMarkResolving(pendingCall.callRequestId)
+            if (!marked) continue
+
+            try {
+                val callInfo = readCallLogForPhone(pendingCall.phoneNumber, pendingCall.startedAtMillis)
+                if (callInfo != null) {
+                    handleCallResult(pendingCall, callInfo)
+                } else {
+                    // Возвращаемся в ожидание до следующего due
+                    AppContainer.pendingCallStore.updateCallState(
+                        pendingCall.callRequestId,
+                        PendingCall.PendingState.PENDING,
+                        incrementAttempts = false
+                    )
+                }
+            } catch (se: SecurityException) {
+                handleCallResultUnknown(
+                    pendingCall,
+                    resolveReason = "permission_missing",
+                    reasonIfUnknown = "READ_CALL_LOG not granted"
+                )
+            } catch (e: Exception) {
+                // Ошибка чтения CallLog не должна валить процесс: ждём следующий тик/попытку
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.w(
+                    "CallListenerService",
+                    "CallLog resolve attempt error: ${e.message}"
+                )
+                AppContainer.pendingCallStore.updateCallState(
+                    pendingCall.callRequestId,
+                    PendingCall.PendingState.PENDING,
+                    incrementAttempts = false
+                )
+            }
+        }
     }
     
     /**

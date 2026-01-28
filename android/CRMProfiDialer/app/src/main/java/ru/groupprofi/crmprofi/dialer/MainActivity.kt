@@ -6,6 +6,8 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.net.Uri
+import android.os.PowerManager
 import android.provider.Settings
 import android.view.View
 import android.widget.Button
@@ -14,6 +16,7 @@ import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import com.google.android.material.card.MaterialCardView
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CoroutineScope
@@ -346,6 +349,7 @@ class MainActivity : AppCompatActivity() {
                 showFixButton = uiModel.showFixButton
             )
             currentFixAction = uiModel.fixActionType
+            updateFixButtonStyle(currentFixAction)
         }
         
         // Показываем/скрываем кнопку выхода в зависимости от состояния
@@ -364,6 +368,26 @@ class MainActivity : AppCompatActivity() {
         // Если готово - автоматически запускаем сервис
         if (state == ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker.ReadyState.READY) {
             startListeningServiceAuto()
+        }
+    }
+
+    private fun updateFixButtonStyle(action: AppReadinessChecker.FixActionType) {
+        // Текст/цвет кнопки под разные сценарии: "критично не готово" vs "рекомендация по фону".
+        when (action) {
+            AppReadinessChecker.FixActionType.OPEN_BATTERY_SETTINGS -> {
+                fixButton.text = getString(R.string.button_allow_background)
+                ViewCompat.setBackgroundTintList(
+                    fixButton,
+                    android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#244B47"))
+                )
+            }
+            else -> {
+                fixButton.text = getString(R.string.button_fix)
+                ViewCompat.setBackgroundTintList(
+                    fixButton,
+                    android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#EF4444"))
+                )
+            }
         }
     }
     
@@ -513,6 +537,10 @@ class MainActivity : AppCompatActivity() {
                 startLoginActivity()
             }
             
+            ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker.FixActionType.OPEN_BATTERY_SETTINGS -> {
+                openBatteryOptimizationSettings()
+            }
+            
             ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker.FixActionType.OPEN_NETWORK_SETTINGS -> {
                 try {
                     val intent = Intent(Settings.ACTION_WIRELESS_SETTINGS)
@@ -529,6 +557,33 @@ class MainActivity : AppCompatActivity() {
             ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker.FixActionType.NONE -> {
                 // Ничего не делаем
             }
+        }
+    }
+
+    private fun openBatteryOptimizationSettings() {
+        // Без принуждения: открываем системный диалог/настройки, объяснение уже в statusExplanation.
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val pm = getSystemService(PowerManager::class.java)
+                val ignoring = pm?.isIgnoringBatteryOptimizations(packageName) == true
+                if (!ignoring) {
+                    // Просим разрешение для конкретного приложения
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                    return
+                }
+            }
+        } catch (_: Exception) {
+            // fallback ниже
+        }
+        
+        // Fallback: открываем общий список
+        try {
+            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(this, "Откройте настройки батареи вручную", android.widget.Toast.LENGTH_LONG).show()
         }
     }
     

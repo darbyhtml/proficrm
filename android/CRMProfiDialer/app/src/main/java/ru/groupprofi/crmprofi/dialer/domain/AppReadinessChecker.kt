@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
+import android.os.PowerManager
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import ru.groupprofi.crmprofi.dialer.auth.TokenManager
@@ -26,6 +27,7 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
         NEEDS_NOTIFICATIONS,        // Уведомления отключены
         NEEDS_AUTH,                 // Нет авторизации или токен истёк
         NO_NETWORK,                 // Нет сети
+        SERVICE_BLOCKED,            // Сервис/приложение заблокированы причиной (ServiceBlockReason)
         SERVICE_STOPPED,            // Сервис остановлен
         UNKNOWN_ERROR               // Неизвестная ошибка
     }
@@ -47,6 +49,7 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
     enum class FixActionType {
         REQUEST_PERMISSIONS,      // Запросить разрешения
         OPEN_NOTIFICATION_SETTINGS, // Открыть настройки уведомлений
+        OPEN_BATTERY_SETTINGS,    // Открыть настройки работы в фоне / battery optimization
         SHOW_LOGIN,               // Показать экран входа
         OPEN_NETWORK_SETTINGS,    // Открыть настройки сети
         RESTART_SERVICE,          // Перезапустить сервис
@@ -64,6 +67,11 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
      * Получить текущее состояние готовности (реализация интерфейса).
      */
     override fun getState(): ReadyState {
+        // 0. Явная причина блокировки (сохраняется сервисом, чтобы не было silent fail)
+        // Если причина есть, показываем её пользователю как "не готово к звонкам".
+        // Важно: авторизация/permissions по-прежнему имеют приоритет.
+        val serviceBlockReason = tokenManager.getServiceBlockReason()
+
         // 1. Проверка авторизации (самое важное)
         if (!tokenManager.hasTokens()) {
             return ReadyState.NEEDS_AUTH
@@ -101,6 +109,12 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
         // 4. Проверка сети
         if (!isNetworkAvailable()) {
             return ReadyState.NO_NETWORK
+        }
+
+        // Если до сюда дошли — базовые условия ОК. Если сервис ранее сообщил причину блокировки,
+        // отражаем её, пока пользователь не исправит (или пока сервис не очистит причину).
+        if (serviceBlockReason != null) {
+            return ReadyState.SERVICE_BLOCKED
         }
         
         // 5. Проверка сервиса (есть ли недавний polling)
@@ -165,6 +179,18 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
         return getUiModel(getState())
     }
     
+    private fun isIgnoringBatteryOptimizationsSafe(): Boolean {
+        // Battery optimization APIs доступны с Android 6 (API 23)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+        return try {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as? PowerManager
+            pm?.isIgnoringBatteryOptimizations(context.packageName) == true
+        } catch (_: Exception) {
+            // На некоторых OEM может быть странное поведение — не блокируем работу.
+            true
+        }
+    }
+
     /**
      * Получить модель для UI на основе состояния готовности.
      */
@@ -173,9 +199,13 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
             ReadyState.READY -> ReadyUiModel(
                 iconEmoji = "🟢",
                 title = "Готово к звонкам",
-                message = "Приложение работает в фоне и готово принимать команды из CRM",
-                showFixButton = false,
-                fixActionType = FixActionType.NONE
+                message = if (!isIgnoringBatteryOptimizationsSafe()) {
+                    "Приложение готово. Для надёжной работы в фоне рекомендуется разрешить работу без ограничений батареи."
+                } else {
+                    "Приложение работает в фоне и готово принимать команды из CRM"
+                },
+                showFixButton = !isIgnoringBatteryOptimizationsSafe(),
+                fixActionType = if (!isIgnoringBatteryOptimizationsSafe()) FixActionType.OPEN_BATTERY_SETTINGS else FixActionType.NONE
             )
             
             ReadyState.NEEDS_PERMISSIONS -> ReadyUiModel(
@@ -217,6 +247,29 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
                 showFixButton = true,
                 fixActionType = FixActionType.RESTART_SERVICE
             )
+
+            ReadyState.SERVICE_BLOCKED -> {
+                val reason = tokenManager.getServiceBlockReason()
+                val title = reason?.userTitle ?: "Приложение не готово к звонкам"
+                val msg = reason?.userMessage ?: "Приложение не готово к звонкам по неизвестной причине."
+                val fixAction = when (reason) {
+                    ru.groupprofi.crmprofi.dialer.domain.ServiceBlockReason.NOTIFICATIONS_DISABLED,
+                    ru.groupprofi.crmprofi.dialer.domain.ServiceBlockReason.NOTIFICATION_PERMISSION_MISSING -> FixActionType.OPEN_NOTIFICATION_SETTINGS
+                    ru.groupprofi.crmprofi.dialer.domain.ServiceBlockReason.AUTH_MISSING -> FixActionType.SHOW_LOGIN
+                    ru.groupprofi.crmprofi.dialer.domain.ServiceBlockReason.BATTERY_OPTIMIZATION -> FixActionType.OPEN_BATTERY_SETTINGS
+                    ru.groupprofi.crmprofi.dialer.domain.ServiceBlockReason.DEVICE_ID_MISSING,
+                    ru.groupprofi.crmprofi.dialer.domain.ServiceBlockReason.FOREGROUND_START_FAILED,
+                    ru.groupprofi.crmprofi.dialer.domain.ServiceBlockReason.UNKNOWN,
+                    null -> FixActionType.RESTART_SERVICE
+                }
+                ReadyUiModel(
+                    iconEmoji = "🔴",
+                    title = "Приложение не готово к звонкам: $title",
+                    message = msg,
+                    showFixButton = true,
+                    fixActionType = fixAction
+                )
+            }
             
             ReadyState.UNKNOWN_ERROR -> ReadyUiModel(
                 iconEmoji = "🔴",

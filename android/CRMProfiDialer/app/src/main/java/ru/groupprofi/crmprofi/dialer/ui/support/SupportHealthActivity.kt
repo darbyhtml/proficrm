@@ -2,8 +2,10 @@ package ru.groupprofi.crmprofi.dialer.ui.support
 
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
@@ -43,6 +45,7 @@ class SupportHealthActivity : AppCompatActivity() {
     private lateinit var restartButton: Button
     private lateinit var shareButton: Button
     private lateinit var progressText: TextView
+    private lateinit var flushQueueButton: Button
     
     private val readinessProvider = AppContainer.readinessProvider
     private val callHistoryStore = AppContainer.callHistoryStore
@@ -70,6 +73,7 @@ class SupportHealthActivity : AppCompatActivity() {
         restartButton = findViewById(R.id.healthRestartButton)
         shareButton = findViewById(R.id.healthShareButton)
         progressText = findViewById(R.id.healthProgressText)
+        flushQueueButton = findViewById(R.id.healthFlushQueueButton)
     }
     
     private fun setupToolbar() {
@@ -93,6 +97,11 @@ class SupportHealthActivity : AppCompatActivity() {
         shareButton.text = getString(R.string.diagnostics_share)
         shareButton.setOnClickListener {
             shareDiagnostics()
+        }
+
+        flushQueueButton.text = getString(R.string.diagnostics_flush_queue)
+        flushQueueButton.setOnClickListener {
+            flushQueueNow()
         }
     }
     
@@ -120,7 +129,7 @@ class SupportHealthActivity : AppCompatActivity() {
      */
     private fun updateHealthStatus() {
         val state = readinessProvider.getState()
-        readinessProvider.getUiModel() // Получаем для проверки, но не используем
+        val uiModel = readinessProvider.getUiModel()
         
         // Обновляем главный статус
         if (state == AppReadinessChecker.ReadyState.READY) {
@@ -128,7 +137,8 @@ class SupportHealthActivity : AppCompatActivity() {
             statusText.text = getString(R.string.diagnostics_status_ready)
         } else {
             statusIcon.text = "🔴"
-            statusText.text = getString(R.string.diagnostics_status_not_ready)
+            // Показываем более понятный заголовок, если он есть
+            statusText.text = uiModel.title.ifBlank { getString(R.string.diagnostics_status_not_ready) }
         }
         
         // Очищаем контейнер чеков
@@ -137,6 +147,7 @@ class SupportHealthActivity : AppCompatActivity() {
         // Добавляем чек-листы
         addCheckItem(getString(R.string.diagnostics_check_permissions), checkPermissionsStatus())
         addCheckItem(getString(R.string.diagnostics_check_notifications), checkNotificationsStatus())
+        addCheckItem(getString(R.string.diagnostics_check_background), checkBatteryOptimizationStatus())
         addCheckItem(getString(R.string.diagnostics_check_network), checkNetworkStatus())
         addCheckItem(getString(R.string.diagnostics_check_auth), checkAuthStatus())
         addCheckItem(getString(R.string.diagnostics_check_queue), checkQueueStatus())
@@ -193,6 +204,17 @@ class SupportHealthActivity : AppCompatActivity() {
         val enabled = NotificationManagerCompat.from(this).areNotificationsEnabled()
         return if (enabled) getString(R.string.diagnostics_status_ok) else "Выключены"
     }
+
+    private fun checkBatteryOptimizationStatus(): String {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return getString(R.string.diagnostics_status_ok)
+        return try {
+            val pm = getSystemService(PowerManager::class.java)
+            val ignoring = pm?.isIgnoringBatteryOptimizations(packageName) == true
+            if (ignoring) getString(R.string.diagnostics_status_ok) else "Ограничено (рекомендуется разрешить)"
+        } catch (e: Exception) {
+            getString(R.string.error_failed_to_check)
+        }
+    }
     
     /**
      * Проверить статус сети.
@@ -232,7 +254,9 @@ class SupportHealthActivity : AppCompatActivity() {
             val queueManager = ru.groupprofi.crmprofi.dialer.queue.QueueManager(this)
             // getStats() - suspend функция, используем runBlocking для синхронного вызова
             val stats = kotlinx.coroutines.runBlocking { queueManager.getStats() }
-            "${stats.total} элементов (ожидают отправки)"
+            val stuckMetrics = kotlinx.coroutines.runBlocking { queueManager.getStuckMetrics() }
+            val stuckPart = stuckMetrics?.let { ", застряло: ${it.stuckCount}" } ?: ""
+            "${stats.total} элементов (ожидают отправки$stuckPart)"
         } catch (e: Exception) {
             getString(R.string.error_failed_to_check)
         }
@@ -353,7 +377,6 @@ class SupportHealthActivity : AppCompatActivity() {
      */
     private fun handleFixAction() {
         val uiModel = readinessProvider.getUiModel()
-        
         when (uiModel.fixActionType) {
             AppReadinessChecker.FixActionType.REQUEST_PERMISSIONS -> {
                 val intent = Intent(this, OnboardingActivity::class.java).apply {
@@ -370,6 +393,9 @@ class SupportHealthActivity : AppCompatActivity() {
             AppReadinessChecker.FixActionType.SHOW_LOGIN -> {
                 // Возвращаемся на главный экран, где есть форма входа
                 finish()
+            }
+            AppReadinessChecker.FixActionType.OPEN_BATTERY_SETTINGS -> {
+                openBatteryOptimizationSettings()
             }
             AppReadinessChecker.FixActionType.RESTART_SERVICE -> {
                 // Перезапускаем сервис
@@ -400,6 +426,30 @@ class SupportHealthActivity : AppCompatActivity() {
             }
         }
     }
+
+    private fun openBatteryOptimizationSettings() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                val pm = getSystemService(PowerManager::class.java)
+                val ignoring = pm?.isIgnoringBatteryOptimizations(packageName) == true
+                if (!ignoring) {
+                    val intent = Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:$packageName")
+                    }
+                    startActivity(intent)
+                    return
+                }
+            }
+        } catch (_: Exception) {
+            // fallback below
+        }
+        
+        try {
+            startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+        } catch (e: Exception) {
+            Toast.makeText(this, "Откройте настройки батареи вручную", Toast.LENGTH_LONG).show()
+        }
+    }
     
     /**
      * Поделиться диагностикой.
@@ -414,6 +464,29 @@ class SupportHealthActivity : AppCompatActivity() {
         }
         
         startActivity(Intent.createChooser(shareIntent, getString(R.string.diagnostics_share)))
+    }
+
+    private fun flushQueueNow() {
+        progressText.visibility = View.VISIBLE
+        progressText.text = "Отправляем очередь…"
+        flushQueueButton.isEnabled = false
+        lifecycleScope.launch {
+            try {
+                val tokenManager = AppContainer.tokenManager
+                val apiClient = AppContainer.apiClient
+                val queueManager = ru.groupprofi.crmprofi.dialer.queue.QueueManager(this@SupportHealthActivity)
+                val baseUrl = ru.groupprofi.crmprofi.dialer.BuildConfig.BASE_URL
+                val token = tokenManager.getAccessToken().orEmpty()
+                val sent = queueManager.flushQueue(baseUrl, token, apiClient.getHttpClient())
+                progressText.text = "Отправлено: $sent, обновляем состояние…"
+                updateHealthStatus()
+            } catch (e: Exception) {
+                Toast.makeText(this@SupportHealthActivity, "Не удалось отправить очередь: ${e.message}", Toast.LENGTH_LONG).show()
+                progressText.text = getString(R.string.error_failed_to_check)
+            } finally {
+                flushQueueButton.isEnabled = true
+            }
+        }
     }
     
     /**

@@ -6,7 +6,6 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.CallLog
-import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -21,6 +20,7 @@ import ru.groupprofi.crmprofi.dialer.domain.ActionSource
 import ru.groupprofi.crmprofi.dialer.domain.CallStatusApi
 import java.text.SimpleDateFormat
 import java.util.*
+import ru.groupprofi.crmprofi.dialer.core.AppContainer
 
 /**
  * Менеджер для отслеживания изменений в CallLog через ContentObserver.
@@ -87,18 +87,26 @@ class CallLogObserverManager(
             return
         }
         
-        for (pendingCall in activeCalls) {
-            try {
+        try {
+            for (pendingCall in activeCalls) {
                 val callInfo = readCallLogForPhone(pendingCall.phoneNumber, pendingCall.startedAtMillis)
                 if (callInfo != null) {
                     // Найдено совпадение - обрабатываем результат
                     handleCallResult(pendingCall, callInfo)
                 }
-            } catch (e: SecurityException) {
-                ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallLogObserverManager", "Нет разрешения на чтение CallLog: ${e.message}")
-            } catch (e: Exception) {
-                ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("CallLogObserverManager", "Ошибка чтения CallLog: ${e.message}", e)
             }
+        } catch (e: SecurityException) {
+            // Разрешения нет — это нормальное состояние: отправляем unknown с причиной.
+            ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallLogObserverManager", "READ_CALL_LOG missing: will mark unknown for active calls")
+            activeCalls.forEach { pendingCall ->
+                try {
+                    handleUnknown(pendingCall, resolveReason = "permission_missing", reasonIfUnknown = "READ_CALL_LOG not granted")
+                } catch (ex: Exception) {
+                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("CallLogObserverManager", "Ошибка обработки permission_missing: ${ex.message}", ex)
+                }
+            }
+        } catch (e: Exception) {
+            ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("CallLogObserverManager", "Ошибка чтения CallLog: ${e.message}", e)
         }
     }
     
@@ -189,6 +197,11 @@ class CallLogObserverManager(
         pendingCall: PendingCall,
         callInfo: CallInfo
     ) {
+        // Атомарно берём право на резолв для данного звонка.
+        val canResolve = pendingCallStore.tryMarkResolving(pendingCall.callRequestId)
+        if (!canResolve) {
+            return
+        }
         // Определяем человеческий статус
         val (status, statusText) = determineCallStatus(callInfo.type, callInfo.duration)
         
@@ -200,6 +213,22 @@ class CallLogObserverManager(
         } else {
             null
         }
+        
+        // Отправляем update в CRM (раньше observer только писал локально — это делало аналитику ненадёжной)
+        val crmStatus = CallStatusApi.fromCallHistoryStatus(status).apiValue
+        val apiResult = AppContainer.apiClient.sendCallUpdate(
+            callRequestId = pendingCall.callRequestId,
+            callStatus = crmStatus,
+            callStartedAt = callInfo.date,
+            callDurationSeconds = callInfo.duration.toInt().takeIf { it > 0 },
+            direction = direction,
+            resolveMethod = resolveMethod,
+            resolveReason = null,
+            reasonIfUnknown = null,
+            attemptsCount = pendingCall.attempts,
+            actionSource = pendingCall.actionSource ?: ActionSource.UNKNOWN,
+            endedAt = endedAt
+        )
         
         // Обновляем состояние на RESOLVED
         pendingCallStore.updateCallState(pendingCall.callRequestId, PendingCall.PendingState.RESOLVED)
@@ -213,8 +242,8 @@ class CallLogObserverManager(
             // statusText теперь вычисляется через getStatusText()
             durationSeconds = callInfo.duration.toInt().takeIf { it > 0 },
             startedAt = callInfo.date,
-            sentToCrm = false, // Будет обновлено после успешной отправки
-            sentToCrmAt = null,
+            sentToCrm = apiResult is ru.groupprofi.crmprofi.dialer.network.ApiClient.Result.Success,
+            sentToCrmAt = if (apiResult is ru.groupprofi.crmprofi.dialer.network.ApiClient.Result.Success) System.currentTimeMillis() else null,
             // Новые поля (ЭТАП 2)
             direction = direction,
             resolveMethod = resolveMethod,
@@ -231,6 +260,50 @@ class CallLogObserverManager(
         ru.groupprofi.crmprofi.dialer.logs.AppLogger.i(
             "CallLogObserverManager", 
             "Результат звонка определён: ${maskPhone(pendingCall.phoneNumber)} -> $statusText (direction=$direction, resolveMethod=$resolveMethod)"
+        )
+    }
+
+    private suspend fun handleUnknown(
+        pendingCall: PendingCall,
+        resolveReason: String,
+        reasonIfUnknown: String
+    ) {
+        val apiResult = AppContainer.apiClient.sendCallUpdate(
+            callRequestId = pendingCall.callRequestId,
+            callStatus = CallStatusApi.UNKNOWN.apiValue,
+            callStartedAt = pendingCall.startedAtMillis,
+            callDurationSeconds = null,
+            direction = null,
+            resolveMethod = ResolveMethod.UNKNOWN,
+            resolveReason = resolveReason,
+            reasonIfUnknown = reasonIfUnknown,
+            attemptsCount = pendingCall.attempts,
+            actionSource = pendingCall.actionSource ?: ActionSource.UNKNOWN,
+            endedAt = null
+        )
+        
+        val historyItem = CallHistoryItem(
+            id = pendingCall.callRequestId,
+            phone = pendingCall.phoneNumber,
+            phoneDisplayName = null,
+            status = CallHistoryItem.CallStatus.UNKNOWN,
+            durationSeconds = null,
+            startedAt = pendingCall.startedAtMillis,
+            sentToCrm = apiResult is ru.groupprofi.crmprofi.dialer.network.ApiClient.Result.Success,
+            sentToCrmAt = if (apiResult is ru.groupprofi.crmprofi.dialer.network.ApiClient.Result.Success) System.currentTimeMillis() else null,
+            direction = null,
+            resolveMethod = ResolveMethod.UNKNOWN,
+            attemptsCount = pendingCall.attempts,
+            actionSource = pendingCall.actionSource ?: ActionSource.UNKNOWN,
+            endedAt = null
+        )
+        
+        callHistoryStore.addOrUpdate(historyItem)
+        pendingCallStore.removePendingCall(pendingCall.callRequestId)
+        
+        ru.groupprofi.crmprofi.dialer.logs.AppLogger.i(
+            "CallLogObserverManager",
+            "CALL_TIMEOUT/UNKNOWN id=${pendingCall.callRequestId} reason=$resolveReason"
         )
     }
     

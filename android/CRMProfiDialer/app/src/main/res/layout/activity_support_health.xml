@@ -146,6 +146,16 @@
             style="@style/Widget.MaterialComponents.Button.OutlinedButton"
             android:textColor="#244B47"
             app:strokeColor="#244B47"
+            app:cornerRadius="12dp"
+            android:layout_marginBottom="8dp" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/healthFlushQueueButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/diagnostics_flush_queue"
+            android:textColor="#FFFFFF"
+            android:backgroundTint="#2563EB"
             app:cornerRadius="12dp" />
     </LinearLayout>
 

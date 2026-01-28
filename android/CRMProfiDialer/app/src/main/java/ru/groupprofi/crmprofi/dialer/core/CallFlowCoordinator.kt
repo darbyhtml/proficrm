@@ -15,6 +15,7 @@ import ru.groupprofi.crmprofi.dialer.domain.PendingCall
 import ru.groupprofi.crmprofi.dialer.domain.ActionSource
 import ru.groupprofi.crmprofi.dialer.domain.PhoneNumberNormalizer
 import ru.groupprofi.crmprofi.dialer.logs.AppLogger
+import ru.groupprofi.crmprofi.dialer.auth.TokenManager
 
 /**
  * Координатор потока обработки команды на звонок.
@@ -58,13 +59,13 @@ class CallFlowCoordinator(
                 
                 // 2. Если приложение на экране - открываем звонилку сразу
                 if (AppState.isForeground) {
-                    openDialer(phone)
+                    openDialer(phone, callRequestId)
                     // Скрываем уведомление после открытия звонилки
                     notificationManager.dismissCallTaskNotification()
                 } else {
                     // В фоне - открываем звонилку с задержкой
                     Handler(Looper.getMainLooper()).postDelayed({
-                        openDialer(phone)
+                        openDialer(phone, callRequestId)
                         notificationManager.dismissCallTaskNotification()
                     }, 500)
                 }
@@ -89,7 +90,7 @@ class CallFlowCoordinator(
                 AppLogger.i("CallFlowCoordinator", "Обработка команды на звонок из уведомления: ${maskPhone(phone)}, id=$callRequestId")
                 
                 // Открываем звонилку
-                openDialer(phone)
+                openDialer(phone, callRequestId)
                 notificationManager.dismissCallTaskNotification()
                 
                 // Создаём ожидаемый звонок с actionSource = NOTIFICATION
@@ -111,7 +112,7 @@ class CallFlowCoordinator(
                 AppLogger.i("CallFlowCoordinator", "Обработка команды на звонок из истории: ${maskPhone(phone)}")
                 
                 // Открываем звонилку
-                openDialer(phone)
+                openDialer(phone, callRequestId)
                 
                 // Если есть callRequestId (из истории звонка, который был отправлен в CRM) - создаём PendingCall
                 // Если нет (ручной звонок) - просто открываем звонилку, не отслеживаем
@@ -131,14 +132,22 @@ class CallFlowCoordinator(
     /**
      * Открыть системную звонилку.
      */
-    private fun openDialer(phone: String) {
+    private fun openDialer(phone: String, callRequestId: String?) {
         try {
             val uri = Uri.parse("tel:$phone")
             val dialIntent = Intent(Intent.ACTION_DIAL, uri).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(dialIntent)
-            AppLogger.i("CallFlowCoordinator", "Звонилка открыта: ${maskPhone(phone)}")
+            val openedAt = System.currentTimeMillis()
+            if (!callRequestId.isNullOrBlank()) {
+                TokenManager.getInstance(context).saveLastDialerOpened(callRequestId, openedAt)
+                val receivedAt = TokenManager.getInstance(context).getLastCallCommandReceivedAt()
+                val delta = if (receivedAt != null) (openedAt - receivedAt).coerceAtLeast(0L) else null
+                AppLogger.i("CallFlowCoordinator", "DIALER_OPENED id=$callRequestId deltaMs=${delta ?: -1}")
+            } else {
+                AppLogger.i("CallFlowCoordinator", "Звонилка открыта: ${maskPhone(phone)}")
+            }
         } catch (e: Exception) {
             AppLogger.e("CallFlowCoordinator", "Ошибка открытия звонилки: ${e.message}", e)
         }

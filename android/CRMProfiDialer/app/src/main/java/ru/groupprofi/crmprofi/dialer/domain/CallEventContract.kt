@@ -88,6 +88,9 @@ data class CallEventPayload(
     val callEndedAt: Long? = null,
     val direction: String? = null,
     val resolveMethod: String? = null,
+    // Почему результат UNKNOWN (это нормально, не failure)
+    val resolveReason: String? = null,
+    val reasonIfUnknown: String? = null,
     val attemptsCount: Int? = null,
     val actionSource: String? = null
 ) {
@@ -132,6 +135,8 @@ data class CallEventPayload(
         }
         if (direction != null) json.put("direction", direction)
         if (resolveMethod != null) json.put("resolve_method", resolveMethod)
+        if (resolveReason != null) json.put("resolve_reason", resolveReason)
+        if (reasonIfUnknown != null) json.put("reason_if_unknown", reasonIfUnknown)
         if (attemptsCount != null) json.put("attempts_count", attemptsCount)
         if (actionSource != null) json.put("action_source", actionSource)
         return json.toString()

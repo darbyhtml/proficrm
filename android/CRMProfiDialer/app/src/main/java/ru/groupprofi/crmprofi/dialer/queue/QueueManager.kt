@@ -79,7 +79,21 @@ class QueueManager(private val context: Context) {
         
         val stuckItems = mutableListOf<QueueItem>()
         
+        val now = System.currentTimeMillis()
         for (item in pending) {
+            // Экспоненциальный backoff: 5с, 15с, 45с между повторами
+            if (item.lastRetryAt != null && item.retryCount > 0) {
+                val backoffSec = when (item.retryCount) {
+                    1 -> 5L
+                    2 -> 15L
+                    else -> 45L
+                }
+                val notBefore = item.lastRetryAt + backoffSec * 1000L
+                if (now < notBefore) {
+                    Log.d("QueueManager", "Skip item ${item.id}: backoff in progress")
+                    continue
+                }
+            }
             try {
                 val success = sendItem(baseUrl, accessToken, item, httpClient)
                 if (success) {

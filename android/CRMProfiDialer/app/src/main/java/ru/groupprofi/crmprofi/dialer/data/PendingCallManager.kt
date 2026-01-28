@@ -147,7 +147,8 @@ class PendingCallManager private constructor(context: Context) : PendingCallStor
     suspend fun cleanupExpiredPendingCalls(): List<String> = withContext(Dispatchers.IO) {
         mutex.withLock {
             val now = System.currentTimeMillis()
-            val expiredTimeout = 10 * 60 * 1000L // 10 минут (увеличено для надежности)
+            // Требование: максимум 2–5 минут ожидания результата (дальше это не "ошибка", а timeout → unknown)
+            val expiredTimeout = 5 * 60 * 1000L // 5 минут
             
             val expired = cache.values.filter { call ->
                 (call.state == PendingCall.PendingState.PENDING || 
@@ -179,6 +180,27 @@ class PendingCallManager private constructor(context: Context) : PendingCallStor
             cache.clear()
             saveToPrefs()
             updateActiveCallsFlow()
+        }
+    }
+
+    /**
+     * Атомарно пометить звонок как RESOLVING, если он ещё в состоянии PENDING.
+     * Увеличивает attempts на 1 при успешном переходе.
+     */
+    override suspend fun tryMarkResolving(callRequestId: String): Boolean = withContext(Dispatchers.IO) {
+        mutex.withLock {
+            val existing = cache[callRequestId] ?: return@withContext false
+            if (existing.state != PendingCall.PendingState.PENDING) {
+                return@withContext false
+            }
+            val updated = existing.copy(
+                state = PendingCall.PendingState.RESOLVING,
+                attempts = existing.attempts + 1
+            )
+            cache[callRequestId] = updated
+            saveToPrefs()
+            updateActiveCallsFlow()
+            true
         }
     }
     

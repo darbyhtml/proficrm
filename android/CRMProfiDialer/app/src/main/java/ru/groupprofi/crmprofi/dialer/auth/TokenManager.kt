@@ -32,6 +32,18 @@ class TokenManager private constructor(context: Context) {
         private const val KEY_IS_ADMIN = "is_admin"
         private const val KEY_ENCRYPTION_ENABLED = "_encryption_enabled"
         private const val KEY_MIGRATED = "_migrated_to_token_manager"
+
+        // Состояние блокировки готовности сервиса (не ошибка, а причина "не готово к звонкам")
+        private const val KEY_SERVICE_BLOCK_REASON = "service_block_reason"
+        private const val KEY_SERVICE_BLOCK_AT = "service_block_at"
+        private const val KEY_LAST_SERVICE_FOREGROUND_OK_AT = "service_foreground_ok_at"
+
+        // Метрики polling / команда на звонок (для диагностики и аналитики)
+        private const val KEY_LAST_POLL_LATENCY_MS = "last_poll_latency_ms"
+        private const val KEY_LAST_COMMAND_CALL_REQUEST_ID = "last_command_call_request_id"
+        private const val KEY_LAST_COMMAND_RECEIVED_AT = "last_command_received_at"
+        private const val KEY_LAST_DIALER_OPENED_AT = "last_dialer_opened_at"
+        private const val KEY_LAST_DIALER_OPENED_CALL_REQUEST_ID = "last_dialer_opened_call_request_id"
         
         @Volatile
         private var INSTANCE: TokenManager? = null
@@ -225,6 +237,50 @@ class TokenManager private constructor(context: Context) {
     fun getLastPollAt(): String? {
         return prefs.getString("last_poll_at", null)
     }
+
+    fun saveLastPollLatencyMs(ms: Long) {
+        prefs.edit().putLong(KEY_LAST_POLL_LATENCY_MS, ms.coerceAtLeast(0)).apply()
+    }
+
+    fun getLastPollLatencyMs(): Long? {
+        val v = prefs.getLong(KEY_LAST_POLL_LATENCY_MS, -1L)
+        return v.takeIf { it >= 0L }
+    }
+
+    /**
+     * Команда на звонок получена устройством (device_received_at).
+     */
+    fun saveLastCallCommand(callRequestId: String, receivedAtMs: Long) {
+        prefs.edit()
+            .putString(KEY_LAST_COMMAND_CALL_REQUEST_ID, callRequestId)
+            .putLong(KEY_LAST_COMMAND_RECEIVED_AT, receivedAtMs)
+            .apply()
+    }
+
+    fun getLastCallCommandId(): String? = prefs.getString(KEY_LAST_COMMAND_CALL_REQUEST_ID, null)
+
+    fun getLastCallCommandReceivedAt(): Long? {
+        val v = prefs.getLong(KEY_LAST_COMMAND_RECEIVED_AT, 0L)
+        return v.takeIf { it > 0L }
+    }
+
+    /**
+     * Системная звонилка открыта (dialer_opened_at) — для измерения задержек на устройстве.
+     */
+    fun saveLastDialerOpened(callRequestId: String, openedAtMs: Long) {
+        prefs.edit()
+            .putString(KEY_LAST_DIALER_OPENED_CALL_REQUEST_ID, callRequestId)
+            .putLong(KEY_LAST_DIALER_OPENED_AT, openedAtMs)
+            .apply()
+    }
+
+    fun getLastDialerOpenedAt(): Long? {
+        val v = prefs.getLong(KEY_LAST_DIALER_OPENED_AT, 0L)
+        return v.takeIf { it > 0L }
+    }
+
+    fun getLastDialerOpenedCallRequestId(): String? =
+        prefs.getString(KEY_LAST_DIALER_OPENED_CALL_REQUEST_ID, null)
     
     /**
      * Сохранить флаг is_admin.
@@ -240,5 +296,47 @@ class TokenManager private constructor(context: Context) {
      */
     fun isAdmin(): Boolean {
         return prefs.getBoolean(KEY_IS_ADMIN, false)
+    }
+
+    /**
+     * Сохранить причину, почему приложение/сервис не готовы к звонкам.
+     * null означает "причина очищена".
+     */
+    fun setServiceBlockReason(reason: ru.groupprofi.crmprofi.dialer.domain.ServiceBlockReason?) {
+        val editor = prefs.edit()
+        if (reason == null) {
+            editor.remove(KEY_SERVICE_BLOCK_REASON)
+            editor.remove(KEY_SERVICE_BLOCK_AT)
+        } else {
+            editor.putString(KEY_SERVICE_BLOCK_REASON, reason.name)
+            editor.putLong(KEY_SERVICE_BLOCK_AT, System.currentTimeMillis())
+        }
+        editor.apply()
+    }
+
+    fun getServiceBlockReason(): ru.groupprofi.crmprofi.dialer.domain.ServiceBlockReason? {
+        val raw = prefs.getString(KEY_SERVICE_BLOCK_REASON, null) ?: return null
+        return try {
+            ru.groupprofi.crmprofi.dialer.domain.ServiceBlockReason.valueOf(raw)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun getServiceBlockAt(): Long? {
+        val v = prefs.getLong(KEY_SERVICE_BLOCK_AT, 0L)
+        return v.takeIf { it > 0L }
+    }
+
+    /**
+     * Отметка, что startForeground был успешен (для диагностики "сервис жив").
+     */
+    fun markServiceForegroundOk() {
+        prefs.edit().putLong(KEY_LAST_SERVICE_FOREGROUND_OK_AT, System.currentTimeMillis()).apply()
+    }
+
+    fun getLastServiceForegroundOkAt(): Long? {
+        val v = prefs.getLong(KEY_LAST_SERVICE_FOREGROUND_OK_AT, 0L)
+        return v.takeIf { it > 0L }
     }
 }
