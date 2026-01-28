@@ -1884,53 +1884,114 @@
 
   <!-- Современный режим (новый layout) -->
   <div id="companyDetailModern" class="{% if detail_view_mode != 'modern' %}hidden{% endif %}">
-    <!-- Sticky header -->
-    <div class="sticky top-0 z-30 bg-white border-b border-brand-soft/50 shadow-sm mb-6" style="padding: 1rem 0;">
+    <!-- Sticky header (компактный) -->
+    <div class="sticky top-0 z-30 bg-white border-b border-brand-soft/50 shadow-sm mb-4" style="padding: 0.75rem 0;">
       <div class="flex items-center justify-between gap-4">
         <div class="flex-1 min-w-0">
-          <div class="text-sm text-brand-dark/70 mb-1"><a class="underline" href="/companies/">Компании</a> /</div>
-          <div class="flex items-center gap-3 flex-wrap">
-            <h1 class="text-2xl font-semibold">{{ company.name }}</h1>
+          <div class="text-xs text-brand-dark/60 mb-0.5"><a class="underline hover:text-brand-teal" href="/companies/">Компании</a> /</div>
+          <div class="flex items-center gap-2 flex-wrap">
+            {% if can_edit_company %}
+              <div class="inline-field-wrapper" data-inline-field="name" data-company-id="{{ company.id }}">
+                <h1 class="text-xl font-semibold inline-field-display cursor-pointer hover:text-brand-teal transition-colors" data-inline-edit>
+                  {{ company.name }}
+                </h1>
+                <div class="inline-field-edit hidden mt-1">
+                  <input class="input w-full" data-inline-input maxlength="255" value="{{ company.name|default:'' }}" />
+                  <div class="flex gap-1 mt-1">
+                    <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
+                    <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
+                  </div>
+                  <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
+                </div>
+              </div>
+            {% else %}
+              <h1 class="text-xl font-semibold">{{ company.name }}</h1>
+            {% endif %}
             {% if company.status %}
-              <span class="badge">{{ company.status.name }}</span>
+              <span class="badge badge-sm">{{ company.status.name }}</span>
             {% endif %}
             {% if company.has_overdue %}
-              <span class="badge badge-warn">Просрочки</span>
+              <span class="badge badge-warn badge-sm">Просрочки</span>
             {% endif %}
             {% if company.is_cold_call %}
-              <span class="badge" style="background-color: #e0e7ff; color: #4338ca;">Холодный</span>
+              <span class="badge badge-sm" style="background-color: #e0e7ff; color: #4338ca;">Холодный</span>
+            {% endif %}
+            {% if contract_alert %}
+              <span class="badge {% if contract_alert == 'danger' %}badge-danger{% elif contract_alert == 'warn' %}badge-warn{% endif %} badge-sm">
+                {% if contract_days_left is not None and contract_days_left <= 0 %}Просрочен{% elif contract_days_left is not None %}Договор: {{ contract_days_left }} дн.{% else %}Договор{% endif %}
+              </span>
             {% endif %}
           </div>
-          <div class="text-sm text-brand-dark/80 mt-2">
-            {% if company.inn %}ИНН: <span class="font-mono">{{ company.inn }}</span>{% endif %}
-            {% if company.responsible %} · Ответственный: {{ company.responsible }}{% endif %}
-            {% if company.branch %} · Филиал: {{ company.branch.name }}{% endif %}
+          <div class="text-xs text-brand-dark/60 mt-1">
+            {% if can_edit_company %}
+              <span>ИНН:</span>
+              <span class="inline-field-wrapper" data-inline-field="inn" data-company-id="{{ company.id }}">
+                <span class="font-mono inline-field-display cursor-pointer hover:text-brand-teal transition-colors" data-inline-edit>
+                  {{ company.inn|default:"—" }}
+                </span>
+                <span class="inline-field-edit hidden ml-1 align-middle">
+                  <input class="input text-xs" data-inline-input maxlength="255" value="{{ company.inn|default:'' }}" style="width:200px;padding:.25rem .5rem;font-size:.75rem" placeholder="ИНН" />
+                  <button type="button" class="btn btn-primary btn-xs ml-1" data-inline-save>✓</button>
+                  <button type="button" class="btn btn-outline btn-xs ml-1" data-inline-cancel>✕</button>
+                  <span class="text-xs text-red-600 ml-1 hidden" data-inline-error></span>
+                </span>
+              </span>
+              {% if company.region %}
+                <span class="mx-1">·</span>
+                <span>Область:</span>
+                <span class="inline-field-wrapper" data-inline-field="region" data-company-id="{{ company.id }}">
+                  <span class="inline-field-display cursor-pointer hover:text-brand-teal transition-colors" data-inline-edit>
+                    {{ company.region.name|default:"—" }}
+                  </span>
+                  <span class="inline-field-edit hidden ml-1 align-middle">
+                    {{ quick_form.region }}
+                    <button type="button" class="btn btn-primary btn-xs ml-1 hidden" data-inline-save>✓</button>
+                    <span class="text-xs text-red-600 ml-1 hidden" data-inline-error></span>
+                  </span>
+                </span>
+              {% endif %}
+            {% else %}
+              {% if company.inn %}ИНН: <span class="font-mono">{{ company.inn }}</span>{% endif %}
+              {% if company.region %} · {{ company.region.name }}{% endif %}
+            {% endif %}
+            {% if company.responsible %} · {{ company.responsible }}{% endif %}
+            {% if company.branch %} · {{ company.branch.name }}{% endif %}
           </div>
         </div>
         <div class="flex items-center gap-2 shrink-0">
           <!-- Переключатель режимов просмотра (иконки) -->
           <div class="flex items-center gap-1 bg-brand-soft/30 rounded-lg p-1" role="group" aria-label="Режим просмотра карточки">
-            <button type="button" id="viewModeClassicDetailModern" class="view-mode-detail-btn p-2 rounded-md transition-colors {% if detail_view_mode == 'classic' %}bg-white text-brand-teal shadow-sm{% else %}text-brand-dark/70 hover:text-brand-dark{% endif %}" data-mode="classic" title="Классический вид" aria-label="Классический вид">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button type="button" id="viewModeClassicDetailModern" class="view-mode-detail-btn p-1.5 rounded-md transition-colors {% if detail_view_mode == 'classic' %}bg-white text-brand-teal shadow-sm{% else %}text-brand-dark/70 hover:text-brand-dark{% endif %}" data-mode="classic" title="Классический вид" aria-label="Классический вид">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
               </svg>
             </button>
-            <button type="button" id="viewModeModernDetailModern" class="view-mode-detail-btn p-2 rounded-md transition-colors {% if detail_view_mode == 'modern' %}bg-white text-brand-teal shadow-sm{% else %}text-brand-dark/70 hover:text-brand-dark{% endif %}" data-mode="modern" title="Современный вид" aria-label="Современный вид">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <button type="button" id="viewModeModernDetailModern" class="view-mode-detail-btn p-1.5 rounded-md transition-colors {% if detail_view_mode == 'modern' %}bg-white text-brand-teal shadow-sm{% else %}text-brand-dark/70 hover:text-brand-dark{% endif %}" data-mode="modern" title="Современный вид" aria-label="Современный вид">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
               </svg>
             </button>
           </div>
-          {% if can_edit_company %}
-            <a class="btn btn-outline btn-sm" href="/companies/{{ company.id }}/edit/">Редактировать</a>
-          {% endif %}
-          {% if can_delete_company %}
-            <button type="button" class="btn btn-outline btn-sm btn-danger" onclick="document.getElementById('openDeleteCompanyModal')?.click()">Удалить</button>
-          {% elif can_request_delete %}
-            <button type="button" class="btn btn-outline btn-sm btn-danger" onclick="document.getElementById('openDeleteRequestModal')?.click()">
-              {% if delete_req %}Запрос отправлен{% else %}Запросить удаление{% endif %}
+          <!-- Dropdown с действиями -->
+          <div class="relative" id="companyActionsDropdownModern">
+            <button type="button" class="btn btn-outline btn-sm p-1.5" id="companyActionsBtnModern" title="Действия" aria-label="Действия">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/>
+              </svg>
             </button>
-          {% endif %}
+            <div class="hidden absolute right-0 top-full mt-1 bg-white border border-brand-soft rounded-lg shadow-lg z-50 min-w-[180px]" id="companyActionsMenuModern">
+              {% if can_edit_company %}
+                <a class="block px-3 py-2 text-sm hover:bg-brand-soft/25" href="/companies/{{ company.id }}/edit/">Редактировать данные</a>
+              {% endif %}
+              {% if can_delete_company %}
+                <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 text-red-600" onclick="document.getElementById('openDeleteCompanyModal')?.click(); document.getElementById('companyActionsMenuModern').classList.add('hidden');">Удалить компанию</button>
+              {% elif can_request_delete %}
+                <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 {% if delete_req %}text-brand-orange{% else %}text-red-600{% endif %}" onclick="document.getElementById('openDeleteRequestModal')?.click(); document.getElementById('companyActionsMenuModern').classList.add('hidden');">
+                  {% if delete_req %}Отменить запрос{% else %}Запросить удаление{% endif %}
+                </button>
+              {% endif %}
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -2018,8 +2079,91 @@
         </div>
       </div>
 
-      <!-- Правая колонка: Контакты и ключевые сведения -->
+      <!-- Правая колонка: Договор, Телефон, Контакты и ключевые сведения -->
       <div class="space-y-6">
+        <!-- Блок договора -->
+        {% if company.contract_until or company.contract_type %}
+          <div class="card card-pad {% if contract_alert == 'danger' %}border-red-400/40 bg-red-500/5{% elif contract_alert == 'warn' %}border-brand-orange/50 bg-brand-orange/10{% endif %}">
+            <div class="flex items-center justify-between mb-2">
+              <div class="font-medium">Договор</div>
+              {% if can_edit_company %}
+                <button type="button" class="btn btn-outline btn-xs" onclick="document.getElementById('openContractModal')?.click()" title="Изменить договор">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                  </svg>
+                </button>
+              {% endif %}
+            </div>
+            <div class="space-y-1 text-sm">
+              {% if company.contract_type %}
+                <div><span class="text-brand-dark/50">Тип:</span> {{ company.contract_type.name }}</div>
+              {% endif %}
+              {% if company.contract_until %}
+                <div>
+                  <span class="text-brand-dark/50">До:</span>
+                  <span class="{% if contract_alert == 'danger' %}text-red-600 font-medium{% elif contract_alert == 'warn' %}text-brand-orange font-medium{% endif %}">
+                    {{ company.contract_until|date:"d.m.Y" }}
+                  </span>
+                  {% if contract_days_left is not None %}
+                    <span class="text-xs text-brand-dark/60 ml-1">
+                      {% if contract_days_left <= 0 %}
+                        (просрочен на {{ contract_days_left|abs }} дн.)
+                      {% else %}
+                        (осталось {{ contract_days_left }} дн.)
+                      {% endif %}
+                    </span>
+                  {% endif %}
+                </div>
+              {% endif %}
+              {% if not company.contract_until and not company.contract_type %}
+                <div class="text-sm text-brand-dark/50 italic">Договор не указан</div>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
+
+        <!-- Телефон как action-блок -->
+        {% if company.phone %}
+          <div class="card card-pad">
+            <div class="font-medium mb-3">Телефон</div>
+            <div class="space-y-2">
+              <div class="flex items-center justify-between gap-2">
+                <div class="font-mono text-base font-medium">{{ company.phone|format_phone }}</div>
+                <div class="flex items-center gap-1">
+                  {% with info=company.phone|phone_local_info %}
+                    {% if info %}
+                      <div class="text-xs text-brand-dark/60">{{ info }}</div>
+                    {% endif %}
+                  {% endwith %}
+                  {% with tz=company.work_timezone|default:company.address|guess_ru_tz %}
+                    {% if tz %}
+                      <span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}" data-live-worktime="1">
+                        <span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span>
+                      </span>
+                    {% endif %}
+                  {% endwith %}
+                </div>
+              </div>
+              <div class="flex gap-2">
+                <button type="button" class="btn btn-primary btn-sm flex-1 js-call-phone" data-phone="{{ company.phone }}" data-company="{{ company.id }}" data-contact="">
+                  <svg class="w-4 h-4 inline mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                  </svg>
+                  Позвонить
+                </button>
+                <button type="button" class="btn btn-outline btn-sm" data-copy-phone="{{ company.phone }}" title="Скопировать номер">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                  </svg>
+                </button>
+              </div>
+              {% if company.phone_comment %}
+                <div class="text-xs text-brand-dark/60 mt-1" style="white-space: pre-wrap;">{{ company.phone_comment }}</div>
+              {% endif %}
+            </div>
+          </div>
+        {% endif %}
+
         <!-- Контакты -->
         <div class="card card-pad">
           <div class="font-medium mb-3">Контакты</div>
@@ -2034,7 +2178,14 @@
                   {% if contact.phones.all %}
                     <div class="text-xs text-brand-dark/80 mt-2">
                       {% for phone in contact.phones.all|slice:":2" %}
-                        <div>{{ phone.value|format_phone }}</div>
+                        <div class="flex items-center gap-2">
+                          <span>{{ phone.value|format_phone }}</span>
+                          <button type="button" class="btn btn-outline btn-xxs js-call-phone" data-phone="{{ phone.value }}" data-company="{{ company.id }}" data-contact="{{ contact.id }}" title="Позвонить">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                            </svg>
+                          </button>
+                        </div>
                       {% endfor %}
                     </div>
                   {% endif %}
@@ -2075,9 +2226,6 @@
                 </div>
               </div>
             {% endif %}
-            {% if company.phone %}
-              <div><span class="text-brand-dark/50">Телефон:</span> {{ company.phone|format_phone }}</div>
-            {% endif %}
             {% if company.email %}
               <div><span class="text-brand-dark/50">Email:</span> {{ company.email }}</div>
             {% endif %}
@@ -2085,6 +2233,35 @@
         </div>
       </div>
     </div>
+
+    <!-- Inline добавление заметки в блок заметки -->
+    {% if can_edit_company %}
+      <div class="mb-6">
+        <div class="card card-pad">
+          <div class="font-medium mb-3">Добавить заметку</div>
+          <form class="space-y-2" method="post" action="/companies/{{ company.id }}/notes/add/" enctype="multipart/form-data" id="noteFormModernInline" data-company-id="{{ company.id }}" data-user-id="{{ request.user.id }}">
+            {% csrf_token %}
+            <div class="space-y-2">
+              {{ note_form.text }}
+              <div class="flex items-center justify-between gap-2">
+                <input id="noteFileModernInline" type="file" name="attachment" class="hidden" />
+                <button type="button" class="btn btn-outline btn-sm" id="noteAttachBtnModernInline" title="Прикрепить файл">
+                  <span class="inline-flex items-center gap-1">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M8 12.5l7.1-7.1a3 3 0 014.2 4.2l-8.5 8.5a5 5 0 01-7.1-7.1l8.2-8.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span>Файл</span>
+                  </span>
+                </button>
+                <div class="text-xs muted-2 truncate flex-1" id="noteFileNameModernInline"></div>
+                <button class="btn btn-primary btn-sm" type="submit">Добавить</button>
+              </div>
+              <div class="text-xs muted-2">Файл опционально. До 15 МБ. PDF/DOC/XLS/картинки и др.</div>
+            </div>
+          </form>
+        </div>
+      </div>
+    {% endif %}
 
     <!-- Полный список заметок и задач (скрыт по умолчанию, можно развернуть) -->
     <div class="mt-6 space-y-6">
@@ -2243,6 +2420,197 @@
             {% empty %}
               <div class="text-sm text-brand-dark/50 italic py-4 text-center">Нет задач</div>
             {% endfor %}
+          </div>
+        </div>
+      </details>
+
+      <!-- Все данные компании (reuse Classic) -->
+      <details class="card card-pad" id="all-data-section-modern">
+        <summary class="cursor-pointer font-medium">Все данные компании</summary>
+        <div class="mt-4">
+          <!-- Используем ту же структуру, что и в Classic -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+            <div class="md:col-span-2">
+              <div class="text-brand-dark/50">Организация</div>
+              <div class="flex flex-wrap items-center gap-2">
+                {% if org_head %}
+                  {% if org_head.id == company.id %}
+                    <span class="badge">Головная</span>
+                    <div class="font-medium">{{ org_head.name }}</div>
+                  {% else %}
+                    <span class="badge">Филиал</span>
+                    <a class="link font-medium" href="/companies/{{ org_head.id }}/">{{ org_head.name }}</a>
+                  {% endif %}
+                {% else %}
+                  <span class="text-brand-dark/70">—</span>
+                {% endif %}
+                {% if org_branches %}
+                  <span class="muted-2 text-xs">· филиалов: {{ org_branches|length }}</span>
+                {% endif %}
+              </div>
+            </div>
+            <div>
+              <div class="text-brand-dark/50">Юр. название</div>
+              {% if can_edit_company %}
+                <div class="inline-field-wrapper" data-inline-field="legal_name" data-company-id="{{ company.id }}">
+                  <div class="inline-field-display cursor-pointer hover:text-brand-dark/80 transition-colors" data-inline-edit>
+                    {{ company.legal_name|default:"—" }}
+                  </div>
+                  <div class="inline-field-edit hidden mt-1">
+                    <input class="input w-full" data-inline-input maxlength="255" value="{{ company.legal_name|default:'' }}" />
+                    <div class="flex gap-1 mt-1">
+                      <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
+                      <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
+                    </div>
+                    <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
+                  </div>
+                </div>
+              {% else %}
+                <div>{{ company.legal_name|default:"—" }}</div>
+              {% endif %}
+            </div>
+            <div>
+              <div class="text-brand-dark/50">Сайт</div>
+              {% if can_edit_company %}
+                <div class="inline-field-wrapper" data-inline-field="website" data-company-id="{{ company.id }}" data-inline-display-kind="website">
+                  <div class="inline-field-display flex items-center gap-2" data-inline-display>
+                    {% if company.website %}
+                      {% if "://" in company.website %}
+                        <a class="link break-all" data-inline-website-link href="{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
+                      {% elif company.website|slice:":2" == "//" %}
+                        <a class="link break-all" data-inline-website-link href="https:{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
+                      {% else %}
+                        <a class="link break-all" data-inline-website-link href="https://{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
+                      {% endif %}
+                    {% else %}
+                      <span class="text-brand-dark/70" data-inline-website-empty>—</span>
+                    {% endif %}
+                    <button type="button" class="btn btn-outline btn-xs" data-inline-edit title="Редактировать сайт">Изменить</button>
+                  </div>
+                  <div class="inline-field-edit hidden mt-1">
+                    <input class="input w-full" data-inline-input maxlength="255" value="{{ company.website|default:'' }}" placeholder="https://example.com" />
+                    <div class="flex gap-1 mt-1">
+                      <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
+                      <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
+                    </div>
+                    <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
+                  </div>
+                </div>
+              {% else %}
+                <div class="max-w-full">
+                  {% if company.website %}
+                    {% if "://" in company.website %}
+                      <a class="link break-all" href="{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
+                    {% elif company.website|slice:":2" == "//" %}
+                      <a class="link break-all" href="https:{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
+                    {% else %}
+                      <a class="link break-all" href="https://{{ company.website }}" target="_blank" rel="noopener">{{ company.website }}</a>
+                    {% endif %}
+                  {% else %}
+                    —
+                  {% endif %}
+                </div>
+              {% endif %}
+            </div>
+            <div>
+              <div class="text-brand-dark/50">Вид деятельности</div>
+              {% if can_edit_company %}
+                <div class="inline-field-wrapper" data-inline-field="activity_kind" data-company-id="{{ company.id }}" data-inline-display-kind="multiline">
+                  <div class="inline-field-display whitespace-pre-line cursor-pointer hover:text-brand-dark/80 transition-colors" data-inline-edit>
+                    {{ company.activity_kind|default:"—" }}
+                  </div>
+                  <div class="inline-field-edit hidden mt-1">
+                    <textarea class="input w-full" data-inline-input rows="3" maxlength="255" style="min-height:88px;resize:vertical">{{ company.activity_kind|default:'' }}</textarea>
+                    <div class="flex gap-1 mt-1">
+                      <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
+                      <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
+                    </div>
+                    <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
+                  </div>
+                </div>
+              {% else %}
+                <div class="whitespace-pre-line">{{ company.activity_kind|default:"—" }}</div>
+              {% endif %}
+            </div>
+            <div>
+              <div class="text-brand-dark/50">Численность сотрудников</div>
+              <div>{{ company.employees_count|default:"—" }}</div>
+            </div>
+            <div>
+              <div class="text-brand-dark/50">Часовой пояс</div>
+              {% with guessed=company.address|guess_ru_tz %}
+              {% with tz=company.work_timezone|default:guessed %}
+                {% if can_edit_company %}
+                  <div class="inline-field-wrapper" data-inline-field="work_timezone" data-company-id="{{ company.id }}" data-inline-display-kind="timezone">
+                    <div class="inline-field-display cursor-pointer hover:text-brand-dark/80 transition-colors" data-inline-edit>
+                      {% if tz %}
+                        <span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}" data-live-worktime="1">
+                          <span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span>
+                          · {{ tz|tz_label }}
+                        </span>
+                      {% else %}
+                        —
+                      {% endif %}
+                    </div>
+                    <div class="inline-field-edit hidden mt-1">
+                      <select class="select w-full" data-inline-input>
+                        <option value="" {% if not company.work_timezone %}selected{% endif %}>Авто (по адресу)</option>
+                        <option value="Europe/Kaliningrad" {% if company.work_timezone == "Europe/Kaliningrad" %}selected{% endif %}>Калининград (UTC+02)</option>
+                        <option value="Europe/Moscow" {% if company.work_timezone == "Europe/Moscow" %}selected{% endif %}>Москва / СПБ (UTC+03)</option>
+                        <option value="Europe/Samara" {% if company.work_timezone == "Europe/Samara" %}selected{% endif %}>Самара (UTC+04)</option>
+                        <option value="Asia/Yekaterinburg" {% if company.work_timezone == "Asia/Yekaterinburg" %}selected{% endif %}>Екатеринбург / Тюмень (UTC+05)</option>
+                        <option value="Asia/Omsk" {% if company.work_timezone == "Asia/Omsk" %}selected{% endif %}>Омск (UTC+06)</option>
+                        <option value="Asia/Novosibirsk" {% if company.work_timezone == "Asia/Novosibirsk" %}selected{% endif %}>Новосибирск (UTC+07)</option>
+                        <option value="Asia/Krasnoyarsk" {% if company.work_timezone == "Asia/Krasnoyarsk" %}selected{% endif %}>Красноярск (UTC+07)</option>
+                        <option value="Asia/Irkutsk" {% if company.work_timezone == "Asia/Irkutsk" %}selected{% endif %}>Иркутск (UTC+08)</option>
+                        <option value="Asia/Yakutsk" {% if company.work_timezone == "Asia/Yakutsk" %}selected{% endif %}>Якутск (UTC+09)</option>
+                        <option value="Asia/Vladivostok" {% if company.work_timezone == "Asia/Vladivostok" %}selected{% endif %}>Владивосток (UTC+10)</option>
+                        <option value="Asia/Sakhalin" {% if company.work_timezone == "Asia/Sakhalin" %}selected{% endif %}>Сахалин (UTC+11)</option>
+                        <option value="Asia/Magadan" {% if company.work_timezone == "Asia/Magadan" %}selected{% endif %}>Магадан (UTC+11)</option>
+                        <option value="Asia/Kamchatka" {% if company.work_timezone == "Asia/Kamchatka" %}selected{% endif %}>Камчатка (UTC+12)</option>
+                      </select>
+                      <div class="flex gap-1 mt-1">
+                        <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
+                        <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
+                      </div>
+                      <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
+                    </div>
+                  </div>
+                {% else %}
+                  {% if tz %}
+                    <div>
+                      <span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}" data-live-worktime="1">
+                        <span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span>
+                        · {{ tz|tz_label }}
+                      </span>
+                    </div>
+                  {% else %}
+                    —
+                  {% endif %}
+                {% endif %}
+              {% endwith %}
+              {% endwith %}
+            </div>
+            <div class="md:col-span-2">
+              <div class="text-brand-dark/50">Адрес</div>
+              {% if can_edit_company %}
+                <div class="inline-field-wrapper" data-inline-field="address" data-company-id="{{ company.id }}" data-inline-display-kind="multiline">
+                  <div class="inline-field-display whitespace-pre-line cursor-pointer hover:text-brand-dark/80 transition-colors" data-inline-edit>
+                    {{ company.address|default:"—" }}
+                  </div>
+                  <div class="inline-field-edit hidden mt-1">
+                    <textarea class="input w-full" data-inline-input rows="3" maxlength="500" style="min-height:88px;resize:vertical">{{ company.address|default:'' }}</textarea>
+                    <div class="flex gap-1 mt-1">
+                      <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
+                      <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
+                    </div>
+                    <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
+                  </div>
+                </div>
+              {% else %}
+                <div class="whitespace-pre-line">{{ company.address|default:"—" }}</div>
+              {% endif %}
+            </div>
           </div>
         </div>
       </details>
