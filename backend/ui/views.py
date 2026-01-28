@@ -10,7 +10,7 @@ from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Exists, OuterRef, Q, F
 from django.db.models import Count, Max, Prefetch, Avg
-from django.db import models, transaction
+from django.db import models, transaction, IntegrityError
 from django.http import HttpRequest, HttpResponse
 from django.http import StreamingHttpResponse
 from django.http import JsonResponse
@@ -36,6 +36,7 @@ from companies.models import (
     CompanyDeletionRequest,
     CompanyEmail,
     CompanyPhone,
+    CompanySearchIndex,
 )
 from companies.services import resolve_target_companies
 from companies.permissions import (
@@ -3593,24 +3594,47 @@ def company_delete_direct(request: HttpRequest, company_id) -> HttpResponse:
     if not _can_delete_company(user, company):
         messages.error(request, "Нет прав на удаление этой компании.")
         return redirect("company_detail", company_id=company.id)
+
     reason = (request.POST.get("reason") or "").strip()
-    detached = _detach_client_branches(head_company=company)
-    branches_notified = _notify_head_deleted_with_branches(actor=user, head_company=company, detached=detached)
-    log_event(
-        actor=user,
-        verb=ActivityEvent.Verb.DELETE,
-        entity_type="company",
-        entity_id=str(company.id),
-        company_id=company.id,
-        message="Компания удалена",
-        meta={
-            "reason": reason[:500],
-            "detached_branches": [str(c.id) for c in detached[:50]],
-            "detached_count": len(detached),
-            "branches_notified": branches_notified,
-        },
-    )
-    company.delete()
+
+    # Удаление компании иногда падало с IntegrityError по CompanySearchIndex
+    # (битые/рассинхронизированные данные индекса поиска).
+    # Чтобы не отдавать 500 пользователю, подчистим индекс и перехватим ошибку.
+    try:
+        with transaction.atomic():
+            # На всякий случай удаляем индекс до каскада.
+            CompanySearchIndex.objects.filter(company_id=company.id).delete()
+
+            detached = _detach_client_branches(head_company=company)
+            branches_notified = _notify_head_deleted_with_branches(
+                actor=user,
+                head_company=company,
+                detached=detached,
+            )
+            log_event(
+                actor=user,
+                verb=ActivityEvent.Verb.DELETE,
+                entity_type="company",
+                entity_id=str(company.id),
+                company_id=company.id,
+                message="Компания удалена",
+                meta={
+                    "reason": reason[:500],
+                    "detached_branches": [str(c.id) for c in detached[:50]],
+                    "detached_count": len(detached),
+                    "branches_notified": branches_notified,
+                },
+            )
+            company.delete()
+    except IntegrityError:
+        logger.exception("Failed to delete company %s due to CompanySearchIndex integrity error", company.id)
+        messages.error(
+            request,
+            "Не удалось полностью удалить компанию из-за проблем с индексом поиска. "
+            "Обратитесь к администратору.",
+        )
+        return redirect("company_detail", company_id=company.id)
+
     messages.success(request, "Компания удалена.")
     return redirect("company_list")
 
