@@ -116,4 +116,3 @@ def _task_changed(sender, instance: Task, **kwargs):
     if instance.company_id:
         _schedule_rebuild_index_for_company(instance.company_id)
 
-
