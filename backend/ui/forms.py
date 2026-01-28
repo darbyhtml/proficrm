@@ -129,6 +129,10 @@ class CompanyCreateForm(forms.ModelForm):
         self.fields["status"].queryset = CompanyStatus.objects.only("id", "name").order_by("name")
         self.fields["spheres"].queryset = CompanySphere.objects.only("id", "name").order_by("name")
         
+        # Регионы выводим отсортированными по названию, без лишних полей.
+        if "region" in self.fields:
+            self.fields["region"].queryset = Region.objects.only("id", "name").order_by("name")
+
         # Поле email необязательное (бывают ситуации, когда email еще неизвестен)
         self.fields["email"].required = False
 
@@ -173,6 +177,7 @@ class CompanyCreateForm(forms.ModelForm):
             "employees_count",
             "work_timezone",
             "work_schedule",
+            "region",
             "contract_type",
             "contract_until",
             "head_company",

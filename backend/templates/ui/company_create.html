@@ -19,7 +19,7 @@
         </div>
         <div class="mt-2 space-y-2" id="dupList"></div>
         <div class="text-xs muted mt-2" id="dupHidden" style="display:none"></div>
-        <div class="text-xs muted mt-2">Создавать можно — иногда компании похожи, но обслуживаются разными филиалами.</div>
+        <div class="text-xs muted mt-2">Создавать можно — иногда компании похожи, но обслуживаются разными филиалами. Список ниже — только подсказка, по умолчанию он не отменяет создание.</div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -66,7 +66,7 @@
         <div class="text-xs muted-2 mt-1">Например: строительство, услуги, производство и т.д.</div>
       </div>
 
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div>
           <label class="block text-sm text-brand-dark/80 mb-1">Численность сотрудников</label>
           {{ form.employees_count }}
@@ -75,6 +75,10 @@
           <label class="block text-sm text-brand-dark/80 mb-1">Часовой пояс</label>
           {{ form.work_timezone }}
           <div class="text-xs muted-2 mt-1">Например: Europe/Moscow, Asia/Yekaterinburg.</div>
+        </div>
+        <div>
+          <label class="block text-sm text-brand-dark/80 mb-1">Регион</label>
+          {{ form.region }}
         </div>
       </div>
 
@@ -269,23 +273,47 @@
       const meta = document.getElementById('dupMeta');
       const hidden = document.getElementById('dupHidden');
       const nameEl = document.querySelector('input[name="name"]');
-      const innEl = document.querySelector('input[name="inn"]');
+      const innEl = document.querySelector('textarea[name="inn"], input[name="inn"]');
       const kppEl = document.querySelector('input[name="kpp"]');
       const addrEl = document.querySelector('textarea[name="address"], input[name="address"]');
 
       let t = null;
+      let dupAbort = null;
+
+      function normalizeIdent(v) {
+        return (v || '').replace(/\s+/g, '');
+      }
+
       async function run(){
         const name = (nameEl && nameEl.value || '').trim();
-        const inn = (innEl && innEl.value || '').trim();
-        const kpp = (kppEl && kppEl.value || '').trim();
+        const inn = normalizeIdent(innEl && innEl.value || '');
+        const kpp = normalizeIdent(kppEl && kppEl.value || '');
         const address = (addrEl && addrEl.value || '').trim();
         if (!name && !inn && !kpp && !address) {
           if (box) box.style.display = 'none';
           return;
         }
         const qs = new URLSearchParams({name, inn, kpp, address});
-        const res = await fetch('/companies/duplicates/?' + qs.toString(), {headers: {'X-Requested-With':'fetch'}});
-        const data = await res.json();
+
+        if (dupAbort) {
+          dupAbort.abort();
+        }
+        dupAbort = new AbortController();
+
+        let data;
+        try {
+          const res = await fetch('/companies/duplicates/?' + qs.toString(), {
+            headers: {'X-Requested-With':'fetch'},
+            signal: dupAbort.signal,
+          });
+          data = await res.json();
+        } catch (e) {
+          if (e.name === 'AbortError') {
+            return;
+          }
+          console && console.warn && console.warn('duplicate check failed', e);
+          return;
+        }
         if (!box || !list || !meta || !hidden) return;
         if (!data.items.length && !(data.hidden_count>0)) {
           box.style.display = 'none';
@@ -295,20 +323,23 @@
         meta.textContent = data.reasons && data.reasons.length ? ('Совпадения: ' + data.reasons.join(', ')) : '';
         list.innerHTML = '';
         for (const it of data.items) {
-          const a = document.createElement('a');
-          a.className = 'block rounded-xl border border-brand-soft bg-white px-3 py-2 hover:bg-brand-soft/25';
-          a.href = it.url;
+          const card = document.createElement('div');
+          card.className = 'block rounded-xl border border-brand-soft bg-white px-3 py-2';
           const matchBadges = (it.match && it.match.length)
             ? (`<div class="mt-1 flex flex-wrap gap-1">
                  <span class="badge badge-warn">Совпало:</span>
                  ${it.match.map(m => `<span class="badge badge-warn">${m}</span>`).join('')}
                </div>`)
             : '';
-          a.innerHTML = `<div class="font-medium">${it.name}</div>
+          card.innerHTML = `<div class="font-medium">${it.name}</div>
             <div class="text-xs muted">ИНН: ${it.inn||'—'} · КПП: ${it.kpp||'—'} · ${it.branch?('Филиал: '+it.branch+' · '):''}${it.responsible?('Ответственный: '+it.responsible):''}</div>
             ${matchBadges}
-            <div class="text-xs muted">${it.address||'—'}</div>`;
-          list.appendChild(a);
+            <div class="text-xs muted">${it.address||'—'}</div>
+            <div class="mt-2 flex flex-wrap gap-2 text-xs">
+              <button type="button" class="btn btn-outline btn-xxs" data-dup-open="${it.url}">Открыть в новой вкладке</button>
+              <button type="button" class="btn btn-outline btn-xxs" data-dup-goto="${it.url}">Это дубль — перейти и не создавать</button>
+            </div>`;
+          list.appendChild(card);
         }
         if (data.hidden_count && data.hidden_count > 0) {
           hidden.style.display = 'block';
@@ -322,10 +353,132 @@
         t = setTimeout(run, 350);
       }
       [nameEl, innEl, kppEl, addrEl].filter(Boolean).forEach(el => el.addEventListener('input', schedule));
+
+      if (list) {
+        list.addEventListener('click', function(e) {
+          const openBtn = e.target.closest('button[data-dup-open]');
+          const gotoBtn = e.target.closest('button[data-dup-goto]');
+          const form = document.getElementById('companyCreateForm');
+          const warnText = 'Вы уйдёте со страницы создания компании. Несохранённые данные могут быть потеряны.';
+
+          if (openBtn) {
+            const url = openBtn.getAttribute('data-dup-open');
+            if (!url) return;
+            if (!window.confirm(warnText + '\n\nОткрыть карточку в новой вкладке?')) return;
+            window.open(url, '_blank', 'noopener');
+            return;
+          }
+          if (gotoBtn) {
+            const url = gotoBtn.getAttribute('data-dup-goto');
+            if (!url) return;
+            if (!window.confirm(warnText + '\n\nПерейти на существующую карточку и не создавать новую?')) return;
+            if (form) {
+              form.dataset.submitted = '1';
+            }
+            window.location.href = url;
+          }
+        });
+      }
     })();
 
-    // Управление дополнительными телефонами и email
+    // Управление дополнительными телефонами и email + автосохранение формы
     document.addEventListener('DOMContentLoaded', function() {
+      const formEl = document.getElementById('companyCreateForm');
+      const DRAFT_KEY = 'companyCreate:draft';
+      let formDirty = false;
+
+      function collectFormData(form) {
+        const data = {};
+        if (!form) return data;
+        const elements = form.querySelectorAll('input, textarea, select');
+        elements.forEach(function(el) {
+          if (!el.name || el.type === 'hidden') return;
+          if (el.name === 'csrfmiddlewaretoken') return;
+          if ((el.type === 'checkbox' || el.type === 'radio') && !el.checked) return;
+          data[el.name] = el.value;
+        });
+        return data;
+      }
+
+      function hasUserData(form) {
+        if (!form) return false;
+        const elements = form.querySelectorAll('input, textarea, select');
+        for (const el of elements) {
+          if (!el.name || el.type === 'hidden' || el.name === 'csrfmiddlewaretoken') continue;
+          if ((el.type === 'checkbox' || el.type === 'radio')) {
+            if (el.checked) return true;
+            continue;
+          }
+          if ((el.value || '').trim()) return true;
+        }
+        return false;
+      }
+
+      function restoreDraft(form) {
+        if (!form) return;
+        let raw = null;
+        try {
+          raw = localStorage.getItem(DRAFT_KEY);
+        } catch (e) {
+          return;
+        }
+        if (!raw) return;
+        let draft;
+        try {
+          draft = JSON.parse(raw);
+        } catch (e) {
+          return;
+        }
+        if (!draft || typeof draft !== 'object') return;
+        const elements = form.querySelectorAll('input, textarea, select');
+        elements.forEach(function(el) {
+          const name = el.name;
+          if (!name || !(name in draft)) return;
+          if (el.type === 'checkbox' || el.type === 'radio') {
+            el.checked = !!draft[name];
+          } else {
+            el.value = draft[name];
+          }
+        });
+      }
+
+      function saveDraftSoon() {
+        if (!formEl) return;
+        formDirty = true;
+        window.clearTimeout(saveDraftSoon._t);
+        saveDraftSoon._t = window.setTimeout(function() {
+          try {
+            const payload = collectFormData(formEl);
+            localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
+          } catch (e) {
+            // localStorage может быть недоступен — просто молча пропускаем.
+          }
+        }, 400);
+      }
+
+      if (formEl) {
+        if (!hasUserData(formEl)) {
+          restoreDraft(formEl);
+        }
+
+        formEl.addEventListener('input', saveDraftSoon, {capture: true});
+        formEl.addEventListener('change', saveDraftSoon, {capture: true});
+        formEl.addEventListener('submit', function() {
+          formEl.dataset.submitted = '1';
+          formDirty = false;
+          try {
+            localStorage.removeItem(DRAFT_KEY);
+          } catch (e) {}
+        });
+
+        window.addEventListener('beforeunload', function(e) {
+          if (!formDirty) return;
+          if (formEl.dataset.submitted === '1') return;
+          e.preventDefault();
+          e.returnValue = '';
+        });
+      }
+
       // EMAILS
       const emailsContainer = document.getElementById('company-emails-container');
       const addEmailBtn = document.getElementById('add-email-btn');
