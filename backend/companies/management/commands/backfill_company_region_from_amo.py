@@ -77,13 +77,16 @@ class Command(BaseCommand):
         if dry_run:
             self.stdout.write(self.style.WARNING("Режим --dry-run: изменения НЕ будут сохранены"))
 
-        qs = Company.objects.filter(region__isnull=True, raw_fields__icontains=f'"field_id": {field_id}')
+        # Используем более надёжный фильтр: убираем зависимость от форматирования JSON
+        # Функция _get_custom_values_from_raw_fields сама корректно найдёт field_id внутри цикла
+        qs = Company.objects.filter(region__isnull=True).exclude(raw_fields__isnull=True)
         total = qs.count()
         if limit > 0:
             qs = qs[:limit]
         self.stdout.write(f"Найдено компаний-кандидатов: {total} (обрабатываем: {qs.count()})")
 
         updated = 0
+        skipped_no_label = 0
         skipped_unknown = 0
 
         with transaction.atomic():
@@ -91,14 +94,17 @@ class Command(BaseCommand):
                 vals = _get_custom_values_from_raw_fields(comp.raw_fields, field_id=field_id)
                 label = _first_text_value(vals)
                 if not label:
+                    skipped_no_label += 1
                     continue
 
                 region = Region.objects.filter(name__iexact=label).first()
                 if not region:
                     skipped_unknown += 1
+                    if dry_run:
+                        self.stdout.write(f"  ⚠️  {comp.name} (inn={comp.inn or '-'}) -> регион '{label}' не найден в БД")
                     continue
 
-                self.stdout.write(f"  {comp.name} (inn={comp.inn or '-'}) -> {region.name}")
+                self.stdout.write(f"  ✓ {comp.name} (inn={comp.inn or '-'}) -> {region.name}")
                 if not dry_run:
                     comp.region = region
                     comp.save(update_fields=["region", "updated_at"])
@@ -109,7 +115,9 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Готово. Заполнено region для компаний: {updated}, пропущено из-за неизвестного региона: {skipped_unknown}."
+                f"Готово. Заполнено region для компаний: {updated}, "
+                f"пропущено из-за отсутствия label в raw_fields: {skipped_no_label}, "
+                f"пропущено из-за неизвестного региона: {skipped_unknown}."
             )
         )
 
