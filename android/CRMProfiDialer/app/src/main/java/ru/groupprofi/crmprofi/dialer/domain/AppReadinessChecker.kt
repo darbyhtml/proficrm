@@ -73,12 +73,11 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
         val serviceBlockReason = tokenManager.getServiceBlockReason()
 
         // 1. Проверка авторизации (самое важное)
-        if (!tokenManager.hasTokens()) {
-            return ReadyState.NEEDS_AUTH
-        }
-        
-        val accessToken = tokenManager.getAccessToken()
-        if (accessToken.isNullOrBlank()) {
+        if (!tokenManager.hasTokens() || tokenManager.getAccessToken().isNullOrBlank()) {
+            // При восстановлении авторизации очищаем связанные причины блокировки.
+            if (serviceBlockReason == ServiceBlockReason.AUTH_MISSING) {
+                tokenManager.setServiceBlockReason(null)
+            }
             return ReadyState.NEEDS_AUTH
         }
         
@@ -89,6 +88,10 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
         val hasPhoneState = ContextCompat.checkSelfPermission(context, phoneStatePerm) == PackageManager.PERMISSION_GRANTED
         
         if (!hasCallLog || !hasPhoneState) {
+            // Если ранее причина была связана с отсутствием разрешений, но сейчас всё выдано, очищаем её.
+            if (hasCallLog && hasPhoneState && serviceBlockReason == ServiceBlockReason.UNKNOWN) {
+                tokenManager.setServiceBlockReason(null)
+            }
             return ReadyState.NEEDS_PERMISSIONS
         }
         
@@ -98,12 +101,19 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
             val hasNotifPerm = ContextCompat.checkSelfPermission(context, notifPerm) == PackageManager.PERMISSION_GRANTED
             if (!hasNotifPerm) {
                 return ReadyState.NEEDS_NOTIFICATIONS
+            } else if (serviceBlockReason == ServiceBlockReason.NOTIFICATION_PERMISSION_MISSING) {
+                // Разрешение выдали — очищаем причину блокировки.
+                tokenManager.setServiceBlockReason(null)
             }
         }
         
         // Проверка включены ли уведомления в настройках
-        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) {
+        val notificationsEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
+        if (!notificationsEnabled) {
             return ReadyState.NEEDS_NOTIFICATIONS
+        } else if (serviceBlockReason == ServiceBlockReason.NOTIFICATIONS_DISABLED) {
+            // Уведомления включили — очищаем причину блокировки.
+            tokenManager.setServiceBlockReason(null)
         }
         
         // 4. Проверка сети
@@ -112,9 +122,38 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
         }
 
         // Если до сюда дошли — базовые условия ОК. Если сервис ранее сообщил причину блокировки,
-        // отражаем её, пока пользователь не исправит (или пока сервис не очистит причину).
+        // отражаем её, пока пользователь не исправит (или пока сервис/чекер не очистят причину).
         if (serviceBlockReason != null) {
-            return ReadyState.SERVICE_BLOCKED
+            // Для причин, зависящих от системных настроек (battery optimization, foreground failure),
+            // проверяем, не восстановились ли условия, и при необходимости очищаем причину.
+            val cleared = when (serviceBlockReason) {
+                ServiceBlockReason.BATTERY_OPTIMIZATION -> {
+                    if (isIgnoringBatteryOptimizationsSafe()) {
+                        tokenManager.setServiceBlockReason(null)
+                        true
+                    } else {
+                        false
+                    }
+                }
+                ServiceBlockReason.FOREGROUND_START_FAILED -> {
+                    // Если foreground уже успешно запускался, считаем, что причина устарела.
+                    val lastOk = tokenManager.getLastServiceForegroundOkAt()
+                    if (lastOk != null && lastOk > 0L) {
+                        tokenManager.setServiceBlockReason(null)
+                        true
+                    } else {
+                        false
+                    }
+                }
+                ServiceBlockReason.AUTH_MISSING,
+                ServiceBlockReason.DEVICE_ID_MISSING,
+                ServiceBlockReason.NOTIFICATIONS_DISABLED,
+                ServiceBlockReason.NOTIFICATION_PERMISSION_MISSING,
+                ServiceBlockReason.UNKNOWN -> false
+            }
+            if (!cleared) {
+                return ReadyState.SERVICE_BLOCKED
+            }
         }
         
         // 5. Проверка сервиса (есть ли недавний polling)

@@ -150,6 +150,7 @@ class SupportHealthActivity : AppCompatActivity() {
         addCheckItem(getString(R.string.diagnostics_check_background), checkBatteryOptimizationStatus())
         addCheckItem(getString(R.string.diagnostics_check_network), checkNetworkStatus())
         addCheckItem(getString(R.string.diagnostics_check_auth), checkAuthStatus())
+        addCheckItem("Polling (последний запрос)", checkPollingStatus())
         addCheckItem(getString(R.string.diagnostics_check_queue), checkQueueStatus())
         addCheckItem(getString(R.string.diagnostics_check_pending_calls), checkPendingCallsStatus())
         addCheckItem(getString(R.string.diagnostics_check_history), checkHistoryStatus())
@@ -283,6 +284,22 @@ class SupportHealthActivity : AppCompatActivity() {
         val allCalls = callHistoryStore.callsFlow.value
         val todayStats = statsUseCase.calculate(allCalls, CallStatsUseCase.Period.TODAY)
         return "Всего: ${allCalls.size}, Сегодня: ${todayStats.total}"
+    }
+
+    /**
+     * Показать диагностическую информацию по последнему polling-запросу.
+     */
+    private fun checkPollingStatus(): String {
+        val tokenManager = AppContainer.tokenManager
+        val code = tokenManager.getLastPollCode()
+        val at = tokenManager.getLastPollAt()
+        val latency = tokenManager.getLastPollLatencyMs()
+
+        val codePart = if (code <= 0) "код: n/a" else "код: $code"
+        val atPart = at?.let { "время: $it" } ?: "время: n/a"
+        val latencyPart = latency?.let { "latency: ${it}мс" } ?: "latency: n/a"
+
+        return "$codePart, $atPart, $latencyPart"
     }
     
     /**

@@ -268,6 +268,12 @@ class CallLogObserverManager(
         resolveReason: String,
         reasonIfUnknown: String
     ) {
+        // Атомарно берём право на резолв, чтобы избежать дублей UNKNOWN
+        val canResolve = pendingCallStore.tryMarkResolving(pendingCall.callRequestId)
+        if (!canResolve) {
+            return
+        }
+
         val apiResult = AppContainer.apiClient.sendCallUpdate(
             callRequestId = pendingCall.callRequestId,
             callStatus = CallStatusApi.UNKNOWN.apiValue,
