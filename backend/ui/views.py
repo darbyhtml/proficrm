@@ -956,6 +956,25 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             task.can_edit_task = _can_edit_task_ui(user, task)  # type: ignore[attr-defined]
             task.can_delete_task = _can_delete_task_ui(user, task)  # type: ignore[attr-defined]
 
+    # Запросы на удаление компаний для РОП/директора
+    deletion_requests = []
+    deletion_requests_count = 0
+    if user.role in (User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR) and user.branch_id:
+        from companies.models import CompanyDeletionRequest
+        deletion_requests_qs = (
+            CompanyDeletionRequest.objects.filter(
+                status=CompanyDeletionRequest.Status.PENDING,
+                requested_by_branch_id=user.branch_id,
+            )
+            .select_related("requested_by", "company")
+            .order_by("-created_at")[:10]
+        )
+        deletion_requests = list(deletion_requests_qs)
+        deletion_requests_count = CompanyDeletionRequest.objects.filter(
+            status=CompanyDeletionRequest.Status.PENDING,
+            requested_by_branch_id=user.branch_id,
+        ).count()
+
     context = {
         "now": now,
         "local_now": local_now,
@@ -974,6 +993,9 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         # Диапазон дат для "Задачи на неделю"
         "week_monday": week_monday,
         "week_sunday": week_sunday,
+        # Запросы на удаление
+        "deletion_requests": deletion_requests,
+        "deletion_requests_count": deletion_requests_count,
     }
 
     # ВРЕМЕННО ОТКЛЮЧАЕМ КЭШ ДЛЯ ОТЛАДКИ
@@ -2345,21 +2367,32 @@ def company_bulk_transfer_preview(request: HttpRequest) -> JsonResponse:
     
     # Проверка прав на передачу
     transfer_check = can_transfer_companies(user, ids)
-    if transfer_check["forbidden"]:
-        forbidden_names = [f["name"] for f in transfer_check["forbidden"][:5]]
-        if len(transfer_check["forbidden"]) > 5:
-            forbidden_names.append(f"... и ещё {len(transfer_check['forbidden']) - 5}")
+    allowed_ids = transfer_check["allowed"]
+    forbidden_list = transfer_check["forbidden"]
+    
+    # Проверка, что новый ответственный из того же филиала (для РОП/директора)
+    if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+        if new_resp.branch_id != user.branch_id:
+            return JsonResponse({
+                "error": "Новый ответственный должен быть из вашего филиала",
+                "allowed_count": 0,
+                "forbidden_count": len(ids),
+            }, status=400)
+    
+    # Если есть запрещённые компании, возвращаем детали, но не блокируем полностью
+    # (пользователь увидит preview с allowed/forbidden)
+    
+    # Используем только разрешённые компании для превью
+    if not allowed_ids:
         return JsonResponse({
-            "error": f"Некоторые компании нельзя передать ({len(transfer_check['forbidden'])} из {len(ids)})",
-            "forbidden": forbidden_names
+            "error": "Нет компаний, доступных для переназначения",
+            "allowed_count": 0,
+            "forbidden_count": len(ids),
+            "forbidden": forbidden_list[:10],  # Первые 10 с причинами
         }, status=400)
     
-    ids = transfer_check["allowed"]
-    if not ids:
-        return JsonResponse({"error": "Нет компаний, доступных для переназначения"}, status=400)
-    
-    # Получаем данные компаний для превью
-    companies = Company.objects.filter(id__in=ids).select_related("responsible", "branch", "status")[:100]
+    # Получаем данные компаний для превью (только разрешённые)
+    companies = Company.objects.filter(id__in=allowed_ids).select_related("responsible", "branch", "status")[:100]
     
     companies_preview = []
     old_responsibles = {}
@@ -2523,8 +2556,19 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
     
     updated = qs_to_update.update(responsible=new_resp, branch=new_resp.branch, updated_at=now_ts)
     _invalidate_company_count_cache()  # Инвалидируем кэш при массовом переназначении
-
-    messages.success(request, f"Переназначено компаний: {updated}. Новый ответственный: {new_resp}.")
+    
+    # Аудит-лог массовой передачи
+    forbidden_count = len(transfer_check.get("forbidden", []))
+    forbidden_list = transfer_check.get("forbidden", [])
+    
+    # Формируем сообщение с сводкой
+    if forbidden_count > 0:
+        messages.success(
+            request,
+            f"Переназначено компаний: {updated}. Пропущено: {forbidden_count}. Новый ответственный: {new_resp}."
+        )
+    else:
+        messages.success(request, f"Переназначено компаний: {updated}. Новый ответственный: {new_resp}.")
     
     # Расширенное логирование для аудита
     log_event(
@@ -2546,6 +2590,8 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
             "mode": apply_mode,
             "companies_sample": companies_data,  # Первые 50 компаний для детального лога
             "filters": filters_info if apply_mode == "filtered" else None,
+            "forbidden_count": forbidden_count,
+            "forbidden_sample": forbidden_list[:10] if forbidden_list else [],  # Первые 10 запрещённых с причинами
         },
     )
     if new_resp.id != user.id:
@@ -3363,6 +3409,27 @@ def company_delete_request_create(request: HttpRequest, company_id) -> HttpRespo
         url=f"/companies/{company.id}/",
         exclude_user_id=user.id,
     )
+    # Дополнительно создаём Notification с payload для UI
+    from notifications.service import notify as notify_service
+    from notifications.models import Notification
+    branch_leads = User.objects.filter(
+        is_active=True, branch_id=branch_id, role__in=[User.Role.SALES_HEAD, User.Role.BRANCH_DIRECTOR]
+    ).exclude(id=user.id)
+    for lead in branch_leads:
+        notify_service(
+            user=lead,
+            kind=Notification.Kind.COMPANY,
+            title="Запрос на удаление компании",
+            body=f"{company.name}: {(note[:180] + '…') if len(note) > 180 else note or 'без комментария'}",
+            url=f"/companies/{company.id}/",
+            payload={
+                "company_id": str(company.id),
+                "request_id": req.id,
+                "requested_by_id": user.id,
+                "requested_by_name": f"{user.last_name} {user.first_name}".strip() or user.get_username(),
+                "reason": note[:500] if note else "",
+            },
+        )
     messages.success(request, f"Запрос отправлен на рассмотрение. Уведомлено руководителей: {sent}.")
     log_event(
         actor=user,
@@ -3406,6 +3473,13 @@ def company_delete_request_cancel(request: HttpRequest, company_id, req_id: int)
             title="Запрос на удаление отклонён",
             body=f"{company.name}: {decision_note}",
             url=f"/companies/{company.id}/",
+            payload={
+                "company_id": str(company.id),
+                "request_id": req.id,
+                "decided_by_id": user.id,
+                "decided_by_name": f"{user.last_name} {user.first_name}".strip() or user.get_username(),
+                "decision": "cancelled",
+            },
         )
     messages.success(request, "Запрос отклонён. Менеджер уведомлён.")
     log_event(
@@ -3450,6 +3524,13 @@ def company_delete_request_approve(request: HttpRequest, company_id, req_id: int
             title="Запрос на удаление подтверждён",
             body=f"{company.name}: компания удалена",
             url="/companies/",
+            payload={
+                "company_id": str(company.id),
+                "request_id": req.id,
+                "decided_by_id": user.id,
+                "decided_by_name": f"{user.last_name} {user.first_name}".strip() or user.get_username(),
+                "decision": "approved",
+            },
         )
     log_event(
         actor=user,
