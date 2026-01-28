@@ -274,6 +274,18 @@ def _parse_phone(raw: str):
         return None
 
 
+@register.filter(name="abs")
+def abs_filter(value):
+    """Возвращает абсолютное значение числа."""
+    try:
+        return abs(int(value))
+    except (ValueError, TypeError):
+        try:
+            return abs(float(value))
+        except (ValueError, TypeError):
+            return value
+
+
 @register.filter(name="phone_local_info")
 def phone_local_info(raw_phone: str) -> str:
     """
