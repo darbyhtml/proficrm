@@ -72,6 +72,9 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user: User = self.request.user
+        # ВАЖНО: вычистить write_only поле из validated_data сериалайзера,
+        # иначе DRF попробует передать его в Task.objects.create()
+        serializer.validated_data.pop("apply_to_org_branches", None)
         data = dict(serializer.validated_data)
 
         apply_to_org = bool(data.pop("apply_to_org_branches", False))
@@ -115,7 +118,7 @@ class TaskViewSet(viewsets.ModelViewSet):
                     description=data.get("description", ""),
                     status=data.get("status") or Task.Status.NEW,
                     due_at=data.get("due_at"),
-                    recurrence_rrule=data.get("recurrence_rrule"),
+                    recurrence_rrule=data.get("recurrence_rrule") or "",
                 )
                 created_tasks.append(task)
 
