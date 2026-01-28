@@ -53,32 +53,38 @@ def only_digits(s: str) -> str:
 class ParsedQuery:
     raw: str
     text_tokens: tuple[str, ...]
-    digit_tokens: tuple[str, ...]
+    strong_digit_tokens: tuple[str, ...]
+    weak_digit_tokens: tuple[str, ...]
 
 
 def parse_query(q: str, *, max_tokens: int = 12) -> ParsedQuery:
     raw = (q or "").strip()
     if not raw:
-        return ParsedQuery(raw="", text_tokens=(), digit_tokens=())
+        return ParsedQuery(raw="", text_tokens=(), strong_digit_tokens=(), weak_digit_tokens=())
 
     text_tokens: list[str] = []
-    digit_tokens: list[str] = []
+    strong_digits: list[str] = []
+    weak_digits: list[str] = []
 
     for m in _TOKEN_RE.finditer(raw):
         tok = (m.group(0) or "").strip()
         if not tok:
             continue
         if tok.isdigit():
-            # 1–2 цифры дают слишком широкую выдачу → игнорируем
-            if len(tok) >= 3:
-                digit_tokens.append(tok)
+            # Разделяем “сильные” и “слабые” цифровые токены:
+            # - strong (>=4): ИНН/КПП/фрагменты телефона → участвуют в AND-фильтрации
+            # - weak (2–3): часто вводят для “докрутки” (код, последние цифры) → не фильтруют, а бустят
+            if len(tok) >= 4:
+                strong_digits.append(tok)
+            elif 2 <= len(tok) <= 3:
+                weak_digits.append(tok)
         else:
             tt = fold_text(tok)
             # 1 буква — шум
             if len(tt) >= 2:
                 text_tokens.append(tt)
 
-        if len(text_tokens) + len(digit_tokens) >= max_tokens:
+        if len(text_tokens) + len(strong_digits) + len(weak_digits) >= max_tokens:
             break
 
     # дедуп + стабильный порядок
@@ -92,7 +98,12 @@ def parse_query(q: str, *, max_tokens: int = 12) -> ParsedQuery:
             out.append(x)
         return tuple(out)
 
-    return ParsedQuery(raw=raw, text_tokens=_dedup(text_tokens), digit_tokens=_dedup(digit_tokens))
+    return ParsedQuery(
+        raw=raw,
+        text_tokens=_dedup(text_tokens),
+        strong_digit_tokens=_dedup(strong_digits),
+        weak_digit_tokens=_dedup(weak_digits),
+    )
 
 
 def _safe_join(parts: Iterable[str], sep: str = "\n") -> str:

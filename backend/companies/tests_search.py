@@ -13,18 +13,27 @@ class QueryParseTests(TestCase):
     def test_parse_query_mixed(self):
         pq = parse_query("иванов 8926")
         self.assertEqual(pq.text_tokens, ("иванов",))
-        self.assertEqual(pq.digit_tokens, ("8926",))
+        self.assertEqual(pq.strong_digit_tokens, ("8926",))
+        self.assertEqual(pq.weak_digit_tokens, ())
 
         pq = parse_query("7701 ооо ромашка")
         self.assertIn("ооо", pq.text_tokens)
         self.assertIn("ромашка", pq.text_tokens)
-        self.assertEqual(pq.digit_tokens, ("7701",))
+        self.assertEqual(pq.strong_digit_tokens, ("7701",))
+        self.assertEqual(pq.weak_digit_tokens, ())
 
     def test_parse_query_special_chars(self):
         pq = parse_query(r"ООО (Ромашка)+[?]* 7701")
         self.assertIn("ооо", pq.text_tokens)
         self.assertIn("ромашка", pq.text_tokens)
-        self.assertEqual(pq.digit_tokens, ("7701",))
+        self.assertEqual(pq.strong_digit_tokens, ("7701",))
+        self.assertEqual(pq.weak_digit_tokens, ())
+
+    def test_parse_query_weak_digits(self):
+        pq = parse_query("+7 (926)")
+        # "7" игнорируем, "926" считаем weak
+        self.assertEqual(pq.strong_digit_tokens, ())
+        self.assertEqual(pq.weak_digit_tokens, ("926",))
 
 
 class HighlightTests(TestCase):
@@ -32,6 +41,7 @@ class HighlightTests(TestCase):
         html = highlight_html("<b>ООО</b> Ромашка", text_tokens=("ооо",), digit_tokens=())
         self.assertIn("&lt;b&gt;", html)  # HTML экранирован
         self.assertIn('class="search-highlight"', html)
+        self.assertIn("…", highlight_html("X " * 200 + "ромашка" + " Y" * 200, text_tokens=("ромашка",), digit_tokens=(), max_len=80))
 
 
 class SearchServicePostgresTests(TestCase):
