@@ -3591,6 +3591,9 @@ def company_delete_direct(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company_id)
     user: User = request.user
     company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    # Сохраняем исходный ID компании отдельно, т.к. после company.delete() pk на инстансе станет None,
+    # а ошибка IntegrityError может возникнуть уже на COMMIT.
+    company_pk = company.id
     if not _can_delete_company(user, company):
         messages.error(request, "Нет прав на удаление этой компании.")
         return redirect("company_detail", company_id=company.id)
@@ -3603,7 +3606,7 @@ def company_delete_direct(request: HttpRequest, company_id) -> HttpResponse:
     try:
         with transaction.atomic():
             # На всякий случай удаляем индекс до каскада.
-            CompanySearchIndex.objects.filter(company_id=company.id).delete()
+            CompanySearchIndex.objects.filter(company_id=company_pk).delete()
 
             detached = _detach_client_branches(head_company=company)
             branches_notified = _notify_head_deleted_with_branches(
@@ -3615,8 +3618,8 @@ def company_delete_direct(request: HttpRequest, company_id) -> HttpResponse:
                 actor=user,
                 verb=ActivityEvent.Verb.DELETE,
                 entity_type="company",
-                entity_id=str(company.id),
-                company_id=company.id,
+                entity_id=str(company_pk),
+                company_id=company_pk,
                 message="Компания удалена",
                 meta={
                     "reason": reason[:500],
@@ -3627,13 +3630,15 @@ def company_delete_direct(request: HttpRequest, company_id) -> HttpResponse:
             )
             company.delete()
     except IntegrityError:
-        logger.exception("Failed to delete company %s due to CompanySearchIndex integrity error", company.id)
+        logger.exception("Failed to delete company %s due to CompanySearchIndex integrity error", company_pk)
         messages.error(
             request,
             "Не удалось полностью удалить компанию из-за проблем с индексом поиска. "
             "Обратитесь к администратору.",
         )
-        return redirect("company_detail", company_id=company.id)
+        # Компания формально ещё существует (транзакция откатится), но текущий инстанс уже “битый”.
+        # Ведём пользователя в список компаний, чтобы избежать NoReverseMatch и повторных сбоев.
+        return redirect("company_detail", company_id=company_pk)
 
     messages.success(request, "Компания удалена.")
     return redirect("company_list")
