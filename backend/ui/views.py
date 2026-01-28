@@ -2980,9 +2980,11 @@ def company_create(request: HttpRequest) -> HttpResponse:
                 CompanyEmail.objects.create(company=company, value=email_value, order=order)
             
             for order, phone_value in sorted(new_company_phones, key=lambda x: x[0]):
-                # Нормализуем телефон перед сохранением
+                # Нормализуем телефон перед сохранением; если номер не удаётся нормализовать,
+                # не сохраняем его во избежание "мусорных" значений.
                 normalized = _normalize_phone(phone_value)
-                CompanyPhone.objects.create(company=company, value=normalized if normalized else phone_value, order=order)
+                if normalized:
+                    CompanyPhone.objects.create(company=company, value=normalized, order=order)
             
             _invalidate_company_count_cache()  # Инвалидируем кэш при создании
             messages.success(request, "Компания создана.")
