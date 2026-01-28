@@ -111,14 +111,16 @@ class SupportHealthActivity : AppCompatActivity() {
     private fun setupReactiveSubscriptions() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                // Обновляем при изменении истории звонков
-                callHistoryStore.callsFlow.collectLatest {
-                    updateHealthStatus()
+                // Обновляем при изменении истории звонков и ожидаемых звонков параллельно
+                launch {
+                    callHistoryStore.callsFlow.collectLatest {
+                        updateHealthStatus()
+                    }
                 }
-                
-                // Обновляем при изменении ожидаемых звонков
-                pendingCallStore.hasActivePendingCallsFlow.collectLatest {
-                    updateHealthStatus()
+                launch {
+                    pendingCallStore.hasActivePendingCallsFlow.collectLatest {
+                        updateHealthStatus()
+                    }
                 }
             }
         }

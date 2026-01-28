@@ -73,12 +73,13 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
         val serviceBlockReason = tokenManager.getServiceBlockReason()
 
         // 1. Проверка авторизации (самое важное)
-        if (!tokenManager.hasTokens() || tokenManager.getAccessToken().isNullOrBlank()) {
-            // При восстановлении авторизации очищаем связанные причины блокировки.
-            if (serviceBlockReason == ServiceBlockReason.AUTH_MISSING) {
-                tokenManager.setServiceBlockReason(null)
-            }
+        val hasTokens = tokenManager.hasTokens() && !tokenManager.getAccessToken().isNullOrBlank()
+        if (!hasTokens) {
             return ReadyState.NEEDS_AUTH
+        }
+        // При восстановлении авторизации очищаем связанные причины блокировки.
+        if (serviceBlockReason == ServiceBlockReason.AUTH_MISSING) {
+            tokenManager.setServiceBlockReason(null)
         }
         
         // 2. Проверка разрешений
@@ -88,10 +89,6 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
         val hasPhoneState = ContextCompat.checkSelfPermission(context, phoneStatePerm) == PackageManager.PERMISSION_GRANTED
         
         if (!hasCallLog || !hasPhoneState) {
-            // Если ранее причина была связана с отсутствием разрешений, но сейчас всё выдано, очищаем её.
-            if (hasCallLog && hasPhoneState && serviceBlockReason == ServiceBlockReason.UNKNOWN) {
-                tokenManager.setServiceBlockReason(null)
-            }
             return ReadyState.NEEDS_PERMISSIONS
         }
         
