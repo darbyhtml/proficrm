@@ -530,16 +530,56 @@
           // Сброс региона (возврат к "Любая")
           (function regionReset() {
             const btn = document.getElementById('regionResetBtnMail');
-            const details = document.getElementById('regionFilterDetailsMail');
+            const root = document.getElementById('regionFilterMail');
+            const menu = document.getElementById('regionFilterMenuMail');
+            const label = document.getElementById('regionFilterLabelMail');
+            const btnToggle = document.getElementById('regionFilterBtnMail');
+            const done = document.getElementById('regionDoneBtnMail');
             const master = document.getElementById('regionAll');
             const container = document.getElementById('regionContainer');
-            if (!btn || !container) return;
-            btn.addEventListener('click', (e) => {
-              e.preventDefault();
-              container.querySelectorAll('input.region-checkbox').forEach(cb => { cb.checked = false; });
-              if (master) { master.checked = false; master.indeterminate = false; }
-              if (details && details.open) details.open = false;
+            if (!container) return;
+
+            function computeLabel() {
+              const checked = Array.from(container.querySelectorAll('input.region-checkbox:checked'));
+              if (!checked.length) return 'Любая';
+              if (checked.length === 1) return (checked[0].dataset.regionName || checked[0].closest('label')?.textContent || '').trim() || 'Выбрано: 1';
+              return `Выбрано: ${checked.length}`;
+            }
+
+            function setLabel() {
+              if (label) label.textContent = computeLabel();
+            }
+
+            function openMenu() { if (menu) menu.classList.remove('hidden'); }
+            function closeMenu() { if (menu) menu.classList.add('hidden'); }
+
+            if (btnToggle) {
+              btnToggle.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (!menu) return;
+                const isOpen = !menu.classList.contains('hidden');
+                if (isOpen) closeMenu(); else openMenu();
+              });
+            }
+            if (done) done.addEventListener('click', (e) => { e.preventDefault(); closeMenu(); });
+            document.addEventListener('click', (e) => {
+              if (!menu || menu.classList.contains('hidden')) return;
+              if (!root) return;
+              if (!root.contains(e.target)) closeMenu();
             });
+
+            container.querySelectorAll('input.region-checkbox').forEach(cb => cb.addEventListener('change', setLabel));
+            setLabel();
+
+            if (btn) {
+              btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                container.querySelectorAll('input.region-checkbox').forEach(cb => { cb.checked = false; });
+                if (master) { master.checked = false; master.indeterminate = false; }
+                setLabel();
+                closeMenu();
+              });
+            }
           })();
         </script>
       </div>
@@ -766,9 +806,9 @@
             {# Область #}
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">Область</label>
-              <details class="border border-gray-300 rounded-lg bg-white" id="regionFilterDetailsMail">
-                <summary class="select w-full cursor-pointer list-none flex items-center justify-between gap-2" style="user-select:none">
-                  <span class="truncate">
+              <div class="relative" id="regionFilterMail">
+                <button type="button" class="select w-full flex items-center justify-between gap-2" id="regionFilterBtnMail">
+                  <span class="truncate" id="regionFilterLabelMail">
                     {% if selected_regions and selected_regions|length == 1 %}
                       {% for r in regions %}
                         {% if r.id|stringformat:"s" in selected_regions %}{{ r.name }}{% endif %}
@@ -780,10 +820,11 @@
                     {% endif %}
                   </span>
                   <span class="opacity-60">▾</span>
-                </summary>
-                <div class="p-2 border-t border-gray-200">
+                </button>
+                <div class="hidden absolute right-0 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg p-2 z-50" id="regionFilterMenuMail">
                   <div class="flex items-center justify-between gap-2 mb-2">
                     <button type="button" class="btn btn-outline" id="regionResetBtnMail" style="padding:.35rem .6rem;font-size:.875rem">Сброс</button>
+                    <button type="button" class="btn btn-primary" id="regionDoneBtnMail" style="padding:.35rem .6rem;font-size:.875rem">Готово</button>
                   </div>
                   <div class="max-h-32 overflow-y-auto">
                     <label class="flex items-center gap-2 p-1 hover:bg-gray-50 rounded cursor-pointer">
@@ -798,6 +839,7 @@
                             name="region"
                             value="{{ r.id }}"
                             class="region-checkbox rounded"
+                            data-region-name="{{ r.name }}"
                             {% if r.id|stringformat:"s" in selected_regions %}checked{% endif %}
                           />
                           <span class="text-sm">{{ r.name }}</span>
@@ -806,7 +848,7 @@
                     </div>
                   </div>
                 </div>
-              </details>
+              </div>
             </div>
           </div>
         </div>
