@@ -335,7 +335,9 @@
           return;
         }
         box.style.display = 'block';
-        meta.textContent = data.reasons && data.reasons.length ? ('Совпадения: ' + data.reasons.join(', ')) : '';
+        const reasonsText = data.reasons && data.reasons.length ? ('По: ' + data.reasons.join(', ')) : '';
+        const totalMatches = items.length + backendHidden;
+        meta.textContent = 'Найдено совпадений: ' + totalMatches + (reasonsText ? ' • ' + reasonsText : '');
 
         function createDupCard(it) {
           const card = document.createElement('div');
