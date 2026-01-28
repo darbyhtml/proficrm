@@ -193,8 +193,8 @@ class CompanyCreateForm(forms.ModelForm):
             "legal_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "inn": forms.Textarea(
                 attrs={
-                    "rows": 2,
-                    "class": "w-full rounded-lg border px-3 py-2 font-mono",
+                    "rows": 1,
+                    "class": "w-full rounded-lg border px-3 py-2 font-mono h-[42px]",
                     "placeholder": "Можно несколько ИНН: через /, запятую, пробел или с новой строки",
                 }
             ),
