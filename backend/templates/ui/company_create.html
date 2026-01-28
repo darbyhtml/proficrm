@@ -257,13 +257,6 @@
   </div>
 
   <script>
-    // Инициализация виджета выбора головной компании
-    document.addEventListener('DOMContentLoaded', function() {
-      if (window.initMsSingleWidgets) {
-        window.initMsSingleWidgets();
-      }
-    });
-
     (function(){
       // Дубликаты не блокируют создание: только подсказка.
 
@@ -386,6 +379,7 @@
       const formEl = document.getElementById('companyCreateForm');
       const DRAFT_KEY = 'companyCreate:draft';
       let formDirty = false;
+      let draftSnapshot = null;
 
       function collectFormData(form) {
         const data = {};
@@ -414,23 +408,30 @@
         return false;
       }
 
-      function restoreDraft(form) {
-        if (!form) return;
+      function loadDraft() {
+        if (draftSnapshot) return draftSnapshot;
         let raw = null;
         try {
           raw = localStorage.getItem(DRAFT_KEY);
         } catch (e) {
-          return;
+          return null;
         }
-        if (!raw) return;
+        if (!raw) return null;
         let draft;
         try {
           draft = JSON.parse(raw);
         } catch (e) {
-          return;
+          return null;
         }
-        if (!draft || typeof draft !== 'object') return;
+        if (!draft || typeof draft !== 'object') return null;
+        draftSnapshot = draft;
+        return draftSnapshot;
+      }
+
+      function applyDraftToExistingControls(form, draft) {
+        if (!form || !draft) return;
         const elements = form.querySelectorAll('input, textarea, select');
+        const triggerNames = new Set(['name', 'inn', 'kpp', 'address']);
         elements.forEach(function(el) {
           const name = el.name;
           if (!name || !(name in draft)) return;
@@ -438,6 +439,13 @@
             el.checked = !!draft[name];
           } else {
             el.value = draft[name];
+          }
+          if (triggerNames.has(name)) {
+            try {
+              el.dispatchEvent(new Event('input', {bubbles: true}));
+            } catch (e) {
+              // ignore
+            }
           }
         });
       }
@@ -458,7 +466,10 @@
 
       if (formEl) {
         if (!hasUserData(formEl)) {
-          restoreDraft(formEl);
+          const draft = loadDraft();
+          if (draft) {
+            applyDraftToExistingControls(formEl, draft);
+          }
         }
 
         formEl.addEventListener('input', saveDraftSoon, {capture: true});
@@ -524,6 +535,57 @@
             }
           }
         });
+      }
+
+      function restoreDynamicFromDraft(draft) {
+        if (!draft || typeof draft !== 'object') return;
+
+        if (emailsContainer) {
+          Object.keys(draft).forEach(function(key) {
+            const m = key.match(/^company_emails_(\d+)$/);
+            if (!m) return;
+            let input = emailsContainer.querySelector('input[name="' + key + '"]');
+            while (!input) {
+              const created = addEmailRow('');
+              if (!created) break;
+              if (created.name === key) {
+                input = created;
+                break;
+              }
+            }
+            if (input) {
+              input.value = draft[key];
+            }
+          });
+        }
+
+        if (phonesContainer) {
+          Object.keys(draft).forEach(function(key) {
+            const m = key.match(/^company_phones_(\d+)$/);
+            if (!m) return;
+            let input = phonesContainer.querySelector('input[name="' + key + '"]');
+            while (!input) {
+              const created = addPhoneRow('');
+              if (!created) break;
+              if (created.name === key) {
+                input = created;
+                break;
+              }
+            }
+            if (input) {
+              const val = draft[key];
+              const normalized = normalizePhoneToDisplay(val);
+              input.value = normalized || val;
+            }
+          });
+        }
+      }
+
+      if (formEl) {
+        const draft = draftSnapshot || loadDraft();
+        if (draft) {
+          restoreDynamicFromDraft(draft);
+        }
       }
 
       // PHONES
@@ -707,6 +769,17 @@
           const formattedValue = normalizeScheduleText(formatTimeInText(e.target.value));
           if (formattedValue !== e.target.value) e.target.value = formattedValue;
         });
+      }
+
+      // Инициализация ms-виджетов после возможного восстановления черновика
+      if (window.initMsSingleWidgets) {
+        window.initMsSingleWidgets();
+      }
+      if (window.initMsMultiWidgets) {
+        window.initMsMultiWidgets();
+      }
+      if (window.initMsWidgets) {
+        window.initMsWidgets();
       }
     });
   </script>
