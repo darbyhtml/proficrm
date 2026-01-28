@@ -1,6 +1,8 @@
 """
 Утилиты для работы с регионами: нормализация названий, поиск по алиасам.
 """
+import re
+
 from companies.models import Region
 
 
@@ -20,6 +22,10 @@ REGION_ALIASES = {
     "ЯНАО": "Ямало-Ненецкий автономный округ",
     "Ямало-Ненецкий АО": "Ямало-Ненецкий автономный округ",
     "Ямало-Ненецкий автономный округ": "Ямало-Ненецкий автономный округ",
+    # Другие несовпадения
+    "Республика Чувашия": "Чувашская Республика",
+    "Чувашия": "Чувашская Республика",
+    "Чукотский автономный  округ": "Чукотский автономный округ",  # с двумя пробелами
     # Можно добавить другие частые несовпадения по мере обнаружения
 }
 
@@ -48,10 +54,19 @@ def find_region_by_name(label: str) -> Region | None:
     if not label:
         return None
     
+    # Нормализуем множественные пробелы (два и более пробела -> один)
+    label_normalized_spaces = re.sub(r'\s+', ' ', label)
+    
     # Сначала пробуем точное совпадение (case-insensitive)
     region = Region.objects.filter(name__iexact=label).first()
     if region:
         return region
+    
+    # Пробуем с нормализованными пробелами
+    if label_normalized_spaces != label:
+        region = Region.objects.filter(name__iexact=label_normalized_spaces).first()
+        if region:
+            return region
     
     # Пробуем нормализованное название через алиасы
     normalized = normalize_region_name(label)
