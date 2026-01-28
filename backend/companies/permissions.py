@@ -102,11 +102,19 @@ def get_transfer_targets(user: User) -> QuerySet[User]:
     - MANAGER (менеджеры)
     - BRANCH_DIRECTOR (директора филиалов)
     - SALES_HEAD (РОП)
+    
+    Для РОП/директора филиала ограничивает список получателей только пользователями своего филиала.
     """
-    return User.objects.filter(
+    qs = User.objects.filter(
         is_active=True,
         role__in=[User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD]
-    ).select_related("branch").order_by("branch__name", "last_name", "first_name")
+    )
+    
+    # РОП/директор филиала может передавать только внутри своего филиала
+    if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+        qs = qs.filter(branch_id=user.branch_id)
+    
+    return qs.select_related("branch").order_by("branch__name", "last_name", "first_name")
 
 
 def get_users_for_lists(user: User = None, exclude_admin: bool = True) -> QuerySet[User]:
