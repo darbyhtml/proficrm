@@ -3,61 +3,31 @@
     <td onclick="event.stopPropagation()">
       <input class="bulk-company" type="checkbox" name="company_ids" value="{{ c.id }}" form="bulkTransferForm" data-can-transfer="{% if c.can_transfer %}1{% else %}0{% endif %}" />
     </td>
-                {% if "name" in company_list_columns %}
+    {% if "name" in company_list_columns %}
       <td>
-        <div class="flex items-start gap-2">
-          <div class="flex-1 min-w-0">
-            <a class="link" href="/companies/{{ c.id }}/" onclick="event.stopPropagation()">
-              {% if search_query %}
-                <span class="highlight-target" data-text="{{ c.name }}" data-query="{{ search_query }}">{{ c.name }}</span>
-              {% else %}
-                {{ c.name }}
-              {% endif %}
-            </a>
-            {% if "address" in company_list_columns %}
-              <div class="text-xs text-brand-dark/70">
-                {% if search_query %}
-                  <span class="highlight-target" data-text="{{ c.address }}" data-query="{{ search_query }}">{{ c.address }}</span>
-                {% else %}
-                  {{ c.address }}
-                {% endif %}
-              </div>
-            {% endif %}
-            {% if search_query and c.search_match_info %}
-              {% if "название" not in c.search_match_info and "ИНН" not in c.search_match_info and "адрес" not in c.search_match_info %}
-                <div class="text-xs mt-1" style="color: #f97316; font-weight: 500;">
-                  Найдено: {{ c.search_match_info }}
-                </div>
-              {% endif %}
+        <a class="link" href="/companies/{{ c.id }}/" onclick="event.stopPropagation()">
+          {% if search_query %}
+            <span class="highlight-target" data-text="{{ c.name }}" data-query="{{ search_query }}">{{ c.name }}</span>
+          {% else %}
+            {{ c.name }}
+          {% endif %}
+        </a>
+        {% if "address" in company_list_columns %}
+          <div class="text-xs text-brand-dark/70">
+            {% if search_query %}
+              <span class="highlight-target" data-text="{{ c.address }}" data-query="{{ search_query }}">{{ c.address }}</span>
+            {% else %}
+              {{ c.address }}
             {% endif %}
           </div>
-          <!-- Мини-индикатор заметки -->
-          {% if c.display_note %}
-            {% with display_note=c.display_note %}
-              <div class="shrink-0 group relative" onclick="event.stopPropagation()">
-                <button type="button" class="text-brand-teal hover:text-brand-orange transition-colors" title="{% if display_note.is_pinned %}Закрепленная заметка{% else %}Последняя заметка{% endif %}: {{ display_note.text|truncatewords:15 }}">
-                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                  </svg>
-                  {% if display_note.is_pinned %}
-                    <span class="absolute -top-1 -right-1 w-2 h-2 bg-brand-orange rounded-full"></span>
-                  {% endif %}
-                </button>
-                <!-- Tooltip с превью заметки -->
-                <div class="hidden group-hover:block absolute z-50 left-full ml-2 top-0 w-64 max-w-[calc(100vw-2rem)] bg-white border border-brand-soft rounded-lg shadow-lg p-3 text-sm tooltip-note">
-                  <div class="flex items-center gap-2 mb-1">
-                    <span class="font-medium text-brand-dark/90">Заметка</span>
-                    {% if display_note.is_pinned %}
-                      <span class="badge badge-warn badge-sm">Закреплено</span>
-                    {% endif %}
-                  </div>
-                  <div class="text-brand-dark/80 whitespace-pre-line line-clamp-3 mb-2">{{ display_note.text|truncatewords:30 }}</div>
-                  <div class="text-xs text-brand-dark/60">{{ display_note.author|default:"—" }} · {{ display_note.created_at|date:"d.m.Y H:i" }}</div>
-                </div>
-              </div>
-            {% endwith %}
+        {% endif %}
+        {% if search_query and c.search_match_info %}
+          {% if "название" not in c.search_match_info and "ИНН" not in c.search_match_info and "адрес" not in c.search_match_info %}
+            <div class="text-xs mt-1" style="color: #f97316; font-weight: 500;">
+              Найдено: {{ c.search_match_info }}
+            </div>
           {% endif %}
-        </div>
+        {% endif %}
       </td>
     {% endif %}
     {% if "overdue" in company_list_columns %}

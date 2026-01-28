@@ -1380,10 +1380,10 @@ def preferences_ui(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @policy_required(resource_type="action", resource="ui:preferences")
-def preferences_company_list_view_mode(request: HttpRequest) -> JsonResponse:
+def preferences_company_detail_view_mode(request: HttpRequest) -> JsonResponse:
     """
-    AJAX endpoint для сохранения режима просмотра списка компаний.
-    POST: {"view_mode": "classic" | "compact"}
+    AJAX endpoint для сохранения режима просмотра карточки компании.
+    POST: {"view_mode": "classic" | "modern"}
     """
     if request.method != "POST":
         return JsonResponse({"success": False, "error": "Метод не разрешен."}, status=405)
@@ -1391,16 +1391,16 @@ def preferences_company_list_view_mode(request: HttpRequest) -> JsonResponse:
     user = request.user
     view_mode = (request.POST.get("view_mode") or "").strip().lower()
 
-    if view_mode not in ["classic", "compact"]:
+    if view_mode not in ["classic", "modern"]:
         return JsonResponse({"success": False, "error": "Некорректный режим просмотра."}, status=400)
 
     prefs = UiUserPreference.load_for_user(user)
-    prefs.company_list_view_mode = view_mode
-    prefs.save(update_fields=["company_list_view_mode", "updated_at"])
+    prefs.company_detail_view_mode = view_mode
+    prefs.save(update_fields=["company_detail_view_mode", "updated_at"])
 
     # Сохраняем в session для быстрого доступа
     try:
-        request.session["company_list_view_mode"] = view_mode
+        request.session["company_detail_view_mode"] = view_mode
     except Exception:
         pass
 
@@ -1950,18 +1950,10 @@ def company_list(request: HttpRequest) -> HttpResponse:
         # TTL 60 секунд для быстрой инвалидации при изменении прав/назначений
         cache.set(cache_key_total, companies_total, 60)
     # Оптимизация: предзагружаем только необходимые связанные объекты
-    # Предзагружаем заметки: сначала pinned, затем latest (для компактного вида)
-    # Сортируем так, чтобы pinned был первым, затем latest по дате создания
-    notes_prefetch = Prefetch(
-        "notes",
-        queryset=CompanyNote.objects.select_related("author", "pinned_by")
-        .order_by("-is_pinned", "-pinned_at", "-created_at"),
-        to_attr="notes_sorted",  # Сохраняем в атрибут для быстрого доступа
-    )
     qs = (
         _companies_with_overdue_flag(now=now)
         .select_related("responsible", "branch", "status", "region")
-        .prefetch_related("spheres", notes_prefetch)
+        .prefetch_related("spheres")
     )
     # Ранее здесь были разные фильтры по умолчанию в зависимости от роли (ответственный/филиал).
     # По запросу заказчика убираем предустановленные фильтры: всем пользователям показываем полный список,
@@ -2018,16 +2010,9 @@ def company_list(request: HttpRequest) -> HttpResponse:
     company_ids = [c.id for c in page.object_list]
     transfer_check = can_transfer_companies(user, company_ids)
     allowed_ids_set = set(transfer_check["allowed"])
-    # Добавляем флаг can_transfer и display_note для каждой компании (для UI)
+    # Добавляем флаг can_transfer для каждой компании (для UI проверки)
     for company in page.object_list:
         company.can_transfer = company.id in allowed_ids_set  # type: ignore[attr-defined]
-        # Берем первую заметку из отсортированного списка (pinned или latest)
-        notes_sorted = getattr(company, "notes_sorted", [])
-        company.display_note = notes_sorted[0] if notes_sorted else None  # type: ignore[attr-defined]
-        # Подготавливаем список сфер для безопасной проверки в шаблоне
-        spheres_list = list(company.spheres.all())
-        company.spheres_list = spheres_list[:3]  # type: ignore[attr-defined]
-        company.spheres_more = max(0, len(spheres_list) - 3)  # type: ignore[attr-defined]
     
     # Формируем qs для пагинации, включая per_page если он отличается от значения по умолчанию
     # Используем filter_params вместо request.GET, чтобы включить default_branch_id для директора филиала
@@ -2053,15 +2038,6 @@ def company_list(request: HttpRequest) -> HttpResponse:
     has_companies_without_responsible = Company.objects.filter(responsible__isnull=True).exists()
 
     is_admin = require_admin(user)
-
-    # Получаем режим просмотра: из GET параметра, session или preferences (по умолчанию classic)
-    view_mode = request.GET.get("view", "").strip().lower()
-    if view_mode not in ["classic", "compact"]:
-        view_mode = request.session.get("company_list_view_mode")
-        if not view_mode:
-            prefs = UiUserPreference.load_for_user(user)
-            view_mode = prefs.company_list_view_mode or "classic"
-            request.session["company_list_view_mode"] = view_mode
 
     return render(
         request,
@@ -2095,7 +2071,6 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "per_page": per_page,
             "is_admin": is_admin,
             "has_companies_without_responsible": has_companies_without_responsible,
-            "view_mode": view_mode,
         },
     )
 
@@ -2140,19 +2115,11 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
     
     # Оптимизация: предзагружаем только необходимые связанные объекты
     # Используем only() для уменьшения объема загружаемых данных
-    # Предзагружаем заметки: сначала pinned, затем latest (для компактного вида)
-    notes_prefetch = Prefetch(
-        "notes",
-        queryset=CompanyNote.objects.select_related("author", "pinned_by")
-        .order_by("-is_pinned", "-pinned_at", "-created_at"),
-        to_attr="notes_sorted",  # Сохраняем в атрибут для быстрого доступа
-    )
     qs = (
         _companies_with_overdue_flag(now=now)
         .select_related("responsible", "branch", "status", "region")
         .prefetch_related(
             "spheres",
-            notes_prefetch,
             # Предзагружаем только value для телефонов и email (не все поля)
             models.Prefetch("phones", queryset=CompanyPhone.objects.only("id", "company_id", "value")),
             models.Prefetch("emails", queryset=CompanyEmail.objects.only("id", "company_id", "value")),
@@ -2210,25 +2177,10 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
     allowed_ids_set = set(transfer_check["allowed"])
     for company in page.object_list:
         company.can_transfer = company.id in allowed_ids_set  # type: ignore[attr-defined]
-        # Берем первую заметку из отсортированного списка (pinned или latest)
-        notes_sorted = getattr(company, "notes_sorted", [])
-        company.display_note = notes_sorted[0] if notes_sorted else None  # type: ignore[attr-defined]
-        # Подготавливаем список сфер для безопасной проверки в шаблоне
-        spheres_list = list(company.spheres.all())
-        company.spheres_list = spheres_list[:3]  # type: ignore[attr-defined]
-        company.spheres_more = max(0, len(spheres_list) - 3)  # type: ignore[attr-defined]
     
     # Получаем конфигурацию колонок
     ui_cfg = UiGlobalConfig.load()
     columns = ui_cfg.company_list_columns or ["name"]
-    
-    # Получаем режим просмотра: из GET параметра, session или preferences (по умолчанию classic)
-    view_mode = request.GET.get("view", "").strip().lower()
-    if view_mode not in ["classic", "compact"]:
-        view_mode = request.session.get("company_list_view_mode")
-        if not view_mode:
-            prefs = UiUserPreference.load_for_user(user)
-            view_mode = prefs.company_list_view_mode or "classic"
     
     # Определяем, где найдено совпадение для каждой компании (если есть поисковый запрос)
     q = (request.GET.get("q") or "").strip()
@@ -2314,20 +2266,14 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
             # Сохраняем информацию о совпадении
             company.search_match_info = match_info[0] if match_info else None  # type: ignore[attr-defined]
     
-    # Рендерим HTML строк таблицы или карточек в зависимости от режима
+    # Рендерим HTML строк таблицы
     from django.template.loader import render_to_string
-    if view_mode == "compact":
-        template_name = "ui/company_list_rows_compact.html"
-    else:
-        template_name = "ui/company_list_rows.html"
-    
     rows_html = render_to_string(
-        template_name,
+        "ui/company_list_rows.html",
         {
             "companies": page.object_list,
             "company_list_columns": columns,
             "search_query": q,  # Передаем запрос для подсветки совпадений
-            "view_mode": view_mode,
         },
         request=request,
     )
@@ -3331,6 +3277,23 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     else:
         logger.warning(f"Company {company.id} has no phones loaded (check if phones exist in DB)")
     
+    # Получаем режим просмотра карточки: из GET параметра, session или preferences (по умолчанию classic)
+    detail_view_mode = request.GET.get("view", "").strip().lower()
+    if detail_view_mode not in ["classic", "modern"]:
+        detail_view_mode = request.session.get("company_detail_view_mode")
+        if not detail_view_mode:
+            prefs = UiUserPreference.load_for_user(user)
+            detail_view_mode = prefs.company_detail_view_mode or "classic"
+            request.session["company_detail_view_mode"] = detail_view_mode
+    
+    # Подготовка данных для modern layout (pinned/latest note, ближайшие задачи)
+    display_note = pinned_note
+    if not display_note and notes:
+        display_note = notes[0]  # Первая заметка из отсортированного списка (latest)
+    
+    # Ближайшие задачи для modern layout (2-3 по дедлайну, исключая выполненные)
+    upcoming_tasks = list(tasks[:3])  # Уже отсортированы: просроченные -> ближайшие
+    
     return render(
         request,
         "ui/company_detail.html",
@@ -3360,6 +3323,9 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "contract_alert": contract_alert,
             "contract_days_left": contract_days_left,
             "company_phones_list": company_phones_list,  # Явно передаем список телефонов для отладки
+            "detail_view_mode": detail_view_mode,
+            "display_note": display_note,  # Для modern layout: pinned или latest
+            "upcoming_tasks": upcoming_tasks,  # Ближайшие 2-3 задачи для modern layout
         },
     )
 

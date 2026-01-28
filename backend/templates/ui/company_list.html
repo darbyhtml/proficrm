@@ -18,16 +18,7 @@
               </span>
             </div>
         </div>
-        <div class="flex gap-2 items-center">
-          <!-- Переключатель вида -->
-          <div class="flex items-center gap-1 bg-brand-soft/30 rounded-lg p-1" role="group" aria-label="Режим просмотра">
-            <button type="button" id="viewModeClassic" class="view-mode-btn px-3 py-1.5 text-sm rounded-md transition-colors {% if view_mode == 'classic' %}bg-white text-brand-teal font-medium shadow-sm{% else %}text-brand-dark/70 hover:text-brand-dark{% endif %}" data-mode="classic" title="Обычный вид (таблица)">
-              Обычный
-            </button>
-            <button type="button" id="viewModeCompact" class="view-mode-btn px-3 py-1.5 text-sm rounded-md transition-colors {% if view_mode == 'compact' %}bg-white text-brand-teal font-medium shadow-sm{% else %}text-brand-dark/70 hover:text-brand-dark{% endif %}" data-mode="compact" title="Компактный вид (карточки)">
-              Компактный
-            </button>
-          </div>
+        <div class="flex gap-2">
           <a href="/companies/new/" class="btn btn-primary">+ Добавить компанию</a>
           {% if is_admin %}
             <a href="/companies/export/?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}&region={{ region }}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}" class="btn btn-outline">Экспорт CSV</a>
@@ -45,7 +36,7 @@
             <div class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-brand-teal border-t-transparent"></div>
           </div>
         </div>
-        <div class="text-xs text-brand-dark/60 mt-1">Результаты поиска отображаются ниже</div>
+        <div class="text-xs text-brand-dark/60 mt-1">Результаты поиска отображаются в таблице ниже</div>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-end">
         <div>
@@ -297,25 +288,62 @@
             </tr>
           </thead>
           <tbody id="companyListBody">
-            {% if view_mode == 'classic' %}
-              {% include "ui/company_list_rows.html" with companies=page.object_list %}
-            {% else %}
-              <tr><td class="muted" colspan="20" style="padding:1.25rem 1rem">Загрузка...</td></tr>
-            {% endif %}
+            {% for c in page.object_list %}
+              <tr onclick="window.location='/companies/{{ c.id }}/'" style="cursor:pointer" class="{% if c.has_overdue %}company-row-overdue{% endif %}">
+                <td onclick="event.stopPropagation()">
+                  <input class="bulk-company" type="checkbox" name="company_ids" value="{{ c.id }}" form="bulkTransferForm" data-can-transfer="{% if c.can_transfer %}1{% else %}0{% endif %}" />
+                </td>
+                {% if "name" in company_list_columns %}
+                  <td>
+                    <a class="link" href="/companies/{{ c.id }}/" onclick="event.stopPropagation()">{{ c.name }}</a>
+                    {% if "address" in company_list_columns %}
+                      <div class="text-xs text-brand-dark/70">{{ c.address }}</div>
+                    {% endif %}
+                  </td>
+                {% endif %}
+                {% if "overdue" in company_list_columns %}
+                  <td>
+                    {% if c.has_overdue %}
+                      <span class="badge badge-warn">Да</span>
+                    {% else %}
+                      <span class="muted-2">—</span>
+                    {% endif %}
+                  </td>
+                {% endif %}
+                {% if "inn" in company_list_columns %}<td>{{ c.inn }}</td>{% endif %}
+                {% if "status" in company_list_columns %}
+                  <td>
+                    {% if c.status %}
+                      <span class="badge">{{ c.status.name }}</span>
+                    {% else %}
+                      <span class="muted-2">—</span>
+                    {% endif %}
+                  </td>
+                {% endif %}
+                {% if "spheres" in company_list_columns %}
+                  <td>
+                    {% for s in c.spheres.all %}
+                      <span class="badge mr-1 mb-1">{{ s.name }}</span>
+                    {% empty %}
+                      <span class="text-brand-dark/70">—</span>
+                    {% endfor %}
+                  </td>
+                {% endif %}
+                {% if "responsible" in company_list_columns %}<td>{{ c.responsible }}</td>{% endif %}
+                {% if "branch" in company_list_columns %}<td>{{ c.branch }}</td>{% endif %}
+                {% if "region" in company_list_columns %}<td>{{ c.region }}</td>{% endif %}
+                {% if "updated_at" in company_list_columns %}
+                  <td class="muted">
+                    <div>{{ c.updated_at|date:"d.m.Y H:i" }}</div>
+                    <div class="text-xs text-brand-dark/60 mt-0.5" data-updated-at="{{ c.updated_at|date:'c' }}"></div>
+                  </td>
+                {% endif %}
+              </tr>
+            {% empty %}
+              <tr><td class="muted" colspan="20" style="padding:1.25rem 1rem">Ничего не найдено.</td></tr>
+            {% endfor %}
           </tbody>
         </table>
-      </div>
-      </div>
-      
-      <!-- Компактный вид (карточки) -->
-      <div id="companyListViewCompact" class="{% if view_mode != 'compact' %}hidden{% endif %}">
-        <div id="companyListBodyCompact">
-          {% if view_mode == 'compact' %}
-            {% include "ui/company_list_rows_compact.html" with companies=page.object_list %}
-          {% else %}
-            <div class="px-4 py-8 text-center text-brand-dark/60">Загрузка...</div>
-          {% endif %}
-        </div>
       </div>
 
       <div class="border-t px-4 py-3 flex items-center justify-between gap-4 flex-wrap" id="companyListPagination">
@@ -1197,256 +1225,6 @@
       updateRelativeTimes();
       // Обновляем каждую минуту
       setInterval(updateRelativeTimes, 60000);
-    })();
-  </script>
-
-  <script>
-    // Переключение режима просмотра (классический/компактный)
-    (function() {
-      const viewModeClassicBtn = document.getElementById('viewModeClassic');
-      const viewModeCompactBtn = document.getElementById('viewModeCompact');
-      const companyListContainer = document.getElementById('companyListContainer');
-      const companyListViewClassic = document.getElementById('companyListViewClassic');
-      const companyListViewCompact = document.getElementById('companyListViewCompact');
-      const companyListBody = document.getElementById('companyListBody');
-      const companyListBodyCompact = document.getElementById('companyListBodyCompact');
-      
-      // Получаем текущий режим из data-атрибута или localStorage
-      let currentViewMode = companyListContainer ? companyListContainer.dataset.viewMode || 'classic' : 'classic';
-      
-      // Проверяем localStorage как fallback
-      if (!currentViewMode || currentViewMode === 'undefined') {
-        const stored = localStorage.getItem('company_list_view_mode');
-        if (stored && (stored === 'classic' || stored === 'compact')) {
-          currentViewMode = stored;
-        } else {
-          currentViewMode = 'classic';
-        }
-      }
-      
-      // Функция переключения режима
-      function switchViewMode(mode) {
-        if (mode !== 'classic' && mode !== 'compact') return;
-        
-        currentViewMode = mode;
-        
-        // Обновляем UI
-        if (companyListContainer) {
-          companyListContainer.dataset.viewMode = mode;
-        }
-        
-        if (mode === 'classic') {
-          if (companyListViewClassic) companyListViewClassic.classList.remove('hidden');
-          if (companyListViewCompact) companyListViewCompact.classList.add('hidden');
-          if (viewModeClassicBtn) {
-            viewModeClassicBtn.classList.add('bg-white', 'text-brand-teal', 'font-medium', 'shadow-sm');
-            viewModeClassicBtn.classList.remove('text-brand-dark/70');
-          }
-          if (viewModeCompactBtn) {
-            viewModeCompactBtn.classList.remove('bg-white', 'text-brand-teal', 'font-medium', 'shadow-sm');
-            viewModeCompactBtn.classList.add('text-brand-dark/70');
-          }
-        } else {
-          if (companyListViewClassic) companyListViewClassic.classList.add('hidden');
-          if (companyListViewCompact) companyListViewCompact.classList.remove('hidden');
-          if (viewModeClassicBtn) {
-            viewModeClassicBtn.classList.remove('bg-white', 'text-brand-teal', 'font-medium', 'shadow-sm');
-            viewModeClassicBtn.classList.add('text-brand-dark/70');
-          }
-          if (viewModeCompactBtn) {
-            viewModeCompactBtn.classList.add('bg-white', 'text-brand-teal', 'font-medium', 'shadow-sm');
-            viewModeCompactBtn.classList.remove('text-brand-dark/70');
-          }
-        }
-        
-        // Сохраняем в localStorage (fallback)
-        try {
-          localStorage.setItem('company_list_view_mode', mode);
-        } catch (e) {
-          console.warn('Не удалось сохранить режим в localStorage:', e);
-        }
-        
-        // Сохраняем на сервере
-        const formData = new FormData();
-        formData.append('view_mode', mode);
-        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]')?.value || '');
-        
-        fetch('/preferences/ui/company-list-view-mode/', {
-          method: 'POST',
-          body: formData,
-          headers: {
-            'X-Requested-With': 'XMLHttpRequest'
-          }
-        }).catch(err => {
-          console.warn('Не удалось сохранить режим на сервере:', err);
-        });
-        
-        // Перезагружаем список через AJAX, если он уже загружен
-        if (typeof loadCompanies === 'function') {
-          loadCompanies(true);
-        }
-      }
-      
-      // Обработчики кнопок
-      if (viewModeClassicBtn) {
-        viewModeClassicBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          switchViewMode('classic');
-        });
-      }
-      
-      if (viewModeCompactBtn) {
-        viewModeCompactBtn.addEventListener('click', (e) => {
-          e.preventDefault();
-          switchViewMode('compact');
-        });
-      }
-      
-      // Инициализация: применяем сохраненный режим, если он отличается от текущего
-      if (companyListContainer && companyListContainer.dataset.viewMode !== currentViewMode) {
-        switchViewMode(currentViewMode);
-      }
-      
-      // Экспортируем функцию для использования в других скриптах
-      window.switchCompanyListViewMode = switchViewMode;
-      window.getCompanyListViewMode = () => currentViewMode;
-    })();
-  </script>
-
-  <script>
-    // Обновление функции loadCompanies для поддержки режима просмотра
-    (function() {
-      // Переопределяем buildQueryParams, если функция уже существует
-      if (typeof buildQueryParams !== 'undefined') {
-        const originalBuildQueryParams = buildQueryParams;
-        window.buildQueryParams = function() {
-          const params = originalBuildQueryParams();
-          const viewMode = window.getCompanyListViewMode ? window.getCompanyListViewMode() : 'classic';
-          params.append('view', viewMode);
-          return params;
-        };
-      }
-      
-      // Обновляем функцию loadCompanies для поддержки компактного вида
-      if (typeof loadCompanies !== 'undefined') {
-        const originalLoadCompanies = loadCompanies;
-        window.loadCompanies = async function(resetPage = true) {
-          if (isLoading) return;
-          
-          if (resetPage) {
-            currentPage = 1;
-            hasMore = true;
-          }
-          
-          showLoading();
-          
-          try {
-            const params = buildQueryParams();
-            const response = await fetch(`/companies/ajax/?${params.toString()}`);
-            const data = await response.json();
-            
-            if (!response.ok) {
-              throw new Error(data.error || 'Ошибка загрузки');
-            }
-            
-            // Определяем, какой контейнер использовать
-            const viewMode = window.getCompanyListViewMode ? window.getCompanyListViewMode() : 'classic';
-            const targetBody = viewMode === 'compact' 
-              ? document.getElementById('companyListBodyCompact')
-              : document.getElementById('companyListBody');
-            
-            // Обновляем соответствующий контейнер
-            if (targetBody) {
-              targetBody.innerHTML = data.html;
-              
-              // Применяем подсветку совпадений после вставки HTML
-              if (typeof window.highlightMatch === 'function') {
-                const searchInput = document.getElementById('company-search-input');
-                const query = searchInput ? searchInput.value.trim() : '';
-                
-                if (query) {
-                  targetBody.querySelectorAll('.highlight-target').forEach(el => {
-                    const text = el.getAttribute('data-text') || el.textContent || '';
-                    const highlighted = window.highlightMatch(text, query);
-                    el.innerHTML = highlighted;
-                  });
-                }
-              }
-            }
-            
-            // Обновляем пагинацию (общее для обоих режимов)
-            if (paginationContainer) {
-              const paginationHtml = `
-                <div class="flex items-center justify-between px-4 py-3 border-t text-sm">
-                  <div class="text-brand-dark/70">Стр. ${data.page} / ${data.num_pages}</div>
-                  <div class="flex gap-2">
-                    ${data.has_previous ? `<a href="#" class="pagination-link rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" data-page="${data.page - 1}">Назад</a>` : ''}
-                    ${data.has_next ? `<a href="#" class="pagination-link rounded-lg border border-brand-soft px-3 py-1.5 hover:bg-brand-soft/40" data-page="${data.page + 1}">Вперёд</a>` : ''}
-                  </div>
-                </div>
-              `;
-              paginationContainer.innerHTML = paginationHtml;
-              
-              // Добавляем обработчики для ссылок пагинации
-              paginationContainer.querySelectorAll('.pagination-link').forEach(link => {
-                link.addEventListener('click', (e) => {
-                  e.preventDefault();
-                  currentPage = parseInt(link.dataset.page);
-                  loadCompanies(false);
-                });
-              });
-            }
-            
-            // Обновляем счетчики
-            const totalBadge = document.getElementById('companiesTotalBadge');
-            const filteredBadge = document.getElementById('companiesFilteredBadge');
-            const totalEl = totalBadge ? totalBadge.querySelector('b') : null;
-            const filteredEl = filteredBadge ? filteredBadge.querySelector('b') : null;
-
-            if (totalEl && data.total !== undefined) {
-              totalEl.textContent = data.total;
-            }
-
-            if (filteredBadge && filteredEl && data.filtered !== undefined && data.total !== undefined) {
-              filteredEl.textContent = data.filtered;
-              if (data.filtered !== data.total) {
-                filteredBadge.classList.remove('hidden');
-              } else {
-                filteredBadge.classList.add('hidden');
-              }
-            }
-            
-            hasMore = data.has_next;
-            
-            // Обновляем относительное время (если функция доступна)
-            setTimeout(() => {
-              const updateRelativeTimesEl = document.querySelector('[data-updated-at]');
-              if (updateRelativeTimesEl && typeof updateRelativeTimes === 'function') {
-                updateRelativeTimes();
-              }
-            }, 100);
-            
-            // Обновляем чекбоксы для массового переназначения (если функция доступна)
-            setTimeout(() => {
-              if (typeof update === 'function') {
-                update();
-              }
-            }, 100);
-            
-          } catch (error) {
-            console.error('Error loading companies:', error);
-            const viewMode = window.getCompanyListViewMode ? window.getCompanyListViewMode() : 'classic';
-            const targetBody = viewMode === 'compact' 
-              ? document.getElementById('companyListBodyCompact')
-              : document.getElementById('companyListBody');
-            if (targetBody) {
-              targetBody.innerHTML = '<tr><td class="muted" colspan="20" style="padding:1.25rem 1rem">Ошибка загрузки данных.</td></tr>';
-            }
-          } finally {
-            hideLoading();
-          }
-        };
-      }
     })();
   </script>
 {% endblock %}

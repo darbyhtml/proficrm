@@ -139,15 +139,15 @@ class UiUserPreference(models.Model):
             MaxValueValidator(Decimal("1.15")),
         ],
     )
-    company_list_view_mode = models.CharField(
-        "Режим просмотра списка компаний",
+    company_detail_view_mode = models.CharField(
+        "Режим просмотра карточки компании",
         max_length=20,
         default="classic",
         choices=[
-            ("classic", "Обычный"),
-            ("compact", "Компактный"),
+            ("classic", "Классический"),
+            ("modern", "Современный"),
         ],
-        help_text="Режим отображения списка компаний: обычный (таблица) или компактный (карточки)",
+        help_text="Режим отображения карточки компании: классический (старый layout) или современный (новый layout)",
     )
     updated_at = models.DateTimeField("Обновлено", auto_now=True)
 
