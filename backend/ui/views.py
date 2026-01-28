@@ -3534,6 +3534,8 @@ def company_delete_request_approve(request: HttpRequest, company_id, req_id: int
         return redirect("company_detail", company_id=company_id)
     user: User = request.user
     company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    # Сохраняем ID компании отдельно — после company.delete() pk на инстансе станет None.
+    company_pk = company.id
     if not _can_delete_company(user, company):
         messages.error(request, "Нет прав на удаление этой компании.")
         return redirect("company_detail", company_id=company.id)
@@ -3546,40 +3548,54 @@ def company_delete_request_approve(request: HttpRequest, company_id, req_id: int
     req.decided_at = timezone.now()
     req.save(update_fields=["status", "decided_by", "decided_at"])
 
-    # Если удаляем "головную" компанию клиента — дочерние карточки становятся самостоятельными.
-    detached = _detach_client_branches(head_company=company)
-    branches_notified = _notify_head_deleted_with_branches(actor=user, head_company=company, detached=detached)
+    try:
+        with transaction.atomic():
+            # На всякий случай удаляем индекс до каскада, как и при прямом удалении.
+            CompanySearchIndex.objects.filter(company_id=company_pk).delete()
 
-    if req.requested_by_id:
-        notify(
-            user=req.requested_by,
-            kind=Notification.Kind.COMPANY,
-            title="Запрос на удаление подтверждён",
-            body=f"{company.name}: компания удалена",
-            url="/companies/",
-            payload={
-                "company_id": str(company.id),
-                "request_id": req.id,
-                "decided_by_id": user.id,
-                "decided_by_name": f"{user.last_name} {user.first_name}".strip() or user.get_username(),
-                "decision": "approved",
-            },
+            # Если удаляем "головную" компанию клиента — дочерние карточки становятся самостоятельными.
+            detached = _detach_client_branches(head_company=company)
+            branches_notified = _notify_head_deleted_with_branches(actor=user, head_company=company, detached=detached)
+
+            if req.requested_by_id:
+                notify(
+                    user=req.requested_by,
+                    kind=Notification.Kind.COMPANY,
+                    title="Запрос на удаление подтверждён",
+                    body=f"{company.name}: компания удалена",
+                    url="/companies/",
+                    payload={
+                        "company_id": str(company_pk),
+                        "request_id": req.id,
+                        "decided_by_id": user.id,
+                        "decided_by_name": f"{user.last_name} {user.first_name}".strip() or user.get_username(),
+                        "decision": "approved",
+                    },
+                )
+            log_event(
+                actor=user,
+                verb=ActivityEvent.Verb.DELETE,
+                entity_type="company",
+                entity_id=str(company_pk),
+                company_id=company_pk,
+                message="Компания удалена (по запросу)",
+                meta={
+                    "request_id": req.id,
+                    "detached_branches": [str(c.id) for c in detached[:50]],
+                    "detached_count": len(detached),
+                    "branches_notified": branches_notified,
+                },
+            )
+            company.delete()
+    except IntegrityError:
+        logger.exception("Failed to delete company %s via delete request due to CompanySearchIndex integrity error", company_pk)
+        messages.error(
+            request,
+            "Не удалось полностью удалить компанию по запросу из-за проблем с индексом поиска. "
+            "Обратитесь к администратору.",
         )
-    log_event(
-        actor=user,
-        verb=ActivityEvent.Verb.DELETE,
-        entity_type="company",
-        entity_id=str(company.id),
-        company_id=company.id,
-        message="Компания удалена (по запросу)",
-        meta={
-            "request_id": req.id,
-            "detached_branches": [str(c.id) for c in detached[:50]],
-            "detached_count": len(detached),
-            "branches_notified": branches_notified,
-        },
-    )
-    company.delete()
+        return redirect("company_detail", company_id=company_pk)
+
     messages.success(request, "Компания удалена.")
     return redirect("company_list")
 
