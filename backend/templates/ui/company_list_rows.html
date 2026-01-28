@@ -6,27 +6,39 @@
     {% if "name" in company_list_columns %}
       <td>
         <a class="link" href="/companies/{{ c.id }}/" onclick="event.stopPropagation()">
-          {% if search_query %}
-            <span class="highlight-target" data-text="{{ c.name }}" data-query="{{ search_query }}">{{ c.name }}</span>
+          {% if search_query and c.search_name_html %}
+            {{ c.search_name_html|safe }}
           {% else %}
             {{ c.name }}
           {% endif %}
         </a>
         {% if "address" in company_list_columns %}
           <div class="text-xs text-brand-dark/70">
-            {% if search_query %}
-              <span class="highlight-target" data-text="{{ c.address }}" data-query="{{ search_query }}">{{ c.address }}</span>
+            {% if search_query and c.search_address_html %}
+              {{ c.search_address_html|safe }}
             {% else %}
               {{ c.address }}
             {% endif %}
           </div>
         {% endif %}
-        {% if search_query and c.search_match_info %}
-          {% if "название" not in c.search_match_info and "ИНН" not in c.search_match_info and "адрес" not in c.search_match_info %}
-            <div class="text-xs mt-1" style="color: #f97316; font-weight: 500;">
-              Найдено: {{ c.search_match_info }}
-            </div>
-          {% endif %}
+        {% if search_query and c.search_reasons %}
+          <div class="text-xs mt-1" style="color: #f97316; font-weight: 500;">
+            Найдено:
+            {% for r in c.search_reasons|slice:":3" %}
+              <span class="ml-1">
+                <b>{{ r.label }}</b>:
+                {{ r.value_html|safe }}
+              </span>
+              {% if not forloop.last %}<span class="opacity-50">·</span>{% endif %}
+            {% endfor %}
+            {% if c.search_reasons_total %}
+              {% with extra=c.search_reasons_total|add:"-3" %}
+                {% if extra > 0 %}
+                  <span class="opacity-60 ml-1">и ещё {{ extra }} причин</span>
+                {% endif %}
+              {% endwith %}
+            {% endif %}
+          </div>
         {% endif %}
       </td>
     {% endif %}
@@ -41,8 +53,8 @@
     {% endif %}
     {% if "inn" in company_list_columns %}
       <td>
-        {% if search_query %}
-          <span class="highlight-target" data-text="{{ c.inn }}" data-query="{{ search_query }}">{{ c.inn }}</span>
+        {% if search_query and c.search_inn_html %}
+          {{ c.search_inn_html|safe }}
         {% else %}
           {{ c.inn }}
         {% endif %}

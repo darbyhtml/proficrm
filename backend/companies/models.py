@@ -2,6 +2,7 @@ import uuid
 
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex, OpClass
+from django.contrib.postgres.search import SearchVectorField
 from django.db import models
 from django.db.models.functions import Upper
 
@@ -522,4 +523,49 @@ class CompanyDeletionRequest(models.Model):
 
     def __str__(self) -> str:
         return f"DeleteRequest({self.company_id_snapshot}) {self.status}"
+
+
+class CompanySearchIndex(models.Model):
+    """
+    Денормализованный индекс для быстрого и полного поиска по карточке компании.
+
+    Важно:
+    - здесь хранится агрегированный текст по компании + связанным сущностям (контакты/почты/телефоны/заметки/задачи),
+      чтобы поиск был индексируемым и без тяжёлых JOIN'ов по всей базе.
+    - tsvector поля заполняются триггером в БД (см. миграции), чтобы вектор всегда был консистентен.
+    """
+
+    company = models.OneToOneField(Company, on_delete=models.CASCADE, related_name="search_index", primary_key=True)
+
+    # Текстовые “группы” для разных весов ранжирования.
+    # Нормализация выполняется на уровне indexer/service (lower, ё→е, пробелы).
+    t_ident = models.TextField(blank=True, default="")     # ИНН/КПП/прочие идентификаторы
+    t_name = models.TextField(blank=True, default="")      # название/юр.название/краткие названия
+    t_contacts = models.TextField(blank=True, default="")  # контакты + их телефоны/emails/примечания
+    t_other = models.TextField(blank=True, default="")     # адрес/сайт/вид деятельности/заметки/задачи/прочее
+
+    # Для триграммного fallback (опечатки/частичные совпадения) и для UI-объяснений.
+    plain_text = models.TextField(blank=True, default="")
+
+    # Все цифры по карточке (ИНН/КПП/телефоны/и т.п.) — для быстрых “цифровых” запросов.
+    digits = models.TextField(blank=True, default="")
+
+    # FTS-вектора по группам (заполняются в БД-триггере).
+    vector_a = SearchVectorField(null=True)
+    vector_b = SearchVectorField(null=True)
+    vector_c = SearchVectorField(null=True)
+    vector_d = SearchVectorField(null=True)
+
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            GinIndex(fields=["vector_a"], name="cmp_si_va_gin_idx"),
+            GinIndex(fields=["vector_b"], name="cmp_si_vb_gin_idx"),
+            GinIndex(fields=["vector_c"], name="cmp_si_vc_gin_idx"),
+            GinIndex(fields=["vector_d"], name="cmp_si_vd_gin_idx"),
+            # Trigram индексы для быстрого LIKE/ILIKE и % (pg_trgm) по агрегированному тексту/цифрам.
+            GinIndex(OpClass(Upper("plain_text"), name="gin_trgm_ops"), name="cmp_si_plain_trgm_idx"),
+            GinIndex(OpClass("digits", name="gin_trgm_ops"), name="cmp_si_digits_trgm_idx"),
+        ]
 

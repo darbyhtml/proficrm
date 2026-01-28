@@ -2011,13 +2011,20 @@ def company_list(request: HttpRequest) -> HttpResponse:
     #
     # Важно: QueryDict может содержать несколько значений для одного ключа (например, region=1&region=2),
     # поэтому используем .lists(), чтобы не потерять мультивыбор.
+    q = (request.GET.get("q") or "").strip()
     filter_params = {k: v for k, v in request.GET.lists()}
-
-    f = _apply_company_filters(qs=qs, params=filter_params, default_responsible_id=None)
+    # Применяем ВСЕ фильтры, кроме поиска (поиск теперь через SearchService).
+    filter_params_wo_search = dict(filter_params)
+    filter_params_wo_search.pop("q", None)
+    f = _apply_company_filters(qs=qs, params=filter_params_wo_search, default_responsible_id=None)
     qs = f["qs"]
+    if q:
+        from companies.search_service import CompanySearchService
+        qs = CompanySearchService().apply(qs=qs, query=q)
 
     # Sorting (asc/desc) — как в задачах
-    sort = (request.GET.get("sort") or "").strip() or "updated_at"
+    sort_raw = (request.GET.get("sort") or "").strip()
+    sort = sort_raw or "updated_at"
     direction = (request.GET.get("dir") or "").strip().lower() or "desc"
     direction = "asc" if direction == "asc" else "desc"
     sort_map = {
@@ -2036,10 +2043,12 @@ def company_list(request: HttpRequest) -> HttpResponse:
         order = [sort_field, "name"]
     if direction == "desc":
         order = [f"-{f}" for f in order]
-    qs = qs.order_by(*order)
+    # Если пользователь не выбирал сортировку и есть q — приоритет релевантности (сервис уже отсортировал).
+    if not (q and not sort_raw):
+        qs = qs.order_by(*order)
 
     companies_filtered = qs.order_by().count()
-    filter_active = f["filter_active"]
+    filter_active = bool(q) or f["filter_active"]
 
     # Количество элементов на странице: из GET или из сессии (по умолчанию 25)
     per_page_param = request.GET.get("per_page", "").strip()
@@ -2066,6 +2075,38 @@ def company_list(request: HttpRequest) -> HttpResponse:
     # Добавляем флаг can_transfer для каждой компании (для UI проверки)
     for company in page.object_list:
         company.can_transfer = company.id in allowed_ids_set  # type: ignore[attr-defined]
+
+    # match_reasons + подсветка (детерминированно, без JS-regex по innerHTML)
+    if q:
+        try:
+            from companies.search_service import CompanySearchService
+            explain_map = CompanySearchService().explain(companies=list(page.object_list), query=q)
+            for company in page.object_list:
+                ex = explain_map.get(company.id)
+                if not ex:
+                    continue
+                company.search_name_html = ex.name_html  # type: ignore[attr-defined]
+                company.search_inn_html = ex.inn_html  # type: ignore[attr-defined]
+                company.search_address_html = ex.address_html  # type: ignore[attr-defined]
+                company.search_reasons = ex.reasons  # type: ignore[attr-defined]
+                company.search_reasons_total = ex.reasons_total  # type: ignore[attr-defined]
+        except Exception:
+            # “последняя линия обороны”: всё равно показываем причины и подсветку,
+            # даже если explain-логика упала.
+            from companies.search_index import parse_query
+            from companies.search_service import SearchReason, highlight_html
+            pq = parse_query(q)
+            for company in page.object_list:
+                company.search_name_html = highlight_html(company.name or "", text_tokens=pq.text_tokens, digit_tokens=pq.digit_tokens)  # type: ignore[attr-defined]
+                company.search_inn_html = highlight_html(company.inn or "", text_tokens=pq.text_tokens, digit_tokens=pq.digit_tokens)  # type: ignore[attr-defined]
+                company.search_address_html = highlight_html(company.address or "", text_tokens=pq.text_tokens, digit_tokens=pq.digit_tokens)  # type: ignore[attr-defined]
+                reasons = [
+                    SearchReason(field="company.inn", label="ИНН", value=(company.inn or ""), value_html=company.search_inn_html),  # type: ignore[arg-type]
+                    SearchReason(field="company.name", label="Название", value=(company.name or ""), value_html=company.search_name_html),  # type: ignore[arg-type]
+                    SearchReason(field="company.address", label="Адрес", value=(company.address or ""), value_html=company.search_address_html),  # type: ignore[arg-type]
+                ]
+                company.search_reasons = tuple([r for r in reasons if r.value])  # type: ignore[attr-defined]
+                company.search_reasons_total = len(company.search_reasons)  # type: ignore[attr-defined]
     
     # Формируем qs для пагинации, включая per_page если он отличается от значения по умолчанию
     # Используем filter_params вместо request.GET, чтобы включить default_branch_id для директора филиала
@@ -2098,7 +2139,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
         {
             "page": page,
             "qs": qs_no_page,
-            "q": f["q"],
+            "q": q,
             "responsible": f["responsible"],
             "status": f["status"],
             "branch": f["branch"],
@@ -2188,14 +2229,21 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
         )
     )
     
+    q = (request.GET.get("q") or "").strip()
     # Важно: QueryDict может содержать несколько значений для одного ключа (например, region=1&region=2),
     # поэтому используем .lists(), чтобы не потерять мультивыбор.
     filter_params = {k: v for k, v in request.GET.lists()}
-    f = _apply_company_filters(qs=qs, params=filter_params, default_responsible_id=None)
+    filter_params_wo_search = dict(filter_params)
+    filter_params_wo_search.pop("q", None)
+    f = _apply_company_filters(qs=qs, params=filter_params_wo_search, default_responsible_id=None)
     qs = f["qs"]
+    if q:
+        from companies.search_service import CompanySearchService
+        qs = CompanySearchService().apply(qs=qs, query=q)
     
     # Sorting
-    sort = (request.GET.get("sort") or "").strip() or "updated_at"
+    sort_raw = (request.GET.get("sort") or "").strip()
+    sort = sort_raw or "updated_at"
     direction = (request.GET.get("dir") or "").strip().lower() or "desc"
     direction = "asc" if direction == "asc" else "desc"
     sort_map = {
@@ -2214,7 +2262,8 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
         order = [sort_field, "name"]
     if direction == "desc":
         order = [f"-{f}" for f in order]
-    qs = qs.order_by(*order)
+    if not (q and not sort_raw):
+        qs = qs.order_by(*order)
     
     companies_filtered = qs.order_by().count()
     
@@ -2238,89 +2287,35 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
     ui_cfg = UiGlobalConfig.load()
     columns = ui_cfg.company_list_columns or ["name"]
     
-    # Определяем, где найдено совпадение для каждой компании (если есть поисковый запрос)
-    q = (request.GET.get("q") or "").strip()
+    # match_reasons + подсветка (детерминированно)
     if q:
-        normalized_q = _normalize_for_search(q)
-        normalized_phone = _normalize_phone_for_search(q)
-        normalized_email = _normalize_email_for_search(q)
-        tokens = _tokenize_search_query(q)
-        
-        # Используем уже предзагруженные данные через prefetch_related (не делаем дополнительные запросы)
-        # Данные уже загружены в page.object_list через prefetch_related выше
-        
-        for company in page.object_list:
-            match_info = []
-            
-            # Проверяем основные поля (которые видны в таблице)
-            if tokens:
-                nm = (company.name or "").lower()
-                inn = (company.inn or "").lower()
-                addr = (company.address or "").lower()
-                # Если любой токен встречается — считаем совпадением поля (для UI "Найдено:")
-                if any(t in nm for t in tokens):
-                    match_info.append("название")
-                if any(t in inn for t in tokens):
-                    match_info.append("ИНН")
-                if any(t in addr for t in tokens):
-                    match_info.append("адрес")
-            elif normalized_q:
-                # fallback на старую логику (один токен/строка)
-                if normalized_q in _normalize_for_search(company.name or ""):
-                    match_info.append("название")
-                if normalized_q in _normalize_for_search(company.inn or ""):
-                    match_info.append("ИНН")
-                if normalized_q in _normalize_for_search(company.address or ""):
-                    match_info.append("адрес")
-            
-            # Проверяем телефон (если не в основных полях)
-            if normalized_phone or q:
-                # Основной телефон компании
-                if company.phone and (q in company.phone or (normalized_phone and normalized_phone in company.phone)):
-                    match_info.append(f"телефон: {company.phone}")
-                # Дополнительные телефоны (уже предзагружены через prefetch_related)
-                for phone_obj in company.phones.all():
-                    if q in phone_obj.value or (normalized_phone and normalized_phone in phone_obj.value):
-                        match_info.append(f"телефон: {phone_obj.value}")
-                        break
-                # Телефоны контактов (уже предзагружены через prefetch_related)
-                for contact in company.contacts.all():
-                    for phone_obj in contact.phones.all():
-                        if q in phone_obj.value or (normalized_phone and normalized_phone in phone_obj.value):
-                            match_info.append(f"телефон контакта: {phone_obj.value}")
-                            break
-                    if match_info and "телефон контакта" in match_info[-1]:
-                        break
-            
-            # Проверяем email (если не в основных полях)
-            if normalized_email or q:
-                # Основной email компании
-                if company.email and (q.lower() in company.email.lower() or (normalized_email and normalized_email == company.email.lower())):
-                    match_info.append(f"email: {company.email}")
-                # Дополнительные email (уже предзагружены через prefetch_related)
-                for email_obj in company.emails.all():
-                    if q.lower() in email_obj.value.lower() or (normalized_email and normalized_email == email_obj.value.lower()):
-                        match_info.append(f"email: {email_obj.value}")
-                        break
-                # Email контактов (уже предзагружены через prefetch_related)
-                for contact in company.contacts.all():
-                    for email_obj in contact.emails.all():
-                        if q.lower() in email_obj.value.lower() or (normalized_email and normalized_email == email_obj.value.lower()):
-                            match_info.append(f"email контакта: {email_obj.value}")
-                            break
-                    if match_info and "email контакта" in match_info[-1]:
-                        break
-            
-            # Проверяем контакты (ФИО) (уже предзагружены через prefetch_related)
-            if q:
-                for contact in company.contacts.all():
-                    full_name = f"{contact.first_name or ''} {contact.last_name or ''}".strip()
-                    if q.lower() in full_name.lower():
-                        match_info.append(f"контакт: {full_name}")
-                        break
-            
-            # Сохраняем информацию о совпадении
-            company.search_match_info = match_info[0] if match_info else None  # type: ignore[attr-defined]
+        try:
+            from companies.search_service import CompanySearchService
+            explain_map = CompanySearchService().explain(companies=list(page.object_list), query=q)
+            for company in page.object_list:
+                ex = explain_map.get(company.id)
+                if not ex:
+                    continue
+                company.search_name_html = ex.name_html  # type: ignore[attr-defined]
+                company.search_inn_html = ex.inn_html  # type: ignore[attr-defined]
+                company.search_address_html = ex.address_html  # type: ignore[attr-defined]
+                company.search_reasons = ex.reasons  # type: ignore[attr-defined]
+                company.search_reasons_total = ex.reasons_total  # type: ignore[attr-defined]
+        except Exception:
+            from companies.search_index import parse_query
+            from companies.search_service import SearchReason, highlight_html
+            pq = parse_query(q)
+            for company in page.object_list:
+                company.search_name_html = highlight_html(company.name or "", text_tokens=pq.text_tokens, digit_tokens=pq.digit_tokens)  # type: ignore[attr-defined]
+                company.search_inn_html = highlight_html(company.inn or "", text_tokens=pq.text_tokens, digit_tokens=pq.digit_tokens)  # type: ignore[attr-defined]
+                company.search_address_html = highlight_html(company.address or "", text_tokens=pq.text_tokens, digit_tokens=pq.digit_tokens)  # type: ignore[attr-defined]
+                reasons = [
+                    SearchReason(field="company.inn", label="ИНН", value=(company.inn or ""), value_html=company.search_inn_html),  # type: ignore[arg-type]
+                    SearchReason(field="company.name", label="Название", value=(company.name or ""), value_html=company.search_name_html),  # type: ignore[arg-type]
+                    SearchReason(field="company.address", label="Адрес", value=(company.address or ""), value_html=company.search_address_html),  # type: ignore[arg-type]
+                ]
+                company.search_reasons = tuple([r for r in reasons if r.value])  # type: ignore[attr-defined]
+                company.search_reasons_total = len(company.search_reasons)  # type: ignore[attr-defined]
     
     # Рендерим HTML строк таблицы
     from django.template.loader import render_to_string
@@ -3041,21 +3036,18 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
     normalized_phone = _normalize_phone_for_search(q)
     normalized_email = _normalize_email_for_search(q)
 
-    # Используем ту же логику поиска, что и в списке компаний,
-    # чтобы поведение автодополнения и таблицы было полностью одинаковым
+    # Используем ту же логику поиска, что и в списке компаний (SearchService),
+    # чтобы поведение автодополнения и таблицы было одинаковым.
     if not company_id_raw:
+        from companies.search_service import CompanySearchService
         base_qs = Company.objects.all()
-        filtered = _apply_company_filters(qs=base_qs, params={"q": q}, default_responsible_id=None)
+        qs = CompanySearchService().apply(qs=base_qs, query=q)
+        if exclude_id:
+            qs = qs.exclude(id=exclude_id)
         qs = (
-            filtered["qs"]
-            .exclude(id=exclude_id) if exclude_id else filtered["qs"]
-        )
-        qs = (
-            qs
-            .select_related("responsible", "branch", "status")
+            qs.select_related("responsible", "branch", "status")
             .prefetch_related("phones", "emails", "contacts__phones", "contacts__emails")
-            .distinct()
-            .order_by("-updated_at")[:10]
+            .distinct()[:10]
         )
     
     items = []
