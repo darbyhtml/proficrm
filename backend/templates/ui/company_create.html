@@ -637,40 +637,53 @@
       function restoreDynamicFromDraft(draft) {
         if (!draft || typeof draft !== 'object') return;
 
-        if (emailsContainer) {
-          Object.keys(draft).forEach(function(key) {
-            const m = key.match(/^company_emails_(\d+)$/);
-            if (!m) return;
-            let input = emailsContainer.querySelector('input[name="' + key + '"]');
+        const emailValuesByIndex = {};
+        const phoneValuesByIndex = {};
+
+        Object.entries(draft).forEach(function([key, value]) {
+          let m = key.match(/^company_emails_(\d+)$/);
+          if (m) {
+            emailValuesByIndex[m[1]] = value;
+            return;
+          }
+          m = key.match(/^company_phones_(\d+)$/);
+          if (m) {
+            phoneValuesByIndex[m[1]] = value;
+          }
+        });
+
+        if (emailsContainer && Object.keys(emailValuesByIndex).length) {
+          Object.keys(emailValuesByIndex).forEach(function(idx) {
+            const name = 'company_emails_' + idx;
+            let input = emailsContainer.querySelector('input[name="' + name + '"]');
             while (!input) {
               const created = addEmailRow('');
               if (!created) break;
-              if (created.name === key) {
+              if (created.name === name) {
                 input = created;
                 break;
               }
             }
             if (input) {
-              input.value = draft[key];
+              input.value = emailValuesByIndex[idx];
             }
           });
         }
 
-        if (phonesContainer) {
-          Object.keys(draft).forEach(function(key) {
-            const m = key.match(/^company_phones_(\d+)$/);
-            if (!m) return;
-            let input = phonesContainer.querySelector('input[name="' + key + '"]');
+        if (phonesContainer && Object.keys(phoneValuesByIndex).length) {
+          Object.keys(phoneValuesByIndex).forEach(function(idx) {
+            const name = 'company_phones_' + idx;
+            let input = phonesContainer.querySelector('input[name="' + name + '"]');
             while (!input) {
               const created = addPhoneRow('');
               if (!created) break;
-              if (created.name === key) {
+              if (created.name === name) {
                 input = created;
                 break;
               }
             }
             if (input) {
-              const val = draft[key];
+              const val = phoneValuesByIndex[idx];
               const normalized = normalizePhoneToDisplay(val);
               input.value = normalized || val;
             }
