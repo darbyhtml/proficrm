@@ -759,20 +759,47 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             # Некорректный ID - пропускаем фильтр
             pass
 
-    region = _get_str_param("region")
-    if region:
+    # Поддержка множественного выбора регионов.
+    # params может быть как dict, так и QueryDict (request.GET / request.POST).
+    def _get_list_param(key: str) -> list[str]:
+        # QueryDict: корректно достаём все значения
+        if hasattr(params, "getlist"):
+            try:
+                return [str(x) for x in (params.getlist(key) or [])]
+            except Exception:
+                return []
+        # dict: значение может быть строкой или списком
+        v = params.get(key, [])
+        if isinstance(v, list):
+            return [str(x) for x in v]
+        if isinstance(v, str):
+            return [v] if v else []
+        return []
+
+    region_values = _get_list_param("region")
+    region_ids: list[int] = []
+    for r in region_values:
+        r_str = (r or "").strip()
+        if not r_str:
+            continue
         try:
-            region_id = int(region)
-            qs = qs.filter(region_id=region_id)
+            region_ids.append(int(r_str))
         except (ValueError, TypeError):
-            # Некорректный ID региона — игнорируем фильтр
             pass
+    
+    if region_ids:
+        qs = qs.filter(region_id__in=region_ids)
+    
+    # Для обратной совместимости сохраняем строковое представление (первое значение или пустая строка)
+    region = str(region_ids[0]) if region_ids else ""
+    # Список выбранных регионов для шаблона
+    selected_regions = [str(rid) for rid in region_ids]
 
     overdue = _get_str_param("overdue")
     if overdue == "1":
         qs = qs.filter(has_overdue=True)
 
-    filter_active = any([q, responsible, status, branch, sphere, contract_type, region, overdue == "1"])
+    filter_active = any([q, responsible, status, branch, sphere, contract_type, region_ids, overdue == "1"])
     return {
         "qs": qs.distinct(),
         "q": q,
@@ -781,7 +808,8 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
         "branch": branch,
         "sphere": sphere,
         "contract_type": contract_type,
-        "region": region,
+        "region": region,  # Для обратной совместимости
+        "selected_regions": selected_regions,  # Список выбранных регионов
         "overdue": overdue,
         "filter_active": filter_active,
     }
@@ -1980,7 +2008,10 @@ def company_list(request: HttpRequest) -> HttpResponse:
     # Ранее здесь были разные фильтры по умолчанию в зависимости от роли (ответственный/филиал).
     # По запросу заказчика убираем предустановленные фильтры: всем пользователям показываем полный список,
     # пока они сами явно не выберут фильтры в интерфейсе.
-    filter_params = dict(request.GET)
+    #
+    # Важно: QueryDict может содержать несколько значений для одного ключа (например, region=1&region=2),
+    # поэтому используем .lists(), чтобы не потерять мультивыбор.
+    filter_params = {k: v for k, v in request.GET.lists()}
 
     f = _apply_company_filters(qs=qs, params=filter_params, default_responsible_id=None)
     qs = f["qs"]
@@ -2074,6 +2105,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "sphere": f["sphere"],
             "contract_type": f["contract_type"],
             "region": f["region"],
+            "selected_regions": f.get("selected_regions", []),
             "overdue": f["overdue"],
             "companies_total": companies_total,
             "companies_filtered": companies_filtered,
@@ -2156,7 +2188,9 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
         )
     )
     
-    filter_params = dict(request.GET)
+    # Важно: QueryDict может содержать несколько значений для одного ключа (например, region=1&region=2),
+    # поэтому используем .lists(), чтобы не потерять мультивыбор.
+    filter_params = {k: v for k, v in request.GET.lists()}
     f = _apply_company_filters(qs=qs, params=filter_params, default_responsible_id=None)
     qs = f["qs"]
     
@@ -2543,6 +2577,9 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
     # Собираем информацию о фильтрах (если был режим filtered)
     filters_info = {}
     if apply_mode == "filtered":
+        # Получаем множественные значения region
+        region_list = request.POST.getlist("region") or []
+        region_str = ",".join(region_list) if region_list else ""
         filters_info = {
             "q": request.POST.get("q", ""),
             "responsible": request.POST.get("responsible", ""),
@@ -2550,7 +2587,7 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
             "branch": request.POST.get("branch", ""),
             "sphere": request.POST.get("sphere", ""),
             "contract_type": request.POST.get("contract_type", ""),
-            "region": request.POST.get("region", ""),
+            "region": region_str,  # Сохраняем как строку для логирования
             "overdue": request.POST.get("overdue", ""),
         }
     
@@ -2638,6 +2675,7 @@ def company_export(request: HttpRequest) -> HttpResponse:
                 "branch": (request.GET.get("branch") or "").strip(),
                 "sphere": (request.GET.get("sphere") or "").strip(),
                 "contract_type": (request.GET.get("contract_type") or "").strip(),
+                "region": ",".join((request.GET.getlist("region") or [])) if hasattr(request.GET, "getlist") else (request.GET.get("region") or "").strip(),
                 "cold_call": (request.GET.get("cold_call") or "").strip(),
                 "overdue": (request.GET.get("overdue") or "").strip(),
             },

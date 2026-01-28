@@ -21,7 +21,7 @@
         <div class="flex gap-2">
           <a href="/companies/new/" class="btn btn-primary">+ Добавить компанию</a>
           {% if is_admin %}
-            <a href="/companies/export/?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}&region={{ region }}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}" class="btn btn-outline">Экспорт CSV</a>
+            <a href="/companies/export/?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}{% for r_id in selected_regions %}&region={{ r_id }}{% endfor %}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}" class="btn btn-outline">Экспорт CSV</a>
           {% endif %}
         </div>
       </div>
@@ -96,12 +96,15 @@
         </div>
         <div>
           <label class="block text-sm text-brand-dark/80 mb-1">Область</label>
-          <select name="region" class="select w-full">
-            <option value="">Любая</option>
+          <div class="border border-brand-soft rounded-lg p-2 max-h-48 overflow-y-auto bg-white">
             {% for r in regions %}
-              <option value="{{ r.id }}" {% if region == r.id|stringformat:"s" %}selected{% endif %}>{{ r.name }}</option>
+              <label class="flex items-center gap-2 py-1 px-2 hover:bg-brand-soft/30 rounded cursor-pointer">
+                <input type="checkbox" name="region" value="{{ r.id }}" class="checkbox" 
+                  {% if r.id|stringformat:"s" in selected_regions %}checked{% endif %} />
+                <span class="text-sm">{{ r.name }}</span>
+              </label>
             {% endfor %}
-          </select>
+          </div>
         </div>
       </div>
       <div class="flex flex-col md:flex-row md:items-center md:flex-wrap gap-2 justify-between">
@@ -125,7 +128,9 @@
       <input type="hidden" name="branch" value="{{ branch }}" />
       <input type="hidden" name="sphere" value="{{ sphere }}" />
       <input type="hidden" name="contract_type" value="{{ contract_type }}" />
-      <input type="hidden" name="region" value="{{ region }}" />
+      {% for r_id in selected_regions %}
+      <input type="hidden" name="region" value="{{ r_id }}" />
+      {% endfor %}
       <input type="hidden" name="cold_call" value="{{ cold_call }}" />
       <input type="hidden" name="overdue" value="{{ overdue }}" />
 
@@ -362,7 +367,9 @@
             {% if branch %}<input type="hidden" name="branch" value="{{ branch }}" />{% endif %}
             {% if sphere %}<input type="hidden" name="sphere" value="{{ sphere }}" />{% endif %}
             {% if contract_type %}<input type="hidden" name="contract_type" value="{{ contract_type }}" />{% endif %}
-            {% if region %}<input type="hidden" name="region" value="{{ region }}" />{% endif %}
+            {% for r_id in selected_regions %}
+            <input type="hidden" name="region" value="{{ r_id }}" />
+            {% endfor %}
             {% if overdue %}<input type="hidden" name="overdue" value="{{ overdue }}" />{% endif %}
             {% if sort %}<input type="hidden" name="sort" value="{{ sort }}" />{% endif %}
             {% if dir %}<input type="hidden" name="dir" value="{{ dir }}" />{% endif %}
@@ -440,6 +447,8 @@
         selectFilteredBtn.addEventListener('click', () => {
           // включает режим "по фильтру", но всё равно требует подтверждения на submit
           if (!confirm('Переназначить ВСЕ компании по текущему фильтру?')) return;
+          // Обновляем скрытые поля фильтров перед включением режима "по фильтру"
+          updateBulkTransferFilters();
           if (modeEl) modeEl.value = 'filtered';
           if (hintEl) hintEl.textContent = ' (все по фильтру)';
           if (form) form.style.display = 'block';
@@ -489,6 +498,38 @@
       const modalConfirm = document.getElementById('bulkTransferModalConfirm');
       const transferBtn = document.getElementById('bulkTransferBtn');
       
+      // Функция для обновления скрытых полей фильтров в bulk-transfer форме
+      function updateBulkTransferFilters() {
+        if (!form) return;
+        const filterForm = document.getElementById('companyFilterForm');
+        if (!filterForm) return;
+        
+        // Удаляем старые скрытые поля фильтров (кроме apply_mode и csrf_token)
+        const fieldsToUpdate = ['q', 'responsible', 'status', 'branch', 'sphere', 'contract_type', 'region', 'cold_call', 'overdue'];
+        fieldsToUpdate.forEach(fieldName => {
+          form.querySelectorAll(`input[name="${fieldName}"]`).forEach(el => el.remove());
+        });
+        
+        // Добавляем текущие значения из формы фильтров
+        const filterFormData = new FormData(filterForm);
+        const beforeEl = form.querySelector('select[name="responsible_id"]');
+        fieldsToUpdate.forEach(fieldName => {
+          const values = filterFormData.getAll(fieldName) || [];
+          values.forEach(value => {
+            if (!value) return;
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = fieldName;
+            input.value = String(value);
+            if (beforeEl) {
+              form.insertBefore(input, beforeEl);
+            } else {
+              form.appendChild(input);
+            }
+          });
+        });
+      }
+      
       function escapeHtml(text) {
         if (!text) return '';
         const div = document.createElement('div');
@@ -518,6 +559,9 @@
       if (transferBtn) {
         transferBtn.addEventListener('click', async function(e) {
           e.preventDefault();
+          
+          // Обновляем скрытые поля фильтров перед отправкой
+          updateBulkTransferFilters();
           
           const responsibleSelect = form.querySelector('select[name="responsible_id"]');
           const responsibleId = responsibleSelect ? responsibleSelect.value : '';

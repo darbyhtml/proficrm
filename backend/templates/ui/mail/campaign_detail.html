@@ -502,6 +502,31 @@
             updateBulkDeleteButtons();
           })();
         </script>
+
+        <script>
+          function toggleAllRegions(master) {
+            const container = document.getElementById('regionContainer');
+            if (!container) return;
+            container.querySelectorAll('input.region-checkbox').forEach(cb => {
+              cb.checked = !!master.checked;
+            });
+          }
+
+          (function syncRegionAllCheckbox() {
+            const master = document.getElementById('regionAll');
+            const container = document.getElementById('regionContainer');
+            if (!master || !container) return;
+            const boxes = Array.from(container.querySelectorAll('input.region-checkbox'));
+            const update = () => {
+              const allChecked = boxes.length > 0 && boxes.every(b => b.checked);
+              const someChecked = boxes.some(b => b.checked);
+              master.checked = allChecked;
+              master.indeterminate = !allChecked && someChecked;
+            };
+            boxes.forEach(b => b.addEventListener('change', update));
+            update();
+          })();
+        </script>
       </div>
 
       <div class="lg:col-span-4 space-y-4">
@@ -726,12 +751,26 @@
             {# Область #}
             <div>
               <label class="block text-sm font-medium text-gray-700 mb-2">Область</label>
-              <select class="select w-full" name="region">
-                <option value="">Любая</option>
-                {% for r in regions %}
-                  <option value="{{ r.id }}">{{ r.name }}</option>
-                {% endfor %}
-              </select>
+              <div class="border border-gray-300 rounded-lg p-2 max-h-32 overflow-y-auto bg-white">
+                <label class="flex items-center gap-2 p-1 hover:bg-gray-50 rounded cursor-pointer">
+                  <input type="checkbox" name="region_all" id="regionAll" class="rounded" onchange="toggleAllRegions(this)" />
+                  <span class="text-sm">Все области</span>
+                </label>
+                <div class="border-t border-gray-200 mt-1 pt-1 space-y-1" id="regionContainer">
+                  {% for r in regions %}
+                    <label class="flex items-center gap-2 p-1 hover:bg-gray-50 rounded cursor-pointer">
+                      <input
+                        type="checkbox"
+                        name="region"
+                        value="{{ r.id }}"
+                        class="region-checkbox rounded"
+                        {% if r.id|stringformat:"s" in selected_regions %}checked{% endif %}
+                      />
+                      <span class="text-sm">{{ r.name }}</span>
+                    </label>
+                  {% endfor %}
+                </div>
+              </div>
             </div>
           </div>
         </div>
