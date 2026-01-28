@@ -324,14 +324,19 @@
           return;
         }
         if (!box || !list || !meta || !hidden) return;
-        if (!data.items.length && !(data.hidden_count>0)) {
+
+        const items = Array.isArray(data.items) ? data.items : [];
+        const frontendHidden = items.length > 1 ? (items.length - 1) : 0;
+        const totalHidden = frontendHidden + (data.hidden_count || 0);
+
+        if (!items.length && totalHidden === 0) {
           box.style.display = 'none';
           return;
         }
         box.style.display = 'block';
         meta.textContent = data.reasons && data.reasons.length ? ('Совпадения: ' + data.reasons.join(', ')) : '';
-        list.innerHTML = '';
-        for (const it of data.items) {
+
+        function createDupCard(it) {
           const card = document.createElement('div');
           card.className = 'block rounded-xl border border-brand-soft/80 bg-white/90 px-3 py-2 shadow-sm transition-all hover:border-brand-teal/50 hover:bg-brand-soft/10 cursor-default';
           const matchBadges = (it.match && it.match.length)
@@ -344,15 +349,51 @@
             <div class="text-xs muted">ИНН: ${it.inn||'—'} · КПП: ${it.kpp||'—'} · ${it.branch?('Филиал: '+it.branch+' · '):''}${it.responsible?('Ответственный: '+it.responsible):''}</div>
             ${matchBadges}
             <div class="text-xs muted">${it.address||'—'}</div>
+            <div class="text-xs muted mt-1">ID: ${it.id}</div>
             <div class="mt-2 flex flex-wrap gap-2 text-xs">
               <button type="button" class="btn btn-outline btn-xxs" data-dup-open="${it.url}">Открыть в новой вкладке</button>
               <button type="button" class="btn btn-outline btn-xxs" data-dup-goto="${it.url}">Это дубль — перейти и не создавать</button>
             </div>`;
-          list.appendChild(card);
+          return card;
         }
-        if (data.hidden_count && data.hidden_count > 0) {
+
+        list.innerHTML = '';
+
+        const visibleItems = items.slice(0, 1);
+        const hiddenItems = items.slice(1);
+
+        visibleItems.forEach(function (it) {
+          list.appendChild(createDupCard(it));
+        });
+
+        if (hiddenItems.length) {
+          const extraContainer = document.createElement('div');
+          extraContainer.className = 'mt-2 space-y-2';
+          extraContainer.style.display = 'none';
+          hiddenItems.forEach(function (it) {
+            extraContainer.appendChild(createDupCard(it));
+          });
+
+          const toggleBtn = document.createElement('button');
+          toggleBtn.type = 'button';
+          toggleBtn.className = 'mt-2 text-xs text-brand-dark/70 hover:text-brand-teal underline decoration-dotted';
+          toggleBtn.textContent = `Показать ещё ${hiddenItems.length} совпадений`;
+          let expanded = false;
+          toggleBtn.addEventListener('click', function () {
+            expanded = !expanded;
+            extraContainer.style.display = expanded ? 'block' : 'none';
+            toggleBtn.textContent = expanded
+              ? 'Скрыть список совпадений'
+              : `Показать ещё ${hiddenItems.length} совпадений`;
+          });
+
+          list.appendChild(toggleBtn);
+          list.appendChild(extraContainer);
+        }
+
+        if (totalHidden > 0) {
           hidden.style.display = 'block';
-          hidden.textContent = 'Показаны первые 10. Ещё совпадений: ' + data.hidden_count;
+          hidden.textContent = 'Ещё совпадений (включая скрытые с сервера): ' + totalHidden;
         } else {
           hidden.style.display = 'none';
         }
@@ -587,13 +628,14 @@
 
       if (emailsContainer) {
         emailsContainer.addEventListener('click', function(e) {
-          if (e.target.classList.contains('remove-email-btn')) {
-            const row = e.target.closest('.company-email-row');
-            if (row && emailsContainer.children.length > 1) {
-              row.remove();
-            } else if (row) {
-              row.querySelector('input').value = '';
-            }
+          const btn = e.target.closest('.remove-email-btn');
+          if (!btn) return;
+          const row = btn.closest('.company-email-row');
+          if (row && emailsContainer.children.length > 1) {
+            row.remove();
+          } else if (row) {
+            const input = row.querySelector('input');
+            if (input) input.value = '';
           }
         });
       }
@@ -675,14 +717,16 @@
         const phoneValuesByIndex = {};
 
         Object.entries(draft).forEach(function([key, value]) {
+          const v = String(value || '').trim();
+          if (!v) return;
           let m = key.match(/^company_emails_(\d+)$/);
           if (m) {
-            emailValuesByIndex[m[1]] = value;
+            emailValuesByIndex[m[1]] = v;
             return;
           }
           m = key.match(/^company_phones_(\d+)$/);
           if (m) {
-            phoneValuesByIndex[m[1]] = value;
+            phoneValuesByIndex[m[1]] = v;
           }
         });
 
@@ -725,13 +769,6 @@
         }
       }
 
-      if (formEl) {
-        const draft = draftSnapshot || loadDraft();
-        if (draft) {
-          restoreDynamicFromDraft(draft);
-        }
-      }
-
       // Приводим уже загруженные телефоны к читаемому виду
       if (phonesContainer) {
         phonesContainer.querySelectorAll('input[name^="company_phones_"]').forEach(function(inp){
@@ -760,13 +797,14 @@
 
       if (phonesContainer) {
         phonesContainer.addEventListener('click', function(e) {
-          if (e.target.classList.contains('remove-phone-btn')) {
-            const row = e.target.closest('.company-phone-row');
-            if (row && phonesContainer.children.length > 1) {
-              row.remove();
-            } else if (row) {
-              row.querySelector('input').value = '';
-            }
+          const btn = e.target.closest('.remove-phone-btn');
+          if (!btn) return;
+          const row = btn.closest('.company-phone-row');
+          if (row && phonesContainer.children.length > 1) {
+            row.remove();
+          } else if (row) {
+            const input = row.querySelector('input');
+            if (input) input.value = '';
           }
         });
       }
