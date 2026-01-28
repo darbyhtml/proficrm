@@ -537,57 +537,6 @@
         });
       }
 
-      function restoreDynamicFromDraft(draft) {
-        if (!draft || typeof draft !== 'object') return;
-
-        if (emailsContainer) {
-          Object.keys(draft).forEach(function(key) {
-            const m = key.match(/^company_emails_(\d+)$/);
-            if (!m) return;
-            let input = emailsContainer.querySelector('input[name="' + key + '"]');
-            while (!input) {
-              const created = addEmailRow('');
-              if (!created) break;
-              if (created.name === key) {
-                input = created;
-                break;
-              }
-            }
-            if (input) {
-              input.value = draft[key];
-            }
-          });
-        }
-
-        if (phonesContainer) {
-          Object.keys(draft).forEach(function(key) {
-            const m = key.match(/^company_phones_(\d+)$/);
-            if (!m) return;
-            let input = phonesContainer.querySelector('input[name="' + key + '"]');
-            while (!input) {
-              const created = addPhoneRow('');
-              if (!created) break;
-              if (created.name === key) {
-                input = created;
-                break;
-              }
-            }
-            if (input) {
-              const val = draft[key];
-              const normalized = normalizePhoneToDisplay(val);
-              input.value = normalized || val;
-            }
-          });
-        }
-      }
-
-      if (formEl) {
-        const draft = draftSnapshot || loadDraft();
-        if (draft) {
-          restoreDynamicFromDraft(draft);
-        }
-      }
-
       // PHONES
       const phonesContainer = document.getElementById('company-phones-container');
       const addPhoneBtn = document.getElementById('add-phone-btn');
@@ -656,6 +605,57 @@
         if (input && val) input.value = val;
         phoneIndex++;
         return input;
+      }
+
+      function restoreDynamicFromDraft(draft) {
+        if (!draft || typeof draft !== 'object') return;
+
+        if (emailsContainer) {
+          Object.keys(draft).forEach(function(key) {
+            const m = key.match(/^company_emails_(\d+)$/);
+            if (!m) return;
+            let input = emailsContainer.querySelector('input[name="' + key + '"]');
+            while (!input) {
+              const created = addEmailRow('');
+              if (!created) break;
+              if (created.name === key) {
+                input = created;
+                break;
+              }
+            }
+            if (input) {
+              input.value = draft[key];
+            }
+          });
+        }
+
+        if (phonesContainer) {
+          Object.keys(draft).forEach(function(key) {
+            const m = key.match(/^company_phones_(\d+)$/);
+            if (!m) return;
+            let input = phonesContainer.querySelector('input[name="' + key + '"]');
+            while (!input) {
+              const created = addPhoneRow('');
+              if (!created) break;
+              if (created.name === key) {
+                input = created;
+                break;
+              }
+            }
+            if (input) {
+              const val = draft[key];
+              const normalized = normalizePhoneToDisplay(val);
+              input.value = normalized || val;
+            }
+          });
+        }
+      }
+
+      if (formEl) {
+        const draft = draftSnapshot || loadDraft();
+        if (draft) {
+          restoreDynamicFromDraft(draft);
+        }
       }
 
       // Приводим уже загруженные телефоны к читаемому виду
