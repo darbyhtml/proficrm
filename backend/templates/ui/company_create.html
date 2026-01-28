@@ -327,9 +327,10 @@
 
         const items = Array.isArray(data.items) ? data.items : [];
         const frontendHidden = items.length > 1 ? (items.length - 1) : 0;
-        const totalHidden = frontendHidden + (data.hidden_count || 0);
+        const backendHidden = data.hidden_count || 0;
+        const totalHidden = frontendHidden + backendHidden;
 
-        if (!items.length && totalHidden === 0) {
+        if (!items.length && backendHidden === 0) {
           box.style.display = 'none';
           return;
         }
@@ -391,9 +392,9 @@
           list.appendChild(extraContainer);
         }
 
-        if (totalHidden > 0) {
+        if (backendHidden > 0) {
           hidden.style.display = 'block';
-          hidden.textContent = 'Ещё совпадений (включая скрытые с сервера): ' + totalHidden;
+          hidden.textContent = 'Ещё совпадений (на списке компаний): ' + backendHidden;
         } else {
           hidden.style.display = 'none';
         }
@@ -610,18 +611,6 @@
 
       if (addEmailBtn) {
         addEmailBtn.addEventListener('click', function() {
-          if (!emailsContainer) {
-            addEmailRow('');
-            return;
-          }
-          const rows = Array.from(emailsContainer.querySelectorAll('.company-email-row'));
-          if (rows.length === 1) {
-            const input = rows[0].querySelector('input');
-            if (!input || !input.value.trim()) {
-              rows[0].remove();
-              return;
-            }
-          }
           addEmailRow('');
         });
       }
@@ -779,18 +768,6 @@
 
       if (addPhoneBtn) {
         addPhoneBtn.addEventListener('click', function() {
-          if (!phonesContainer) {
-            addPhoneRow('');
-            return;
-          }
-          const rows = Array.from(phonesContainer.querySelectorAll('.company-phone-row'));
-          if (rows.length === 1) {
-            const input = rows[0].querySelector('input');
-            if (!input || !input.value.trim()) {
-              rows[0].remove();
-              return;
-            }
-          }
           addPhoneRow('');
         });
       }
