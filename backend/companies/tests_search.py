@@ -5,7 +5,7 @@ from django.test import TestCase
 
 from companies.search_index import parse_query
 from companies.search_service import highlight_html, CompanySearchService
-from companies.models import Company, CompanyStatus, Contact, ContactPhone, CompanySearchIndex
+from companies.models import Company, CompanyStatus, Contact, ContactPhone, CompanyPhone, CompanySearchIndex
 from companies.search_index import rebuild_company_search_index
 
 
@@ -87,4 +87,37 @@ class SearchServicePostgresTests(TestCase):
         ex = explain[c.id]
         self.assertTrue(ex.reasons)
         self.assertIn("search-highlight", ex.name_html)
+
+    def test_result_implies_explain_not_empty_for_split_tokens(self):
+        """
+        Регрессия: запрос "иванов 8926" с разнесёнными токенами (контакт + телефон компании)
+        должен не только найти компанию, но и дать ненулевой explain.
+        """
+        c = Company.objects.create(name="ООО Тест", inn="1234567890", status=self.status)
+        # text‑токен уходит в контакт
+        ct = Contact.objects.create(company=c, first_name="Иван", last_name="Иванов")
+        # digit‑токен уходит в телефон КОМПАНИИ (чтобы точно оказаться в другой сущности)
+        CompanyPhone.objects.create(company=c, value="+7 (926) 123-45-67")
+
+        rebuild_company_search_index(c.id)
+
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="иванов 8926")
+        page = list(qs[:10])
+        self.assertTrue(any(x.id == c.id for x in page), "Компания должна быть в выдаче по AND-запросу.")
+
+        explain_map = CompanySearchService().explain(companies=page, query="иванов 8926")
+        self.assertIn(c.id, explain_map)
+        ex = explain_map[c.id]
+        # ключевая гарантия: "нашлось ⇒ объяснилось"
+        self.assertTrue(ex.reasons, "Для найденной компании explain.reasons не должен быть пустым.")
+        # хотя бы одна причина должна содержать контакт/ФИО
+        self.assertTrue(
+            any("иванов" in (r.value or "").lower() for r in ex.reasons),
+            "В причинах должен фигурировать контакт Иванов.",
+        )
+        # и хотя бы одна причина должна содержать цифры телефона
+        self.assertTrue(
+            any("926" in (r.value or "") or "926" in (r.value_html or "") for r in ex.reasons),
+            "В причинах должен фигурировать фрагмент телефона 8926/926.",
+        )
 
