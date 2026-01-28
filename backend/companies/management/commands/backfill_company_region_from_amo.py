@@ -54,6 +54,10 @@ REGION_ALIASES = {
     "Республика Башкирия": "Республика Башкортостан",
     "Башкирия": "Республика Башкортостан",
     "Башкортостан": "Республика Башкортостан",
+    "Республика Удмуртия": "Удмуртская Республика",
+    "Удмуртия": "Удмуртская Республика",
+    "Ненецкий-автономный округ": "Ненецкий автономный округ",
+    "Ненецкий автономный округ": "Ненецкий автономный округ",
     # Можно добавить другие частые несовпадения по мере обнаружения
 }
 
@@ -77,22 +81,42 @@ def _find_region_by_name(label: str) -> Region | None:
     """
     Находит регион по названию с учётом нормализации и алиасов.
     """
+    label = label.strip()
+    
     # Сначала пробуем точное совпадение (case-insensitive)
     region = Region.objects.filter(name__iexact=label).first()
     if region:
         return region
     
-    # Пробуем нормализованное название
+    # Пробуем нормализованное название через алиасы
     normalized = _normalize_region_name(label)
     if normalized != label:
         region = Region.objects.filter(name__iexact=normalized).first()
         if region:
             return region
     
+    # Пробуем с заменой дефисов на пробелы и наоборот (для автономных округов)
+    # "Ненецкий-автономный округ" -> "Ненецкий автономный округ"
+    label_with_spaces = label.replace("-", " ")
+    if label_with_spaces != label:
+        region = Region.objects.filter(name__iexact=label_with_spaces).first()
+        if region:
+            return region
+    
+    label_with_dash = label.replace(" ", "-")
+    if label_with_dash != label:
+        region = Region.objects.filter(name__iexact=label_with_dash).first()
+        if region:
+            return region
+    
     # Пробуем частичное совпадение (если label содержит часть названия региона)
     # Например, "ХМАО" -> "Ханты-Мансийский автономный округ — Югра"
-    if len(label) < 10:  # Короткие названия могут быть аббревиатурами
+    if len(label) < 15:  # Короткие названия могут быть аббревиатурами или неполными
         regions = Region.objects.filter(name__icontains=label)
+        if regions.count() == 1:
+            return regions.first()
+        # Если несколько, пробуем более точное совпадение - начало названия
+        regions = Region.objects.filter(name__istartswith=label)
         if regions.count() == 1:
             return regions.first()
     
