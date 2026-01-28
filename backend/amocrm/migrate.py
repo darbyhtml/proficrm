@@ -15,6 +15,7 @@ from datetime import date as dt_date, datetime, time as dt_time, timezone as dt_
 
 from accounts.models import User
 from companies.models import Company, CompanyNote, CompanySphere, Region, Contact, ContactEmail, ContactPhone, CompanyPhone, CompanyEmail
+from companies.region_utils import find_region_by_name
 from tasksapp.models import Task
 
 from .client import AmoClient, AmoApiError, RateLimitError
@@ -3327,8 +3328,8 @@ def _upsert_company_from_amo(
                 region_name = lab
                 break
         if region_name:
-            # Ищем регион по имени (без создания новых, чтобы не нарушать справочник)
-            region_obj = Region.objects.filter(name__iexact=region_name).first()
+            # Ищем регион по имени с учётом нормализации и алиасов (без создания новых, чтобы не нарушать справочник)
+            region_obj = find_region_by_name(region_name)
             if region_obj:
                 old_region_name = ""
                 if company.region_id and company.region:
