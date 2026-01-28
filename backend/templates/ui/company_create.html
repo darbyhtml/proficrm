@@ -9,15 +9,20 @@
       <div class="text-sm text-brand-dark/70">Ответственный будет автоматически: вы</div>
     </div>
 
-    <form method="post" class="bg-white border rounded-2xl p-4 space-y-3" id="companyCreateForm">
+    <form method="post" class="bg-white border rounded-2xl p-4 space-y-4 shadow-sm" id="companyCreateForm">
       {% csrf_token %}
 
-      <div id="companyCreateDraftBanner" class="hidden mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-brand-dark/80 flex items-start justify-between gap-2">
-        <div>
-          <div class="font-medium text-sm">Найден черновик этой формы</div>
-          <div class="mt-0.5">
-            <span class="muted">Вы можете восстановить ранее введённые данные или удалить черновик.</span>
-            <span class="muted" id="companyCreateDraftMeta"></span>
+      <div id="companyCreateDraftBanner" class="hidden mb-3 rounded-xl border border-amber-300/80 bg-gradient-to-r from-amber-50 to-amber-100 px-3.5 py-2.5 text-xs sm:text-sm text-brand-dark/80 flex items-start justify-between gap-3 shadow-sm">
+        <div class="flex items-start gap-2">
+          <div class="mt-0.5 rounded-full bg-amber-400/90 text-white w-5 h-5 flex items-center justify-center text-[10px] font-semibold shadow-sm">
+            !
+          </div>
+          <div>
+            <div class="font-medium text-sm">Найден черновик этой формы</div>
+            <div class="mt-0.5 leading-snug">
+              <span class="muted">Вы можете восстановить ранее введённые данные или удалить черновик.</span>
+              <span class="muted" id="companyCreateDraftMeta"></span>
+            </div>
           </div>
         </div>
         <div class="flex flex-col sm:flex-row gap-1 sm:items-center shrink-0">
@@ -26,7 +31,7 @@
         </div>
       </div>
 
-      <div class="card card-pad" id="dupBox" style="display:none">
+      <div class="card card-pad shadow-sm" id="dupBox" style="display:none">
         <div class="flex items-center justify-between">
           <div class="font-medium">Похожие компании</div>
           <div class="text-xs muted" id="dupMeta"></div>
@@ -163,18 +168,13 @@
                     </button>
                   </div>
                 {% endfor %}
-              {% else %}
-                <div class="flex gap-2 items-center company-phone-row">
-                  <input type="text" name="company_phones_0" value=""
-                         class="flex-1 rounded-lg border px-3 py-2" placeholder="+7 ..." />
-                  <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-phone-btn" title="Удалить номер">
-                    ✕
-                  </button>
-                </div>
               {% endif %}
             </div>
-            <button type="button" id="add-phone-btn" class="mt-2 btn btn-outline text-xs">
-              + Добавить телефон
+            <button type="button" id="add-phone-btn" class="mt-2 inline-flex items-center gap-1 rounded-full border border-dashed border-brand-soft px-2.5 py-1.5 text-[11px] font-medium text-brand-dark/70 hover:border-brand-teal/60 hover:bg-brand-soft/10 transition-colors">
+              <span class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-brand-teal/90 text-white text-[10px] shadow-sm">
+                +
+              </span>
+              <span>Добавить телефон</span>
             </button>
             <div class="text-xs text-brand-dark/60 mt-1">Эти номера учитываются в поиске и могут использоваться для звонков.</div>
           </div>
@@ -202,23 +202,13 @@
                   </div>
                 {% endfor %}
               {% else %}
-                <div class="flex gap-2 items-center company-email-row">
-                  <input type="email" name="company_emails_0" value=""
-                         class="flex-1 rounded-lg border px-3 py-2" placeholder="email@example.com" />
-          <button type="button" class="btn btn-outline text-red-600 hover:bg-red-50 remove-email-btn" title="Удалить email">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="3 6 5 6 21 6"></polyline>
-              <path d="M19 6l-1 14H6L5 6"></path>
-              <path d="M10 11v6"></path>
-              <path d="M14 11v6"></path>
-              <path d="M9 6l1-3h4l1 3"></path>
-            </svg>
-          </button>
-                </div>
               {% endif %}
             </div>
-            <button type="button" id="add-email-btn" class="mt-2 btn btn-outline text-xs">
-              + Добавить Email
+            <button type="button" id="add-email-btn" class="mt-2 inline-flex items-center gap-1 rounded-full border border-dashed border-brand-soft px-2.5 py-1.5 text-[11px] font-medium text-brand-dark/70 hover:border-brand-teal/60 hover:bg-brand-soft/10 transition-colors">
+              <span class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-brand-teal/90 text-white text-[10px] shadow-sm">
+                +
+              </span>
+              <span>Добавить Email</span>
             </button>
             <div class="text-xs text-brand-dark/60 mt-1">Эти email адреса будут доступны в разделе "Почта" для рассылок.</div>
           </div>
@@ -331,7 +321,7 @@
         list.innerHTML = '';
         for (const it of data.items) {
           const card = document.createElement('div');
-          card.className = 'block rounded-xl border border-brand-soft bg-white px-3 py-2';
+          card.className = 'block rounded-xl border border-brand-soft/80 bg-white/90 px-3 py-2 shadow-sm transition-all hover:border-brand-teal/50 hover:bg-brand-soft/10 cursor-default';
           const matchBadges = (it.match && it.match.length)
             ? (`<div class="mt-1 flex flex-wrap gap-1">
                  <span class="badge badge-warn">Совпало:</span>
