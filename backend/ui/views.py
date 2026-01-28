@@ -3326,6 +3326,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "detail_view_mode": detail_view_mode,
             "display_note": display_note,  # Для modern layout: pinned или latest
             "upcoming_tasks": upcoming_tasks,  # Ближайшие 2-3 задачи для modern layout
+            "statuses": CompanyStatus.objects.order_by("name"),  # Для быстрого изменения статуса в Modern
         },
     )
 

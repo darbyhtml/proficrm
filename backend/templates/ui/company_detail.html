@@ -1921,6 +1921,16 @@
                 {% if contract_days_left is not None and contract_days_left <= 0 %}Просрочен{% elif contract_days_left is not None %}Договор: {{ contract_days_left }} дн.{% else %}Договор{% endif %}
               </span>
             {% endif %}
+            {% if upcoming_tasks %}
+              {% for task in upcoming_tasks|slice:":1" %}
+                {% if task.due_at and task.due_at < local_now and task.status != 'done' and task.status != 'cancelled' %}
+                  <span class="badge badge-danger badge-sm">Просроченные задачи</span>
+                {% endif %}
+              {% endfor %}
+            {% endif %}
+            {% if not company.phone and not contacts %}
+              <span class="badge badge-warn badge-sm">Нет контактов</span>
+            {% endif %}
           </div>
           <div class="text-xs text-brand-dark/60 mt-1">
             {% if can_edit_company %}
@@ -1957,8 +1967,56 @@
             {% if company.responsible %} · {{ company.responsible }}{% endif %}
             {% if company.branch %} · {{ company.branch.name }}{% endif %}
           </div>
+          <!-- Индикатор несохранённых изменений -->
+          <div id="unsavedChangesIndicatorModern" class="hidden mt-2 text-xs text-brand-orange flex items-center gap-2">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+            </svg>
+            <span>Есть несохранённые изменения</span>
+            <button type="button" class="btn btn-outline btn-xxs ml-auto" id="saveAllChangesModern">Сохранить всё</button>
+            <button type="button" class="btn btn-outline btn-xxs" id="cancelAllChangesModern">Отменить</button>
+          </div>
         </div>
         <div class="flex items-center gap-2 shrink-0">
+          <!-- Быстрые действия (только в Modern) -->
+          <div class="flex items-center gap-1 bg-brand-soft/20 rounded-lg p-1" id="quickActionsModern">
+            {% if can_edit_company %}
+              <button type="button" class="quick-action-btn p-1.5 rounded hover:bg-white transition-colors" data-quick-action="note" title="Добавить заметку (N)" aria-label="Добавить заметку">
+                <svg class="w-4 h-4 text-brand-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                </svg>
+              </button>
+              <button type="button" class="quick-action-btn p-1.5 rounded hover:bg-white transition-colors" data-quick-action="task" data-company-id="{{ company.id }}" title="Создать задачу (T)" aria-label="Создать задачу">
+                <svg class="w-4 h-4 text-brand-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                </svg>
+              </button>
+            {% endif %}
+            {% if company.phone %}
+              <button type="button" class="quick-action-btn p-1.5 rounded hover:bg-white transition-colors js-call-phone" data-phone="{{ company.phone }}" data-company="{{ company.id }}" data-contact="" title="Позвонить (C)" aria-label="Позвонить">
+                <svg class="w-4 h-4 text-brand-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                </svg>
+              </button>
+            {% endif %}
+            {% if company.inn %}
+              <button type="button" class="quick-action-btn p-1.5 rounded hover:bg-white transition-colors" data-copy-text="{{ company.inn }}" title="Копировать ИНН" aria-label="Копировать ИНН">
+                <svg class="w-4 h-4 text-brand-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                </svg>
+              </button>
+            {% endif %}
+            <button type="button" class="quick-action-btn p-1.5 rounded hover:bg-white transition-colors" data-copy-text="{{ request.build_absolute_uri }}" title="Копировать ссылку" aria-label="Копировать ссылку">
+              <svg class="w-4 h-4 text-brand-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+              </svg>
+            </button>
+            <button type="button" class="quick-action-btn p-1.5 rounded hover:bg-white transition-colors" id="quickSearchBtnModern" title="Поиск по карточке (/) (Ctrl+K)" aria-label="Поиск">
+              <svg class="w-4 h-4 text-brand-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              </svg>
+            </button>
+          </div>
           <!-- Переключатель режимов просмотра (иконки) -->
           <div class="flex items-center gap-1 bg-brand-soft/30 rounded-lg p-1" role="group" aria-label="Режим просмотра карточки">
             <button type="button" id="viewModeClassicDetailModern" class="view-mode-detail-btn p-1.5 rounded-md transition-colors {% if detail_view_mode == 'classic' %}bg-white text-brand-teal shadow-sm{% else %}text-brand-dark/70 hover:text-brand-dark{% endif %}" data-mode="classic" title="Классический вид" aria-label="Классический вид">
@@ -1974,12 +2032,23 @@
           </div>
           <!-- Dropdown с действиями -->
           <div class="relative" id="companyActionsDropdownModern">
-            <button type="button" class="btn btn-outline btn-sm p-1.5" id="companyActionsBtnModern" title="Действия" aria-label="Действия">
+            <button type="button" class="btn btn-outline btn-sm p-1.5" id="companyActionsBtnModern" title="Действия (.)" aria-label="Действия">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/>
               </svg>
             </button>
             <div class="hidden absolute right-0 top-full mt-1 bg-white border border-brand-soft rounded-lg shadow-lg z-50 min-w-[180px]" id="companyActionsMenuModern">
+              {% if statuses %}
+                <div class="px-3 py-2 border-b border-brand-soft/50">
+                  <div class="text-xs text-brand-dark/60 mb-1">Статус</div>
+                  <select class="select w-full text-sm" id="quickStatusChangeModern" data-company-id="{{ company.id }}">
+                    <option value="">—</option>
+                    {% for status in statuses %}
+                      <option value="{{ status.id }}" {% if company.status_id == status.id %}selected{% endif %}>{{ status.name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+              {% endif %}
               {% if can_edit_company %}
                 <a class="block px-3 py-2 text-sm hover:bg-brand-soft/25" href="/companies/{{ company.id }}/edit/">Редактировать данные</a>
               {% endif %}
@@ -2005,7 +2074,7 @@
           <div class="flex items-center justify-between mb-3">
             <div class="font-medium">Заметка</div>
             {% if can_edit_company %}
-              <a href="#notes-section" class="btn btn-outline btn-sm">Добавить заметку</a>
+              <button type="button" class="btn btn-outline btn-sm" onclick="document.getElementById('noteFormModernInline')?.querySelector('textarea')?.focus(); document.getElementById('noteFormModernInline')?.scrollIntoView({behavior: 'smooth', block: 'center'});">Добавить заметку</button>
             {% endif %}
           </div>
           {% if display_note %}
@@ -2043,20 +2112,25 @@
           {% endif %}
         </div>
 
-        <!-- Блок ближайших задач -->
+        <!-- Блок ближайших задач с быстрыми действиями -->
         <div class="card card-pad">
           <div class="font-medium mb-3">Ближайшие задачи</div>
           {% if upcoming_tasks %}
             <div class="space-y-2">
               {% for task in upcoming_tasks %}
-                <div class="rounded-lg border p-3 {% if task.due_at and task.due_at < local_now and task.status != 'done' and task.status != 'cancelled' %}task-overdue{% endif %} hover:bg-brand-soft/20 transition-colors cursor-pointer" onclick="window.location='/tasks/{{ task.id }}/'">
+                <div class="rounded-lg border p-3 {% if task.due_at and task.due_at < local_now and task.status != 'done' and task.status != 'cancelled' %}task-overdue border-red-300{% endif %} hover:bg-brand-soft/20 transition-colors" data-task-id="{{ task.id }}">
                   <div class="flex items-start justify-between gap-2">
                     <div class="flex-1 min-w-0">
-                      {% if task.type %}
-                        {% include "ui/partials/task_type_badge.html" with task_type=task.type only %}
-                      {% elif task.title %}
-                        <span class="badge badge-sm">{{ task.title }}</span>
-                      {% endif %}
+                      <div class="flex items-center gap-2">
+                        {% if can_edit_company %}
+                          <input type="checkbox" class="task-complete-checkbox" data-task-id="{{ task.id }}" {% if task.status == 'done' %}checked{% endif %} title="Завершить задачу">
+                        {% endif %}
+                        {% if task.type %}
+                          {% include "ui/partials/task_type_badge.html" with task_type=task.type only %}
+                        {% elif task.title %}
+                          <span class="badge badge-sm">{{ task.title }}</span>
+                        {% endif %}
+                      </div>
                       {% if task.description %}
                         <div class="text-sm text-brand-dark/80 mt-1 line-clamp-2">{{ task.description }}</div>
                       {% endif %}
@@ -2065,7 +2139,15 @@
                           Срок: {{ task.due_at|date:"d.m.Y H:i" }}
                         </div>
                       {% endif %}
+                      {% if can_edit_company and task.status != 'done' and task.status != 'cancelled' %}
+                        <div class="flex gap-1 mt-2">
+                          <button type="button" class="btn btn-outline btn-xxs task-reschedule-btn" data-task-id="{{ task.id }}" data-days="1" title="Перенести на +1 день">+1д</button>
+                          <button type="button" class="btn btn-outline btn-xxs task-reschedule-btn" data-task-id="{{ task.id }}" data-days="3" title="Перенести на +3 дня">+3д</button>
+                          <button type="button" class="btn btn-outline btn-xxs task-reschedule-btn" data-task-id="{{ task.id }}" data-days="7" title="Перенести на следующую неделю">+7д</button>
+                        </div>
+                      {% endif %}
                     </div>
+                    <button type="button" class="btn btn-outline btn-xs shrink-0" onclick="window.location='/tasks/{{ task.id }}/'" title="Открыть задачу">→</button>
                   </div>
                 </div>
               {% endfor %}
@@ -2075,6 +2157,11 @@
             </div>
           {% else %}
             <div class="text-sm text-brand-dark/50 italic py-4 text-center">Нет активных задач</div>
+            {% if can_edit_company %}
+              <div class="mt-2">
+                <button type="button" class="btn btn-outline btn-sm w-full" data-create-task data-company-id="{{ company.id }}">Поставить задачу на перезвон</button>
+              </div>
+            {% endif %}
           {% endif %}
         </div>
       </div>
@@ -2122,7 +2209,7 @@
           </div>
         {% endif %}
 
-        <!-- Телефон как action-блок -->
+        <!-- Телефон как action-блок + Следующий шаг -->
         {% if company.phone %}
           <div class="card card-pad">
             <div class="font-medium mb-3">Телефон</div>
@@ -2163,6 +2250,47 @@
             </div>
           </div>
         {% endif %}
+
+        <!-- Следующий шаг -->
+        <div class="card card-pad">
+          <div class="font-medium mb-3">Следующий шаг</div>
+          {% if upcoming_tasks and upcoming_tasks|length > 0 %}
+            {% with next_task=upcoming_tasks.0 %}
+              <div class="space-y-2">
+                <div class="text-sm">
+                  {% if next_task.type %}
+                    {% include "ui/partials/task_type_badge.html" with task_type=next_task.type only %}
+                  {% elif next_task.title %}
+                    <span class="badge badge-sm">{{ next_task.title }}</span>
+                  {% endif %}
+                  {% if next_task.description %}
+                    <div class="text-brand-dark/80 mt-1">{{ next_task.description|truncatewords:15 }}</div>
+                  {% endif %}
+                  {% if next_task.due_at %}
+                    <div class="text-xs text-brand-dark/60 mt-1">
+                      {% if next_task.due_at < local_now and next_task.status != 'done' and next_task.status != 'cancelled' %}
+                        <span class="text-red-600 font-medium">Просрочено: {{ next_task.due_at|date:"d.m.Y H:i" }}</span>
+                      {% else %}
+                        Срок: {{ next_task.due_at|date:"d.m.Y H:i" }}
+                      {% endif %}
+                    </div>
+                  {% endif %}
+                </div>
+                <div class="flex gap-2">
+                  <button type="button" class="btn btn-primary btn-sm flex-1" onclick="window.location='/tasks/{{ next_task.id }}/'">Открыть задачу</button>
+                  {% if can_edit_company %}
+                    <button type="button" class="btn btn-outline btn-sm" data-create-task data-company-id="{{ company.id }}" data-task-template="callback">Перезвон</button>
+                  {% endif %}
+                </div>
+              </div>
+            {% endwith %}
+          {% else %}
+            <div class="text-sm text-brand-dark/50 italic mb-2">Нет активных задач</div>
+            {% if can_edit_company %}
+              <button type="button" class="btn btn-primary btn-sm w-full" data-create-task data-company-id="{{ company.id }}" data-task-template="callback">Поставить задачу на перезвон</button>
+            {% endif %}
+          {% endif %}
+        </div>
 
         <!-- Контакты -->
         <div class="card card-pad">
@@ -2234,11 +2362,29 @@
       </div>
     </div>
 
+    <!-- Поиск по карточке (скрыт по умолчанию) -->
+    <div id="cardSearchModern" class="hidden mb-4">
+      <div class="card card-pad">
+        <div class="flex items-center gap-2">
+          <input type="text" id="cardSearchInputModern" class="input flex-1" placeholder="Поиск по карточке (ИНН, телефон, комментарий, статус...)">
+          <button type="button" class="btn btn-outline btn-sm" id="cardSearchCloseModern">✕</button>
+        </div>
+        <div id="cardSearchResultsModern" class="mt-2 text-sm text-brand-dark/60 hidden"></div>
+      </div>
+    </div>
+
     <!-- Inline добавление заметки в блок заметки -->
     {% if can_edit_company %}
       <div class="mb-6">
         <div class="card card-pad">
           <div class="font-medium mb-3">Добавить заметку</div>
+          <!-- Шаблоны заметок -->
+          <div class="flex flex-wrap gap-2 mb-2" id="noteTemplatesModern">
+            <button type="button" class="btn btn-outline btn-xs note-template-btn" data-template="important">⭐ Важно</button>
+            <button type="button" class="btn btn-outline btn-xs note-template-btn" data-template="callback">📞 Перезвон</button>
+            <button type="button" class="btn btn-outline btn-xs note-template-btn" data-template="quote">💰 КП/счёт</button>
+            <button type="button" class="btn btn-outline btn-xs note-template-btn" data-template="reject">❌ Отказ/причина</button>
+          </div>
           <form class="space-y-2" method="post" action="/companies/{{ company.id }}/notes/add/" enctype="multipart/form-data" id="noteFormModernInline" data-company-id="{{ company.id }}" data-user-id="{{ request.user.id }}">
             {% csrf_token %}
             <div class="space-y-2">
@@ -4800,6 +4946,377 @@
       // Инициализируем для обеих форм
       initDraft('noteFormModern');
       initDraft('noteFormModernInline');
+    })();
+  </script>
+
+  <script>
+    // Горячие клавиши для Modern режима
+    (function() {
+      const modernView = document.getElementById('companyDetailModern');
+      if (!modernView) return;
+
+      document.addEventListener('keydown', function(e) {
+        // Работаем только если Modern режим активен
+        if (modernView.classList.contains('hidden')) return;
+        
+        // Игнорируем если пользователь вводит текст
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.isContentEditable) {
+          // Разрешаем только Ctrl+K для поиска
+          if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+            e.preventDefault();
+            document.getElementById('quickSearchBtnModern')?.click();
+          }
+          return;
+        }
+
+        // N - новая заметка
+        if (e.key === 'n' || e.key === 'N') {
+          e.preventDefault();
+          const noteForm = document.getElementById('noteFormModernInline');
+          if (noteForm) {
+            const textarea = noteForm.querySelector('textarea[name="text"]');
+            if (textarea) {
+              textarea.focus();
+              noteForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }
+        }
+
+        // T - новая задача
+        if (e.key === 't' || e.key === 'T') {
+          e.preventDefault();
+          const taskBtn = document.querySelector('[data-quick-action="task"]');
+          if (taskBtn) taskBtn.click();
+        }
+
+        // C - позвонить
+        if (e.key === 'c' || e.key === 'C') {
+          e.preventDefault();
+          const callBtn = document.querySelector('[data-quick-action="call"]');
+          if (callBtn) callBtn.click();
+        }
+
+        // . - открыть меню действий
+        if (e.key === '.') {
+          e.preventDefault();
+          document.getElementById('companyActionsBtnModern')?.click();
+        }
+
+        // / - поиск по карточке
+        if (e.key === '/') {
+          e.preventDefault();
+          document.getElementById('quickSearchBtnModern')?.click();
+        }
+      });
+    })();
+  </script>
+
+  <script>
+    // Поиск по карточке в Modern режиме
+    (function() {
+      const searchBtn = document.getElementById('quickSearchBtnModern');
+      const searchPanel = document.getElementById('cardSearchModern');
+      const searchInput = document.getElementById('cardSearchInputModern');
+      const searchResults = document.getElementById('cardSearchResultsModern');
+      const searchClose = document.getElementById('cardSearchCloseModern');
+
+      if (!searchBtn || !searchPanel || !searchInput) return;
+
+      function toggleSearch() {
+        searchPanel.classList.toggle('hidden');
+        if (!searchPanel.classList.contains('hidden')) {
+          searchInput.focus();
+        } else {
+          searchInput.value = '';
+          searchResults.classList.add('hidden');
+        }
+      }
+
+      searchBtn.addEventListener('click', toggleSearch);
+      if (searchClose) searchClose.addEventListener('click', toggleSearch);
+
+      // Ctrl+K
+      document.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k' && !document.getElementById('companyDetailModern')?.classList.contains('hidden')) {
+          e.preventDefault();
+          toggleSearch();
+        }
+      });
+
+      // Поиск при вводе
+      searchInput.addEventListener('input', function() {
+        const query = this.value.trim().toLowerCase();
+        if (!query) {
+          searchResults.classList.add('hidden');
+          return;
+        }
+
+        const results = [];
+        const modernView = document.getElementById('companyDetailModern');
+        if (!modernView) return;
+
+        // Ищем по всем текстовым элементам
+        const textElements = modernView.querySelectorAll('*');
+        textElements.forEach(el => {
+          const text = el.textContent || '';
+          if (text.toLowerCase().includes(query) && el.children.length === 0) {
+            const parent = el.closest('.card, section, [class*="block"]');
+            if (parent && !results.find(r => r.element === parent)) {
+              results.push({ element: parent, text: text.substring(0, 100) });
+            }
+          }
+        });
+
+        if (results.length > 0) {
+          searchResults.innerHTML = results.slice(0, 5).map(r => 
+            `<div class="p-2 hover:bg-brand-soft/20 rounded cursor-pointer" onclick="r.element.scrollIntoView({behavior:'smooth',block:'center'}); searchPanel.classList.add('hidden');">
+              ${r.text.substring(0, 80)}...
+            </div>`
+          ).join('');
+          searchResults.classList.remove('hidden');
+        } else {
+          searchResults.innerHTML = '<div class="p-2 text-brand-dark/50">Ничего не найдено</div>';
+          searchResults.classList.remove('hidden');
+        }
+      });
+    })();
+  </script>
+
+  <script>
+    // Шаблоны заметок
+    (function() {
+      const templates = {
+        important: '⭐ ВАЖНО:\n\n',
+        callback: '📞 Перезвон:\nДата: ' + new Date().toLocaleDateString('ru-RU') + '\nРезультат: ',
+        quote: '💰 КП/Счёт:\nСумма: \nСрок действия: \nКомментарий: ',
+        reject: '❌ Отказ:\nПричина: \nКомментарий: '
+      };
+
+      document.querySelectorAll('.note-template-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+          const template = templates[this.dataset.template];
+          if (!template) return;
+
+          const form = document.getElementById('noteFormModernInline');
+          if (!form) return;
+
+          const textarea = form.querySelector('textarea[name="text"]');
+          if (textarea) {
+            textarea.value = template;
+            textarea.focus();
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+          }
+        });
+      });
+    })();
+  </script>
+
+  <script>
+    // Копирование текста (универсальное)
+    (function() {
+      document.addEventListener('click', function(e) {
+        const copyBtn = e.target.closest('[data-copy-text]');
+        if (!copyBtn) return;
+        
+        const text = copyBtn.getAttribute('data-copy-text');
+        if (!text) return;
+        
+        navigator.clipboard.writeText(text).then(() => {
+          const originalHTML = copyBtn.innerHTML;
+          copyBtn.innerHTML = '<svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
+          setTimeout(() => {
+            copyBtn.innerHTML = originalHTML;
+          }, 1000);
+        }).catch(err => {
+          console.error('Не удалось скопировать:', err);
+        });
+      });
+    })();
+  </script>
+
+  <script>
+    // Быстрые действия в Modern режиме
+    (function() {
+      // Добавить заметку
+      document.querySelector('[data-quick-action="note"]')?.addEventListener('click', function() {
+        const form = document.getElementById('noteFormModernInline');
+        if (form) {
+          const textarea = form.querySelector('textarea[name="text"]');
+          if (textarea) {
+            textarea.focus();
+            form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }
+      });
+
+      // Создать задачу
+      document.querySelector('[data-quick-action="task"]')?.addEventListener('click', function() {
+        const companyId = this.dataset.companyId;
+        if (companyId) {
+          const taskBtn = document.querySelector(`[data-create-task][data-company-id="${companyId}"]`);
+          if (taskBtn) taskBtn.click();
+        }
+      });
+    })();
+  </script>
+
+  <script>
+    // Завершение задачи и перенос сроков
+    (function() {
+      // Завершение задачи
+      document.querySelectorAll('.task-complete-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', async function() {
+          const taskId = this.dataset.taskId;
+          if (!taskId) return;
+
+          const formData = new FormData();
+          formData.append('status', this.checked ? 'done' : 'in_progress');
+          formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]')?.value || '');
+
+          try {
+            const res = await fetch(`/tasks/${taskId}/update-status/`, {
+              method: 'POST',
+              body: formData,
+              headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            if (res.ok) {
+              location.reload(); // Перезагружаем для обновления списка
+            }
+          } catch (err) {
+            console.error('Ошибка обновления задачи:', err);
+            this.checked = !this.checked; // Откатываем изменение
+          }
+        });
+      });
+
+      // Перенос сроков
+      document.querySelectorAll('.task-reschedule-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+          const taskId = this.dataset.taskId;
+          const days = parseInt(this.dataset.days) || 0;
+          if (!taskId || !days) return;
+
+          const formData = new FormData();
+          const newDate = new Date();
+          newDate.setDate(newDate.getDate() + days);
+          formData.append('due_at', newDate.toISOString().slice(0, 16));
+          formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]')?.value || '');
+
+          try {
+            const res = await fetch(`/tasks/${taskId}/edit/`, {
+              method: 'POST',
+              body: formData,
+              headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            if (res.ok) {
+              location.reload();
+            }
+          } catch (err) {
+            console.error('Ошибка переноса задачи:', err);
+          }
+        });
+      });
+    })();
+  </script>
+
+  <script>
+    // Быстрое изменение статуса компании
+    (function() {
+      const statusSelect = document.getElementById('quickStatusChangeModern');
+      if (!statusSelect) return;
+
+      statusSelect.addEventListener('change', async function() {
+        const statusId = this.value;
+        const companyId = this.dataset.companyId;
+        if (!statusId || !companyId) return;
+
+        const formData = new FormData();
+        formData.append('field', 'status');
+        formData.append('value', statusId);
+        formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]')?.value || '');
+
+        try {
+          const res = await fetch(`/companies/${companyId}/inline/`, {
+            method: 'POST',
+            body: formData,
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+          });
+          if (res.ok) {
+            location.reload();
+          }
+        } catch (err) {
+          console.error('Ошибка изменения статуса:', err);
+        }
+      });
+    })();
+  </script>
+
+  <script>
+    // Индикатор несохранённых изменений
+    (function() {
+      const indicator = document.getElementById('unsavedChangesIndicatorModern');
+      if (!indicator) return;
+
+      let unsavedFields = new Set();
+
+      function updateIndicator() {
+        if (unsavedFields.size > 0) {
+          indicator.classList.remove('hidden');
+        } else {
+          indicator.classList.add('hidden');
+        }
+      }
+
+      // Отслеживаем открытие inline-редактирования
+      document.addEventListener('click', function(e) {
+        const editBtn = e.target.closest('[data-inline-edit]');
+        if (editBtn) {
+          const wrapper = editBtn.closest('.inline-field-wrapper');
+          if (wrapper) {
+            unsavedFields.add(wrapper);
+            updateIndicator();
+          }
+        }
+
+        const saveBtn = e.target.closest('[data-inline-save]');
+        if (saveBtn) {
+          const wrapper = saveBtn.closest('.inline-field-wrapper');
+          if (wrapper) {
+            // Удаляем после успешного сохранения (будет обработано в основном обработчике)
+            setTimeout(() => {
+              unsavedFields.delete(wrapper);
+              updateIndicator();
+            }, 500);
+          }
+        }
+
+        const cancelBtn = e.target.closest('[data-inline-cancel]');
+        if (cancelBtn) {
+          const wrapper = cancelBtn.closest('.inline-field-wrapper');
+          if (wrapper) {
+            unsavedFields.delete(wrapper);
+            updateIndicator();
+          }
+        }
+      });
+
+      // Сохранить всё
+      document.getElementById('saveAllChangesModern')?.addEventListener('click', function() {
+        unsavedFields.forEach(wrapper => {
+          const saveBtn = wrapper.querySelector('[data-inline-save]');
+          if (saveBtn) saveBtn.click();
+        });
+      });
+
+      // Отменить всё
+      document.getElementById('cancelAllChangesModern')?.addEventListener('click', function() {
+        unsavedFields.forEach(wrapper => {
+          const cancelBtn = wrapper.querySelector('[data-inline-cancel]');
+          if (cancelBtn) cancelBtn.click();
+        });
+        unsavedFields.clear();
+        updateIndicator();
+      });
     })();
   </script>
 
