@@ -108,7 +108,7 @@
             </form>
           {% endif %}
           
-          <button class="btn-icon btn" type="button" onclick="document.getElementById('generateModal').classList.remove('hidden')" title="Сгенерировать получателей" style="background:#f97316;color:#fff;padding:0.375rem 0.75rem;font-size:0.875rem">
+          <button class="btn-icon btn" type="button" onclick="document.getElementById('generateModal').classList.remove('hidden'); if (window.initMailRegionDropdown) window.initMailRegionDropdown();" title="Сгенерировать получателей" style="background:#f97316;color:#fff;padding:0.375rem 0.75rem;font-size:0.875rem">
             <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
               <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
             </svg>
@@ -504,75 +504,79 @@
         </script>
 
         <script>
-          function toggleAllRegions(master) {
-            const container = document.getElementById('regionContainer');
-            if (!container) return;
-            container.querySelectorAll('input.region-checkbox').forEach(cb => {
-              cb.checked = !!master.checked;
-            });
-          }
-
-          (function syncRegionAllCheckbox() {
-            const master = document.getElementById('regionAll');
-            const container = document.getElementById('regionContainer');
-            if (!master || !container) return;
-            const boxes = Array.from(container.querySelectorAll('input.region-checkbox'));
-            const update = () => {
-              const allChecked = boxes.length > 0 && boxes.every(b => b.checked);
-              const someChecked = boxes.some(b => b.checked);
-              master.checked = allChecked;
-              master.indeterminate = !allChecked && someChecked;
-            };
-            boxes.forEach(b => b.addEventListener('change', update));
-            update();
-          })();
-
-          // Сброс региона (возврат к "Любая")
-          (function regionReset() {
-            const btn = document.getElementById('regionResetBtnMail');
+          // Инициализация фильтра "Область" в модалке генерации.
+          // Важно: модалка находится ниже по DOM, поэтому инициализируем ПОСЛЕ загрузки DOM
+          // и дополнительно при открытии модалки.
+          window.initMailRegionDropdown = function initMailRegionDropdown() {
             const root = document.getElementById('regionFilterMail');
             const menu = document.getElementById('regionFilterMenuMail');
             const label = document.getElementById('regionFilterLabelMail');
             const btnToggle = document.getElementById('regionFilterBtnMail');
             const done = document.getElementById('regionDoneBtnMail');
+            const resetBtn = document.getElementById('regionResetBtnMail');
             const master = document.getElementById('regionAll');
             const container = document.getElementById('regionContainer');
-            if (!container) return;
+
+            if (!root || !menu || !label || !btnToggle || !container) return;
+            if (root.dataset.inited === '1') return; // не вешаем обработчики повторно
+            root.dataset.inited = '1';
+
+            window.toggleAllRegions = function toggleAllRegions(masterEl) {
+              if (!container) return;
+              container.querySelectorAll('input.region-checkbox').forEach(cb => {
+                cb.checked = !!masterEl.checked;
+              });
+              setLabel();
+              syncMaster();
+            };
 
             function computeLabel() {
               const checked = Array.from(container.querySelectorAll('input.region-checkbox:checked'));
               if (!checked.length) return 'Любая';
-              if (checked.length === 1) return (checked[0].dataset.regionName || checked[0].closest('label')?.textContent || '').trim() || 'Выбрано: 1';
+              if (checked.length === 1) {
+                return (checked[0].dataset.regionName || checked[0].closest('label')?.textContent || '').trim() || 'Выбрано: 1';
+              }
               return `Выбрано: ${checked.length}`;
             }
 
             function setLabel() {
-              if (label) label.textContent = computeLabel();
+              label.textContent = computeLabel();
             }
 
-            function openMenu() { if (menu) menu.classList.remove('hidden'); }
-            function closeMenu() { if (menu) menu.classList.add('hidden'); }
-
-            if (btnToggle) {
-              btnToggle.addEventListener('click', (e) => {
-                e.preventDefault();
-                if (!menu) return;
-                const isOpen = !menu.classList.contains('hidden');
-                if (isOpen) closeMenu(); else openMenu();
-              });
+            function syncMaster() {
+              if (!master) return;
+              const boxes = Array.from(container.querySelectorAll('input.region-checkbox'));
+              const allChecked = boxes.length > 0 && boxes.every(b => b.checked);
+              const someChecked = boxes.some(b => b.checked);
+              master.checked = allChecked;
+              master.indeterminate = !allChecked && someChecked;
             }
+
+            function openMenu() { menu.classList.remove('hidden'); }
+            function closeMenu() { menu.classList.add('hidden'); }
+
+            btnToggle.addEventListener('click', (e) => {
+              e.preventDefault();
+              const isOpen = !menu.classList.contains('hidden');
+              if (isOpen) closeMenu(); else openMenu();
+            });
+
             if (done) done.addEventListener('click', (e) => { e.preventDefault(); closeMenu(); });
+
             document.addEventListener('click', (e) => {
-              if (!menu || menu.classList.contains('hidden')) return;
-              if (!root) return;
+              if (menu.classList.contains('hidden')) return;
               if (!root.contains(e.target)) closeMenu();
             });
 
-            container.querySelectorAll('input.region-checkbox').forEach(cb => cb.addEventListener('change', setLabel));
-            setLabel();
+            container.querySelectorAll('input.region-checkbox').forEach(cb => {
+              cb.addEventListener('change', () => {
+                setLabel();
+                syncMaster();
+              });
+            });
 
-            if (btn) {
-              btn.addEventListener('click', (e) => {
+            if (resetBtn) {
+              resetBtn.addEventListener('click', (e) => {
                 e.preventDefault();
                 container.querySelectorAll('input.region-checkbox').forEach(cb => { cb.checked = false; });
                 if (master) { master.checked = false; master.indeterminate = false; }
@@ -580,7 +584,16 @@
                 closeMenu();
               });
             }
-          })();
+
+            setLabel();
+            syncMaster();
+          };
+
+          document.addEventListener('DOMContentLoaded', () => {
+            if (typeof window.initMailRegionDropdown === 'function') {
+              window.initMailRegionDropdown();
+            }
+          });
         </script>
       </div>
 
