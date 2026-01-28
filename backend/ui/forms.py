@@ -572,13 +572,14 @@ class TaskForm(forms.ModelForm):
     class Meta:
         model = Task
         # Заголовок теперь не вводится руками — он берётся из выбранного типа/статуса.
-        fields = ["description", "company", "type", "assigned_to", "due_at"]
+        fields = ["description", "company", "type", "assigned_to", "due_at", "is_urgent"]
         widgets = {
             "description": forms.Textarea(attrs={"rows": 4, "class": "w-full rounded-lg border px-3 py-2"}),
             "company": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             # type фактически используется как «Задача» (тип задачи из справочника)
             "type": TaskTypeSelectWidget(attrs={"class": "w-full rounded-lg border px-3 py-2 task-type-select"}),
             "assigned_to": UserSelectWithBranchWidget(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "is_urgent": forms.CheckboxInput(attrs={"class": "rounded border-gray-300"}),
         }
     
     def __init__(self, *args, **kwargs):

@@ -1,0 +1,46 @@
+{% comment %}
+Partial для отображения мета-информации задачи:
+- кто поставил задачу
+- иконка роли (РОП/директор)
+- дедлайн
+- бейдж "СРОЧНО" (если is_urgent)
+
+Использование:
+{% include "ui/partials/_task_meta.html" with task=task only %}
+{% endcomment %}
+
+{% if task.created_by or task.due_at or task.is_urgent %}
+  <div class="flex items-center gap-1.5 flex-wrap text-xs text-brand-dark/60 mt-1">
+    {% if task.created_by %}
+      <span class="flex items-center gap-1">
+        <span>поставил:</span>
+        <span class="text-brand-dark/80">{{ task.created_by.last_name }} {{ task.created_by.first_name|slice:":1" }}.</span>
+        {% if task.created_by.role == 'sales_head' %}
+          {# РОП - иконка target 🎯 #}
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-brand-teal" title="РОП">
+            <circle cx="12" cy="12" r="10"/>
+            <circle cx="12" cy="12" r="6"/>
+            <circle cx="12" cy="12" r="2"/>
+          </svg>
+        {% elif task.created_by.role == 'branch_director' %}
+          {# Директор филиала - иконка crown 👑 #}
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-amber-600" title="Директор филиала">
+            <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z"/>
+            <path d="M12 18v4"/>
+            <path d="M8 22h8"/>
+          </svg>
+        {% endif %}
+      </span>
+    {% endif %}
+    
+    {% if task.due_at %}
+      <span class="text-brand-dark/60">·</span>
+      <span>срок: {{ task.due_at|date:"d.m.Y H:i" }}</span>
+    {% endif %}
+    
+    {% if task.is_urgent %}
+      <span class="text-brand-dark/60">·</span>
+      <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 border border-red-200">СРОЧНО</span>
+    {% endif %}
+  </div>
+{% endif %}

@@ -129,7 +129,8 @@
                       {% if t.description %}
                         <div class="text-xs text-brand-dark/70 mt-1 mb-1" style="line-height:1.4">{{ t.description|truncatechars:100 }}</div>
                       {% endif %}
-                      <div class="text-xs text-brand-dark/70 flex items-center gap-1 flex-wrap">
+                      {% include "ui/partials/_task_meta.html" with task=t only %}
+                      <div class="text-xs text-brand-dark/70 flex items-center gap-1 flex-wrap mt-1">
                         {% if t.company %}
                           <span>{{ t.company.name }}</span>
                           {% with guessed=t.company.address|guess_ru_tz %}
@@ -287,7 +288,8 @@
                       {% if t.description %}
                         <div class="text-xs text-brand-dark/70 mt-1 mb-1" style="line-height:1.4">{{ t.description|truncatechars:100 }}</div>
                       {% endif %}
-                      <div class="text-xs text-brand-dark/70 flex items-center gap-1 flex-wrap">
+                      {% include "ui/partials/_task_meta.html" with task=t only %}
+                      <div class="text-xs text-brand-dark/70 flex items-center gap-1 flex-wrap mt-1">
                         {% if t.company %}
                           <span>{{ t.company.name }}</span>
                           {% with guessed=t.company.address|guess_ru_tz %}
@@ -421,7 +423,8 @@
                       {% if t.description %}
                         <div class="text-xs text-brand-dark/70 mt-1 mb-1" style="line-height:1.4">{{ t.description|truncatechars:100 }}</div>
                       {% endif %}
-                      <div class="text-xs text-brand-dark/70 flex items-center gap-1 flex-wrap">
+                      {% include "ui/partials/_task_meta.html" with task=t only %}
+                      <div class="text-xs text-brand-dark/70 flex items-center gap-1 flex-wrap mt-1">
                         {% if t.company %}<span>{{ t.company.name }}</span>{% endif %}
                       </div>
                       {% if t.due_at %}
@@ -453,6 +456,51 @@
           </div>
         {% endif %}
       </section>
+
+      {# Блок запросов на удаление для РОП/директора #}
+      {% if deletion_requests_count > 0 %}
+        <section class="card card-pad dashboard-card">
+          <div class="flex items-center justify-between mb-3">
+            <div class="font-medium">
+              Запросы на удаление
+              <span class="ml-2 badge badge-progress">{{ deletion_requests_count }}</span>
+            </div>
+          </div>
+          <ul class="space-y-2">
+            {% for req in deletion_requests %}
+              <li>
+                <div class="rounded-lg border border-brand-soft p-3 hover:bg-brand-soft/20 transition-colors">
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex-1 min-w-0">
+                      <div class="text-sm font-medium mb-1">
+                        {% if req.company %}
+                          <a href="/companies/{{ req.company.id }}/" class="link">{{ req.company.name }}</a>
+                        {% else %}
+                          {{ req.company_name_snapshot }}
+                        {% endif %}
+                      </div>
+                      {% if req.requested_by %}
+                        <div class="text-xs text-brand-dark/70 mb-1">
+                          Запросил: {{ req.requested_by.last_name }} {{ req.requested_by.first_name|slice:":1" }}.
+                        </div>
+                      {% endif %}
+                      {% if req.note %}
+                        <div class="text-xs text-brand-dark/60 mt-1">{{ req.note|truncatewords:15 }}</div>
+                      {% endif %}
+                      <div class="text-xs text-brand-dark/50 mt-1">{{ req.created_at|date:"d.m.Y H:i" }}</div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                      {% if req.company %}
+                        <a href="/companies/{{ req.company.id }}/" class="btn btn-outline btn-sm">Открыть</a>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+              </li>
+            {% endfor %}
+          </ul>
+        </section>
+      {% endif %}
     </div>
 
     {# Модальное окно для создания задачи #}

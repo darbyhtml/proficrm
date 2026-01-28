@@ -823,8 +823,26 @@
                     {% for n in notif_items %}
                       <div class="rounded-xl border border-brand-soft px-3 py-2 mb-2 bg-brand-soft/20" data-notif-id="{{ n.id }}">
                         <div class="flex items-start justify-between gap-2">
-                          <div>
-                            <div class="text-sm font-medium">{{ n.title }}</div>
+                          <div class="flex-1">
+                            <div class="text-sm font-medium flex items-center gap-1">
+                              {{ n.title }}
+                              {% if n.payload.creator_role == 'sales_head' %}
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-brand-teal" title="РОП">
+                                  <circle cx="12" cy="12" r="10"/>
+                                  <circle cx="12" cy="12" r="6"/>
+                                  <circle cx="12" cy="12" r="2"/>
+                                </svg>
+                              {% elif n.payload.creator_role == 'branch_director' %}
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-amber-600" title="Директор филиала">
+                                  <path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z"/>
+                                  <path d="M12 18v4"/>
+                                  <path d="M8 22h8"/>
+                                </svg>
+                              {% endif %}
+                              {% if n.payload.is_urgent %}
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 border border-red-200">СРОЧНО</span>
+                              {% endif %}
+                            </div>
                             {% if n.body %}<div class="text-xs muted mt-0.5">{{ n.body|truncatechars:140 }}</div>{% endif %}
                             <div class="muted-2 mt-1" style="font-size:0.6875rem;">{{ n.created_at }}</div>
                           </div>
@@ -1317,12 +1335,24 @@
             const body = escapeHtml(n.body || '');
             const created = escapeHtml(n.created_at || '');
             const url = escapeHtml(n.url || '');
+            const payload = n.payload || {};
             const openLink = url ? `<a class="link text-sm mt-2 inline-block" href="${url}">Открыть</a>` : '';
             const bodyShort = body ? (body.length > 140 ? body.slice(0, 140) + '…' : body) : '';
+            
+            // Иконки ролей и бейдж "СРОЧНО"
+            let roleIcon = '';
+            if (payload.creator_role === 'sales_head') {
+              roleIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-brand-teal inline-block ml-1" title="РОП"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>';
+            } else if (payload.creator_role === 'branch_director') {
+              roleIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-amber-600 inline-block ml-1" title="Директор филиала"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>';
+            }
+            
+            const urgentBadge = payload.is_urgent ? '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 border border-red-200 ml-1">СРОЧНО</span>' : '';
+            
             return `<div class="rounded-xl border border-brand-soft px-3 py-2 mb-2 bg-brand-soft/20" data-notif-id="${id}">
               <div class="flex items-start justify-between gap-2">
-                <div>
-                  <div class="text-sm font-medium">${title}</div>
+                <div class="flex-1">
+                  <div class="text-sm font-medium flex items-center gap-1">${title}${roleIcon}${urgentBadge}</div>
                   ${bodyShort ? `<div class="text-xs muted mt-0.5">${bodyShort}</div>` : ''}
                   <div class="muted-2 mt-1" style="font-size:0.6875rem;">${created}</div>
                 </div>

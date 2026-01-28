@@ -65,6 +65,14 @@
       </div>
 
       <div>
+        <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
+          {{ form.is_urgent }}
+          <span>Срочная задача</span>
+        </label>
+        <div class="text-xs text-brand-dark/70 mt-1">Отметка "СРОЧНО" будет отображаться в уведомлениях и списках задач.</div>
+      </div>
+
+      <div>
         <label class="block text-sm text-brand-dark/80 mb-1">Повтор (RRULE)</label>
         {{ form.recurrence_rrule }}
         <div class="text-xs text-brand-dark/70 mt-1">Можно оставить пустым. Пример: <span class="font-mono">FREQ=WEEKLY;BYDAY=MO</span></div>

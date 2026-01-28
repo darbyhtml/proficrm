@@ -1118,6 +1118,7 @@
                     {% if t.description %}
                       <div class="text-xs text-brand-dark/70 mt-1" style="line-height:1.3">{{ t.description|truncatechars:120 }}</div>
                     {% endif %}
+                    {% include "ui/partials/_task_meta.html" with task=t only %}
                     <div class="text-xs text-brand-dark/70 mt-1">
                       {{ t.get_status_display }}
                       {% if t.assigned_to %} · {{ t.assigned_to }}{% endif %}
@@ -2557,9 +2558,7 @@
                     {% if task.description %}
                       <div class="text-sm text-brand-dark/80 mt-1">{{ task.description|truncatewords:20 }}</div>
                     {% endif %}
-                    {% if task.due_at %}
-                      <div class="text-xs text-brand-dark/60 mt-1">Срок: {{ task.due_at|date:"d.m.Y H:i" }}</div>
-                    {% endif %}
+                    {% include "ui/partials/_task_meta.html" with task=task only %}
                   </div>
                 </div>
               </div>
