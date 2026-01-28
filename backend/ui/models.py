@@ -139,6 +139,16 @@ class UiUserPreference(models.Model):
             MaxValueValidator(Decimal("1.15")),
         ],
     )
+    company_list_view_mode = models.CharField(
+        "Режим просмотра списка компаний",
+        max_length=20,
+        default="classic",
+        choices=[
+            ("classic", "Обычный"),
+            ("compact", "Компактный"),
+        ],
+        help_text="Режим отображения списка компаний: обычный (таблица) или компактный (карточки)",
+    )
     updated_at = models.DateTimeField("Обновлено", auto_now=True)
 
     class Meta:
