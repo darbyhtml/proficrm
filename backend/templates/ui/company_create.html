@@ -12,6 +12,20 @@
     <form method="post" class="bg-white border rounded-2xl p-4 space-y-3" id="companyCreateForm">
       {% csrf_token %}
 
+      <div id="companyCreateDraftBanner" class="hidden mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-brand-dark/80 flex items-start justify-between gap-2">
+        <div>
+          <div class="font-medium text-sm">Найден черновик этой формы</div>
+          <div class="mt-0.5">
+            <span class="muted">Вы можете восстановить ранее введённые данные или удалить черновик.</span>
+            <span class="muted" id="companyCreateDraftMeta"></span>
+          </div>
+        </div>
+        <div class="flex flex-col sm:flex-row gap-1 sm:items-center shrink-0">
+          <button type="button" class="btn btn-xs btn-primary" id="companyCreateDraftRestoreBtn">Восстановить</button>
+          <button type="button" class="btn btn-xs btn-outline" id="companyCreateDraftDiscardBtn">Удалить</button>
+        </div>
+      </div>
+
       <div class="card card-pad" id="dupBox" style="display:none">
         <div class="flex items-center justify-between">
           <div class="font-medium">Похожие компании</div>
@@ -378,6 +392,10 @@
     document.addEventListener('DOMContentLoaded', function() {
       const formEl = document.getElementById('companyCreateForm');
       const DRAFT_KEY = 'companyCreate:draft';
+      const draftBannerEl = document.getElementById('companyCreateDraftBanner');
+      const draftMetaEl = document.getElementById('companyCreateDraftMeta');
+      const draftRestoreBtn = document.getElementById('companyCreateDraftRestoreBtn');
+      const draftDiscardBtn = document.getElementById('companyCreateDraftDiscardBtn');
       let formDirty = false;
       let draftSnapshot = null;
 
@@ -457,6 +475,10 @@
         saveDraftSoon._t = window.setTimeout(function() {
           try {
             const payload = collectFormData(formEl);
+            const now = new Date();
+            payload.__meta = {
+              savedAt: now.toLocaleString('ru-RU'),
+            };
             localStorage.setItem(DRAFT_KEY, JSON.stringify(payload));
           } catch (e) {
             // localStorage может быть недоступен — просто молча пропускаем.
@@ -465,10 +487,12 @@
       }
 
       if (formEl) {
-        if (!hasUserData(formEl)) {
-          const draft = loadDraft();
-          if (draft) {
-            applyDraftToExistingControls(formEl, draft);
+        const draft = loadDraft();
+        if (draft && draftBannerEl) {
+          draftBannerEl.classList.remove('hidden');
+          const meta = (draft.__meta && draft.__meta.savedAt) ? String(draft.__meta.savedAt) : '';
+          if (draftMetaEl) {
+            draftMetaEl.textContent = meta ? ` (сохранено: ${meta})` : '';
           }
         }
 
@@ -698,6 +722,42 @@
           t.value = phones[0] || '';
           for (let i = 1; i < phones.length; i++) {
             addPhoneRow(phones[i]);
+          }
+        });
+      }
+
+      function applyDraftFull(form, draft) {
+        if (!form || !draft) return;
+        const hadData = hasUserData(form);
+        if (hadData) {
+          const overwrite = window.confirm('Будут восстановлены данные из черновика и могут быть перезаписаны текущие значения. Продолжить?');
+          if (!overwrite) return;
+        }
+        applyDraftToExistingControls(form, draft);
+        restoreDynamicFromDraft(draft);
+        if (draftBannerEl) {
+          draftBannerEl.classList.add('hidden');
+        }
+        formDirty = true;
+        saveDraftSoon();
+      }
+
+      if (draftRestoreBtn) {
+        draftRestoreBtn.addEventListener('click', function() {
+          const draft = draftSnapshot || loadDraft();
+          if (!draft) return;
+          applyDraftFull(formEl, draft);
+        });
+      }
+
+      if (draftDiscardBtn) {
+        draftDiscardBtn.addEventListener('click', function() {
+          try {
+            localStorage.removeItem(DRAFT_KEY);
+          } catch (e) {}
+          draftSnapshot = null;
+          if (draftBannerEl) {
+            draftBannerEl.classList.add('hidden');
           }
         });
       }
