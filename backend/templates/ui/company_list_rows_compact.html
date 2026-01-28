@@ -48,14 +48,14 @@
             <span>·</span>
             <span>{{ c.region.name }}</span>
           {% endif %}
-          {% if c.spheres.all %}
+          {% if c.spheres_list %}
             <span>·</span>
             <div class="flex items-center gap-1 flex-wrap">
-              {% for s in c.spheres.all|slice:":3" %}
+              {% for s in c.spheres_list %}
                 <span class="badge badge-sm">{{ s.name }}</span>
               {% endfor %}
-              {% if c.spheres.all|length > 3 %}
-                <span class="text-xs">+{{ c.spheres.all|length|add:"-3" }}</span>
+              {% if c.spheres_more > 0 %}
+                <span class="text-xs">+{{ c.spheres_more }}</span>
               {% endif %}
             </div>
           {% endif %}

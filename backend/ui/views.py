@@ -10,12 +10,11 @@ from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Exists, OuterRef, Q, F
 from django.db.models import Count, Max, Prefetch, Avg
-from django.db import models
+from django.db import models, transaction
 from django.http import HttpRequest, HttpResponse
 from django.http import StreamingHttpResponse
 from django.http import JsonResponse
 from django.http import FileResponse, Http404
-from django.db import models, transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -36,7 +35,6 @@ from companies.models import (
     ContactPhone,
     CompanyDeletionRequest,
     CompanyEmail,
-    CompanyPhone,
     CompanyPhone,
 )
 from companies.services import resolve_target_companies
@@ -2026,6 +2024,10 @@ def company_list(request: HttpRequest) -> HttpResponse:
         # Берем первую заметку из отсортированного списка (pinned или latest)
         notes_sorted = getattr(company, "notes_sorted", [])
         company.display_note = notes_sorted[0] if notes_sorted else None  # type: ignore[attr-defined]
+        # Подготавливаем список сфер для безопасной проверки в шаблоне
+        spheres_list = list(company.spheres.all())
+        company.spheres_list = spheres_list[:3]  # type: ignore[attr-defined]
+        company.spheres_more = max(0, len(spheres_list) - 3)  # type: ignore[attr-defined]
     
     # Формируем qs для пагинации, включая per_page если он отличается от значения по умолчанию
     # Используем filter_params вместо request.GET, чтобы включить default_branch_id для директора филиала
@@ -2211,6 +2213,10 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
         # Берем первую заметку из отсортированного списка (pinned или latest)
         notes_sorted = getattr(company, "notes_sorted", [])
         company.display_note = notes_sorted[0] if notes_sorted else None  # type: ignore[attr-defined]
+        # Подготавливаем список сфер для безопасной проверки в шаблоне
+        spheres_list = list(company.spheres.all())
+        company.spheres_list = spheres_list[:3]  # type: ignore[attr-defined]
+        company.spheres_more = max(0, len(spheres_list) - 3)  # type: ignore[attr-defined]
     
     # Получаем конфигурацию колонок
     ui_cfg = UiGlobalConfig.load()
