@@ -900,11 +900,11 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     tasks_week_count = len(tasks_week_list)
     tasks_new_count = len(tasks_new_all)
     
-    # Ограничиваем до 5 для отображения на dashboard
-    overdue_list = overdue_list[:5]  # 5 самых просроченных
-    tasks_today_list = tasks_today_list[:5]
-    tasks_week_list = tasks_week_list[:5]
-    tasks_new_list = tasks_new_all[:5]
+    # Ограничиваем до 3 для отображения на dashboard
+    overdue_list = overdue_list[:3]  # 3 самых просроченных
+    tasks_today_list = tasks_today_list[:3]
+    tasks_week_list = tasks_week_list[:3]
+    tasks_new_list = tasks_new_all[:3]
 
     # Договоры, которые подходят по сроку (<= 30 дней) — только для ответственного
     contracts_soon_qs = (

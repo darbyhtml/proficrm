@@ -102,10 +102,10 @@
           <div class="font-medium">
             На сегодня
             {% if tasks_today_count > 0 %}
-              <span class="ml-2 badge {% if tasks_today_count > 5 %}badge-progress{% else %}badge-new{% endif %}">{{ tasks_today_count }}</span>
+              <span class="ml-2 badge {% if tasks_today_count > 3 %}badge-progress{% else %}badge-new{% endif %}">{{ tasks_today_count }}</span>
             {% endif %}
           </div>
-          {% if tasks_today_count > 5 %}
+          {% if tasks_today_count > 3 %}
             <a class="text-sm link" href="/tasks/?mine=1&today=1">
               Посмотреть все
               <span class="text-xs text-brand-dark/60">({{ tasks_today_count }})</span>
@@ -184,7 +184,7 @@
               <span class="ml-2 badge badge-new">{{ tasks_new_count }}</span>
             {% endif %}
           </div>
-          {% if tasks_new_count > 5 %}
+          {% if tasks_new_count > 3 %}
             <a class="text-sm link" href="/tasks/?mine=1&status=new">
               Посмотреть все
               <span class="text-xs text-brand-dark/60">({{ tasks_new_count }})</span>
@@ -264,7 +264,7 @@
               <span class="ml-2 badge badge-danger">{{ overdue_count }}</span>
             {% endif %}
           </div>
-          {% if overdue_count > 5 %}
+          {% if overdue_count > 3 %}
             <a class="text-sm link" href="/tasks/?mine=1&overdue=1">
               Посмотреть все
               <span class="text-xs text-brand-dark/60">({{ overdue_count }})</span>
@@ -383,8 +383,8 @@
         {% endif %}
       </section>
 
-      {# 3 строка: Задачи на неделю — на всю ширину #}
-      <section class="card card-pad lg:col-span-2 dashboard-card">
+      {# 3 строка: Задачи на неделю — на всю ширину для обычных пользователей, на половинку для РОП/директора (если есть запросы на удаление) #}
+      <section class="card card-pad {% if (request.user.role == 'sales_head' or request.user.role == 'branch_director') and deletion_requests_count > 0 %}{% else %}lg:col-span-2{% endif %} dashboard-card">
         <div class="flex items-center justify-between mb-3">
           <div>
             <div class="font-medium">
@@ -399,7 +399,7 @@
               </div>
             {% endif %}
           </div>
-          {% if tasks_week_count > 5 %}
+          {% if tasks_week_count > 3 %}
             <a class="text-sm link" href="/tasks/?mine=1">
               Посмотреть все
               <span class="text-xs text-brand-dark/60">({{ tasks_week_count }})</span>
@@ -465,6 +465,12 @@
               Запросы на удаление
               <span class="ml-2 badge badge-progress">{{ deletion_requests_count }}</span>
             </div>
+            {% if deletion_requests_count > 3 %}
+              <a class="text-sm link" href="/companies/?deletion_requests=1">
+                Показать все
+                <span class="text-xs text-brand-dark/60">({{ deletion_requests_count }})</span>
+              </a>
+            {% endif %}
           </div>
           <ul class="space-y-2">
             {% for req in deletion_requests %}
