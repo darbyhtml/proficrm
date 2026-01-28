@@ -44,7 +44,7 @@
                   {% endif %}
                 </button>
                 <!-- Tooltip с превью заметки -->
-                <div class="hidden group-hover:block absolute z-50 left-full ml-2 top-0 w-64 bg-white border border-brand-soft rounded-lg shadow-lg p-3 text-sm">
+                <div class="hidden group-hover:block absolute z-50 left-full ml-2 top-0 w-64 max-w-[calc(100vw-2rem)] bg-white border border-brand-soft rounded-lg shadow-lg p-3 text-sm tooltip-note">
                   <div class="flex items-center gap-2 mb-1">
                     <span class="font-medium text-brand-dark/90">Заметка</span>
                     {% if display_note.is_pinned %}
