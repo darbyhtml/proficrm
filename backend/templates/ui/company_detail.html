@@ -4666,6 +4666,144 @@
   </script>
 
   <script>
+    // Dropdown действий в Modern режиме
+    (function() {
+      const btn = document.getElementById('companyActionsBtnModern');
+      const menu = document.getElementById('companyActionsMenuModern');
+      if (!btn || !menu) return;
+      
+      btn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        menu.classList.toggle('hidden');
+      });
+      
+      // Закрытие при клике вне меню
+      document.addEventListener('click', function(e) {
+        if (!btn.contains(e.target) && !menu.contains(e.target)) {
+          menu.classList.add('hidden');
+        }
+      });
+    })();
+  </script>
+
+  <script>
+    // Копирование телефона
+    (function() {
+      document.addEventListener('click', function(e) {
+        const copyBtn = e.target.closest('[data-copy-phone]');
+        if (!copyBtn) return;
+        
+        const phone = copyBtn.getAttribute('data-copy-phone');
+        if (!phone) return;
+        
+        navigator.clipboard.writeText(phone).then(() => {
+          const originalText = copyBtn.innerHTML;
+          copyBtn.innerHTML = '<svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
+          setTimeout(() => {
+            copyBtn.innerHTML = originalText;
+          }, 1000);
+        }).catch(err => {
+          console.error('Не удалось скопировать:', err);
+        });
+      });
+    })();
+  </script>
+
+  <script>
+    // Обработчик формы заметок в modern режиме (inline)
+    (function(){
+      const btn = document.getElementById('noteAttachBtnModernInline');
+      const input = document.getElementById('noteFileModernInline');
+      const name = document.getElementById('noteFileNameModernInline');
+      if (!btn || !input) return;
+      btn.addEventListener('click', () => input.click());
+      input.addEventListener('change', () => {
+        const f = input.files && input.files.length ? input.files[0] : null;
+        if (name) name.textContent = f ? f.name : '';
+      });
+    })();
+  </script>
+
+  <script>
+    // Обработчик формы заметок в modern режиме (в details)
+    (function(){
+      const btn = document.getElementById('noteAttachBtnModern');
+      const input = document.getElementById('noteFileModern');
+      const name = document.getElementById('noteFileNameModern');
+      if (!btn || !input) return;
+      btn.addEventListener('click', () => input.click());
+      input.addEventListener('change', () => {
+        const f = input.files && input.files.length ? input.files[0] : null;
+        if (name) name.textContent = f ? f.name : '';
+      });
+    })();
+  </script>
+
+  <script>
+    // Черновик заметки в modern режиме (для обеих форм)
+    (function(){
+      function initDraft(formId) {
+        const form = document.getElementById(formId);
+        if (!form) return;
+
+        const textarea = form.querySelector('textarea[name="text"]');
+        if (!textarea) return;
+
+        const companyId = form.getAttribute('data-company-id') || '';
+        const userId = form.getAttribute('data-user-id') || '';
+        const storageKey = `companyNoteDraft:v1:${userId}:${companyId}`;
+
+        function normalize(s) {
+          return String(s || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+        }
+
+        function getDraft() {
+          try { return localStorage.getItem(storageKey) || ''; } catch (_e) { return ''; }
+        }
+        function setDraft(v) {
+          try { localStorage.setItem(storageKey, v); } catch (_e) {}
+        }
+        function clearDraft() {
+          try { localStorage.removeItem(storageKey); } catch (_e) {}
+        }
+
+        // Восстановление черновика
+        const current = normalize(textarea.value);
+        const draft = getDraft();
+        if (!current && draft) {
+          textarea.value = draft;
+        }
+
+        // Автосохранение по мере ввода (debounce)
+        let t = null;
+        textarea.addEventListener('input', () => {
+          if (t) window.clearTimeout(t);
+          t = window.setTimeout(() => {
+            const v = textarea.value || '';
+            if (normalize(v)) setDraft(v);
+            else clearDraft();
+          }, 250);
+        });
+
+        // Сохраняем при уходе со страницы
+        window.addEventListener('beforeunload', () => {
+          const v = textarea.value || '';
+          if (normalize(v)) setDraft(v);
+        });
+
+        // Очистка черновика после успешной отправки
+        form.addEventListener('submit', () => {
+          setTimeout(() => clearDraft(), 500);
+        });
+      }
+
+      // Инициализируем для обеих форм
+      initDraft('noteFormModern');
+      initDraft('noteFormModernInline');
+    })();
+  </script>
+
+  <script>
     // Обработка кнопки "Развернуть/Свернуть" для заметки в modern режиме
     (function() {
       const expandBtn = document.querySelector('#displayNoteText')?.nextElementSibling;
