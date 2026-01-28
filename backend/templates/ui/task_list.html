@@ -17,7 +17,7 @@
       <button type="button" class="btn btn-primary" data-create-task>+ Новая задача</button>
     </div>
 
-    <form class="bg-white border rounded-2xl p-3 flex flex-wrap items-end gap-3" method="get" id="taskFilterForm">
+    <form class="bg-white border rounded-2xl p-3 flex flex-wrap items-end gap-3" method="get" id="taskFilterForm" data-user-id="{{ request.user.id }}">
       <div class="flex flex-wrap items-end gap-3 flex-1">
         <div class="flex items-center gap-2">
           <svg class="w-4 h-4 text-brand-dark/60 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -68,7 +68,11 @@
         </label>
       </div>
 
-      <div class="flex gap-2 ml-auto">
+      <div class="flex flex-wrap items-center gap-3 ml-auto">
+        <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer" title="При возврате в «Задачи» фильтры восстановятся">
+          <input type="checkbox" id="rememberTaskFilters" class="rounded" />
+          <span>Запоминать фильтры</span>
+        </label>
         <button type="button" class="btn btn-outline btn-md flex items-center gap-2" id="dateFilterBtn">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
@@ -79,7 +83,7 @@
           {% endif %}
         </button>
         <button class="btn btn-primary btn-md" type="submit">Применить</button>
-        <a class="btn btn-outline btn-md" href="/tasks/">Сброс</a>
+        <a class="btn btn-outline btn-md" href="/tasks/" id="taskFilterResetBtn">Сброс</a>
       </div>
     </form>
 
@@ -993,6 +997,98 @@
         dateToInput.value = '';
         document.getElementById('taskFilterForm').submit();
       });
+    })();
+  </script>
+
+  <script>
+    // Запоминание фильтров задач (localStorage, per-user). Восстановление только при заходе на /tasks/ без querystring.
+    (function() {
+      const form = document.getElementById('taskFilterForm');
+      const rememberCb = document.getElementById('rememberTaskFilters');
+      const resetBtn = document.getElementById('taskFilterResetBtn');
+      if (!form || !rememberCb) return;
+
+      const userId = (form.dataset && form.dataset.userId) ? String(form.dataset.userId) : 'anon';
+      // Ключи с userId, чтобы после перелогина не подтягивались чужие фильтры
+      const LS_PREF_KEY = `proficrm:${userId}:tasks:remember_filters`;
+      const LS_QS_KEY = `proficrm:${userId}:tasks:filters_qs`;
+      const SS_RESTORED_KEY = `proficrm:${userId}:tasks:restored_once`;
+
+      function setPref(v) {
+        try { localStorage.setItem(LS_PREF_KEY, v ? '1' : '0'); } catch (e) {}
+      }
+      function getPref() {
+        try { return localStorage.getItem(LS_PREF_KEY) === '1'; } catch (e) { return false; }
+      }
+      function setSavedQs(qs) {
+        try {
+          if (!qs) localStorage.removeItem(LS_QS_KEY);
+          else localStorage.setItem(LS_QS_KEY, qs);
+        } catch (e) {}
+      }
+      function getSavedQs() {
+        try { return localStorage.getItem(LS_QS_KEY) || ''; } catch (e) { return ''; }
+      }
+
+      function buildQsFromForm() {
+        const fd = new FormData(form);
+        const params = new URLSearchParams();
+        for (const [k, v] of fd.entries()) {
+          if (v === undefined || v === null) continue;
+          const s = String(v);
+          if (!s) continue;
+          if (k === 'page') continue; // всегда возвращаемся на 1 страницу
+          params.append(k, s);
+        }
+        // sort/dir/per_page могут быть в qs через пагинацию/шапку; если пользователь сейчас на странице с ними, они будут в fd? (обычно нет)
+        // Поэтому дополнительно берём их из URL текущей страницы.
+        const current = new URLSearchParams(window.location.search || '');
+        ['sort', 'dir', 'per_page'].forEach(key => {
+          const val = current.get(key);
+          if (val && !params.has(key)) params.set(key, val);
+        });
+        return params.toString();
+      }
+
+      // Инициализация чекбокса
+      rememberCb.checked = getPref();
+      rememberCb.addEventListener('change', () => {
+        setPref(rememberCb.checked);
+        if (!rememberCb.checked) setSavedQs('');
+      });
+
+      // Сохранение при применении фильтров
+      form.addEventListener('submit', () => {
+        if (!rememberCb.checked) return;
+        const qs = buildQsFromForm();
+        setSavedQs(qs);
+      });
+
+      // Сброс должен очищать сохранённое, иначе оно тут же восстановится на чистом /tasks/
+      if (resetBtn) {
+        resetBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          // Жёсткий сброс: очищаем сохранённое и выключаем режим запоминания
+          setSavedQs('');
+          rememberCb.checked = false;
+          setPref(false);
+          window.location.href = '/tasks/';
+        });
+      }
+
+      // Автовосстановление при заходе на /tasks/ без querystring
+      (function restoreOnLoad() {
+        if (!rememberCb.checked) return;
+        if (window.location.search && window.location.search.length > 1) return;
+        const saved = getSavedQs();
+        if (!saved) return;
+        // Защита от петли/дребезга: 1 раз на вкладку
+        try {
+          if (sessionStorage.getItem(SS_RESTORED_KEY) === '1') return;
+          sessionStorage.setItem(SS_RESTORED_KEY, '1');
+        } catch (e) {}
+        window.location.replace('/tasks/?' + saved);
+      })();
     })();
   </script>
 
