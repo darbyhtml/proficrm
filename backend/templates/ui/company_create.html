@@ -326,9 +326,7 @@
         if (!box || !list || !meta || !hidden) return;
 
         const items = Array.isArray(data.items) ? data.items : [];
-        const frontendHidden = items.length > 1 ? (items.length - 1) : 0;
         const backendHidden = data.hidden_count || 0;
-        const totalHidden = frontendHidden + backendHidden;
 
         if (!items.length && backendHidden === 0) {
           box.style.display = 'none';
@@ -336,7 +334,7 @@
         }
         box.style.display = 'block';
         const reasonsText = data.reasons && data.reasons.length ? ('По: ' + data.reasons.join(', ')) : '';
-        const totalMatches = items.length + backendHidden;
+        const totalMatches = items.length;
         meta.textContent = 'Найдено совпадений: ' + totalMatches + (reasonsText ? ' • ' + reasonsText : '');
 
         function createDupCard(it) {
@@ -394,12 +392,8 @@
           list.appendChild(extraContainer);
         }
 
-        if (backendHidden > 0) {
-          hidden.style.display = 'block';
-          hidden.textContent = 'Ещё совпадений (на списке компаний): ' + backendHidden;
-        } else {
-          hidden.style.display = 'none';
-        }
+        hidden.style.display = backendHidden > 0 ? 'block' : 'none';
+        hidden.textContent = backendHidden > 0 ? 'На списке компаний могут быть и другие похожие карточки.' : '';
       }
       function schedule(){
         if (t) clearTimeout(t);
@@ -622,12 +616,7 @@
           const btn = e.target.closest('.remove-email-btn');
           if (!btn) return;
           const row = btn.closest('.company-email-row');
-          if (row && emailsContainer.children.length > 1) {
-            row.remove();
-          } else if (row) {
-            const input = row.querySelector('input');
-            if (input) input.value = '';
-          }
+          if (row) row.remove();
         });
       }
 
@@ -779,12 +768,7 @@
           const btn = e.target.closest('.remove-phone-btn');
           if (!btn) return;
           const row = btn.closest('.company-phone-row');
-          if (row && phonesContainer.children.length > 1) {
-            row.remove();
-          } else if (row) {
-            const input = row.querySelector('input');
-            if (input) input.value = '';
-          }
+          if (row) row.remove();
         });
       }
 
