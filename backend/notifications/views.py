@@ -55,6 +55,7 @@ def poll(request: HttpRequest) -> HttpResponse:
                 "body": (n.body or ""),
                 "created_at": str(n.created_at),
                 "url": n.url or "",
+                "payload": n.payload or {},
             }
         )
     return JsonResponse(

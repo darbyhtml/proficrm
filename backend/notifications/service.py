@@ -15,6 +15,7 @@ def notify(
     url: str = "",
     kind: str = Notification.Kind.INFO,
     dedupe_seconds: int = 0,
+    payload: dict | None = None,
 ) -> Notification:
     """
     Создать уведомление.
@@ -41,8 +42,11 @@ def notify(
             .first()
         )
         if existing:
+            if payload is not None:
+                existing.payload = payload
+                existing.save(update_fields=["payload"])
             return existing
 
-    return Notification.objects.create(user=user, title=t, body=b, url=u, kind=kind)
+    return Notification.objects.create(user=user, title=t, body=b, url=u, kind=kind, payload=payload or {})
 
 

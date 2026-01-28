@@ -37,6 +37,7 @@ class Task(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     due_at = models.DateTimeField("Дедлайн", null=True, blank=True, db_index=True)
     completed_at = models.DateTimeField("Завершено", null=True, blank=True)
+    is_urgent = models.BooleanField("Срочно", default=False, db_index=True)
 
     # Повторяющиеся задачи: храним RRULE (iCal) строкой; генерацию экземпляров можно добавить позже cron'ом.
     recurrence_rrule = models.CharField("Повтор (RRULE)", max_length=500, blank=True, default="")

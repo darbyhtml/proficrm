@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from django.conf import settings
 from django.db import models
 
@@ -19,6 +21,7 @@ class Notification(models.Model):
 
     is_read = models.BooleanField("Прочитано", default=False)
     created_at = models.DateTimeField("Создано", auto_now_add=True)
+    payload = models.JSONField("Дополнительные данные", null=True, blank=True, default=dict)
 
     class Meta:
         verbose_name = "Уведомление"
