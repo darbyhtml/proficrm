@@ -381,6 +381,7 @@
             if (!window.confirm(warnText + '\n\nПерейти на существующую карточку и не создавать новую?')) return;
             if (form) {
               form.dataset.submitted = '1';
+              form.dataset.allowNavigate = '1';
             }
             window.location.href = url;
           }
@@ -500,6 +501,7 @@
         formEl.addEventListener('change', saveDraftSoon, {capture: true});
         formEl.addEventListener('submit', function() {
           formEl.dataset.submitted = '1';
+          formEl.dataset.allowNavigate = '1';
           formDirty = false;
           try {
             localStorage.removeItem(DRAFT_KEY);
@@ -509,6 +511,7 @@
         window.addEventListener('beforeunload', function(e) {
           if (!formDirty) return;
           if (formEl.dataset.submitted === '1') return;
+          if (formEl.dataset.allowNavigate === '1') return;
           e.preventDefault();
           e.returnValue = '';
         });
