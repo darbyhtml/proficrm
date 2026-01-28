@@ -49,6 +49,56 @@ def _first_text_value(values: list) -> str | None:
     return None
 
 
+# Словарь алиасов для нормализации названий регионов из amoCRM
+REGION_ALIASES = {
+    "Республика Башкирия": "Республика Башкортостан",
+    "Башкирия": "Республика Башкортостан",
+    "Башкортостан": "Республика Башкортостан",
+    # Можно добавить другие частые несовпадения по мере обнаружения
+}
+
+
+def _normalize_region_name(label: str) -> str:
+    """
+    Нормализует название региона из amoCRM к стандартному названию в БД.
+    """
+    label = label.strip()
+    # Сначала проверяем точное совпадение (с учётом регистра)
+    if label in REGION_ALIASES:
+        return REGION_ALIASES[label]
+    # Проверяем без учёта регистра
+    for alias, canonical in REGION_ALIASES.items():
+        if alias.lower() == label.lower():
+            return canonical
+    return label
+
+
+def _find_region_by_name(label: str) -> Region | None:
+    """
+    Находит регион по названию с учётом нормализации и алиасов.
+    """
+    # Сначала пробуем точное совпадение (case-insensitive)
+    region = Region.objects.filter(name__iexact=label).first()
+    if region:
+        return region
+    
+    # Пробуем нормализованное название
+    normalized = _normalize_region_name(label)
+    if normalized != label:
+        region = Region.objects.filter(name__iexact=normalized).first()
+        if region:
+            return region
+    
+    # Пробуем частичное совпадение (если label содержит часть названия региона)
+    # Например, "ХМАО" -> "Ханты-Мансийский автономный округ — Югра"
+    if len(label) < 10:  # Короткие названия могут быть аббревиатурами
+        regions = Region.objects.filter(name__icontains=label)
+        if regions.count() == 1:
+            return regions.first()
+    
+    return None
+
+
 class Command(BaseCommand):
     help = (
         "Backfill: заполняет Company.region на основе raw_fields из amoCRM. "
@@ -97,7 +147,7 @@ class Command(BaseCommand):
                     skipped_no_label += 1
                     continue
 
-                region = Region.objects.filter(name__iexact=label).first()
+                region = _find_region_by_name(label)
                 if not region:
                     skipped_unknown += 1
                     if dry_run:
