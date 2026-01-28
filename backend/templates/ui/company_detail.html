@@ -2877,7 +2877,16 @@
         document.querySelectorAll('[data-create-task]').forEach(btn => {
           btn.addEventListener('click', async function() {
             const companyId = this.dataset.companyId || '';
-            const url = `/tasks/new/?modal=1${companyId ? '&company=' + companyId : ''}`;
+            const template = this.dataset.taskTemplate || '';
+            let url = `/tasks/new/?modal=1${companyId ? '&company=' + companyId : ''}`;
+            
+            // Если шаблон "callback", добавляем предзаполнение даты
+            if (template === 'callback') {
+              const tomorrow = new Date();
+              tomorrow.setDate(tomorrow.getDate() + 1);
+              tomorrow.setHours(10, 0, 0, 0);
+              url += `&due_at=${tomorrow.toISOString().slice(0, 16)}`;
+            }
             
             try {
               const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
@@ -2885,6 +2894,17 @@
               const html = await res.text();
               createModalContent.innerHTML = html;
               createModal.classList.remove('hidden');
+              
+              // Если шаблон "callback", предзаполняем описание
+              if (template === 'callback') {
+                setTimeout(() => {
+                  const descField = createModalContent.querySelector('textarea[name="description"]');
+                  if (descField) {
+                    descField.value = 'Перезвон клиенту';
+                    descField.focus();
+                  }
+                }, 200);
+              }
               
               // Инициализация select с небольшой задержкой для гарантии обновления DOM
               setTimeout(function() {
@@ -5048,6 +5068,11 @@
         const query = this.value.trim().toLowerCase();
         if (!query) {
           searchResults.classList.add('hidden');
+          // Убираем подсветку
+          document.querySelectorAll('.search-highlight').forEach(el => {
+            el.classList.remove('search-highlight');
+            el.style.backgroundColor = '';
+          });
           return;
         }
 
@@ -5055,27 +5080,84 @@
         const modernView = document.getElementById('companyDetailModern');
         if (!modernView) return;
 
-        // Ищем по всем текстовым элементам
-        const textElements = modernView.querySelectorAll('*');
-        textElements.forEach(el => {
-          const text = el.textContent || '';
-          if (text.toLowerCase().includes(query) && el.children.length === 0) {
-            const parent = el.closest('.card, section, [class*="block"]');
+        // Убираем предыдущую подсветку
+        document.querySelectorAll('.search-highlight').forEach(el => {
+          el.classList.remove('search-highlight');
+          el.style.backgroundColor = '';
+        });
+
+        // Ищем по ключевым полям
+        const searchFields = [
+          { selector: '[data-company-inn]', label: 'ИНН' },
+          { selector: '[data-company-phone]', label: 'Телефон' },
+          { selector: '.card', label: 'Блок' },
+        ];
+
+        // Поиск по ИНН
+        const innEl = modernView.querySelector('[data-inline-field="inn"] .inline-field-display, .font-mono');
+        if (innEl) {
+          const innText = innEl.textContent || '';
+          if (innText.toLowerCase().includes(query)) {
+            results.push({ element: innEl.closest('.inline-field-wrapper') || innEl, text: `ИНН: ${innText}`, label: 'ИНН' });
+            innEl.style.backgroundColor = '#fef3c7';
+            innEl.classList.add('search-highlight');
+          }
+        }
+
+        // Поиск по телефону
+        const phoneEls = modernView.querySelectorAll('[data-phone], .font-mono');
+        phoneEls.forEach(el => {
+          const phoneText = el.textContent || el.getAttribute('data-phone') || '';
+          if (phoneText.toLowerCase().includes(query)) {
+            const parent = el.closest('.card, [class*="phone"]');
             if (parent && !results.find(r => r.element === parent)) {
-              results.push({ element: parent, text: text.substring(0, 100) });
+              results.push({ element: parent, text: `Телефон: ${phoneText}`, label: 'Телефон' });
+              el.style.backgroundColor = '#fef3c7';
+              el.classList.add('search-highlight');
+            }
+          }
+        });
+
+        // Поиск по заметкам
+        const noteEls = modernView.querySelectorAll('[data-note-body], #displayNoteText');
+        noteEls.forEach(el => {
+          const noteText = el.textContent || '';
+          if (noteText.toLowerCase().includes(query)) {
+            const parent = el.closest('.card, [data-note-item]');
+            if (parent && !results.find(r => r.element === parent)) {
+              results.push({ element: parent, text: `Заметка: ${noteText.substring(0, 50)}...`, label: 'Заметка' });
+              // Подсветка текста внутри заметки
+              const regex = new RegExp(`(${query})`, 'gi');
+              if (el.innerHTML) {
+                el.innerHTML = el.innerHTML.replace(regex, '<mark style="background-color:#fef3c7">$1</mark>');
+              }
+            }
+          }
+        });
+
+        // Поиск по задачам
+        const taskEls = modernView.querySelectorAll('[data-task-id]');
+        taskEls.forEach(el => {
+          const taskText = el.textContent || '';
+          if (taskText.toLowerCase().includes(query)) {
+            if (!results.find(r => r.element === el)) {
+              results.push({ element: el, text: `Задача: ${taskText.substring(0, 50)}...`, label: 'Задача' });
+              el.style.borderColor = '#f59e0b';
+              el.style.borderWidth = '2px';
             }
           }
         });
 
         if (results.length > 0) {
-          searchResults.innerHTML = results.slice(0, 5).map(r => 
-            `<div class="p-2 hover:bg-brand-soft/20 rounded cursor-pointer" onclick="r.element.scrollIntoView({behavior:'smooth',block:'center'}); searchPanel.classList.add('hidden');">
-              ${r.text.substring(0, 80)}...
+          searchResults.innerHTML = results.slice(0, 8).map((r, idx) => 
+            `<div class="p-2 hover:bg-brand-soft/20 rounded cursor-pointer border-b border-brand-soft/30 last:border-0" onclick="const el = document.querySelectorAll('[data-task-id], .inline-field-wrapper, .card')[${idx}]; if(el) { el.scrollIntoView({behavior:'smooth',block:'center'}); setTimeout(() => { document.getElementById('cardSearchModern').classList.add('hidden'); }, 300); }">
+              <div class="text-xs text-brand-dark/50 mb-0.5">${r.label}</div>
+              <div class="text-sm">${r.text.substring(0, 80)}${r.text.length > 80 ? '...' : ''}</div>
             </div>`
           ).join('');
           searchResults.classList.remove('hidden');
         } else {
-          searchResults.innerHTML = '<div class="p-2 text-brand-dark/50">Ничего не найдено</div>';
+          searchResults.innerHTML = '<div class="p-2 text-brand-dark/50 text-center">Ничего не найдено</div>';
           searchResults.classList.remove('hidden');
         }
       });
