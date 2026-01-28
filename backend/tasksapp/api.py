@@ -45,6 +45,10 @@ class TaskSerializer(serializers.ModelSerializer):
         write_only=True,
         help_text="Если включено и у компании есть организация (головная/филиалы), задача будет создана по всей организации.",
     )
+    
+    def validate_recurrence_rrule(self, value):
+        """Гарантируем, что recurrence_rrule не будет None."""
+        return value or ""
 
 
 class TaskTypeViewSet(viewsets.ModelViewSet):
@@ -72,12 +76,10 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         user: User = self.request.user
-        # ВАЖНО: вычистить write_only поле из validated_data сериалайзера,
+        # ВАЖНО: сначала читаем флаг, потом удаляем из validated_data,
         # иначе DRF попробует передать его в Task.objects.create()
-        serializer.validated_data.pop("apply_to_org_branches", None)
+        apply_to_org = bool(serializer.validated_data.pop("apply_to_org_branches", False))
         data = dict(serializer.validated_data)
-
-        apply_to_org = bool(data.pop("apply_to_org_branches", False))
         assigned_to = data.get("assigned_to") or user
         company: Company | None = data.get("company")
 
