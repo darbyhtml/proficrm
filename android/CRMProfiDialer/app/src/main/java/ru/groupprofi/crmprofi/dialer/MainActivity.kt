@@ -284,7 +284,7 @@ class MainActivity : AppCompatActivity() {
         // Подписка на активные ожидаемые звонки (для показа "Определяем результат...")
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                pendingCallStore.hasActivePendingCallsFlow.collectLatest { hasActive ->
+                pendingCallStore.hasActivePendingCallsFlow.collectLatest { _ ->
                     updateReadinessStatus()
                 }
             }

@@ -346,6 +346,7 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
             } else {
                 @Suppress("DEPRECATION")
                 val networkInfo = connectivityManager.activeNetworkInfo
+                @Suppress("DEPRECATION")
                 networkInfo?.isConnected == true
             }
         } catch (e: SecurityException) {

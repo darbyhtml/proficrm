@@ -183,7 +183,6 @@ class CallListenerService : Service() {
                             delay(5000)
                             continue
                         }
-                        val pollStartMs = System.currentTimeMillis()
                         val pollStartNano = System.nanoTime()
                         // Используем ApiClient для polling (внутри он использует TokenManager и обрабатывает refresh)
                         val pullResult = apiClient.pullCall(deviceId)
@@ -244,14 +243,14 @@ class CallListenerService : Service() {
                                 val pendingCallManager = AppContainer.pendingCallStore as? ru.groupprofi.crmprofi.dialer.data.PendingCallManager
                                 val expiredIds = pendingCallManager?.cleanupExpiredPendingCalls() ?: emptyList()
                                 if (expiredIds.isNotEmpty()) {
-                                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("CallListenerService", "Очищено ${expiredIds.size} устаревших ожидаемых звонков (таймаут 10 минут)")
+                                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("CallListenerService", "Очищено ${expiredIds.size} устаревших ожидаемых звонков (таймаут 5 минут)")
                                     // Помечаем устаревшие звонки в истории как UNKNOWN (если они там есть)
-                                    expiredIds.forEach { callRequestId ->
+                                    expiredIds.forEach { expiredCallRequestId ->
                                         scope.launch {
-                                            val expiredCall = AppContainer.pendingCallStore.getPendingCall(callRequestId)
+                                            val expiredCall = AppContainer.pendingCallStore.getPendingCall(expiredCallRequestId)
                                             if (expiredCall != null) {
                                                 // Если записи в истории нет, создаем с UNKNOWN статусом
-                                                val existingCall = AppContainer.callHistoryStore.getCallById(callRequestId)
+                                                val existingCall = AppContainer.callHistoryStore.getCallById(expiredCallRequestId)
                                                 if (existingCall == null) {
                                                     val historyItem = ru.groupprofi.crmprofi.dialer.domain.CallHistoryItem(
                                                         id = expiredCall.callRequestId,
@@ -271,7 +270,7 @@ class CallListenerService : Service() {
                                                     AppContainer.callHistoryStore.addOrUpdate(historyItem)
                                                 }
                                                 // Удаляем из ожидаемых
-                                                AppContainer.pendingCallStore.removePendingCall(callRequestId)
+                                                AppContainer.pendingCallStore.removePendingCall(expiredCallRequestId)
                                             }
                                         }
                                     }

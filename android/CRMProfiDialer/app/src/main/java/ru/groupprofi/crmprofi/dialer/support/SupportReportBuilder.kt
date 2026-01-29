@@ -80,7 +80,7 @@ object SupportReportBuilder {
         sb.appendLine("История: $historyStatus")
         
         // Последняя активность (если доступна)
-        val lastActivity = getLastActivity(context)
+        val lastActivity = getLastActivity()
         if (lastActivity.isNotEmpty()) {
             sb.appendLine("Последняя активность: $lastActivity")
         }
@@ -105,8 +105,8 @@ object SupportReportBuilder {
         }
         
         // Build info
-        val buildType = getBuildType(context)
-        val minifyStatus = getMinifyStatus(context)
+        val buildType = getBuildType()
+        val minifyStatus = getMinifyStatus()
         sb.appendLine("Build type: $buildType")
         sb.appendLine("Минификация: $minifyStatus")
         sb.appendLine()
@@ -279,7 +279,7 @@ object SupportReportBuilder {
     /**
      * Получить информацию о последней активности (если доступна).
      */
-    private fun getLastActivity(context: Context): String {
+    private fun getLastActivity(): String {
         // Можно добавить сохранение времени последнего успешного poll/send в SharedPreferences
         // Пока возвращаем пустую строку, если данных нет
         return ""
@@ -288,7 +288,7 @@ object SupportReportBuilder {
     /**
      * Получить build type.
      */
-    private fun getBuildType(context: Context): String {
+    private fun getBuildType(): String {
         return try {
             if (ru.groupprofi.crmprofi.dialer.BuildConfig.DEBUG) {
                 "debug"
@@ -303,7 +303,7 @@ object SupportReportBuilder {
     /**
      * Получить статус минификации.
      */
-    private fun getMinifyStatus(context: Context): String {
+    private fun getMinifyStatus(): String {
         return try {
             if (ru.groupprofi.crmprofi.dialer.BuildConfig.DEBUG) {
                 "нет"

@@ -159,7 +159,7 @@ class CallFlowCoordinator(
      */
     private suspend fun startCallResolution(phone: String, callRequestId: String, actionSource: ActionSource) {
         try {
-            val normalizedPhone = PendingCall.normalizePhone(phone)
+            val normalizedPhone = PhoneNumberNormalizer.normalize(phone)
             val startedAt = System.currentTimeMillis()
             
             // Создаём ожидаемый звонок с actionSource

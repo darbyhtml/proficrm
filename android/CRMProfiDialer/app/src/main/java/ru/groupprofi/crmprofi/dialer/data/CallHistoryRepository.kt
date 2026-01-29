@@ -46,8 +46,8 @@ class CallHistoryRepository private constructor(context: Context) : CallHistoryS
     /**
      * Добавить или обновить звонок в истории.
      */
-    override suspend fun addOrUpdate(call: CallHistoryItem) = withContext(Dispatchers.IO) {
-        cache[call.id] = call
+    override suspend fun addOrUpdate(item: CallHistoryItem) = withContext(Dispatchers.IO) {
+        cache[item.id] = item
         saveToPrefs()
         updateFlows()
     }
@@ -61,10 +61,10 @@ class CallHistoryRepository private constructor(context: Context) : CallHistoryS
     /**
      * Отметить звонок как отправленный в CRM.
      */
-    override suspend fun markSent(callId: String, sentAt: Long) = withContext(Dispatchers.IO) {
-        val call = cache[callId] ?: return@withContext
+    override suspend fun markSent(callRequestId: String, sentAt: Long) = withContext(Dispatchers.IO) {
+        val call = cache[callRequestId] ?: return@withContext
         val updated = call.copy(sentToCrm = true, sentToCrmAt = sentAt)
-        cache[callId] = updated
+        cache[callRequestId] = updated
         saveToPrefs()
         updateFlows()
     }
