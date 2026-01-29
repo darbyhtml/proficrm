@@ -103,10 +103,6 @@ android {
         correctErrorTypes = true
         // Отключаем кэш для избежания проблем с дубликатами
         useBuildCache = false
-        arguments {
-            // Room schema location (опционально, для экспорта схемы)
-            arg("room.schemaLocation", "$projectDir/schemas")
-        }
         javacOptions {
             option("-source", "17")
             option("-target", "17")
@@ -136,8 +132,6 @@ dependencies {
     implementation "androidx.room:room-runtime:$room_version"
     implementation "androidx.room:room-ktx:$room_version"
     kapt "androidx.room:room-compiler:$room_version"
-    kaptTest "androidx.room:room-compiler:$room_version"
-    kaptAndroidTest "androidx.room:room-compiler:$room_version"
     
     // Тестирование
     testImplementation "junit:junit:4.13.2"
