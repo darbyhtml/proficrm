@@ -298,8 +298,11 @@ class MainActivity : AppCompatActivity() {
         // Запускаем автоматическое восстановление
         autoRecoveryManager.start()
         
-        // Обновляем статус при возврате на экран
-        updateReadinessStatus()
+        // Обновляем статус только если UI уже инициализирован (continueOnCreateAfterOnboardingCheck уже выполнился).
+        // Иначе onResume может вызваться до завершения корутины проверки onboarding — statusIcon ещё не присвоен.
+        if (::statusIcon.isInitialized) {
+            updateReadinessStatus()
+        }
         
         // Если есть pending start - запускаем сервис
         if (pendingStartListening) {
@@ -374,8 +377,10 @@ class MainActivity : AppCompatActivity() {
     
     /**
      * Обновить статус готовности приложения с плавными анимациями.
+     * Не вызывать до инициализации UI (continueOnCreateAfterOnboardingCheck).
      */
     private fun updateReadinessStatus() {
+        if (!::statusIcon.isInitialized) return
         val state = readinessProvider.getState()
         val uiModel = readinessProvider.getUiModel()
         
