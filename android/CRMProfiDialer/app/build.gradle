@@ -47,23 +47,23 @@ android {
     }
     
     // Приоритет: ENV vars > local.properties
-    def storeFile = System.getenv("STORE_FILE") ?: keystoreProperties['storeFile']
-    def storePassword = System.getenv("STORE_PASSWORD") ?: keystoreProperties['storePassword']
-    def keyAlias = System.getenv("KEY_ALIAS") ?: keystoreProperties['keyAlias']
-    def keyPassword = System.getenv("KEY_PASSWORD") ?: keystoreProperties['keyPassword']
+    def storeFileProp = System.getenv("STORE_FILE") ?: keystoreProperties['storeFile']
+    def storePasswordProp = System.getenv("STORE_PASSWORD") ?: keystoreProperties['storePassword']
+    def keyAliasProp = System.getenv("KEY_ALIAS") ?: keystoreProperties['keyAlias']
+    def keyPasswordProp = System.getenv("KEY_PASSWORD") ?: keystoreProperties['keyPassword']
     
     signingConfigs {
         productionRelease {
-            if (storeFile && storePassword && keyAlias && keyPassword) {
+            if (storeFileProp && storePasswordProp && keyAliasProp && keyPasswordProp) {
                 // Путь может быть абсолютным или относительным к root проекта
-                def keystorePath = storeFile.startsWith('/') || storeFile.matches(/^[A-Za-z]:/) 
-                    ? storeFile 
-                    : rootProject.file(storeFile)
+                def keystorePath = storeFileProp.startsWith('/') || storeFileProp.matches(/^[A-Za-z]:/) 
+                    ? storeFileProp 
+                    : rootProject.file(storeFileProp)
                 
-                storeFile keystorePath
-                storePassword storePassword
-                keyAlias keyAlias
-                keyPassword keyPassword
+                storeFile = keystorePath
+                storePassword = storePasswordProp
+                keyAlias = keyAliasProp
+                keyPassword = keyPasswordProp
             }
         }
     }
@@ -71,8 +71,8 @@ android {
     buildTypes {
         release {
             // Release без минификации (безопасный вариант)
-            minifyEnabled false
-            shrinkResources false
+            minifyEnabled = false
+            shrinkResources = false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         minified {
@@ -85,8 +85,8 @@ android {
             signingConfig = signingConfigs.debug
         }
         debug {
-            minifyEnabled false
-            shrinkResources false
+            minifyEnabled = false
+            shrinkResources = false
         }
     }
 
