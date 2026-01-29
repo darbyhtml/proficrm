@@ -466,7 +466,6 @@ class CallListenerService : Service() {
                     }
                 }
             }
-        }
 
         return START_STICKY
     }
