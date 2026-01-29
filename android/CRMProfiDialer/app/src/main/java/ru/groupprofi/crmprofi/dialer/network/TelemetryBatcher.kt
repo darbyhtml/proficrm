@@ -74,51 +74,53 @@ class TelemetryBatcher(
     /**
      * Отправить батч телеметрии.
      */
-    private suspend fun flushBatch(reason: FlushReason) = mutex.withLock {
-        if (telemetryQueue.isEmpty()) return@withLock
-        
-        val items = mutableListOf<ApiClient.TelemetryItem>()
-        var count = 0
-        
-        // Извлекаем элементы из очереди (до MAX_BATCH_SIZE)
-        while (count < MAX_BATCH_SIZE && telemetryQueue.isNotEmpty()) {
-            telemetryQueue.poll()?.let { items.add(it) }
-            count++
-        }
-        
-        if (items.isEmpty()) return@withLock
-        
-        try {
-            // Отправляем батч напрямую через ApiClient
-            val outcome = sendBatchFn(deviceId, items)
+    private suspend fun flushBatch(reason: FlushReason): Unit {
+        mutex.withLock<Unit> {
+            if (telemetryQueue.isEmpty()) return@withLock
             
-            if (outcome.ok) {
-                ru.groupprofi.crmprofi.dialer.logs.AppLogger.d(
-                    "TelemetryBatcher",
-                    "TelemetryBatcher flush: nItems=${items.size}, reason=${reason.name}"
-                )
-            } else {
-                val msg = outcome.errorMessage ?: "Unknown error"
-                ru.groupprofi.crmprofi.dialer.logs.AppLogger.w(
-                    "TelemetryBatcher",
-                    "TelemetryBatcher flush failed: nItems=${items.size}, reason=${reason.name}, error=$msg"
-                )
+            val items = mutableListOf<ApiClient.TelemetryItem>()
+            var count = 0
+            
+            // Извлекаем элементы из очереди (до MAX_BATCH_SIZE)
+            while (count < MAX_BATCH_SIZE && telemetryQueue.isNotEmpty()) {
+                telemetryQueue.poll()?.let { items.add(it) }
+                count++
+            }
+            
+            if (items.isEmpty()) return@withLock
+            
+            try {
+                // Отправляем батч напрямую через ApiClient
+                val outcome = sendBatchFn(deviceId, items)
+                
+                if (outcome.ok) {
+                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.d(
+                        "TelemetryBatcher",
+                        "TelemetryBatcher flush: nItems=${items.size}, reason=${reason.name}"
+                    )
+                } else {
+                    val msg = outcome.errorMessage ?: "Unknown error"
+                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.w(
+                        "TelemetryBatcher",
+                        "TelemetryBatcher flush failed: nItems=${items.size}, reason=${reason.name}, error=$msg"
+                    )
+                    // Возвращаем элементы обратно в очередь при ошибке
+                    items.forEach { telemetryQueue.offer(it) }
+                }
+            } catch (e: Exception) {
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("TelemetryBatcher", "Error batching telemetry: ${e.message}")
                 // Возвращаем элементы обратно в очередь при ошибке
                 items.forEach { telemetryQueue.offer(it) }
             }
-        } catch (e: Exception) {
-            ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("TelemetryBatcher", "Error batching telemetry: ${e.message}")
-            // Возвращаем элементы обратно в очередь при ошибке
-            items.forEach { telemetryQueue.offer(it) }
-        }
-        
-        // Если в очереди еще есть элементы и это был принудительный flush, запускаем следующий таймерный flush
-        if (reason == FlushReason.FORCED && telemetryQueue.isNotEmpty()) {
-            // Отменяем существующий таймерный flush перед планированием нового
-            flushJob?.cancel()
-            flushJob = scope.launch {
-                delay(BATCH_INTERVAL_MS)
-                flushBatch(FlushReason.TIMER)
+            
+            // Если в очереди еще есть элементы и это был принудительный flush, запускаем следующий таймерный flush
+            if (reason == FlushReason.FORCED && telemetryQueue.isNotEmpty()) {
+                // Отменяем существующий таймерный flush перед планированием нового
+                flushJob?.cancel()
+                flushJob = scope.launch {
+                    delay(BATCH_INTERVAL_MS)
+                    flushBatch(FlushReason.TIMER)
+                }
             }
         }
     }
