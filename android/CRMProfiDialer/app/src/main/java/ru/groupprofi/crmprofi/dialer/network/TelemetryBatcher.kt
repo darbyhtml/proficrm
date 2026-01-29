@@ -86,7 +86,7 @@ class TelemetryBatcher(
         
         try {
             // Отправляем батч напрямую через ApiClient
-            val result = sendBatchFn(deviceId, items)
+            val result: ru.groupprofi.crmprofi.dialer.network.ApiClient.Result<Unit> = sendBatchFn(deviceId, items)
             
             when (result) {
                 is ru.groupprofi.crmprofi.dialer.network.ApiClient.Result.Success -> {

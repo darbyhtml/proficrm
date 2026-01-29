@@ -1,6 +1,6 @@
 package ru.groupprofi.crmprofi.dialer.network
 
-import java.util.Random
+import kotlin.random.Random
 
 /**
  * Управление exponential backoff для rate limiting (HTTP 429).
@@ -8,7 +8,7 @@ import java.util.Random
  */
 class RateLimitBackoff {
     private var backoffLevel: Int = 0
-    private val random = Random()
+    private val random = Random.Default
     
     companion object {
         // Базовые значения для exponential backoff (в миллисекундах)
