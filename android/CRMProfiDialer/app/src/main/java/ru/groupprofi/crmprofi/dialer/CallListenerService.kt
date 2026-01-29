@@ -614,15 +614,18 @@ class CallListenerService : Service() {
                 ),
                 "${CallLog.Calls.DATE} >= ? AND ${CallLog.Calls.DATE} <= ?",
                 arrayOf(windowStart.toString(), windowEnd.toString()),
-                "${CallLog.Calls.DATE} DESC LIMIT 50"
+                "${CallLog.Calls.DATE} DESC"
             )
             
             cursor?.use {
                 var checkedCount = 0
+                val maxRows = 50
+                // Some CallLog providers don't support "LIMIT" in sortOrder; limit rows in code for compatibility.
                 while (it.moveToNext()) {
+                    if (++checkedCount > maxRows) break
+                    
                     val number = it.getString(it.getColumnIndexOrThrow(CallLog.Calls.NUMBER)) ?: ""
                     val normalizedNumber = PhoneNumberNormalizer.normalize(number)
-                    checkedCount++
                     
                     // Логируем первые несколько номеров для отладки
                     if (checkedCount <= 3) {
