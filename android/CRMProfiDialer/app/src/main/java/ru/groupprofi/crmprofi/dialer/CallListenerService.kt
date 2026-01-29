@@ -92,19 +92,22 @@ class CallListenerService : Service() {
             }
         }
 
-        // Инициализируем TokenManager и ApiClient
+        // Инициализируем TokenManager и ApiClient (быстрые операции)
         tokenManager = TokenManager.getInstance(this)
         apiClient = ApiClient.getInstance(this)
         logSender = LogSender(this, apiClient.getHttpClient(), queueManager)
         
-        // Инициализируем CallLogObserverManager для отслеживания изменений CallLog
-        callLogObserverManager = CallLogObserverManager(
-            contentResolver = contentResolver,
-            pendingCallStore = AppContainer.pendingCallStore,
-            callHistoryStore = AppContainer.callHistoryStore,
-            scope = scope
-        )
-        callLogObserverManager?.register()
+        // Откладываем тяжелые I/O операции на фоновый поток (CallLogObserverManager.register вызывает AppLogger.d)
+        scope.launch {
+            // Инициализируем CallLogObserverManager для отслеживания изменений CallLog
+            callLogObserverManager = CallLogObserverManager(
+                contentResolver = contentResolver,
+                pendingCallStore = AppContainer.pendingCallStore,
+                callHistoryStore = AppContainer.callHistoryStore,
+                scope = scope
+            )
+            callLogObserverManager?.register()
+        }
         
         val deviceId = (intent?.getStringExtra(EXTRA_DEVICE_ID) ?: tokenManager.getDeviceId() ?: "").trim()
 

@@ -28,6 +28,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import android.os.Trace
@@ -131,8 +132,12 @@ class MainActivity : AppCompatActivity() {
             return
         }
         
-        // Проверяем, нужно ли показывать onboarding
-        if (shouldShowOnboarding()) {
+        // Проверяем, нужно ли показывать onboarding (откладываем чтение SharedPreferences на фоновый поток)
+        // Используем runBlocking с Dispatchers.IO для синхронной проверки, но на фоновом потоке
+        val needsOnboarding = kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+            shouldShowOnboarding()
+        }
+        if (needsOnboarding) {
             if (BuildConfig.DEBUG) {
                 ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("MainActivity", "Onboarding not completed, redirecting to OnboardingActivity")
             }

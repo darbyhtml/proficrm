@@ -17,7 +17,8 @@ class PortraitCaptureActivity : CaptureActivity() {
     override fun onResume() {
         super.onResume()
         
-        // Фиксируем портретную ориентацию только один раз
+        // Фиксируем портретную ориентацию только один раз за lifecycle
+        // НЕ сбрасываем флаг в onPause(), чтобы избежать повторной инициализации при быстрых переходах
         if (!orientationSet.getAndSet(true)) {
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         }
@@ -25,14 +26,13 @@ class PortraitCaptureActivity : CaptureActivity() {
     
     override fun onPause() {
         super.onPause()
-        // Не сбрасываем ориентацию, чтобы камера не поворачивалась
-        // Сбрасываем флаг для следующего onResume
-        orientationSet.set(false)
+        // НЕ сбрасываем флаг здесь, чтобы избежать повторной инициализации при быстрых переходах
+        // Флаг сбрасывается только в onDestroy()
     }
     
     override fun onDestroy() {
         super.onDestroy()
-        // Гарантируем сброс флага при уничтожении
+        // Гарантируем сброс флага при уничтожении Activity
         orientationSet.set(false)
     }
 }

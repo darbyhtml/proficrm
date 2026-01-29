@@ -11,6 +11,10 @@ import java.util.*
 import java.util.concurrent.ConcurrentLinkedQueue
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Единый централизованный логгер для всего приложения.
@@ -32,6 +36,9 @@ object AppLogger {
     private val mutex = Mutex()
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
     
+    // Coroutine scope для асинхронной записи в файл
+    private val fileWriteScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    
     @Volatile
     private var context: Context? = null
     
@@ -52,9 +59,11 @@ object AppLogger {
         context = appContext.applicationContext
         fileLoggingEnabled = enableFileLogging
         
-        // Очищаем старый файл, если он слишком большой
+        // Очищаем старый файл асинхронно на фоновом потоке (не блокируем main thread)
         if (fileLoggingEnabled) {
-            cleanupOldLogFile()
+            fileWriteScope.launch {
+                cleanupOldLogFile()
+            }
         }
         
         // Подключаем к существующему LogCollector для совместимости
@@ -166,9 +175,11 @@ object AppLogger {
             logBuffer.poll()
         }
         
-        // Пишем в файл (асинхронно, не блокируем)
+        // Пишем в файл асинхронно на фоновом потоке (не блокируем main thread)
         if (fileLoggingEnabled) {
-            writeToFile(entry)
+            fileWriteScope.launch {
+                writeToFile(entry)
+            }
         }
         
         // Также пишем в существующий LogCollector для совместимости
@@ -255,9 +266,9 @@ object AppLogger {
     }
     
     /**
-     * Записать лог в файл (асинхронно, не блокирует).
+     * Записать лог в файл (вызывается из фонового потока через fileWriteScope).
      */
-    private fun writeToFile(entry: LogEntry) {
+    private suspend fun writeToFile(entry: LogEntry) {
         val ctx = context ?: return
         
         try {
