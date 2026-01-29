@@ -16,7 +16,6 @@ import java.io.IOException
  */
 class TelemetryInterceptor(
     private val tokenManager: TokenManager,
-    private val queueManager: kotlin.Lazy<QueueManager>,
     private val context: android.content.Context,
     private val telemetryBatcher: TelemetryBatcher
 ) : Interceptor {

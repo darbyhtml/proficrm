@@ -247,8 +247,9 @@ class CallListenerService : Service() {
                                 }
                             }
                         } else if (code == 200 || code == 204) {
-                            // Сбрасываем backoff при успешных ответах (200/204)
-                            rateLimitBackoff.resetBackoff()
+                            // Мягко снижаем backoff при успешных ответах (200/204)
+                            // Используем decrement вместо reset для избежания "пилы" при чередовании успешных/неудачных запросов
+                            rateLimitBackoff.decrementBackoff()
                         }
                         
                         // Адаптивная частота: при пустых командах (204) увеличиваем задержку
@@ -405,6 +406,8 @@ class CallListenerService : Service() {
                     
                         // ДВА РЕЖИМА polling:
                         // - быстрый: 500–800мс, когда приложение активно/готово (не делаем агрессивный backoff)
+                        //   ПРИМЕЧАНИЕ: Частота выбрана для минимальной задержки доставки команды "позвонить".
+                        //   Если нагрузка на батарею критична, можно увеличить до 1-2 сек или использовать push/FCM.
                         // - медленный: 2–10с, когда нет активных команд и приложение не активно (экономим батарею)
                         val isFastMode = AppState.isForeground ||
                                 (AppContainer.pendingCallStore.hasActivePendingCallsFlow.value) ||

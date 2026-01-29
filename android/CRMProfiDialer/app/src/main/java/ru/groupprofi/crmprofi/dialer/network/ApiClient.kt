@@ -57,8 +57,8 @@ class ApiClient private constructor(context: Context) {
             }
         }
         
-        // TelemetryInterceptor также получает queueManager лениво
-        val telemetryInterceptor = TelemetryInterceptor(tokenManager, lazy { queueManager }, context, telemetryBatcher)
+        // TelemetryInterceptor использует только telemetryBatcher (queueManager не нужен)
+        val telemetryInterceptor = TelemetryInterceptor(tokenManager, context, telemetryBatcher)
         httpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)

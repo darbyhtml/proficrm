@@ -368,3 +368,64 @@ masked = masked.replace(Regex("""device[_\s]?id[=:]([A-Za-z0-9]{8,})(?=\s|$|&|})
 - `SupportReportBuilder.kt`: аналогично для сети и versionCode/longVersionCode.
 
 **Результат:** `:app:compileDebugKotlin`, `:app:assembleDebug`, `:app:testDebugUnitTest`, `:app:lintDebug` проходят.
+
+---
+
+## Исправления по результатам ревью (январь 2026, четвертая итерация)
+
+### 17. QueueManager.enqueue(): синхронность для критичных путей
+**Проблема:** Комментарий говорил "синхронно", но реализация была асинхронной через `scope.launch`, что могло привести к потере данных при быстром убийстве процесса.
+
+**Исправление:**
+- `enqueue()` теперь использует `runBlocking(Dispatchers.IO)` для гарантии сохранения данных
+- Добавлен `enqueueAsync()` для неблокирующего варианта (если потеря данных допустима)
+- Комментарии обновлены для ясности
+
+**Код:**
+```kotlin
+fun enqueue(...) {
+    kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+        dao.insert(item)
+    }
+}
+```
+
+### 18. TelemetryInterceptor: удален неиспользуемый queueManager
+**Проблема:** Параметр `queueManager: Lazy<QueueManager>` принимался, но никогда не использовался.
+
+**Исправление:**
+- Удален неиспользуемый параметр из конструктора
+- Обновлена инициализация в `ApiClient.kt`
+
+### 19. RateLimitBackoff: мягкое снижение вместо резкого reset
+**Проблема:** `resetBackoff()` обнулял уровень до 0, что могло создавать "пилу" при чередовании успешных и неудачных запросов.
+
+**Исправление:**
+- Добавлен метод `decrementBackoff()` для мягкого снижения уровня на 1
+- В `CallListenerService` используется `decrementBackoff()` вместо `resetBackoff()` при успешных ответах после 429
+- Это обеспечивает более плавное восстановление без резких скачков
+
+**Код:**
+```kotlin
+fun decrementBackoff() {
+    if (backoffLevel > 0) {
+        backoffLevel--
+    }
+}
+
+// В CallListenerService:
+} else if (code == 200 || code == 204) {
+    rateLimitBackoff.decrementBackoff() // Мягкое снижение вместо resetBackoff()
+}
+```
+
+### 20. Документация: комментарий о частоте polling
+**Добавлено:** Комментарий в `CallListenerService` объясняет выбор частоты polling (650ms) и рекомендации по оптимизации (push/FCM) при необходимости снижения нагрузки на батарею.
+
+## Обновленные файлы (четвертая итерация)
+
+1. `android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/queue/QueueManager.kt` - синхронный enqueue через runBlocking
+2. `android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/network/TelemetryInterceptor.kt` - удален неиспользуемый queueManager
+3. `android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/network/ApiClient.kt` - обновлена инициализация TelemetryInterceptor
+4. `android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/network/RateLimitBackoff.kt` - добавлен decrementBackoff()
+5. `android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/CallListenerService.kt` - используется decrementBackoff() вместо resetBackoff()

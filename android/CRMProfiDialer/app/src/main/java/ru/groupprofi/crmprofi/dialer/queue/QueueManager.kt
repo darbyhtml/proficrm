@@ -38,9 +38,37 @@ class QueueManager(private val context: Context) {
     private val STUCK_ALERT_INTERVAL_MS = 5 * 60 * 1000L  // 5 минут
     
     /**
-     * Добавить элемент в очередь (синхронно, для использования из сервиса).
+     * Добавить элемент в очередь (синхронно, блокирующий вызов).
+     * Использует runBlocking для гарантии сохранения данных даже при быстром убийстве процесса.
+     * Для неблокирующего варианта используйте enqueueAsync().
      */
     fun enqueue(
+        type: String,
+        endpoint: String,
+        payload: String,
+        method: String = "POST"
+    ) {
+        kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+            try {
+                val item = QueueItem(
+                    type = type,
+                    endpoint = endpoint,
+                    payload = payload,
+                    method = method
+                )
+                dao.insert(item)
+                Log.i("QueueManager", "Enqueued: type=$type, endpoint=$endpoint")
+            } catch (e: Exception) {
+                Log.e("QueueManager", "Failed to enqueue: ${e.message}")
+            }
+        }
+    }
+    
+    /**
+     * Добавить элемент в очередь асинхронно (неблокирующий вариант).
+     * Используйте только если потеря данных при убийстве процесса допустима.
+     */
+    fun enqueueAsync(
         type: String,
         endpoint: String,
         payload: String,
@@ -55,9 +83,9 @@ class QueueManager(private val context: Context) {
                     method = method
                 )
                 dao.insert(item)
-                Log.i("QueueManager", "Enqueued: type=$type, endpoint=$endpoint")
+                Log.i("QueueManager", "Enqueued async: type=$type, endpoint=$endpoint")
             } catch (e: Exception) {
-                Log.e("QueueManager", "Failed to enqueue: ${e.message}")
+                Log.e("QueueManager", "Failed to enqueue async: ${e.message}")
             }
         }
     }
