@@ -86,23 +86,21 @@ class TelemetryBatcher(
         
         try {
             // Отправляем батч напрямую через ApiClient
-            val result: ru.groupprofi.crmprofi.dialer.network.ApiClient.Result<Unit> = sendBatchFn(deviceId, items)
+            val sendResult: ru.groupprofi.crmprofi.dialer.network.ApiClient.Result<Unit> = sendBatchFn(deviceId, items)
             
-            when (result) {
-                is ru.groupprofi.crmprofi.dialer.network.ApiClient.Result.Success -> {
-                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.d(
-                        "TelemetryBatcher",
-                        "TelemetryBatcher flush: nItems=${items.size}, reason=${reason.name}"
-                    )
-                }
-                is ru.groupprofi.crmprofi.dialer.network.ApiClient.Result.Error -> {
-                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.w(
-                        "TelemetryBatcher",
-                        "TelemetryBatcher flush failed: nItems=${items.size}, reason=${reason.name}, error=${result.message}"
-                    )
-                    // Возвращаем элементы обратно в очередь при ошибке
-                    items.forEach { telemetryQueue.offer(it) }
-                }
+            if (sendResult is ru.groupprofi.crmprofi.dialer.network.ApiClient.Result.Success) {
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.d(
+                    "TelemetryBatcher",
+                    "TelemetryBatcher flush: nItems=${items.size}, reason=${reason.name}"
+                )
+            } else {
+                val err = sendResult as ru.groupprofi.crmprofi.dialer.network.ApiClient.Result.Error
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.w(
+                    "TelemetryBatcher",
+                    "TelemetryBatcher flush failed: nItems=${items.size}, reason=${reason.name}, error=${err.message}"
+                )
+                // Возвращаем элементы обратно в очередь при ошибке
+                items.forEach { telemetryQueue.offer(it) }
             }
         } catch (e: Exception) {
             ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("TelemetryBatcher", "Error batching telemetry: ${e.message}")
