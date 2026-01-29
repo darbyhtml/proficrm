@@ -157,3 +157,13 @@ masked = masked.replace(Regex("""("device_id"\s*:\s*")([A-Za-z0-9]{8,})(")""", R
 - ✅ Forced flush на важных событиях
 - ✅ CallLog matching с безопасным логированием (без PII)
 - ✅ Корректное маскирование JSON без порчи формата
+
+---
+
+## Исправление TelemetryBatcher: корректное определение reason
+
+**Проблема:** При достижении BATCH_SIZE_THRESHOLD вызывался `flushBatch(force=true)`, что приводило к логированию `reason=FORCED` вместо `reason=SIZE`. Причина flush определялась неправильно из-за проверки параметра `force` перед размером батча.
+
+**Исправление:** Добавлен enum `FlushReason` (SIZE, TIMER, FORCED) для явного указания причины flush. Изменена сигнатура `flushBatch()` для принятия `FlushReason` вместо `force: Boolean`. При достижении размера батча вызывается `flushBatch(FlushReason.SIZE)`, при таймерном flush — `flushBatch(FlushReason.TIMER)`, при явном forced flush — `flushBatch(FlushReason.FORCED)`.
+
+**Результат:** Логирование теперь корректно отражает причину flush: `reason=SIZE` при достижении порога размера, `reason=TIMER` при таймерном flush, `reason=FORCED` только при бизнес-событиях (COMMAND_RECEIVED, RATE_LIMIT_ENTER, CALL_RESOLVED). Поведение полностью соответствует документации и ожидаемым логам.

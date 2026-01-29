@@ -30,21 +30,30 @@ class TelemetryBatcher(
     }
     
     /**
+     * Причина отправки батча телеметрии.
+     */
+    private enum class FlushReason {
+        SIZE,   // Достигнут порог размера батча (>=20 элементов)
+        TIMER,  // Истек таймер (45 секунд)
+        FORCED  // Принудительная отправка (бизнес-события: COMMAND_RECEIVED, RATE_LIMIT_ENTER, CALL_RESOLVED)
+    }
+    
+    /**
      * Добавить элемент телеметрии в очередь для батчинга.
      */
     fun addTelemetry(item: ApiClient.TelemetryItem) {
         telemetryQueue.offer(item)
         
-        // Запускаем flush если очередь пуста (первый элемент) или достигнут порог
+        // Запускаем flush при достижении порога размера
         if (telemetryQueue.size >= BATCH_SIZE_THRESHOLD) {
             scope.launch {
-                flushBatch(force = true)
+                flushBatch(FlushReason.SIZE)
             }
         } else if (flushJob == null || flushJob?.isCompleted == true) {
             // Запускаем периодический flush если его еще нет
             flushJob = scope.launch {
                 delay(BATCH_INTERVAL_MS)
-                flushBatch(force = false)
+                flushBatch(FlushReason.TIMER)
             }
         }
     }
@@ -53,13 +62,13 @@ class TelemetryBatcher(
      * Принудительно отправить накопленную телеметрию (например, при получении команды или важном событии).
      */
     suspend fun flushNow() {
-        flushBatch(force = true)
+        flushBatch(FlushReason.FORCED)
     }
     
     /**
      * Отправить батч телеметрии.
      */
-    private suspend fun flushBatch(force: Boolean) = mutex.withLock {
+    private suspend fun flushBatch(reason: FlushReason) = mutex.withLock {
         if (telemetryQueue.isEmpty()) return@withLock
         
         val items = mutableListOf<ApiClient.TelemetryItem>()
@@ -73,12 +82,6 @@ class TelemetryBatcher(
         
         if (items.isEmpty()) return@withLock
         
-        val flushReason = when {
-            force -> "FORCED"
-            items.size >= BATCH_SIZE_THRESHOLD -> "SIZE"
-            else -> "TIMER"
-        }
-        
         try {
             // Отправляем батч напрямую через ApiClient
             val result = sendBatchFn(deviceId, items)
@@ -87,13 +90,13 @@ class TelemetryBatcher(
                 is ru.groupprofi.crmprofi.dialer.network.ApiClient.Result.Success -> {
                     ru.groupprofi.crmprofi.dialer.logs.AppLogger.d(
                         "TelemetryBatcher",
-                        "TelemetryBatcher flush: nItems=${items.size}, reason=$flushReason"
+                        "TelemetryBatcher flush: nItems=${items.size}, reason=${reason.name}"
                     )
                 }
                 is ru.groupprofi.crmprofi.dialer.network.ApiClient.Result.Error -> {
                     ru.groupprofi.crmprofi.dialer.logs.AppLogger.w(
                         "TelemetryBatcher",
-                        "TelemetryBatcher flush failed: nItems=${items.size}, reason=$flushReason, error=${result.message}"
+                        "TelemetryBatcher flush failed: nItems=${items.size}, reason=${reason.name}, error=${result.message}"
                     )
                     // Возвращаем элементы обратно в очередь при ошибке
                     items.forEach { telemetryQueue.offer(it) }
@@ -105,11 +108,11 @@ class TelemetryBatcher(
             items.forEach { telemetryQueue.offer(it) }
         }
         
-        // Если в очереди еще есть элементы и это был принудительный flush, запускаем следующий
-        if (force && telemetryQueue.isNotEmpty()) {
+        // Если в очереди еще есть элементы и это был принудительный flush, запускаем следующий таймерный flush
+        if (reason == FlushReason.FORCED && telemetryQueue.isNotEmpty()) {
             flushJob = scope.launch {
                 delay(BATCH_INTERVAL_MS)
-                flushBatch(force = false)
+                flushBatch(FlushReason.TIMER)
             }
         }
     }
