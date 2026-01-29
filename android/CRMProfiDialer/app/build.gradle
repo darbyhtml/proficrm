@@ -138,44 +138,33 @@ dependencies {
     testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1"
 }
 
-// Очищаем kapt stubs перед каждой сборкой для избежания дубликатов
-afterEvaluate {
-    tasks.matching { it.name.contains("kapt") && !it.name.contains("UnitTest") && !it.name.contains("AndroidTest") }.configureEach { task ->
-        task.doFirst {
-            // Очищаем только основную папку kapt3 (не тестовую), чтобы избежать блокировок на Windows
-            try {
-                def kaptDir = file("$buildDir/tmp/kapt3")
-                if (kaptDir.exists()) {
-                    // Пытаемся удалить только файлы, не директории с кэшем
-                    kaptDir.listFiles()?.each { file ->
-                        if (file.isFile()) {
-                            file.delete()
-                        }
+// Очищаем kapt stubs перед каждой сборкой для избежания дубликатов (только для основного kapt)
+tasks.matching { it.name.contains("kapt") && !it.name.contains("UnitTest") && !it.name.contains("AndroidTest") }.configureEach { task ->
+    task.doFirst {
+        try {
+            def kaptDir = file("$buildDir/tmp/kapt3")
+            if (kaptDir.exists()) {
+                kaptDir.listFiles()?.each { file ->
+                    if (file.isFile()) {
+                        file.delete()
                     }
-                    println("Cleaned kapt directory: $kaptDir")
                 }
-            } catch (Exception e) {
-                // Игнорируем ошибки очистки (файлы могут быть заблокированы)
-                println("Warning: Could not clean kapt directory: ${e.message}")
+                println("Cleaned kapt directory: $kaptDir")
             }
+        } catch (Exception e) {
+            println("Warning: Could not clean kapt directory: ${e.message}")
         }
     }
 }
 
-// Применяем signing ТОЛЬКО для productionRelease
-// Примечание: R8/ProGuard для productionRelease можно включить через отдельный buildType
-// Для тестирования (stagingDebug) minify не нужен
-afterEvaluate {
-    android.applicationVariants.all { variant ->
-        if (variant.buildType.name == "release" && variant.flavorName == "production") {
-            // Применяем signing config только если он настроен
-            // В afterEvaluate нужно обращаться через android.signingConfigs
-            def signingConfig = android.signingConfigs.findByName("productionRelease")
-            if (signingConfig && signingConfig.storeFile != null && signingConfig.storeFile.exists()) {
-                variant.buildType.signingConfig = signingConfig
-            }
-            // Если секретов нет - просто не подписываем (для тестирования это нормально)
+// Применяем signing ТОЛЬКО для productionRelease с помощью Android Components API
+androidComponents {
+    onVariants(selector().withName("productionRelease")) { variant ->
+        def signingConfig = android.signingConfigs.findByName("productionRelease")
+        if (signingConfig && signingConfig.storeFile != null && signingConfig.storeFile.exists()) {
+            variant.signingConfig = signingConfig
         }
+        // Если секретов нет — оставляем variant без кастомного signing (для теста это нормально)
     }
 }
 
