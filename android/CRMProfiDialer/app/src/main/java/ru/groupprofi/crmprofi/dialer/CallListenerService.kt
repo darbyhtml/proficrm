@@ -180,7 +180,7 @@ class CallListenerService : Service() {
         loopJob?.cancel()
         loopJob = scope.launch {
             while (true) {
-                    try {
+                try {
                         // Если foreground не стартовал — не делаем агрессивную работу, чтобы избежать лишней нагрузки.
                         if (Build.VERSION.SDK_INT >= 26 && !foregroundStarted) {
                             delay(5000)
@@ -396,9 +396,9 @@ class CallListenerService : Service() {
                             
                             // Используем CallFlowCoordinator для обработки команды на звонок
                             callFlowCoordinator.handleCallCommand(phone, callRequestId)
-                            } else {
+                        } else {
                             ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallListenerService", "Номер или ID пустой, пропускаем")
-                    }
+                        }
 
                         // Надёжный резолв pending calls: расширенные ретраи + таймаут
                         maybeResolvePendingCalls()
