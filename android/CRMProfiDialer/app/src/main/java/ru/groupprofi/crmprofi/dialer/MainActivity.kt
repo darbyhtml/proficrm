@@ -9,6 +9,7 @@ import android.os.Looper
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
+import android.view.Choreographer
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
@@ -29,6 +30,8 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import android.os.Trace
+import ru.groupprofi.crmprofi.dialer.BuildConfig
 import ru.groupprofi.crmprofi.dialer.auth.TokenManager
 import ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker
 import ru.groupprofi.crmprofi.dialer.domain.PendingCall
@@ -99,7 +102,17 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        // В debug режиме логируем время старта
+        val startTime = if (BuildConfig.DEBUG) android.os.SystemClock.elapsedRealtime() else 0L
+        
         // Инициализация через AppContainer (используем интерфейсы)
+        // ВАЖНО: AppContainer должен быть уже инициализирован в Application.onCreate (на фоне)
+        // Если нет - ждем инициализации (fallback для edge cases)
+        if (!ru.groupprofi.crmprofi.dialer.core.AppContainer.isInitialized()) {
+            ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("MainActivity", "AppContainer not initialized, initializing synchronously (should not happen)")
+            ru.groupprofi.crmprofi.dialer.core.AppContainer.init(applicationContext)
+        }
+        
         callHistoryStore = AppContainer.callHistoryStore
         pendingCallStore = AppContainer.pendingCallStore
         readinessProvider = AppContainer.readinessProvider
@@ -111,14 +124,26 @@ class MainActivity : AppCompatActivity() {
         
         // Сначала проверяем авторизацию
         if (!tokenManager.hasTokens()) {
+            if (BuildConfig.DEBUG) {
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("MainActivity", "No tokens, redirecting to LoginActivity")
+            }
             startLoginActivity()
             return
         }
         
         // Проверяем, нужно ли показывать onboarding
         if (shouldShowOnboarding()) {
+            if (BuildConfig.DEBUG) {
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("MainActivity", "Onboarding not completed, redirecting to OnboardingActivity")
+            }
             startOnboarding()
             return
+        }
+        
+        // Логируем время старта в debug режиме
+        if (BuildConfig.DEBUG && startTime > 0) {
+            val elapsed = android.os.SystemClock.elapsedRealtime() - startTime
+            ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("MainActivity", "onCreate completed in ${elapsed}ms")
         }
 
         onboardingLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -127,28 +152,37 @@ class MainActivity : AppCompatActivity() {
         }
         
         try {
+            Trace.beginSection("MainActivity.onCreate")
+            
             setContentView(R.layout.activity_main)
             
-            // Сохраняем device_id если еще не сохранен
-            if (tokenManager.getDeviceId().isNullOrBlank()) {
-                tokenManager.saveDeviceId(deviceId)
-            }
-            
-            // Находим UI элементы
+            // Находим UI элементы (быстрая операция)
             initViews()
             
-            // Настраиваем обработчики
+            // Настраиваем обработчики (быстрая операция)
             setupClickListeners()
             
-            // Настраиваем long-press для режима поддержки
+            // Настраиваем long-press для режима поддержки (быстрая операция)
             setupSupportMode()
             
-            // Настраиваем реактивные подписки
+            // Настраиваем реактивные подписки (быстрая операция)
             setupReactiveSubscriptions()
             
-            // Обновляем UI
-            updateReadinessStatus()
+            // Сохраняем device_id если еще не сохранен (может быть тяжело - откладываем)
+            if (tokenManager.getDeviceId().isNullOrBlank()) {
+                lifecycleScope.launch(Dispatchers.IO) {
+                    tokenManager.saveDeviceId(deviceId)
+                }
+            }
             
+            // Обновляем UI после первого кадра (откладываем тяжелые проверки)
+            Choreographer.getInstance().postFrameCallback {
+                Trace.beginSection("MainActivity.updateReadinessStatus")
+                updateReadinessStatus()
+                Trace.endSection()
+            }
+            
+            Trace.endSection()
         } catch (e: Exception) {
             ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("MainActivity", "Ошибка в onCreate: ${e.message}", e)
             android.widget.Toast.makeText(this, "Ошибка запуска: ${e.message}", android.widget.Toast.LENGTH_LONG).show()

@@ -400,8 +400,9 @@ class OnboardingActivity : AppCompatActivity() {
         
         AppLogger.i("OnboardingActivity", "Onboarding завершён")
         
-        // Переходим в MainActivity
+        // Переходим в MainActivity с правильными flags для избежания лишних пересозданий
         val intent = Intent(this, MainActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
         startActivity(intent)
         finish()
     }

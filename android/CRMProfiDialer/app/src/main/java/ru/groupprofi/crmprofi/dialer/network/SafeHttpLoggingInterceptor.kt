@@ -1,6 +1,9 @@
 package ru.groupprofi.crmprofi.dialer.network
 
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import okhttp3.Interceptor
 import okhttp3.Response
 import okhttp3.logging.HttpLoggingInterceptor
@@ -8,13 +11,25 @@ import okhttp3.logging.HttpLoggingInterceptor
 /**
  * Безопасный HTTP logging interceptor с маскированием чувствительных данных.
  * Включается только в debug сборках.
+ * 
+ * ВАЖНО: Маскирование выполняется на фоновом потоке, чтобы не блокировать main thread.
  */
 class SafeHttpLoggingInterceptor : Interceptor {
+    private val loggingScope = CoroutineScope(Dispatchers.Default)
+    
     private val delegate = HttpLoggingInterceptor(object : HttpLoggingInterceptor.Logger {
         override fun log(message: String) {
-            // Маскируем чувствительные данные перед логированием
-            val masked = maskSensitiveData(message)
-            Log.d("OkHttp", masked)
+            // Маскируем чувствительные данные на фоновом потоке (regex/replace операции могут быть тяжелыми)
+            loggingScope.launch {
+                try {
+                    val masked = maskSensitiveData(message)
+                    Log.d("OkHttp", masked)
+                } catch (e: Exception) {
+                    // Если маскирование упало - логируем оригинальное сообщение без маскирования
+                    Log.d("OkHttp", message)
+                    Log.w("SafeHttpLoggingInterceptor", "Failed to mask sensitive data: ${e.message}")
+                }
+            }
         }
     }).apply {
         level = HttpLoggingInterceptor.Level.BODY

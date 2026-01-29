@@ -2,6 +2,7 @@ package ru.groupprofi.crmprofi.dialer.logs
 
 import android.content.Context
 import android.util.Log
+import ru.groupprofi.crmprofi.dialer.BuildConfig
 import java.io.File
 import java.io.FileWriter
 import java.io.PrintWriter
@@ -123,9 +124,15 @@ object AppLogger {
     /**
      * Основной метод логирования.
      * Маскирует чувствительные данные перед записью.
+     * В release режиме пропускает DEBUG логи для уменьшения спама.
      */
     private fun log(level: Int, tag: String, message: String) {
-        // Всегда пишем в системный log
+        // В release режиме пропускаем DEBUG логи
+        if (!BuildConfig.DEBUG && level == Log.DEBUG) {
+            return
+        }
+        
+        // Всегда пишем в системный log (кроме DEBUG в release)
         when (level) {
             Log.DEBUG -> Log.d(tag, message)
             Log.INFO -> Log.i(tag, message)
