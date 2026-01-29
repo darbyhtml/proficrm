@@ -46,6 +46,8 @@ class TelemetryBatcher(
         
         // Запускаем flush при достижении порога размера
         if (telemetryQueue.size >= BATCH_SIZE_THRESHOLD) {
+            // Отменяем запланированный таймерный flush, так как делаем немедленный SIZE flush
+            flushJob?.cancel()
             scope.launch {
                 flushBatch(FlushReason.SIZE)
             }
@@ -110,6 +112,8 @@ class TelemetryBatcher(
         
         // Если в очереди еще есть элементы и это был принудительный flush, запускаем следующий таймерный flush
         if (reason == FlushReason.FORCED && telemetryQueue.isNotEmpty()) {
+            // Отменяем существующий таймерный flush перед планированием нового
+            flushJob?.cancel()
             flushJob = scope.launch {
                 delay(BATCH_INTERVAL_MS)
                 flushBatch(FlushReason.TIMER)

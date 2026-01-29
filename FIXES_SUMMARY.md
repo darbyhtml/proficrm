@@ -167,3 +167,5 @@ masked = masked.replace(Regex("""("device_id"\s*:\s*")([A-Za-z0-9]{8,})(")""", R
 **Исправление:** Добавлен enum `FlushReason` (SIZE, TIMER, FORCED) для явного указания причины flush. Изменена сигнатура `flushBatch()` для принятия `FlushReason` вместо `force: Boolean`. При достижении размера батча вызывается `flushBatch(FlushReason.SIZE)`, при таймерном flush — `flushBatch(FlushReason.TIMER)`, при явном forced flush — `flushBatch(FlushReason.FORCED)`.
 
 **Результат:** Логирование теперь корректно отражает причину flush: `reason=SIZE` при достижении порога размера, `reason=TIMER` при таймерном flush, `reason=FORCED` только при бизнес-событиях (COMMAND_RECEIVED, RATE_LIMIT_ENTER, CALL_RESOLVED). Поведение полностью соответствует документации и ожидаемым логам.
+
+**Дополнительное улучшение:** Добавлена отмена запланированного таймерного flushJob при SIZE и FORCED flush для предотвращения лишних срабатываний таймера и дублирования flush операций. Это устраняет edge-case, когда запланированный таймерный flush мог сработать после уже выполненного SIZE/FORCED flush.
