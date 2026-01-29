@@ -2,6 +2,7 @@ package ru.groupprofi.crmprofi.dialer.ui.login
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Trace
 import android.widget.Button
 import android.widget.TextView
 import androidx.activity.result.ActivityResultLauncher
@@ -29,30 +30,49 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var qrLoginLauncher: ActivityResultLauncher<Intent>
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_login)
-
-        qrLoginLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            if (TokenManager.getInstanceOrNull()?.hasTokens() == true) {
-                startMainActivity()
-                finish()
+        Trace.beginSection("LoginActivity.onCreate")
+        try {
+            super.onCreate(savedInstanceState)
+            Trace.beginSection("LoginActivity.setContentView")
+            try {
+                setContentView(R.layout.activity_login)
+            } finally {
+                Trace.endSection()
             }
-        }
 
-        initViews()
-        setupListeners()
-
-        // Инициализация TokenManager и проверка токенов только в фоне — без disk I/O на main thread
-        lifecycleScope.launch {
-            val tm = TokenManager.init(applicationContext)
-            withContext(Dispatchers.Main) {
-                if (tm.hasTokens()) {
+            qrLoginLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+                if (TokenManager.getInstanceOrNull()?.hasTokens() == true) {
                     startMainActivity()
                     finish()
-                    return@withContext
                 }
-                // Уже отрисован экран логина (initViews/setupListeners выше)
             }
+
+            Trace.beginSection("LoginActivity.initViews")
+            try {
+                initViews()
+            } finally {
+                Trace.endSection()
+            }
+            Trace.beginSection("LoginActivity.setupListeners")
+            try {
+                setupListeners()
+            } finally {
+                Trace.endSection()
+            }
+
+            // Инициализация TokenManager и проверка токенов только в фоне — без disk I/O на main thread
+            lifecycleScope.launch {
+                val tm = TokenManager.init(applicationContext)
+                withContext(Dispatchers.Main) {
+                    if (tm.hasTokens()) {
+                        startMainActivity()
+                        finish()
+                        return@withContext
+                    }
+                }
+            }
+        } finally {
+            Trace.endSection()
         }
     }
 

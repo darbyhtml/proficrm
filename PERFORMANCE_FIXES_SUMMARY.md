@@ -438,6 +438,58 @@ adb logcat | grep -i "Skipped.*frames"
 - ✅ QR flow не нарушен; токены сохраняются, запросы выполняются.
 - ✅ Lifecycle-safe: без runBlocking на UI, только applicationContext.
 
+## Четвёртая итерация: OEM-шум, трассы, BootCompletedReceiver, retry (январь 2026)
+
+### Контекст из logcat
+
+- **Не наше:** VerityUtils/fs-verity, BufferQueueDebug, OpenGLRenderer/ion/fbcNotifyFrameComplete — OEM/прошивка (Transsion/Mediatek), в коде приложения не исправляется.
+- **StrictMode DiskReadViolation** со стеком `com.transsion.scaler.view.SurfaceFactory` — тоже OEM (Surface/ViewRoot при первом кадре). TokenManager/EncryptedSharedPreferences уже вынесены на IO.
+- **Skipped 34 frames** при старте LoginActivity — фриз уже не от TokenManager (инициализация идёт позже в фоне). Нужны трассы, чтобы искать причину в layout/SDK/первом рендере.
+- **BootCompletedReceiver:** выполнение на Main после init увеличивало риск очереди на main при загрузке.
+- **CallListenerService:** при TokenManager == null сервис останавливался без повторной попытки — после boot автозапуск мог не восстановиться.
+
+### Исправления
+
+#### 1. StrictMode: фильтрация по пакету (debug)
+
+**Файл:** `CRMApplication.kt`
+
+**Изменения:**
+- Вместо `penaltyLog()` используется **penaltyListener(executor)**: логируются только нарушения, в стеке которых есть **ru.groupprofi**.
+- Нарушения от OEM (com.transsion.*, surfaceflinger и т.д.) не логируются, чтобы не гоняться за ложными целями.
+
+#### 2. LoginActivity: Trace-секции для Perfetto
+
+**Файл:** `LoginActivity.kt`
+
+**Изменения:**
+- Добавлены **Trace.beginSection/endSection** вокруг: `LoginActivity.onCreate`, `LoginActivity.setContentView`, `LoginActivity.initViews`, `LoginActivity.setupListeners`.
+- В Perfetto/System Trace видно, где именно «дырка» на main thread при холодном старте.
+
+#### 3. BootCompletedReceiver: всё на фоне, без Main
+
+**Файл:** `BootCompletedReceiver.kt`
+
+**Изменения:**
+- Убран **withContext(Dispatchers.Main)** — вся логика (проверки разрешений, уведомлений, **startForegroundService**) выполняется на **Dispatchers.Default**.
+- **startForegroundService/startService** не требуют main thread — снижается риск ANR и очереди на main при загрузке после boot.
+- Используется **appContext** для всех вызовов.
+
+#### 4. CallListenerService: retry при TokenManager == null
+
+**Файл:** `CallListenerService.kt`
+
+**Изменения:**
+- При **TokenManager.getInstanceOrNull() == null** перед **stopSelf()** вызывается **scheduleRetryIfNeeded(intent, flags)**.
+- Отложенный повтор через **Handler(Looper.getMainLooper()).postDelayed(..., 10_000)**: через 10 с сервис запускается снова с **ACTION_START** и **EXTRA_RETRY_COUNT**.
+- Максимум **3** попытки; далее логируется «TokenManager retries exhausted».
+
+### Рекомендации по проверке
+
+- **Perfetto/System Trace:** холодный старт → смотреть секции `LoginActivity.*` и `TokenManager.init`; искать длинные блоки на main.
+- **Сравнение:** AOSP-эмулятор / Pixel vs устройство Transsion — отделить OEM-артефакты от регрессий приложения.
+- **Baseline Profile:** при наличии — даёт выигрыш по cold start при targetSdk 34.
+
 ## Commit Hash
 
 **FULL commit hash:**

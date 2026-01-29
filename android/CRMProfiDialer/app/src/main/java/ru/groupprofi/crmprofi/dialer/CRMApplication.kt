@@ -4,7 +4,9 @@ import android.app.Application
 import android.os.Build
 import android.os.StrictMode
 import android.os.Trace
+import android.util.Log
 import android.view.Choreographer
+import java.util.concurrent.Executors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -70,17 +72,29 @@ class CRMApplication : Application() {
     
     /**
      * Включить StrictMode в debug режиме для обнаружения блокировок main thread.
+     * Нарушения от OEM/вендора (например com.transsion.* при Surface/ViewRoot) не логируем,
+     * чтобы не гоняться за ложными целями — только наш пакет ru.groupprofi.
      */
     private fun enableStrictMode() {
+        val ourPackage = "ru.groupprofi"
+        val executor = Executors.newSingleThreadExecutor()
         StrictMode.setThreadPolicy(
             StrictMode.ThreadPolicy.Builder()
                 .detectDiskReads()
                 .detectDiskWrites()
                 .detectNetwork()
-                .penaltyLog()
+                .penaltyListener(executor) { violation ->
+                    val fromOurCode = violation.stackTrace.any { element ->
+                        element.className?.startsWith(ourPackage) == true
+                    }
+                    if (fromOurCode) {
+                        Log.w("StrictMode", "Policy violation (our code)", violation)
+                    }
+                    // OEM/системные нарушения (transsion, surfaceflinger и т.д.) не логируем
+                }
                 .build()
         )
-        
+
         StrictMode.setVmPolicy(
             StrictMode.VmPolicy.Builder()
                 .detectLeakedSqlLiteObjects()

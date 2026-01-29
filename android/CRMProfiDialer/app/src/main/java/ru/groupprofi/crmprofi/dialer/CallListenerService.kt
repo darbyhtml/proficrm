@@ -92,10 +92,11 @@ class CallListenerService : Service() {
             }
         }
 
-        // TokenManager должен быть уже инициализирован в Application; иначе — деградация (не блокируем main thread)
+        // TokenManager должен быть уже инициализирован в Application; иначе — деградация + отложенный retry
         val tm = TokenManager.getInstanceOrNull()
         if (tm == null) {
             ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "TokenManager not ready")
+            scheduleRetryIfNeeded(intent)
             stopSelf()
             return START_NOT_STICKY
         }
@@ -1102,6 +1103,43 @@ class CallListenerService : Service() {
 
         const val ACTION_START = "ru.groupprofi.crmprofi.dialer.START"
         const val ACTION_STOP = "ru.groupprofi.crmprofi.dialer.STOP"
+
+        private const val EXTRA_RETRY_COUNT = "retry_count"
+        private const val RETRY_DELAY_MS = 10_000L
+        private const val MAX_TOKENMANAGER_RETRIES = 3
+
+        /**
+         * Отложенный повторный запуск сервиса, если TokenManager ещё не готов (например после boot).
+         * Вызывать только при stopSelf() из-за getInstanceOrNull() == null.
+         */
+        private fun scheduleRetry(service: CallListenerService, intent: Intent?) {
+            val retryCount = intent?.getIntExtra(EXTRA_RETRY_COUNT, 0) ?: 0
+            if (retryCount >= MAX_TOKENMANAGER_RETRIES) {
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "TokenManager retries exhausted ($MAX_TOKENMANAGER_RETRIES)")
+                return
+            }
+            val ctx = service.applicationContext
+            Handler(Looper.getMainLooper()).postDelayed({
+                val next = Intent(ctx, CallListenerService::class.java).apply {
+                    action = ACTION_START
+                    putExtra(EXTRA_RETRY_COUNT, retryCount + 1)
+                }
+                try {
+                    if (Build.VERSION.SDK_INT >= 26) {
+                        ContextCompat.startForegroundService(ctx, next)
+                    } else {
+                        ctx.startService(next)
+                    }
+                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("CallListenerService", "Scheduled retry ${retryCount + 1}/$MAX_TOKENMANAGER_RETRIES")
+                } catch (e: Exception) {
+                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("CallListenerService", "Retry start failed: ${e.message}", e)
+                }
+            }, RETRY_DELAY_MS)
+        }
+    }
+
+    private fun scheduleRetryIfNeeded(intent: Intent?) {
+        CallListenerService.scheduleRetry(this, intent)
     }
 }
 
