@@ -9,7 +9,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentLinkedQueue
-import ru.groupprofi.crmprofi.dialer.network.ApiClient.Result
 
 /**
  * Батчинг телеметрии для снижения нагрузки на сервер.
@@ -17,8 +16,15 @@ import ru.groupprofi.crmprofi.dialer.network.ApiClient.Result
  */
 class TelemetryBatcher(
     private val deviceId: String,
-    private val sendBatchFn: suspend (String, List<ApiClient.TelemetryItem>) -> Result<Unit>
+    private val sendBatchFn: suspend (String, List<ApiClient.TelemetryItem>) -> SendBatchOutcome
 ) {
+    /**
+     * Результат отправки батча телеметрии (без generic-типов для избежания recursive type checking).
+     */
+    sealed class SendBatchOutcome {
+        data object Success : SendBatchOutcome()
+        data class Failure(val message: String) : SendBatchOutcome()
+    }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val telemetryQueue = ConcurrentLinkedQueue<ApiClient.TelemetryItem>()
     private val mutex = Mutex()
@@ -87,20 +93,18 @@ class TelemetryBatcher(
         
         try {
             // Отправляем батч напрямую через ApiClient
-            val sendResult = sendBatchFn(deviceId, items)
+            val outcome = sendBatchFn(deviceId, items)
             
-            val isSuccess = sendResult is Result.Success<*>
-            if (isSuccess) {
+            if (outcome is SendBatchOutcome.Success) {
                 ru.groupprofi.crmprofi.dialer.logs.AppLogger.d(
                     "TelemetryBatcher",
                     "TelemetryBatcher flush: nItems=${items.size}, reason=${reason.name}"
                 )
             } else {
-                val err = sendResult as? Result.Error
-                val msg = err?.message ?: "Unknown error"
+                val failure = outcome as SendBatchOutcome.Failure
                 ru.groupprofi.crmprofi.dialer.logs.AppLogger.w(
                     "TelemetryBatcher",
-                    "TelemetryBatcher flush failed: nItems=${items.size}, reason=${reason.name}, error=$msg"
+                    "TelemetryBatcher flush failed: nItems=${items.size}, reason=${reason.name}, error=${failure.message}"
                 )
                 // Возвращаем элементы обратно в очередь при ошибке
                 items.forEach { telemetryQueue.offer(it) }
