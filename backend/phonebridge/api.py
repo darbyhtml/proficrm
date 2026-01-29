@@ -823,3 +823,53 @@ class UserInfoView(APIView):
             "is_admin": is_admin,
         })
 
+
+class QrTokenStatusView(APIView):
+    """
+    Проверка статуса QR-токена для веб-интерфейса.
+    Нужна только для красивого подтверждения входа по QR.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        from rest_framework import status as drf_status
+
+        enforce(user=request.user, resource_type="action", resource="phone:qr:status", context={"path": request.path})
+
+        token = (request.query_params.get("token") or "").strip()
+        if not token:
+            return Response({"detail": "token is required"}, status=drf_status.HTTP_400_BAD_REQUEST)
+
+        try:
+            qr_token = MobileAppQrToken.objects.only("user_id", "expires_at", "used_at").get(
+                token=token,
+                user=request.user,
+            )
+        except MobileAppQrToken.DoesNotExist:
+            # Не раскрываем лишних деталей — просто говорим, что токен не найден.
+            return Response({"status": "not_found"}, status=drf_status.HTTP_404_NOT_FOUND)
+
+        now = timezone.now()
+        if qr_token.used_at is not None:
+            return Response(
+                {
+                    "status": "used",
+                    "used_at": qr_token.used_at.isoformat(),
+                }
+            )
+        if now > qr_token.expires_at:
+            return Response(
+                {
+                    "status": "expired",
+                    "expires_at": qr_token.expires_at.isoformat(),
+                }
+            )
+
+        return Response(
+            {
+                "status": "pending",
+                "expires_at": qr_token.expires_at.isoformat(),
+            }
+        )
+

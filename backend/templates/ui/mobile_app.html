@@ -107,7 +107,7 @@
   </div>
 
   <!-- Модалка QR-кода -->
-  <div id="qrModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+  <div id="qrModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[80] flex items-center justify-center p-4">
     <div class="bg-white rounded-xl p-6 max-w-md w-full relative">
       <button type="button" id="closeQrModal" class="absolute top-4 right-4 text-brand-dark/60 hover:text-brand-dark">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -132,10 +132,29 @@
     </div>
   </div>
 
+  <!-- Модалка успешного входа по QR -->
+  <div id="qrSuccessModal" class="hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-[90] flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-xl">
+      <div class="mx-auto mb-4 flex items-center justify-center w-16 h-16 rounded-full bg-emerald-100 text-emerald-600">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 6L9 17l-5-5"/>
+        </svg>
+      </div>
+      <h2 class="text-xl font-semibold mb-2">Вход по QR выполнен</h2>
+      <p class="text-sm text-brand-dark/70 mb-4">
+        Вы успешно вошли в мобильное приложение. Это окно закроется автоматически.
+      </p>
+      <button type="button" id="qrSuccessClose" class="btn btn-primary w-full">
+        Понятно
+      </button>
+    </div>
+  </div>
+
   <script>
     let qrToken = null;
     let qrExpiresAt = null;
     let qrTimerInterval = null;
+    let qrStatusInterval = null;
 
     // Получаем CSRF токен из cookie
     function getCookie(name) {
@@ -184,24 +203,31 @@
         qrExpiresAt = new Date(data.expires_at);
         
         // Показываем QR-код
-        document.getElementById('qrCodeImage').src = `/mobile-app/qr.png?token=${qrToken}`;
+        document.getElementById('qrCodeImage').src = `/mobile-app/qr.png?token=${encodeURIComponent(qrToken)}`;
         document.getElementById('qrModal').classList.remove('hidden');
         
-        // Запускаем таймер
+        // Запускаем таймер и опрос статуса токена
         startQrTimer();
+        startQrStatusPolling();
       } catch (error) {
         console.error('Error creating QR token:', error);
         alert(`Ошибка создания QR-кода: ${error.message || 'Попробуйте позже'}`);
       }
     });
 
-    document.getElementById('closeQrModal').addEventListener('click', function() {
+    function closeQrModal() {
       document.getElementById('qrModal').classList.add('hidden');
       if (qrTimerInterval) {
         clearInterval(qrTimerInterval);
         qrTimerInterval = null;
       }
-    });
+      if (qrStatusInterval) {
+        clearInterval(qrStatusInterval);
+        qrStatusInterval = null;
+      }
+    }
+
+    document.getElementById('closeQrModal').addEventListener('click', closeQrModal);
 
     function startQrTimer() {
       if (qrTimerInterval) {
@@ -218,9 +244,14 @@
           document.getElementById('qrTimer').textContent = 'Истек';
           if (qrTimerInterval) {
             clearInterval(qrTimerInterval);
+            qrTimerInterval = null;
+          }
+          if (qrStatusInterval) {
+            clearInterval(qrStatusInterval);
+            qrStatusInterval = null;
           }
           setTimeout(() => {
-            document.getElementById('qrModal').classList.add('hidden');
+            closeQrModal();
           }, 2000);
           return;
         }
@@ -232,6 +263,74 @@
       
       updateTimer();
       qrTimerInterval = setInterval(updateTimer, 1000);
+    }
+
+    function showQrSuccessModal() {
+      const successModal = document.getElementById('qrSuccessModal');
+      if (!successModal) return;
+      successModal.classList.remove('hidden');
+      // Автоматически закрываем через несколько секунд
+      setTimeout(() => {
+        successModal.classList.add('hidden');
+      }, 3000);
+    }
+
+    document.getElementById('qrSuccessClose').addEventListener('click', function() {
+      document.getElementById('qrSuccessModal').classList.add('hidden');
+    });
+
+    function handleQrUsed() {
+      // Останавливаем таймеры и закрываем модалку с QR
+      closeQrModal();
+      // Показываем красивое подтверждение в центре экрана
+      showQrSuccessModal();
+    }
+
+    function startQrStatusPolling() {
+      if (qrStatusInterval) {
+        clearInterval(qrStatusInterval);
+        qrStatusInterval = null;
+      }
+      if (!qrToken) return;
+
+      async function pollStatus() {
+        try {
+          const resp = await fetch(`/api/phone/qr/status/?token=${encodeURIComponent(qrToken)}`, {
+            method: 'GET',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+          });
+          if (!resp.ok) {
+            // Для 404 или других ошибок просто прекращаем опрос тихо.
+            if (qrStatusInterval) {
+              clearInterval(qrStatusInterval);
+              qrStatusInterval = null;
+            }
+            return;
+          }
+          const data = await resp.json();
+          if (data.status === 'used') {
+            if (qrStatusInterval) {
+              clearInterval(qrStatusInterval);
+              qrStatusInterval = null;
+            }
+            handleQrUsed();
+          } else if (data.status === 'expired') {
+            if (qrStatusInterval) {
+              clearInterval(qrStatusInterval);
+              qrStatusInterval = null;
+            }
+          }
+        } catch (e) {
+          console.error('QR status poll error', e);
+        }
+      }
+
+      // Первый запрос сразу, затем опрос каждые 2 секунды
+      pollStatus();
+      qrStatusInterval = setInterval(pollStatus, 2000);
     }
   </script>
 {% endblock %}
