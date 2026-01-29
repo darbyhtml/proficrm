@@ -57,14 +57,24 @@ class SafeHttpLoggingInterceptor : Interceptor {
             }
         }
         
-        // Маскируем device_id в других форматах (не JSON: device_id=value, device_id: value)
-        // Только если это НЕ JSON формат (нет двойных кавычек вокруг значения)
-        masked = masked.replace(Regex("""device[_\s]?id["\s:=]+([A-Za-z0-9]{8,})(?!")(?=\s|$|,|})""", RegexOption.IGNORE_CASE)) { matchResult ->
-            val id = matchResult.groupValues[1]
-            if (id.length > 8) {
-                "device_id=\"${id.take(4)}***${id.takeLast(4)}\""
+        // Маскируем device_id в query параметрах и других не-JSON форматах
+        // Важно: применяем только если это НЕ JSON формат (проверяем, что перед значением нет двойных кавычек)
+        // Избегаем маскирования внутри JSON строк, так как это может портить формат
+        masked = masked.replace(Regex("""device[_\s]?id["\s:=]+([A-Za-z0-9]{8,})(?!")(?=\s|$|,|&|})""", RegexOption.IGNORE_CASE)) { matchResult ->
+            val beforeMatch = masked.substring(0, matchResult.range.first)
+            // Проверяем, что мы не внутри JSON строки (нет нечетного количества кавычек перед match)
+            val quotesBefore = beforeMatch.count { it == '"' }
+            if (quotesBefore % 2 == 0) {
+                // Мы вне JSON строки - безопасно маскируем
+                val id = matchResult.groupValues[1]
+                if (id.length > 8) {
+                    "device_id=\"${id.take(4)}***${id.takeLast(4)}\""
+                } else {
+                    "device_id=\"***\""
+                }
             } else {
-                "device_id=\"***\""
+                // Мы внутри JSON строки - не трогаем (уже обработано выше)
+                matchResult.value
             }
         }
         

@@ -715,6 +715,13 @@ class ApiClient private constructor(context: Context) {
             
             httpClient.newCall(req).execute().use { res ->
                 if (!res.isSuccessful) {
+                    // При 429 не добавляем телеметрию в очередь - это создаст лавину запросов
+                    // Телеметрия не критична, просто пропускаем при rate limiting
+                    if (res.code == 429) {
+                        // Логируем но не добавляем в очередь
+                        Log.d("ApiClient", "Telemetry batch rate-limited (429), skipping")
+                        return@use Result.Success(Unit)
+                    }
                     if (res.code in 500..599) {
                         queueManager.enqueue("telemetry", "/api/phone/telemetry/", bodyJson)
                     }

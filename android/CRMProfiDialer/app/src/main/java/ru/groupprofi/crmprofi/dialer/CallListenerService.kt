@@ -176,9 +176,10 @@ class CallListenerService : Service() {
             LogInterceptor.setCollector(logCollector)
         }
 
-        if (loopJob == null) {
-            loopJob = scope.launch {
-                while (true) {
+        // Защита от параллельных polling запросов: отменяем предыдущий job если он существует
+        loopJob?.cancel()
+        loopJob = scope.launch {
+            while (true) {
                     try {
                         // Если foreground не стартовал — не делаем агрессивную работу, чтобы избежать лишней нагрузки.
                         if (Build.VERSION.SDK_INT >= 26 && !foregroundStarted) {

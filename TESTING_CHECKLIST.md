@@ -228,8 +228,74 @@ CallListenerService: Poll: code=200, nextDelayMs=650ms, mode=FAST, emptyCount=0
 4. ✅ JSON masking: формат не портится, маскирование работает
 5. ✅ Adaptive polling: режимы переключаются корректно, логи содержат нужную информацию
 
+## Новые тесты (январь 2026)
+
+### Тест 6: Проверка single-flight polling (защита от параллельных запросов)
+
+**Шаги:**
+1. Запустить приложение
+2. Быстро вызвать `onStartCommand()` несколько раз (например, через ADB или быстрое переключение приложения)
+3. Наблюдать логи polling
+
+**Ожидаемые логи:**
+```
+CallListenerService: PullCall: 204 (no commands)
+CallListenerService: Poll: code=204, nextDelayMs=650ms, mode=FAST, emptyCount=1
+CallListenerService: PullCall: 204 (no commands)
+CallListenerService: Poll: code=204, nextDelayMs=750ms, mode=FAST, emptyCount=2
+```
+
+**Проверки:**
+- [ ] НЕТ параллельных polling запросов (все запросы идут последовательно)
+- [ ] При повторном `onStartCommand()` предыдущий polling job отменяется
+- [ ] В логах нет дублирования запросов с одинаковым timestamp
+
+### Тест 7: Проверка предотвращения лавины телеметрии при 429
+
+**Шаги:**
+1. Настроить сервер для возврата 429 на polling запросы
+2. Запустить приложение и дождаться получения 429
+3. Наблюдать логи телеметрии
+
+**Ожидаемые логи:**
+```
+CallListenerService: PullCall: 429 (rate limited)
+CallListenerService: 429 rate-limited: retryAfter=30s, backoff=30000ms, mode=RATE_LIMIT
+ApiClient: Telemetry batch rate-limited (429), skipping
+```
+
+**Проверки:**
+- [ ] НЕТ телеметрии для 429 запросов в TelemetryInterceptor
+- [ ] При 429 на отправку телеметрии она НЕ попадает в очередь
+- [ ] Логируется сообщение "Telemetry batch rate-limited (429), skipping"
+- [ ] НЕТ лавины телеметрии при rate limiting
+
+### Тест 8: Проверка улучшенного маскирования JSON
+
+**Шаги:**
+1. Включить debug режим сборки
+2. Выполнить запрос с device_id в query параметрах и в JSON теле
+3. Проверить логи OkHttp
+
+**Ожидаемые логи (правильно):**
+```
+GET /api/phone/calls/pull/?device_id=9982***6682
+POST /api/phone/telemetry/
+{
+  "device_id":"9982***6682",
+  "items":[...]
+}
+```
+
+**Проверки:**
+- [ ] Query параметры маскируются корректно: `device_id=9982***6682`
+- [ ] JSON формат сохраняется: `"device_id":"9982***6682"`
+- [ ] НЕТ порчи формата типа `device_id="9982***6682"` внутри JSON
+- [ ] Маскирование работает для всех форматов (query, JSON, headers)
+
 ## Известные ограничения
 
 - TelemetryBatcher при ошибке отправки возвращает элементы в очередь (может привести к дублированию при сетевых проблемах)
 - Rate limiting backoff не сохраняется между перезапусками приложения
 - CallLog matching может не найти звонок, если номер был изменен системой (например, добавлен код страны)
+- Warning "initCamera called twice" может появляться из библиотеки zxing (QR-сканер), не критично

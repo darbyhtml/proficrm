@@ -40,11 +40,23 @@ class TelemetryInterceptor(
         try {
             val response = chain.proceed(request)
             httpCode = response.code
+            
+            // НЕ собираем телеметрию для 429 запросов, чтобы избежать лавины
+            // При 429 сервер уже перегружен, дополнительная телеметрия только усугубляет проблему
+            if (httpCode == 429) {
+                return response
+            }
+            
             return response
         } catch (e: IOException) {
             error = e
             throw e
         } finally {
+            // Пропускаем сбор телеметрии для 429, чтобы не создавать лавину запросов
+            if (httpCode == 429) {
+                return@finally
+            }
+            
             val duration = System.currentTimeMillis() - startTime
             
             // Добавляем телеметрию в батчер (асинхронно, не блокируем основной поток)

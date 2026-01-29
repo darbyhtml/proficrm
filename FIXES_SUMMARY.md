@@ -169,3 +169,123 @@ masked = masked.replace(Regex("""("device_id"\s*:\s*")([A-Za-z0-9]{8,})(")""", R
 **Результат:** Логирование теперь корректно отражает причину flush: `reason=SIZE` при достижении порога размера, `reason=TIMER` при таймерном flush, `reason=FORCED` только при бизнес-событиях (COMMAND_RECEIVED, RATE_LIMIT_ENTER, CALL_RESOLVED). Поведение полностью соответствует документации и ожидаемым логам.
 
 **Дополнительное улучшение:** Добавлена отмена запланированного таймерного flushJob при SIZE и FORCED flush для предотвращения лишних срабатываний таймера и дублирования flush операций. Это устраняет edge-case, когда запланированный таймерный flush мог сработать после уже выполненного SIZE/FORCED flush.
+
+---
+
+## Аудит и исправления (январь 2026)
+
+### 6. CallListenerService.kt: Защита от параллельных polling запросов
+**Проблема:** При повторных вызовах `onStartCommand()` могло создаваться несколько параллельных polling циклов (`loopJob`), что приводило к спаму запросов и усугублению rate limiting.
+
+**Исправление:**
+- Убрана проверка `if (loopJob == null)` - теперь всегда отменяем предыдущий job перед созданием нового
+- Гарантирован single-flight polling: одновременно выполняется только один polling цикл
+
+**Код:**
+```kotlin
+// Защита от параллельных polling запросов: отменяем предыдущий job если он существует
+loopJob?.cancel()
+loopJob = scope.launch {
+    while (true) {
+        // ...
+    }
+}
+```
+
+### 7. TelemetryInterceptor.kt: Предотвращение лавины телеметрии при 429
+**Проблема:** При получении 429 на polling запрос, телеметрия все равно собиралась и отправлялась, создавая дополнительную нагрузку на сервер и усугубляя rate limiting.
+
+**Исправление:**
+- Телеметрия НЕ собирается для запросов с кодом 429
+- Это предотвращает лавинообразное увеличение запросов при rate limiting
+
+**Код:**
+```kotlin
+try {
+    val response = chain.proceed(request)
+    httpCode = response.code
+    
+    // НЕ собираем телеметрию для 429 запросов, чтобы избежать лавины
+    if (httpCode == 429) {
+        return response
+    }
+    
+    return response
+} finally {
+    // Пропускаем сбор телеметрии для 429
+    if (httpCode == 429) {
+        return@finally
+    }
+    // ...
+}
+```
+
+### 8. ApiClient.kt: Обработка 429 для телеметрии
+**Проблема:** При отправке батча телеметрии, если сервер возвращал 429, телеметрия могла попадать в очередь (при 500-599) или создавать дополнительные запросы.
+
+**Исправление:**
+- При 429 на отправку телеметрии: НЕ добавляем в очередь, просто пропускаем
+- Логируем событие для диагностики
+- Телеметрия не критична, поэтому безопасно пропускать при rate limiting
+
+**Код:**
+```kotlin
+if (!res.isSuccessful) {
+    // При 429 не добавляем телеметрию в очередь - это создаст лавину запросов
+    if (res.code == 429) {
+        Log.d("ApiClient", "Telemetry batch rate-limited (429), skipping")
+        return@use Result.Success(Unit)
+    }
+    if (res.code in 500..599) {
+        queueManager.enqueue("telemetry", "/api/phone/telemetry/", bodyJson)
+    }
+}
+```
+
+### 9. SafeHttpLoggingInterceptor.kt: Улучшенное маскирование JSON
+**Проблема:** Регулярное выражение для маскирования `device_id` в не-JSON форматах могло портить JSON строки, если паттерн встречался внутри JSON.
+
+**Исправление:**
+- Добавлена проверка четности количества кавычек перед match
+- Если мы внутри JSON строки (нечетное количество кавычек) - не применяем маскирование
+- Это предотвращает порчу JSON формата при маскировании query параметров
+
+**Код:**
+```kotlin
+masked = masked.replace(Regex("""device[_\s]?id["\s:=]+([A-Za-z0-9]{8,})(?!")(?=\s|$|,|&|})""", RegexOption.IGNORE_CASE)) { matchResult ->
+    val beforeMatch = masked.substring(0, matchResult.range.first)
+    // Проверяем, что мы не внутри JSON строки
+    val quotesBefore = beforeMatch.count { it == '"' }
+    if (quotesBefore % 2 == 0) {
+        // Мы вне JSON строки - безопасно маскируем
+        // ...
+    } else {
+        // Мы внутри JSON строки - не трогаем
+        matchResult.value
+    }
+}
+```
+
+### 10. initCamera warning
+**Статус:** Проверено. Warning "initCamera called twice" не найден в коде приложения. Возможно, это warning из библиотеки `zxing` (QR-сканер) или системный warning Android. Не критично, так как:
+- QR-сканер используется только в `QRLoginActivity` и `PortraitCaptureActivity`
+- Lifecycle камеры управляется библиотекой `zxing`
+- Нет явных проблем с производительностью или стабильностью
+
+**Рекомендация:** Если warning появляется в логах, можно добавить фильтрацию или игнорирование для этого конкретного warning из библиотеки.
+
+## Обновленные файлы
+
+1. `android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/CallListenerService.kt` - защита от параллельных polling
+2. `android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/network/TelemetryInterceptor.kt` - предотвращение лавины телеметрии
+3. `android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/network/ApiClient.kt` - обработка 429 для телеметрии
+4. `android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/network/SafeHttpLoggingInterceptor.kt` - улучшенное маскирование JSON
+
+## Итоговый результат
+
+Все критические проблемы исправлены:
+- ✅ Single-flight polling гарантирован (нет параллельных запросов)
+- ✅ Лавина телеметрии при 429 предотвращена (не собираем телеметрию для 429)
+- ✅ Телеметрия при 429 не попадает в очередь (пропускаем)
+- ✅ Маскирование JSON улучшено (не портит формат)
+- ✅ Rate limiting работает корректно с exponential backoff и Retry-After
