@@ -127,25 +127,6 @@ dependencies {
     testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1"
 }
 
-// Очищаем kapt stubs перед каждой сборкой для избежания дубликатов (только для основного kapt)
-tasks.matching { it.name.contains("kapt") && !it.name.contains("UnitTest") && !it.name.contains("AndroidTest") }.configureEach { task ->
-    task.doFirst {
-        try {
-            def kaptDir = file("$buildDir/tmp/kapt3")
-            if (kaptDir.exists()) {
-                kaptDir.listFiles()?.each { file ->
-                    if (file.isFile()) {
-                        file.delete()
-                    }
-                }
-                println("Cleaned kapt directory: $kaptDir")
-            }
-        } catch (Exception e) {
-            println("Warning: Could not clean kapt directory: ${e.message}")
-        }
-    }
-}
-
 // Применяем signing ТОЛЬКО для productionRelease с помощью Android Components API
 androidComponents {
     onVariants(selector().withName("productionRelease")) { variant ->
