@@ -16,6 +16,10 @@ import ru.groupprofi.crmprofi.dialer.MainActivity
 import ru.groupprofi.crmprofi.dialer.R
 import ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker
 import ru.groupprofi.crmprofi.dialer.logs.AppLogger
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -108,6 +112,7 @@ class OnboardingActivity : AppCompatActivity() {
     
     /**
      * Обновить UI для текущего шага.
+     * Запись в SharedPreferences — на IO, чтобы не вызывать StrictMode DiskReadViolation на main thread.
      */
     private fun updateStep(step: OnboardingStep) {
         currentStep = step
@@ -120,11 +125,15 @@ class OnboardingActivity : AppCompatActivity() {
         secondaryButton.text = stepData.secondaryActionText
         secondaryButton.visibility = if (stepData.showSecondaryButton) android.view.View.VISIBLE else android.view.View.GONE
         
-        // Сохраняем текущий шаг
-        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-            .edit()
-            .putString(KEY_LAST_STEP, step.name)
-            .apply()
+        // Сохраняем текущий шаг в фоне (getSharedPreferences/edit/apply трогают диск)
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                    .edit()
+                    .putString(KEY_LAST_STEP, step.name)
+                    .apply()
+            }
+        }
     }
     
     /**
@@ -390,21 +399,23 @@ class OnboardingActivity : AppCompatActivity() {
     
     /**
      * Завершить onboarding.
+     * Запись в SharedPreferences — на IO, чтобы не вызывать StrictMode DiskReadViolation на main thread.
      */
     private fun completeOnboarding() {
-        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-            .edit()
-            .putBoolean(KEY_COMPLETED, true)
-            .putString(KEY_LAST_STEP, OnboardingStep.FINAL.name)
-            .apply()
-        
-        AppLogger.i("OnboardingActivity", "Onboarding завершён")
-        
-        // Переходим в MainActivity с правильными flags для избежания лишних пересозданий
-        val intent = Intent(this, MainActivity::class.java)
-        intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
-        startActivity(intent)
-        finish()
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                    .edit()
+                    .putBoolean(KEY_COMPLETED, true)
+                    .putString(KEY_LAST_STEP, OnboardingStep.FINAL.name)
+                    .apply()
+            }
+            AppLogger.i("OnboardingActivity", "Onboarding завершён")
+            val intent = Intent(this@OnboardingActivity, MainActivity::class.java)
+            intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+            startActivity(intent)
+            finish()
+        }
     }
     
     override fun onRequestPermissionsResult(

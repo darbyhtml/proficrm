@@ -103,6 +103,11 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
+        // Регистрация Activity Result launcher ОБЯЗАТЕЛЬНО в onCreate до STARTED (нельзя в корутине после onResume).
+        onboardingLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            updateReadinessStatus()
+        }
+        
         // В debug режиме логируем время старта
         val startTime = if (BuildConfig.DEBUG) android.os.SystemClock.elapsedRealtime() else 0L
         
@@ -163,12 +168,8 @@ class MainActivity : AppCompatActivity() {
             val elapsed = android.os.SystemClock.elapsedRealtime() - startTime
             ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("MainActivity", "onCreate completed in ${elapsed}ms")
         }
+        // onboardingLauncher уже зарегистрирован в onCreate()
 
-        onboardingLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            // Возврат из OnboardingActivity: обновляем статус (поведение как в legacy onActivityResult)
-            updateReadinessStatus()
-        }
-        
         try {
             Trace.beginSection("MainActivity.onCreate")
             
