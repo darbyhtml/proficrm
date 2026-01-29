@@ -6,8 +6,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import okhttp3.Interceptor
 import okhttp3.Response
-import ru.groupprofi.crmprofi.dialer.auth.TokenManager
-import ru.groupprofi.crmprofi.dialer.queue.QueueManager
 import java.io.IOException
 
 /**
@@ -15,8 +13,6 @@ import java.io.IOException
  * Использует батчинг для снижения нагрузки на сервер.
  */
 class TelemetryInterceptor(
-    private val tokenManager: TokenManager,
-    private val context: android.content.Context,
     private val telemetryBatcher: TelemetryBatcher
 ) : Interceptor {
     
