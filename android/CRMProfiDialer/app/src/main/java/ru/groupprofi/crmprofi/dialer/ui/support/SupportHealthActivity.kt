@@ -16,8 +16,10 @@ import androidx.appcompat.widget.Toolbar
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import ru.groupprofi.crmprofi.dialer.R
@@ -154,7 +156,7 @@ class SupportHealthActivity : AppCompatActivity() {
         addCheckItem(getString(R.string.diagnostics_check_network), checkNetworkStatus())
         addCheckItem(getString(R.string.diagnostics_check_auth), checkAuthStatus())
         addCheckItem("Polling (последний запрос)", checkPollingStatus())
-        addCheckItem(getString(R.string.diagnostics_check_queue), checkQueueStatus())
+        addCheckItemQueueAsync()
         addCheckItem(getString(R.string.diagnostics_check_pending_calls), checkPendingCallsStatus())
         addCheckItem(getString(R.string.diagnostics_check_history), checkHistoryStatus())
         addCheckItem(getString(R.string.diagnostics_check_version), getAppVersion())
@@ -179,6 +181,33 @@ class SupportHealthActivity : AppCompatActivity() {
         statusView.text = status
         
         checksContainer.addView(itemView)
+    }
+    
+    /**
+     * Добавить элемент "Очередь" и загрузить статус асинхронно (без runBlocking на main thread).
+     */
+    private fun addCheckItemQueueAsync() {
+        val itemView = layoutInflater.inflate(R.layout.item_health_check, checksContainer, false)
+        val labelView: TextView = itemView.findViewById(R.id.checkLabel)
+        val statusView: TextView = itemView.findViewById(R.id.checkStatus)
+        labelView.text = getString(R.string.diagnostics_check_queue)
+        statusView.text = "…"
+        checksContainer.addView(itemView)
+        
+        lifecycleScope.launch {
+            val status = withContext(Dispatchers.IO) {
+                try {
+                    val queueManager = ru.groupprofi.crmprofi.dialer.queue.QueueManager(this@SupportHealthActivity)
+                    val stats = queueManager.getStats()
+                    val stuckMetrics = queueManager.getStuckMetrics()
+                    val stuckPart = stuckMetrics?.let { ", застряло: ${it.stuckCount}" } ?: ""
+                    "${stats.total} элементов (ожидают отправки$stuckPart)"
+                } catch (e: Exception) {
+                    getString(R.string.error_failed_to_check)
+                }
+            }
+            statusView.text = status
+        }
     }
     
     /**
@@ -254,22 +283,6 @@ class SupportHealthActivity : AppCompatActivity() {
                 val tokenManager = AppContainer.tokenManager
                 if (tokenManager.hasTokens()) getString(R.string.diagnostics_status_ok) else getString(R.string.error_unknown)
             }
-        }
-    }
-    
-    /**
-     * Проверить статус очереди.
-     */
-    private fun checkQueueStatus(): String {
-        return try {
-            val queueManager = ru.groupprofi.crmprofi.dialer.queue.QueueManager(this)
-            // getStats() - suspend функция, используем runBlocking для синхронного вызова
-            val stats = kotlinx.coroutines.runBlocking { queueManager.getStats() }
-            val stuckMetrics = kotlinx.coroutines.runBlocking { queueManager.getStuckMetrics() }
-            val stuckPart = stuckMetrics?.let { ", застряло: ${it.stuckCount}" } ?: ""
-            "${stats.total} элементов (ожидают отправки$stuckPart)"
-        } catch (e: Exception) {
-            getString(R.string.error_failed_to_check)
         }
     }
     
@@ -482,18 +495,28 @@ class SupportHealthActivity : AppCompatActivity() {
     }
     
     /**
-     * Поделиться диагностикой.
+     * Поделиться диагностикой (отчёт строится асинхронно, без блокировки main thread).
      */
     private fun shareDiagnostics() {
-        val report = SupportReportBuilder.build(this)
-        
-        val shareIntent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/plain"
-            putExtra(Intent.EXTRA_TEXT, report)
-            putExtra(Intent.EXTRA_SUBJECT, getString(R.string.diagnostics_share_subject))
+        progressText.visibility = View.VISIBLE
+        progressText.text = "Формируем отчёт…"
+        shareButton.isEnabled = false
+        lifecycleScope.launch {
+            try {
+                val report = SupportReportBuilder.buildReport(this@SupportHealthActivity)
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_TEXT, report)
+                    putExtra(Intent.EXTRA_SUBJECT, getString(R.string.diagnostics_share_subject))
+                }
+                startActivity(Intent.createChooser(shareIntent, getString(R.string.diagnostics_share)))
+            } catch (e: Exception) {
+                Toast.makeText(this@SupportHealthActivity, "Не удалось сформировать отчёт: ${e.message}", Toast.LENGTH_LONG).show()
+            } finally {
+                progressText.visibility = View.GONE
+                shareButton.isEnabled = true
+            }
         }
-        
-        startActivity(Intent.createChooser(shareIntent, getString(R.string.diagnostics_share)))
     }
 
     private fun flushQueueNow() {

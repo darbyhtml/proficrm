@@ -1,7 +1,6 @@
 package ru.groupprofi.crmprofi.dialer.network
 
 import android.content.Context
-import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.withLock
@@ -134,8 +133,8 @@ class ApiClient private constructor(context: Context) {
                 val refresh = obj.optString("refresh", "")
                 val isAdmin = obj.optBoolean("is_admin", false)
                 
-                // Не логируем токены и полный ответ (безопасность).
-                android.util.Log.d("ApiClient", "Login response: is_admin=$isAdmin, payload size=${raw.length}")
+                // Не логируем токены и полный ответ (безопасность)
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("ApiClient", "Login response: is_admin=$isAdmin, payload size=${raw.length}")
                 
                 if (access.isBlank() || refresh.isBlank()) {
                     return@withContext Result.Error("Неверный формат ответа сервера")
@@ -288,13 +287,13 @@ class ApiClient private constructor(context: Context) {
             httpClient.newCall(req).execute().use { res ->
                 if (!res.isSuccessful) {
                     // Регистрация не критична, логируем но не падаем
-                    Log.w("ApiClient", "Register device failed: HTTP ${res.code}")
+                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("ApiClient", "Register device failed: HTTP ${res.code}")
                 }
                 Result.Success(Unit)
             }
         } catch (e: Exception) {
             // Регистрация не критична, логируем но не падаем
-            Log.w("ApiClient", "Register device error: ${e.message}")
+            ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("ApiClient", "Register device error: ${e.message}")
             Result.Success(Unit)
         }
     }
@@ -719,7 +718,7 @@ class ApiClient private constructor(context: Context) {
                     // Телеметрия не критична, просто пропускаем при rate limiting
                     if (res.code == 429) {
                         // Логируем но не добавляем в очередь
-                        Log.d("ApiClient", "Telemetry batch rate-limited (429), skipping")
+                        ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("ApiClient", "Telemetry batch rate-limited (429), skipping")
                         return@use Result.Success(Unit)
                     }
                     if (res.code in 500..599) {

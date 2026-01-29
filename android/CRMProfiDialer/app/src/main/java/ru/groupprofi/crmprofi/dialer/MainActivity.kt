@@ -98,6 +98,12 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val REQ_CALL_PERMS = 200
         private const val REQ_NOTIF_PERMS = 100
+        
+        /** Маскирует device_id для логов (первые 4 + *** + последние 4 символа). */
+        private fun maskDeviceId(deviceId: String): String {
+            if (deviceId.length <= 8) return "***"
+            return "${deviceId.take(4)}***${deviceId.takeLast(4)}"
+        }
     }
     
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -275,10 +281,11 @@ class MainActivity : AppCompatActivity() {
     }
     
     /**
-     * Запустить экран входа.
+     * Запустить экран входа (очищаем стек, чтобы не было дублирования Activity).
      */
     private fun startLoginActivity() {
         val intent = Intent(this, ru.groupprofi.crmprofi.dialer.ui.login.LoginActivity::class.java)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
         startActivity(intent)
         finish()
     }
@@ -707,12 +714,14 @@ class MainActivity : AppCompatActivity() {
     
     /**
      * Обработать выход.
+     * Перед остановкой сервиса запускаем форсированную отправку телеметрии в фоне.
      */
     private fun handleLogout() {
+        lifecycleScope.launch(Dispatchers.IO) {
+            try { apiClient.flushTelemetry() } catch (_: Exception) { }
+        }
         tokenManager.clearAll()
         stopService(Intent(this, CallListenerService::class.java))
-        
-        // Переходим на экран входа
         startLoginActivity()
     }
     
@@ -751,7 +760,7 @@ class MainActivity : AppCompatActivity() {
             .putExtra(CallListenerService.EXTRA_REFRESH, refresh)
             .putExtra(CallListenerService.EXTRA_DEVICE_ID, deviceId)
         
-        ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("MainActivity", "Запуск CallListenerService: deviceId=$deviceId")
+        ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("MainActivity", "Запуск CallListenerService: deviceId=${maskDeviceId(deviceId)}")
         if (Build.VERSION.SDK_INT >= 26) {
             startForegroundService(intent)
         } else {

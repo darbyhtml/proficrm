@@ -11,6 +11,8 @@ import ru.groupprofi.crmprofi.dialer.domain.CallStatsUseCase
 import ru.groupprofi.crmprofi.dialer.logs.AppLogger
 import ru.groupprofi.crmprofi.dialer.recovery.SafeModeManager
 import ru.groupprofi.crmprofi.dialer.support.CrashLogStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -21,9 +23,10 @@ import java.util.*
 object SupportReportBuilder {
     
     /**
-     * Построить текстовый отчёт диагностики.
+     * Построить текстовый отчёт диагностики (асинхронно, без блокировки main thread).
+     * Используйте эту функцию из корутины (lifecycleScope.launch { buildReport(context) }).
      */
-    fun build(context: Context): String {
+    suspend fun buildReport(context: Context): String {
         val sb = StringBuilder()
         
         // Заголовок
@@ -67,7 +70,7 @@ object SupportReportBuilder {
         sb.appendLine("Авторизация: $authStatus")
         sb.appendLine()
         
-        // Очередь
+        // Очередь (загрузка на IO, без runBlocking на main)
         val queueStatus = getQueueStatus(context)
         sb.appendLine("Очередь: $queueStatus")
         
@@ -241,16 +244,17 @@ object SupportReportBuilder {
     }
     
     /**
-     * Получить статус очереди.
+     * Получить статус очереди (suspend, выполняется на IO).
      */
-    private fun getQueueStatus(context: Context): String {
-        return try {
-            val queueManager = ru.groupprofi.crmprofi.dialer.queue.QueueManager(context)
-            // getStats() - suspend функция, используем runBlocking для синхронного вызова
-            val stats = kotlinx.coroutines.runBlocking { queueManager.getStats() }
-            "${stats.total} элементов (ожидают отправки)"
-        } catch (e: Exception) {
-            "не удалось проверить"
+    private suspend fun getQueueStatus(context: Context): String {
+        return withContext(Dispatchers.IO) {
+            try {
+                val queueManager = ru.groupprofi.crmprofi.dialer.queue.QueueManager(context)
+                val stats = queueManager.getStats()
+                "${stats.total} элементов (ожидают отправки)"
+            } catch (e: Exception) {
+                "не удалось проверить"
+            }
         }
     }
     

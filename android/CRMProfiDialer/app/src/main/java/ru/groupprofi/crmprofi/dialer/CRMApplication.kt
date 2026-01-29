@@ -44,10 +44,10 @@ class CRMApplication : Application() {
             // Инициализируем единый AppLogger (легкая операция - только настройка)
             AppLogger.initialize(this, enableFileLogging = true)
             
-            // Тяжелые операции откладываем на фоновый поток после первого кадра
+            // Тяжелые операции откладываем на фоновый поток после первого кадра (Dispatchers.IO)
             Choreographer.getInstance().postFrameCallback {
                 Trace.beginSection("CRMApplication.initBackground")
-                applicationScope.launch {
+                applicationScope.launch(Dispatchers.IO) {
                     try {
                         // Сначала TokenManager (EncryptedSharedPreferences / Tink) — только на IO
                         ru.groupprofi.crmprofi.dialer.auth.TokenManager.init(this@CRMApplication)
@@ -112,13 +112,18 @@ class CRMApplication : Application() {
         
         Thread.setDefaultUncaughtExceptionHandler { thread, exception ->
             try {
-                // Собираем информацию о сбое
+                // Собираем информацию о сбое (лёгкие операции на потоке краша)
                 val exceptionClass = exception.javaClass.simpleName
                 val message = exception.message
                 val stacktrace = exception.stackTraceToString()
                 
-                // Сохраняем в CrashLogStore
-                CrashLogStore.saveCrash(this, exceptionClass, message, stacktrace)
+                // Сохраняем в CrashLogStore в фоне, чтобы не блокировать поток краша (disk I/O)
+                val appRef = this
+                Executors.newSingleThreadExecutor().execute {
+                    try {
+                        CrashLogStore.saveCrash(appRef, exceptionClass, message, stacktrace)
+                    } catch (_: Exception) { /* игнорируем */ }
+                }
                 
                 // Логируем через AppLogger (если он уже инициализирован)
                 try {

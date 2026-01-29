@@ -233,6 +233,10 @@ class CallListenerService : Service() {
                                     "CallListenerService",
                                     "429 rate-limited: retryAfter=$retryAfterMsg, backoff=${backoffDelay}ms, mode=RATE_LIMIT"
                                 )
+                                // Форсированная отправка телеметрии при 429, чтобы CRM оперативно получил данные
+                                scope.launch {
+                                    try { apiClient.flushTelemetry() } catch (_: Exception) { }
+                                }
                             }
                             0 -> ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "PullCall: 0 (network error)")
                             else -> ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "PullCall: $code (error)")
@@ -375,11 +379,13 @@ class CallListenerService : Service() {
                         // Обработка ошибок авторизации - refresh token истек, требуется повторный вход
                         if (code == 401) {
                             ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "Authentication failed (401), stopping service")
-                            // Очищаем токены через TokenManager (ApiClient уже мог очистить их при refresh failure)
+                            // Форсированная отправка телеметрии перед остановкой
+                            scope.launch {
+                                try { apiClient.flushTelemetry() } catch (_: Exception) { }
+                            }
                             if (!tokenManager.hasTokens()) {
                                 tokenManager.clearAll()
                             }
-                            // Останавливаем сервис при ошибке авторизации
                             stopSelf()
                             return@launch
                         }

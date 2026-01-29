@@ -136,8 +136,8 @@ object AppLogger {
      * В release режиме пропускает DEBUG логи для уменьшения спама.
      */
     private fun log(level: Int, tag: String, message: String) {
-        // В release режиме пропускаем DEBUG логи
-        if (!BuildConfig.DEBUG && level == Log.DEBUG) {
+        // В release режиме пропускаем DEBUG и VERBOSE логи (снижение шума и защита данных)
+        if (!BuildConfig.DEBUG && (level == Log.DEBUG || level == Log.VERBOSE)) {
             return
         }
         
@@ -267,6 +267,7 @@ object AppLogger {
     
     /**
      * Записать лог в файл (вызывается из фонового потока через fileWriteScope).
+     * Логи хранятся только во внутренней памяти приложения (ctx.filesDir), доступ ограничен.
      */
     private suspend fun writeToFile(entry: LogEntry) {
         val ctx = context ?: return

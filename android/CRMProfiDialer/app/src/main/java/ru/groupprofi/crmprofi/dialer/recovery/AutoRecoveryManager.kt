@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -58,6 +59,9 @@ class AutoRecoveryManager private constructor(context: Context) {
                 try {
                     checkAndRecover()
                     delay(30000) // Проверяем каждые 30 секунд
+                } catch (e: CancellationException) {
+                    // Отмена job при остановке сервиса/приложения — не логируем как ошибку
+                    throw e
                 } catch (e: Exception) {
                     AppLogger.e("AutoRecoveryManager", "Ошибка в цикле восстановления: ${e.message}", e)
                     delay(60000) // При ошибке ждём минуту
