@@ -35,6 +35,7 @@ import ru.groupprofi.crmprofi.dialer.logs.LogSender
 import ru.groupprofi.crmprofi.dialer.logs.LogInterceptor
 import ru.groupprofi.crmprofi.dialer.auth.TokenManager
 import ru.groupprofi.crmprofi.dialer.network.ApiClient
+import ru.groupprofi.crmprofi.dialer.network.RateLimitBackoff
 import ru.groupprofi.crmprofi.dialer.core.AppContainer
 import ru.groupprofi.crmprofi.dialer.data.PendingCallManager
 import ru.groupprofi.crmprofi.dialer.data.CallLogObserverManager
@@ -56,6 +57,7 @@ class CallListenerService : Service() {
     private var logSendCounter: Int = 0
     private var consecutiveEmptyPolls: Int = 0 // Счетчик пустых опросов для адаптивной частоты
     private var expiredCallsCheckCounter: Int = 0 // Счетчик для периодической проверки устаревших звонков
+    private val rateLimitBackoff = RateLimitBackoff() // Управление exponential backoff для rate limiting
     private val timeFmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     private lateinit var tokenManager: TokenManager
     private lateinit var apiClient: ApiClient
@@ -185,35 +187,38 @@ class CallListenerService : Service() {
                         }
                         val pollStartNano = System.nanoTime()
                         // Используем ApiClient для polling (внутри он использует TokenManager и обрабатывает refresh)
-                        val pullResult = apiClient.pullCall(deviceId)
+                        val pullCallResult = apiClient.pullCall(deviceId)
                         val pollLatencyMs = ((System.nanoTime() - pollStartNano) / 1_000_000L).coerceAtLeast(0L)
                         val nowDate = Date()
                         val nowStr = timeFmt.format(nowDate)
                         
                         // Определяем код ответа из Result
-                        val code = when (pullResult) {
+                        val code = when (pullCallResult.result) {
                             is ApiClient.Result.Success -> {
-                                if (pullResult.data == null) {
+                                if (pullCallResult.result.data == null) {
                                     204 // Нет команд
                                 } else {
                                     200 // Есть команда
                                 }
                             }
                             is ApiClient.Result.Error -> {
-                                when (pullResult.code) {
+                                when (pullCallResult.result.code) {
                                     401 -> 401 // Требуется повторный вход
                                     0 -> 0 // Сетевая ошибка
-                                    else -> pullResult.code ?: 0
+                                    else -> pullCallResult.result.code ?: 0
                                 }
                             }
                         }
                         
-                        // Логируем результат polling
+                        // Логируем результат polling с информацией о Retry-After
                         when (code) {
                             200 -> ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallListenerService", "PullCall: 200 (command received)")
                             204 -> ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallListenerService", "PullCall: 204 (no commands)")
                             401 -> ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "PullCall: 401 (auth failed)")
-                            429 -> ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("CallListenerService", "PullCall: 429 (rate limited, will retry with delay)")
+                            429 -> {
+                                val retryAfterMsg = pullCallResult.retryAfterSeconds?.let { "Retry-After: ${it}s" } ?: "no Retry-After"
+                                ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("CallListenerService", "PullCall: 429 (rate limited, $retryAfterMsg, backoff level=${rateLimitBackoff.getBackoffLevel()})")
+                            }
                             0 -> ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "PullCall: 0 (network error)")
                             else -> ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "PullCall: $code (error)")
                         }
@@ -222,18 +227,23 @@ class CallListenerService : Service() {
                         tokenManager.saveLastPoll(code, nowStr)
                         tokenManager.saveLastPollLatencyMs(pollLatencyMs)
                         
-                        val phone = (pullResult as? ApiClient.Result.Success<ApiClient.PullCallResponse?>)?.data?.phone
-                        val callRequestId = (pullResult as? ApiClient.Result.Success<ApiClient.PullCallResponse?>)?.data?.callRequestId
+                        val phone = (pullCallResult.result as? ApiClient.Result.Success<ApiClient.PullCallResponse?>)?.data?.phone
+                        val callRequestId = (pullCallResult.result as? ApiClient.Result.Success<ApiClient.PullCallResponse?>)?.data?.callRequestId
+                        
+                        // Управление backoff для rate limiting
+                        if (code == 429) {
+                            rateLimitBackoff.incrementBackoff()
+                        } else if (code == 200 || code == 204) {
+                            // Сбрасываем backoff при успешных ответах (200/204)
+                            rateLimitBackoff.resetBackoff()
+                        }
                         
                         // Адаптивная частота: при пустых командах (204) увеличиваем задержку
                         // При получении команды (200) - сбрасываем счетчик и возвращаемся к быстрой частоте
-                        // При rate limiting (429) - увеличиваем счетчик быстрее для увеличения задержки
                         if (code == 204) {
                             consecutiveEmptyPolls++
                         } else if (code == 200 && phone != null) {
                             consecutiveEmptyPolls = 0 // Сброс при получении команды
-                        } else if (code == 429) {
-                            consecutiveEmptyPolls += 5 // При rate limiting значительно увеличиваем счетчик для быстрого увеличения задержки
                         }
 
                         // Периодически проверяем и очищаем устаревшие активные звонки (каждые 10 итераций, примерно каждые 15-30 секунд)
@@ -361,6 +371,16 @@ class CallListenerService : Service() {
                                 "CallListenerService",
                                 "COMMAND_RECEIVED id=$callRequestId pollLatencyMs=$pollLatencyMs"
                             )
+                            
+                            // Принудительно отправляем накопленную телеметрию при получении команды
+                            scope.launch {
+                                try {
+                                    apiClient.flushTelemetry()
+                                } catch (e: Exception) {
+                                    // Игнорируем ошибки flush (не критично)
+                                }
+                            }
+                            
                             // Используем CallFlowCoordinator для обработки команды на звонок
                             callFlowCoordinator.handleCallCommand(phone, callRequestId)
                             } else {
@@ -372,26 +392,38 @@ class CallListenerService : Service() {
                     
                         // ДВА РЕЖИМА polling:
                         // - быстрый: 500–800мс, когда приложение активно/готово (не делаем агрессивный backoff)
-                        // - медленный: 5–15с, когда нет активных команд и приложение не активно (экономим батарею)
+                        // - медленный: 2–10с, когда нет активных команд и приложение не активно (экономим батарею)
                         val isFastMode = AppState.isForeground ||
                                 (AppContainer.pendingCallStore.hasActivePendingCallsFlow.value) ||
                                 (System.currentTimeMillis() - (tokenManager.getLastCallCommandReceivedAt() ?: 0L) < 2 * 60 * 1000L)
 
                         val baseDelay = when {
-                            code == 429 -> 10_000L // rate limit: уважительный backoff
-                            !isFastMode -> {
-                                // 5..15 секунд (плавно увеличиваем от количества пустых ответов)
-                                val step = (consecutiveEmptyPolls / 10).coerceIn(0, 10) // 0..10
-                                (5_000L + step * 1_000L).coerceAtMost(15_000L)
+                            code == 429 -> {
+                                // Rate limiting: используем exponential backoff с Retry-After
+                                rateLimitBackoff.getRateLimitDelay(pullCallResult.retryAfterSeconds)
                             }
-                            else -> 650L // быстрый режим: 500–800мс с лёгким джиттером ниже
+                            !isFastMode -> {
+                                // Медленный режим: ступенчатое увеличение при пустых ответах
+                                rateLimitBackoff.getEmptyPollDelay(consecutiveEmptyPolls)
+                            }
+                            else -> {
+                                // Быстрый режим: базовый интервал с небольшим увеличением при множественных пустых ответах
+                                if (consecutiveEmptyPolls > 10) {
+                                    // После 10+ пустых ответов в быстром режиме немного увеличиваем интервал
+                                    val step = ((consecutiveEmptyPolls - 10) / 5).coerceIn(0, 3)
+                                    (650L + step * 200L).coerceAtMost(1_250L)
+                                } else {
+                                    650L
+                                }
+                            }
                         }
                         
-                        // Джиттер: быстрый режим ±150мс (попадаем в 500..800), медленный ±1s
+                        // Джиттер: быстрый режим ±150мс (попадаем в 500..800), медленный ±20% от baseDelay
                         val jitter = if (baseDelay <= 1000L) {
                             random.nextInt(301) - 150 // -150..+150
                         } else {
-                            random.nextInt(2001) - 1000 // -1000..+1000
+                            val jitterRange = (baseDelay * 0.2).toInt()
+                            random.nextInt(jitterRange * 2 + 1) - jitterRange
                         }
                         val delayMs = (baseDelay + jitter).coerceAtLeast(500L)
                     
@@ -620,33 +652,53 @@ class CallListenerService : Service() {
             cursor?.use {
                 var checkedCount = 0
                 val maxRows = 50
+                val checkedEntries = mutableListOf<String>() // Для диагностики (без PII)
                 // Some CallLog providers don't support "LIMIT" in sortOrder; limit rows in code for compatibility.
                 while (it.moveToNext()) {
                     if (++checkedCount > maxRows) break
                     
                     val number = it.getString(it.getColumnIndexOrThrow(CallLog.Calls.NUMBER)) ?: ""
                     val normalizedNumber = PhoneNumberNormalizer.normalize(number)
+                    val type = it.getInt(it.getColumnIndexOrThrow(CallLog.Calls.TYPE))
+                    val date = it.getLong(it.getColumnIndexOrThrow(CallLog.Calls.DATE))
                     
-                    // Логируем первые несколько номеров для отладки
-                    if (checkedCount <= 3) {
-                        ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallListenerService", "Проверка #$checkedCount: CallLog номер='$number' → нормализован='$normalizedNumber', ищем='$normalized'")
-                    }
+                    // Сохраняем диагностическую информацию (без PII - только последние 4 цифры)
+                    val last4 = if (normalizedNumber.length >= 4) normalizedNumber.takeLast(4) else "****"
+                    checkedEntries.add("type=$type,date=${date},last4=$last4")
                     
-                    // Проверяем совпадение номера (более гибкая проверка)
-                    // Сравниваем полные нормализованные номера или последние 7+ цифр
+                    // Проверяем совпадение номера (улучшенная проверка с fallback на последние 10 цифр)
                     val match = when {
                         normalizedNumber == normalized -> {
-                            ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallListenerService", "Полное совпадение: '$normalizedNumber' == '$normalized'")
+                            ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallListenerService", "Полное совпадение: last4=${normalizedNumber.takeLast(4)}")
                             true // Полное совпадение
                         }
+                        normalizedNumber.length >= 10 && normalized.length >= 10 -> {
+                            // Сравниваем последние 10 цифр (более надежно чем 7)
+                            val last10Match = normalizedNumber.takeLast(10) == normalized.takeLast(10)
+                            if (last10Match) {
+                                ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallListenerService", "Совпадение по последним 10 цифрам: last4=${normalizedNumber.takeLast(4)}")
+                                true
+                            } else {
+                                // Fallback: проверяем совпадение окончаний (более гибко)
+                                val minLen = minOf(normalizedNumber.length, normalized.length)
+                                val compareLen = minLen.coerceAtMost(10).coerceAtLeast(7)
+                                val endsMatch = normalizedNumber.takeLast(compareLen) == normalized.takeLast(compareLen) ||
+                                              normalizedNumber.endsWith(normalized.takeLast(minOf(compareLen, normalized.length))) ||
+                                              normalized.endsWith(normalizedNumber.takeLast(minOf(compareLen, normalizedNumber.length)))
+                                if (endsMatch) {
+                                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallListenerService", "Совпадение по окончанию (len=$compareLen): last4=${normalizedNumber.takeLast(4)}")
+                                }
+                                endsMatch
+                            }
+                        }
                         normalizedNumber.length >= 7 && normalized.length >= 7 -> {
-                            // Сравниваем последние 7+ цифр
+                            // Сравниваем последние 7+ цифр (старая логика для коротких номеров)
                             val last7Match = normalizedNumber.takeLast(7) == normalized.takeLast(7)
                             val endsWithMatch = normalizedNumber.endsWith(normalized.takeLast(minOf(7, normalized.length))) ||
                                               normalized.endsWith(normalizedNumber.takeLast(minOf(7, normalizedNumber.length)))
                             val result = last7Match || endsWithMatch
                             if (result) {
-                                ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallListenerService", "Частичное совпадение (последние 7): '$normalizedNumber' vs '$normalized'")
+                                ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallListenerService", "Совпадение по последним 7 цифрам: last4=${normalizedNumber.takeLast(4)}")
                             }
                             result
                         }
@@ -654,13 +706,20 @@ class CallListenerService : Service() {
                     }
                     
                     if (match) {
-                        val type = it.getInt(it.getColumnIndexOrThrow(CallLog.Calls.TYPE))
                         val duration = it.getLong(it.getColumnIndexOrThrow(CallLog.Calls.DURATION))
-                        val date = it.getLong(it.getColumnIndexOrThrow(CallLog.Calls.DATE))
                         
-                        ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("CallListenerService", "Найден звонок: тип=$type, длительность=${duration}с, дата=$date")
+                        ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("CallListenerService", "Найден звонок: тип=$type, длительность=${duration}с, дата=$date, checked=$checkedCount")
                         return CallInfo(type, duration, date)
                     }
+                }
+                
+                // Диагностика: логируем информацию о проверенных записях (без PII)
+                if (checkedEntries.isNotEmpty()) {
+                    val sampleEntries = checkedEntries.take(5).joinToString("; ")
+                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.d(
+                        "CallListenerService",
+                        "Проверено $checkedCount записей CallLog (sample: $sampleEntries), совпадений не найдено"
+                    )
                 }
             }
         } catch (e: SecurityException) {

@@ -39,7 +39,19 @@ class SafeHttpLoggingInterceptor : Interceptor {
         // Маскируем пароли
         masked = masked.replace(Regex("""(password|passwd|pwd)["\s:=]+([^\s"']+)""", RegexOption.IGNORE_CASE), "$1=\"***\"")
         
-        // Маскируем device_id
+        // Маскируем device_id в JSON формате ("device_id":"value" -> "device_id":"masked")
+        masked = masked.replace(Regex("""("device_id"\s*:\s*")([A-Za-z0-9]{8,})(")""", RegexOption.IGNORE_CASE)) { matchResult ->
+            val id = matchResult.groupValues[2]
+            val prefix = matchResult.groupValues[1]
+            val suffix = matchResult.groupValues[3]
+            if (id.length > 8) {
+                "$prefix${id.take(4)}***${id.takeLast(4)}$suffix"
+            } else {
+                "$prefix***$suffix"
+            }
+        }
+        
+        // Маскируем device_id в других форматах (device_id=value, device_id: value)
         masked = masked.replace(Regex("""device[_\s]?id["\s:=]+([A-Za-z0-9]{8,})""", RegexOption.IGNORE_CASE)) { matchResult ->
             val id = matchResult.groupValues[1]
             if (id.length > 8) {

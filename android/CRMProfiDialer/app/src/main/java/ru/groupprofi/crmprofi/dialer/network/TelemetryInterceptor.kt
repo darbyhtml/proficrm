@@ -12,12 +12,13 @@ import java.io.IOException
 
 /**
  * Interceptor для сбора телеметрии (latency, HTTP коды).
- * Автоматически отправляет метрики в очередь для последующей отправки в CRM.
+ * Использует батчинг для снижения нагрузки на сервер.
  */
 class TelemetryInterceptor(
     private val tokenManager: TokenManager,
     private val queueManager: kotlin.Lazy<QueueManager>,
-    private val context: android.content.Context
+    private val context: android.content.Context,
+    private val telemetryBatcher: TelemetryBatcher
 ) : Interceptor {
     
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -45,30 +46,19 @@ class TelemetryInterceptor(
             throw e
         } finally {
             val duration = System.currentTimeMillis() - startTime
-            val deviceId = tokenManager.getDeviceId() ?: ""
             
-            // Отправляем телеметрию асинхронно (не блокируем основной поток)
+            // Добавляем телеметрию в батчер (асинхронно, не блокируем основной поток)
             scope.launch {
                 try {
-                    // Формируем JSON для телеметрии
-                    val telemetryJson = org.json.JSONObject().apply {
-                        put("type", "latency")
-                        put("endpoint", endpoint)
-                        if (httpCode != null) put("http_code", httpCode)
-                        put("value_ms", duration.toInt())
-                        if (error != null) {
-                            put("extra", org.json.JSONObject().apply {
-                                put("error", error.message ?: "unknown")
-                            })
-                        }
-                    }
-                    val batchJson = org.json.JSONObject().apply {
-                        put("device_id", deviceId)
-                        put("items", org.json.JSONArray().put(telemetryJson))
-                    }
+                    val telemetryItem = ApiClient.TelemetryItem(
+                        type = "latency",
+                        endpoint = endpoint,
+                        httpCode = httpCode,
+                        valueMs = duration.toInt(),
+                        extra = error?.let { mapOf("error" to (it.message ?: "unknown")) }
+                    )
                     
-                    // Добавляем в очередь для последующей отправки (ленивая инициализация)
-                    queueManager.value.enqueue("telemetry", "/api/phone/telemetry/", batchJson.toString())
+                    telemetryBatcher.addTelemetry(telemetryItem)
                 } catch (e: Exception) {
                     // Игнорируем ошибки телеметрии (не критично)
                     Log.d("TelemetryInterceptor", "Telemetry collection error: ${e.message}")

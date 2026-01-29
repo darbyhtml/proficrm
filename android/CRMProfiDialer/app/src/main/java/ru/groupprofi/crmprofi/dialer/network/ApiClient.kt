@@ -43,10 +43,15 @@ class ApiClient private constructor(context: Context) {
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
     private val baseUrl = BuildConfig.BASE_URL
     private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
+    private val telemetryBatcher: TelemetryBatcher
     
     init {
+        // Создаем TelemetryBatcher для батчинга телеметрии
+        val deviceId = tokenManager.getDeviceId() ?: ""
+        telemetryBatcher = TelemetryBatcher(queueManager, deviceId)
+        
         // TelemetryInterceptor также получает queueManager лениво
-        val telemetryInterceptor = TelemetryInterceptor(tokenManager, lazy { queueManager }, context)
+        val telemetryInterceptor = TelemetryInterceptor(tokenManager, lazy { queueManager }, context, telemetryBatcher)
         httpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
@@ -60,6 +65,13 @@ class ApiClient private constructor(context: Context) {
                 }
             }
             .build()
+    }
+    
+    /**
+     * Принудительно отправить накопленную телеметрию (вызывается при важных событиях).
+     */
+    suspend fun flushTelemetry() {
+        telemetryBatcher.flushNow()
     }
     
     companion object {
@@ -282,11 +294,12 @@ class ApiClient private constructor(context: Context) {
     
     /**
      * Получить следующую команду на звонок (polling).
+     * Возвращает PullCallResult с информацией о Retry-After заголовке для rate limiting.
      */
-    suspend fun pullCall(deviceId: String): Result<PullCallResponse?> = withContext(Dispatchers.IO) {
+    suspend fun pullCall(deviceId: String): PullCallResult = withContext(Dispatchers.IO) {
         val token = tokenManager.getAccessToken()
         if (token.isNullOrBlank()) {
-            return@withContext Result.Error("Токен отсутствует")
+            return@withContext PullCallResult(Result.Error("Токен отсутствует"), retryAfterSeconds = null)
         }
         
         try {
@@ -301,10 +314,14 @@ class ApiClient private constructor(context: Context) {
                 val code = res.code
                 val body = res.body?.string()
                 
+                // Извлекаем Retry-After заголовок для rate limiting (429)
+                val retryAfterHeader = res.header("Retry-After")
+                val retryAfterSeconds = retryAfterHeader?.toIntOrNull()
+                
                 when (code) {
                     204 -> {
                         // Нет команд
-                        return@withContext Result.Success(null)
+                        return@withContext PullCallResult(Result.Success(null), retryAfterSeconds = null)
                     }
                     401 -> {
                         // Unauthorized - попробуем refresh
@@ -321,38 +338,63 @@ class ApiClient private constructor(context: Context) {
                             httpClient.newCall(retryReq).execute().use { retryRes ->
                                 val retryCode = retryRes.code
                                 val retryBody = retryRes.body?.string()
+                                val retryAfterRetry = retryRes.header("Retry-After")?.toIntOrNull()
                                 
-                                if (retryCode == 200 && !retryBody.isNullOrBlank()) {
-                                    return@withContext parseCallResponse(retryBody)
-                                } else if (retryCode == 204) {
-                                    return@withContext Result.Success(null)
-                                } else {
-                                    return@withContext Result.Error("Ошибка после refresh: HTTP $retryCode", retryCode)
+                                val result = when {
+                                    retryCode == 200 && !retryBody.isNullOrBlank() -> Result.Success(parseCallResponse(retryBody).getOrNull())
+                                    retryCode == 204 -> Result.Success(null)
+                                    else -> Result.Error("Ошибка после refresh: HTTP $retryCode", retryCode)
                                 }
+                                return@withContext PullCallResult(result, retryAfterSeconds = retryAfterRetry)
                             }
                         } else {
                             // Refresh не удался - требуется повторный вход
-                            return@withContext Result.Error("Требуется повторный вход", 401)
+                            return@withContext PullCallResult(Result.Error("Требуется повторный вход", 401), retryAfterSeconds = null)
                         }
                     }
                     200 -> {
-                        if (body.isNullOrBlank()) {
-                            return@withContext Result.Success(null)
+                        val result = if (body.isNullOrBlank()) {
+                            Result.Success(null)
+                        } else {
+                            parseCallResponse(body)
                         }
-                        return@withContext parseCallResponse(body)
+                        return@withContext PullCallResult(result, retryAfterSeconds = null)
+                    }
+                    429 -> {
+                        // Rate limited - возвращаем ошибку с Retry-After
+                        return@withContext PullCallResult(
+                            Result.Error("Rate limited", 429),
+                            retryAfterSeconds = retryAfterSeconds
+                        )
                     }
                     else -> {
-                        return@withContext Result.Error("Неожиданный код ответа: $code", code)
+                        return@withContext PullCallResult(Result.Error("Неожиданный код ответа: $code", code), retryAfterSeconds = null)
                     }
                 }
             }
         } catch (e: UnknownHostException) {
-            Result.Error("Нет подключения к интернету", 0)
+            PullCallResult(Result.Error("Нет подключения к интернету", 0), retryAfterSeconds = null)
         } catch (e: SocketTimeoutException) {
-            Result.Error("Превышено время ожидания ответа", 0)
+            PullCallResult(Result.Error("Превышено время ожидания ответа", 0), retryAfterSeconds = null)
         } catch (e: Exception) {
-            Result.Error("Ошибка сети: ${e.message}", 0)
+            PullCallResult(Result.Error("Ошибка сети: ${e.message}", 0), retryAfterSeconds = null)
         }
+    }
+    
+    /**
+     * Результат pullCall с информацией о Retry-After заголовке.
+     */
+    data class PullCallResult(
+        val result: Result<PullCallResponse?>,
+        val retryAfterSeconds: Int?
+    )
+    
+    /**
+     * Расширение Result для получения данных без проверки типа.
+     */
+    private fun <T> Result<T>.getOrNull(): T? = when (this) {
+        is Result.Success -> data
+        is Result.Error -> null
     }
     
     private fun parseCallResponse(body: String): Result<PullCallResponse?> {
