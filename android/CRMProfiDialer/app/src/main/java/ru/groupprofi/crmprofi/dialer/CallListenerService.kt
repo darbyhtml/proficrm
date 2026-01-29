@@ -337,9 +337,9 @@ class CallListenerService : Service() {
                                 if (sentCount > 0) {
                                     ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("CallListenerService", "Queue flushed: $sentCount items sent")
                                 }
-                        } catch (e: Exception) {
-                            ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "Queue flush error: ${e.message}")
-                        }
+                            } catch (e: Exception) {
+                                ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "Queue flush error: ${e.message}")
+                            }
                         }
                         
                         // Периодически отправляем накопленные логи (раз в час или при накоплении > 200 логов)
