@@ -18,6 +18,8 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import com.google.android.material.card.MaterialCardView
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -82,6 +84,8 @@ class MainActivity : AppCompatActivity() {
     private var pendingStartListening = false
     private var currentFixAction: ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker.FixActionType = 
         ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker.FixActionType.NONE
+
+    private lateinit var onboardingLauncher: ActivityResultLauncher<Intent>
     
     private val deviceId: String by lazy {
         Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID) ?: "unknown"
@@ -115,6 +119,11 @@ class MainActivity : AppCompatActivity() {
         if (shouldShowOnboarding()) {
             startOnboarding()
             return
+        }
+
+        onboardingLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            // Возврат из OnboardingActivity: обновляем статус (поведение как в legacy onActivityResult)
+            updateReadinessStatus()
         }
         
         try {
@@ -311,17 +320,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 100) {
-            // Возврат из QRLoginActivity
-            updateReadinessStatus()
-        } else if (requestCode == 200) {
-            // Возврат из OnboardingActivity
-            updateReadinessStatus()
-        }
-    }
-    
     /**
      * Обновить статус готовности приложения с плавными анимациями.
      */
@@ -513,7 +511,7 @@ class MainActivity : AppCompatActivity() {
                     val intent = Intent(this, OnboardingActivity::class.java).apply {
                         putExtra(OnboardingActivity.EXTRA_START_STEP, "PERMISSIONS")
                     }
-                    startActivityForResult(intent, 200)
+                    onboardingLauncher.launch(intent)
                 } else {
                     requestCallLogPermissions()
                 }
@@ -526,7 +524,7 @@ class MainActivity : AppCompatActivity() {
                     val intent = Intent(this, OnboardingActivity::class.java).apply {
                         putExtra(OnboardingActivity.EXTRA_START_STEP, "NOTIFICATIONS")
                     }
-                    startActivityForResult(intent, 200)
+                    onboardingLauncher.launch(intent)
                 } else {
                     openNotificationSettings()
                 }

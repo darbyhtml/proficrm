@@ -167,7 +167,7 @@ class CallsHistoryActivity : AppCompatActivity() {
     /**
      * Обработать действие для звонка (перезвонить или скопировать).
      */
-    private fun handleCallAction(_call: CallHistoryItem) {
+    private fun handleCallAction(_: CallHistoryItem) {
         // Действия обрабатываются в адаптере через callback
     }
     

@@ -4,6 +4,8 @@ import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
 import android.widget.TextView
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import ru.groupprofi.crmprofi.dialer.MainActivity
 import ru.groupprofi.crmprofi.dialer.QRLoginActivity
@@ -20,11 +22,20 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var qrLoginButton: Button
     private lateinit var titleText: TextView
     private lateinit var messageText: TextView
+    private lateinit var qrLoginLauncher: ActivityResultLauncher<Intent>
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
         tokenManager = TokenManager.getInstance(this)
+
+        qrLoginLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            // Проверяем, успешно ли выполнен вход (поведение как в legacy onActivityResult)
+            if (tokenManager.hasTokens()) {
+                startMainActivity()
+                finish()
+            }
+        }
         
         // Если уже авторизован - переходим в главное приложение
         if (tokenManager.hasTokens()) {
@@ -53,19 +64,7 @@ class LoginActivity : AppCompatActivity() {
     
     private fun startQrLogin() {
         val intent = Intent(this, QRLoginActivity::class.java)
-        startActivityForResult(intent, REQ_QR_LOGIN)
-    }
-    
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        
-        if (requestCode == REQ_QR_LOGIN) {
-            // Проверяем, успешно ли выполнен вход
-            if (tokenManager.hasTokens()) {
-                startMainActivity()
-                finish()
-            }
-        }
+        qrLoginLauncher.launch(intent)
     }
     
     private fun startMainActivity() {
@@ -76,6 +75,6 @@ class LoginActivity : AppCompatActivity() {
     }
     
     companion object {
-        private const val REQ_QR_LOGIN = 100
+        // requestCode больше не нужен: используем Activity Result API
     }
 }
