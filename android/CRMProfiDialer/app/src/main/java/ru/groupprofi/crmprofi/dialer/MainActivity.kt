@@ -133,18 +133,31 @@ class MainActivity : AppCompatActivity() {
         }
         
         // Проверяем, нужно ли показывать onboarding (откладываем чтение SharedPreferences на фоновый поток)
-        // Используем runBlocking с Dispatchers.IO для синхронной проверки, но на фоновом потоке
-        val needsOnboarding = kotlinx.coroutines.runBlocking(Dispatchers.IO) {
-            shouldShowOnboarding()
-        }
-        if (needsOnboarding) {
-            if (BuildConfig.DEBUG) {
-                ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("MainActivity", "Onboarding not completed, redirecting to OnboardingActivity")
+        // Используем launch + withContext вместо runBlocking для неблокирующей проверки
+        lifecycleScope.launch {
+            val needsOnboarding = withContext(Dispatchers.IO) {
+                shouldShowOnboarding()
             }
-            startOnboarding()
-            return
+            if (needsOnboarding) {
+                if (BuildConfig.DEBUG) {
+                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("MainActivity", "Onboarding not completed, redirecting to OnboardingActivity")
+                }
+                startOnboarding()
+                return@launch
+            }
+            
+            // Продолжаем onCreate только если onboarding не нужен
+            // Переключаемся на main thread для UI операций
+            withContext(Dispatchers.Main) {
+                continueOnCreateAfterOnboardingCheck(startTime)
+            }
         }
-        
+    }
+    
+    /**
+     * Продолжение onCreate после проверки onboarding (вызывается из корутины на main thread).
+     */
+    private fun continueOnCreateAfterOnboardingCheck(startTime: Long) {
         // Логируем время старта в debug режиме
         if (BuildConfig.DEBUG && startTime > 0) {
             val elapsed = android.os.SystemClock.elapsedRealtime() - startTime
