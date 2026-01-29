@@ -299,3 +299,19 @@ POST /api/phone/telemetry/
 - Rate limiting backoff не сохраняется между перезапусками приложения
 - CallLog matching может не найти звонок, если номер был изменен системой (например, добавлен код страны)
 - Warning "initCamera called twice" может появляться из библиотеки zxing (QR-сканер), не критично
+
+---
+
+## Команды, которые реально прогонялись (PowerShell / Windows)
+
+```powershell
+$env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+cd C:\Users\Admin\Desktop\CRM\android\CRMProfiDialer
+
+.\gradlew :app:compileDebugKotlin
+.\gradlew :app:assembleDebug
+.\gradlew :app:testDebugUnitTest
+.\gradlew :app:lintDebug
+```
+
+**Ожидаемо:** все команды завершаются `BUILD SUCCESSFUL`.

@@ -42,14 +42,21 @@ enum class CallDirection(val apiValue: String) {
     UNKNOWN("unknown");      // Неизвестно
     
     companion object {
+        // Значения соответствуют android.provider.CallLog.Calls.*_TYPE.
+        // Используем константы (а не прямые ссылки на android.*), чтобы unit-тесты (host JVM)
+        // не падали с NoClassDefFoundError.
+        private const val CALLLOG_INCOMING_TYPE = 1
+        private const val CALLLOG_OUTGOING_TYPE = 2
+        private const val CALLLOG_MISSED_TYPE = 3
+
         /**
          * Маппинг из CallLog.Calls.TYPE в CallDirection.
          */
         fun fromCallLogType(type: Int): CallDirection {
             return when (type) {
-                android.provider.CallLog.Calls.OUTGOING_TYPE -> OUTGOING
-                android.provider.CallLog.Calls.INCOMING_TYPE -> INCOMING
-                android.provider.CallLog.Calls.MISSED_TYPE -> MISSED
+                CALLLOG_OUTGOING_TYPE -> OUTGOING
+                CALLLOG_INCOMING_TYPE -> INCOMING
+                CALLLOG_MISSED_TYPE -> MISSED
                 else -> UNKNOWN
             }
         }

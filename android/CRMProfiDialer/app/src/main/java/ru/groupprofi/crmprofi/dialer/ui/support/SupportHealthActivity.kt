@@ -1,5 +1,6 @@
 package ru.groupprofi.crmprofi.dialer.ui.support
 
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -223,14 +224,21 @@ class SupportHealthActivity : AppCompatActivity() {
      * Проверить статус сети.
      */
     private fun checkNetworkStatus(): String {
-        val connectivityManager = getSystemService(android.net.ConnectivityManager::class.java)
-        val network = connectivityManager?.activeNetwork
-        val capabilities = connectivityManager?.getNetworkCapabilities(network)
-        val hasNetwork = capabilities != null && (
-            capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ||
-            capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) ||
-            capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)
-        )
+        val connectivityManager =
+            getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+
+        val hasNetwork = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val network = connectivityManager?.activeNetwork
+            val capabilities = connectivityManager?.getNetworkCapabilities(network)
+            capabilities != null && (
+                capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ||
+                    capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) ||
+                    capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)
+                )
+        } else {
+            @Suppress("DEPRECATION")
+            connectivityManager?.activeNetworkInfo?.isConnected == true
+        }
         return if (hasNetwork) getString(R.string.diagnostics_status_ok) else "Нет сети"
     }
     
@@ -311,7 +319,13 @@ class SupportHealthActivity : AppCompatActivity() {
         return try {
             val pm = packageManager
             val pkgInfo = pm.getPackageInfo(packageName, 0)
-            "${pkgInfo.versionName} (${pkgInfo.longVersionCode})"
+            @Suppress("DEPRECATION")
+            val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                pkgInfo.longVersionCode
+            } else {
+                pkgInfo.versionCode.toLong()
+            }
+            "${pkgInfo.versionName} ($versionCode)"
         } catch (e: Exception) {
             getString(R.string.error_unknown)
         }

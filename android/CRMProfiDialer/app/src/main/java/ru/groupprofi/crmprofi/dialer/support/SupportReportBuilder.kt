@@ -126,7 +126,13 @@ object SupportReportBuilder {
         return try {
             val pm = context.packageManager
             val pkgInfo = pm.getPackageInfo(context.packageName, 0)
-            "${pkgInfo.versionName} (${pkgInfo.longVersionCode})"
+            @Suppress("DEPRECATION")
+            val versionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                pkgInfo.longVersionCode
+            } else {
+                pkgInfo.versionCode.toLong()
+            }
+            "${pkgInfo.versionName} ($versionCode)"
         } catch (e: Exception) {
             "Неизвестно"
         }
@@ -202,13 +208,18 @@ object SupportReportBuilder {
      */
     private fun getNetworkStatus(context: Context): String {
         val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
-        val network = connectivityManager?.activeNetwork
-        val capabilities = connectivityManager?.getNetworkCapabilities(network)
-        val hasNetwork = capabilities != null && (
-            capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ||
-            capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) ||
-            capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)
-        )
+        val hasNetwork = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val network = connectivityManager?.activeNetwork
+            val capabilities = connectivityManager?.getNetworkCapabilities(network)
+            capabilities != null && (
+                capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ||
+                    capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) ||
+                    capabilities.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)
+                )
+        } else {
+            @Suppress("DEPRECATION")
+            connectivityManager?.activeNetworkInfo?.isConnected == true
+        }
         return if (hasNetwork) "есть" else "нет сети"
     }
     
