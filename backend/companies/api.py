@@ -14,7 +14,7 @@ from policy.drf import PolicyPermission
 
 class CompanySerializer(serializers.ModelSerializer):
     # Валидация полей с ограничением длины (защита от StringDataRightTruncation)
-    inn = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    inn = serializers.CharField(max_length=255, required=True, allow_blank=False)
     kpp = serializers.CharField(max_length=20, required=False, allow_blank=True)
     legal_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
     address = serializers.CharField(max_length=500, required=False, allow_blank=True)
@@ -36,9 +36,9 @@ class CompanySerializer(serializers.ModelSerializer):
     
     def validate_inn(self, value):
         """Нормализует ИНН используя единый нормализатор"""
-        if value:
-            return normalize_inn(value)
-        return value
+        if not value or not str(value).strip():
+            raise serializers.ValidationError("ИНН обязателен для заполнения.")
+        return normalize_inn(value)
     
     def validate_work_schedule(self, value):
         """Нормализует расписание работы используя единый нормализатор"""

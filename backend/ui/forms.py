@@ -136,6 +136,10 @@ class CompanyCreateForm(forms.ModelForm):
         # Поле email необязательное (бывают ситуации, когда email еще неизвестен)
         self.fields["email"].required = False
 
+        # Убеждаемся, что численность, часовой пояс и режим работы необязательные
+        self.fields["employees_count"].required = False
+        self.fields["work_schedule"].required = False
+
         # Часовой пояс: показываем понятный селект по РФ + авто по адресу при пустом значении.
         self.fields["work_timezone"].required = False
         _choices = [("", "Авто (по адресу)")] + RUS_TZ_CHOICES
@@ -161,8 +165,17 @@ class CompanyCreateForm(forms.ModelForm):
             cleaned["work_schedule"] = normalize_work_schedule(ws)
         return cleaned
 
+    def clean_name(self):
+        name = (self.cleaned_data.get("name") or "").strip()
+        if not name:
+            raise ValidationError("Название обязательно для заполнения.")
+        return name
+
     def clean_inn(self):
-        return normalize_inn(self.cleaned_data.get("inn"))
+        inn = self.cleaned_data.get("inn")
+        if not inn or not str(inn).strip():
+            raise ValidationError("ИНН обязателен для заполнения.")
+        return normalize_inn(inn)
     
     class Meta:
         model = Company
@@ -248,6 +261,10 @@ class CompanyEditForm(forms.ModelForm):
         # Поле email необязательное (бывают ситуации, когда email еще неизвестен)
         self.fields["email"].required = False
 
+        # Убеждаемся, что численность, часовой пояс и режим работы необязательные
+        self.fields["employees_count"].required = False
+        self.fields["work_schedule"].required = False
+
         # head_company: минимальный queryset для рендера (текущая выбранная + пустая),
         # дальше работает AJAX-поиск, а валидация идёт через allowed_qs_getter.
         self.fields["head_company"].empty_label = "— Не выбрано —"
@@ -285,8 +302,17 @@ class CompanyEditForm(forms.ModelForm):
             cleaned["work_schedule"] = normalize_work_schedule(ws)
         return cleaned
 
+    def clean_name(self):
+        name = (self.cleaned_data.get("name") or "").strip()
+        if not name:
+            raise ValidationError("Название обязательно для заполнения.")
+        return name
+
     def clean_inn(self):
-        return normalize_inn(self.cleaned_data.get("inn"))
+        inn = self.cleaned_data.get("inn")
+        if not inn or not str(inn).strip():
+            raise ValidationError("ИНН обязателен для заполнения.")
+        return normalize_inn(inn)
 
     def clean_head_company(self):
         hc = self.cleaned_data.get("head_company")
@@ -407,7 +433,10 @@ class CompanyInlineEditForm(forms.ModelForm):
         return (self.cleaned_data.get("legal_name") or "").strip()
 
     def clean_inn(self):
-        return normalize_inn(self.cleaned_data.get("inn"))
+        inn = self.cleaned_data.get("inn")
+        if not inn or not str(inn).strip():
+            raise ValidationError("ИНН обязателен для заполнения.")
+        return normalize_inn(inn)
 
     def clean_kpp(self):
         return (self.cleaned_data.get("kpp") or "").strip()
