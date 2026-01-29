@@ -53,27 +53,25 @@ class TelemetryInterceptor(
             throw e
         } finally {
             // Пропускаем сбор телеметрии для 429, чтобы не создавать лавину запросов
-            if (httpCode == 429) {
-                return@finally
-            }
-            
-            val duration = System.currentTimeMillis() - startTime
-            
-            // Добавляем телеметрию в батчер (асинхронно, не блокируем основной поток)
-            scope.launch {
-                try {
-                    val telemetryItem = ApiClient.TelemetryItem(
-                        type = "latency",
-                        endpoint = endpoint,
-                        httpCode = httpCode,
-                        valueMs = duration.toInt(),
-                        extra = error?.let { mapOf("error" to (it.message ?: "unknown")) }
-                    )
-                    
-                    telemetryBatcher.addTelemetry(telemetryItem)
-                } catch (e: Exception) {
-                    // Игнорируем ошибки телеметрии (не критично)
-                    Log.d("TelemetryInterceptor", "Telemetry collection error: ${e.message}")
+            if (httpCode != 429) {
+                val duration = System.currentTimeMillis() - startTime
+
+                // Добавляем телеметрию в батчер (асинхронно, не блокируем основной поток)
+                scope.launch {
+                    try {
+                        val telemetryItem = ApiClient.TelemetryItem(
+                            type = "latency",
+                            endpoint = endpoint,
+                            httpCode = httpCode,
+                            valueMs = duration.toInt(),
+                            extra = error?.let { mapOf("error" to (it.message ?: "unknown")) }
+                        )
+
+                        telemetryBatcher.addTelemetry(telemetryItem)
+                    } catch (e: Exception) {
+                        // Игнорируем ошибки телеметрии (не критично)
+                        Log.d("TelemetryInterceptor", "Telemetry collection error: ${e.message}")
+                    }
                 }
             }
         }
