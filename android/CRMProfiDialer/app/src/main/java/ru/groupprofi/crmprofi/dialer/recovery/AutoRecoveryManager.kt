@@ -98,6 +98,14 @@ class AutoRecoveryManager private constructor(context: Context) {
                 return
             }
             
+            AppReadinessChecker.ReadyState.SERVICE_BLOCKED -> {
+                // Сервис/приложение заблокированы явной причиной (требуется действие пользователя).
+                // Важно: НЕ запускаем агрессивные рестарты, чтобы избежать бесконечных циклов.
+                AppLogger.w("AutoRecoveryManager", "Service blocked; skip auto-recovery. User action required.")
+                showAppStateNotificationIfNeeded(state)
+                return
+            }
+
             AppReadinessChecker.ReadyState.NEEDS_PERMISSIONS,
             AppReadinessChecker.ReadyState.NEEDS_NOTIFICATIONS -> {
                 // Разрешения/уведомления - не пытаемся чинить автоматически

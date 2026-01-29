@@ -163,6 +163,7 @@ object SupportReportBuilder {
             AppReadinessChecker.ReadyState.NEEDS_NOTIFICATIONS -> "НЕ ГОТОВО (Уведомления выключены)"
             AppReadinessChecker.ReadyState.NEEDS_AUTH -> "НЕ ГОТОВО (Нужна авторизация)"
             AppReadinessChecker.ReadyState.NO_NETWORK -> "НЕ ГОТОВО (Нет сети)"
+            AppReadinessChecker.ReadyState.SERVICE_BLOCKED -> "НЕ ГОТОВО (Заблокировано: ${uiModel.title})"
             AppReadinessChecker.ReadyState.SERVICE_STOPPED -> "НЕ ГОТОВО (Сервис остановлен)"
             AppReadinessChecker.ReadyState.UNKNOWN_ERROR -> "НЕ ГОТОВО (Неизвестная ошибка)"
         }
@@ -339,6 +340,9 @@ object SupportReportBuilder {
             }
             AppReadinessChecker.ReadyState.SERVICE_STOPPED -> {
                 "Перезапустите приложение или нажмите \"Исправить\" для перезапуска сервиса."
+            }
+            AppReadinessChecker.ReadyState.SERVICE_BLOCKED -> {
+                "Откройте приложение → нажмите \"Исправить\" и выполните действие, указанное в статусе: ${uiModel.title}."
             }
             else -> {
                 "Откройте приложение → нажмите \"Исправить\" для диагностики и исправления проблем."
