@@ -2527,10 +2527,35 @@
               overlay.appendChild(popup);
             }
             
+            // Настройки ограничения времени: берём из data-атрибутов, если заданы на input,
+            // иначе используем значения по умолчанию (08:00–17:00, шаг минут 10).
+            const MIN_HOUR = input.dataset.minHour ? parseInt(input.dataset.minHour, 10) : 8;
+            const MAX_HOUR = input.dataset.maxHour ? parseInt(input.dataset.maxHour, 10) : 17;
+            const MINUTE_STEP = input.dataset.minuteStep ? parseInt(input.dataset.minuteStep, 10) : 10;
+
+            function clampTime(hour, minute) {
+              let h = Number.isFinite(hour) ? hour : MIN_HOUR;
+              let m = Number.isFinite(minute) ? minute : 0;
+
+              if (h < MIN_HOUR) h = MIN_HOUR;
+              if (h > MAX_HOUR) h = MAX_HOUR;
+
+              // Приводим минуты к шагу (кратные MINUTE_STEP)
+              m = Math.round(m / MINUTE_STEP) * MINUTE_STEP;
+              if (m >= 60) {
+                m = 60 - MINUTE_STEP;
+              }
+
+              return { hour: h, minute: m };
+            }
+
             let currentDate = input.value ? new Date(input.value) : new Date();
             let selectedDate = currentDate;
-            let selectedHour = input.type === 'datetime-local' ? currentDate.getHours() : 0;
-            let selectedMinute = input.type === 'datetime-local' ? currentDate.getMinutes() : 0;
+            let initialHour = input.type === 'datetime-local' ? currentDate.getHours() : 0;
+            let initialMinute = input.type === 'datetime-local' ? currentDate.getMinutes() : 0;
+            const clampedInitial = clampTime(initialHour, initialMinute);
+            let selectedHour = clampedInitial.hour;
+            let selectedMinute = clampedInitial.minute;
             let showMonthYearSelector = false;
             let showYearSelector = false;
             
@@ -2683,18 +2708,20 @@
                     <div class="time-column">
                       <div class="time-column-label">Часы</div>
                       <div class="time-scroll" id="hours-scroll">
-                        ${Array(24).fill(0).map((_, i) => {
-                          const hour = String(i).padStart(2, '0');
-                          return `<div class="time-item ${i === selectedHour ? 'selected' : ''}" data-hour="${i}">${hour}</div>`;
+                        ${Array(MAX_HOUR - MIN_HOUR + 1).fill(0).map((_, idx) => {
+                          const h = MIN_HOUR + idx;
+                          const label = String(h).padStart(2, '0');
+                          return `<div class="time-item ${h === selectedHour ? 'selected' : ''}" data-hour="${h}">${label}</div>`;
                         }).join('')}
                       </div>
                     </div>
                     <div class="time-column">
                       <div class="time-column-label">Минуты</div>
                       <div class="time-scroll" id="minutes-scroll">
-                        ${Array(60).fill(0).map((_, i) => {
-                          const minute = String(i).padStart(2, '0');
-                          return `<div class="time-item ${i === selectedMinute ? 'selected' : ''}" data-minute="${i}">${minute}</div>`;
+                        ${Array(Math.floor(60 / MINUTE_STEP)).fill(0).map((_, idx) => {
+                          const m = idx * MINUTE_STEP;
+                          const label = String(m).padStart(2, '0');
+                          return `<div class="time-item ${m === selectedMinute ? 'selected' : ''}" data-minute="${m}">${label}</div>`;
                         }).join('')}
                       </div>
                     </div>
@@ -2781,8 +2808,9 @@
                 currentDate = new Date(now);
                 selectedDate = new Date(now);
                 if (input.type === 'datetime-local') {
-                  selectedHour = now.getHours();
-                  selectedMinute = now.getMinutes();
+                  const clamped = clampTime(now.getHours(), now.getMinutes());
+                  selectedHour = clamped.hour;
+                  selectedMinute = clamped.minute;
                 }
                 renderCalendar();
               });
@@ -2790,7 +2818,8 @@
               popup.querySelector('.btn-apply').addEventListener('click', () => {
                 if (selectedDate) {
                   if (input.type === 'datetime-local') {
-                    selectedDate.setHours(selectedHour, selectedMinute, 0, 0);
+                    const clamped = clampTime(selectedHour, selectedMinute);
+                    selectedDate.setHours(clamped.hour, clamped.minute, 0, 0);
                     // Преобразуем в локальное время для datetime-local
                     const localDate = new Date(selectedDate.getTime() - selectedDate.getTimezoneOffset() * 60000);
                     const isoString = localDate.toISOString().slice(0, 16);

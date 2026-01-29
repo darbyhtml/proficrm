@@ -593,7 +593,20 @@ class TaskForm(forms.ModelForm):
     due_at = forms.DateTimeField(
         required=True,
         input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"],
-        widget=forms.DateTimeInput(attrs={"type": "datetime-local", "class": "w-full rounded-lg border px-3 py-2", "required": "required"}),
+        widget=forms.DateTimeInput(
+            attrs={
+                "type": "datetime-local",
+                "class": "w-full rounded-lg border px-3 py-2",
+                "required": "required",
+                # Ограничения для удобного выбора времени в кастомном календаре
+                # (используются фронтенд-скриптом в base.html):
+                # рабочие часы 08:00–17:00, минуты кратны 10.
+                "data-min-hour": "8",
+                "data-max-hour": "17",
+                "data-minute-step": "10",
+                "step": "600",  # 10 минут в секундах
+            }
+        ),
         label="Дедлайн",
     )
     apply_to_org_branches = forms.BooleanField(
@@ -660,7 +673,17 @@ class TaskEditForm(forms.ModelForm):
     due_at = forms.DateTimeField(
         required=True,
         input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%dT%H:%M:%S"],
-        widget=forms.DateTimeInput(attrs={"type": "datetime-local", "class": "w-full rounded-lg border px-3 py-2", "required": "required"}),
+        widget=forms.DateTimeInput(
+            attrs={
+                "type": "datetime-local",
+                "class": "w-full rounded-lg border px-3 py-2",
+                "required": "required",
+                "data-min-hour": "8",
+                "data-max-hour": "17",
+                "data-minute-step": "10",
+                "step": "600",
+            }
+        ),
         label="Дедлайн",
     )
 
