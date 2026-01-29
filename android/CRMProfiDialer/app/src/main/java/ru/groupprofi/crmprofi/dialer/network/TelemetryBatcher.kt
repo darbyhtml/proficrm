@@ -1,6 +1,5 @@
 package ru.groupprofi.crmprofi.dialer.network
 
-import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -9,16 +8,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import ru.groupprofi.crmprofi.dialer.queue.QueueManager
 import java.util.concurrent.ConcurrentLinkedQueue
 
 /**
  * Батчинг телеметрии для снижения нагрузки на сервер.
- * Накапливает метрики и отправляет их батчами раз в 30-60 секунд или при накоплении K элементов.
+ * Накапливает метрики и отправляет их батчами раз в 45 секунд или при накоплении 20 элементов.
  */
 class TelemetryBatcher(
-    private val queueManager: QueueManager,
-    private val deviceId: String
+    private val deviceId: String,
+    private val sendBatchFn: suspend (String, List<ApiClient.TelemetryItem>) -> ru.groupprofi.crmprofi.dialer.network.ApiClient.Result<Unit>
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val telemetryQueue = ConcurrentLinkedQueue<ApiClient.TelemetryItem>()
@@ -75,31 +73,34 @@ class TelemetryBatcher(
         
         if (items.isEmpty()) return@withLock
         
+        val flushReason = when {
+            force -> "FORCED"
+            items.size >= BATCH_SIZE_THRESHOLD -> "SIZE"
+            else -> "TIMER"
+        }
+        
         try {
-            // Формируем JSON батча
-            val itemsArray = org.json.JSONArray()
-            items.forEach { item ->
-                itemsArray.put(org.json.JSONObject().apply {
-                    if (item.ts != null) put("ts", item.ts)
-                    if (item.type != null) put("type", item.type)
-                    if (item.endpoint != null) put("endpoint", item.endpoint)
-                    if (item.httpCode != null) put("http_code", item.httpCode)
-                    if (item.valueMs != null) put("value_ms", item.valueMs)
-                    if (item.extra != null) put("extra", org.json.JSONObject(item.extra))
-                })
+            // Отправляем батч напрямую через ApiClient
+            val result = sendBatchFn(deviceId, items)
+            
+            when (result) {
+                is ru.groupprofi.crmprofi.dialer.network.ApiClient.Result.Success -> {
+                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.d(
+                        "TelemetryBatcher",
+                        "TelemetryBatcher flush: nItems=${items.size}, reason=$flushReason"
+                    )
+                }
+                is ru.groupprofi.crmprofi.dialer.network.ApiClient.Result.Error -> {
+                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.w(
+                        "TelemetryBatcher",
+                        "TelemetryBatcher flush failed: nItems=${items.size}, reason=$flushReason, error=${result.message}"
+                    )
+                    // Возвращаем элементы обратно в очередь при ошибке
+                    items.forEach { telemetryQueue.offer(it) }
+                }
             }
-            
-            val batchJson = org.json.JSONObject().apply {
-                put("device_id", deviceId)
-                put("items", itemsArray)
-            }.toString()
-            
-            // Добавляем в очередь для отправки
-            queueManager.enqueue("telemetry", "/api/phone/telemetry/", batchJson)
-            
-            Log.d("TelemetryBatcher", "Batched ${items.size} telemetry items (force=$force)")
         } catch (e: Exception) {
-            Log.w("TelemetryBatcher", "Error batching telemetry: ${e.message}")
+            ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("TelemetryBatcher", "Error batching telemetry: ${e.message}")
             // Возвращаем элементы обратно в очередь при ошибке
             items.forEach { telemetryQueue.offer(it) }
         }

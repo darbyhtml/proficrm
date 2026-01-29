@@ -47,8 +47,13 @@ class ApiClient private constructor(context: Context) {
     
     init {
         // Создаем TelemetryBatcher для батчинга телеметрии
+        // Передаем функцию отправки, которая будет вызывать sendTelemetryBatch
         val deviceId = tokenManager.getDeviceId() ?: ""
-        telemetryBatcher = TelemetryBatcher(queueManager, deviceId)
+        telemetryBatcher = TelemetryBatcher(deviceId) { devId, items ->
+            // Используем this@ApiClient для вызова метода после полной инициализации
+            // Но это создаст проблему циклической зависимости, поэтому используем lazy
+            sendTelemetryBatch(devId, items)
+        }
         
         // TelemetryInterceptor также получает queueManager лениво
         val telemetryInterceptor = TelemetryInterceptor(tokenManager, lazy { queueManager }, context, telemetryBatcher)

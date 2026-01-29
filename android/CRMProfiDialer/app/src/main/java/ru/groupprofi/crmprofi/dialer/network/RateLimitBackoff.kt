@@ -23,22 +23,22 @@ class RateLimitBackoff {
     
     /**
      * Получить задержку для rate limit (429) с учетом Retry-After заголовка.
+     * Использует max(backoff, retryAfterSeconds) для учета обоих значений.
      * @param retryAfterSeconds значение из заголовка Retry-After (если есть), null если нет
      * @return задержка в миллисекундах
      */
     fun getRateLimitDelay(retryAfterSeconds: Int?): Long {
-        val baseDelay = if (retryAfterSeconds != null && retryAfterSeconds > 0) {
-            // Уважаем Retry-After заголовок
-            (retryAfterSeconds * 1000L).coerceAtMost(MAX_DELAY_MS)
-        } else {
-            // Exponential backoff: 10s, 20s, 40s, 80s, 160s, capped at 5min
-            val exponentialDelay = BASE_DELAY_MS * (1L shl backoffLevel.coerceAtMost(MAX_BACKOFF_LEVEL))
-            exponentialDelay.coerceAtMost(MAX_DELAY_MS)
-        }
+        // Exponential backoff: 10s, 20s, 40s, 80s, 160s, capped at 5min
+        val exponentialDelay = BASE_DELAY_MS * (1L shl backoffLevel.coerceAtMost(MAX_BACKOFF_LEVEL))
+        val backoffDelay = exponentialDelay.coerceAtMost(MAX_DELAY_MS)
+        
+        // Если есть Retry-After, используем max(backoff, retryAfterSeconds)
+        val retryAfterMs = retryAfterSeconds?.let { (it * 1000L).coerceAtMost(MAX_DELAY_MS) } ?: 0L
+        val baseDelay = maxOf(backoffDelay, retryAfterMs).coerceAtLeast(BASE_DELAY_MS)
         
         // Добавляем jitter (±20% для избежания thundering herd)
         val jitterRange = (baseDelay * 0.2).toLong()
-        val jitter = random.nextLong(-jitterRange, jitterRange + 1)
+        val jitter = random.nextLong(jitterRange * 2 + 1) - jitterRange // -jitterRange..+jitterRange
         
         return (baseDelay + jitter).coerceAtLeast(BASE_DELAY_MS)
     }
