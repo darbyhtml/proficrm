@@ -216,11 +216,11 @@ class CallListenerService : Service() {
                             204 -> ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("CallListenerService", "PullCall: 204 (no commands)")
                             401 -> ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "PullCall: 401 (auth failed)")
                             429 -> {
-                                val retryAfterMsg = pullCallResult.retryAfterSeconds?.let { "Retry-After: ${it}s" } ?: "no Retry-After"
+                                val retryAfterMsg = pullCallResult.retryAfterSeconds?.let { "${it}s" } ?: "none"
                                 val backoffDelay = rateLimitBackoff.getRateLimitDelay(pullCallResult.retryAfterSeconds)
                                 ru.groupprofi.crmprofi.dialer.logs.AppLogger.i(
                                     "CallListenerService",
-                                    "429 rate-limited: retryAfter=${pullCallResult.retryAfterSeconds?.let { "${it}s" } ?: "none"}, backoff=${backoffDelay}ms, mode=RATE_LIMIT"
+                                    "429 rate-limited: retryAfter=$retryAfterMsg, backoff=${backoffDelay}ms, mode=RATE_LIMIT"
                                 )
                             }
                             0 -> ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "PullCall: 0 (network error)")
