@@ -440,6 +440,27 @@ fun decrementBackoff() {
 ### 23. QueueManager.enqueue(): добавлена документация о безопасности runBlocking
 **Добавлено:** Комментарий объясняет, что все текущие вызовы `enqueue()` идут из suspend-функций с `Dispatchers.IO`, поэтому `runBlocking` безопасен и не блокирует main thread. Добавлено предупреждение использовать `enqueueAsync()` при вызове из UI/main thread.
 
+### 24. SafeHttpLoggingInterceptor: исправлен PatternSyntaxException в regex для query параметров
+**Проблема:** Regex для маскирования `device_id` в query параметрах содержал неэкранированную `}` в lookahead: `(?=\s|$|&|})`. На некоторых Android/Java версиях это вызывало `PatternSyntaxException` ("Syntax error in regexp pattern..."), что ломало QR-логин и сетевые запросы.
+
+**Исправление:**
+- Заменен lookahead с `(?=\s|$|&|})` на `(?=$|[\s&}])` - использование charclass вместо альтернатив с неэкранированной скобкой
+- Это гарантирует корректную работу на всех версиях Android/Java regex engine
+- Добавлены unit-тесты для edge cases с закрывающей `}` в query параметрах
+
+**Код:**
+```kotlin
+// БЫЛО (вызывало PatternSyntaxException):
+masked.replace(Regex("""device[_\s]?id[=:]([A-Za-z0-9]{8,})(?=\s|$|&|})""", ...))
+
+// СТАЛО (безопасно):
+masked.replace(Regex("""device[_\s]?id[=:]([A-Za-z0-9]{8,})(?=$|[\s&}])""", ...))
+```
+
+**Тесты:**
+- Добавлен тест `maskSensitiveData - query параметр device_id с закрывающей скобкой не вызывает PatternSyntaxException`
+- Добавлен тест `maskSensitiveData - query параметр device_id с & и закрывающей скобкой`
+
 ## Обновленные файлы (четвертая итерация)
 
 1. `android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/queue/QueueManager.kt` - синхронный enqueue через runBlocking

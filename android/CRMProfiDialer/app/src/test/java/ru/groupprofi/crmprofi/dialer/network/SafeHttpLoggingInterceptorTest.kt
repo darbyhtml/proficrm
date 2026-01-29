@@ -110,4 +110,27 @@ device_id=9982171c26e26682"""
         assertTrue("Password должен быть замаскирован", result.contains("\"password\":\"masked\""))
         assertFalse("Password не должен быть виден", result.contains("secret123"))
     }
+    
+    @Test
+    fun `maskSensitiveData - query параметр device_id с закрывающей скобкой не вызывает PatternSyntaxException`() {
+        // КРИТИЧНЫЙ ТЕСТ: проверяем, что regex не падает на закрывающей } в lookahead
+        // Это реальная проблема, которая ломала QR-логин на некоторых Android версиях
+        val input = "GET /api/phone/calls/pull/?device_id=9982171c26e26682} HTTP/1.1"
+        val result = maskSensitiveData(input)
+        
+        // Проверяем, что обработка прошла без исключения и device_id замаскирован
+        assertTrue("device_id должен быть замаскирован", result.contains("9982***6682"))
+        assertFalse("НЕ должно быть кавычек вокруг значения в query", result.contains("device_id=\"9982"))
+        assertTrue("Должен быть формат device_id=9982***6682", result.contains("device_id=9982***6682"))
+    }
+    
+    @Test
+    fun `maskSensitiveData - query параметр device_id с & и закрывающей скобкой`() {
+        // Проверяем edge case: device_id в середине query строки с закрывающей }
+        val input = "GET /api/phone/calls/pull/?param1=value&device_id=9982171c26e26682}&param2=value HTTP/1.1"
+        val result = maskSensitiveData(input)
+        
+        assertTrue("device_id должен быть замаскирован", result.contains("9982***6682"))
+        assertTrue("Должен быть формат device_id=9982***6682", result.contains("device_id=9982***6682"))
+    }
 }

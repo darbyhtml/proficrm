@@ -74,7 +74,8 @@ class SafeHttpLoggingInterceptor : Interceptor {
         
         // Маскируем device_id в query параметрах (device_id=value -> device_id=9982***6682)
         // НЕ добавляем кавычки - это query параметр, не JSON
-        masked = masked.replace(Regex("""device[_\s]?id[=:]([A-Za-z0-9]{8,})(?=\s|$|&|})""", RegexOption.IGNORE_CASE)) { matchResult ->
+        // ВАЖНО: } в lookahead должна быть экранирована или в charclass, иначе PatternSyntaxException на некоторых Android версиях
+        masked = masked.replace(Regex("""device[_\s]?id[=:]([A-Za-z0-9]{8,})(?=$|[\s&}])""", RegexOption.IGNORE_CASE)) { matchResult ->
             val beforeMatch = masked.substring(0, matchResult.range.first)
             // Проверяем контекст: если перед match есть нечетное количество кавычек - мы внутри JSON строки
             // Также проверяем, что это действительно query параметр (есть = или : без кавычек вокруг)
