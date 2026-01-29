@@ -279,7 +279,13 @@ class CompanySearchService:
         if not pq.text_tokens and not strong_digits and weak_digits and pq.raw:
             return qs.none()
 
-        qs = qs.filter((indexed & indexed_match) | (Q(search_index__isnull=True) & fallback_match))
+        # Фильтрация:
+        # - для компаний с индексом используем FTS (indexed_match);
+        # - дополнительно для всех компаний допускаем fallback_match (icontains по основным полям).
+        # Это делает поиск по названию более “прощающим” к опечаткам/окончаниям
+        # (например, "сибирские медвед" всё равно найдёт "Сибирские медведи"),
+        # при этом не ломая существующий FTS и ранжирование.
+        qs = qs.filter((indexed & indexed_match) | fallback_match)
 
         # Ранжирование (важность)
         score = Value(0.0, output_field=FloatField())
