@@ -52,8 +52,8 @@ class ApiClient private constructor(context: Context) {
         telemetryBatcher = TelemetryBatcher(deviceId) { devId, items ->
             val result = sendTelemetryBatch(devId, items)
             when (result) {
-                is Result.Success -> TelemetryBatcher.SendBatchOutcome.Success
-                is Result.Error -> TelemetryBatcher.SendBatchOutcome.Failure(result.message)
+                is Result.Success -> TelemetryBatcher.SendBatchOutcome(ok = true)
+                is Result.Error -> TelemetryBatcher.SendBatchOutcome(ok = false, errorMessage = result.message)
             }
         }
         

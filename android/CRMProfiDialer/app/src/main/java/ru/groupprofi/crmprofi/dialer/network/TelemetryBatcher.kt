@@ -19,12 +19,9 @@ class TelemetryBatcher(
     private val sendBatchFn: suspend (String, List<ApiClient.TelemetryItem>) -> SendBatchOutcome
 ) {
     /**
-     * Результат отправки батча телеметрии (без generic-типов для избежания recursive type checking).
+     * Результат отправки батча телеметрии (простой data class без sealed/generics для избежания recursive type checking).
      */
-    sealed class SendBatchOutcome {
-        data object Success : SendBatchOutcome()
-        data class Failure(val message: String) : SendBatchOutcome()
-    }
+    data class SendBatchOutcome(val ok: Boolean, val errorMessage: String? = null)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val telemetryQueue = ConcurrentLinkedQueue<ApiClient.TelemetryItem>()
     private val mutex = Mutex()
@@ -95,16 +92,16 @@ class TelemetryBatcher(
             // Отправляем батч напрямую через ApiClient
             val outcome = sendBatchFn(deviceId, items)
             
-            if (outcome is SendBatchOutcome.Success) {
+            if (outcome.ok) {
                 ru.groupprofi.crmprofi.dialer.logs.AppLogger.d(
                     "TelemetryBatcher",
                     "TelemetryBatcher flush: nItems=${items.size}, reason=${reason.name}"
                 )
             } else {
-                val failure = outcome as SendBatchOutcome.Failure
+                val msg = outcome.errorMessage ?: "Unknown error"
                 ru.groupprofi.crmprofi.dialer.logs.AppLogger.w(
                     "TelemetryBatcher",
-                    "TelemetryBatcher flush failed: nItems=${items.size}, reason=${reason.name}, error=${failure.message}"
+                    "TelemetryBatcher flush failed: nItems=${items.size}, reason=${reason.name}, error=$msg"
                 )
                 // Возвращаем элементы обратно в очередь при ошибке
                 items.forEach { telemetryQueue.offer(it) }
