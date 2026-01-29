@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import ru.groupprofi.crmprofi.dialer.MainActivity
 import ru.groupprofi.crmprofi.dialer.R
@@ -161,6 +162,11 @@ class AppNotificationManager private constructor(context: Context) {
                 }
                 AppReadinessChecker.FixActionType.OPEN_NETWORK_SETTINGS -> {
                     Intent(android.provider.Settings.ACTION_WIRELESS_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                }
+                AppReadinessChecker.FixActionType.OPEN_BATTERY_SETTINGS -> {
+                    Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
                 }
