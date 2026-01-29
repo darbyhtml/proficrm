@@ -604,7 +604,8 @@ class TaskForm(forms.ModelForm):
                 "data-min-hour": "8",
                 "data-max-hour": "17",
                 "data-minute-step": "10",
-                "step": "600",  # 10 минут в секундах
+                # Шаг 10 минут реализован в кастомном календаре, 
+                # нативный step не задаём, чтобы избежать конфликтов с таймзоной браузера.
             }
         ),
         label="Дедлайн",
@@ -681,7 +682,6 @@ class TaskEditForm(forms.ModelForm):
                 "data-min-hour": "8",
                 "data-max-hour": "17",
                 "data-minute-step": "10",
-                "step": "600",
             }
         ),
         label="Дедлайн",
