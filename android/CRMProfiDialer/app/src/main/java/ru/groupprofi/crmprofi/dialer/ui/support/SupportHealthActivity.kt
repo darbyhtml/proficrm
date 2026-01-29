@@ -366,8 +366,7 @@ class SupportHealthActivity : AppCompatActivity() {
             if (ru.groupprofi.crmprofi.dialer.BuildConfig.DEBUG) {
                 "debug"
             } else {
-                // В release или staging (точное определение сложно без дополнительных BuildConfig полей)
-                "release/staging"
+                "release"
             }
         } catch (e: Exception) {
             "unknown"
@@ -382,9 +381,7 @@ class SupportHealthActivity : AppCompatActivity() {
             if (ru.groupprofi.crmprofi.dialer.BuildConfig.DEBUG) {
                 "нет"
             } else {
-                // Для staging: minifyEnabled=true, для release: minifyEnabled=false
-                // Точную проверку сложно сделать без дополнительных BuildConfig полей
-                "да (staging) / нет (release)"
+                "нет (release без минификации)"
             }
         } catch (e: Exception) {
             "неизвестно"

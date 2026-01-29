@@ -18,25 +18,8 @@ android {
         targetSdk = 34
         versionCode = 5
         versionName = "0.5"
-    }
-
-    flavorDimensions += "env"
-
-    productFlavors {
-        staging {
-            dimension "env"
-            // STAGING API — только для новой версии и тестов
-            buildConfigField "String", "BASE_URL", "\"http://95.142.47.245\""
-            applicationIdSuffix ".staging"
-            versionNameSuffix "-staging"
-        }
-        production {
-            dimension "env"
-            // ТЕКУЩИЙ боевой URL — не менять, чтобы не ломать уже работающий сценарий
-            buildConfigField "String", "BASE_URL", "\"https://crm.groupprofi.ru\""
-            // Для productionRelease включаем minify через matchingFallbacks
-            // (будет применено только если есть соответствующий buildType)
-        }
+        // Production backend URL
+        buildConfigField "String", "BASE_URL", "\"https://crm.groupprofi.ru\""
     }
 
     // Чтение секретов для подписи: сначала из ENV vars, затем из local.properties
@@ -127,9 +110,9 @@ dependencies {
     testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1"
 }
 
-// Применяем signing ТОЛЬКО для productionRelease с помощью Android Components API
+// Применяем signing ТОЛЬКО для release с помощью Android Components API
 androidComponents {
-    onVariants(selector().withName("productionRelease")) { variant ->
+    onVariants(selector().withName("release")) { variant ->
         def signingConfig = android.signingConfigs.findByName("productionRelease")
         if (signingConfig && signingConfig.storeFile != null && signingConfig.storeFile.exists()) {
             variant.signingConfig = signingConfig

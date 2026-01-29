@@ -308,7 +308,7 @@ object SupportReportBuilder {
             if (ru.groupprofi.crmprofi.dialer.BuildConfig.DEBUG) {
                 "нет"
             } else {
-                "да (staging/release)"
+                "нет (release без минификации)"
             }
         } catch (e: Exception) {
             "неизвестно"
