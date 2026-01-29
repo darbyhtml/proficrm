@@ -369,6 +369,75 @@ adb logcat | grep -i "MainActivity.*onCreate completed"
 - ✅ Устранение проблемы "initCamera called twice" (или значительное уменьшение)
 - ✅ Улучшение общей производительности приложения
 
+## Третья итерация: TokenManager / EncryptedSharedPreferences на main thread (январь 2026)
+
+### Проблема из логов
+
+На холодном старте после установки по-прежнему фиксировались:
+- **StrictMode policy violation: DiskReadViolation/DiskWriteViolation on main thread**
+- Стек: `LoginActivity.onCreate` → `TokenManager.createSecurePrefs` → `EncryptedSharedPreferences.create` / `SharedPreferencesImpl.commit`
+- **Choreographer: Skipped 75 frames** — UI блокируется из-за тяжёлой крипто/IO инициализации при первом запуске
+
+### Причина
+
+`TokenManager.getInstance(context)` создавал `EncryptedSharedPreferences` и выполнял миграцию синхронно на main thread при первом обращении (часто в `LoginActivity.onCreate`).
+
+### Исправления
+
+#### 1. TokenManager: асинхронная инициализация
+
+**Файл:** `android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/auth/TokenManager.kt`
+
+**Изменения:**
+- Конструктор принимает только `SharedPreferences` (тяжёлая работа вынесена из конструктора).
+- Добавлен **suspend fun init(appContext: Context): TokenManager** — вся работа (createSecurePrefs, миграция) выполняется в **withContext(Dispatchers.IO)** под **Mutex** (идемпотентность).
+- **getInstance()** — без аргументов, возвращает инициализированный экземпляр; при отсутствии инициализации — **IllegalStateException**.
+- **getInstanceOrNull()** — для деградированного режима (например, CallListenerService до готовности Application).
+- Метки **Trace.beginSection/endSection("TokenManager.init")** для профилирования (debug).
+- Никакого disk I/O / crypto init на main thread.
+
+#### 2. CRMApplication: прогрев TokenManager после первого кадра
+
+**Файл:** `android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/CRMApplication.kt`
+
+**Изменения:**
+- В блоке после **Choreographer.postFrameCallback** сначала вызывается **TokenManager.init(this@CRMApplication)**, затем **AppContainer.init()**.
+- Инициализация выполняется в том же **applicationScope.launch** (без блокировки main thread).
+
+#### 3. LoginActivity: без синхронного TokenManager в onCreate
+
+**Файл:** `android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/ui/login/LoginActivity.kt`
+
+**Изменения:**
+- Убран вызов **TokenManager.getInstance(this)** из **onCreate**.
+- **setContentView**, **initViews**, **setupListeners** и регистрация **qrLoginLauncher** выполняются сразу (лёгкие операции).
+- Инициализация и проверка токенов: **lifecycleScope.launch { TokenManager.init(applicationContext); ... if (hasTokens) startMainActivity() }**.
+- В callback **qrLoginLauncher** используется **TokenManager.getInstanceOrNull()?.hasTokens()** (без требования предварительного init в Activity).
+
+#### 4. Остальные модули
+
+- **AppContainer.init()**: вызов изменён на **TokenManager.getInstance()** (без context).
+- **ApiClient, QRLoginActivity, AppReadinessChecker, AutoRecoveryManager, LogsActivity, CallFlowCoordinator**: **TokenManager.getInstance(context)** заменён на **TokenManager.getInstance()** (предполагается, что init уже выполнен в Application или ранее в flow).
+- **CallListenerService**: используется **TokenManager.getInstanceOrNull()**; при **null** — **stopSelf()** и **START_NOT_STICKY** (деградация при раннем старте сервиса до init).
+- **BootCompletedReceiver**: логика перенесена в корутину с **goAsync()**; сначала **TokenManager.init()**, затем **AppContainer.init()**, затем проверка токенов и запуск сервиса. Main thread не блокируется.
+
+### Как проверить (logcat)
+
+```bash
+# StrictMode — не должно быть нарушений от TokenManager/EncryptedSharedPreferences на main thread
+adb logcat | grep -i "StrictMode.*Disk"
+
+# Skipped frames — ожидаемо существенное снижение (например, < 10–15 на холодном старте LoginActivity)
+adb logcat | grep -i "Skipped.*frames"
+```
+
+### Ожидаемые результаты после третьей итерации
+
+- ✅ Нет StrictMode DiskReadViolation/DiskWriteViolation, связанных с TokenManager / EncryptedSharedPreferences на main thread.
+- ✅ Существенное снижение Skipped frames при открытии LoginActivity (целевой порядок < 10–15).
+- ✅ QR flow не нарушен; токены сохраняются, запросы выполняются.
+- ✅ Lifecycle-safe: без runBlocking на UI, только applicationContext.
+
 ## Commit Hash
 
 **FULL commit hash:**

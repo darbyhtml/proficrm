@@ -47,7 +47,7 @@ class LogsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_logs)
         
-        tokenManager = TokenManager.getInstance(this)
+        tokenManager = TokenManager.getInstance()
         
         // ВРЕМЕННО: доступ для всех пользователей (для дебага)
         // Убрана проверка роли - все залогиненные пользователи могут видеть логи

@@ -25,7 +25,7 @@ class AutoRecoveryManager private constructor(context: Context) {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val readinessChecker = AppReadinessChecker(appContext)
-    private val tokenManager = TokenManager.getInstance(appContext)
+    private val tokenManager = TokenManager.getInstance()
     private val notificationManager = AppNotificationManager.getInstance(appContext)
     
     private var recoveryJob: Job? = null

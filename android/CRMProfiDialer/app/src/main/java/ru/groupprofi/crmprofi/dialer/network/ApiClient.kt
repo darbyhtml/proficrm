@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit
  * Все методы возвращают Result<T> для безопасной обработки ошибок.
  */
 class ApiClient private constructor(context: Context) {
-    private val tokenManager = TokenManager.getInstance(context)
+    private val tokenManager = TokenManager.getInstance()
     private val appContext = context.applicationContext
     // Ленивая инициализация QueueManager - создается только при первом использовании
     private val queueManager: QueueManager by lazy { QueueManager(appContext) }

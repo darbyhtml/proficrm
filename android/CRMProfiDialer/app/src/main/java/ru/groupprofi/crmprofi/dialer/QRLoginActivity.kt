@@ -47,7 +47,7 @@ class QRLoginActivity : AppCompatActivity() {
         // Фиксируем вертикальную ориентацию программно ДО setContentView
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         
-        tokenManager = TokenManager.getInstance(this)
+        tokenManager = TokenManager.getInstance()
         apiClient = ApiClient.getInstance(this)
         
         // Проверяем, не вошли ли уже

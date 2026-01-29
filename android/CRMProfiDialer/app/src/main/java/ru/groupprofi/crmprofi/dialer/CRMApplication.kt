@@ -47,11 +47,14 @@ class CRMApplication : Application() {
                 Trace.beginSection("CRMApplication.initBackground")
                 applicationScope.launch {
                     try {
-                        // Инициализируем контейнер зависимостей на фоновом потоке
+                        // Сначала TokenManager (EncryptedSharedPreferences / Tink) — только на IO
+                        ru.groupprofi.crmprofi.dialer.auth.TokenManager.init(this@CRMApplication)
+                        AppLogger.i("CRMApplication", "TokenManager initialized on background thread")
+                        // Затем контейнер зависимостей (использует TokenManager.getInstance())
                         ru.groupprofi.crmprofi.dialer.core.AppContainer.init(this@CRMApplication)
                         AppLogger.i("CRMApplication", "AppContainer initialized on background thread")
                     } catch (e: Exception) {
-                        AppLogger.e("CRMApplication", "Failed to initialize AppContainer: ${e.message}", e)
+                        AppLogger.e("CRMApplication", "Failed to initialize: ${e.message}", e)
                     } finally {
                         Trace.endSection()
                     }

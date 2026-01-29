@@ -92,8 +92,14 @@ class CallListenerService : Service() {
             }
         }
 
-        // Инициализируем TokenManager и ApiClient (быстрые операции)
-        tokenManager = TokenManager.getInstance(this)
+        // TokenManager должен быть уже инициализирован в Application; иначе — деградация (не блокируем main thread)
+        val tm = TokenManager.getInstanceOrNull()
+        if (tm == null) {
+            ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "TokenManager not ready")
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        tokenManager = tm
         apiClient = ApiClient.getInstance(this)
         logSender = LogSender(this, apiClient.getHttpClient(), queueManager)
         
@@ -1075,11 +1081,11 @@ class CallListenerService : Service() {
         
         // УСТАРЕЛО: KEY_TOKEN, KEY_REFRESH, KEY_DEVICE_ID теперь в TokenManager
         // Оставлены для совместимости с securePrefs() для pending_call_* и других локальных данных
-        @Deprecated("Use TokenManager instead", ReplaceWith("TokenManager.getInstance(context).getAccessToken()"))
+        @Deprecated("Use TokenManager instead", ReplaceWith("TokenManager.getInstance().getAccessToken()"))
         private const val KEY_TOKEN = "token"
-        @Deprecated("Use TokenManager instead", ReplaceWith("TokenManager.getInstance(context).getRefreshToken()"))
+        @Deprecated("Use TokenManager instead", ReplaceWith("TokenManager.getInstance().getRefreshToken()"))
         private const val KEY_REFRESH = "refresh"
-        @Deprecated("Use TokenManager instead", ReplaceWith("TokenManager.getInstance(context).getDeviceId()"))
+        @Deprecated("Use TokenManager instead", ReplaceWith("TokenManager.getInstance().getDeviceId()"))
         private const val KEY_DEVICE_ID = "device_id"
         
         // УСТАРЕЛО: KEY_LAST_POLL_AT, KEY_LAST_POLL_CODE теперь в TokenManager

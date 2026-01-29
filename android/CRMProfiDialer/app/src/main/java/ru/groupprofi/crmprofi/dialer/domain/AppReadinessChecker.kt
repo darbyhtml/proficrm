@@ -16,7 +16,7 @@ import ru.groupprofi.crmprofi.dialer.CallListenerService
  * Определяет, готово ли приложение к работе, и что нужно исправить.
  */
 class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
-    private val tokenManager = TokenManager.getInstance(context)
+    private val tokenManager = TokenManager.getInstance()
     
     /**
      * Состояние готовности приложения.

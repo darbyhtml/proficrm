@@ -50,9 +50,9 @@ object AppContainer {
         }
         
         appContext = context.applicationContext
-        
-        // Инициализируем инфраструктуру
-        tokenManager = TokenManager.getInstance(appContext)
+
+        // Инициализируем инфраструктуру (TokenManager уже инициализирован в Application)
+        tokenManager = TokenManager.getInstance()
         apiClient = ApiClient.getInstance(appContext)
         notificationManager = AppNotificationManager.getInstance(appContext)
         
