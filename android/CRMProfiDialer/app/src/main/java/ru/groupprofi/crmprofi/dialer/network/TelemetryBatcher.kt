@@ -104,7 +104,10 @@ class TelemetryBatcher(
                         "TelemetryBatcher",
                         "TelemetryBatcher flush failed: nItems=${items.size}, reason=${reason.name}, error=$msg"
                     )
-                    // Возвращаем элементы обратно в очередь при ошибке
+                    // При ошибке отправки возвращаем элементы обратно в очередь
+                    // НО: если это 429 (rate limit), ApiClient уже обработал это и вернул ok=true,
+                    // так что сюда мы попадем только при реальных ошибках (5xx, network)
+                    // В этом случае возврат в очередь безопасен - они будут отправлены позже
                     items.forEach { telemetryQueue.offer(it) }
                 }
             } catch (e: Exception) {

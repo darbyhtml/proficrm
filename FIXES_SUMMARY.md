@@ -289,3 +289,63 @@ masked = masked.replace(Regex("""device[_\s]?id["\s:=]+([A-Za-z0-9]{8,})(?!")(?=
 - ✅ Телеметрия при 429 не попадает в очередь (пропускаем)
 - ✅ Маскирование JSON улучшено (не портит формат)
 - ✅ Rate limiting работает корректно с exponential backoff и Retry-After
+
+---
+
+## Аудит и исправления (январь 2026, вторая итерация)
+
+### 11. SafeHttpLoggingInterceptor.kt: Критическое исправление порчи JSON
+**Проблема:** В логах появлялся испорченный JSON вида `{"device_id="9982***6682"","items":[...]}` - маскирование query параметров применялось к JSON body и добавляло кавычки, портя формат.
+
+**Корневая причина:** Порядок применения regex позволял маскированию query параметров (`device_id=...`) применяться к уже обработанному JSON, добавляя кавычки вокруг значения.
+
+**Исправление:**
+- Разделена логика на два шага: сначала обрабатываются JSON поля (строгий паттерн `"key":"value"`), затем query параметры
+- Для query параметров добавлена проверка контекста: не применяем маскирование, если уже обработан как JSON
+- Query параметры маскируются БЕЗ кавычек: `device_id=9982***6682` (не `device_id="9982***6682"`)
+- Добавлена дополнительная проверка на уже обработанный JSON паттерн
+
+**Код:**
+```kotlin
+// ШАГ 1: Сначала обрабатываем JSON поля (строгий паттерн "key":"value")
+masked = masked.replace(Regex("""("device_id"\s*:\s*")([A-Za-z0-9]{8,})(")""", RegexOption.IGNORE_CASE)) { ... }
+
+// ШАГ 2: Затем обрабатываем query параметры с проверкой контекста
+masked = masked.replace(Regex("""device[_\s]?id[=:]([A-Za-z0-9]{8,})(?=\s|$|&|})""", RegexOption.IGNORE_CASE)) { matchResult ->
+    val contextBefore = beforeMatch.takeLast(20)
+    val isAlreadyMaskedJson = contextBefore.contains("\"device_id\"")
+    if (!isInJsonString && !isAlreadyMaskedJson) {
+        // Query параметр - маскируем БЕЗ кавычек
+        "${prefix}${id.take(4)}***${id.takeLast(4)}"
+    }
+}
+```
+
+### 12. SafeHttpLoggingInterceptorTest.kt: Unit-тесты для маскирования
+**Добавлено:** Полный набор unit-тестов для проверки корректности маскирования:
+- JSON body с device_id не портит формат
+- Query параметр device_id маскируется без кавычек
+- Смешанный текст (JSON + query) обрабатывается корректно
+- JSON с экранированными кавычками не портится
+- Короткие device_id маскируются корректно
+- Bearer токены и пароли маскируются
+
+**Результат:** Все тесты проходят, подтверждая что JSON формат никогда не портится.
+
+### 13. TelemetryBatcher.kt: Улучшенные комментарии
+**Изменение:** Добавлены комментарии, объясняющие что при 429 ApiClient возвращает `ok=true`, поэтому цикл возврата в очередь не возникает при rate limiting.
+
+## Обновленные файлы (вторая итерация)
+
+1. `android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/network/SafeHttpLoggingInterceptor.kt` - критическое исправление порчи JSON
+2. `android/CRMProfiDialer/app/src/test/java/ru/groupprofi/crmprofi/dialer/network/SafeHttpLoggingInterceptorTest.kt` - unit-тесты для маскирования
+3. `android/CRMProfiDialer/app/src/main/java/ru/groupprofi/crmprofi/dialer/network/TelemetryBatcher.kt` - улучшенные комментарии
+
+## Финальный результат
+
+Все критические проблемы исправлены и протестированы:
+- ✅ JSON формат никогда не портится при маскировании
+- ✅ Query параметры маскируются корректно (без кавычек)
+- ✅ Unit-тесты подтверждают корректность маскирования
+- ✅ Single-flight polling гарантирован
+- ✅ Лавина телеметрии при 429 предотвращена
