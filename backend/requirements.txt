@@ -17,4 +17,5 @@ qrcode[pil]==8.0
 requests==2.32.3
 phonenumbers==9.0.21
 gunicorn==23.0.0
+typesense==2.0.0
 

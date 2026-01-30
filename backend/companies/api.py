@@ -1,11 +1,25 @@
 from rest_framework import serializers, viewsets
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.filters import SearchFilter, OrderingFilter
+from rest_framework.filters import BaseFilterBackend, OrderingFilter
 from django_filters.rest_framework import DjangoFilterBackend
 
 from accounts.models import User
 from .permissions import can_edit_company
+
+
+class CompanySearchFilterBackend(BaseFilterBackend):
+    """
+    Поиск по компаниям через общий backend (Postgres FTS или Typesense).
+    Параметр запроса: search. Тот же движок, что и в UI-списке компаний.
+    """
+
+    def filter_queryset(self, request, queryset, view):
+        q = (request.query_params.get("search") or "").strip()
+        if not q:
+            return queryset
+        from companies.search_service import get_company_search_backend
+        return get_company_search_backend().apply(qs=queryset, query=q)
 from .models import Company, Contact, CompanyNote
 from .normalizers import normalize_phone, normalize_inn, normalize_work_schedule
 from .policy import visible_companies_qs, visible_company_notes_qs, visible_contacts_qs
@@ -80,9 +94,8 @@ class CompanyViewSet(viewsets.ModelViewSet):
     serializer_class = CompanySerializer
     permission_classes = [IsAuthenticated, PolicyPermission]
     policy_resource_prefix = "api:companies"
-    filter_backends = (DjangoFilterBackend, SearchFilter, OrderingFilter)
+    filter_backends = (DjangoFilterBackend, CompanySearchFilterBackend, OrderingFilter)
     filterset_fields = ("branch", "responsible", "status", "contract_type", "is_cold_call")
-    search_fields = ("name", "inn", "legal_name", "address", "phone", "email", "contact_name", "contact_position")
     ordering_fields = ("updated_at", "created_at", "name")
 
     def get_queryset(self):

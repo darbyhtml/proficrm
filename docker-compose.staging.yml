@@ -32,6 +32,19 @@ services:
     networks:
       - crm_staging_network
 
+  typesense:
+    image: typesense/typesense:27.0
+    container_name: crm_staging_typesense
+    environment:
+      TYPESENSE_DATA_DIR: /data
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-xyz}
+    volumes:
+      - typesense_data_staging:/data
+    command: --data-dir /data --api-key=${TYPESENSE_API_KEY:-xyz}
+    restart: unless-stopped
+    networks:
+      - crm_staging_network
+
   web:
     build:
       context: .
@@ -54,6 +67,10 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
+      TYPESENSE_HOST: typesense
+      TYPESENSE_PORT: 8108
+      TYPESENSE_PROTOCOL: http
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-xyz}
     depends_on:
       db:
         condition: service_healthy
@@ -136,8 +153,9 @@ services:
   nginx:
     image: nginx:alpine
     container_name: crm_staging_nginx
+    # На одном хосте с продом: прод занимает 80, staging — 8080; хост-Nginx проксирует crm-staging.groupprofi.ru на 127.0.0.1:8080
     ports:
-      - "80:80"
+      - "127.0.0.1:8080:80"
     volumes:
       - ./nginx/staging.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/error_pages:/usr/share/nginx/html/error_pages:ro
@@ -152,6 +170,7 @@ services:
 volumes:
   pgdata_staging:
   redisdata_staging:
+  typesense_data_staging:
   media_staging:
   static_staging:
 

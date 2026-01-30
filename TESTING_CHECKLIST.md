@@ -9,6 +9,8 @@
 | **Telemetry batching** | Батчинг 20 элементов или 45 секунд, forced flush на важных событиях | ✅ Реализовано: батчинг через ApiClient.sendTelemetryBatch, flush на COMMAND_RECEIVED, RATE_LIMIT_ENTER, CALL_RESOLVED | ✅ |
 | **CallLog matching** | Сравнение по последним 10 цифрам, fallback на endsWith, логи без PII | ✅ Реализовано: сравнение по 10/7 цифрам, логи с last4, типом события, elapsed | ✅ |
 | **SafeHttpLoggingInterceptor** | Корректное маскирование JSON без порчи формата | ✅ Реализовано: исправлены регулярные выражения для сохранения JSON формата | ✅ |
+| **Поиск компаний (Postgres)** | FTS + pg_trgm, ранжирование, подсветка, explain | ✅ `CompanySearchService`, `CompanySearchIndex`, `get_company_search_backend()` при `SEARCH_ENGINE_BACKEND=postgres` | ✅ |
+| **Поиск компаний (Typesense)** | Внешний движок: fuzzy, веса полей, подсветка | ✅ При `SEARCH_ENGINE_BACKEND=typesense` — `TypesenseSearchBackend`; команда `index_companies_typesense` | ✅ |
 
 ## План правок (выполнено)
 
@@ -38,6 +40,13 @@
 - ✅ Исправлены регулярные выражения для корректного маскирования JSON
 - ✅ Сохранение формата `"key":"value"` при маскировании
 - ✅ Исправлен кейс `"device_id":"9982171c26e26682"` -> `"device_id":"9982***6682"`
+
+## Поиск компаний (Postgres / Typesense)
+
+- **Backend по умолчанию:** `SEARCH_ENGINE_BACKEND=postgres` — используется `CompanySearchService` (FTS + pg_trgm).
+- **Typesense:** задать `SEARCH_ENGINE_BACKEND=typesense` и `TYPESENSE_API_KEY`, запустить Typesense (Docker), выполнить `python manage.py index_companies_typesense`.
+- **Проверки поиска:** запрос по ИНН/названию/контакту возвращает релевантные компании; подсветка и «причины совпадения» отображаются в списке; при недоступности Typesense поиск возвращает пустой результат (или fallback на Postgres в explain).
+- **Тесты:** `companies.tests_search` — `SearchBackendFacadeTests`, `SearchServicePostgresTests` (требуют PostgreSQL).
 
 ## Чеклист ручного тестирования
 

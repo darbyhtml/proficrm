@@ -2,6 +2,8 @@
 
 Документ привязывает описанные в спецификации практики к текущей реализации в коде.
 
+**Вариант с внешним движком:** спецификация требований и план внедрения Typesense/Elasticsearch — см. `docs/INTELLIGENT_SEARCH_SPEC.md` и `docs/SEARCH_ENGINE_ROADMAP.md`. Реализован backend **Typesense**: при `SEARCH_ENGINE_BACKEND=typesense` используется `companies/search_backends/typesense_backend.py`; переключение через `get_company_search_backend()` в `search_service.py`. Полная переиндексация: `python manage.py index_companies_typesense`. Стоп-слова и синонимы: `sync_typesense_stopwords`, `sync_typesense_synonyms`.
+
 ---
 
 ## 1. Нормализация данных и регистронезависимый поиск

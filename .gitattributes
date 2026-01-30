@@ -1,0 +1,2 @@
+# Shell scripts: always LF on checkout (avoids "required file not found" on Linux)
+*.sh text eol=lf

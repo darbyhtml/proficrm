@@ -171,3 +171,60 @@ class SearchServicePostgresTests(TestCase):
             "Запрос из одного символа не должен возвращать неограниченную выдачу.",
         )
 
+
+class SearchBackendFacadeTests(TestCase):
+    """Тесты фасада get_company_search_backend и Typesense backend без поднятого Typesense."""
+
+    def test_get_backend_default_is_postgres(self):
+        from companies.search_service import get_company_search_backend, CompanySearchService
+        with self.settings(SEARCH_ENGINE_BACKEND="postgres"):
+            backend = get_company_search_backend()
+        self.assertIsInstance(backend, CompanySearchService)
+
+    def test_get_backend_typesense_returns_typesense_backend(self):
+        from companies.search_service import get_company_search_backend
+        from companies.search_backends import TypesenseSearchBackend
+        with self.settings(SEARCH_ENGINE_BACKEND="typesense"):
+            backend = get_company_search_backend()
+        self.assertIsInstance(backend, TypesenseSearchBackend)
+
+    def test_typesense_apply_returns_none_when_unavailable_and_no_fallback(self):
+        """При недоступности Typesense и отключённом fallback apply возвращает qs.none()."""
+        from unittest.mock import patch
+        from companies.models import Company, CompanyStatus
+        from companies.search_backends.typesense_backend import TypesenseSearchBackend
+        status = CompanyStatus.objects.create(name="Т")
+        Company.objects.create(name="Тест", inn="1234567890", status=status)
+        backend = TypesenseSearchBackend()
+        with patch("companies.search_backends.typesense_backend._get_client", return_value=None), \
+             self.settings(TYPESENSE_FALLBACK_TO_POSTGRES=False):
+            qs = backend.apply(qs=Company.objects.all(), query="тест")
+        self.assertEqual(qs.count(), 0)
+
+    def test_build_company_document_structure(self):
+        """build_company_document возвращает dict с полями схемы Typesense."""
+        from companies.models import Company, CompanyStatus
+        from companies.search_backends.typesense_backend import build_company_document
+        status = CompanyStatus.objects.create(name="Т")
+        c = Company.objects.create(
+            name="ООО Док",
+            legal_name="Общество Док",
+            inn="7701000000",
+            kpp="770101001",
+            address="Москва",
+            status=status,
+        )
+        doc = build_company_document(c)
+        self.assertEqual(doc["id"], str(c.id))
+        self.assertIn("name", doc)
+        self.assertIn("legal_name", doc)
+        self.assertIn("inn", doc)
+        self.assertIn("kpp", doc)
+        self.assertIn("address", doc)
+        self.assertIn("contacts", doc)
+        self.assertIn("emails", doc)
+        self.assertIn("phones", doc)
+        self.assertIn("notes", doc)
+        self.assertIn("updated_at", doc)
+        self.assertIsInstance(doc["updated_at"], int)
+

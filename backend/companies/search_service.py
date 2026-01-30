@@ -598,3 +598,16 @@ class CompanySearchService:
 
         return out
 
+
+def get_company_search_backend(*, max_results_cap: int = 5000):
+    """
+    Возвращает backend поиска компаний по настройке SEARCH_ENGINE_BACKEND:
+    "typesense" — TypesenseSearchBackend, иначе — CompanySearchService (Postgres).
+    """
+    from django.conf import settings as django_settings
+    backend = (getattr(django_settings, "SEARCH_ENGINE_BACKEND", "postgres") or "postgres").strip().lower()
+    if backend == "typesense":
+        from companies.search_backends import TypesenseSearchBackend
+        return TypesenseSearchBackend(max_results_cap=max_results_cap)
+    return CompanySearchService(max_results_cap=max_results_cap)
+

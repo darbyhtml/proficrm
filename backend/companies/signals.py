@@ -41,6 +41,25 @@ def _rebuild_index_for_company(company_id):
     except Exception:
         # Индекс — вспомогательная штука: не ломаем бизнес-сохранение из-за проблем индекса
         pass
+    # Синхронизация с Typesense при включённом backend
+    try:
+        from django.conf import settings as s
+        if (getattr(s, "SEARCH_ENGINE_BACKEND", "postgres") or "postgres").strip().lower() == "typesense":
+            from companies.models import Company
+            from companies.search_backends.typesense_backend import index_company
+            company = (
+                Company.objects.filter(id=company_id)
+                .prefetch_related(
+                    "phones", "emails",
+                    "contacts__phones", "contacts__emails",
+                    "notes", "tasks",
+                )
+                .first()
+            )
+            if company:
+                index_company(company)
+    except Exception:
+        pass
 
 
 def _schedule_rebuild_index_for_company(company_id):
@@ -61,6 +80,18 @@ def _schedule_rebuild_index_for_company(company_id):
 @receiver(post_save, sender=Company)
 def _company_saved_rebuild_search_index(sender, instance: Company, **kwargs):
     _schedule_rebuild_index_for_company(instance.id)
+
+
+@receiver(post_delete, sender=Company)
+def _company_deleted_remove_from_typesense(sender, instance: Company, **kwargs):
+    """При удалении компании удаляем документ из Typesense."""
+    try:
+        from django.conf import settings as s
+        if (getattr(s, "SEARCH_ENGINE_BACKEND", "postgres") or "postgres").strip().lower() == "typesense":
+            from companies.search_backends.typesense_backend import delete_company_from_index
+            delete_company_from_index(instance.id)
+    except Exception:
+        pass
 
 
 @receiver(post_save, sender=CompanyEmail)

@@ -14,6 +14,17 @@ services:
       - redisdata:/data
     command: redis-server --appendonly yes
 
+  typesense:
+    image: typesense/typesense:27.0
+    environment:
+      TYPESENSE_DATA_DIR: /data
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-xyz}
+    volumes:
+      - typesense_data:/data
+    ports:
+      - "8108:8108"
+    command: '--data-dir /data --api-key=${TYPESENSE_API_KEY:-xyz}'
+
   web:
     image: python:3.13-slim
     working_dir: /app/backend
@@ -41,9 +52,14 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
+      TYPESENSE_HOST: typesense
+      TYPESENSE_PORT: 8108
+      TYPESENSE_PROTOCOL: http
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-xyz}
     depends_on:
       - db
       - redis
+      - typesense
     command: >
       sh -c "pip install -q -r /app/backend/requirements.txt &&
              python manage.py migrate &&
@@ -109,5 +125,6 @@ volumes:
   pgdata:
   media:
   redisdata:
+  typesense_data:
 
 

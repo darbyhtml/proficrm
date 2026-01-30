@@ -104,6 +104,19 @@ def health_check(request):
                 health_status["checks"]["celery"] = "warning: no workers available"
         except Exception as e:
             health_status["checks"]["celery"] = f"warning: {str(e)}"
-    
+
+    # Опционально: проверка Typesense (не влияет на status — есть fallback на Postgres)
+    backend = getattr(settings, "SEARCH_ENGINE_BACKEND", "postgres") or "postgres"
+    if str(backend).strip().lower() == "typesense":
+        try:
+            from companies.search_backends.typesense_backend import _get_client
+            client = _get_client()
+            if client:
+                health_status["checks"]["search_typesense"] = "ok"
+            else:
+                health_status["checks"]["search_typesense"] = "unavailable"
+        except Exception as e:
+            health_status["checks"]["search_typesense"] = f"unavailable: {str(e)}"
+
     status_code = 200 if health_status["status"] == "ok" else 503
     return JsonResponse(health_status, status=status_code)

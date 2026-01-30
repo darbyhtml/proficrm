@@ -412,6 +412,16 @@ CELERY_WORKER_LOG_COLOR = False  # Отключить цветной вывод 
 # Примечание: запуск Celery от root в Docker контейнере безопасен, так как контейнер изолирован
 # Предупреждение о root user можно игнорировать в Docker окружении
 
+# Поиск компаний: "postgres" — текущий FTS+pg_trgm, "typesense" — внешний Typesense
+SEARCH_ENGINE_BACKEND = os.getenv("SEARCH_ENGINE_BACKEND", "postgres").strip().lower()
+TYPESENSE_HOST = os.getenv("TYPESENSE_HOST", "localhost")
+TYPESENSE_PORT = os.getenv("TYPESENSE_PORT", "8108")
+TYPESENSE_PROTOCOL = os.getenv("TYPESENSE_PROTOCOL", "http")
+TYPESENSE_API_KEY = os.getenv("TYPESENSE_API_KEY", "xyz")
+TYPESENSE_COLLECTION_COMPANIES = os.getenv("TYPESENSE_COLLECTION_COMPANIES", "companies")
+# При недоступности Typesense использовать поиск Postgres (по умолчанию — да)
+TYPESENSE_FALLBACK_TO_POSTGRES = os.getenv("TYPESENSE_FALLBACK_TO_POSTGRES", "1") == "1"
+
 # Celery Beat Schedule (периодические задачи)
 # Частота синхронизации квоты smtp.bz (сек). По умолчанию раз в 5 минут.
 SMTP_BZ_QUOTA_SYNC_SECONDS = float(os.getenv("SMTP_BZ_QUOTA_SYNC_SECONDS", "300") or "300")

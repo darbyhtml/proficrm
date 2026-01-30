@@ -1,0 +1,128 @@
+# План внедрения поискового движка (Typesense / Elasticsearch)
+
+Пошаговый план миграции поиска компаний с PostgreSQL (FTS + pg_trgm) на специализированный движок. Спецификация требований — `docs/INTELLIGENT_SEARCH_SPEC.md`.
+
+---
+
+## Фаза 0: Подготовка
+
+| # | Задача | Файлы / действия |
+|---|--------|-------------------|
+| 0.1 | Выбор движка | Typesense (рекомендуется) или Elasticsearch — зафиксировать в решении. |
+| 0.2 | Изучить точки входа поиска | `ui/views.py`: вызовы `CompanySearchService().apply(qs, query)` и `.explain(companies, query)`; API при наличии. |
+| 0.3 | Зафиксировать интерфейс сервиса | Текущий: `apply(qs, query)` возвращает отфильтрованный/аннотированный QuerySet; `explain(companies, query)` — словарь {company_id: список причин совпадения}. Новый backend должен сохранить эту контрактность. |
+
+---
+
+## Фаза 1: Инфраструктура и схема
+
+| # | Задача | Детали |
+|---|--------|--------|
+| 1.1 | Добавить сервис в Docker | В `docker-compose*.yml` — контейнер Typesense или Elasticsearch; переменные окружения (URL, API key). |
+| 1.2 | Настройки приложения | В `settings.py` (или env): `SEARCH_ENGINE_URL`, `SEARCH_ENGINE_API_KEY`, флаг `USE_EXTERNAL_SEARCH=False` для постепенного включения. |
+| 1.3 | Схема индекса/коллекции | Определить поля документа (см. спецификацию): `id`, `name`, `legal_name`, `contacts`, `emails`, `phones`, `inn`, `kpp`, `address`, `notes`, `updated_at`; для Typesense — `query_by`, `query_by_weights`; для Elastic — маппинг и анализаторы. |
+| 1.4 | Создание индекса при старте | Опционально: management-команда или startup-скрипт, создающий индекс/коллекцию, если его нет. |
+
+---
+
+## Фаза 2: Данные и синхронизация
+
+| # | Задача | Детали |
+|---|--------|--------|
+| 2.1 | Построение документа из Company | Функция/сервис: по экземпляру `Company` (с prefetch контактов, телефонов, email, заметок) формировать JSON для индекса. Использовать нормализацию из `search_index.fold_text`, `only_digits`; агрегация контактов/телефонов/email — по аналогии с `build_company_index_payload`. |
+| 2.2 | Полная переиндексация | Management-команда (аналог `rebuild_company_search_index`): обход компаний чанками, bulk-отправка в движок. Запуск после деплоя и при необходимости «починить» индекс. |
+| 2.3 | Синхронизация при изменениях | При создании/обновлении/удалении компании вызывать API движка (upsert/delete по id). Точки: `Company.save`, сигналы при изменении связанных контактов/телефонов/email/заметок — либо один хук после сохранения компании + пересборка документа. Рассмотреть очередь (Celery) для устойчивости. |
+| 2.4 | Обработка ошибок | При недоступности движка: fallback на текущий PostgreSQL-поиск или возврат пустой выдачи + логирование. |
+
+---
+
+## Фаза 3: Backend поиска
+
+| # | Задача | Детали |
+|---|--------|--------|
+| 3.1 | Абстракция backend | Ввести интерфейс (например, протокол или базовый класс): `search(qs, query) -> (filtered_qs или list of ids)`, `explain(companies, query) -> dict`. Реализации: `PostgresSearchBackend` (текущая логика из `CompanySearchService`), `TypesenseSearchBackend` / `ElasticSearchBackend`. |
+| 3.2 | Реализация поиска по движку | Вызов API движка с параметрами: строка запроса, веса полей, highlight, лимит. Преобразование ответа: список id компаний + структуры для highlight/explain. |
+| 3.3 | Сведение с QuerySet и правами | По списку id из поиска выполнить `Company.objects.filter(id__in=ids)` с сохранением порядка; применить текущие фильтры/права доступа (как в `_apply_company_filters`). Либо передавать в поиск фильтр по доступным компаниям (если движок поддерживает). |
+| 3.4 | Формат explain/highlight | Привести ответ движка (highlight по полям) к формату, ожидаемому UI: строки вида «Название: …», «Контакт: …», «Телефон: …» (как в текущем `CompanySearchService.explain`). |
+
+---
+
+## Фаза 4: Переключение и тесты
+
+| # | Задача | Детали |
+|---|--------|--------|
+| 4.1 | Выбор backend по настройке | В коде вызова поиска: если `USE_EXTERNAL_SEARCH` и движок доступен — использовать внешний backend, иначе — текущий `CompanySearchService` (Postgres). |
+| 4.2 | Обновить места вызова | `ui/views.py` и др.: использовать единую точку входа (фасад), которая внутри выбирает backend. Не менять сигнатуры страниц/API. |
+| 4.3 | Тесты | Расширить `companies/tests_search.py`: при наличии настроенного внешнего движка — тесты для нового backend (те же сценарии: по ИНН, по имени, по контакту, опечатки); иначе — skip. Сохранить тесты для Postgres-backend. |
+| 4.4 | Ручная проверка | Проверить сценарии из спецификации: «янтарь», «Иванов 8926», точный ИНН, короткий запрос, подсветка и объяснение в UI. |
+
+---
+
+## Фаза 5: Настройка и мониторинг
+
+| # | Задача | Детали |
+|---|--------|--------|
+| 5.1 | Стоп-слова и синонимы | Загрузить стоп-слова (ООО, ИП, …), синонимы (ул → улица, транслитерация при необходимости). |
+| 5.2 | Пороги и лимиты | Минимальная длина запроса, max_typos / fuzziness, лимит результатов (например, 5000 как сейчас). |
+| 5.3 | Мониторинг | Логирование ошибок движка, время ответа; при необходимости — метрики (например, количество запросов к внешнему поиску). |
+| 5.4 | Документация | Обновить `SEARCH_BEST_PRACTICES.md`: описать два режима (Postgres / внешний движок), конфигурацию, команду переиндексации. |
+
+---
+
+## Откат
+
+- Отключить Typesense: задать `SEARCH_ENGINE_BACKEND=postgres` (или не задавать `typesense`). Поиск снова идёт через PostgreSQL без изменения кода вызовов.
+- При проблемах с индексом — переиндексация через `python manage.py index_companies_typesense` после исправления данных или конфигурации движка.
+
+---
+
+## Зависимости (Python)
+
+- Typesense: `typesense`
+- Elasticsearch: `elasticsearch`
+- Указать в `requirements*.txt` и использовать только при включённом внешнем поиске (опционально).
+
+---
+
+## Реализовано (первая итерация)
+
+- **Docker:** сервис `typesense` в `docker-compose.yml`, переменные TYPESENSE_* в web.
+- **Настройки:** `SEARCH_ENGINE_BACKEND`, `TYPESENSE_HOST/PORT/PROTOCOL/API_KEY`, `TYPESENSE_COLLECTION_COMPANIES` в `settings.py`.
+- **Backend:** `companies/search_backends/typesense_backend.py` — схема коллекции, `build_company_document()`, `TypesenseSearchBackend.apply()` / `.explain()`, `index_company()`, `delete_company_from_index()`.
+- **Фасад:** `get_company_search_backend()` в `search_service.py`; во views используется фасад вместо прямого `CompanySearchService()`.
+- **Синхронизация:** в `_rebuild_index_for_company` (signals) при `SEARCH_ENGINE_BACKEND=typesense` вызывается `index_company()`; при удалении компании — `delete_company_from_index()`.
+- **Команда:** `python manage.py index_companies_typesense` — полная переиндексация (или `--company-id=UUID` для одной компании).
+- **Схема:** для полей name, legal_name, contacts, address, notes заданы `locale: "ru"` и `stem: true` (русский стемминг).
+- **Стоп-слова:** набор `ru_org` (ООО, ИП, ЗАО, федеральное и т.д.) создаётся при `ensure_collection`; при поиске передаётся параметр `stopwords: ru_org`. При необходимости обновить список: `python manage.py sync_typesense_stopwords`.
+- **Fallback на Postgres:** при недоступности Typesense (клиент не создан или ошибка поиска) по умолчанию используется поиск через Postgres (`TYPESENSE_FALLBACK_TO_POSTGRES=1`). Чтобы возвращать пустую выдачу, задать `TYPESENSE_FALLBACK_TO_POSTGRES=0`.
+- **REST API:** список компаний (`/api/companies/`) при параметре `?search=...` использует тот же backend (Typesense или Postgres) — фильтр `CompanySearchFilterBackend` в `companies/api.py`.
+- **Health:** при `SEARCH_ENGINE_BACKEND=typesense` в ответе `/health/` добавляется `checks.search_typesense` (`ok` или `unavailable`).
+- **Синонимы:** стоп-слова реализованы (набор `ru_org`). Синонимы (ул→улица, пр→проспект и т.д.) загружаются через `python manage.py sync_typesense_synonyms` (использует `ensure_synonyms()` в backend).
+
+**Переменные окружения (Typesense):**
+
+| Переменная | По умолчанию | Описание |
+|------------|--------------|----------|
+| `SEARCH_ENGINE_BACKEND` | `postgres` | `postgres` — FTS+pg_trgm, `typesense` — Typesense |
+| `TYPESENSE_HOST` | `localhost` | Хост Typesense |
+| `TYPESENSE_PORT` | `8108` | Порт |
+| `TYPESENSE_PROTOCOL` | `http` | `http` или `https` |
+| `TYPESENSE_API_KEY` | `xyz` | API-ключ (в production задать свой) |
+| `TYPESENSE_COLLECTION_COMPANIES` | `companies` | Имя коллекции |
+| `TYPESENSE_FALLBACK_TO_POSTGRES` | `1` | При недоступности Typesense искать через Postgres |
+
+Для включения Typesense: задать `SEARCH_ENGINE_BACKEND=typesense` и `TYPESENSE_API_KEY`, запустить `index_companies_typesense`, затем перезапустить приложение.
+
+**Порядок деплоя с Typesense:** (1) поднять контейнер Typesense (или отдельный хост); (2) задать в окружении `SEARCH_ENGINE_BACKEND=typesense`, `TYPESENSE_*`; (3) после миграций выполнить `python manage.py index_companies_typesense`; (4) при необходимости — `sync_typesense_stopwords`, `sync_typesense_synonyms`. При падении Typesense поиск автоматически идёт через Postgres (если `TYPESENSE_FALLBACK_TO_POSTGRES=1`). Синтаксис `filter_by` для списка id (`id:[uuid1,uuid2,...]`) корректен для Typesense (OR по значениям строкового поля).
+
+---
+
+## Краткий чеклист перед релизом
+
+- [ ] Движок поднимается из Docker, индекс создаётся.
+- [ ] Полная переиндексация выполняется без ошибок.
+- [ ] При сохранении компании документ обновляется в индексе (или задача в очередь ставится).
+- [ ] Поиск по строке возвращает релевантные компании в ожидаемом порядке.
+- [ ] Подсветка и «объяснение» отображаются в UI.
+- [ ] При недоступности движка срабатывает fallback на Postgres или явная ошибка.
+- [ ] Тесты проходят; документация обновлена.

@@ -2072,8 +2072,8 @@ def company_list(request: HttpRequest) -> HttpResponse:
     f = _apply_company_filters(qs=qs, params=filter_params_wo_search, default_responsible_id=None)
     qs = f["qs"]
     if q:
-        from companies.search_service import CompanySearchService
-        qs = CompanySearchService().apply(qs=qs, query=q)
+        from companies.search_service import get_company_search_backend
+        qs = get_company_search_backend().apply(qs=qs, query=q)
 
     # Sorting (asc/desc) — как в задачах
     sort_raw = (request.GET.get("sort") or "").strip()
@@ -2132,8 +2132,8 @@ def company_list(request: HttpRequest) -> HttpResponse:
     # match_reasons + подсветка (детерминированно, без JS-regex по innerHTML)
     if q:
         try:
-            from companies.search_service import CompanySearchService
-            explain_map = CompanySearchService().explain(companies=list(page.object_list), query=q)
+            from companies.search_service import get_company_search_backend
+            explain_map = get_company_search_backend().explain(companies=list(page.object_list), query=q)
             for company in page.object_list:
                 ex = explain_map.get(company.id)
                 if not ex:
@@ -2292,8 +2292,8 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
     f = _apply_company_filters(qs=qs, params=filter_params_wo_search, default_responsible_id=None)
     qs = f["qs"]
     if q:
-        from companies.search_service import CompanySearchService
-        qs = CompanySearchService().apply(qs=qs, query=q)
+        from companies.search_service import get_company_search_backend
+        qs = get_company_search_backend().apply(qs=qs, query=q)
     
     # Sorting
     sort_raw = (request.GET.get("sort") or "").strip()
@@ -2344,8 +2344,8 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
     # match_reasons + подсветка (детерминированно)
     if q:
         try:
-            from companies.search_service import CompanySearchService
-            explain_map = CompanySearchService().explain(companies=list(page.object_list), query=q)
+            from companies.search_service import get_company_search_backend
+            explain_map = get_company_search_backend().explain(companies=list(page.object_list), query=q)
             for company in page.object_list:
                 ex = explain_map.get(company.id)
                 if not ex:
@@ -3096,9 +3096,9 @@ def company_autocomplete(request: HttpRequest) -> JsonResponse:
     # Используем ту же логику поиска, что и в списке компаний (SearchService),
     # чтобы поведение автодополнения и таблицы было одинаковым.
     if not company_id_raw:
-        from companies.search_service import CompanySearchService
+        from companies.search_service import get_company_search_backend
         base_qs = Company.objects.all()
-        qs = CompanySearchService().apply(qs=base_qs, query=q)
+        qs = get_company_search_backend().apply(qs=base_qs, query=q)
         if exclude_id:
             qs = qs.exclude(id=exclude_id)
         qs = (

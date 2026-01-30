@@ -2,7 +2,12 @@
 
 ## Вариант 1: Использование готового скрипта деплоя (рекомендуется)
 
-Если у вас настроен автоматический деплой через скрипты:
+| Скрипт | Назначение |
+|--------|------------|
+| `./deploy_production.sh` | Прод (docker-compose.prod.yml, .env) |
+| `./deploy_staging.sh` | Staging crm-staging.groupprofi.ru (docker-compose.staging.yml, .env.staging) |
+| `./deploy_crm_fixes.sh` | Быстрый деплой исправлений (docker-compose.yml) |
+| `./deploy_security.sh` | Безопасность на VDS (docker-compose.yml + docker-compose.vds.yml) |
 
 ### Для Production (docker-compose.prod.yml):
 ```bash
@@ -10,10 +15,23 @@ cd /path/to/project
 ./deploy_production.sh
 ```
 
+### Для Staging (crm-staging.groupprofi.ru):
+```bash
+cd /path/to/project
+chmod +x deploy_staging.sh   # один раз, если Permission denied
+./deploy_staging.sh
+```
+
 ### Для быстрого деплоя исправлений:
 ```bash
 cd /path/to/project
 ./deploy_crm_fixes.sh
+```
+
+### Для настройки безопасности на VDS (docker-compose.vds.yml):
+```bash
+cd /path/to/project
+./deploy_security.sh
 ```
 
 ---
@@ -83,6 +101,21 @@ sudo systemctl restart crm  # или имя вашего сервиса
 sudo supervisorctl restart crm  # или имя вашего процесса
 ```
 
+### Шаг 5.1: Опционально — Typesense (поиск компаний)
+
+Если включён поиск через Typesense (`SEARCH_ENGINE_BACKEND=typesense` в окружении):
+
+1. Убедитесь, что контейнер Typesense запущен (в `docker-compose.yml` есть сервис `typesense`).
+2. После миграций выполните полную переиндексацию:
+   ```bash
+   docker compose exec web python manage.py index_companies_typesense
+   ```
+3. При необходимости обновите стоп-слова:
+   ```bash
+   docker compose exec web python manage.py sync_typesense_stopwords
+   ```
+4. Проверка в `/health/`: при `SEARCH_ENGINE_BACKEND=typesense` в ответе будет `checks.search_typesense` (`ok` или `unavailable`). При недоступности Typesense поиск автоматически идёт через Postgres (если `TYPESENSE_FALLBACK_TO_POSTGRES=1`).
+
 ### Шаг 6: Очистите кэш (опционально, но рекомендуется)
 
 **Если используете Docker:**
@@ -99,6 +132,8 @@ python manage.py shell -c "from django.core.cache import cache; cache.clear()"
 
 ## Вариант 3: Для VDS с docker-compose.vds.yml
 
+Можно использовать скрипт `./deploy_security.sh` (обновление кода, миграции, collectstatic, проверка DEBUG/SECRET_KEY, перезапуск) или вручную:
+
 ```bash
 cd /path/to/project
 
@@ -114,6 +149,66 @@ docker compose -f docker-compose.yml -f docker-compose.vds.yml exec web python m
 # 4. Перезапуск
 docker compose -f docker-compose.yml -f docker-compose.vds.yml restart web
 ```
+
+---
+
+## Staging (crm-staging.groupprofi.ru)
+
+Staging поднят на **отдельном поддомене** `crm-staging.groupprofi.ru`, чтобы не затрагивать прод `crm.groupprofi.ru`. Сервер (IP **5.181.254.172**) общий с продом: прод занимает порты 80/443, staging — **8080** (контейнер nginx слушает `127.0.0.1:8080`).
+
+### Подготовка (один раз)
+
+1. **DNS:** A-запись `crm-staging.groupprofi.ru` → **5.181.254.172** (тот же IP, что и прод).
+
+2. **Файл окружения:** скопируйте шаблон и задайте секреты:
+   ```bash
+   cp env.staging.template .env.staging
+   # Отредактируйте .env.staging: DJANGO_SECRET_KEY, POSTGRES_PASSWORD, MAILER_FERNET_KEY и т.д.
+   ```
+
+3. **Запуск:**
+   ```bash
+   docker compose -f docker-compose.staging.yml up -d --build
+   ```
+   Или скрипт: `./deploy_staging.sh`
+
+4. **Хост-Nginx (staging и прод на одном сервере):** прод слушает 80/443, staging-контейнер — только `127.0.0.1:8080`. Добавьте на хосте в конфиг Nginx блок для staging: скопируйте содержимое `nginx/snippets/staging-proxy.conf` в конфиг или в секцию `http { }` добавьте `include /path/to/project/nginx/snippets/staging-proxy.conf;`, затем `nginx -t` и `systemctl reload nginx`. После выдачи HTTPS для staging — добавьте `listen 443 ssl` и редирект с 80 на 443 для `crm-staging.groupprofi.ru`.
+
+5. **После первого запуска (миграции уже в command):** при необходимости включите Typesense и переиндексируйте:
+   ```bash
+   # В .env.staging: SEARCH_ENGINE_BACKEND=typesense (и TYPESENSE_*)
+   docker compose -f docker-compose.staging.yml exec web python manage.py index_companies_typesense
+   docker compose -f docker-compose.staging.yml exec web python manage.py sync_typesense_stopwords
+   docker compose -f docker-compose.staging.yml exec web python manage.py sync_typesense_synonyms
+   ```
+
+6. **HTTPS (опционально):** на сервере с staging установите certbot и получите сертификат:
+   ```bash
+   certbot certonly --nginx -d crm-staging.groupprofi.ru
+   ```
+   Затем добавьте в `nginx/staging.conf` блок `server { listen 443 ssl; server_name crm-staging.groupprofi.ru; ... }` с путями к сертификату и редирект с 80 на 443 для этого host. В `.env.staging` при HTTPS можно включить `DJANGO_SECURE_SSL_REDIRECT=1` и т.д.
+
+### Обновление staging
+
+Рекомендуется скрипт (миграции и collectstatic включены):
+
+```bash
+cd /path/to/project
+chmod +x deploy_staging.sh   # один раз, если ещё не исполняемый
+./deploy_staging.sh
+```
+
+Вручную:
+
+```bash
+cd /path/to/project
+git pull origin main
+docker compose -f docker-compose.staging.yml build web
+docker compose -f docker-compose.staging.yml up -d
+# Миграции выполняются при старте web в command; при необходимости: exec web python manage.py migrate
+```
+
+На хосте для прокси staging можно использовать готовый сниппет: скопируйте `nginx/snippets/staging-proxy.conf` в конфиг Nginx или добавьте `include /path/to/project/nginx/snippets/staging-proxy.conf;`.
 
 ---
 
