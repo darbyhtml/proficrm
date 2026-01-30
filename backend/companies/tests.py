@@ -169,6 +169,7 @@ class CompanyAPITestCase(TestCase):
         """Тест нормализации телефона при создании через API"""
         data = {
             "name": "Новая компания",
+            "inn": "1234567890",
             "phone": "8 (999) 123-45-69"
         }
         # Используем URL с trailing slash
@@ -244,6 +245,7 @@ class CompanyAPITestCase(TestCase):
         """Тест нормализации расписания при создании через API"""
         data = {
             "name": "Компания с расписанием",
+            "inn": "1234567890",
             "work_schedule": "пн-пт 9.00-18.00"
         }
         # Используем URL с trailing slash

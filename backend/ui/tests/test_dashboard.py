@@ -398,7 +398,7 @@ class DashboardViewTestCase(TestCase):
         self.assertEqual(tasks_new[1].title, "Старая новая задача")
 
     def test_overdue_limit_20_tasks(self):
-        """Тест: просроченные задачи ограничены 20 элементами в контексте, но на dashboard показывается только 5."""
+        """Тест: просроченные задачи ограничены 20 элементами в контексте, на dashboard показывается только 3."""
         # Создаём 25 просроченных задач (не NEW, чтобы они попали в overdue)
         overdue_time = self.local_now - timedelta(days=1)
         for i in range(25):
@@ -413,13 +413,13 @@ class DashboardViewTestCase(TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         context = response.context
-        # На dashboard показывается только 5 задач
-        self.assertEqual(len(context["overdue"]), 5)
+        # На dashboard показывается только 3 задачи (лимит в views)
+        self.assertEqual(len(context["overdue"]), 3)
         # Но счетчик показывает правильное количество (25)
         self.assertEqual(context["overdue_count"], 25)
 
     def test_tasks_week_limit_50_tasks(self):
-        """Тест: задачи на неделю ограничены 50 элементами в контексте, но на dashboard показывается только 5."""
+        """Тест: задачи на неделю ограничены 50 элементами в контексте, на dashboard показывается только 3."""
         # Создаём 55 задач на неделю (не NEW, чтобы они попали в tasks_week)
         week_task_time = self.tomorrow_start + timedelta(days=3)
         for i in range(55):
@@ -434,13 +434,13 @@ class DashboardViewTestCase(TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         context = response.context
-        # На dashboard показывается только 5 задач
-        self.assertEqual(len(context["tasks_week"]), 5)
+        # На dashboard показывается только 3 задачи (лимит в views)
+        self.assertEqual(len(context["tasks_week"]), 3)
         # Но счетчик показывает правильное количество (55)
         self.assertEqual(context["tasks_week_count"], 55)
 
     def test_tasks_new_limit_20_tasks(self):
-        """Тест: новые задачи ограничены 20 элементами в контексте, но на dashboard показывается только 5."""
+        """Тест: новые задачи ограничены 20 элементами в контексте, на dashboard показывается только 3."""
         # Создаём 25 новых задач
         for i in range(25):
             Task.objects.create(
@@ -453,8 +453,8 @@ class DashboardViewTestCase(TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         context = response.context
-        # На dashboard показывается только 5 задач
-        self.assertEqual(len(context["tasks_new"]), 5)
+        # На dashboard показывается только 3 задачи (лимит в views)
+        self.assertEqual(len(context["tasks_new"]), 3)
         # Но счетчик показывает правильное количество (25)
         self.assertEqual(context["tasks_new_count"], 25)
 
@@ -500,7 +500,7 @@ class DashboardViewTestCase(TestCase):
         self.assertNotIn("Компания без договора", contract_companies)
 
     def test_tasks_limited_to_5_on_dashboard(self):
-        """Тест: на dashboard отображается максимум 5 задач в каждом блоке."""
+        """Тест: на dashboard отображается максимум 3 задач в каждом блоке (лимит в views)."""
         # Создаём 10 задач на сегодня
         for i in range(10):
             Task.objects.create(
@@ -514,8 +514,8 @@ class DashboardViewTestCase(TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         context = response.context
-        # На dashboard должно быть максимум 5 задач
-        self.assertLessEqual(len(context["tasks_today"]), 5)
+        # На dashboard показывается только 3 (лимит в views)
+        self.assertLessEqual(len(context["tasks_today"]), 3)
         # Но общее количество должно быть 10
         self.assertEqual(context["tasks_today_count"], 10)
 

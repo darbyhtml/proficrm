@@ -26,7 +26,7 @@ class CompanyHeadCompanyTests(TestCase):
         self.client.force_login(self.user)
 
         # Компания менеджера, которую он редактирует (филиал клиента)
-        self.branch_card = Company.objects.create(name="Филиал клиента", responsible=self.user)
+        self.branch_card = Company.objects.create(name="Филиал клиента", inn="1234567890", responsible=self.user)
 
         # Потенциальная "головная" карточка (может быть у другого ответственного)
         self.other_user = User.objects.create_user(
@@ -34,7 +34,7 @@ class CompanyHeadCompanyTests(TestCase):
             password="pass12345",
             role=User.Role.MANAGER,
         )
-        self.head_card = Company.objects.create(name="Головная организация клиента", responsible=self.other_user)
+        self.head_card = Company.objects.create(name="Головная организация клиента", inn="0987654321", responsible=self.other_user)
 
     def _company_edit_post_data(self, *, company: Company, head_company_id: str | None):
         """
@@ -82,7 +82,7 @@ class CompanyHeadCompanyTests(TestCase):
         Если у компании уже есть филиал, нельзя выбрать этот филиал как "головную" (цикл).
         """
         # Делаем организацию "головной", а текущую branch_card — её филиалом
-        org_head = Company.objects.create(name="Организация", responsible=self.user)
+        org_head = Company.objects.create(name="Организация", inn="1111111111", responsible=self.user)
         self.branch_card.head_company = org_head
         self.branch_card.save()
 

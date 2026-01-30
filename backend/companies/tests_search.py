@@ -66,20 +66,20 @@ class SearchServicePostgresTests(TestCase):
         self.assertNotIn(c2.id, ids)  # AND: 7701 обязателен
 
     def test_search_mixed_contact_phone(self):
-        # Совпадение по ФИО + цифрам: используем поля компании, чтобы fallback_match
-        # сработал стабильно (индекс/триггер в тест-БД могут отличаться).
+        # Совпадение по ФИО + цифрам: используем поля компании для fallback_match.
+        # Телефон при save() нормализуется в +79261234567, поэтому ищем по "9261" (strong digit).
         c = Company.objects.create(
             name="ООО Тест",
             inn="1234567890",
             status=self.status,
             contact_name="Иванов Иван",
-            phone="89261234567",
+            phone="8 (926) 123-45-67",
         )
         rebuild_company_search_index(c.id)
 
-        qs = CompanySearchService().apply(qs=Company.objects.all(), query="иванов 8926")
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="иванов 9261")
         ids = list(qs.values_list("id", flat=True)[:10])
-        self.assertIn(c.id, ids, "Запрос «иванов 8926» должен найти компанию по contact_name и phone.")
+        self.assertIn(c.id, ids, "Запрос «иванов 9261» должен найти компанию по contact_name и phone.")
         self.assertEqual(ids[0], c.id)
 
     def test_explain_returns_reasons(self):
