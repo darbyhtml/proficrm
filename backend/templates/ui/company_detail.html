@@ -1,5 +1,6 @@
 {% extends "ui/base.html" %}
 {% load ui_extras %}
+{% load l10n %}
 {% block title %}{{ company.name }} — CRM ПРОФИ{% endblock %}
 
 {% block content %}
@@ -1558,7 +1559,7 @@
               </div>
               <div id="contractAmountField" style="display: none;">
                 <label class="block text-xs text-brand-dark/70 mb-1">Сумма договора</label>
-                <input type="number" name="contract_amount" step="0.01" min="0" class="w-full rounded-lg border px-3 py-2" value="{% if company.contract_amount %}{{ company.contract_amount }}{% endif %}" placeholder="0.00">
+                <input type="number" name="contract_amount" step="0.01" min="0" class="w-full rounded-lg border px-3 py-2" value="{% if company.contract_amount is not None %}{% unlocalize %}{{ company.contract_amount|floatformat:2 }}{% endunlocalize %}{% endif %}" placeholder="0.00">
               </div>
               <div class="md:col-span-2 flex gap-2">
                 <button class="btn btn-primary" type="submit">Сохранить</button>
