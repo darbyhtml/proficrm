@@ -15,6 +15,16 @@
       {{ form.name }}
     </div>
 
+    {% if form.is_annual %}
+      <div class="mt-3">
+        <label class="flex items-center gap-2">
+          {{ form.is_annual }}
+          <span class="text-sm text-brand-dark/80">Годовой договор</span>
+        </label>
+        <div class="text-xs text-brand-dark/60 mt-1">Если отмечено, договор действует на определенную сумму, а не до даты. Для годовых договоров поле 'Действует до' не отображается.</div>
+      </div>
+    {% endif %}
+
     {% if form.warning_days %}
       <div class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
         <div>

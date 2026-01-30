@@ -935,9 +935,11 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     tasks_week_list = tasks_week_list[:3]
     tasks_new_list = tasks_new_all[:3]
 
-    # Договоры, которые подходят по сроку (<= 30 дней) — только для ответственного
+    # Договоры: для обычных - по сроку (<= 30 дней), для годовых - по сумме
+    # Обычные договоры по сроку
     contracts_soon_qs = (
         Company.objects.filter(responsible=user, contract_until__isnull=False)
+        .exclude(contract_type__is_annual=True)  # Исключаем годовые
         .filter(contract_until__gte=today_date, contract_until__lte=contract_until_30)
         .select_related("contract_type")
         .only("id", "name", "contract_type", "contract_until")
@@ -961,7 +963,28 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             level = "danger" if (days_left is not None and days_left < 14) else "warn" if days_left is not None else None
         
         if level:  # Добавляем только если есть предупреждение
-            contracts_soon.append({"company": c, "days_left": days_left, "level": level})
+            contracts_soon.append({"company": c, "days_left": days_left, "level": level, "is_annual": False})
+    
+    # Годовые договоры по сумме
+    annual_contracts_qs = (
+        Company.objects.filter(responsible=user, contract_type__is_annual=True, contract_amount__isnull=False)
+        .select_related("contract_type")
+        .only("id", "name", "contract_type", "contract_amount")
+        .order_by("contract_amount", "name")[:50]
+    )
+    for c in annual_contracts_qs:
+        amount = c.contract_amount
+        if amount is not None:
+            # Меньше 25 000 - красный, меньше 70 000 - оранжевый
+            if amount < 25000:
+                level = "danger"
+            elif amount < 70000:
+                level = "warn"
+            else:
+                level = None  # Не показываем, если больше 70 000
+            
+            if level:  # Добавляем только если есть предупреждение
+                contracts_soon.append({"company": c, "amount": amount, "level": level, "is_annual": True})
 
     # Сопоставляем задачи без типа с TaskType по точному совпадению названия
     # Загружаем все TaskType для сопоставления
@@ -1129,9 +1152,11 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
     tasks_week_list = tasks_week_list[:50]
     tasks_new_list = tasks_new_all[:20]
 
-    # Договоры
+    # Договоры: для обычных - по сроку (<= 30 дней), для годовых - по сумме
+    # Обычные договоры по сроку
     contracts_soon_qs = (
         Company.objects.filter(responsible=user, contract_until__isnull=False)
+        .exclude(contract_type__is_annual=True)  # Исключаем годовые
         .filter(contract_until__gte=today_date, contract_until__lte=contract_until_30)
         .select_related("contract_type")
         .only("id", "name", "contract_type", "contract_until")
@@ -1159,6 +1184,39 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
                 "company_id": str(c.id),
                 "company_name": c.name,
                 "contract_type": c.contract_type.name if c.contract_type else "",
+                "is_annual": False,
+                "days_left": days_left,
+                "level": level,
+            })
+    
+    # Годовые договоры по сумме
+    annual_contracts_qs = (
+        Company.objects.filter(responsible=user, contract_type__is_annual=True, contract_amount__isnull=False)
+        .select_related("contract_type")
+        .only("id", "name", "contract_type", "contract_amount")
+        .order_by("contract_amount", "name")[:50]
+    )
+    for c in annual_contracts_qs:
+        amount = c.contract_amount
+        if amount is not None:
+            # Меньше 25 000 - красный, меньше 70 000 - оранжевый
+            if amount < 25000:
+                level = "danger"
+            elif amount < 70000:
+                level = "warn"
+            else:
+                level = None  # Не показываем, если больше 70 000
+            
+            if level:  # Добавляем только если есть предупреждение
+                contracts_soon.append({
+                    "company_id": str(c.id),
+                    "company_name": c.name,
+                    "contract_type": c.contract_type.name if c.contract_type else "",
+                    "is_annual": True,
+                    "amount": float(amount),
+                    "level": level,
+                })
+                "is_annual": False,
                 "contract_until": c.contract_until.isoformat() if c.contract_until else None,
                 "days_left": days_left,
                 "level": level,
@@ -3375,6 +3433,9 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     # Ближайшие задачи для modern layout (2-3 по дедлайну, исключая выполненные)
     upcoming_tasks = list(tasks[:3])  # Уже отсортированы: просроченные -> ближайшие
     
+    from companies.models import ContractType
+    contract_types_list = ContractType.objects.all().order_by("order", "name")
+    
     return render(
         request,
         "ui/company_detail.html",
@@ -3400,6 +3461,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "delete_req": delete_req,
             "quick_form": quick_form,
             "contract_form": contract_form,
+            "contract_types": contract_types_list,  # Для JavaScript определения годовых договоров
             "transfer_targets": transfer_targets,
             "contract_alert": contract_alert,
             "contract_days_left": contract_days_left,
@@ -3681,6 +3743,17 @@ def company_contract_update(request: HttpRequest, company_id) -> HttpResponse:
         messages.error(request, "Проверьте поля договора.")
         return redirect("company_detail", company_id=company.id)
 
+    # Если тип договора изменился на негодовой, очищаем сумму
+    # Если тип договора изменился на годовой, очищаем дату окончания
+    if form.cleaned_data.get("contract_type"):
+        contract_type = form.cleaned_data["contract_type"]
+        if contract_type.is_annual:
+            # Для годовых договоров очищаем дату окончания
+            company.contract_until = None
+        else:
+            # Для негодовых договоров очищаем сумму
+            company.contract_amount = None
+    
     form.save()
     messages.success(request, "Данные договора обновлены.")
     log_event(
@@ -5112,6 +5185,13 @@ def company_inline_update(request: HttpRequest, company_id) -> HttpResponse:
     # Для внешних ключей и спец-полей приводим значение к строке для JSON.
     if field == "region":
         updated_value = company.region.name if company.region else ""
+    elif field == "contract_amount":
+        # Для суммы форматируем как число с двумя знаками после запятой
+        amount = getattr(company, field, None)
+        if amount is not None:
+            updated_value = f"{float(amount):.2f}"
+        else:
+            updated_value = ""
     else:
         updated_value = getattr(company, field, "")
 

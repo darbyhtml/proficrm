@@ -76,9 +76,18 @@
           {% for ct in contract_types %}
             <li class="rounded-lg border px-3 py-2 flex items-center justify-between gap-2" data-dict-item data-dict-type="contract-type" data-dict-id="{{ ct.id }}" data-dict-name="{{ ct.name }}">
               <div class="flex-1">
-                <div class="font-medium">{{ ct.name }}</div>
+                <div class="font-medium">
+                  {{ ct.name }}
+                  {% if ct.is_annual %}
+                    <span class="badge badge-sm badge-teal ml-1">Годовой</span>
+                  {% endif %}
+                </div>
                 <div class="text-xs text-brand-dark/60 mt-1">
-                  Желтое: за {{ ct.warning_days }} дн., Красное: за {{ ct.danger_days }} дн.
+                  {% if ct.is_annual %}
+                    Договор по сумме
+                  {% else %}
+                    Желтое: за {{ ct.warning_days }} дн., Красное: за {{ ct.danger_days }} дн.
+                  {% endif %}
                 </div>
               </div>
               <div class="flex items-center gap-1">

@@ -349,26 +349,50 @@
           <ul class="space-y-2">
             {% for item in contracts_soon %}
               <li class="group">
-                <a href="/companies/{{ item.company.id }}/" class="block rounded-lg border p-3 transition-all {% if item.level == 'danger' %}task-overdue border-red-400{% else %}bg-brand-orange/10 border-brand-orange/40{% endif %} hover:border-brand-teal/50 hover:bg-brand-soft/20">
+                <div class="block rounded-lg border p-3 transition-all {% if item.level == 'danger' %}task-overdue border-red-400{% else %}bg-brand-orange/10 border-brand-orange/40{% endif %} hover:border-brand-teal/50 hover:bg-brand-soft/20">
                   <div class="flex items-start justify-between gap-3">
                     <div class="flex-1">
-                      <div class="text-sm font-medium">
+                      <a href="/companies/{{ item.company.id }}/" class="text-sm font-medium hover:underline">
                         {{ item.company.name }}
-                      </div>
+                      </a>
                       <div class="text-xs text-brand-dark/70 mt-1">
                         {% if item.company.contract_type %}{{ item.company.contract_type.name }}{% else %}—{% endif %}
-                        {% if item.company.contract_until %} · до <span class="{% if item.level == 'danger' %}text-red-700 font-medium{% endif %}">{{ item.company.contract_until|date:"d.m.Y" }}</span>{% endif %}
+                        {% if item.is_annual %}
+                          {% if item.amount %}
+                            · сумма: <span class="{% if item.level == 'danger' %}text-red-700 font-medium{% elif item.level == 'warn' %}text-brand-orange font-medium{% endif %}" data-contract-amount-display>{{ item.amount|floatformat:2|default:"0.00" }} ₽</span>
+                          {% else %}
+                            · сумма не указана
+                          {% endif %}
+                        {% else %}
+                          {% if item.company.contract_until %} · до <span class="{% if item.level == 'danger' %}text-red-700 font-medium{% endif %}">{{ item.company.contract_until|date:"d.m.Y" }}</span>{% endif %}
+                        {% endif %}
                       </div>
                     </div>
-                    <span class="badge {% if item.level == 'danger' %}badge-danger{% else %}badge-warn{% endif %} flex-shrink-0">
-                      {% if item.days_left is not None %}
-                        {{ item.days_left }} дн.
+                    <div class="flex items-center gap-2">
+                      {% if item.is_annual %}
+                        <div class="inline-field-wrapper" data-company-id="{{ item.company.id }}" data-inline-field="contract_amount" data-inline-original="{% if item.amount %}{{ item.amount }}{% endif %}" data-inline-display-kind="amount">
+                          <div class="inline-field-display">
+                            <input type="number" 
+                                   step="0.01" 
+                                   class="text-xs w-24 rounded border px-2 py-1 {% if item.level == 'danger' %}border-red-400 bg-red-50{% elif item.level == 'warn' %}border-brand-orange bg-brand-orange/20{% else %}border-brand-dark/20{% endif %}" 
+                                   value="{% if item.amount %}{{ item.amount }}{% endif %}" 
+                                   data-inline-input
+                                   placeholder="Сумма">
+                            <button type="button" class="ml-1 text-xs text-brand-teal hover:text-brand-teal/80" data-inline-save>✓</button>
+                          </div>
+                        </div>
                       {% else %}
-                        —
+                        <span class="badge {% if item.level == 'danger' %}badge-danger{% else %}badge-warn{% endif %} flex-shrink-0">
+                          {% if item.days_left is not None %}
+                            {{ item.days_left }} дн.
+                          {% else %}
+                            —
+                          {% endif %}
+                        </span>
                       {% endif %}
-                    </span>
+                    </div>
                   </div>
-                </a>
+                </div>
               </li>
             {% endfor %}
           </ul>
@@ -1270,6 +1294,74 @@
           });
         });
       }
+    })();
+  </script>
+
+  {# Инлайн-редактирование суммы договора на рабочем столе #}
+  <script>
+    (function() {
+      const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
+      if (!csrftoken) return;
+
+      // Сохранение суммы договора
+      document.addEventListener('click', function(e) {
+        const saveBtn = e.target.closest('[data-inline-save]');
+        if (!saveBtn) return;
+        const wrapper = saveBtn.closest('.inline-field-wrapper');
+        if (!wrapper) return;
+
+        const field = (wrapper.dataset.inlineField || '').trim();
+        const companyId = (wrapper.dataset.companyId || '').trim();
+        const input = wrapper.querySelector('[data-inline-input]');
+        if (!field || !companyId || !input) return;
+
+        const value = (input.value !== undefined ? input.value : (input.textContent || '')).toString();
+
+        const formData = new FormData();
+        formData.append('field', field);
+        formData.append('value', value);
+        formData.append('csrfmiddlewaretoken', csrftoken);
+
+        fetch(`/companies/${companyId}/inline/`, {
+          method: 'POST',
+          body: formData,
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(r => r.json().then(data => ({ ok: r.ok, status: r.status, data })))
+        .then(({ ok, data }) => {
+          if (!ok || !data.ok) {
+            const msg = (data && (data.error || (data.errors && data.errors[field] && data.errors[field][0]))) || 'Ошибка сохранения.';
+            alert(msg);
+            return;
+          }
+
+          const newVal = (data.value ?? '').toString();
+          wrapper.dataset.inlineOriginal = newVal;
+
+          // Обновляем display
+          const display = wrapper.querySelector('.inline-field-display');
+          if (display && wrapper.dataset.inlineDisplayKind === 'amount') {
+            const amount = parseFloat(newVal) || 0;
+            input.value = amount;
+            // Обновляем цвет в зависимости от суммы
+            if (amount < 25000) {
+              input.className = input.className.replace(/border-\w+/g, '') + ' border-red-400 bg-red-50';
+            } else if (amount < 70000) {
+              input.className = input.className.replace(/border-\w+/g, '') + ' border-brand-orange bg-brand-orange/20';
+            } else {
+              input.className = input.className.replace(/border-\w+/g, '') + ' border-brand-dark/20';
+            }
+            // Обновляем отображение суммы в тексте
+            const amountDisplay = wrapper.closest('li').querySelector('[data-contract-amount-display]');
+            if (amountDisplay) {
+              amountDisplay.textContent = amount.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' ₽';
+            }
+          }
+        })
+        .catch(err => {
+          alert('Ошибка: ' + err.message);
+        });
+      });
     })();
   </script>
 

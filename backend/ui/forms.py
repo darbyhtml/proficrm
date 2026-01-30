@@ -409,6 +409,7 @@ class CompanyInlineEditForm(forms.ModelForm):
         "work_timezone",
         "work_schedule",
         "region",
+        "contract_amount",
     )
 
     def __init__(self, *args, **kwargs):
@@ -472,6 +473,14 @@ class CompanyInlineEditForm(forms.ModelForm):
         # Разрешаем пустое значение (region = None) или валидный регион справочника.
         return self.cleaned_data.get("region")
 
+    def clean_contract_amount(self):
+        # Проверяем, что сумма указана только для годовых договоров
+        amount = self.cleaned_data.get("contract_amount")
+        if amount is not None and self.instance and self.instance.contract_type:
+            if not self.instance.contract_type.is_annual:
+                raise ValidationError("Сумма договора может быть указана только для годовых договоров.")
+        return amount
+
     class Meta:
         model = Company
         fields = [
@@ -485,6 +494,7 @@ class CompanyInlineEditForm(forms.ModelForm):
             "work_timezone",
             "work_schedule",
             "region",
+            "contract_amount",
         ]
 
 
@@ -493,12 +503,35 @@ class CompanyContractForm(forms.ModelForm):
     Мини-форма для редактирования договора прямо из карточки компании.
     """
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Всегда добавляем поле суммы, но оно будет условно отображаться через JavaScript
+        if "contract_amount" not in self.fields:
+            self.fields["contract_amount"] = forms.DecimalField(
+                label="Сумма договора",
+                max_digits=12,
+                decimal_places=2,
+                required=False,
+                widget=forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "step": "0.01"}),
+            )
+        
+        # Инициализируем видимость полей в зависимости от текущего типа договора
+        if self.instance and self.instance.contract_type and self.instance.contract_type.is_annual:
+            # Для годовых договоров скрываем "Действует до"
+            if "contract_until" in self.fields:
+                self.fields["contract_until"].widget = forms.HiddenInput()
+        else:
+            # Для негодовых договоров скрываем поле суммы
+            if "contract_amount" in self.fields:
+                self.fields["contract_amount"].widget = forms.HiddenInput()
+
     class Meta:
         model = Company
-        fields = ["contract_type", "contract_until"]
+        fields = ["contract_type", "contract_until", "contract_amount"]
         widgets = {
             "contract_type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "contract_until": forms.DateInput(attrs={"type": "date", "class": "w-full rounded-lg border px-3 py-2"}),
+            "contract_amount": forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "step": "0.01"}),
         }
 
 
@@ -748,9 +781,10 @@ class CompanySphereForm(forms.ModelForm):
 class ContractTypeForm(forms.ModelForm):
     class Meta:
         model = ContractType
-        fields = ["name", "warning_days", "danger_days", "order"]
+        fields = ["name", "is_annual", "warning_days", "danger_days", "order"]
         widgets = {
             "name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "is_annual": forms.CheckboxInput(attrs={"class": "rounded border"}),
             "warning_days": forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "min": 1}),
             "danger_days": forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "min": 1}),
             "order": forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),

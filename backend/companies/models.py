@@ -50,6 +50,11 @@ class ContractType(models.Model):
     Справочник видов договоров с настройками напоминаний.
     """
     name = models.CharField("Название", max_length=120, unique=True)
+    is_annual = models.BooleanField(
+        "Годовой договор",
+        default=False,
+        help_text="Если отмечено, договор действует на определенную сумму, а не до даты. Для годовых договоров поле 'Действует до' не отображается."
+    )
     warning_days = models.PositiveIntegerField(
         "Дней до желтого предупреждения",
         default=14,
@@ -128,6 +133,14 @@ class Company(models.Model):
         db_index=True,
     )
     contract_until = models.DateField("Действует до", null=True, blank=True, db_index=True)
+    contract_amount = models.DecimalField(
+        "Сумма договора",
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Сумма договора (только для годовых договоров)"
+    )
 
     head_company = models.ForeignKey(
         "self",
