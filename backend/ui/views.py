@@ -1216,11 +1216,6 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
                     "amount": float(amount),
                     "level": level,
                 })
-                "is_annual": False,
-                "contract_until": c.contract_until.isoformat() if c.contract_until else None,
-                "days_left": days_left,
-                "level": level,
-            })
 
     # Сопоставляем задачи без типа с TaskType по точному совпадению названия
     from tasksapp.models import TaskType
