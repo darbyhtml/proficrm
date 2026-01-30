@@ -191,6 +191,7 @@ class Company(models.Model):
             GinIndex(OpClass(Upper("legal_name"), name="gin_trgm_ops"), name="cmp_legal_trgm_gin_idx"),
             GinIndex(OpClass(Upper("address"), name="gin_trgm_ops"), name="cmp_addr_trgm_gin_idx"),
             GinIndex(OpClass(Upper("inn"), name="gin_trgm_ops"), name="cmp_inn_trgm_gin_idx"),
+            GinIndex(OpClass(Upper("kpp"), name="gin_trgm_ops"), name="cmp_kpp_trgm_gin_idx"),
             GinIndex(OpClass(Upper("phone"), name="gin_trgm_ops"), name="cmp_phone_trgm_gin_idx"),
             GinIndex(OpClass(Upper("email"), name="gin_trgm_ops"), name="cmp_email_trgm_gin_idx"),
         ]
