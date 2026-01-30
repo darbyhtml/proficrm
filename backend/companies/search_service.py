@@ -7,7 +7,7 @@ from uuid import UUID
 from django.db import connection
 from django.db.models import Case, F, FloatField, Q, Value, When
 from django.db.models.functions import Coalesce
-from django.contrib.postgres.search import SearchQuery, SearchRank
+from django.contrib.postgres.search import SearchQuery, SearchRank, TrigramWordSimilarity
 from django.utils.html import escape
 
 from companies.models import Company, CompanyEmail, CompanyNote, CompanyPhone, Contact, ContactEmail, ContactPhone
@@ -176,7 +176,15 @@ def highlight_html(
         html = "…" + html
     if right_cut:
         html = html + "…"
-    return html
+        return html
+
+
+# Пороги для trigram similarity fallback (поиск по названию при слабом/пустом FTS).
+# Fallback включается только для текстовых токенов длины >= MIN_TOKEN_LEN, чтобы
+# короткие/шумовые запросы (1–2 символа) не возвращали "всё подряд".
+# Порог 0.3 даёт баланс: "янтарь"/"янтар"/"ФКУ «Янтарь»" матчатся, случайные слова — нет.
+SIMILARITY_MIN_TOKEN_LEN = 3
+SIMILARITY_THRESHOLD = 0.3
 
 
 @dataclass(frozen=True)
@@ -204,6 +212,8 @@ class CompanySearchService:
     - точно: AND по токенам + ранжирование (идентификаторы > название > контакты > прочее)
     - полно: ищем по индексированной “карточке” (CompanySearchIndex)
     - объяснимо: для результата формируем match_reasons и подсвечиваем их детерминированно
+    - по названию: при 1–2 словах FTS может не сматчить (plain+AND) — добавлен similarity
+      fallback по Company.name и CompanySearchIndex.t_name (pg_trgm word_similarity).
     """
 
     def __init__(self, *, max_results_cap: int = 5000):
@@ -285,7 +295,30 @@ class CompanySearchService:
         # Это делает поиск по названию более “прощающим” к опечаткам/окончаниям
         # (например, "сибирские медвед" всё равно найдёт "Сибирские медведи"),
         # при этом не ломая существующий FTS и ранжирование.
-        qs = qs.filter((indexed & indexed_match) | fallback_match)
+        # Similarity fallback: для запросов по названию (1–2 слова) FTS с plain+AND часто
+        # не матчит из‑за стемминга/кавычек. Добавляем pg_trgm word_similarity по name и t_name:
+        # только для токенов >= SIMILARITY_MIN_TOKEN_LEN и с порогом SIMILARITY_THRESHOLD,
+        # чтобы не возвращать "всё подряд" на коротких/шумовых запросах.
+        similarity_match = Q()
+        if pq.text_tokens and not strong_digits:
+            long_tokens = [t for t in pq.text_tokens if len(t) >= SIMILARITY_MIN_TOKEN_LEN]
+            if long_tokens:
+                token = max(long_tokens, key=len)
+                base_qs = qs  # сохраняем фильтры (филиал, права)
+                sim_name_ids = (
+                    base_qs.annotate(sim=TrigramWordSimilarity(token, "name"))
+                    .filter(sim__gt=SIMILARITY_THRESHOLD)
+                    .values_list("id", flat=True)[: self.max_results_cap]
+                )
+                sim_tname_ids = (
+                    base_qs.filter(search_index__isnull=False).distinct()
+                    .annotate(sim=TrigramWordSimilarity(token, "search_index__t_name"))
+                    .filter(sim__gt=SIMILARITY_THRESHOLD)
+                    .values_list("id", flat=True)[: self.max_results_cap]
+                )
+                similarity_match = Q(pk__in=sim_name_ids) | Q(pk__in=sim_tname_ids)
+
+        qs = qs.filter((indexed & indexed_match) | fallback_match | similarity_match)
 
         # Ранжирование (важность)
         score = Value(0.0, output_field=FloatField())

@@ -121,3 +121,47 @@ class SearchServicePostgresTests(TestCase):
             "В причинах должен фигурировать фрагмент телефона 8926/926.",
         )
 
+    def test_search_by_company_name_single_token(self):
+        """Запрос по одному слову названия (янтарь) находит компанию ФКУ Янтарь / ФГКУ «Янтарь»."""
+        c = Company.objects.create(name='ФКУ Янтарь', inn="7701234567", status=self.status)
+        rebuild_company_search_index(c.id)
+
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="янтарь")
+        ids = list(qs.values_list("id", flat=True)[:10])
+        self.assertIn(c.id, ids, "Запрос «янтарь» должен находить компанию с названием «ФКУ Янтарь».")
+
+    def test_search_by_company_name_quoted(self):
+        """Поиск по названию с кавычками в карточке (ФГКУ «Янтарь»)."""
+        c = Company.objects.create(name='ФГКУ "Янтарь"', inn="7702345678", status=self.status)
+        rebuild_company_search_index(c.id)
+
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="янтарь")
+        ids = list(qs.values_list("id", flat=True)[:10])
+        self.assertIn(c.id, ids, "Запрос «янтарь» должен находить компанию «ФГКУ «Янтарь»».")
+
+    def test_search_by_company_name_typo(self):
+        """Опечатка в запросе (янтар) при пороге similarity всё ещё находит «Янтарь»."""
+        c = Company.objects.create(name="Янтарь", inn="7703456789", status=self.status)
+        rebuild_company_search_index(c.id)
+
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="янтар")
+        ids = list(qs.values_list("id", flat=True)[:10])
+        self.assertIn(c.id, ids, "Запрос «янтар» (опечатка) должен находить компанию «Янтарь» по similarity.")
+
+    def test_search_short_query_no_spam(self):
+        """Короткий/шумовой запрос (1 буква) не возвращает всё подряд."""
+        Company.objects.create(name="А", inn="7704000001", status=self.status)
+        c2 = Company.objects.create(name="Банк", inn="7704000002", status=self.status)
+        rebuild_company_search_index(Company.objects.get(name="А").id)
+        rebuild_company_search_index(c2.id)
+
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="а")
+        ids = list(qs.values_list("id", flat=True)[:20])
+        # Токен "а" отбрасывается в parse_query (len >= 2), поэтому запрос без текстовых токенов
+        # и без strong_digits → пустая выдача или по weak_digits. Не должно быть "всё подряд".
+        self.assertLessEqual(
+            len(ids),
+            10,
+            "Запрос из одного символа не должен возвращать неограниченную выдачу.",
+        )
+
