@@ -68,7 +68,8 @@ class SearchServicePostgresTests(TestCase):
     def test_search_mixed_contact_phone(self):
         c = Company.objects.create(name="ООО Тест", inn="1234567890", status=self.status)
         ct = Contact.objects.create(company=c, first_name="Иван", last_name="Иванов")
-        ContactPhone.objects.create(contact=ct, value="+79261234567")
+        # Номер должен содержать подстроку "8926" в digits (8 (926) → 8926...)
+        ContactPhone.objects.create(contact=ct, value="8 (926) 123-45-67")
 
         rebuild_company_search_index(c.id)
 
@@ -96,8 +97,8 @@ class SearchServicePostgresTests(TestCase):
         c = Company.objects.create(name="ООО Тест", inn="1234567890", status=self.status)
         # text‑токен уходит в контакт
         ct = Contact.objects.create(company=c, first_name="Иван", last_name="Иванов")
-        # digit‑токен уходит в телефон КОМПАНИИ (чтобы точно оказаться в другой сущности)
-        CompanyPhone.objects.create(company=c, value="+7 (926) 123-45-67")
+        # digit‑токен уходит в телефон КОМПАНИИ; номер должен содержать "8926" в digits
+        CompanyPhone.objects.create(company=c, value="8 (926) 123-45-67")
 
         rebuild_company_search_index(c.id)
 

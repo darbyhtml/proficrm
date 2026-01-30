@@ -176,7 +176,7 @@ def highlight_html(
         html = "…" + html
     if right_cut:
         html = html + "…"
-        return html
+    return html
 
 
 # Пороги для trigram similarity fallback (поиск по названию при слабом/пустом FTS).
