@@ -414,10 +414,23 @@
             <div class="flex items-start justify-between gap-2">
               <div class="text-sm">
                 {% if company.contract_type %}{{ company.contract_type.name }}{% else %}—{% endif %}
-                {% if company.contract_until %}
-                  <span class="muted-2">· до {{ company.contract_until|date:"d.m.Y" }}</span>
-                  {% if contract_days_left is not None %}
-                    <span class="muted-2">· осталось {{ contract_days_left }} дн.</span>
+                {% if company.contract_type.is_annual %}
+                  {% if company.contract_amount is not None %}
+                    <span class="muted-2">· сумма: {{ company.contract_amount|floatformat:2 }} ₽</span>
+                    {% if company.contract_amount < 25000 %}
+                      <span class="badge badge-danger badge-sm ml-1">Меньше 25 000</span>
+                    {% elif company.contract_amount < 70000 %}
+                      <span class="badge badge-warn badge-sm ml-1">Меньше 70 000</span>
+                    {% endif %}
+                  {% else %}
+                    <span class="muted-2">· сумма не указана</span>
+                  {% endif %}
+                {% else %}
+                  {% if company.contract_until %}
+                    <span class="muted-2">· до {{ company.contract_until|date:"d.m.Y" }}</span>
+                    {% if contract_days_left is not None %}
+                      <span class="muted-2">· осталось {{ contract_days_left }} дн.</span>
+                    {% endif %}
                   {% endif %}
                 {% endif %}
               </div>

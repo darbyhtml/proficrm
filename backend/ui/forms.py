@@ -476,6 +476,8 @@ class CompanyInlineEditForm(forms.ModelForm):
     def clean_contract_amount(self):
         # Проверяем, что сумма указана только для годовых договоров
         amount = self.cleaned_data.get("contract_amount")
+        if amount is not None and str(amount).strip() == "":
+            return None
         if amount is not None and self.instance and self.instance.contract_type:
             if not self.instance.contract_type.is_annual:
                 raise ValidationError("Сумма договора может быть указана только для годовых договоров.")

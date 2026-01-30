@@ -965,26 +965,26 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         if level:  # Добавляем только если есть предупреждение
             contracts_soon.append({"company": c, "days_left": days_left, "level": level, "is_annual": False})
     
-    # Годовые договоры по сумме
+    # Годовые договоры: показываем все (с суммой и без), чтобы можно было ввести/редактировать
     annual_contracts_qs = (
-        Company.objects.filter(responsible=user, contract_type__is_annual=True, contract_amount__isnull=False)
+        Company.objects.filter(responsible=user, contract_type__is_annual=True)
         .select_related("contract_type")
         .only("id", "name", "contract_type", "contract_amount")
         .order_by("contract_amount", "name")[:50]
     )
     for c in annual_contracts_qs:
         amount = c.contract_amount
-        if amount is not None:
-            # Меньше 25 000 - красный, меньше 70 000 - оранжевый
-            if amount < 25000:
-                level = "danger"
-            elif amount < 70000:
-                level = "warn"
-            else:
-                level = None  # Не показываем, если больше 70 000
-            
-            if level:  # Добавляем только если есть предупреждение
-                contracts_soon.append({"company": c, "amount": amount, "level": level, "is_annual": True})
+        # Нет суммы или меньше 25 000 — красный, меньше 70 000 — оранжевый, больше — не показываем в блоке предупреждений
+        if amount is None:
+            level = "warn"  # напомнить указать сумму
+        elif amount < 25000:
+            level = "danger"
+        elif amount < 70000:
+            level = "warn"
+        else:
+            level = None
+        if level:
+            contracts_soon.append({"company": c, "amount": amount, "level": level, "is_annual": True})
 
     # Сопоставляем задачи без типа с TaskType по точному совпадению названия
     # Загружаем все TaskType для сопоставления
@@ -1189,33 +1189,32 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
                 "level": level,
             })
     
-    # Годовые договоры по сумме
+    # Годовые договоры: показываем все (с суммой и без)
     annual_contracts_qs = (
-        Company.objects.filter(responsible=user, contract_type__is_annual=True, contract_amount__isnull=False)
+        Company.objects.filter(responsible=user, contract_type__is_annual=True)
         .select_related("contract_type")
         .only("id", "name", "contract_type", "contract_amount")
         .order_by("contract_amount", "name")[:50]
     )
     for c in annual_contracts_qs:
         amount = c.contract_amount
-        if amount is not None:
-            # Меньше 25 000 - красный, меньше 70 000 - оранжевый
-            if amount < 25000:
-                level = "danger"
-            elif amount < 70000:
-                level = "warn"
-            else:
-                level = None  # Не показываем, если больше 70 000
-            
-            if level:  # Добавляем только если есть предупреждение
-                contracts_soon.append({
-                    "company_id": str(c.id),
-                    "company_name": c.name,
-                    "contract_type": c.contract_type.name if c.contract_type else "",
-                    "is_annual": True,
-                    "amount": float(amount),
-                    "level": level,
-                })
+        if amount is None:
+            level = "warn"
+        elif amount < 25000:
+            level = "danger"
+        elif amount < 70000:
+            level = "warn"
+        else:
+            level = None
+        if level:
+            contracts_soon.append({
+                "company_id": str(c.id),
+                "company_name": c.name,
+                "contract_type": c.contract_type.name if c.contract_type else "",
+                "is_annual": True,
+                "amount": float(amount) if amount is not None else None,
+                "level": level,
+            })
 
     # Сопоставляем задачи без типа с TaskType по точному совпадению названия
     from tasksapp.models import TaskType
@@ -3738,15 +3737,22 @@ def company_contract_update(request: HttpRequest, company_id) -> HttpResponse:
         messages.error(request, "Проверьте поля договора.")
         return redirect("company_detail", company_id=company.id)
 
-    # Если тип договора изменился на негодовой, очищаем сумму
-    # Если тип договора изменился на годовой, очищаем дату окончания
-    if form.cleaned_data.get("contract_type"):
-        contract_type = form.cleaned_data["contract_type"]
+    contract_type = form.cleaned_data.get("contract_type")
+    if contract_type:
         if contract_type.is_annual:
-            # Для годовых договоров очищаем дату окончания
+            # Для годовых: очищаем дату окончания и явно берём сумму из POST (модалка рендерит свой input)
             company.contract_until = None
+            raw_amount = (request.POST.get("contract_amount") or "").strip()
+            if raw_amount:
+                try:
+                    from decimal import Decimal
+                    company.contract_amount = Decimal(raw_amount.replace(",", "."))
+                except (ValueError, TypeError):
+                    company.contract_amount = None
+            else:
+                company.contract_amount = None
         else:
-            # Для негодовых договоров очищаем сумму
+            # Для негодовых: очищаем сумму
             company.contract_amount = None
     
     form.save()
@@ -5158,7 +5164,10 @@ def company_inline_update(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company_id)
 
     user: User = request.user
-    company = get_object_or_404(Company.objects.select_related("responsible", "branch", "region"), id=company_id)
+    company = get_object_or_404(
+        Company.objects.select_related("responsible", "branch", "region", "contract_type"),
+        id=company_id,
+    )
     if not _can_edit_company(user, company):
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return JsonResponse({"ok": False, "error": "Нет прав на редактирование этой компании."}, status=403)
