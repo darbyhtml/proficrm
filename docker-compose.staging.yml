@@ -145,7 +145,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: celery -A crm beat --loglevel=info
+    # -s /tmp/...: файл расписания в /tmp (crmuser не может писать в смонтированный ./backend)
+    command: celery -A crm beat --loglevel=info -s /tmp/celerybeat-schedule
     restart: unless-stopped
     networks:
       - crm_staging_network
