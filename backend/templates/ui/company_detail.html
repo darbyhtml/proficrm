@@ -1518,7 +1518,7 @@
             <div class="flex items-start justify-between gap-3">
               <div>
                 <div class="font-medium">Изменить договор</div>
-                <div class="text-xs muted-2 mt-1">Меняем только вид договора и срок действия.</div>
+                <div class="text-xs muted-2 mt-1">Вид договора, срок действия или сумма (для годового).</div>
               </div>
               <button type="button" class="btn btn-outline btn-sm" data-close-contract aria-label="Закрыть" title="Закрыть">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -1545,11 +1545,7 @@
               </div>
               <div id="contractAmountField" style="display: none;">
                 <label class="block text-xs text-brand-dark/70 mb-1">Сумма договора</label>
-                {% if contract_form.contract_amount %}
-                  {{ contract_form.contract_amount }}
-                {% else %}
-                  <input type="number" name="contract_amount" step="0.01" class="w-full rounded-lg border px-3 py-2" value="{% if company.contract_amount %}{{ company.contract_amount }}{% endif %}">
-                {% endif %}
+                <input type="number" name="contract_amount" step="0.01" min="0" class="w-full rounded-lg border px-3 py-2" value="{% if company.contract_amount %}{{ company.contract_amount }}{% endif %}" placeholder="0.00">
               </div>
               <div class="md:col-span-2 flex gap-2">
                 <button class="btn btn-primary" type="submit">Сохранить</button>
