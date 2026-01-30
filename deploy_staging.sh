@@ -32,9 +32,9 @@ sleep 15
 echo ">>> migrate"
 $COMPOSE run --rm web python manage.py migrate --noinput
 
-# 5) Статика
+# 5) Статика (от root: том static_staging при создании принадлежит root, crmuser не может писать)
 echo ">>> collectstatic"
-$COMPOSE run --rm web python manage.py collectstatic --noinput
+$COMPOSE run --rm -u root web python manage.py collectstatic --noinput
 
 # 6) Запуск всех сервисов
 echo ">>> up -d"
