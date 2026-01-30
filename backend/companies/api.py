@@ -1,7 +1,7 @@
 from rest_framework import serializers, viewsets
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.filters import BaseFilterBackend, OrderingFilter
+from rest_framework.filters import BaseFilterBackend, OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
 
 from accounts.models import User
