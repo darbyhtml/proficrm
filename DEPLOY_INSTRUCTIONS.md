@@ -198,6 +198,15 @@ chmod +x deploy_staging.sh   # один раз, если ещё не испол�
 ./deploy_staging.sh
 ```
 
+Если `git pull` выдаёт **«would be overwritten by merge»** для `deploy_staging.sh` — на сервере есть локальная копия; уберите или переименуйте её, затем снова выполните pull:
+
+```bash
+mv deploy_staging.sh deploy_staging.sh.bak   # или: rm deploy_staging.sh
+git pull origin main
+chmod +x deploy_staging.sh
+./deploy_staging.sh
+```
+
 Вручную:
 
 ```bash
