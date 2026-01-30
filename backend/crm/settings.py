@@ -20,9 +20,13 @@ from django.core.exceptions import ImproperlyConfigured
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Создаём директорию для логов, если её нет
+# Директория для логов (в Docker при монтировании backend/ может быть недоступна для записи — тогда только console)
 LOGS_DIR = BASE_DIR / "logs"
-LOGS_DIR.mkdir(exist_ok=True)
+try:
+    LOGS_DIR.mkdir(exist_ok=True)
+except OSError:
+    pass
+_use_file_logging = LOGS_DIR.exists() and os.access(str(LOGS_DIR), os.W_OK)
 
 # Загружаем .env из корня проекта (для Docker) или из backend/.env (для локальной разработки)
 # Сначала пробуем корень проекта (на уровень выше backend/)
@@ -487,15 +491,21 @@ LOGGING = {
             # ENTERPRISE: JSON formatter в production для structured logging
             "formatter": "json" if not DEBUG else "verbose",
         },
-        "file": {
-            "level": "INFO",
-            "class": "logging.handlers.RotatingFileHandler",
-            "filename": str(LOGS_DIR / "crm.log"),
-            "maxBytes": 10 * 1024 * 1024,  # 10 MB
-            "backupCount": 5,
-            "formatter": "verbose",
-            "filters": ["require_debug_false"],
-        },
+        **(
+            {
+                "file": {
+                    "level": "INFO",
+                    "class": "logging.handlers.RotatingFileHandler",
+                    "filename": str(LOGS_DIR / "crm.log"),
+                    "maxBytes": 10 * 1024 * 1024,  # 10 MB
+                    "backupCount": 5,
+                    "formatter": "verbose",
+                    "filters": ["require_debug_false"],
+                },
+            }
+            if _use_file_logging
+            else {}
+        ),
     },
     "root": {
         "handlers": ["console"],
@@ -503,33 +513,33 @@ LOGGING = {
     },
     "loggers": {
         "django": {
-            "handlers": ["console", "file"] if not DEBUG else ["console"],
+            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
             "level": "INFO",
             "propagate": False,
         },
         "django.request": {
-            "handlers": ["console", "file"] if not DEBUG else ["console"],
+            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
             "level": "ERROR",
             "propagate": False,
         },
         "crm": {
-            "handlers": ["console", "file"] if not DEBUG else ["console"],
+            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
             "level": "INFO",
             "propagate": False,
         },
         "mailer": {
-            "handlers": ["console", "file"] if not DEBUG else ["console"],
+            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
             "level": "INFO",
             "propagate": False,
         },
         # ENTERPRISE: JSON formatter для mailer в production (structured logging)
         "mailer.tasks": {
-            "handlers": ["console", "file"] if not DEBUG else ["console"],
+            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
             "level": "INFO",
             "propagate": False,
         },
         "phonebridge": {
-            "handlers": ["console", "file"] if not DEBUG else ["console"],
+            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
             "level": "INFO",
             "propagate": False,
         },
