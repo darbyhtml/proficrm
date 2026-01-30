@@ -198,10 +198,19 @@ chmod +x deploy_staging.sh   # один раз, если ещё не испол�
 ./deploy_staging.sh
 ```
 
-Если `git pull` выдаёт **«would be overwritten by merge»** для `deploy_staging.sh` — на сервере есть локальная копия; уберите или переименуйте её, затем снова выполните pull:
+Если `git pull` выдаёт **«would be overwritten by merge»** или **«Your local changes would be overwritten by merge»** для `deploy_staging.sh` — на сервере есть локальные правки; сбросьте их и подтяните версию из репозитория:
 
 ```bash
-mv deploy_staging.sh deploy_staging.sh.bak   # или: rm deploy_staging.sh
+# Вариант 1: отменить локальные правки и подтянуть
+git checkout -- deploy_staging.sh
+git pull origin main
+chmod +x deploy_staging.sh
+./deploy_staging.sh
+```
+
+```bash
+# Вариант 2: сохранить правки в stash, потом pull
+git stash push deploy_staging.sh
 git pull origin main
 chmod +x deploy_staging.sh
 ./deploy_staging.sh

@@ -36,8 +36,9 @@ $COMPOSE run --rm web python manage.py migrate --noinput
 echo ">>> collectstatic"
 $COMPOSE run --rm -u root web python manage.py collectstatic --noinput
 
-# 6) Запуск всех сервисов
+# 6) Запуск всех сервисов (удаляем старый контейнер nginx, если имя занято от предыдущего запуска)
 echo ">>> up -d"
+docker rm -f crm_staging_nginx 2>/dev/null || true
 $COMPOSE up -d
 
 echo "Готово. Staging nginx на 127.0.0.1:8080. Проверка: curl -sI http://127.0.0.1:8080/health/"
