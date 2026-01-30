@@ -3429,12 +3429,20 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     
     from companies.models import ContractType
     contract_types_list = ContractType.objects.all().order_by("order", "name")
-    
+    # Сумма договора для input в модалке — всегда с точкой (для type="number")
+    contract_amount_value = ""
+    if getattr(company, "contract_amount", None) is not None:
+        try:
+            contract_amount_value = f"{float(company.contract_amount):.2f}"
+        except (TypeError, ValueError):
+            pass
+
     return render(
         request,
         "ui/company_detail.html",
         {
             "company": company,
+            "contract_amount_value": contract_amount_value,
             "org_head": org_head,
             "org_branches": org_branches,
             "can_edit_company": can_edit_company,
