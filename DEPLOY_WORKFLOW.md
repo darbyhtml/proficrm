@@ -53,6 +53,27 @@ nano .env.staging   # задать POSTGRES_PASSWORD=надёжный_парол
 - **crm.groupprofi.ru** → `127.0.0.1:8001` (прод)
 - **crm-staging.groupprofi.ru** → `127.0.0.1:8080` (стагинг)
 
+### Создание пользователя с ролью «Администратор»
+
+После первого деплоя (стагинг или прод) нужно создать пользователя с ролью **Администратор** (не Менеджер), чтобы входить в CRM и управлять настройками.
+
+**Создать нового администратора** (пароль можно не указывать — сгенерируется и выведется в консоль):
+
+```bash
+# На сервере в папке стагинга или прода:
+docker compose -f docker-compose.staging.yml exec web python manage.py create_admin_user admin --email admin@example.com
+# или с паролем:
+docker compose -f docker-compose.staging.yml exec web python manage.py create_admin_user admin --email admin@example.com --password ваш_пароль
+```
+
+**Сделать существующего пользователя администратором** (например, у него была роль «Менеджер»):
+
+```bash
+docker compose -f docker-compose.staging.yml exec web python manage.py create_admin_user --promote имя_логина
+```
+
+Для прода замените `docker-compose.staging.yml` на `docker-compose.prod.yml -f docker-compose.vds.yml` и контейнер `web` из соответствующего compose.
+
 ---
 
 ## 3. Ежедневный workflow: изменения → стагинг → тест → прод
