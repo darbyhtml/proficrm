@@ -1,60 +1,129 @@
 # Деплой поиска компаний (PostgreSQL FTS)
 
-Краткий чеклист для выкатки обновлённого поиска на staging и production.
+Чёткие команды для запуска на staging и production и проверки поиска.
 
-## Подтверждение стека
+---
 
-- **Движок поиска:** PostgreSQL (FTS + pg_trgm). Переменная `SEARCH_ENGINE_BACKEND` по умолчанию `postgres`.
-- **БД:** `DB_ENGINE=postgres`. Внешний движок (Typesense) не используется при настройках по умолчанию.
+## Команды для запуска
 
-## Порядок деплоя
+### Staging (crm-staging.groupprofi.ru)
 
-### 1. Staging
-
-1. В папке стагинга: `git pull`, затем `./deploy_staging.sh`.
-2. Скрипт применяет миграции, собирает статику и выполняет `rebuild_company_search_index`.
-3. Проверка: https://crm-staging.groupprofi.ru → раздел «Компании»:
-   - поиск по названию, ИНН, телефону;
-   - частичное совпадение (первые цифры ИНН, фрагмент телефона, слово с опечаткой);
-   - подсветка совпадений и объяснения.
-
-### 2. Production
-
-1. После успешной проверки на staging: в папке прода (например `/opt/proficrm`) — `git pull`, затем `./deploy_security.sh` (или `./deploy_production.sh`).
-2. Скрипт применяет миграции (в т.ч. до 0042), собирает статику и запускает `rebuild_company_search_index`.
-3. Убедиться, что миграции прошли без ошибок (расширения `pg_trgm`, `unaccent`, таблица `companies_companysearchindex`). При большом объёме данных GIN-индексы могут создаваться несколько минут.
-4. Перезапуск сервисов выполняется самим скриптом деплоя.
-
-### 3. Ручной запуск перестроения индекса (при необходимости)
-
-Если шаг перестроения индекса убран из скрипта (например, из-за нагрузки), выполнить вручную:
+**Папка на сервере:** `/opt/proficrm-staging`.
 
 ```bash
-# Production (docker-compose.prod.yml + docker-compose.vds.yml)
-docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml run --rm web python manage.py rebuild_company_search_index
+cd /opt/proficrm-staging
+git pull origin main
+./deploy_staging.sh
+```
 
-# Staging
+---
+
+### Production (crm.groupprofi.ru)
+
+**Папка на сервере:** `/opt/proficrm`.
+
+**Вариант A — прод на VDS (порт 8001, prod + vds):**
+```bash
+cd /opt/proficrm
+git pull origin main
+./deploy_security.sh
+```
+
+**Вариант B — прод без vds (только prod.yml):**
+```bash
+cd /opt/proficrm
+git pull origin main
+./deploy_production.sh
+```
+
+Скрипты сами выполняют: сборку образов, подъём db/redis/typesense, миграции, collectstatic, **перестроение поискового индекса** (`rebuild_company_search_index`), запуск web/celery/celery-beat.
+
+---
+
+## Команды для проверки после деплоя
+
+### 1. Health-check (с сервера)
+
+**Staging:**
+```bash
+curl -sI http://127.0.0.1:8080/health/
+```
+
+**Production:**
+```bash
+curl -sI http://127.0.0.1:8001/health/
+```
+
+Ожидается ответ `200 OK`.
+
+---
+
+### 2. Логи (если что-то пошло не так)
+
+**Staging:**
+```bash
+cd /opt/proficrm-staging
+docker compose -f docker-compose.staging.yml logs web --tail=50
+```
+
+**Production:**
+```bash
+cd /opt/proficrm
+docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml logs web --tail=50
+```
+
+---
+
+### 3. Проверка поиска в браузере
+
+| Окружение | URL | Что проверить |
+|-----------|-----|----------------|
+| Staging | https://crm-staging.groupprofi.ru | Войти → «Компании» → поиск по названию, ИНН, телефону |
+| Production | https://crm.groupprofi.ru | То же |
+
+**Рекомендуемые тесты поиска:**
+- Часть названия компании (одно слово).
+- Название с опечаткой (триграммы).
+- Первые 4–5 цифр ИНН.
+- Несколько цифр телефона подряд.
+- Фамилия контакта + фрагмент телефона.
+- Убедиться, что в результатах есть подсветка совпадений и объяснения (если UI это показывает).
+
+---
+
+## Ручной запуск (без полного деплоя)
+
+Если нужно только перестроить поисковый индекс:
+
+**Production:**
+```bash
+cd /opt/proficrm
+docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml run --rm web python manage.py rebuild_company_search_index
+```
+
+**Staging:**
+```bash
+cd /opt/proficrm-staging
 docker compose -f docker-compose.staging.yml run --rm web python manage.py rebuild_company_search_index
 ```
 
-Желательно запускать в период низкой нагрузки; при тысячах компаний процесс может занять несколько минут.
+Только миграции + статика (без перезапуска сервисов):
 
-### 4. Проверка на проде
+**Production:**
+```bash
+cd /opt/proficrm
+COMPOSE="docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml"
+$COMPOSE run --rm web python manage.py migrate --noinput
+$COMPOSE run --rm web python manage.py collectstatic --noinput
+```
 
-- https://crm.groupprofi.ru → «Компании».
-- Примеры: часть названия с опечаткой, первые 4–5 цифр ИНН, фрагмент телефона, фамилия контакта + цифры телефона.
-- Убедиться, что подсветка и объяснения работают. В `.env` не должно быть `SEARCH_ENGINE_BACKEND=typesense`, если используется Postgres.
+---
+
+## Подтверждение стека
+
+- **Движок поиска:** PostgreSQL (FTS + pg_trgm). `SEARCH_ENGINE_BACKEND` по умолчанию `postgres`.
+- **БД:** `DB_ENGINE=postgres`. Typesense при настройках по умолчанию не используется.
 
 ## Поддержка актуальности индекса
 
-После первоначального заполнения индекс обновляется автоматически через сигналы (`companies/signals.py`): при сохранении компании и связанных сущностей (контакты, телефоны, email, заметки, задачи) по `transaction.on_commit` вызывается перестроение `CompanySearchIndex` для этой компании. Дополнительный ручной перезапуск `rebuild_company_search_index` нужен только после массового импорта или при сбоях.
-
-## Полезные команды
-
-```bash
-# Миграции (если не через скрипт)
-docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml run --rm web python manage.py migrate --noinput
-
-# Сбор статики
-docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml run --rm web python manage.py collectstatic --noinput
-```
+После первого заполнения индекс обновляется автоматически через сигналы при сохранении компании и связанных сущностей. Ручной `rebuild_company_search_index` нужен только после массового импорта или сбоев.
