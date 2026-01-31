@@ -57,8 +57,29 @@ SCHEMA = {
 }
 
 
+def _suppress_typesense_deprecation_warnings() -> None:
+    """Убирает из логов WARNING Python-клиента Typesense про deprecated API (v30+)."""
+    ts_logger = logging.getLogger("typesense")
+    if any(isinstance(f, _TypesenseDeprecationFilter) for f in ts_logger.filters):
+        return
+    ts_logger.addFilter(_TypesenseDeprecationFilter())
+
+
+class _TypesenseDeprecationFilter(logging.Filter):
+    """Не пропускать WARNING от typesense с текстом про deprecation."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno != logging.WARNING:
+            return True
+        msg = (record.getMessage() or "").lower()
+        if "deprecat" in msg or "v30" in msg:
+            return False
+        return True
+
+
 def _get_client():
     """Создаёт клиент Typesense. При ошибке (нет модуля, неверные настройки) возвращает None."""
+    _suppress_typesense_deprecation_warnings()
     try:
         import typesense
         return typesense.Client({
@@ -72,6 +93,10 @@ def _get_client():
         })
     except Exception:
         return None
+
+
+# Фильтр deprecation вешаем при загрузке модуля, чтобы к первому import typesense логгер уже был настроен.
+_suppress_typesense_deprecation_warnings()
 
 
 def _typesense_base_url() -> str:
