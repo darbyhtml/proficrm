@@ -44,14 +44,25 @@ git pull origin main
 
 ### 1. Health-check (с сервера)
 
+Django принимает только запросы с заголовком Host из `ALLOWED_HOSTS`. Если в `.env` только домен (например `DJANGO_ALLOWED_HOSTS=crm.groupprofi.ru`), то `curl http://127.0.0.1:8001/health/` вернёт **400 Bad Request** (Invalid HTTP_HOST). Варианты:
+
+**Вариант A — добавить 127.0.0.1 в .env (рекомендуется для проверки с сервера):**
+```bash
+# В /opt/proficrm/.env (прод) или .env.staging (стагинг):
+# DJANGO_ALLOWED_HOSTS=crm.groupprofi.ru,127.0.0.1
+# Затем перезапуск: docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml up -d --force-recreate web celery celery-beat
+```
+
+**Вариант B — curl с заголовком Host (без смены .env):**
+
 **Staging:**
 ```bash
-curl -sI http://127.0.0.1:8080/health/
+curl -sI -H "Host: crm-staging.groupprofi.ru" http://127.0.0.1:8080/health/
 ```
 
 **Production:**
 ```bash
-curl -sI http://127.0.0.1:8001/health/
+curl -sI -H "Host: crm.groupprofi.ru" http://127.0.0.1:8001/health/
 ```
 
 Ожидается ответ `200 OK`.
