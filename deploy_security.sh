@@ -6,6 +6,9 @@
 set -e
 
 COMPOSE="docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml"
+cd "$(cd "$(dirname "$0")" && pwd)"
+# Очистка: убрать .env.staging и напомнить не использовать стагинг-файлы
+[ -x "scripts/cleanup_for_prod.sh" ] && ./scripts/cleanup_for_prod.sh || true
 
 echo "🔒 Деплой production CRM на VDS..."
 

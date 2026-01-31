@@ -74,6 +74,41 @@ docker compose -f docker-compose.staging.yml exec web python manage.py create_ad
 
 Для прода замените `docker-compose.staging.yml` на `docker-compose.prod.yml -f docker-compose.vds.yml` и контейнер `web` из соответствующего compose.
 
+### Разделение прод/стагинг: чтобы не путаться
+
+**Проблема:** В обеих папках при `git pull` подтягивается один и тот же репозиторий — в стагинге есть прод-файлы, в проде — стагинг-файлы. Можно случайно запустить не тот скрипт или перепутать `.env` и `.env.staging`.
+
+**Что сделано:**
+
+1. **Очистка при каждом деплое**  
+   При запуске `./deploy_staging.sh` вызывается `scripts/cleanup_for_staging.sh`: в стагинге `.env` всегда копируется из `.env.staging`, удаляются копии прод-файлов (если были). При запуске `./deploy_security.sh` и `./deploy_production.sh` вызывается `scripts/cleanup_for_prod.sh`: в проде удаляется `.env.staging`, если он случайно скопирован.
+
+2. **Sparse-checkout (опционально)**  
+   Можно один раз настроить так, чтобы при `git pull` в папке стагинга **не появлялись** прод-файлы, а в папке прода — стагинг-файлы.
+
+   **В папке стагинга** (после клона и первого деплоя):
+   ```bash
+   cd /opt/proficrm-staging
+   chmod +x scripts/configure_sparse_checkout.sh
+   ./scripts/configure_sparse_checkout.sh staging
+   ```
+   После этого в этой папке не будет файлов: `deploy_production.sh`, `deploy_security.sh`, `docker-compose.prod.yml`, `docker-compose.vds.yml`, `env.template`, `scripts/promote_to_prod.sh`. При следующих `git pull` они не подтянутся.
+
+   **В папке прода**:
+   ```bash
+   cd /opt/proficrm
+   chmod +x scripts/configure_sparse_checkout.sh
+   ./scripts/configure_sparse_checkout.sh prod
+   ```
+   После этого в этой папке не будет: `deploy_staging.sh`, `docker-compose.staging.yml`, `env.staging.template`, `scripts/setup_staging_env.sh`, `scripts/setup_staging_env.py`. При следующих `git pull` они не подтянутся.
+
+   Требуется Git 2.25+. Отменить: `git config core.sparseCheckout false && rm -f .git/info/sparse-checkout && git read-tree -mu HEAD`.
+
+3. **Ручная очистка**  
+   В любой момент можно запустить вручную:
+   - в стагинге: `cd /opt/proficrm-staging && ./scripts/cleanup_for_staging.sh`
+   - в проде: `cd /opt/proficrm && ./scripts/cleanup_for_prod.sh`
+
 ---
 
 ## 3. Ежедневный workflow: изменения → стагинг → тест → прод

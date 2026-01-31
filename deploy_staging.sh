@@ -14,7 +14,9 @@ if [ ! -f ".env.staging" ]; then
     echo "Создайте .env.staging из env.staging.template и заполните POSTGRES_PASSWORD, DJANGO_SECRET_KEY и т.д."
     exit 1
 fi
-# Compose подставляет переменные только из .env; копируем .env.staging → .env при каждом деплое
+# Очистка: .env из .env.staging, напоминание не использовать прод-файлы
+[ -x "scripts/cleanup_for_staging.sh" ] && ./scripts/cleanup_for_staging.sh || true
+# Compose подставляет переменные только из .env
 cp .env.staging .env
 
 # Проверка обязательных переменных (не пустые и не плейсхолдеры)

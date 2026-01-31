@@ -8,6 +8,8 @@ set -e
 COMPOSE="docker compose -f docker-compose.prod.yml"
 PROJECT_ROOT="$(cd "$(dirname "$0")" && pwd)"
 cd "$PROJECT_ROOT"
+# Очистка: убрать .env.staging и напомнить не использовать стагинг-файлы
+[ -x "scripts/cleanup_for_prod.sh" ] && ./scripts/cleanup_for_prod.sh || true
 
 if [ ! -f ".env" ]; then
     echo "Создайте .env из env.template и заполните POSTGRES_PASSWORD, DJANGO_SECRET_KEY, DJANGO_ALLOWED_HOSTS, DJANGO_CSRF_TRUSTED_ORIGINS"
