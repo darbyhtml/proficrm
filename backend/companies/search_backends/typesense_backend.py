@@ -1,12 +1,14 @@
 """
 Backend поиска компаний через Typesense.
 Совместим с интерфейсом CompanySearchService: apply(qs, query), explain(companies, query).
+Typesense v30+: synonym_sets (top-level), curation_sets, analytics.
 """
 from __future__ import annotations
 
 import logging
 from uuid import UUID
 
+import requests
 from django.conf import settings
 from django.db.models import Case, IntegerField, Value, When
 
@@ -25,7 +27,8 @@ RUSSIAN_ORG_STOPWORDS = [
     "общество", "ограниченной", "ответственностью",
 ]
 
-# Синонимы для поиска по адресам и названиям (многовариантные группы)
+# Синонимы для поиска по адресам и названиям (многовариантные группы). Typesense v30: synonym_sets.
+SYNONYM_SET_NAME = "ru_address_synonyms"
 RUSSIAN_SYNONYMS = [
     ["ул", "улица"],
     ["пр-т", "проспект", "пр"],
@@ -69,6 +72,14 @@ def _get_client():
         })
     except Exception:
         return None
+
+
+def _typesense_base_url() -> str:
+    """Базовый URL Typesense для прямых HTTP-запросов (synonym_sets в v30)."""
+    port = str(getattr(settings, "TYPESENSE_PORT", 8108))
+    protocol = (getattr(settings, "TYPESENSE_PROTOCOL", "http") or "http").rstrip("://")
+    host = getattr(settings, "TYPESENSE_HOST", "localhost")
+    return f"{protocol}://{host}:{port}"
 
 
 def build_company_document(company: Company) -> dict:
@@ -181,24 +192,45 @@ def ensure_stopwords(client) -> None:
 
 def ensure_synonyms(client, collection: str | None = None) -> int:
     """
-    Создаёт или обновляет синонимы для коллекции компаний (сокращения адресов и т.д.).
-    Возвращает количество успешно загруженных групп.
+    Создаёт или обновляет синонимы для коллекции компаний (Typesense v30: synonym_sets).
+    PUT /synonym_sets/:name с items, затем PATCH коллекции — synonym_sets: [name].
+    Возвращает количество групп в наборе при успехе, иначе 0.
     """
     coll = collection or getattr(settings, "TYPESENSE_COLLECTION_COMPANIES", COLLECTION_NAME)
-    count = 0
+    api_key = getattr(settings, "TYPESENSE_API_KEY", "") or ""
+    base = _typesense_base_url()
+    headers = {"X-TYPESENSE-API-KEY": api_key, "Content-Type": "application/json"}
+    items = []
     for i, group in enumerate(RUSSIAN_SYNONYMS):
         if not group:
             continue
         syn_id = "ru_syn_%d" % (i + 1)
-        try:
-            if hasattr(client, "collections") and hasattr(client.collections[coll], "synonyms"):
-                client.collections[coll].synonyms[syn_id].upsert({"synonyms": group})
-                count += 1
-            else:
-                break
-        except Exception as e:
-            logger.debug("Typesense: синоним %s не задан: %s", syn_id, e)
-    return count
+        items.append({"id": syn_id, "synonyms": group})
+    if not items:
+        return 0
+    try:
+        r = requests.put(
+            f"{base}/synonym_sets/{SYNONYM_SET_NAME}",
+            json={"items": items},
+            headers=headers,
+            timeout=10,
+        )
+        if r.status_code not in (200, 201):
+            logger.debug("Typesense: synonym_sets %s — %s %s", SYNONYM_SET_NAME, r.status_code, r.text[:200])
+            return 0
+        # Привязать набор синонимов к коллекции (v30)
+        r2 = requests.patch(
+            f"{base}/collections/{coll}",
+            json={"synonym_sets": [SYNONYM_SET_NAME]},
+            headers=headers,
+            timeout=10,
+        )
+        if r2.status_code not in (200, 201):
+            logger.debug("Typesense: PATCH collection %s synonym_sets — %s %s", coll, r2.status_code, r2.text[:200])
+        return len(items)
+    except Exception as e:
+        logger.debug("Typesense: ensure_synonyms failed: %s", e)
+        return 0
 
 
 class TypesenseSearchBackend:
@@ -258,6 +290,7 @@ class TypesenseSearchBackend:
                 "per_page": self.max_results_cap,
                 "sort_by": "_text_match:desc,updated_at:desc",
                 "highlight_full_fields": "name,legal_name,contacts,emails,phones,address,website,notes",
+                "synonym_sets": SYNONYM_SET_NAME,
             }
             search_params["stopwords"] = STOPWORDS_SET_ID
             res = client.collections[collection].documents.search(search_params)
@@ -322,6 +355,7 @@ class TypesenseSearchBackend:
                 "num_typos": 2,
                 "per_page": len(companies) + 10,
                 "highlight_full_fields": "name,legal_name,contacts,emails,phones,address,website,notes",
+                "synonym_sets": SYNONYM_SET_NAME,
             }
             explain_params["stopwords"] = STOPWORDS_SET_ID
             res = client.collections[collection].documents.search(explain_params)
