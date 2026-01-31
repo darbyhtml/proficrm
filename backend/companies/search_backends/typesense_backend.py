@@ -46,6 +46,7 @@ SCHEMA = {
         {"name": "inn", "type": "string", "facet": False},
         {"name": "kpp", "type": "string", "facet": False},
         {"name": "address", "type": "string", "facet": False, "locale": "ru", "stem": True},
+        {"name": "website", "type": "string", "facet": False},
         {"name": "notes", "type": "string", "facet": False, "locale": "ru", "stem": True},
         {"name": "updated_at", "type": "int64", "facet": False},
     ],
@@ -116,6 +117,7 @@ def build_company_document(company: Company) -> dict:
     inn = safe(company.inn or "")
     kpp = safe(company.kpp or "")
     address = fold_text(safe(company.address or ""))
+    website = fold_text(safe(company.website or ""))
 
     note_parts = []
     for n in getattr(company, "notes", []).all():
@@ -141,6 +143,7 @@ def build_company_document(company: Company) -> dict:
         "inn": inn or " ",
         "kpp": kpp or " ",
         "address": address or " ",
+        "website": website or " ",
         "notes": notes or " ",
         "updated_at": updated_at,
     }
@@ -247,14 +250,14 @@ class TypesenseSearchBackend:
         try:
             search_params = {
                 "q": q,
-                "query_by": "name,legal_name,contacts,emails,phones,inn,kpp,address,notes",
-                "query_by_weights": "5,5,3,2,2,5,5,1,0.5",
+                "query_by": "name,legal_name,contacts,emails,phones,inn,kpp,address,website,notes",
+                "query_by_weights": "5,5,3,2,2,5,5,1,1,0.5",
                 "prefix": "true",
                 "num_typos": 2,
                 "max_facet_values": 0,
                 "per_page": self.max_results_cap,
                 "sort_by": "_text_match:desc,updated_at:desc",
-                "highlight_full_fields": "name,legal_name,contacts,emails,phones,address,notes",
+                "highlight_full_fields": "name,legal_name,contacts,emails,phones,address,website,notes",
             }
             search_params["stopwords"] = STOPWORDS_SET_ID
             res = client.collections[collection].documents.search(search_params)
@@ -313,12 +316,12 @@ class TypesenseSearchBackend:
         try:
             explain_params = {
                 "q": q,
-                "query_by": "name,legal_name,contacts,emails,phones,inn,kpp,address,notes",
+                "query_by": "name,legal_name,contacts,emails,phones,inn,kpp,address,website,notes",
                 "filter_by": f"id:[{ids_filter}]",
                 "prefix": "true",
                 "num_typos": 2,
                 "per_page": len(companies) + 10,
-                "highlight_full_fields": "name,legal_name,contacts,emails,phones,address,notes",
+                "highlight_full_fields": "name,legal_name,contacts,emails,phones,address,website,notes",
             }
             explain_params["stopwords"] = STOPWORDS_SET_ID
             res = client.collections[collection].documents.search(explain_params)
@@ -351,6 +354,7 @@ class TypesenseSearchBackend:
                 "inn": "ИНН",
                 "kpp": "КПП",
                 "address": "Адрес",
+                "website": "Сайт",
                 "notes": "Примечание",
             }
             for hl in highlights[:max_reasons_per_company]:
