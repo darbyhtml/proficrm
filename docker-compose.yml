@@ -1,3 +1,5 @@
+# Переменные (POSTGRES_PASSWORD, DJANGO_SECRET_KEY и др.) берутся из файла .env
+# в той же папке при запуске: docker compose up. Без .env или пустой POSTGRES_PASSWORD — ошибка.
 services:
   db:
     image: postgres:16

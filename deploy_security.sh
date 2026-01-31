@@ -1,48 +1,55 @@
 #!/bin/bash
-# Скрипт для настройки безопасности на VDS
+# Деплой production на VDS (docker-compose.prod.yml + docker-compose.vds.yml).
+# Прод с gunicorn, healthchecks, лимитами; vds — порт БД 15432 и web 8001.
 # Использование: ./deploy_security.sh
 
 set -e
 
-echo "🔒 Настройка безопасности CRM на VDS..."
+COMPOSE="docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml"
 
-# 1. Проверка, что мы в правильной директории
-if [ ! -f "docker-compose.yml" ]; then
+echo "🔒 Деплой production CRM на VDS..."
+
+# 1. Проверка директории и .env
+if [ ! -f "docker-compose.prod.yml" ]; then
     echo "❌ Ошибка: запустите скрипт из корня проекта"
     exit 1
 fi
-
-# 2. Обновление кода
-echo "📥 Обновление кода из репозитория..."
-git pull
-
-# 3. Применение миграций
-echo "🗄️  Применение миграций..."
-docker compose -f docker-compose.yml -f docker-compose.vds.yml exec web python manage.py migrate
-
-# 4. Сбор статических файлов
-echo "📦 Сбор статических файлов..."
-docker compose -f docker-compose.yml -f docker-compose.vds.yml exec web python manage.py collectstatic --noinput
-
-# 5. Проверка настроек безопасности
-echo "🔍 Проверка настроек безопасности..."
-
-# Проверка DEBUG
-DEBUG_VALUE=$(docker compose -f docker-compose.yml -f docker-compose.vds.yml exec -T web python -c "import os; from dotenv import load_dotenv; load_dotenv(); print(os.getenv('DJANGO_DEBUG', '1'))")
-if [ "$DEBUG_VALUE" = "1" ]; then
-    echo "⚠️  ВНИМАНИЕ: DJANGO_DEBUG=1. Для production установите DJANGO_DEBUG=0 в .env"
+if [ ! -f ".env" ]; then
+    echo "❌ Создайте .env из env.template и заполните секреты"
+    exit 1
 fi
 
-# Проверка SECRET_KEY
-SECRET_KEY=$(docker compose -f docker-compose.yml -f docker-compose.vds.yml exec -T web python -c "import os; from dotenv import load_dotenv; load_dotenv(); print(os.getenv('DJANGO_SECRET_KEY', ''))")
-if [ -z "$SECRET_KEY" ] || [ "$SECRET_KEY" = "change-me" ] || [ ${#SECRET_KEY} -lt 50 ]; then
-    echo "⚠️  ВНИМАНИЕ: Установите сильный DJANGO_SECRET_KEY (50+ символов) в .env"
-fi
+# 2. Каталоги для static/media
+mkdir -p data/staticfiles data/media
+chown 1000:1000 data/staticfiles data/media 2>/dev/null || true
 
-# 6. Перезапуск контейнеров
-echo "🔄 Перезапуск контейнеров..."
-docker compose -f docker-compose.yml -f docker-compose.vds.yml up -d --build
+# 3. Обновление кода
+echo "📥 Обновление кода..."
+git pull origin main
 
-echo "✅ Готово! Проверьте логи:"
-echo "   docker compose -f docker-compose.yml -f docker-compose.vds.yml logs -f web"
+# 4. Сборка и подъём db, redis, typesense
+echo "📦 Сборка образов и запуск db/redis/typesense..."
+$COMPOSE build
+$COMPOSE up -d db redis typesense
+echo "Ожидание db/redis 15 сек..."
+sleep 15
 
+# 5. Миграции и статика
+echo "🗄️  Миграции..."
+$COMPOSE run --rm web python manage.py migrate --noinput
+echo "📦 collectstatic..."
+$COMPOSE run --rm web python manage.py collectstatic --noinput
+
+# 6. Запуск всех сервисов
+echo "🔄 Запуск web, celery, celery-beat..."
+$COMPOSE up -d
+
+# 7. Проверка настроек (опционально)
+echo "🔍 Проверка настроек..."
+DEBUG_VALUE=$($COMPOSE exec -T web python -c "import os; print(os.getenv('DJANGO_DEBUG', '1'))" 2>/dev/null || true)
+[ "$DEBUG_VALUE" = "1" ] && echo "⚠️  DJANGO_DEBUG=1 — для прода установите 0 в .env"
+SECRET_KEY=$($COMPOSE exec -T web python -c "import os; print(os.getenv('DJANGO_SECRET_KEY', ''))" 2>/dev/null || true)
+[ -n "$SECRET_KEY" ] && [ ${#SECRET_KEY} -lt 50 ] && echo "⚠️  Установите сильный DJANGO_SECRET_KEY (50+ символов) в .env"
+
+echo "✅ Готово. Проверка: curl -sI http://127.0.0.1:8001/health/"
+echo "   Логи: $COMPOSE logs -f web"

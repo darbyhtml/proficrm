@@ -53,11 +53,11 @@ class RateLimitMiddleware(MiddlewareMixin):
                 )
             return None
         
-        # Проверяем защищенные пути авторизации (строгий лимит)
+        # Проверяем защищенные пути авторизации (строгий лимит только для попыток входа)
+        # GET/HEAD к /login/ не считаем — иначе после выхода редирект на страницу входа даёт 429
         is_auth_protected = any(path.startswith(p) for p in self.PROTECTED_AUTH_PATHS)
-        if is_auth_protected:
-            # Для логина/токенов используем строгий лимит (10 попыток в минуту)
-            # Отдельный бакет, чтобы телефонное приложение не блокировало браузерный логин
+        if is_auth_protected and request.method not in ("GET", "HEAD", "OPTIONS"):
+            # Для POST к логину/токенам — строгий лимит (10 попыток в минуту)
             if is_ip_rate_limited(ip, "auth", 10, 60):
                 if request.path.startswith("/api/"):
                     return JsonResponse(

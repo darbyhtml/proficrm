@@ -1,38 +1,60 @@
 # Инструкция по применению изменений на сервере
 
-## Вариант 1: Использование готового скрипта деплоя (рекомендуется)
+Остаются **два окружения**: **прод** (crm.groupprofi.ru) и **стаги** (crm-staging.groupprofi.ru). Всё лишнее убрано.
+
+## Вариант 1: Скрипты деплоя (рекомендуется)
 
 | Скрипт | Назначение |
 |--------|------------|
 | `./deploy_production.sh` | Прод (docker-compose.prod.yml, .env) |
-| `./deploy_staging.sh` | Staging crm-staging.groupprofi.ru (docker-compose.staging.yml, .env.staging) |
-| `./deploy_crm_fixes.sh` | Быстрый деплой исправлений (docker-compose.yml) |
-| `./deploy_security.sh` | Безопасность на VDS (docker-compose.yml + docker-compose.vds.yml) |
+| `./deploy_security.sh` | Прод на VDS (prod.yml + vds.yml: порт БД 15432, web 8001) |
+| `./deploy_staging.sh` | Staging (docker-compose.staging.yml, .env.staging) |
 
-### Для Production (docker-compose.prod.yml):
+### Чем отличаются compose-файлы (прод)
+
+| | docker-compose.yml (старый прод) | docker-compose.prod.yml (рекомендуется) |
+|--|----------------------------------|----------------------------------------|
+| **Образ web** | python:3.13-slim, код монтируется с хоста | Сборка из Dockerfile, код внутри образа |
+| **Запуск** | runserver + pip install при старте | **gunicorn**, без монтирования кода |
+| **Статика/медиа** | volume `media`, static при старте | `./data/staticfiles`, `./data/media` (каталоги на хосте) |
+| **Безопасность** | нет | healthcheck, cap_drop, no-new-privileges, лимиты памяти |
+| **Typesense** | есть | есть (добавлен в prod.yml) |
+| **Тома БД** | pgdata, redisdata, typesense_data | те же — при переходе **данные не теряются** |
+
+Для **прод на VDS** используйте **prod.yml + vds.yml**: тот же prod, плюс порты (15432 для БД, 8001 для web). Имена томов общие — БД сохраняется.
+
+### Прод (crm.groupprofi.ru)
+
+**Вариант A — без VDS-оверлея (только prod.yml):**
 ```bash
 cd /path/to/project
 ./deploy_production.sh
 ```
 
-### Для Staging (crm-staging.groupprofi.ru):
+**Вариант B — прод на VDS (prod.yml + vds.yml, порт 8001):**
+```bash
+cd /path/to/project
+./deploy_security.sh
+```
+
+Перед первым запуском на prod.yml: создать каталоги и владельца (на сервере):
+```bash
+mkdir -p data/staticfiles data/media
+chown 1000:1000 data/staticfiles data/media
+```
+
+### Staging (crm-staging.groupprofi.ru)
 ```bash
 cd /path/to/project
 chmod +x deploy_staging.sh   # один раз, если Permission denied
 ./deploy_staging.sh
 ```
 
-### Для быстрого деплоя исправлений:
-```bash
-cd /path/to/project
-./deploy_crm_fixes.sh
-```
+### Переход с docker-compose.yml на prod.yml (без потери БД)
 
-### Для настройки безопасности на VDS (docker-compose.vds.yml):
-```bash
-cd /path/to/project
-./deploy_security.sh
-```
+1. Запускать из **того же каталога** (`/opt/proficrm`), **не** использовать `docker compose down -v`.
+2. Создать `data/staticfiles`, `data/media`, один раз выполнить collectstatic (через текущий web или после первого `up` с prod.yml).
+3. Остановить старый стек, поднять prod: `docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml up -d --build`. Тома `pgdata`, `redisdata`, `typesense_data` общие — данные останутся.
 
 ---
 
@@ -105,7 +127,7 @@ sudo supervisorctl restart crm  # или имя вашего процесса
 
 Если включён поиск через Typesense (`SEARCH_ENGINE_BACKEND=typesense` в окружении):
 
-1. Убедитесь, что контейнер Typesense запущен (в `docker-compose.yml` есть сервис `typesense`).
+1. Убедитесь, что контейнер Typesense запущен (в `docker-compose.prod.yml` и `docker-compose.staging.yml` есть сервис `typesense`).
 2. После миграций выполните полную переиндексацию:
    ```bash
    docker compose exec web python manage.py index_companies_typesense
@@ -130,9 +152,9 @@ python manage.py shell -c "from django.core.cache import cache; cache.clear()"
 
 ---
 
-## Вариант 3: Для VDS с docker-compose.vds.yml
+## Вариант 3: Прод на VDS (prod.yml + vds.yml)
 
-Можно использовать скрипт `./deploy_security.sh` (обновление кода, миграции, collectstatic, проверка DEBUG/SECRET_KEY, перезапуск) или вручную:
+Скрипт `./deploy_security.sh` или вручную:
 
 ```bash
 cd /path/to/project
@@ -141,14 +163,92 @@ cd /path/to/project
 git pull origin main
 
 # 2. Применение миграций
-docker compose -f docker-compose.yml -f docker-compose.vds.yml exec web python manage.py migrate
+docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml exec web python manage.py migrate
 
 # 3. Сбор статики
-docker compose -f docker-compose.yml -f docker-compose.vds.yml exec web python manage.py collectstatic --noinput
+docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml exec web python manage.py collectstatic --noinput
 
 # 4. Перезапуск
-docker compose -f docker-compose.yml -f docker-compose.vds.yml restart web
+docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml restart web
 ```
+
+---
+
+## Синхронизация пароля PostgreSQL с .env
+
+Если в логах **web** или **celery** появляется `password authentication failed for user "crm"`, значит пароль, который приложение читает из `.env` (переменная `POSTGRES_PASSWORD`), **не совпадает** с паролем пользователя `crm` в PostgreSQL.
+
+### Откуда берётся пароль и почему «раньше был другой»
+
+- **Пароль всегда берётся из файла `.env`** в каталоге проекта (рядом с `docker-compose.yml`). Docker Compose при `docker compose up` читает этот файл и подставляет `${POSTGRES_PASSWORD}` в контейнеры. Других источников пароля в compose нет.
+- **При первом запуске** контейнер `db` (Postgres) **инициализирует** базу и создаёт пользователя `crm` с паролем из `POSTGRES_PASSWORD` на тот момент. То есть изначально пароль в БД и в `.env` совпадали — поэтому раньше всё работало.
+- **После этого** пароль мог разъехаться, если:
+  1. В БД вручную выполнили `ALTER USER crm WITH PASSWORD 'новый';` и **не** обновили тот же пароль в `.env`, или  
+  2. Восстановили БД из бэкапа (в бэкапе уже был другой пароль), а в `.env` оставили старый/пустой.
+
+**Итог:** либо приведите пароль в БД к значению из `.env` (ALTER USER), либо измените в `.env` на тот пароль, который сейчас в БД — и перезапустите сервисы.
+
+### Почему БД «сбрасывается» при смене пароля
+
+Данные PostgreSQL лежат в **томе** `pgdata`. БД обнуляется только если этот том удалён. Это происходит при:
+
+- **`docker compose down -v`** — флаг `-v` удаляет тома, в том числе с базой. После следующего `up` создаётся пустая БД с паролем из `.env`.
+- Ручное удаление тома или каталога с данными.
+
+**Важно:** никогда не используйте `down -v`, если нужно сохранить данные. Менять пароль можно **без пересоздания контейнера `db`** и без удаления тома — только через `ALTER USER` в работающей БД и обновление `.env`, затем пересоздание только приложения (web, celery, celery-beat).
+
+### Безопасная смена пароля (данные БД сохраняются)
+
+1. Придумайте новый пароль и запишите его.
+2. Задайте его в **работающей** БД (контейнер `db` не перезапускайте и не пересоздавайте):
+   ```bash
+   cd /opt/proficrm
+   docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml exec db psql -U crm -d crm -c "ALTER USER crm WITH PASSWORD 'ваш_новый_пароль';"
+   ```
+3. Пропишите **тот же** пароль в `.env` в строке `POSTGRES_PASSWORD=...`, сохраните файл.
+4. Пересоздайте **только** приложение (не `db`), чтобы подхватить новый `.env`:
+   ```bash
+   docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml up -d --force-recreate web celery celery-beat
+   ```
+5. Не выполняйте `docker compose down -v` — иначе том с БД будет удалён и при следующем `up` база создастся заново (пустая).
+
+### Проверка, что Compose видит .env
+
+Запускать из **корня проекта** (где лежит `.env`), например `/opt/proficrm`:
+
+```bash
+cd /opt/proficrm
+docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml run --rm --no-deps web sh -c 'if [ -n "$POSTGRES_PASSWORD" ]; then echo "POSTGRES_PASSWORD: задан, длина ${#POSTGRES_PASSWORD}"; else echo "POSTGRES_PASSWORD: пустой или не задан"; fi'
+```
+
+Если видите «пустой или не задан» — файл `.env` не найден, пустой или переменная не экспортируется (проверьте, что запускаете из каталога с `.env`).
+
+### Что сделать
+
+1. **Откройте `.env` на сервере** (для прода — `/opt/proficrm/.env`, для staging — `.env.staging`):
+   ```bash
+   nano /opt/proficrm/.env
+   ```
+2. **Проверьте строку `POSTGRES_PASSWORD=`** — без кавычек, без пробелов до/после `=`, без лишних символов в конце строки. Значение должно **точно** совпадать с паролем, заданным в БД.
+3. **Выберите один из вариантов:**
+   - **Вариант A:** Запомнить пароль из `.env` и задать его в PostgreSQL:
+     ```bash
+     # Подставьте вместо YOUR_PASSWORD_FROM_ENV значение из .env
+     docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml exec db psql -U crm -d crm -c "ALTER USER crm WITH PASSWORD 'YOUR_PASSWORD_FROM_ENV';"
+     ```
+   - **Вариант B:** Задать новый пароль в БД (как вы уже делали), затем **обязательно** прописать тот же пароль в `.env` в `POSTGRES_PASSWORD=...` и сохранить файл.
+4. **Пересоздайте только контейнеры приложения** (не только restart, и не трогайте `db`): при `restart` переменные из `.env` не перечитываются. Чтобы приложение подхватило новый пароль:
+   ```bash
+   docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml up -d --force-recreate web celery celery-beat
+   ```
+   Не используйте `docker compose down -v` — это удалит том с БД и при следующем запуске база будет пустой.
+5. **Проверка:**
+   ```bash
+   curl -sI http://127.0.0.1:8001/health/
+   docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml logs web --tail=30
+   ```
+
+Если после этого ошибка сохраняется — проверьте, что в `.env` нет опечатки (например, лишняя цифра в пароле) и что при редактировании не появились пробелы или кавычки вокруг значения.
 
 ---
 
