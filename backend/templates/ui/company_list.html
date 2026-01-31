@@ -31,11 +31,11 @@
       <div>
         <label class="block text-sm text-brand-dark/80 mb-1">Поиск</label>
         <div class="relative">
-          <input name="q" value="{{ q }}" id="company-search-input" class="input w-full pr-9" placeholder="ИНН / название / адрес" autocomplete="off" />
-          <button type="button" id="company-search-clear" class="absolute right-9 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-brand-soft/50 text-brand-dark/60 hover:text-brand-dark focus:outline-none {% if not q %}hidden{% endif %}" title="Очистить поиск" aria-label="Очистить поиск">
+          <input name="q" value="{{ q }}" id="company-search-input" class="input w-full pr-10" placeholder="ИНН / название / адрес" autocomplete="off" />
+          <button type="button" id="company-search-clear" class="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-brand-soft/50 text-brand-dark/60 hover:text-brand-dark focus:outline-none {% if not q %}hidden{% endif %}" title="Очистить поиск" aria-label="Очистить поиск">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
-          <div id="company-search-loading" class="hidden absolute right-3 top-1/2 -translate-y-1/2">
+          <div id="company-search-loading" class="hidden absolute right-8 top-1/2 -translate-y-1/2">
             <div class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-brand-teal border-t-transparent"></div>
           </div>
         </div>
@@ -864,9 +864,11 @@
       }
       
       function updateSortHeaderUI() {
+        const searchInput = getSearchInput();
+        const searchActive = searchInput && (searchInput.value || '').trim() !== '';
         sortLinks.forEach(link => {
           const sortField = link.dataset.sort;
-          const isActive = sortField === currentSort;
+          const isActive = !searchActive && sortField === currentSort;
           link.classList.toggle('text-brand-orange', isActive);
           link.classList.toggle('font-bold', isActive);
           const svgs = link.querySelectorAll('.flex-col svg, .flex-col > svg');
@@ -977,6 +979,9 @@
               update();
             }
           }, 100);
+          
+          // При активном поиске сбрасываем подсветку сортировки (порядок по релевантности)
+          updateSortHeaderUI();
           
         } catch (error) {
           console.error('Error loading companies:', error);
@@ -1152,6 +1157,9 @@
         setRegionLabel();
         loadCompanies(true);
       })();
+      
+      // При загрузке страницы с уже заполненным поиском убираем подсветку сортировки
+      updateSortHeaderUI();
       
       filterInputs.forEach(input => {
         // Пропускаем скрытые поля и кнопки

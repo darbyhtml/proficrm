@@ -420,26 +420,31 @@ class TypesenseSearchBackend:
             if hi:
                 highlight_by_id[sid] = hi
 
+        # Приоритет полей для причин: только главное (ИНН, телефон, название, контакт, адрес), без шума заметок
+        REASON_PRIORITY = ("inn", "kpp", "phones", "name", "legal_name", "contacts", "address", "emails", "website", "notes")
+        labels = {
+            "name": "Название",
+            "legal_name": "Юр. название",
+            "contacts": "Контакт",
+            "emails": "Email",
+            "phones": "Телефон",
+            "inn": "ИНН",
+            "kpp": "КПП",
+            "address": "Адрес",
+            "website": "Сайт",
+            "notes": "Примечание",
+        }
         out = {}
         for c in companies:
             sid = str(c.id)
             highlights = highlight_by_id.get(sid) or []
-            reasons = []
-            labels = {
-                "name": "Название",
-                "legal_name": "Юр. название",
-                "contacts": "Контакт",
-                "emails": "Email",
-                "phones": "Телефон",
-                "inn": "ИНН",
-                "kpp": "КПП",
-                "address": "Адрес",
-                "website": "Сайт",
-                "notes": "Примечание",
-            }
-            for hl in highlights[:max_reasons_per_company]:
+            # Собираем причины и берём подсветку для колонок таблицы
+            name_html = c.name or ""
+            inn_html = c.inn or ""
+            address_html = c.address or ""
+            all_reasons = []
+            for hl in highlights:
                 field = hl.get("field") or ""
-                # Typesense: value — полное поле с <mark>, snippet — обрезка; для массивов — values/snippets
                 raw = (hl.get("value") or hl.get("snippet") or "").strip()
                 if isinstance(raw, list):
                     raw = " ".join(str(x).strip() for x in raw if x)[:500]
@@ -447,30 +452,33 @@ class TypesenseSearchBackend:
                     continue
                 label = labels.get(field, field)
                 plain = raw.replace("<mark>", "").replace("</mark>", "")
-                reasons.append(
-                    SearchReason(
-                        field=field,
-                        label=label,
-                        value=plain[:200],
-                        value_html=raw[:500],
-                    )
-                )
+                all_reasons.append((field, SearchReason(field=field, label=label, value=plain[:200], value_html=raw[:500])))
+                if field == "name":
+                    name_html = raw[:300]
+                elif field == "inn":
+                    inn_html = raw[:120]
+                elif field == "address":
+                    address_html = raw[:300]
+            # Показываем не более 3 причин, по приоритету (без лишнего шума)
+            order = {f: i for i, f in enumerate(REASON_PRIORITY)}
+            all_reasons.sort(key=lambda x: (order.get(x[0], 99), x[0]))
+            reasons = [r for _, r in all_reasons[:3]]
             if not reasons:
-                reasons.append(
+                reasons = [
                     SearchReason(
                         field="",
                         label="Совпадение",
                         value=(c.name or "")[:80],
                         value_html=(c.name or "")[:80],
                     )
-                )
+                ]
             out[c.id] = SearchExplain(
                 company_id=c.id,
                 reasons=tuple(reasons),
-                reasons_total=len(reasons),
-                name_html=(c.name or ""),
-                inn_html=(c.inn or ""),
-                address_html=(c.address or ""),
+                reasons_total=len(all_reasons),
+                name_html=name_html,
+                inn_html=inn_html,
+                address_html=address_html,
             )
         return out
 

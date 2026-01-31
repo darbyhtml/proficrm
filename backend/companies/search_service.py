@@ -578,10 +578,25 @@ class CompanySearchService:
             if not selected and cands_sorted:
                 selected.append(cands_sorted[0])
 
-            # reasons_total: сколько всего валидных причин нашли, а не сколько показываем
             reasons_total = len(cands_sorted)
-            # вернём чуть больше, чтобы UI мог показать “ещё N причин” корректно, но без раздувания
-            selected_for_ui = selected + [c for c in cands_sorted if c not in selected][: max(0, min(max_reasons_per_company, 10) - len(selected))]
+            # Убираем "шум": заметки, задачи — если уже есть ясная причина (ИНН, название, контакт, телефон)
+            PRIMARY_FIELDS = frozenset({
+                "company.inn", "company.kpp", "company.name", "company.legal_name",
+                "company.phone", "company.email", "company.phones.value", "company.emails.value",
+                "contact.name", "contact.phones.value", "contact.emails.value",
+                "company.address", "company.website", "company.contact_name", "company.contact_position",
+                "contact.position",
+            })
+            NOISE_FIELDS = frozenset({
+                "company.notes.text", "company.notes.attachment_name",
+                "company.tasks.title", "company.tasks.description",
+                "company.phones.comment", "contact.phones.comment", "contact.note",
+                "search_index.plain_text",
+            })
+            has_primary = any(c.field in PRIMARY_FIELDS for c in selected)
+            if has_primary:
+                selected = [c for c in selected if c.field not in NOISE_FIELDS]
+            selected_for_ui = selected[:3]
 
             name_html = highlight_html(c.name or "", text_tokens=pq.text_tokens, digit_tokens=pq.strong_digit_tokens + pq.weak_digit_tokens, max_matches=2, max_len=120)
             inn_html = highlight_html(c.inn or "", text_tokens=pq.text_tokens, digit_tokens=pq.strong_digit_tokens + pq.weak_digit_tokens, max_matches=2, max_len=120)
