@@ -78,7 +78,7 @@ chmod +x deploy_staging.sh   # один раз, если Permission denied
 ./deploy_staging.sh
 ```
 
-Первый раз: клонировать репозиторий в `/opt/proficrm-staging`, скопировать `env.staging.template` в `.env.staging`, заполнить секреты — см. [DEPLOY_WORKFLOW.md](DEPLOY_WORKFLOW.md).
+Первый раз: клонировать репозиторий в `/opt/proficrm-staging`, запустить `./scripts/setup_staging_env.sh` (подставит ключи), задать в `.env.staging` **POSTGRES_PASSWORD**, затем `./deploy_staging.sh`. Подробно: [DEPLOY_WORKFLOW.md](DEPLOY_WORKFLOW.md).
 
 ### Переход с docker-compose.yml на prod.yml (без потери БД)
 

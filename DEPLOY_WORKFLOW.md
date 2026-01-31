@@ -40,11 +40,14 @@ sudo mkdir -p /opt/proficrm-staging
 sudo chown $USER:$USER /opt/proficrm-staging
 cd /opt/proficrm-staging
 git clone https://github.com/darbyhtml/proficrm.git .
-cp env.staging.template .env.staging
-# Отредактировать .env.staging: POSTGRES_PASSWORD, DJANGO_SECRET_KEY, DJANGO_ALLOWED_HOSTS (crm-staging.groupprofi.ru) и т.д.
-chmod +x deploy_staging.sh
-# Деплой: ./deploy_staging.sh
+# Настройка паролей и ключей (подставит DJANGO_SECRET_KEY и MAILER_FERNET_KEY; пароль задать вручную):
+chmod +x scripts/setup_staging_env.sh deploy_staging.sh
+./scripts/setup_staging_env.sh
+nano .env.staging   # задать POSTGRES_PASSWORD=надёжный_пароль (обязательно)
+./deploy_staging.sh
 ```
+
+**Обязательно в .env.staging:** `POSTGRES_PASSWORD`, `DJANGO_SECRET_KEY`, `MAILER_FERNET_KEY`. Скрипт `setup_staging_env.sh` подставляет ключи из шаблона; пароль БД задаёте вы. Без этого `deploy_staging.sh` выдаст ошибку и не запустит compose.
 
 На хосте Nginx должен быть настроен:
 - **crm.groupprofi.ru** → `127.0.0.1:8001` (прод)

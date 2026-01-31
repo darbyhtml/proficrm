@@ -14,11 +14,22 @@ if [ ! -f ".env.staging" ]; then
     echo "Создайте .env.staging из env.staging.template и заполните POSTGRES_PASSWORD, DJANGO_SECRET_KEY и т.д."
     exit 1
 fi
-# Compose подставляет переменные только из .env; для стагинга копируем .env.staging → .env
-if [ ! -f ".env" ]; then
-    cp .env.staging .env
-    echo "Скопирован .env.staging в .env (для подстановки POSTGRES_PASSWORD и др.)"
-fi
+# Compose подставляет переменные только из .env; копируем .env.staging → .env при каждом деплое
+cp .env.staging .env
+
+# Проверка обязательных переменных (не пустые и не плейсхолдеры)
+check_var() {
+    local name="$1"
+    local val
+    val=$(grep -E "^${name}=" .env.staging 2>/dev/null | cut -d= -f2- | tr -d '\r' || true)
+    if [ -z "$val" ] || [ "$val" = "CHANGE_ME_STRONG_PASSWORD" ] || [ "$val" = "CHANGE_ME_GENERATE_STRONG_KEY" ] || [ "$val" = "CHANGE_ME_GENERATE_FERNET_KEY" ]; then
+        echo "Ошибка: в .env.staging задайте ${name} (сейчас пусто или значение-плейсхолдер)."
+        echo "Запустите: ./scripts/setup_staging_env.sh — затем отредактируйте .env.staging и задайте POSTGRES_PASSWORD."
+        exit 1
+    fi
+}
+check_var "POSTGRES_PASSWORD"
+check_var "DJANGO_SECRET_KEY"
 
 # 1) Обновление кода
 echo ">>> git pull"
