@@ -438,11 +438,26 @@ class TypesenseSearchBackend:
         for c in companies:
             sid = str(c.id)
             highlights = highlight_by_id.get(sid) or []
-            # Собираем причины и берём подсветку для колонок таблицы
-            name_html = c.name or ""
-            inn_html = c.inn or ""
-            address_html = c.address or ""
-            all_reasons = []
+            # Если Typesense не вернул подсветку — берём причины из Postgres (не подставляем "Совпадение: название")
+            if not highlights:
+                fallback = _fallback_explain([c], query, max_reasons_per_company)
+                if c.id in fallback:
+                    out[c.id] = fallback[c.id]
+                else:
+                    out[c.id] = SearchExplain(
+                        company_id=c.id,
+                        reasons=(),
+                        reasons_total=0,
+                        name_html=c.name or "",
+                        inn_html=c.inn or "",
+                        address_html=c.address or "",
+                    )
+                continue
+
+            # Собираем причины по приоритету, не более 3 (без шума заметок)
+            FIELD_PRIORITY = ("inn", "kpp", "phones", "name", "legal_name", "contacts", "address", "emails", "website", "notes")
+            order = {f: i for i, f in enumerate(FIELD_PRIORITY)}
+            highlight_by_field = {}
             for hl in highlights:
                 field = hl.get("field") or ""
                 raw = (hl.get("value") or hl.get("snippet") or "").strip()
@@ -450,32 +465,34 @@ class TypesenseSearchBackend:
                     raw = " ".join(str(x).strip() for x in raw if x)[:500]
                 if not raw:
                     continue
-                label = labels.get(field, field)
-                plain = raw.replace("<mark>", "").replace("</mark>", "")
-                all_reasons.append((field, SearchReason(field=field, label=label, value=plain[:200], value_html=raw[:500])))
-                if field == "name":
-                    name_html = raw[:300]
-                elif field == "inn":
-                    inn_html = raw[:120]
-                elif field == "address":
-                    address_html = raw[:300]
-            # Показываем не более 3 причин, по приоритету (без лишнего шума)
-            order = {f: i for i, f in enumerate(REASON_PRIORITY)}
-            all_reasons.sort(key=lambda x: (order.get(x[0], 99), x[0]))
-            reasons = [r for _, r in all_reasons[:3]]
-            if not reasons:
-                reasons = [
+                highlight_by_field.setdefault(field, (raw, plain := raw.replace("<mark>", "").replace("</mark>", "")))
+            sorted_fields = sorted(highlight_by_field.keys(), key=lambda f: (order.get(f, 99), f))
+            reason_fields = [f for f in sorted_fields if f != "notes" or len(highlight_by_field) <= 1][:2]
+            # Короткие сниппеты в "Найдено" (без длинного текста)
+            _snippet_len = 70
+            reasons = []
+            for f in reason_fields:
+                raw, plain = highlight_by_field[f]
+                snippet = raw[: _snippet_len] + ("…" if len(raw) > _snippet_len else "")
+                reasons.append(
                     SearchReason(
-                        field="",
-                        label="Совпадение",
-                        value=(c.name or "")[:80],
-                        value_html=(c.name or "")[:80],
+                        field=f,
+                        label=labels.get(f, f),
+                        value=plain[:_snippet_len] + ("…" if len(plain) > _snippet_len else ""),
+                        value_html=snippet,
                     )
-                ]
+                )
+            reason_field_set = set(reason_fields)
+
+            # Подсвечиваем в таблице только то поле, по которому реально нашли
+            name_html = highlight_by_field["name"][0][:300] if "name" in reason_field_set else (c.name or "")
+            inn_html = highlight_by_field["inn"][0][:120] if "inn" in reason_field_set else (c.inn or "")
+            address_html = highlight_by_field["address"][0][:300] if "address" in reason_field_set else (c.address or "")
+
             out[c.id] = SearchExplain(
                 company_id=c.id,
                 reasons=tuple(reasons),
-                reasons_total=len(all_reasons),
+                reasons_total=len(highlight_by_field),
                 name_html=name_html,
                 inn_html=inn_html,
                 address_html=address_html,

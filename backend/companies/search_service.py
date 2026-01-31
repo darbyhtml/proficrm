@@ -467,12 +467,13 @@ class CompanySearchService:
                     pass
                 else:
                     return None
+            # Короткий сниппет для "Найдено" (без длинных цитат)
             html = highlight_html(
                 value,
                 text_tokens=pq.text_tokens,
                 digit_tokens=pq.strong_digit_tokens + pq.weak_digit_tokens,
                 max_matches=2,
-                max_len=120,
+                max_len=70,
             )
             return Candidate(field=field, label=label, value=value, value_html=html, hit_text=frozenset(ht), hit_digits=frozenset(hd), priority=priority)
 
@@ -596,11 +597,24 @@ class CompanySearchService:
             has_primary = any(c.field in PRIMARY_FIELDS for c in selected)
             if has_primary:
                 selected = [c for c in selected if c.field not in NOISE_FIELDS]
-            selected_for_ui = selected[:3]
+            selected_for_ui = selected[:2]
+            selected_fields = {x.field for x in selected_for_ui}
 
-            name_html = highlight_html(c.name or "", text_tokens=pq.text_tokens, digit_tokens=pq.strong_digit_tokens + pq.weak_digit_tokens, max_matches=2, max_len=120)
-            inn_html = highlight_html(c.inn or "", text_tokens=pq.text_tokens, digit_tokens=pq.strong_digit_tokens + pq.weak_digit_tokens, max_matches=2, max_len=120)
-            address_html = highlight_html(c.address or "", text_tokens=pq.text_tokens, digit_tokens=pq.strong_digit_tokens + pq.weak_digit_tokens, max_matches=2, max_len=120)
+            # Подсвечиваем в таблице только то поле, по которому реально нашли (иначе — обычный текст)
+            if selected_fields & {"company.name", "company.legal_name"}:
+                name_html = highlight_html(c.name or "", text_tokens=pq.text_tokens, digit_tokens=pq.strong_digit_tokens + pq.weak_digit_tokens, max_matches=2, max_len=120)
+            else:
+                name_html = escape(c.name or "")
+
+            if "company.inn" in selected_fields:
+                inn_html = highlight_html(c.inn or "", text_tokens=pq.text_tokens, digit_tokens=pq.strong_digit_tokens + pq.weak_digit_tokens, max_matches=2, max_len=120)
+            else:
+                inn_html = escape(c.inn or "")
+
+            if "company.address" in selected_fields:
+                address_html = highlight_html(c.address or "", text_tokens=pq.text_tokens, digit_tokens=pq.strong_digit_tokens + pq.weak_digit_tokens, max_matches=2, max_len=120)
+            else:
+                address_html = escape(c.address or "")
 
             out[c.id] = SearchExplain(
                 company_id=c.id,

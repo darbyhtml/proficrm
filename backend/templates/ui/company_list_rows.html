@@ -24,20 +24,9 @@
         {% if search_query and c.search_reasons %}
           <div class="text-xs mt-1" style="color: #f97316; font-weight: 500;">
             Найдено:
-            {% for r in c.search_reasons|slice:":3" %}
-              <span class="ml-1">
-                <b>{{ r.label }}</b>:
-                {{ r.value_html|safe }}
-              </span>
-              {% if not forloop.last %}<span class="opacity-50">·</span>{% endif %}
+            {% for r in c.search_reasons %}
+              <span class="ml-1"><b>{{ r.label }}</b>: {{ r.value_html|safe }}</span>{% if not forloop.last %}<span class="opacity-50"> · </span>{% endif %}
             {% endfor %}
-            {% if c.search_reasons_total %}
-              {% with extra=c.search_reasons_total|add:"-3" %}
-                {% if extra > 0 %}
-                  <span class="opacity-60 ml-1">и ещё {{ extra }} причин</span>
-                {% endif %}
-              {% endwith %}
-            {% endif %}
           </div>
         {% endif %}
       </td>
@@ -78,18 +67,7 @@
         {% endfor %}
       </td>
     {% endif %}
-    {% if "responsible" in company_list_columns %}
-      <td>
-        {% if c.responsible %}{{ c.responsible }}{% endif %}
-        {% if search_query and c.search_reasons %}
-          {% for r in c.search_reasons %}
-            {% if r.label == "Контакт" %}
-              <div class="text-xs mt-0.5" style="color:#f97316;font-weight:500;">{{ r.value_html|safe }}</div>
-            {% endif %}
-          {% endfor %}
-        {% endif %}
-      </td>
-    {% endif %}
+    {% if "responsible" in company_list_columns %}<td>{% if c.responsible %}{{ c.responsible }}{% endif %}</td>{% endif %}
     {% if "branch" in company_list_columns %}<td>{{ c.branch }}</td>{% endif %}
     {% if "region" in company_list_columns %}<td>{{ c.region }}</td>{% endif %}
     {% if "updated_at" in company_list_columns %}
