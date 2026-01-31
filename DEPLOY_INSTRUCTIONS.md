@@ -1,14 +1,38 @@
 # Инструкция по применению изменений на сервере
 
-Остаются **два окружения**: **прод** (crm.groupprofi.ru) и **стаги** (crm-staging.groupprofi.ru). Всё лишнее убрано.
+Два окружения: **прод** (crm.groupprofi.ru) и **стагинг** (crm-staging.groupprofi.ru). Они работают **одновременно** на одном сервере в **разных папках**. Workflow: изменения сначала деплоятся на стагинг, тестируются, затем — на прод.
+
+**Подробный порядок работы:** см. **[DEPLOY_WORKFLOW.md](DEPLOY_WORKFLOW.md)** (две папки, Staging → Production).
+
+---
+
+## Раскладка окружений (две папки)
+
+| Окружение | Папка на сервере | Домен | Скрипт деплоя |
+|-----------|------------------|--------|----------------|
+| **Production** | `/opt/proficrm` | crm.groupprofi.ru | `./deploy_security.sh` или `./deploy_production.sh` |
+| **Staging** | `/opt/proficrm-staging` | crm-staging.groupprofi.ru | `./deploy_staging.sh` |
+
+Staging — в **отдельной папке** (`/opt/proficrm-staging`), чтобы не путать с продом и чтобы оба стека могли работать одновременно (разные тома и контейнеры).
+
+### Порядок выкатки (Staging → Production)
+
+1. **Код** — пуш в `main` (или в ветку для стагинга).
+2. **Стагинг** — в папке стагинга: `git pull && ./deploy_staging.sh`, проверить https://crm-staging.groupprofi.ru.
+3. **Тест** — убедиться, что всё работает на стагинге.
+4. **Прод** — в папке прода: `git pull && ./deploy_security.sh`, проверить https://crm.groupprofi.ru.
+
+Подробно: [DEPLOY_WORKFLOW.md](DEPLOY_WORKFLOW.md).
+
+---
 
 ## Вариант 1: Скрипты деплоя (рекомендуется)
 
-| Скрипт | Назначение |
-|--------|------------|
-| `./deploy_production.sh` | Прод (docker-compose.prod.yml, .env) |
-| `./deploy_security.sh` | Прод на VDS (prod.yml + vds.yml: порт БД 15432, web 8001) |
-| `./deploy_staging.sh` | Staging (docker-compose.staging.yml, .env.staging) |
+| Скрипт | Где запускать | Назначение |
+|--------|----------------|------------|
+| `./deploy_staging.sh` | **Папка стагинга** (`/opt/proficrm-staging`) | Деплой стагинга (staging.yml, .env.staging) |
+| `./deploy_security.sh` | **Папка прода** (`/opt/proficrm`) | Деплой прода на VDS (prod.yml + vds.yml) |
+| `./deploy_production.sh` | **Папка прода** (`/opt/proficrm`) | Деплой прода без vds (только prod.yml) |
 
 ### Чем отличаются compose-файлы (прод)
 
@@ -23,32 +47,38 @@
 
 Для **прод на VDS** используйте **prod.yml + vds.yml**: тот же prod, плюс порты (15432 для БД, 8001 для web). Имена томов общие — БД сохраняется.
 
-### Прод (crm.groupprofi.ru)
+### Прод (crm.groupprofi.ru) — папка `/opt/proficrm`
 
 **Вариант A — без VDS-оверлея (только prod.yml):**
 ```bash
-cd /path/to/project
+cd /opt/proficrm
 ./deploy_production.sh
 ```
 
 **Вариант B — прод на VDS (prod.yml + vds.yml, порт 8001):**
 ```bash
-cd /path/to/project
+cd /opt/proficrm
 ./deploy_security.sh
 ```
 
-Перед первым запуском на prod.yml: создать каталоги и владельца (на сервере):
+Перед первым запуском: создать каталоги (на сервере):
 ```bash
+cd /opt/proficrm
 mkdir -p data/staticfiles data/media
 chown 1000:1000 data/staticfiles data/media
 ```
 
-### Staging (crm-staging.groupprofi.ru)
+### Staging (crm-staging.groupprofi.ru) — папка `/opt/proficrm-staging`
+
+Staging разворачивается в **отдельной папке**, чтобы работать одновременно с продом.
+
 ```bash
-cd /path/to/project
+cd /opt/proficrm-staging
 chmod +x deploy_staging.sh   # один раз, если Permission denied
 ./deploy_staging.sh
 ```
+
+Первый раз: клонировать репозиторий в `/opt/proficrm-staging`, скопировать `env.staging.template` в `.env.staging`, заполнить секреты — см. [DEPLOY_WORKFLOW.md](DEPLOY_WORKFLOW.md).
 
 ### Переход с docker-compose.yml на prod.yml (без потери БД)
 

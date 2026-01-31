@@ -14,6 +14,11 @@ if [ ! -f ".env.staging" ]; then
     echo "Создайте .env.staging из env.staging.template и заполните POSTGRES_PASSWORD, DJANGO_SECRET_KEY и т.д."
     exit 1
 fi
+# Compose подставляет переменные только из .env; для стагинга копируем .env.staging → .env
+if [ ! -f ".env" ]; then
+    cp .env.staging .env
+    echo "Скопирован .env.staging в .env (для подстановки POSTGRES_PASSWORD и др.)"
+fi
 
 # 1) Обновление кода
 echo ">>> git pull"
