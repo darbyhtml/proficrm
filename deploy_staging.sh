@@ -54,6 +54,10 @@ $COMPOSE run --rm web python manage.py migrate --noinput
 echo ">>> collectstatic"
 $COMPOSE run --rm -u root web python manage.py collectstatic --noinput
 
+# 5.1) Перестроение поискового индекса компаний (FTS)
+echo ">>> rebuild_company_search_index"
+$COMPOSE run --rm web python manage.py rebuild_company_search_index
+
 # 6) Запуск всех сервисов (удаляем старый контейнер nginx, если имя занято от предыдущего запуска)
 echo ">>> up -d"
 docker rm -f crm_staging_nginx 2>/dev/null || true
