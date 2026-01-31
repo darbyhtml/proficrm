@@ -11,7 +11,7 @@ from companies.search_backends.typesense_backend import (
     STOPWORDS_SET_ID,
     RUSSIAN_ORG_STOPWORDS,
     ensure_stopwords,
-    _get_client,
+    _typesense_available,
 )
 
 
@@ -24,12 +24,11 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("SEARCH_ENGINE_BACKEND не typesense — команда пропущена."))
             return
 
-        client = _get_client()
-        if not client:
+        if not _typesense_available():
             self.stdout.write(self.style.ERROR("Typesense недоступен. Проверьте TYPESENSE_* в настройках."))
             return
 
-        ensure_stopwords(client)
+        ensure_stopwords()
         self.stdout.write(
             self.style.SUCCESS("Стоп-слова обновлены: %s (%d слов)" % (STOPWORDS_SET_ID, len(RUSSIAN_ORG_STOPWORDS)))
         )

@@ -1,7 +1,7 @@
 """
 Backend поиска компаний через Typesense.
 Совместим с интерфейсом CompanySearchService: apply(qs, query), explain(companies, query).
-Typesense v30+: synonym_sets (top-level), curation_sets, analytics.
+Typesense v30+: все вызовы через HTTP (requests), без пакета typesense — нет deprecation-предупреждений.
 """
 from __future__ import annotations
 
@@ -56,55 +56,32 @@ SCHEMA = {
     "default_sorting_field": "updated_at",
 }
 
-
-def _suppress_typesense_deprecation_warnings() -> None:
-    """Убирает из логов WARNING Python-клиента Typesense про deprecated API (v30+)."""
-    ts_logger = logging.getLogger("typesense")
-    if any(isinstance(f, _TypesenseDeprecationFilter) for f in ts_logger.filters):
-        return
-    ts_logger.addFilter(_TypesenseDeprecationFilter())
-
-
-class _TypesenseDeprecationFilter(logging.Filter):
-    """Не пропускать WARNING от typesense с текстом про deprecation."""
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        if record.levelno != logging.WARNING:
-            return True
-        msg = (record.getMessage() or "").lower()
-        if "deprecat" in msg or "v30" in msg:
-            return False
-        return True
-
-
-def _get_client():
-    """Создаёт клиент Typesense. При ошибке (нет модуля, неверные настройки) возвращает None."""
-    _suppress_typesense_deprecation_warnings()
-    try:
-        import typesense
-        return typesense.Client({
-            "nodes": [{
-                "host": settings.TYPESENSE_HOST,
-                "port": str(settings.TYPESENSE_PORT),
-                "protocol": settings.TYPESENSE_PROTOCOL,
-            }],
-            "api_key": settings.TYPESENSE_API_KEY,
-            "connection_timeout_seconds": 5,
-        })
-    except Exception:
-        return None
-
-
-# Фильтр deprecation вешаем при загрузке модуля, чтобы к первому import typesense логгер уже был настроен.
-_suppress_typesense_deprecation_warnings()
+_TIMEOUT = 10
 
 
 def _typesense_base_url() -> str:
-    """Базовый URL Typesense для прямых HTTP-запросов (synonym_sets в v30)."""
     port = str(getattr(settings, "TYPESENSE_PORT", 8108))
     protocol = (getattr(settings, "TYPESENSE_PROTOCOL", "http") or "http").rstrip("://")
     host = getattr(settings, "TYPESENSE_HOST", "localhost")
     return f"{protocol}://{host}:{port}"
+
+
+def _typesense_headers() -> dict:
+    api_key = getattr(settings, "TYPESENSE_API_KEY", "") or ""
+    return {"X-TYPESENSE-API-KEY": api_key, "Content-Type": "application/json"}
+
+
+def _typesense_available() -> bool:
+    """Проверка доступности Typesense (GET /collections)."""
+    try:
+        r = requests.get(
+            f"{_typesense_base_url()}/collections",
+            headers=_typesense_headers(),
+            timeout=5,
+        )
+        return r.status_code == 200
+    except Exception:
+        return False
 
 
 def build_company_document(company: Company) -> dict:
@@ -185,46 +162,52 @@ def build_company_document(company: Company) -> dict:
     }
 
 
-def ensure_collection(client) -> None:
-    """Создаёт коллекцию, если её нет."""
+def ensure_collection() -> None:
+    """Создаёт коллекцию, если её нет (HTTP API)."""
+    base = _typesense_base_url()
+    headers = _typesense_headers()
     try:
-        client.collections[COLLECTION_NAME].retrieve()
+        r = requests.get(f"{base}/collections/{COLLECTION_NAME}", headers=headers, timeout=_TIMEOUT)
+        if r.status_code == 200:
+            ensure_stopwords()
+            return
     except Exception:
-        try:
-            client.collections.create(SCHEMA)
-        except Exception as e:
-            logger.warning("Typesense: не удалось создать коллекцию %s: %s", COLLECTION_NAME, e)
-    ensure_stopwords(client)
+        pass
+    try:
+        r = requests.post(f"{base}/collections", json=SCHEMA, headers=headers, timeout=_TIMEOUT)
+        if r.status_code in (200, 201):
+            ensure_stopwords()
+        else:
+            logger.warning("Typesense: не удалось создать коллекцию %s: %s %s", COLLECTION_NAME, r.status_code, r.text[:200])
+    except Exception as e:
+        logger.warning("Typesense: не удалось создать коллекцию %s: %s", COLLECTION_NAME, e)
 
 
-def ensure_stopwords(client) -> None:
-    """Создаёт или обновляет набор стоп-слов для русского поиска (орг. формы и т.д.)."""
+def ensure_stopwords() -> None:
+    """Создаёт или обновляет набор стоп-слов (HTTP API v30)."""
     body = {"stopwords": RUSSIAN_ORG_STOPWORDS, "locale": "ru"}
     try:
-        if hasattr(client, "stopwords"):
-            sw = client.stopwords
-            if hasattr(sw, "upsert"):
-                sw.upsert(STOPWORDS_SET_ID, body)
-            elif hasattr(sw, "__getitem__"):
-                sw[STOPWORDS_SET_ID].upsert(body)
-            else:
-                logger.debug("Typesense: API stopwords не найден")
-        else:
-            logger.debug("Typesense: клиент без stopwords")
+        r = requests.put(
+            f"{_typesense_base_url()}/stopwords/{STOPWORDS_SET_ID}",
+            json=body,
+            headers=_typesense_headers(),
+            timeout=_TIMEOUT,
+        )
+        if r.status_code not in (200, 201):
+            logger.debug("Typesense: стоп-слова %s — %s %s", STOPWORDS_SET_ID, r.status_code, r.text[:200])
     except Exception as e:
         logger.debug("Typesense: стоп-слова не заданы (%s): %s", STOPWORDS_SET_ID, e)
 
 
-def ensure_synonyms(client, collection: str | None = None) -> int:
+def ensure_synonyms(collection: str | None = None) -> int:
     """
     Создаёт или обновляет синонимы для коллекции компаний (Typesense v30: synonym_sets).
     PUT /synonym_sets/:name с items, затем PATCH коллекции — synonym_sets: [name].
     Возвращает количество групп в наборе при успехе, иначе 0.
     """
     coll = collection or getattr(settings, "TYPESENSE_COLLECTION_COMPANIES", COLLECTION_NAME)
-    api_key = getattr(settings, "TYPESENSE_API_KEY", "") or ""
     base = _typesense_base_url()
-    headers = {"X-TYPESENSE-API-KEY": api_key, "Content-Type": "application/json"}
+    headers = _typesense_headers()
     items = []
     for i, group in enumerate(RUSSIAN_SYNONYMS):
         if not group:
@@ -258,24 +241,69 @@ def ensure_synonyms(client, collection: str | None = None) -> int:
         return 0
 
 
+def _typesense_import_documents(collection: str, docs: list[dict]) -> tuple[int, list[str]]:
+    """
+    POST /collections/{name}/documents/import (NDJSON, action=upsert).
+    Возвращает (количество успешных, список ошибок).
+    """
+    if not docs:
+        return 0, []
+    import json as _json
+    ndjson = "\n".join(_json.dumps(d, ensure_ascii=False) for d in docs)
+    headers = _typesense_headers()
+    headers["Content-Type"] = "application/x-ndjson"
+    try:
+        r = requests.post(
+            f"{_typesense_base_url()}/collections/{collection}/documents/import",
+            params={"action": "upsert"},
+            data=ndjson.encode("utf-8"),
+            headers=headers,
+            timeout=60,
+        )
+        if r.status_code != 200:
+            return 0, [r.text[:500]]
+        count = 0
+        errors = []
+        for line in (r.text or "").strip().split("\n"):
+            if not line:
+                continue
+            try:
+                item = _json.loads(line)
+                if item.get("success") is True:
+                    count += 1
+                elif item.get("error"):
+                    errors.append(item.get("error", "")[:200])
+            except Exception:
+                pass
+        return count, errors
+    except Exception as e:
+        return 0, [str(e)]
+
+
+def _typesense_search(collection: str, params: dict) -> dict | None:
+    """GET /collections/{name}/documents/search. Возвращает JSON ответа или None при ошибке."""
+    try:
+        r = requests.get(
+            f"{_typesense_base_url()}/collections/{collection}/documents/search",
+            params=params,
+            headers=_typesense_headers(),
+            timeout=_TIMEOUT,
+        )
+        if r.status_code != 200:
+            return None
+        return r.json()
+    except Exception:
+        return None
+
+
 class TypesenseSearchBackend:
     """
-    Поиск компаний через Typesense.
+    Поиск компаний через Typesense (HTTP API, без пакета typesense).
     Интерфейс совместим с CompanySearchService: apply(qs, query), explain(companies, query).
     """
 
     def __init__(self, *, max_results_cap: int = 5000):
         self.max_results_cap = max_results_cap
-        self._client = None
-
-    def _client_or_none(self):
-        if self._client is None:
-            try:
-                self._client = _get_client()
-            except Exception as e:
-                logger.warning("Typesense: клиент не создан: %s", e)
-                return None
-        return self._client
 
     def _fallback_apply(self, qs, query: str):
         """При недоступности Typesense — поиск через Postgres."""
@@ -290,37 +318,33 @@ class TypesenseSearchBackend:
         q = (query or "").strip()
         if not q:
             return qs
-        # Слишком короткий запрос (1 символ) — не дергаем Typesense, используем fallback или пусто
         if len(q) < 2:
             if getattr(settings, "TYPESENSE_FALLBACK_TO_POSTGRES", True):
                 return self._fallback_apply(qs, q)
             return qs.none()
 
-        client = self._client_or_none()
-        if not client:
+        if not _typesense_available():
             if getattr(settings, "TYPESENSE_FALLBACK_TO_POSTGRES", True):
                 logger.info("Typesense недоступен — fallback на Postgres.")
                 return self._fallback_apply(qs, q)
             return qs.none()
 
         collection = getattr(settings, "TYPESENSE_COLLECTION_COMPANIES", COLLECTION_NAME)
-        try:
-            search_params = {
-                "q": q,
-                "query_by": "name,legal_name,contacts,emails,phones,inn,kpp,address,website,notes",
-                "query_by_weights": "5,5,3,2,2,5,5,1,1,0.5",
-                "prefix": "true",
-                "num_typos": 2,
-                "max_facet_values": 0,
-                "per_page": self.max_results_cap,
-                "sort_by": "_text_match:desc,updated_at:desc",
-                "highlight_full_fields": "name,legal_name,contacts,emails,phones,address,website,notes",
-                "synonym_sets": SYNONYM_SET_NAME,
-            }
-            search_params["stopwords"] = STOPWORDS_SET_ID
-            res = client.collections[collection].documents.search(search_params)
-        except Exception as e:
-            logger.warning("Typesense search failed: %s", e)
+        search_params = {
+            "q": q,
+            "query_by": "name,legal_name,contacts,emails,phones,inn,kpp,address,website,notes",
+            "query_by_weights": "5,5,3,2,2,5,5,1,1,0.5",
+            "prefix": "true",
+            "num_typos": 2,
+            "max_facet_values": 0,
+            "per_page": self.max_results_cap,
+            "sort_by": "_text_match:desc,updated_at:desc",
+            "highlight_full_fields": "name,legal_name,contacts,emails,phones,address,website,notes",
+            "synonym_sets": SYNONYM_SET_NAME,
+            "stopwords": STOPWORDS_SET_ID,
+        }
+        res = _typesense_search(collection, search_params)
+        if not res:
             if getattr(settings, "TYPESENSE_FALLBACK_TO_POSTGRES", True):
                 return self._fallback_apply(qs, q)
             return qs.none()
@@ -365,27 +389,24 @@ class TypesenseSearchBackend:
         if not q or not companies:
             return {}
 
-        client = self._client_or_none()
-        if not client:
+        if not _typesense_available():
             return _fallback_explain(companies, query, max_reasons_per_company)
 
         collection = getattr(settings, "TYPESENSE_COLLECTION_COMPANIES", COLLECTION_NAME)
         ids_filter = ",".join(str(c.id) for c in companies)
-        try:
-            explain_params = {
-                "q": q,
-                "query_by": "name,legal_name,contacts,emails,phones,inn,kpp,address,website,notes",
-                "filter_by": f"id:[{ids_filter}]",
-                "prefix": "true",
-                "num_typos": 2,
-                "per_page": len(companies) + 10,
-                "highlight_full_fields": "name,legal_name,contacts,emails,phones,address,website,notes",
-                "synonym_sets": SYNONYM_SET_NAME,
-            }
-            explain_params["stopwords"] = STOPWORDS_SET_ID
-            res = client.collections[collection].documents.search(explain_params)
-        except Exception as e:
-            logger.warning("Typesense explain search failed: %s", e)
+        explain_params = {
+            "q": q,
+            "query_by": "name,legal_name,contacts,emails,phones,inn,kpp,address,website,notes",
+            "filter_by": f"id:[{ids_filter}]",
+            "prefix": "true",
+            "num_typos": 2,
+            "per_page": len(companies) + 10,
+            "highlight_full_fields": "name,legal_name,contacts,emails,phones,address,website,notes",
+            "synonym_sets": SYNONYM_SET_NAME,
+            "stopwords": STOPWORDS_SET_ID,
+        }
+        res = _typesense_search(collection, explain_params)
+        if not res:
             return _fallback_explain(companies, query, max_reasons_per_company)
 
         hits = res.get("hits") or []
@@ -466,35 +487,35 @@ def _fallback_explain(companies, query, max_reasons_per_company):
 
 def index_company(company: Company) -> bool:
     """
-    Индексирует или обновляет одну компанию в Typesense.
+    Индексирует или обновляет одну компанию в Typesense (HTTP API).
     company должен быть загружен с prefetch_related("phones", "emails", "contacts__phones", "contacts__emails", "notes", "tasks").
     Возвращает True при успехе, False при ошибке или недоступности Typesense.
     """
-    client = _get_client()
-    if not client:
-        return False
+    collection = getattr(settings, "TYPESENSE_COLLECTION_COMPANIES", COLLECTION_NAME)
     try:
-        from django.conf import settings as s
-        collection = getattr(s, "TYPESENSE_COLLECTION_COMPANIES", COLLECTION_NAME)
-        ensure_collection(client)
         doc = build_company_document(company)
-        client.collections[collection].documents.upsert(doc)
-        return True
+        r = requests.post(
+            f"{_typesense_base_url()}/collections/{collection}/documents",
+            json=doc,
+            headers=_typesense_headers(),
+            timeout=_TIMEOUT,
+        )
+        return r.status_code in (200, 201)
     except Exception as e:
         logger.warning("Typesense index_company %s failed: %s", company.id, e)
         return False
 
 
 def delete_company_from_index(company_id: UUID) -> bool:
-    """Удаляет компанию из индекса Typesense. Возвращает True при успехе."""
-    client = _get_client()
-    if not client:
-        return False
+    """Удаляет компанию из индекса Typesense (HTTP API). Возвращает True при успехе."""
+    collection = getattr(settings, "TYPESENSE_COLLECTION_COMPANIES", COLLECTION_NAME)
     try:
-        from django.conf import settings as s
-        collection = getattr(s, "TYPESENSE_COLLECTION_COMPANIES", COLLECTION_NAME)
-        client.collections[collection].documents[str(company_id)].delete()
-        return True
+        r = requests.delete(
+            f"{_typesense_base_url()}/collections/{collection}/documents/{company_id}",
+            headers=_typesense_headers(),
+            timeout=_TIMEOUT,
+        )
+        return r.status_code in (200, 204)
     except Exception as e:
         logger.warning("Typesense delete_company %s failed: %s", company_id, e)
         return False

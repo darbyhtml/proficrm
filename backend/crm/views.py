@@ -109,12 +109,8 @@ def health_check(request):
     backend = getattr(settings, "SEARCH_ENGINE_BACKEND", "postgres") or "postgres"
     if str(backend).strip().lower() == "typesense":
         try:
-            from companies.search_backends.typesense_backend import _get_client
-            client = _get_client()
-            if client:
-                health_status["checks"]["search_typesense"] = "ok"
-            else:
-                health_status["checks"]["search_typesense"] = "unavailable"
+            from companies.search_backends.typesense_backend import _typesense_available
+            health_status["checks"]["search_typesense"] = "ok" if _typesense_available() else "unavailable"
         except Exception as e:
             health_status["checks"]["search_typesense"] = f"unavailable: {str(e)}"
 

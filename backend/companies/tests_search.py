@@ -196,7 +196,7 @@ class SearchBackendFacadeTests(TestCase):
         status = CompanyStatus.objects.create(name="Т")
         Company.objects.create(name="Тест", inn="1234567890", status=status)
         backend = TypesenseSearchBackend()
-        with patch("companies.search_backends.typesense_backend._get_client", return_value=None), \
+        with patch("companies.search_backends.typesense_backend._typesense_available", return_value=False), \
              self.settings(TYPESENSE_FALLBACK_TO_POSTGRES=False):
             qs = backend.apply(qs=Company.objects.all(), query="тест")
         self.assertEqual(qs.count(), 0)

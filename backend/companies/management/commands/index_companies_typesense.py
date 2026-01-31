@@ -4,18 +4,18 @@
 """
 from __future__ import annotations
 
-import json
 from uuid import UUID
 
+from django.conf import settings as s
 from django.core.management.base import BaseCommand
 
 from companies.models import Company
 from companies.search_backends.typesense_backend import (
     build_company_document,
     ensure_collection,
-    _get_client,
+    _typesense_available,
+    _typesense_import_documents,
 )
-from django.conf import settings as s
 
 
 class Command(BaseCommand):
@@ -31,12 +31,11 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("SEARCH_ENGINE_BACKEND не typesense — индексация пропущена."))
             return
 
-        client = _get_client()
-        if not client:
+        if not _typesense_available():
             self.stdout.write(self.style.ERROR("Typesense недоступен. Проверьте TYPESENSE_* в настройках."))
             return
 
-        ensure_collection(client)
+        ensure_collection()
         collection = getattr(s, "TYPESENSE_COLLECTION_COMPANIES", "companies")
         chunk_size = max(1, int(options.get("chunk") or 200))
         company_id_raw = (options.get("company_id") or "").strip()
@@ -71,52 +70,16 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING("Ошибка сборки документа %s: %s" % (company.id, e)))
                 continue
             if len(buf) >= chunk_size:
-                indexed += self._import_batch(client, collection, buf)
+                count, errors = _typesense_import_documents(collection, buf)
+                indexed += count
+                for err in errors:
+                    self.stdout.write(self.style.WARNING("Импорт документа: %s" % err))
                 buf = []
                 self.stdout.write("Готово: %d/%d" % (indexed, total))
 
         if buf:
-            indexed += self._import_batch(client, collection, buf)
+            count, errors = _typesense_import_documents(collection, buf)
+            indexed += count
+            for err in errors:
+                self.stdout.write(self.style.WARNING("Импорт документа: %s" % err))
         self.stdout.write(self.style.SUCCESS("OK. Проиндексировано: %d" % indexed))
-
-    def _import_batch(self, client, collection: str, docs: list) -> int:
-        try:
-            # API принимает NDJSON; клиент может принять список и сериализовать сам
-            result = client.collections[collection].documents.import_(
-                docs, {"action": "upsert"}
-            )
-            # Ответ — итератор строк (NDJSON) или список dict; успех = success: true
-            count = 0
-            for item in result:
-                if isinstance(item, dict):
-                    if item.get("success") is True:
-                        count += 1
-                    elif item.get("error"):
-                        self.stdout.write(
-                            self.style.WARNING("Импорт документа: %s" % item.get("error"))
-                        )
-                else:
-                    try:
-                        parsed = json.loads(item) if isinstance(item, str) else item
-                        if parsed.get("success") is True:
-                            count += 1
-                    except Exception:
-                        pass
-            return count
-        except TypeError:
-            # Часть клиентов ожидает NDJSON-строку
-            try:
-                ndjson = "\n".join(json.dumps(d, ensure_ascii=False) for d in docs)
-                result = client.collections[collection].documents.import_(
-                    ndjson, {"action": "upsert"}
-                )
-                return sum(
-                    1 for r in result
-                    if isinstance(r, dict) and r.get("success") is True
-                )
-            except Exception as e:
-                self.stdout.write(self.style.WARNING("Ошибка импорта пачки (NDJSON): %s" % e))
-                return 0
-        except Exception as e:
-            self.stdout.write(self.style.WARNING("Ошибка импорта пачки: %s" % e))
-            return 0

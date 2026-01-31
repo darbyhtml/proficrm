@@ -31,7 +31,10 @@
       <div>
         <label class="block text-sm text-brand-dark/80 mb-1">Поиск</label>
         <div class="relative">
-          <input name="q" value="{{ q }}" id="company-search-input" class="input w-full" placeholder="ИНН / название / адрес" autocomplete="off" />
+          <input name="q" value="{{ q }}" id="company-search-input" class="input w-full pr-9" placeholder="ИНН / название / адрес" autocomplete="off" />
+          <button type="button" id="company-search-clear" class="absolute right-9 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-brand-soft/50 text-brand-dark/60 hover:text-brand-dark focus:outline-none {% if not q %}hidden{% endif %}" title="Очистить поиск" aria-label="Очистить поиск">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
           <div id="company-search-loading" class="hidden absolute right-3 top-1/2 -translate-y-1/2">
             <div class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-brand-teal border-t-transparent"></div>
           </div>
@@ -688,6 +691,8 @@
       let currentPage = 1;
       let isLoading = false;
       let hasMore = true;
+      // Сортировка до начала поиска: при очистке поиска восстанавливаем её
+      let sortBeforeSearch = { sort: currentSort, dir: currentDir };
 
       // Запоминание фильтров/поиска (localStorage, per-user).
       // ВАЖНО: ключи включают userId, чтобы после перелогина не подтягивались "чужие" фильтры.
@@ -834,15 +839,18 @@
       function buildQueryParams() {
         const formData = new FormData(filterForm);
         const params = new URLSearchParams();
+        const searchVal = (filterForm && filterForm.querySelector('input[name="q"]')) ? (filterForm.querySelector('input[name="q"]').value || '').trim() : '';
         
         // Добавляем все поля формы
         for (const [key, value] of formData.entries()) {
           if (value) params.append(key, value);
         }
         
-        // Добавляем сортировку
-        params.append('sort', currentSort);
-        params.append('dir', currentDir);
+        // При непустом поиске не передаём sort/dir — бэкенд отдаёт по релевантности; при очистке вернётся сохранённая сортировка
+        if (!searchVal) {
+          params.append('sort', currentSort);
+          params.append('dir', currentDir);
+        }
         
         // Добавляем пагинацию
         params.append('page', currentPage);
@@ -853,6 +861,38 @@
         }
         
         return params;
+      }
+      
+      function updateSortHeaderUI() {
+        sortLinks.forEach(link => {
+          const sortField = link.dataset.sort;
+          const isActive = sortField === currentSort;
+          link.classList.toggle('text-brand-orange', isActive);
+          link.classList.toggle('font-bold', isActive);
+          const svgs = link.querySelectorAll('.flex-col svg, .flex-col > svg');
+          if (svgs.length >= 2) {
+            svgs[0].classList.toggle('text-brand-orange', isActive && currentDir === 'asc');
+            svgs[0].classList.toggle('opacity-30', !(isActive && currentDir === 'asc'));
+            svgs[1].classList.toggle('text-brand-orange', isActive && currentDir === 'desc');
+            svgs[1].classList.toggle('opacity-30', !(isActive && currentDir === 'desc'));
+          }
+        });
+      }
+      
+      function getSearchInput() {
+        return filterForm ? filterForm.querySelector('input[name="q"]') : null;
+      }
+      
+      function clearSearchAndRestoreSort() {
+        const searchInput = getSearchInput();
+        if (!searchInput) return;
+        searchInput.value = '';
+        currentSort = sortBeforeSearch.sort;
+        currentDir = sortBeforeSearch.dir;
+        updateSortHeaderUI();
+        const clearBtn = document.getElementById('company-search-clear');
+        if (clearBtn) clearBtn.classList.add('hidden');
+        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
       }
       
       async function loadCompanies(resetPage = true) {
@@ -1119,36 +1159,38 @@
           return;
         }
 
-        // Поле общего поиска теперь триггерит обновление таблицы
+        // Поле общего поиска: при вводе — сортировка по релевантности; при очистке — восстанавливаем сохранённую сортировку
         if (input.id === 'company-search-input') {
-          // Обработчик для лайв-поиска в таблице
           let searchDebounceTimer = null;
+          const clearBtn = document.getElementById('company-search-clear');
+          const loadingIndicator = document.getElementById('company-search-loading');
           input.addEventListener('input', () => {
             const query = input.value.trim();
-            const loadingIndicator = document.getElementById('company-search-loading');
-            
-            // Показываем индикатор загрузки
-            if (loadingIndicator) {
-              loadingIndicator.classList.remove('hidden');
+            if (query) {
+              sortBeforeSearch = { sort: currentSort, dir: currentDir };
+              if (clearBtn) clearBtn.classList.remove('hidden');
+            } else {
+              currentSort = sortBeforeSearch.sort;
+              currentDir = sortBeforeSearch.dir;
+              updateSortHeaderUI();
+              if (clearBtn) clearBtn.classList.add('hidden');
             }
-            
-            // Очищаем предыдущий таймер
-            if (searchDebounceTimer) {
-              clearTimeout(searchDebounceTimer);
-            }
-            
-            // Устанавливаем новый таймер (300ms задержка для лайв-поиска)
+            if (loadingIndicator) loadingIndicator.classList.remove('hidden');
+            if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
             searchDebounceTimer = setTimeout(async () => {
               try {
                 await loadCompanies(true);
               } finally {
-                // Скрываем индикатор загрузки после завершения
-                if (loadingIndicator) {
-                  loadingIndicator.classList.add('hidden');
-                }
+                if (loadingIndicator) loadingIndicator.classList.add('hidden');
               }
             }, 300);
           });
+          if (clearBtn) {
+            clearBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              clearSearchAndRestoreSort();
+            });
+          }
           return;
         }
         

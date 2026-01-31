@@ -8,9 +8,8 @@ from django.conf import settings as s
 from django.core.management.base import BaseCommand
 
 from companies.search_backends.typesense_backend import (
-    ensure_collection,
     ensure_synonyms,
-    _get_client,
+    _typesense_available,
 )
 
 
@@ -23,13 +22,11 @@ class Command(BaseCommand):
             self.stdout.write(self.style.WARNING("SEARCH_ENGINE_BACKEND не typesense — команда пропущена."))
             return
 
-        client = _get_client()
-        if not client:
+        if not _typesense_available():
             self.stdout.write(self.style.ERROR("Typesense недоступен. Проверьте TYPESENSE_* в настройках."))
             return
 
-        ensure_collection(client)
-        count = ensure_synonyms(client)
+        count = ensure_synonyms()
         self.stdout.write(
             self.style.SUCCESS("Синонимы обновлены: загружено %d групп (ул/пр-т/наб/пер/ш и т.д.)." % count)
         )
