@@ -984,9 +984,19 @@
                 </span>
                 <span>Помощь</span>
               </a>
+              {# Настройки пользователя (персональные) — доступны всем, в том числе администратору #}
+              <a class="flex flex-col items-center gap-1 px-2 py-2 rounded-lg hover:bg-brand-soft/40 text-[12px] text-center {% if request.resolver_match.url_name == 'preferences' or request.resolver_match.url_name == 'preferences_ui' or request.resolver_match.url_name == 'preferences_mail' %}bg-brand-soft/50 font-medium{% endif %}" href="/preferences/">
+                <span class="nav-ico-wrap">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15z"/>
+                  </svg>
+                </span>
+                <span>Настройки</span>
+              </a>
               {% policy_can 'ui:settings' as can_nav_settings %}
               {% if can_nav_settings %}
-                {# Админские настройки CRM #}
+                {# Админка CRM — только для администратора #}
                 <a class="flex flex-col items-center gap-1 px-2 py-2 rounded-lg hover:bg-brand-soft/40 text-[12px] text-center {% if request.resolver_match.url_name|slice:':9' == 'settings_' %}bg-brand-soft/50 font-medium{% endif %}" href="/settings/">
                   <span class="nav-ico-wrap">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1002,17 +1012,6 @@
                     </svg>
                   </span>
                   <span>Админка</span>
-                </a>
-              {% else %}
-                {# Настройки пользователя (доступны всем ролям, кроме админов, чтобы не путать с админскими) #}
-                <a class="flex flex-col items-center gap-1 px-2 py-2 rounded-lg hover:bg-brand-soft/40 text-[12px] text-center {% if request.resolver_match.url_name == 'preferences' %}bg-brand-soft/50 font-medium{% endif %}" href="/preferences/">
-                  <span class="nav-ico-wrap">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#003D38" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/>
-                      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09A1.65 1.65 0 0 0 15 4.6a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09A1.65 1.65 0 0 0 19.4 15z"/>
-                    </svg>
-                  </span>
-                  <span>Настройки</span>
                 </a>
               {% endif %}
             </nav>
