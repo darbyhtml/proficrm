@@ -87,37 +87,27 @@
 
     <!-- Массовый перенос даты — доступен всем ролям -->
     {% if can_bulk_reschedule %}
-      <div class="bg-white border border-brand-soft rounded-2xl p-4 mb-4 shadow-sm">
-        <div class="flex items-center gap-2 mb-3">
-          <div class="flex items-center justify-center w-9 h-9 rounded-xl bg-brand-teal/10 text-brand-teal">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-            </svg>
-          </div>
-          <div>
-            <h2 class="text-sm font-semibold text-brand-dark">Перенести на дату</h2>
-            <p class="text-xs text-brand-dark/60">Выберите задачи чекбоксами или примените ко всем по текущему фильтру</p>
-          </div>
-        </div>
-        <form method="post" action="/tasks/bulk-reschedule/" id="bulkRescheduleForm" class="flex flex-wrap items-end gap-4" {% if is_admin %}data-copy-task-ids="1"{% endif %}>
+      <div class="bg-white border border-brand-soft rounded-xl p-3 mb-3 shadow-sm">
+        <form method="post" action="/tasks/bulk-reschedule/" id="bulkRescheduleForm" class="flex flex-wrap items-center gap-3" {% if is_admin %}data-copy-task-ids="1"{% endif %}>
           {% csrf_token %}
-          <div class="flex flex-wrap items-end gap-3 flex-1 min-w-0">
-            <div class="min-w-[200px]">
-              <label class="block text-xs font-medium text-brand-dark/70 mb-1">Дата и время</label>
-              <input type="datetime-local" name="due_at" id="bulkRescheduleDateTime" class="input w-full border-brand-soft/60 focus:border-brand-teal focus:ring-brand-teal/20" required
-                data-min-hour="8" data-max-hour="17" data-minute-step="10"
-                value="{{ default_bulk_reschedule_datetime|default:'' }}"
-                title="Задачи ставятся с 8:00 до 17:50" />
+          <div class="flex items-center gap-2 shrink-0 text-brand-dark/80">
+            <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-teal/10 text-brand-teal">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+              </svg>
             </div>
-            <div class="flex flex-wrap gap-2">
-              <button type="submit" name="apply_mode" value="selected" class="btn btn-primary inline-flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-                Перенести выбранные
-              </button>
-              <button type="submit" name="apply_mode" value="filtered" class="btn btn-outline inline-flex items-center gap-2">
-                Перенести все по фильтру
-              </button>
-            </div>
+            <span class="text-sm font-medium">Перенести на дату</span>
+          </div>
+          <div class="flex flex-wrap items-center gap-2 flex-1 min-w-0">
+            <input type="datetime-local" name="due_at" id="bulkRescheduleDateTime" class="input text-sm py-1.5 px-2 border-brand-soft/60 focus:border-brand-teal focus:ring-brand-teal/20 min-w-[160px]" required
+              data-min-hour="8" data-max-hour="17" data-minute-step="10"
+              value="{{ default_bulk_reschedule_datetime|default:'' }}"
+              title="Задачи ставятся с 8:00 до 17:50" />
+            <button type="submit" name="apply_mode" value="selected" class="btn btn-primary text-sm py-1.5 px-3 inline-flex items-center gap-1.5">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+              Выбранные
+            </button>
+            <button type="submit" name="apply_mode" value="filtered" class="btn btn-outline text-sm py-1.5 px-3">По фильтру</button>
           </div>
           <input type="hidden" name="status" value="{{ status }}" />
           <input type="hidden" name="mine" value="{{ mine }}" />
