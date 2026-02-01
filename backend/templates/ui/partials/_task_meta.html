@@ -35,12 +35,12 @@ Partial для отображения мета-информации задачи
     {% endif %}
     
     {% if task.due_at %}
-      <span class="text-brand-dark/60">·</span>
+      {% if task.created_by and not hide_created_by %}<span class="text-brand-dark/60">·</span>{% endif %}
       <span>срок: {{ task.due_at|date:"d.m.Y H:i" }}</span>
     {% endif %}
     
     {% if task.is_urgent %}
-      <span class="text-brand-dark/60">·</span>
+      {% if task.created_by or task.due_at %}<span class="text-brand-dark/60">·</span>{% endif %}
       <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 border border-red-200">СРОЧНО</span>
     {% endif %}
   </div>
