@@ -74,11 +74,13 @@ $COMPOSE exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "
   GRANT ALL ON SCHEMA public TO public;
 "
 
-echo ">>> Восстановление из дампа..."
+# Дамп с прода содержит OWNER TO crm; на стаджинге пользователь — crm_staging, подменяем
+echo ">>> Восстановление из дампа (подмена владельца crm -> $POSTGRES_USER)..."
+owner_sed="s/OWNER TO crm;/OWNER TO $POSTGRES_USER;/g; s/OWNER TO \"crm\"/OWNER TO \"$POSTGRES_USER\"/g"
 if [[ "$F" == *.gpg ]]; then
-  gpg -d "$F" | gunzip | $COMPOSE exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f - >/dev/null
+  gpg -d "$F" | gunzip | sed "$owner_sed" | $COMPOSE exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f - >/dev/null
 else
-  gunzip -c "$F" | $COMPOSE exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f - >/dev/null
+  gunzip -c "$F" | sed "$owner_sed" | $COMPOSE exec -T db psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f - >/dev/null
 fi
 
 echo ">>> Миграции (на случай расхождения схемы)..."
