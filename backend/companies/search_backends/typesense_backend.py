@@ -421,10 +421,16 @@ class TypesenseSearchBackend:
         if not _typesense_available():
             return _fallback_explain(companies, query, max_reasons_per_company)
 
+        from companies.search_index import only_digits, parse_query
+        q_explain = q
+        d = only_digits(q)
+        if len(d) == 11 and d.startswith("8"):
+            q_explain = "7" + d[1:]
+
         collection = getattr(settings, "TYPESENSE_COLLECTION_COMPANIES", COLLECTION_NAME)
         ids_filter = ",".join(str(c.id) for c in companies)
         explain_params = {
-            "q": q,
+            "q": q_explain,
             "query_by": "name,legal_name,contacts,emails,phones,inn,kpp,address,website,notes",
             "filter_by": f"id:[{ids_filter}]",
             "prefix": "true",
@@ -448,6 +454,11 @@ class TypesenseSearchBackend:
             hi = h.get("highlights") or []
             if hi:
                 highlight_by_id[sid] = hi
+
+        from companies.search_service import highlight_html
+
+        pq = parse_query(q)
+        dig_tokens = pq.strong_digit_tokens + pq.weak_digit_tokens
 
         # Приоритет полей для причин: только главное (ИНН, телефон, название, контакт, адрес), без шума заметок
         REASON_PRIORITY = ("inn", "kpp", "phones", "name", "legal_name", "contacts", "address", "emails", "website", "notes")
@@ -503,6 +514,15 @@ class TypesenseSearchBackend:
             for f in reason_fields:
                 raw, plain = highlight_by_field[f]
                 snippet = raw[: _snippet_len] + ("…" if len(raw) > _snippet_len else "")
+                # Если Typesense не вернул <mark> (часто для phones/emails) — подсвечиваем сами
+                if f in ("phones", "emails") and "<mark>" not in snippet and "search-highlight" not in snippet:
+                    snippet = highlight_html(
+                        plain,
+                        text_tokens=pq.text_tokens,
+                        digit_tokens=dig_tokens,
+                        max_matches=2,
+                        max_len=70,
+                    )
                 reasons.append(
                     SearchReason(
                         field=f,
