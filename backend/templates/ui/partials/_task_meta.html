@@ -1,17 +1,18 @@
 {% comment %}
 Partial для отображения мета-информации задачи:
-- кто поставил задачу
+- кто поставил задачу (скрывается, если hide_created_by=True — например в списке задач, где есть столбец «Кто»)
 - иконка роли (РОП/директор)
 - дедлайн
 - бейдж "СРОЧНО" (если is_urgent)
 
 Использование:
 {% include "ui/partials/_task_meta.html" with task=task only %}
+В списке задач (без дублирования «поставил»): {% include "ui/partials/_task_meta.html" with task=t hide_created_by=True only %}
 {% endcomment %}
 
 {% if task.created_by or task.due_at or task.is_urgent %}
   <div class="flex items-center gap-1.5 flex-wrap text-xs text-brand-dark/60 mt-1">
-    {% if task.created_by %}
+    {% if task.created_by and not hide_created_by %}
       <span class="flex items-center gap-1">
         <span>поставил:</span>
         <span class="text-brand-dark/80">{{ task.created_by.last_name }} {{ task.created_by.first_name|slice:":1" }}.</span>

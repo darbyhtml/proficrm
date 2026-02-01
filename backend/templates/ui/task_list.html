@@ -320,7 +320,7 @@
                       {% if t.description %}
                         <div class="text-xs text-brand-dark/70 mt-1" style="line-height:1.3">{{ t.description }}</div>
                       {% endif %}
-                      {% include "ui/partials/_task_meta.html" with task=t only %}
+                      {% include "ui/partials/_task_meta.html" with task=t hide_created_by=True only %}
                     </div>
                   </div>
                 </td>
