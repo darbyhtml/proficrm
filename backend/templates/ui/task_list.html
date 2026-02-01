@@ -85,72 +85,75 @@
     <input type="hidden" name="date_from" id="dateFromInput" value="{{ date_from|default:'' }}" form="taskFilterForm" />
     <input type="hidden" name="date_to" id="dateToInput" value="{{ date_to|default:'' }}" form="taskFilterForm" />
 
-    <!-- Массовый перенос даты — доступен всем ролям. flex-nowrap + фиксированная ширина заголовка = без перестроения при загрузке -->
-    {% if can_bulk_reschedule %}
-      <div class="bg-white border border-brand-soft rounded-xl p-4 mb-4 shadow-sm">
-        <form method="post" action="/tasks/bulk-reschedule/" id="bulkRescheduleForm" class="flex flex-nowrap items-center gap-4" {% if is_admin %}data-copy-task-ids="1"{% endif %}>
-          {% csrf_token %}
-          <div class="flex items-center gap-2 shrink-0 w-[11rem]">
-            <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-teal/10 text-brand-teal shrink-0">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
-              </svg>
-            </div>
-            <span class="text-sm font-medium text-brand-dark/80 whitespace-nowrap">Перенести на дату</span>
+    <!-- Оба блока в одну строку с первой отрисовки — без перестроения при загрузке -->
+    {% if can_bulk_reschedule or is_admin %}
+      <div class="flex flex-nowrap gap-4 mb-4 items-stretch">
+        {% if can_bulk_reschedule %}
+          <div class="flex-1 min-w-0 bg-white border border-brand-soft rounded-xl p-4 shadow-sm">
+            <form method="post" action="/tasks/bulk-reschedule/" id="bulkRescheduleForm" class="flex flex-nowrap items-center gap-5" {% if is_admin %}data-copy-task-ids="1"{% endif %}>
+              {% csrf_token %}
+              <div class="flex items-center gap-2 shrink-0 w-[11rem]">
+                <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-teal/10 text-brand-teal shrink-0">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                  </svg>
+                </div>
+                <span class="text-sm font-medium text-brand-dark/80 whitespace-nowrap">Перенести на дату</span>
+              </div>
+              <span class="text-brand-dark/30 shrink-0 select-none" aria-hidden="true">|</span>
+              <div class="flex flex-wrap items-center gap-3 flex-1 min-w-0">
+                <input type="datetime-local" name="due_at" id="bulkRescheduleDateTime" class="input text-sm py-1.5 pl-2 pr-10 border-brand-soft/60 focus:border-brand-teal focus:ring-brand-teal/20 min-w-[160px]" required
+                  data-min-hour="8" data-max-hour="17" data-minute-step="10"
+                  value="{{ default_bulk_reschedule_datetime|default:'' }}"
+                  title="Задачи ставятся с 8:00 до 17:50" />
+                <button type="submit" name="apply_mode" value="selected" class="btn btn-primary text-sm py-1.5 px-3 inline-flex items-center gap-1.5">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                  Выбранные
+                </button>
+                <button type="submit" name="apply_mode" value="filtered" class="btn btn-outline text-sm py-1.5 px-3">По фильтру</button>
+              </div>
+              <input type="hidden" name="status" value="{{ status }}" />
+              <input type="hidden" name="mine" value="{{ mine }}" />
+              <input type="hidden" name="overdue" value="{{ overdue }}" />
+              <input type="hidden" name="today" value="{{ today }}" />
+            </form>
           </div>
-          <span class="text-brand-dark/30 shrink-0 select-none" aria-hidden="true">|</span>
-          <div class="flex flex-wrap items-center gap-2 flex-1 min-w-0">
-            <input type="datetime-local" name="due_at" id="bulkRescheduleDateTime" class="input text-sm py-1.5 px-2 border-brand-soft/60 focus:border-brand-teal focus:ring-brand-teal/20 min-w-[160px]" required
-              data-min-hour="8" data-max-hour="17" data-minute-step="10"
-              value="{{ default_bulk_reschedule_datetime|default:'' }}"
-              title="Задачи ставятся с 8:00 до 17:50" />
-            <button type="submit" name="apply_mode" value="selected" class="btn btn-primary text-sm py-1.5 px-3 inline-flex items-center gap-1.5">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-              Выбранные
-            </button>
-            <button type="submit" name="apply_mode" value="filtered" class="btn btn-outline text-sm py-1.5 px-3">По фильтру</button>
-          </div>
-          <input type="hidden" name="status" value="{{ status }}" />
-          <input type="hidden" name="mine" value="{{ mine }}" />
-          <input type="hidden" name="overdue" value="{{ overdue }}" />
-          <input type="hidden" name="today" value="{{ today }}" />
-        </form>
-      </div>
-    {% endif %}
-
-    {% if is_admin %}
-      <div class="bg-white border border-brand-soft rounded-xl p-4 mb-4 shadow-sm">
-        <form method="post" action="/tasks/bulk-reassign/" id="bulkReassignForm" class="flex flex-nowrap items-center gap-4">
-          {% csrf_token %}
-          <div class="flex items-center gap-2 shrink-0 w-[11rem]">
-            <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-teal/10 text-brand-teal shrink-0">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-              </svg>
-            </div>
-            <span class="text-sm font-medium text-brand-dark/80 whitespace-nowrap">Переназначить на</span>
-          </div>
-          <span class="text-brand-dark/30 shrink-0 select-none" aria-hidden="true">|</span>
-          <div class="flex flex-wrap items-center gap-2 flex-1 min-w-0">
-            <select name="assigned_to_id" class="select text-sm py-1.5 px-2 min-w-[180px] max-w-[240px]" required>
-              <option value="">Выберите сотрудника</option>
-              {% regroup transfer_targets by branch as branches_list %}
-              {% for branch_group in branches_list %}
-                <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
-                  {% for u in branch_group.list %}
-                    <option value="{{ u.id }}">{{ u }} ({{ u.get_role_display }})</option>
+        {% endif %}
+        {% if is_admin %}
+          <div class="flex-1 min-w-0 bg-white border border-brand-soft rounded-xl p-4 shadow-sm">
+            <form method="post" action="/tasks/bulk-reassign/" id="bulkReassignForm" class="flex flex-nowrap items-center gap-5">
+              {% csrf_token %}
+              <div class="flex items-center gap-2 shrink-0 w-[11rem]">
+                <div class="flex items-center justify-center w-8 h-8 rounded-lg bg-brand-teal/10 text-brand-teal shrink-0">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+                  </svg>
+                </div>
+                <span class="text-sm font-medium text-brand-dark/80 whitespace-nowrap">Переназначить на</span>
+              </div>
+              <span class="text-brand-dark/30 shrink-0 select-none" aria-hidden="true">|</span>
+              <div class="flex flex-wrap items-center gap-3 flex-1 min-w-0">
+                <select name="assigned_to_id" class="select text-sm py-1.5 px-2 min-w-[180px] max-w-[240px]" required>
+                  <option value="">Выберите сотрудника</option>
+                  {% regroup transfer_targets by branch as branches_list %}
+                  {% for branch_group in branches_list %}
+                    <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
+                      {% for u in branch_group.list %}
+                        <option value="{{ u.id }}">{{ u }} ({{ u.get_role_display }})</option>
+                      {% endfor %}
+                    </optgroup>
                   {% endfor %}
-                </optgroup>
-              {% endfor %}
-            </select>
-            <button type="submit" name="apply_mode" value="selected" class="btn btn-primary text-sm py-1.5 px-3">Выбранные</button>
-            <button type="submit" name="apply_mode" value="filtered" class="btn btn-outline text-sm py-1.5 px-3">По фильтру</button>
+                </select>
+                <button type="submit" name="apply_mode" value="selected" class="btn btn-primary text-sm py-1.5 px-3">Выбранные</button>
+                <button type="submit" name="apply_mode" value="filtered" class="btn btn-outline text-sm py-1.5 px-3">По фильтру</button>
+              </div>
+              <input type="hidden" name="status" value="{{ status }}" />
+              <input type="hidden" name="mine" value="{{ mine }}" />
+              <input type="hidden" name="overdue" value="{{ overdue }}" />
+              <input type="hidden" name="today" value="{{ today }}" />
+            </form>
           </div>
-          <input type="hidden" name="status" value="{{ status }}" />
-          <input type="hidden" name="mine" value="{{ mine }}" />
-          <input type="hidden" name="overdue" value="{{ overdue }}" />
-          <input type="hidden" name="today" value="{{ today }}" />
-        </form>
+        {% endif %}
       </div>
     {% endif %}
 
