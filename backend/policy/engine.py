@@ -178,7 +178,13 @@ def baseline_allowed_for_role(*, role: str, resource_type: str, resource_key: st
             return bool(role == User.Role.ADMIN)
 
         # --- Tasks ---
-        if resource_key in ("ui:tasks:create", "ui:tasks:update", "ui:tasks:delete", "ui:tasks:status"):
+        if resource_key in (
+            "ui:tasks:create",
+            "ui:tasks:update",
+            "ui:tasks:delete",
+            "ui:tasks:status",
+            "ui:tasks:bulk_reschedule",
+        ):
             # Детальная проверка "своё/филиал/ответственный" остаётся в UI коде.
             return bool(
                 role

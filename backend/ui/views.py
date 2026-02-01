@@ -95,6 +95,7 @@ from amocrm.client import AmoApiError, AmoClient
 from amocrm.migrate import fetch_amo_users, fetch_company_custom_fields, migrate_filtered
 from crm.utils import require_admin, get_effective_user, get_view_as_user
 from policy.decorators import policy_required
+from policy.engine import decide as policy_decide
 from django.core.exceptions import PermissionDenied
 from ui.templatetags.ui_extras import format_phone
 from ui.cleaners import clean_int_id
@@ -5990,7 +5991,11 @@ def task_list(request: HttpRequest) -> HttpResponse:
 
     # Подсчитываем общее количество задач после всех фильтров (до пагинации)
     tasks_count = qs.count()
-    
+
+    # Массовый перенос даты доступен всем ролям с доступом к задачам; чекбоксы показываем, если можно переносить дату или переназначать (админ)
+    can_bulk_reschedule = policy_decide(user=user, resource_type="action", resource="ui:tasks:bulk_reschedule").allowed
+    show_task_checkboxes = can_bulk_reschedule or is_admin
+
     # Сопоставляем задачи без типа с TaskType по точному совпадению названия
     # Загружаем все TaskType для сопоставления
     from tasksapp.models import TaskType
@@ -6034,6 +6039,8 @@ def task_list(request: HttpRequest) -> HttpResponse:
             "sort_dir": sort_dir,
             "per_page": per_page,
             "is_admin": is_admin,
+            "can_bulk_reschedule": can_bulk_reschedule,
+            "show_task_checkboxes": show_task_checkboxes,
             "transfer_targets": transfer_targets,
             "view_task": view_task,
             "view_task_overdue_days": view_task_overdue_days,
@@ -6742,6 +6749,106 @@ def task_bulk_reassign(request: HttpRequest) -> HttpResponse:
             body=f"Количество: {updated}",
             url="/tasks/?mine=1",
         )
+    return redirect("task_list")
+
+
+@login_required
+@policy_required(resource_type="action", resource="ui:tasks:bulk_reschedule")
+def task_bulk_reschedule(request: HttpRequest) -> HttpResponse:
+    """
+    Массовый перенос даты (дедлайна) задач:
+    - либо по выбранным task_ids[]
+    - либо по текущему фильтру (apply_mode=filtered).
+    Доступно всем ролям с доступом к списку задач. Обновляются только задачи, видимые пользователю (visible_tasks_qs).
+    """
+    if request.method != "POST":
+        return redirect("task_list")
+
+    user: User = request.user
+
+    due_date_str = (request.POST.get("due_date") or "").strip()
+    if not due_date_str:
+        messages.error(request, "Укажите дату для переноса.")
+        return redirect("task_list")
+
+    try:
+        parsed_date = datetime.strptime(due_date_str, "%Y-%m-%d").date()
+    except ValueError:
+        messages.error(request, "Неверный формат даты. Используйте ГГГГ-ММ-ДД.")
+        return redirect("task_list")
+
+    due_time_str = (request.POST.get("due_time") or "18:00").strip()
+    try:
+        if len(due_time_str) == 5 and ":" in due_time_str:
+            h, m = due_time_str.split(":", 1)
+            new_time = datetime.strptime(due_time_str, "%H:%M").time()
+        else:
+            new_time = datetime.strptime("18:00", "%H:%M").time()
+    except ValueError:
+        new_time = datetime.strptime("18:00", "%H:%M").time()
+
+    new_due_at = timezone.make_aware(datetime.combine(parsed_date, new_time))
+
+    apply_mode = (request.POST.get("apply_mode") or "selected").strip().lower()
+
+    if apply_mode == "filtered":
+        now = timezone.now()
+        local_now = timezone.localtime(now)
+        today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+        tomorrow_start = today_start + timedelta(days=1)
+
+        qs = visible_tasks_qs(user).order_by("-created_at").distinct()
+
+        status = (request.POST.get("status") or "").strip()
+        if status:
+            qs = qs.filter(status=status)
+
+        mine = (request.POST.get("mine") or "").strip()
+        if mine == "1":
+            qs = qs.filter(assigned_to=user)
+
+        overdue = (request.POST.get("overdue") or "").strip()
+        if overdue == "1":
+            qs = qs.filter(due_at__lt=now).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+
+        today = (request.POST.get("today") or "").strip()
+        if today == "1":
+            qs = qs.filter(due_at__gte=today_start, due_at__lt=tomorrow_start).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+
+        cap = 5000
+        ids = list(qs.values_list("id", flat=True)[:cap])
+        if not ids:
+            messages.error(request, "Нет задач для переноса даты.")
+            return redirect("task_list")
+        if len(ids) >= cap:
+            messages.warning(request, f"Выбрано слишком много задач (>{cap}). Сузьте фильтр и повторите.")
+            return redirect("task_list")
+    else:
+        raw_ids = request.POST.getlist("task_ids") or []
+        raw_ids = [i for i in raw_ids if i]
+        if not raw_ids:
+            messages.error(request, "Выберите хотя бы одну задачу (чекбоксы слева) или используйте «Перенести все по фильтру».")
+            return redirect("task_list")
+        # Только задачи, видимые пользователю
+        ids = list(visible_tasks_qs(user).filter(id__in=raw_ids).values_list("id", flat=True))
+        if not ids:
+            messages.error(request, "Нет доступа к выбранным задачам.")
+            return redirect("task_list")
+
+    now_ts = timezone.now()
+    with transaction.atomic():
+        qs_to_update = Task.objects.filter(id__in=ids)
+        updated = qs_to_update.update(due_at=new_due_at, updated_at=now_ts)
+
+    messages.success(request, f"Перенесено на дату задач: {updated}. Новая дата: {new_due_at.strftime('%d.%m.%Y %H:%M')}.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="task_bulk_reschedule",
+        entity_id="",
+        message="Массовый перенос даты задач",
+        meta={"count": updated, "due_at": new_due_at.isoformat(), "mode": apply_mode},
+    )
     return redirect("task_list")
 
 

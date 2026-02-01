@@ -62,6 +62,7 @@ urlpatterns = [
     path("phone/call/", views.phone_call_create, name="phone_call_create"),
     path("tasks/", views.task_list, name="task_list"),
     path("tasks/bulk-reassign/", views.task_bulk_reassign, name="task_bulk_reassign"),
+    path("tasks/bulk-reschedule/", views.task_bulk_reschedule, name="task_bulk_reschedule"),
     path("tasks/new/", views.task_create, name="task_create"),
     path("tasks/<uuid:task_id>/", views.task_view, name="task_view"),
     path("tasks/<uuid:task_id>/edit/", views.task_edit, name="task_edit"),

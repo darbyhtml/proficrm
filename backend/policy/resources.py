@@ -66,6 +66,7 @@ RESOURCES: tuple[PolicyResource, ...] = (
     PolicyResource("ui:tasks:update", "action", "Задачи: редактировать"),
     PolicyResource("ui:tasks:delete", "action", "Задачи: удалить", sensitive=True),
     PolicyResource("ui:tasks:bulk_reassign", "action", "Задачи: массовое переназначение", sensitive=True),
+    PolicyResource("ui:tasks:bulk_reschedule", "action", "Задачи: массовый перенос даты"),
     PolicyResource("ui:tasks:status", "action", "Задачи: смена статуса"),
 
     PolicyResource("ui:mail:campaigns:manage", "action", "Почта: управление кампаниями"),
