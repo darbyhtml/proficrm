@@ -37,9 +37,9 @@
       }
       /* Персональный масштаб интерфейса (влияет на все страницы через rem). */
       html{ font-size: calc(100% * var(--ui-font-scale, 1)); }
-      .card{border:1px solid rgba(194,226,222,.9); border-radius:16px; background:#fff; box-shadow:0 1px 0 rgba(0,61,56,.04)}
-      .card-pad{padding:16px}
-      .btn{display:inline-flex; align-items:center; justify-content:center; gap:.5rem; border-radius:12px; padding:.55rem .9rem; font-size:.875rem; line-height:1.1; transition:background-color .15s ease, border-color .15s ease, transform .05s ease}
+      .card{border:1px solid rgba(194,226,222,.9); border-radius:1rem; background:#fff; box-shadow:0 0.0625rem 0 rgba(0,61,56,.04)}
+      .card-pad{padding:1rem}
+      .btn{display:inline-flex; align-items:center; justify-content:center; gap:.5rem; border-radius:0.75rem; padding:.55rem .9rem; font-size:.875rem; line-height:1.1; transition:background-color .15s ease, border-color .15s ease, transform .05s ease}
       .btn:active{transform:scale(.99)}
       .btn-primary{background:var(--brand-teal); color:#fff}
       .btn-primary:hover{background:var(--brand-dark)}
@@ -64,9 +64,9 @@
       .badge-sm{padding:.1rem .35rem; font-size:.65rem}
       .badge-md{padding:.15rem .55rem; font-size:.75rem}
       .badge-lg{padding:.2rem .7rem; font-size:.8125rem}
-      .input,.select,.textarea{width:100%; border-radius:12px; border:1px solid rgba(194,226,222,.95); padding:.55rem .75rem; background:#fff; color:var(--brand-dark)}
-      .textarea{min-height:96px}
-      .input:focus,.select:focus,.textarea:focus{outline:none; box-shadow:0 0 0 4px rgba(1,148,142,.14); border-color:rgba(1,148,142,.65)}
+      .input,.select,.textarea{width:100%; border-radius:0.75rem; border:1px solid rgba(194,226,222,.95); padding:.55rem .75rem; background:#fff; color:var(--brand-dark)}
+      .textarea{min-height:6rem}
+      .input:focus,.select:focus,.textarea:focus{outline:none; box-shadow:0 0 0 0.25rem rgba(1,148,142,.14); border-color:rgba(1,148,142,.65)}
       .muted{color:rgba(0,61,56,.72)}
       .muted-2{color:rgba(0,61,56,.55)}
       .badge{display:inline-flex; align-items:center; border-radius:999px; padding:.15rem .55rem; font-size:.75rem; border:1px solid rgba(194,226,222,.95); background:rgba(194,226,222,.35); color:var(--brand-dark); white-space:nowrap}
@@ -102,26 +102,26 @@
         padding: 0;
         display: flex;
         flex-direction: column;
-        gap: 2px;
+        gap: 0.125rem;
         transition: max-width .2s ease, opacity .2s ease, margin-left .2s ease;
       }
       .mail-progress:hover .mail-progress__body{
-        max-width: 260px; /* уже на 20px, чтобы не залезать на контент */
+        max-width: 16.25rem; /* не залезать на контент */
         opacity: 1;
-        margin-left: 10px;
+        margin-left: 0.625rem;
         padding: 0 1.25rem 0 0;
         overflow: visible; /* крестик (-top-1 -right-1) не обрезается */
       }
       .mail-progress__title,
       .mail-progress__counts{
-        max-width: 240px;
+        max-width: 15rem;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
       .mail-progress__counts-short{
         display: none !important;
-        max-width: 240px;
+        max-width: 15rem;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -130,8 +130,8 @@
       .mail-progress--limit .mail-progress__limit{ display:block; }
       /* На совсем узких экранах поднимаем выше кнопок/панелей */
       @media (max-width: 480px){
-        .mail-progress{ left: 12px; right: 12px; bottom: 76px; max-width:none; }
-        .mail-progress__title, .mail-progress__counts{ max-width: 180px; }
+        .mail-progress{ left: 0.75rem; right: 0.75rem; bottom: 4.75rem; max-width:none; }
+        .mail-progress__title, .mail-progress__counts{ max-width: 11.25rem; }
       }
       
       /* Глобальные стили скроллбаров (как в календаре) */
@@ -140,8 +140,8 @@
         scrollbar-color: rgba(194,226,222,.6) transparent;
       }
       *::-webkit-scrollbar {
-        width: 4px;
-        height: 4px;
+        width: 0.25rem;
+        height: 0.25rem;
       }
       *::-webkit-scrollbar-track {
         background: transparent;
@@ -168,22 +168,22 @@
         font-weight: 700 !important;
         color: #f97316 !important;
         background-color: #fff7ed !important;
-        border-radius: 4px;
+        border-radius: 0.25rem;
         padding: 0 .08em;
       }
       /* Icon alignment */
-      .nav-ico-wrap{width:20px;height:20px;display:inline-flex;align-items:center;justify-content:center;flex:none}
+      .nav-ico-wrap{width:1.25rem;height:1.25rem;display:inline-flex;align-items:center;justify-content:center;flex:none}
       .nav-ico-wrap svg{display:block}
       /* Multiselect (checkbox dropdown) */
       .ms{position:relative}
-      .ms-btn{width:100%; display:flex; align-items:center; justify-content:space-between; gap:.5rem; border-radius:12px; border:1px solid rgba(194,226,222,.95); padding:.55rem .75rem; background:#fff; color:var(--brand-dark)}
+      .ms-btn{width:100%; display:flex; align-items:center; justify-content:space-between; gap:.5rem; border-radius:0.75rem; border:1px solid rgba(194,226,222,.95); padding:.55rem .75rem; background:#fff; color:var(--brand-dark)}
       .ms-btn:hover{background:rgba(194,226,222,.20)}
       .ms-value{font-size:.875rem}
-      .ms-panel{position:absolute; left:0; right:0; top:calc(100% + 8px); z-index:60; border-radius:16px; border:1px solid rgba(194,226,222,.95); background:#fff; box-shadow:0 12px 30px rgba(0,61,56,.10); overflow:hidden}
-      .ms-panel .ms-top{padding:10px 12px; border-bottom:1px solid rgba(194,226,222,.7); display:flex; gap:8px; align-items:center}
+      .ms-panel{position:absolute; left:0; right:0; top:calc(100% + 0.5rem); z-index:60; border-radius:1rem; border:1px solid rgba(194,226,222,.95); background:#fff; box-shadow:0 0.75rem 1.875rem rgba(0,61,56,.10); overflow:hidden}
+      .ms-panel .ms-top{padding:0.625rem 0.75rem; border-bottom:1px solid rgba(194,226,222,.7); display:flex; gap:0.5rem; align-items:center}
       .ms-panel .ms-search{flex:1}
-      .ms-panel .ms-list{max-height:260px; overflow:auto; padding:8px}
-      .ms-item{display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:12px}
+      .ms-panel .ms-list{max-height:16.25rem; overflow:auto; padding:0.5rem}
+      .ms-item{display:flex; align-items:center; gap:0.5rem; padding:0.5rem 0.625rem; border-radius:0.75rem}
       .ms-item:hover{background:rgba(194,226,222,.25)}
       .ms-muted{color:rgba(0,61,56,.65); font-size:.75rem}
       
@@ -311,18 +311,18 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 8px;
+        margin-bottom: 0.5rem;
         padding-bottom: 0;
         border-bottom: none;
       }
       
       .custom-datetime-popup .calendar-header .month-year {
-        font-size: 14px;
+        font-size: 0.875rem;
         font-weight: 600;
         color: var(--brand-dark);
         cursor: pointer;
-        padding: 4px 10px;
-        border-radius: 6px;
+        padding: 0.25rem 0.625rem;
+        border-radius: 0.375rem;
         transition: all 0.2s ease;
         user-select: none;
       }
@@ -334,18 +334,18 @@
       .custom-datetime-popup .month-year-selector {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
-        gap: 8px;
-        padding: 12px;
-        max-height: 280px;
+        gap: 0.5rem;
+        padding: 0.75rem;
+        max-height: 17.5rem;
         overflow-y: auto;
       }
       
       .custom-datetime-popup .month-year-item {
-        padding: 12px 8px;
+        padding: 0.75rem 0.5rem;
         text-align: center;
-        border-radius: 8px;
+        border-radius: 0.5rem;
         cursor: pointer;
-        font-size: 14px;
+        font-size: 0.875rem;
         font-weight: 500;
         color: var(--brand-dark);
         transition: all 0.2s ease;
@@ -356,8 +356,8 @@
       .custom-datetime-popup .month-year-item:hover {
         background: rgba(194,226,222,.15);
         border-color: var(--brand-teal);
-        transform: translateY(-1px);
-        box-shadow: 0 2px 4px rgba(0,61,56,.1);
+        transform: translateY(-0.0625rem);
+        box-shadow: 0 0.125rem 0.25rem rgba(0,61,56,.1);
       }
       
       .custom-datetime-popup .month-year-item.selected {
@@ -371,9 +371,9 @@
       .custom-datetime-popup .year-selector {
         display: flex;
         flex-direction: column;
-        gap: 8px;
-        padding: 12px;
-        max-height: 320px;
+        gap: 0.5rem;
+        padding: 0.75rem;
+        max-height: 20rem;
         overflow-y: auto;
       }
       
@@ -381,12 +381,12 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 8px 4px;
-        margin-bottom: 4px;
+        padding: 0.5rem 0.25rem;
+        margin-bottom: 0.25rem;
       }
       
       .custom-datetime-popup .year-decade-title {
-        font-size: 15px;
+        font-size: 0.9375rem;
         font-weight: 600;
         color: var(--brand-dark);
       }
@@ -407,7 +407,7 @@
         align-items: center;
         justify-content: center;
         color: var(--brand-dark);
-        font-size: 12px;
+        font-size: 0.75rem;
         transition: all 0.2s ease;
         padding: 0;
       }
@@ -420,15 +420,15 @@
       .custom-datetime-popup .year-grid {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: 6px;
+        gap: 0.375rem;
       }
       
       .custom-datetime-popup .year-item {
-        padding: 10px 8px;
+        padding: 0.625rem 0.5rem;
         text-align: center;
-        border-radius: 8px;
+        border-radius: 0.5rem;
         cursor: pointer;
-        font-size: 14px;
+        font-size: 0.875rem;
         font-weight: 500;
         color: var(--brand-dark);
         transition: all 0.2s ease;
@@ -453,21 +453,21 @@
       
       .custom-datetime-popup .calendar-header .nav-buttons {
         display: flex;
-        gap: 2px;
+        gap: 0.125rem;
       }
       
       .custom-datetime-popup .calendar-header button {
-        width: 26px;
-        height: 26px;
+        width: 1.625rem;
+        height: 1.625rem;
         border: 1px solid rgba(194,226,222,.5);
         background: #fff;
-        border-radius: 6px;
+        border-radius: 0.375rem;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
         color: var(--brand-dark);
-        font-size: 16px;
+        font-size: 1rem;
         font-weight: 600;
         transition: all 0.2s ease;
         padding: 0;
@@ -481,22 +481,22 @@
       .custom-datetime-popup .calendar-weekdays {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
-        gap: 3px;
-        margin-bottom: 6px;
+        gap: 0.1875rem;
+        margin-bottom: 0.375rem;
       }
       
       .custom-datetime-popup .calendar-weekdays span {
         text-align: center;
-        font-size: 11px;
+        font-size: 0.6875rem;
         font-weight: 600;
         color: rgba(0,61,56,.6);
-        padding: 3px;
+        padding: 0.1875rem;
       }
       
       .custom-datetime-popup .calendar-days {
         display: grid;
         grid-template-columns: repeat(7, 1fr);
-        gap: 2px;
+        gap: 0.125rem;
         margin-bottom: 0;
       }
       
@@ -506,13 +506,13 @@
         align-items: center;
         justify-content: center;
         border: 1px solid transparent;
-        border-radius: 8px;
+        border-radius: 0.5rem;
         cursor: pointer;
-        font-size: 13px;
+        font-size: 0.8125rem;
         font-weight: 500;
         color: var(--brand-dark);
         transition: all 0.2s ease;
-        min-height: 30px;
+        min-height: 1.875rem;
       }
       
       .custom-datetime-popup .calendar-day:hover {
@@ -539,9 +539,9 @@
       
       .custom-datetime-popup .calendar-time-wrapper {
         display: flex;
-        gap: 12px;
+        gap: 0.75rem;
         align-items: stretch;
-        padding-top: 8px;
+        padding-top: 0.5rem;
         border-top: 1px solid rgba(194,226,222,.7);
         flex: 1;
         min-height: 0;
@@ -576,36 +576,36 @@
       }
       
       .custom-datetime-popup .time-column-label {
-        font-size: 10px;
+        font-size: 0.625rem;
         font-weight: 600;
         color: rgba(0,61,56,.7);
-        margin-bottom: 4px;
+        margin-bottom: 0.25rem;
         flex-shrink: 0;
       }
       
       .custom-datetime-popup .time-scroll {
         width: 100%;
-        height: 220px;
+        height: 13.75rem;
         overflow-y: auto;
         overflow-x: hidden;
         display: flex;
         flex-direction: column;
-        gap: 2px;
-        padding: 4px 0;
+        gap: 0.125rem;
+        padding: 0.25rem 0;
         scrollbar-width: thin;
         scrollbar-color: rgba(194,226,222,.6) transparent;
       }
       
       .custom-datetime-popup .time-item {
-        padding: 4px 6px;
+        padding: 0.25rem 0.375rem;
         text-align: center;
-        border-radius: 5px;
+        border-radius: 0.3125rem;
         cursor: pointer;
-        font-size: 11px;
+        font-size: 0.6875rem;
         font-weight: 500;
         color: var(--brand-dark);
         transition: all 0.2s ease;
-        min-height: 20px;
+        min-height: 1.25rem;
         height: auto;
         display: flex;
         align-items: center;
@@ -616,17 +616,17 @@
       
       /* Кастомный скроллбар для WebKit */
       .custom-datetime-popup .time-scroll::-webkit-scrollbar {
-        width: 4px;
+        width: 0.25rem;
       }
       
       .custom-datetime-popup .time-scroll::-webkit-scrollbar-track {
         background: transparent;
-        border-radius: 2px;
+        border-radius: 0.125rem;
       }
       
       .custom-datetime-popup .time-scroll::-webkit-scrollbar-thumb {
         background: rgba(194,226,222,.6);
-        border-radius: 2px;
+        border-radius: 0.125rem;
         transition: background 0.2s ease;
       }
       
@@ -635,15 +635,15 @@
       }
       
       .custom-datetime-popup .time-item {
-        padding: 5px 8px;
+        padding: 0.3125rem 0.5rem;
         text-align: center;
-        border-radius: 6px;
+        border-radius: 0.375rem;
         cursor: pointer;
-        font-size: 12px;
+        font-size: 0.75rem;
         font-weight: 500;
         color: var(--brand-dark);
         transition: all 0.2s ease;
-        min-height: 24px;
+        min-height: 1.5rem;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -665,9 +665,9 @@
       .custom-datetime-popup .calendar-actions {
         display: flex;
         justify-content: space-between;
-        gap: 6px;
-        margin-top: 8px;
-        padding-top: 8px;
+        gap: 0.375rem;
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
         border-top: 1px solid rgba(194,226,222,.7);
         flex-shrink: 0;
         flex-grow: 0;
@@ -675,12 +675,12 @@
       
       .custom-datetime-popup .calendar-actions button {
         flex: 1;
-        padding: 6px 10px;
+        padding: 0.375rem 0.625rem;
         border: 1px solid rgba(194,226,222,.6);
         background: #fff;
-        border-radius: 6px;
+        border-radius: 0.375rem;
         cursor: pointer;
-        font-size: 11px;
+        font-size: 0.6875rem;
         font-weight: 500;
         color: var(--brand-dark);
         transition: all 0.2s ease;
@@ -1068,7 +1068,7 @@
 
     {# Глобальный прогресс рассылки: по умолчанию только % в квадратике; при наведении — подробности; клик — страница кампании #}
     <a id="mailProgressWidget" href="#" class="hidden fixed bottom-5 left-5 z-50 bg-white border border-brand-soft rounded-2xl shadow-lg flex items-center hover:bg-brand-soft/20 mail-progress">
-      <div id="mailProgressCircle" class="w-10 h-10 flex-shrink-0 rounded-lg flex items-center justify-center text-xs font-semibold" style="background:conic-gradient(var(--brand-teal) 0deg, rgba(194,226,222,.6) 0deg); color:var(--brand-dark); border:1.5px solid rgba(1,148,142,.45); box-sizing:border-box;">
+      <div id="mailProgressCircle" class="w-10 h-10 flex-shrink-0 rounded-lg flex items-center justify-center text-xs font-semibold" style="background:conic-gradient(var(--brand-teal) 0deg, rgba(194,226,222,.6) 0deg); color:var(--brand-dark); border:0.09375rem solid rgba(1,148,142,.45); box-sizing:border-box;">
         <span id="mailProgressPct">0%</span>
       </div>
       <div class="leading-tight relative mail-progress__body">
@@ -1163,7 +1163,7 @@
               el.style.zIndex = '90';
               el.style.maxWidth = '92vw';
               el.style.display = 'none';
-              el.innerHTML = '<div style="border:1px solid rgba(194,226,222,.95);background:#fff;border-radius:12px;padding:10px 12px;box-shadow:0 12px 30px rgba(0,61,56,.10);font-size:13px;color:#003D38"></div>';
+              el.innerHTML = '<div style="border:1px solid rgba(194,226,222,.95);background:#fff;border-radius:0.75rem;padding:0.625rem 0.75rem;box-shadow:0 0.75rem 1.875rem rgba(0,61,56,.10);font-size:0.8125rem;color:#003D38"></div>';
               document.body.appendChild(el);
             }
             const box = el.firstElementChild;
@@ -2290,7 +2290,7 @@
               
               // Если это emoji (1-2 символа Unicode), возвращаем как есть
               if (iconValue.length <= 2 || /^[\u{1F300}-\u{1F9FF}]/u.test(iconValue)) {
-                return '<span style="font-size: 16px; line-height: 1;">' + iconValue + '</span>';
+                return '<span style="font-size: 1rem; line-height: 1;">' + iconValue + '</span>';
               }
               
               // Библиотека SVG иконок
@@ -2315,7 +2315,7 @@
                 'star': '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" stroke="none"><path d="M12 2.5l2.9 5.9 6.6.9-4.8 4.7 1.1 6.5L12 17.8 6.2 20.5l1.1-6.5-4.8-4.7 6.6-.9z"/></svg>',
               };
               // Возвращаем SVG иконку или emoji как есть
-              return icons[iconValue] || '<span style="font-size: 16px; line-height: 1;">' + iconValue + '</span>';
+              return icons[iconValue] || '<span style="font-size: 1rem; line-height: 1;">' + iconValue + '</span>';
             }
             
             function getColorClasses(color) {
@@ -2585,7 +2585,7 @@
                   <div class="calendar-header">
                     <div class="month-year" style="cursor: pointer;">Выберите год</div>
                     <div class="nav-buttons">
-                      <button class="close-year-selector" type="button" style="font-size: 18px; line-height: 1;">✕</button>
+                      <button class="close-year-selector" type="button" style="font-size: 1.125rem; line-height: 1;">✕</button>
                     </div>
                   </div>
                   <div class="year-selector">
@@ -2638,8 +2638,8 @@
                   <div class="calendar-header">
                     <div class="month-year" style="cursor: pointer;">Выберите месяц</div>
                     <div class="nav-buttons">
-                      <button class="show-year-selector" type="button" style="min-width: 60px; font-weight: 600;">${year}</button>
-                      <button class="close-month-selector" type="button" style="font-size: 18px; line-height: 1;">✕</button>
+                      <button class="show-year-selector" type="button" style="min-width: 3.75rem; font-weight: 600;">${year}</button>
+                      <button class="close-month-selector" type="button" style="font-size: 1.125rem; line-height: 1;">✕</button>
                     </div>
                   </div>
                   <div class="month-year-selector">

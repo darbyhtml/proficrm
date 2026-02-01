@@ -47,7 +47,7 @@
                 {{ company.inn|default:"—" }}
               </span>
               <span class="inline-field-edit hidden ml-2 align-middle">
-                <input class="input" data-inline-input maxlength="255" value="{{ company.inn|default:'' }}" style="width:320px" placeholder="Можно несколько: через /, запятую, пробел" />
+                <input class="input" data-inline-input maxlength="255" value="{{ company.inn|default:'' }}" style="width:20rem" placeholder="Можно несколько: через /, запятую, пробел" />
                 <button type="button" class="btn btn-primary btn-xs ml-1" data-inline-save>Сохранить</button>
                 <button type="button" class="btn btn-outline btn-xs ml-1" data-inline-cancel>Отмена</button>
                 <span class="text-xs text-red-600 ml-2 hidden" data-inline-error></span>
@@ -61,7 +61,7 @@
                 {{ company.kpp|default:"—" }}
               </span>
               <span class="inline-field-edit hidden ml-2 align-middle">
-                <input class="input" data-inline-input maxlength="20" value="{{ company.kpp|default:'' }}" style="width:220px" />
+                <input class="input" data-inline-input maxlength="20" value="{{ company.kpp|default:'' }}" style="width:13.75rem" />
                 <button type="button" class="btn btn-primary btn-xs ml-1" data-inline-save>Сохранить</button>
                 <button type="button" class="btn btn-outline btn-xs ml-1" data-inline-cancel>Отмена</button>
                 <span class="text-xs text-red-600 ml-2 hidden" data-inline-error></span>
@@ -100,7 +100,7 @@
           {% endif %}
         {% endif %}
         {% if pinned_note %}
-          <div class="mt-3 rounded-xl border border-brand-orange/35 bg-white px-3 py-2 shadow-sm" style="border-left-width:6px;">
+          <div class="mt-3 rounded-xl border border-brand-orange/35 bg-white px-3 py-2 shadow-sm" style="border-left-width:0.375rem;">
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
                 <div class="flex items-center gap-2">
@@ -385,7 +385,7 @@
                   {{ company.work_schedule|default:"—" }}
                 </div>
                 <div class="inline-field-edit hidden mt-1">
-                  <textarea class="input w-full font-mono text-xs" data-inline-input rows="5" style="min-height:96px;resize:vertical">{{ company.work_schedule|default:'' }}</textarea>
+                  <textarea class="input w-full font-mono text-xs" data-inline-input rows="5" style="min-height:6rem;resize:vertical">{{ company.work_schedule|default:'' }}</textarea>
                   <div class="flex gap-1 mt-1">
                     <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
                     <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
@@ -456,7 +456,7 @@
                 {% endif %}
                 {% if can_edit_company %}
                   <div class="hidden mt-1" data-company-main-phone-edit>
-                    <input class="input text-xs" data-company-main-phone-input value="{{ company.phone|default:'' }}" placeholder="+7..." style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:240px" />
+                    <input class="input text-xs" data-company-main-phone-input value="{{ company.phone|default:'' }}" placeholder="+7..." style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:15rem" />
                     <div class="flex gap-1 mt-1">
                       <button type="button" class="btn btn-primary btn-sm" data-company-main-phone-save>Сохранить</button>
                       <button type="button" class="btn btn-outline btn-sm" data-company-main-phone-cancel>Отмена</button>
@@ -565,7 +565,7 @@
             {% if can_edit_company %}
               <div class="hidden mt-2" data-company-phone-add>
                 <div class="flex items-start gap-2 flex-wrap">
-                  <input class="input text-xs" data-company-phone-add-input placeholder="+7..." style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:240px" />
+                  <input class="input text-xs" data-company-phone-add-input placeholder="+7..." style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:15rem" />
                   <button type="button" class="btn btn-primary btn-sm" data-company-phone-add-save>Сохранить</button>
                   <button type="button" class="btn btn-outline btn-sm" data-company-phone-add-cancel>Отмена</button>
                 </div>
@@ -592,7 +592,7 @@
                       {% endif %}
                       {% if can_edit_company %}
                         <div class="hidden mt-1" data-company-phone-edit="{{ phone.id }}">
-                          <input class="input text-xs" data-company-phone-input value="{{ phone.value|default:'' }}" placeholder="+7..." style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:240px" />
+                          <input class="input text-xs" data-company-phone-input value="{{ phone.value|default:'' }}" placeholder="+7..." style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:15rem" />
                           <div class="flex gap-1 mt-1">
                             <button type="button" class="btn btn-primary btn-sm" data-company-phone-save="{{ phone.id }}">Сохранить</button>
                             <button type="button" class="btn btn-outline btn-sm" data-company-phone-cancel="{{ phone.id }}">Отмена</button>
@@ -689,7 +689,7 @@
                     <div class="text-xs text-brand-dark/50">(основной)</div>
                     {% if can_edit_company %}
                       <div class="hidden mt-1" data-company-main-email-edit>
-                        <input class="input text-xs" data-company-main-email-input value="{{ company.email|default:'' }}" placeholder="email@example.com" style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:280px" />
+                        <input class="input text-xs" data-company-main-email-input value="{{ company.email|default:'' }}" placeholder="email@example.com" style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:17.5rem" />
                         <div class="flex gap-1 mt-1">
                           <button type="button" class="btn btn-primary btn-sm" data-company-main-email-save>Сохранить</button>
                           <button type="button" class="btn btn-outline btn-sm" data-company-main-email-cancel>Отмена</button>
@@ -716,7 +716,7 @@
                     <div class="font-mono text-xs" data-company-email-display="{{ email.id }}">{{ email.value }}</div>
                     {% if can_edit_company %}
                       <div class="hidden mt-1" data-company-email-edit="{{ email.id }}">
-                        <input class="input text-xs" data-company-email-input value="{{ email.value|default:'' }}" placeholder="email@example.com" style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:280px" />
+                        <input class="input text-xs" data-company-email-input value="{{ email.value|default:'' }}" placeholder="email@example.com" style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:17.5rem" />
                         <div class="flex gap-1 mt-1">
                           <button type="button" class="btn btn-primary btn-sm" data-company-email-save="{{ email.id }}">Сохранить</button>
                           <button type="button" class="btn btn-outline btn-sm" data-company-email-cancel="{{ email.id }}">Отмена</button>
@@ -758,7 +758,7 @@
                   {{ company.address|default:"—" }}
                 </div>
                 <div class="inline-field-edit hidden mt-1">
-                  <textarea class="input w-full" data-inline-input rows="3" maxlength="500" style="min-height:88px;resize:vertical">{{ company.address|default:'' }}</textarea>
+                  <textarea class="input w-full" data-inline-input rows="3" maxlength="500" style="min-height:5.5rem;resize:vertical">{{ company.address|default:'' }}</textarea>
                   <div class="flex gap-1 mt-1">
                     <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
                     <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
@@ -796,7 +796,7 @@
       </div>
 
       {# Немодальная панель: создать/редактировать контакт (фон НЕ блокируем, чтобы можно было копировать) #}
-      <div id="contactPanel" class="fixed right-4 bottom-4 z-[120] hidden" style="width: min(720px, calc(100vw - 2rem));">
+      <div id="contactPanel" class="fixed right-4 bottom-4 z-[120] hidden" style="width: min(45rem, calc(100vw - 2rem));">
         <div class="bg-white border border-brand-soft rounded-2xl shadow-2xl p-5 max-h-[85vh] overflow-auto">
           <div id="contactPanelBody"></div>
         </div>
@@ -1031,7 +1031,7 @@
                                 <button
                                   type="submit"
                                   class="btn btn-outline btn-xs js-cold-mark"
-                                  style="padding:4px 8px;"
+                                  style="padding:0.25rem 0.5rem;"
                                   data-cold-btn="phone-{{ p.id }}"
                                   title="Отметить холодный звонок"
                                   aria-label="Отметить холодный звонок"
@@ -1057,7 +1057,7 @@
                                   <button
                                     type="submit"
                                     class="btn btn-outline btn-xs"
-                                    style="padding:4px 8px;"
+                                    style="padding:0.25rem 0.5rem;"
                                     title="Откатить отметку холодного звонка (только для администраторов)"
                                     aria-label="Откатить отметку холодного звонка"
                                   >
@@ -1072,7 +1072,7 @@
                             <button
                               type="button"
                               class="btn btn-outline btn-xs js-call-phone"
-                              style="padding:4px 8px;"
+                              style="padding:0.25rem 0.5rem;"
                               data-phone="{{ p.value }}"
                               data-company="{{ company.id }}"
                               data-contact="{{ c.id }}"
@@ -1991,7 +1991,7 @@
                   {{ company.inn|default:"—" }}
                 </span>
                 <span class="inline-field-edit hidden ml-1 align-middle">
-                  <input class="input text-xs" data-inline-input maxlength="255" value="{{ company.inn|default:'' }}" style="width:200px;padding:.25rem .5rem;font-size:.75rem" placeholder="ИНН" />
+                  <input class="input text-xs" data-inline-input maxlength="255" value="{{ company.inn|default:'' }}" style="width:12.5rem;padding:.25rem .5rem;font-size:.75rem" placeholder="ИНН" />
                   <button type="button" class="btn btn-primary btn-xs ml-1" data-inline-save>✓</button>
                   <button type="button" class="btn btn-outline btn-xs ml-1" data-inline-cancel>✕</button>
                   <span class="text-xs text-red-600 ml-1 hidden" data-inline-error></span>
@@ -2812,7 +2812,7 @@
                     {{ company.address|default:"—" }}
                   </div>
                   <div class="inline-field-edit hidden mt-1">
-                    <textarea class="input w-full" data-inline-input rows="3" maxlength="500" style="min-height:88px;resize:vertical">{{ company.address|default:'' }}</textarea>
+                    <textarea class="input w-full" data-inline-input rows="3" maxlength="500" style="min-height:5.5rem;resize:vertical">{{ company.address|default:'' }}</textarea>
                     <div class="flex gap-1 mt-1">
                       <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
                       <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
@@ -4162,7 +4162,7 @@
                 <div class="font-mono text-xs" data-company-phone-display="${phoneId}">${displayText || '—'}</div>
                 <div class="text-[11px] muted-2 mt-0.5 ${rawPhone ? '' : 'hidden'}" data-company-phone-local="${phoneId}"></div>
                 <div class="hidden mt-1" data-company-phone-edit="${phoneId}">
-                  <input class="input text-xs" data-company-phone-input value="${rawPhone || ''}" placeholder="+7..." style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:240px" />
+                  <input class="input text-xs" data-company-phone-input value="${rawPhone || ''}" placeholder="+7..." style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:15rem" />
                   <div class="flex gap-1 mt-1">
                     <button type="button" class="btn btn-primary btn-sm" data-company-phone-save="${phoneId}">Сохранить</button>
                     <button type="button" class="btn btn-outline btn-sm" data-company-phone-cancel="${phoneId}">Отмена</button>

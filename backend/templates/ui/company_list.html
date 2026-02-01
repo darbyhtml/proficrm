@@ -188,7 +188,7 @@
           <span class="muted-2 ml-2" id="bulkModeHint"></span>
         </div>
         <div class="flex flex-wrap items-center gap-2">
-          <select name="responsible_id" class="select" style="min-width:260px">
+          <select name="responsible_id" class="select" style="min-width:16.25rem">
             <option value="">Новый ответственный…</option>
             {% regroup transfer_targets by branch as branches_list %}
             {% for branch_group in branches_list %}
@@ -212,7 +212,7 @@
     <!-- Индикатор загрузки -->
     <div id="companyListLoading" class="hidden fixed inset-0 z-40 flex items-center justify-center" style="background: rgba(0, 61, 56, 0.15);">
       <div class="bg-white rounded-2xl shadow-xl p-8 flex flex-col items-center gap-4" style="border: 1px solid rgba(194, 226, 222, 0.9);">
-        <div class="inline-block animate-spin rounded-full h-12 w-12" style="border: 3px solid rgba(194, 226, 222, 0.3); border-top-color: #01948E;"></div>
+        <div class="inline-block animate-spin rounded-full h-12 w-12" style="border: 0.1875rem solid rgba(194, 226, 222, 0.3); border-top-color: #01948E;"></div>
         <div style="color: #003D38; font-weight: 500;">Загрузка компаний...</div>
       </div>
     </div>
@@ -222,7 +222,7 @@
         <table class="table">
           <thead>
             <tr>
-              <th class="text-left px-4 py-3" style="width:44px">
+              <th class="text-left px-4 py-3" style="width:2.75rem">
                 <input type="checkbox" id="bulkSelectAll" />
               </th>
               {% if "name" in company_list_columns %}

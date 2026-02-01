@@ -23,7 +23,7 @@
       </div>
 
       <div class="flex items-center gap-2 flex-wrap">
-        <input class="input" style="max-width:420px" type="text" name="q" value="{{ request.GET.q }}" placeholder="Поиск по ключу/названию (например tasks, phone:qr, ui:analytics)">
+        <input class="input" style="max-width:26.25rem" type="text" name="q" value="{{ request.GET.q }}" placeholder="Поиск по ключу/названию (например tasks, phone:qr, ui:analytics)">
         <select class="select w-auto" name="group">
           <option value="" {% if not request.GET.group or request.GET.group == 'all' %}selected{% endif %}>Все группы</option>
           <option value="ui" {% if request.GET.group == 'ui' %}selected{% endif %}>UI</option>
@@ -43,10 +43,10 @@
         <table class="table">
           <thead>
             <tr>
-              <th style="min-width: 320px;">Ресурс</th>
-              <th style="min-width: 120px;">Тип</th>
-              <th style="min-width: 220px;">Доступ</th>
-              <th style="min-width: 120px;">Риск</th>
+              <th style="min-width: 20rem;">Ресурс</th>
+              <th style="min-width: 7.5rem;">Тип</th>
+              <th style="min-width: 13.75rem;">Доступ</th>
+              <th style="min-width: 7.5rem;">Риск</th>
             </tr>
           </thead>
           <tbody>
