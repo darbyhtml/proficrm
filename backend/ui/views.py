@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
-from datetime import timedelta
+from datetime import datetime, time as datetime_time, timedelta
 from uuid import UUID
 from decimal import Decimal
 
@@ -6041,6 +6040,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
             "is_admin": is_admin,
             "can_bulk_reschedule": can_bulk_reschedule,
             "show_task_checkboxes": show_task_checkboxes,
+            "default_bulk_reschedule_datetime": local_now.replace(hour=17, minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H:%M"),
             "transfer_targets": transfer_targets,
             "view_task": view_task,
             "view_task_overdue_days": view_task_overdue_days,
@@ -6766,28 +6766,50 @@ def task_bulk_reschedule(request: HttpRequest) -> HttpResponse:
 
     user: User = request.user
 
-    due_date_str = (request.POST.get("due_date") or "").strip()
-    if not due_date_str:
-        messages.error(request, "Укажите дату для переноса.")
-        return redirect("task_list")
+    # Принимаем due_at (datetime-local) или due_date + due_time для обратной совместимости
+    due_at_str = (request.POST.get("due_at") or "").strip()
+    if due_at_str:
+        try:
+            # Формат YYYY-MM-DDTHH:MM или YYYY-MM-DDTHH:MM:SS
+            if "T" in due_at_str:
+                parsed = datetime.strptime(due_at_str[:16], "%Y-%m-%dT%H:%M")
+            else:
+                parsed = datetime.strptime(due_at_str[:10], "%Y-%m-%d")
+                parsed = parsed.replace(hour=17, minute=0, second=0, microsecond=0)
+            new_due_at = timezone.make_aware(parsed)
+        except ValueError:
+            messages.error(request, "Неверный формат даты и времени.")
+            return redirect("task_list")
+    else:
+        due_date_str = (request.POST.get("due_date") or "").strip()
+        if not due_date_str:
+            messages.error(request, "Укажите дату для переноса.")
+            return redirect("task_list")
+        try:
+            parsed_date = datetime.strptime(due_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            messages.error(request, "Неверный формат даты. Используйте ГГГГ-ММ-ДД.")
+            return redirect("task_list")
+        due_time_str = (request.POST.get("due_time") or "17:00").strip()
+        try:
+            if len(due_time_str) >= 5 and ":" in due_time_str:
+                new_time = datetime.strptime(due_time_str[:5], "%H:%M").time()
+            else:
+                new_time = datetime.strptime("17:00", "%H:%M").time()
+        except ValueError:
+            new_time = datetime.strptime("17:00", "%H:%M").time()
+        new_due_at = timezone.make_aware(datetime.combine(parsed_date, new_time))
 
-    try:
-        parsed_date = datetime.strptime(due_date_str, "%Y-%m-%d").date()
-    except ValueError:
-        messages.error(request, "Неверный формат даты. Используйте ГГГГ-ММ-ДД.")
-        return redirect("task_list")
-
-    due_time_str = (request.POST.get("due_time") or "18:00").strip()
-    try:
-        if len(due_time_str) == 5 and ":" in due_time_str:
-            h, m = due_time_str.split(":", 1)
-            new_time = datetime.strptime(due_time_str, "%H:%M").time()
+    # Ограничение: задачи ставятся с 8:00 до 17:50 (как в формах создания/редактирования задач)
+    local_dt = timezone.localtime(new_due_at)
+    h, m = local_dt.hour, local_dt.minute
+    if h < 8 or (h == 17 and m > 50) or h > 17:
+        if h < 8:
+            h, m = 8, 0
         else:
-            new_time = datetime.strptime("18:00", "%H:%M").time()
-    except ValueError:
-        new_time = datetime.strptime("18:00", "%H:%M").time()
-
-    new_due_at = timezone.make_aware(datetime.combine(parsed_date, new_time))
+            h, m = 17, 50
+        new_due_at = timezone.make_aware(datetime.combine(local_dt.date(), datetime_time(h, m, 0)))
+        messages.info(request, f"Время скорректировано в рабочий интервал 8:00–17:50. Применено: {new_due_at.strftime('%d.%m.%Y %H:%M')}.")
 
     apply_mode = (request.POST.get("apply_mode") or "selected").strip().lower()
 

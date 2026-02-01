@@ -108,13 +108,12 @@
         <form method="post" action="/tasks/bulk-reschedule/" id="bulkRescheduleForm" class="flex flex-wrap items-end gap-4" {% if is_admin %}data-copy-task-ids="1"{% endif %}>
           {% csrf_token %}
           <div class="flex flex-wrap items-end gap-3 flex-1 min-w-0">
-            <div class="min-w-[140px]">
-              <label class="block text-xs font-medium text-brand-dark/70 mb-1">Дата</label>
-              <input type="date" name="due_date" class="input w-full border-brand-soft/60 focus:border-brand-teal focus:ring-brand-teal/20" required />
-            </div>
-            <div class="min-w-[100px]">
-              <label class="block text-xs font-medium text-brand-dark/70 mb-1">Время</label>
-              <input type="time" name="due_time" class="input w-full border-brand-soft/60 focus:border-brand-teal focus:ring-brand-teal/20" value="18:00" step="300" />
+            <div class="min-w-[200px]">
+              <label class="block text-xs font-medium text-brand-dark/70 mb-1">Дата и время</label>
+              <input type="datetime-local" name="due_at" id="bulkRescheduleDateTime" class="input w-full border-brand-soft/60 focus:border-brand-teal focus:ring-brand-teal/20" required
+                data-min-hour="8" data-max-hour="17" data-minute-step="10"
+                value="{{ default_bulk_reschedule_datetime|default:'' }}"
+                title="Задачи ставятся с 8:00 до 17:50" />
             </div>
             <div class="flex flex-wrap gap-2">
               <button type="submit" name="apply_mode" value="selected" class="btn btn-primary inline-flex items-center gap-2">
