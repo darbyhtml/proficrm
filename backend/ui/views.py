@@ -8800,6 +8800,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                                     run_id = None
                                 else:
                                     try:
+                                        target_responsible = form.cleaned_data.get("target_responsible")
                                         result = migrate_filtered(
                                             client=client,
                                             actor=request.user,
@@ -8816,6 +8817,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                                             company_fields_meta=fields,
                                             skip_field_filter=migrate_all,
                                             region_field_id=getattr(cfg, "region_custom_field_id", None) or None,
+                                            target_responsible=target_responsible,
                                         )
                                         migrate_responsible_user_id = responsible_user_id
                                         if dry_run:

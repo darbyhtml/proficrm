@@ -3402,6 +3402,7 @@ def migrate_filtered(
     company_fields_meta: list[dict[str, Any]] | None = None,
     skip_field_filter: bool = False,  # если True, мигрируем все компании ответственного без фильтра по полю
     region_field_id: int | None = None,
+    target_responsible: User | None = None,  # если задан — все компании назначаются этому пользователю в нашей CRM
 ) -> AmoMigrateResult:
     import time
     start_time = time.time()
@@ -3420,8 +3421,11 @@ def migrate_filtered(
 
     amo_users = fetch_amo_users(client)
     amo_user_by_id = {int(u.get("id") or 0): u for u in amo_users if int(u.get("id") or 0)}
-    # Если список пользователей пуст (например, из-за 403), используем пустой словарь
-    responsible_local = _map_amo_user_to_local(amo_user_by_id.get(int(responsible_user_id)) or {}) if amo_user_by_id else None
+    # Если задан target_responsible — все компании назначаем ему; иначе маппим по ФИО из amo
+    if target_responsible is not None:
+        responsible_local = target_responsible
+    else:
+        responsible_local = _map_amo_user_to_local(amo_user_by_id.get(int(responsible_user_id)) or {}) if amo_user_by_id else None
     field_meta = _build_field_meta(company_fields_meta or [])
 
     # КРИТИЧЕСКИ: ВСЕГДА запрашиваем компании БЕЗ контактов

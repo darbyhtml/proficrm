@@ -1050,6 +1050,13 @@ class AmoMigrateFilterForm(forms.Form):
         required=True,
         help_text="Выберите одного ответственного (менеджера) amoCRM."
     )
+    target_responsible = FlexibleUserChoiceField(
+        queryset=User.objects.none(),
+        label="Назначить в нашей CRM пользователю",
+        required=False,
+        widget=forms.Select(attrs={"class": "select w-full"}),
+        help_text="Если указать, все перенесённые компании будут назначены этому пользователю (филиал — по пользователю). Иначе — по совпадению ФИО с amo.",
+    )
     migrate_all_companies = forms.BooleanField(label="Мигрировать все компании ответственного (без фильтра по полю)", required=False, initial=False)
     custom_field_id = forms.IntegerField(label="Кастомное поле (id)", required=False)
     custom_value_label = forms.CharField(label="Значение (текст)", required=False, initial="Новая CRM")
@@ -1057,6 +1064,12 @@ class AmoMigrateFilterForm(forms.Form):
     import_tasks = forms.BooleanField(label="Импортировать задачи", required=False, initial=True)
     import_notes = forms.BooleanField(label="Импортировать заметки", required=False, initial=True)
     import_contacts = forms.BooleanField(label="Импортировать контакты (может быть медленно)", required=False, initial=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["target_responsible"].queryset = (
+            User.objects.filter(is_active=True).select_related("branch").order_by("last_name", "first_name")
+        )
 
     def clean(self):
         cleaned_data = super().clean()
