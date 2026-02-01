@@ -80,6 +80,15 @@ chmod +x deploy_staging.sh   # один раз, если Permission denied
 
 Первый раз: клонировать репозиторий в `/opt/proficrm-staging`, запустить `./scripts/setup_staging_env.sh` (подставит ключи), задать в `.env.staging` **POSTGRES_PASSWORD**, затем `./deploy_staging.sh`. Подробно: [DEPLOY_WORKFLOW.md](DEPLOY_WORKFLOW.md).
 
+**Копирование БД прода на стаджинг (только данные — компании, заметки, задачи):**  
+Сначала на **проде** создайте дамп: `cd /opt/proficrm && ./scripts/backup_postgres.sh` (файл появится в `/opt/proficrm/backups`). Затем на **стаджинге** выполните:
+```bash
+cd /opt/proficrm-staging
+chmod +x scripts/restore_prod_db_to_staging.sh   # один раз
+./scripts/restore_prod_db_to_staging.sh
+```
+Скрипт подхватит последний дамп из `/opt/proficrm/backups` и заменит им БД стаджинга (с подтверждением). Либо укажите путь к файлу: `./scripts/restore_prod_db_to_staging.sh /opt/proficrm/backups/crm_YYYYMMDD_HHMMSS.sql.gz`.
+
 ### Переход с docker-compose.yml на prod.yml (без потери БД)
 
 1. Запускать из **того же каталога** (`/opt/proficrm`), **не** использовать `docker compose down -v`.
