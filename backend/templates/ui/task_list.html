@@ -168,15 +168,26 @@
 
     <div class="bg-white border rounded-2xl overflow-hidden">
       <div class="overflow-x-auto">
-        <table class="table">
+        <table class="table w-full" style="table-layout: fixed; min-width: 960px;">
+          <colgroup>
+            {% if show_task_checkboxes %}<col style="width: 2.25rem;" />{% endif %}
+            <col />
+            <col />
+            <col />
+            <col />
+            <col />
+            <col />
+            <col style="width: 6rem;" />
+            <col />
+          </colgroup>
           <thead>
             <tr>
-              {% if is_admin %}
-                <th class="text-left px-2 py-2" style="width:45px;min-width:45px;max-width:45px">
-                  <input type="checkbox" id="bulkSelectAll" title="Выбрать все" />
+              {% if show_task_checkboxes %}
+                <th class="text-center px-1 py-2 w-9 shrink-0" style="width: 2.25rem;">
+                  <input type="checkbox" id="bulkSelectAll" title="Выбрать все" class="rounded" />
                 </th>
               {% endif %}
-              <th class="text-left px-2 py-2" style="width:200px;min-width:200px;max-width:200px">
+              <th class="text-left px-2 py-2">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=title&dir={% if sort_field == 'title' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'title' %}text-brand-orange font-bold{% endif %}">
                   Задача
                   <div class="flex flex-col gap-0.5">
@@ -189,7 +200,7 @@
                   </div>
                 </a>
               </th>
-              <th class="text-left px-2 py-2" style="width:168px;min-width:168px;max-width:168px">
+              <th class="text-left px-2 py-2">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=company&dir={% if sort_field == 'company' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'company' %}text-brand-orange font-bold{% endif %}">
                   Компания
                   <div class="flex flex-col gap-0.5">
@@ -202,7 +213,7 @@
                   </div>
                 </a>
               </th>
-              <th class="text-left px-2 py-2" style="width:168px;min-width:168px;max-width:168px">
+              <th class="text-left px-2 py-2">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=assignee&dir={% if sort_field == 'assignee' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'assignee' %}text-brand-orange font-bold{% endif %}">
                   Кому
                   <div class="flex flex-col gap-0.5">
@@ -215,7 +226,7 @@
                   </div>
                 </a>
               </th>
-              <th class="text-left px-2 py-2" style="width:168px;min-width:168px;max-width:168px">
+              <th class="text-left px-2 py-2">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=created_by&dir={% if sort_field == 'created_by' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'created_by' %}text-brand-orange font-bold{% endif %}">
                   Кто
                   <div class="flex flex-col gap-0.5">
@@ -228,7 +239,7 @@
                   </div>
                 </a>
               </th>
-              <th class="text-left px-2 py-2" style="width:168px;min-width:168px;max-width:168px">
+              <th class="text-left px-2 py-2">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=due_at&dir={% if sort_field == 'due_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'due_at' %}text-brand-orange font-bold{% endif %}">
                   Дедлайн
                   <div class="flex flex-col gap-0.5">
@@ -241,7 +252,7 @@
                   </div>
                 </a>
               </th>
-              <th class="text-left px-2 py-2" style="width:100px;min-width:100px;max-width:100px">
+              <th class="text-left px-2 py-2">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=status&dir={% if sort_field == 'status' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'status' %}text-brand-orange font-bold{% endif %}">
                   Статус
                   <div class="flex flex-col gap-0.5">
@@ -254,8 +265,8 @@
                   </div>
                 </a>
               </th>
-              <th class="text-left px-2 py-2" style="width:100px;min-width:100px;max-width:100px">Действия</th>
-              <th class="text-left px-2 py-2" style="width:168px;min-width:168px;max-width:168px">
+              <th class="text-left px-2 py-2">Действия</th>
+              <th class="text-left px-2 py-2">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=created_at&dir={% if sort_field == 'created_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'created_at' %}text-brand-orange font-bold{% endif %}">
                   Дата создания
                   <div class="flex flex-col gap-0.5">
@@ -320,7 +331,7 @@
                     </div>
                   </div>
                 </td>
-                <td class="px-2 py-2" style="width:168px;min-width:168px;max-width:168px;word-wrap:break-word;overflow-wrap:break-word">
+                <td class="px-2 py-2 min-w-0 break-words">
                   {% if t.company %}
                     <div style="line-height:1.4">
                       <a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>
@@ -343,19 +354,13 @@
                     —
                   {% endif %}
                 </td>
-                <td class="px-2 py-2" style="width:168px;min-width:168px;max-width:168px;word-wrap:break-word;overflow-wrap:break-word">
-                  <span style="line-height:1.4">{{ t.assigned_to|default:"—" }}</span>
-                </td>
-                <td class="px-2 py-2" style="width:168px;min-width:168px;max-width:168px;word-wrap:break-word;overflow-wrap:break-word">
-                  <span style="line-height:1.4">{{ t.created_by|default:"—" }}</span>
-                </td>
-                <td class="muted px-2 py-2" style="width:168px;min-width:168px;max-width:168px;word-wrap:break-word;overflow-wrap:break-word">
+                <td class="px-2 py-2 min-w-0 break-words"><span style="line-height:1.4">{{ t.assigned_to|default:"—" }}</span></td>
+                <td class="px-2 py-2 min-w-0 break-words"><span style="line-height:1.4">{{ t.created_by|default:"—" }}</span></td>
+                <td class="muted px-2 py-2 min-w-0 break-words">
                   <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}" style="line-height:1.4">{{ t.due_at|default:"—" }}</span>
                 </td>
-                <td class="px-2 py-2" style="width:100px;min-width:100px;max-width:100px;word-wrap:break-word;overflow-wrap:break-word">
-                  <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
-                </td>
-                <td class="px-2 py-2" style="width:100px;min-width:100px;max-width:100px">
+                <td class="px-2 py-2 min-w-0"><span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span></td>
+                <td class="px-2 py-2 w-24 shrink-0">
                   <div class="grid grid-cols-2 gap-1">
                     {% if t.can_edit_task %}
                       <button type="button" class="flex items-center justify-center w-6 h-6 rounded bg-white border border-brand-soft hover:bg-brand-soft/40 transition-colors" data-edit-task data-task-id="{{ t.id }}" title="Редактировать" aria-label="Редактировать">
@@ -419,9 +424,7 @@
                     {% endif %}
                   </div>
                 </td>
-                <td class="muted px-2 py-2" style="width:168px;min-width:168px;max-width:168px;word-wrap:break-word;overflow-wrap:break-word">
-                  <span style="line-height:1.4">{{ t.created_at|date:"d.m.Y H:i" }}</span>
-                </td>
+                <td class="muted px-2 py-2 min-w-0 break-words"><span style="line-height:1.4">{{ t.created_at|date:"d.m.Y H:i" }}</span></td>
               </tr>
             {% empty %}
               <tr><td class="muted" colspan="{% if show_task_checkboxes %}8{% else %}7{% endif %}" style="padding:1.25rem 1rem">Задач нет.</td></tr>
