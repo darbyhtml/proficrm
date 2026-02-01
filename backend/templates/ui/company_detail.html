@@ -11,7 +11,7 @@
         <div class="text-sm text-brand-dark/70"><a class="underline" href="/companies/">Компании</a> /</div>
         <div class="flex items-start justify-between gap-3">
           {% if can_edit_company %}
-            <div class="inline-field-wrapper" data-inline-field="name" data-company-id="{{ company.id }}">
+            <div class="inline-field-wrapper flex-1 min-w-0" data-inline-field="name" data-company-id="{{ company.id }}">
               <div class="relative" data-dd-root>
                 <div class="inline-field-trigger group" data-dd-toggle title="Клик: скопировать или изменить">
                   <h1 class="text-2xl font-semibold inline-field-display hover:text-brand-dark/80 transition-colors">{{ company.name }}</h1>
@@ -22,8 +22,8 @@
                   <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-edit>Изменить</button>
                 </div>
               </div>
-              <div class="inline-field-edit hidden mt-2">
-                <input class="input w-full" data-inline-input maxlength="255" value="{{ company.name|default:'' }}" />
+              <div class="inline-field-edit hidden mt-2 w-full">
+                <input class="input w-full text-xl py-2 min-h-[2.75rem]" data-inline-input maxlength="255" value="{{ company.name|default:'' }}" placeholder="Название компании" />
                 <div class="flex gap-1 mt-2">
                   <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
                   <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
@@ -2060,7 +2060,7 @@
           <div class="text-xs text-brand-dark/60 mb-0.5"><a class="underline hover:text-brand-teal" href="/companies/">Компании</a> /</div>
           <div class="flex items-center gap-2 flex-wrap">
             {% if can_edit_company %}
-              <div class="inline-field-wrapper" data-inline-field="name" data-company-id="{{ company.id }}">
+              <div class="inline-field-wrapper w-full min-w-0" data-inline-field="name" data-company-id="{{ company.id }}">
                 <div class="relative" data-dd-root>
                   <div class="inline-field-trigger group" data-dd-toggle title="Клик: скопировать или изменить">
                     <h1 class="text-xl font-semibold inline-field-display min-w-0 hover:text-brand-teal transition-colors">{{ company.name }}</h1>
@@ -2071,8 +2071,8 @@
                     <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-edit>Изменить</button>
                   </div>
                 </div>
-                <div class="inline-field-edit hidden mt-1">
-                  <input class="input w-full" data-inline-input maxlength="255" value="{{ company.name|default:'' }}" />
+                <div class="inline-field-edit hidden mt-1 w-full">
+                  <input class="input w-full text-lg py-2 min-h-[2.5rem]" data-inline-input maxlength="255" value="{{ company.name|default:'' }}" placeholder="Название компании" />
                   <div class="flex gap-1 mt-1">
                     <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
                     <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
