@@ -69,27 +69,6 @@
             </span>
 
             <span class="mx-1">·</span>
-            <span>Юр. назв.:</span>
-            <span class="inline-field-wrapper" data-inline-field="legal_name" data-company-id="{{ company.id }}">
-              <span class="relative inline-block" data-dd-root>
-                <span class="inline-field-trigger inline-field-trigger-inline group" data-dd-toggle title="Клик: скопировать или изменить">
-                  <span class="inline-field-display">{{ company.legal_name|default:"—" }}</span>
-                  <svg class="inline-field-pencil" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
-                </span>
-                <div class="hidden absolute left-0 mt-1 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
-                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-copy>Скопировать</button>
-                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-edit>Изменить</button>
-                </div>
-              </span>
-              <span class="inline-field-edit hidden ml-2 align-middle">
-                <input class="input" data-inline-input maxlength="255" value="{{ company.legal_name|default:'' }}" style="width:20rem" />
-                <button type="button" class="btn btn-primary btn-xs ml-1" data-inline-save>Сохранить</button>
-                <button type="button" class="btn btn-outline btn-xs ml-1" data-inline-cancel>Отмена</button>
-                <span class="text-xs text-red-600 ml-2 hidden" data-inline-error></span>
-              </span>
-            </span>
-
-            <span class="mx-1">·</span>
             <span>КПП:</span>
             <span class="inline-field-wrapper" data-inline-field="kpp" data-company-id="{{ company.id }}">
               <span class="relative inline-block" data-dd-root>
@@ -109,32 +88,9 @@
                 <span class="text-xs text-red-600 ml-2 hidden" data-inline-error></span>
               </span>
             </span>
-
-            <span class="mx-1">·</span>
-            <span>Числ.:</span>
-            <span class="inline-field-wrapper" data-inline-field="employees_count" data-company-id="{{ company.id }}">
-              <span class="relative inline-block" data-dd-root>
-                <span class="inline-field-trigger inline-field-trigger-inline group" data-dd-toggle title="Клик: скопировать или изменить">
-                  <span class="inline-field-display">{{ company.employees_count|default:"—" }}</span>
-                  <svg class="inline-field-pencil" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
-                </span>
-                <div class="hidden absolute left-0 mt-1 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
-                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-copy>Скопировать</button>
-                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-edit>Изменить</button>
-                </div>
-              </span>
-              <span class="inline-field-edit hidden ml-2 align-middle">
-                <input class="input" type="number" min="0" data-inline-input value="{{ company.employees_count|default:'' }}" style="width:5rem" placeholder="—" />
-                <button type="button" class="btn btn-primary btn-xs ml-1" data-inline-save>Сохранить</button>
-                <button type="button" class="btn btn-outline btn-xs ml-1" data-inline-cancel>Отмена</button>
-                <span class="text-xs text-red-600 ml-2 hidden" data-inline-error></span>
-              </span>
-            </span>
           {% else %}
             {% if company.inn %}ИНН: <span class="font-mono">{{ company.inn }}</span>{% endif %}
             {% if company.kpp %} · КПП: <span class="font-mono">{{ company.kpp }}</span>{% endif %}
-            {% if company.legal_name %} · Юр. назв.: {{ company.legal_name }}{% endif %}
-            {% if company.employees_count is not None %} · Числ.: {{ company.employees_count }}{% endif %}
           {% endif %}
         </div>
 
@@ -536,33 +492,62 @@
                 <span class="badge badge-warn badge-sm">Напоминание</span>
               {% endif %}
             </div>
-            <div class="flex items-start justify-between gap-2">
-              <div class="text-sm">
-                {% if company.contract_type %}{{ company.contract_type.name }}{% else %}—{% endif %}
-                {% if company.contract_type.is_annual %}
-                  {% if company.contract_amount is not None %}
-                    <span class="muted-2">· сумма: {{ company.contract_amount|floatformat:2 }} ₽</span>
-                    {% if company.contract_amount < 25000 %}
-                      <span class="badge badge-danger badge-sm ml-1">Меньше 25 000</span>
-                    {% elif company.contract_amount < 70000 %}
-                      <span class="badge badge-warn badge-sm ml-1">Меньше 70 000</span>
+            {% if can_edit_company %}
+            <div class="relative mt-1" data-dd-root>
+              <div class="inline-field-trigger group flex items-start justify-between gap-2 cursor-pointer rounded-lg hover:bg-brand-soft/20 -mx-1 px-1 py-0.5" data-dd-toggle title="Клик: скопировать или изменить">
+                <div class="text-sm min-w-0" data-contract-display>
+                  {% if company.contract_type %}{{ company.contract_type.name }}{% else %}—{% endif %}
+                  {% if company.contract_type.is_annual %}
+                    {% if company.contract_amount is not None %}
+                      <span class="muted-2">· сумма: {{ company.contract_amount|floatformat:2 }} ₽</span>
+                      {% if company.contract_amount < 25000 %}
+                        <span class="badge badge-danger badge-sm ml-1">Меньше 25 000</span>
+                      {% elif company.contract_amount < 70000 %}
+                        <span class="badge badge-warn badge-sm ml-1">Меньше 70 000</span>
+                      {% endif %}
+                    {% else %}
+                      <span class="muted-2">· сумма не указана</span>
                     {% endif %}
                   {% else %}
-                    <span class="muted-2">· сумма не указана</span>
-                  {% endif %}
-                {% else %}
-                  {% if company.contract_until %}
-                    <span class="muted-2">· до {{ company.contract_until|date:"d.m.Y" }}</span>
-                    {% if contract_days_left is not None %}
-                      <span class="muted-2">· осталось {{ contract_days_left }} дн.</span>
+                    {% if company.contract_until %}
+                      <span class="muted-2">· до {{ company.contract_until|date:"d.m.Y" }}</span>
+                      {% if contract_days_left is not None %}
+                        <span class="muted-2">· осталось {{ contract_days_left }} дн.</span>
+                      {% endif %}
                     {% endif %}
                   {% endif %}
-                {% endif %}
+                </div>
+                <svg class="inline-field-pencil shrink-0" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
               </div>
-              {% if can_edit_company %}
-                <button type="button" class="btn btn-outline btn-sm" id="openContractModal">Изменить</button>
+              <div class="hidden absolute left-0 mt-1 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
+                <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-contract-copy>Скопировать</button>
+                <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-open-contract-modal>Изменить</button>
+              </div>
+            </div>
+            {% else %}
+            <div class="text-sm mt-1">
+              {% if company.contract_type %}{{ company.contract_type.name }}{% else %}—{% endif %}
+              {% if company.contract_type.is_annual %}
+                {% if company.contract_amount is not None %}
+                  <span class="muted-2">· сумма: {{ company.contract_amount|floatformat:2 }} ₽</span>
+                  {% if company.contract_amount < 25000 %}
+                    <span class="badge badge-danger badge-sm ml-1">Меньше 25 000</span>
+                  {% elif company.contract_amount < 70000 %}
+                    <span class="badge badge-warn badge-sm ml-1">Меньше 70 000</span>
+                  {% endif %}
+                {% else %}
+                  <span class="muted-2">· сумма не указана</span>
+                {% endif %}
+              {% else %}
+                {% if company.contract_until %}
+                  <span class="muted-2">· до {{ company.contract_until|date:"d.m.Y" }}</span>
+                  {% if contract_days_left is not None %}
+                    <span class="muted-2">· осталось {{ contract_days_left }} дн.</span>
+                  {% endif %}
+                {% endif %}
               {% endif %}
             </div>
+            {% endif %}
           </div>
           <div>
             <div class="text-brand-dark/50">Телефон (основной)</div>
@@ -1656,6 +1641,7 @@
 
 
     {% if can_edit_company %}
+      <button type="button" id="openContractModal" class="hidden" aria-hidden="true"></button>
       <div id="contractModal" class="fixed inset-0 z-[200] hidden">
         <div class="fixed inset-0 bg-black/35" data-close-contract></div>
         <div class="absolute inset-x-4 top-24 mx-auto max-w-lg">
@@ -4225,6 +4211,44 @@
       });
       document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') closeAll();
+      });
+
+      // Договор: Скопировать (текст из data-contract-display)
+      document.addEventListener('click', async function(e) {
+        const btn = e.target.closest('[data-contract-copy]');
+        if (!btn) return;
+        e.preventDefault();
+        const root = btn.closest('[data-dd-root]');
+        const display = root ? root.querySelector('[data-contract-display]') : null;
+        const text = (display && display.textContent) ? display.textContent.trim() : '';
+        if (!text) return;
+        try {
+          await navigator.clipboard.writeText(text);
+          if (window.uiToast) window.uiToast('Скопировано', 'success');
+        } catch (_err) {
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.style.position = 'fixed';
+          textarea.style.opacity = '0';
+          document.body.appendChild(textarea);
+          textarea.select();
+          try {
+            document.execCommand('copy');
+            if (window.uiToast) window.uiToast('Скопировано', 'success');
+          } catch (e2) {
+            if (window.uiToast) window.uiToast('Не удалось скопировать', 'error');
+          }
+          document.body.removeChild(textarea);
+        }
+        closeAll();
+      });
+
+      // Договор: Изменить — открыть модалку
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('[data-open-contract-modal]')) return;
+        e.preventDefault();
+        closeAll();
+        document.getElementById('openContractModal')?.click();
       });
 
       // Copy phone
