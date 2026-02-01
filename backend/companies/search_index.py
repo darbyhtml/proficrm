@@ -87,6 +87,11 @@ def parse_query(q: str, *, max_tokens: int = 12) -> ParsedQuery:
         if len(text_tokens) + len(strong_digits) + len(weak_digits) >= max_tokens:
             break
 
+    # Номер с 8: в БД телефоны хранятся как +7 / 7..., добавляем вариант 7 для поиска
+    for d in list(strong_digits):
+        if len(d) == 11 and d.startswith("8"):
+            strong_digits.append("7" + d[1:])
+
     # дедуп + стабильный порядок
     def _dedup(items: list[str]) -> tuple[str, ...]:
         seen: set[str] = set()

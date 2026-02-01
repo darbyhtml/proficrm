@@ -329,9 +329,16 @@ class TypesenseSearchBackend:
                 return self._fallback_apply(qs, q)
             return qs.none()
 
+        # Номер с 8: в индексе телефоны как 7..., подставляем 7 для Typesense
+        from companies.search_index import only_digits
+        dig = only_digits(q)
+        q_typesense = q
+        if len(dig) == 11 and dig.startswith("8"):
+            q_typesense = "7" + dig[1:]
+
         collection = getattr(settings, "TYPESENSE_COLLECTION_COMPANIES", COLLECTION_NAME)
         search_params = {
-            "q": q,
+            "q": q_typesense,
             "query_by": "name,legal_name,contacts,emails,phones,inn,kpp,address,website,notes",
             "query_by_weights": "5,5,3,2,2,5,5,1,1,0.5",
             "prefix": "true",

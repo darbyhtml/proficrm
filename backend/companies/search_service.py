@@ -5,7 +5,8 @@ from typing import Any
 from uuid import UUID
 
 from django.db import connection
-from django.db.models import Case, F, FloatField, Q, Value, When
+from django.db.models import Case, F, FloatField, IntegerField, Q, Value, When
+from django.db.models.expressions import RawSQL
 from django.db.models.functions import Coalesce
 from django.contrib.postgres.search import SearchQuery, SearchRank, TrigramWordSimilarity
 from django.utils.html import escape
@@ -251,15 +252,24 @@ class CompanySearchService:
         strong_digits = pq.strong_digit_tokens
         weak_digits = pq.weak_digit_tokens
 
-        # AND по strong digit tokens
+        # Группы цифровых токенов: 8 и 7 — один номер, достаточно совпадения по любому варианту
+        def _digit_group(dt: str) -> list[str]:
+            if len(dt) == 11 and dt.startswith("8"):
+                return [dt, "7" + dt[1:]]
+            return [dt]
+
+        # AND по группам strong digit (внутри группы — OR: 8 или 7)
         for dt in strong_digits:
-            indexed_match &= Q(search_index__digits__contains=dt)
-            # fallback по основным числовым полям (без сканирования по связанным таблицам)
-            fallback_match &= (
-                Q(inn__contains=dt)
-                | Q(kpp__contains=dt)
-                | Q(phone__contains=dt)
-            )
+            group = _digit_group(dt)
+            q_group = Q()
+            for v in group:
+                q_group |= Q(search_index__digits__contains=v)
+            indexed_match &= q_group
+            # fallback по основным полям (телефон может быть +7 или 8)
+            fb = Q(inn__contains=dt) | Q(kpp__contains=dt)
+            for v in group:
+                fb |= Q(phone__contains=v)
+            fallback_match &= fb
 
         # AND по text tokens (fts на индексе, icontains на fallback)
         if pq.text_tokens:
@@ -349,6 +359,22 @@ class CompanySearchService:
                 output_field=FloatField(),
             )
         )
+
+        # Поиск по одному номеру (11 цифр): сначала компании с точным совпадением телефона
+        phone_norm = None
+        if not pq.text_tokens and len(strong_digits) == 1 and len(strong_digits[0]) == 11:
+            phone_norm = strong_digits[0]
+            if phone_norm.startswith("8"):
+                phone_norm = "7" + phone_norm[1:]
+        if phone_norm:
+            qs = qs.annotate(
+                exact_phone=RawSQL(
+                    "CASE WHEN regexp_replace(COALESCE(phone,''), '\\D', '', 'g') = %s THEN 1 ELSE 0 END",
+                    [phone_norm],
+                    output_field=IntegerField(),
+                )
+            )
+            return qs.order_by("-exact_phone", "-search_score", "-updated_at")
 
         return qs.order_by("-search_score", "-updated_at")
 
