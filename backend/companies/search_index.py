@@ -62,6 +62,19 @@ def parse_query(q: str, *, max_tokens: int = 12) -> ParsedQuery:
     if not raw:
         return ParsedQuery(raw="", text_tokens=(), strong_digit_tokens=(), weak_digit_tokens=())
 
+    # Один номер телефона (11 цифр с 7/8): считаем весь ввод одним номером для ранжирования и подсветки
+    digits_only = only_digits(raw)
+    if len(digits_only) == 11 and digits_only[0] in ("7", "8"):
+        strong_digits = [digits_only]
+        if digits_only.startswith("8"):
+            strong_digits.append("7" + digits_only[1:])
+        return ParsedQuery(
+            raw=raw,
+            text_tokens=(),
+            strong_digit_tokens=tuple(dict.fromkeys(strong_digits)),
+            weak_digit_tokens=(),
+        )
+
     text_tokens: list[str] = []
     strong_digits: list[str] = []
     weak_digits: list[str] = []
@@ -71,23 +84,19 @@ def parse_query(q: str, *, max_tokens: int = 12) -> ParsedQuery:
         if not tok:
             continue
         if tok.isdigit():
-            # Разделяем “сильные” и “слабые” цифровые токены:
-            # - strong (>=4): ИНН/КПП/фрагменты телефона → участвуют в AND-фильтрации
-            # - weak (2–3): часто вводят для “докрутки” (код, последние цифры) → не фильтруют, а бустят
             if len(tok) >= 4:
                 strong_digits.append(tok)
             elif 2 <= len(tok) <= 3:
                 weak_digits.append(tok)
         else:
             tt = fold_text(tok)
-            # 1 буква — шум
             if len(tt) >= 2:
                 text_tokens.append(tt)
 
         if len(text_tokens) + len(strong_digits) + len(weak_digits) >= max_tokens:
             break
 
-    # Номер с 8: в БД телефоны хранятся как +7 / 7..., добавляем вариант 7 для поиска
+    # Номер с 8: добавляем вариант 7 для поиска
     for d in list(strong_digits):
         if len(d) == 11 and d.startswith("8"):
             strong_digits.append("7" + d[1:])

@@ -22,10 +22,10 @@
           </div>
         {% endif %}
         {% if search_query and c.search_reasons %}
-          <div class="text-xs mt-1" style="color: #f97316; font-weight: 500;">
+          <div class="text-xs mt-1 search-reasons" style="color: #f97316; font-weight: 500;">
             Найдено:
             {% for r in c.search_reasons %}
-              <span class="ml-1"><b>{{ r.label }}</b>: {{ r.value_html|safe }}</span>{% if not forloop.last %}<span class="opacity-50"> · </span>{% endif %}
+              <span class="ml-1"><b>{{ r.label }}</b>: <span class="search-reasons-value">{{ r.value_html|safe }}</span></span>{% if not forloop.last %}<span class="opacity-50"> · </span>{% endif %}
             {% endfor %}
           </div>
         {% endif %}

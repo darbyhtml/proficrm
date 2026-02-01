@@ -375,7 +375,29 @@ class TypesenseSearchBackend:
         if not ids_ordered:
             return qs.none()
 
-        # Сохраняем порядок Typesense: фильтруем qs и сортируем по позиции в ids_ordered
+        # Поиск по одному номеру (11 цифр): сначала компании с точным совпадением phone
+        if len(dig) == 11 and dig[0] in ("7", "8"):
+            phone_norm = dig if dig.startswith("7") else "7" + dig[1:]
+            from django.db.models import TextField
+            from django.db.models.expressions import RawSQL
+            exact_match_ids = set(
+                Company.objects.filter(id__in=ids_ordered)
+                .annotate(
+                    phone_digits=RawSQL(
+                        "regexp_replace(COALESCE(phone,''), '\\D', '', 'g')",
+                        [],
+                        output_field=TextField(),
+                    ),
+                )
+                .filter(phone_digits=phone_norm)
+                .values_list("id", flat=True)
+            )
+            if exact_match_ids:
+                ids_ordered = [i for i in ids_ordered if i in exact_match_ids] + [
+                    i for i in ids_ordered if i not in exact_match_ids
+                ]
+
+        # Сохраняем порядок: фильтруем qs и сортируем по позиции в ids_ordered
         order_case = Case(
             *[When(id=uid, then=Value(i)) for i, uid in enumerate(ids_ordered)],
             output_field=IntegerField(),
