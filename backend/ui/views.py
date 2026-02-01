@@ -2136,8 +2136,29 @@ def company_list(request: HttpRequest) -> HttpResponse:
             explain_map = get_company_search_backend().explain(companies=list(page.object_list), query=q)
             for company in page.object_list:
                 ex = explain_map.get(company.id)
-                if not ex:
-                    continue
+                if not (ex and ex.reasons):
+                    single_map = get_company_search_backend().explain(companies=[company], query=q)
+                    ex_one = single_map.get(company.id) if single_map else None
+                    if ex_one and ex_one.reasons:
+                        company.search_name_html = ex_one.name_html  # type: ignore[attr-defined]
+                        company.search_inn_html = ex_one.inn_html  # type: ignore[attr-defined]
+                        company.search_address_html = ex_one.address_html  # type: ignore[attr-defined]
+                        company.search_reasons = ex_one.reasons  # type: ignore[attr-defined]
+                        company.search_reasons_total = ex_one.reasons_total  # type: ignore[attr-defined]
+                    else:
+                        from companies.search_index import parse_query
+                        from companies.search_service import SearchReason, highlight_html
+                        pq = parse_query(q)
+                        dig = pq.strong_digit_tokens + pq.weak_digit_tokens
+                        company.search_name_html = highlight_html(company.name or "", text_tokens=pq.text_tokens, digit_tokens=dig)  # type: ignore[attr-defined]
+                        company.search_inn_html = highlight_html(company.inn or "", text_tokens=pq.text_tokens, digit_tokens=dig)  # type: ignore[attr-defined]
+                        company.search_address_html = highlight_html(company.address or "", text_tokens=pq.text_tokens, digit_tokens=dig)  # type: ignore[attr-defined]
+                        reasons = [
+                            SearchReason(field="company.name", label="Название", value=(company.name or ""), value_html=company.search_name_html),  # type: ignore[arg-type]
+                        ]
+                        company.search_reasons = tuple([r for r in reasons if r.value])  # type: ignore[attr-defined]
+                        company.search_reasons_total = len(company.search_reasons)  # type: ignore[attr-defined]
+                        continue
                 company.search_name_html = ex.name_html  # type: ignore[attr-defined]
                 company.search_inn_html = ex.inn_html  # type: ignore[attr-defined]
                 company.search_address_html = ex.address_html  # type: ignore[attr-defined]
@@ -2348,13 +2369,34 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
             explain_map = get_company_search_backend().explain(companies=list(page.object_list), query=q)
             for company in page.object_list:
                 ex = explain_map.get(company.id)
-                if not ex:
-                    continue
-                company.search_name_html = ex.name_html  # type: ignore[attr-defined]
-                company.search_inn_html = ex.inn_html  # type: ignore[attr-defined]
-                company.search_address_html = ex.address_html  # type: ignore[attr-defined]
-                company.search_reasons = ex.reasons  # type: ignore[attr-defined]
-                company.search_reasons_total = ex.reasons_total  # type: ignore[attr-defined]
+                if ex and ex.reasons:
+                    company.search_name_html = ex.name_html  # type: ignore[attr-defined]
+                    company.search_inn_html = ex.inn_html  # type: ignore[attr-defined]
+                    company.search_address_html = ex.address_html  # type: ignore[attr-defined]
+                    company.search_reasons = ex.reasons  # type: ignore[attr-defined]
+                    company.search_reasons_total = ex.reasons_total  # type: ignore[attr-defined]
+                else:
+                    single_map = get_company_search_backend().explain(companies=[company], query=q)
+                    ex_one = single_map.get(company.id) if single_map else None
+                    if ex_one and ex_one.reasons:
+                        company.search_name_html = ex_one.name_html  # type: ignore[attr-defined]
+                        company.search_inn_html = ex_one.inn_html  # type: ignore[attr-defined]
+                        company.search_address_html = ex_one.address_html  # type: ignore[attr-defined]
+                        company.search_reasons = ex_one.reasons  # type: ignore[attr-defined]
+                        company.search_reasons_total = ex_one.reasons_total  # type: ignore[attr-defined]
+                    else:
+                        from companies.search_index import parse_query
+                        from companies.search_service import SearchReason, highlight_html
+                        pq = parse_query(q)
+                        dig = pq.strong_digit_tokens + pq.weak_digit_tokens
+                        company.search_name_html = highlight_html(company.name or "", text_tokens=pq.text_tokens, digit_tokens=dig)  # type: ignore[attr-defined]
+                        company.search_inn_html = highlight_html(company.inn or "", text_tokens=pq.text_tokens, digit_tokens=dig)  # type: ignore[attr-defined]
+                        company.search_address_html = highlight_html(company.address or "", text_tokens=pq.text_tokens, digit_tokens=dig)  # type: ignore[attr-defined]
+                        reasons = [
+                            SearchReason(field="company.name", label="Название", value=(company.name or ""), value_html=company.search_name_html),  # type: ignore[arg-type]
+                        ]
+                        company.search_reasons = tuple([r for r in reasons if r.value])  # type: ignore[attr-defined]
+                        company.search_reasons_total = len(company.search_reasons)  # type: ignore[attr-defined]
         except Exception:
             from companies.search_index import parse_query
             from companies.search_service import SearchReason, highlight_html

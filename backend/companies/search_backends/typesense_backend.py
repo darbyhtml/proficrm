@@ -531,12 +531,27 @@ class TypesenseSearchBackend:
                         value_html=snippet,
                     )
                 )
-            reason_field_set = set(reason_fields)
+            # Если Typesense вернул highlights, но причин нет (пустые сниппеты) — берём причины из Postgres
+            if not reasons:
+                fallback = _fallback_explain([c], query, max_reasons_per_company)
+                if c.id in fallback and fallback[c.id].reasons:
+                    out[c.id] = fallback[c.id]
+                else:
+                    out[c.id] = SearchExplain(
+                        company_id=c.id,
+                        reasons=tuple(reasons),
+                        reasons_total=len(highlight_by_field),
+                        name_html=c.name or "",
+                        inn_html=c.inn or "",
+                        address_html=c.address or "",
+                    )
+                continue
 
+            reason_field_set = set(reason_fields)
             # Подсвечиваем в таблице только то поле, по которому реально нашли
-            name_html = highlight_by_field["name"][0][:300] if "name" in reason_field_set else (c.name or "")
-            inn_html = highlight_by_field["inn"][0][:120] if "inn" in reason_field_set else (c.inn or "")
-            address_html = highlight_by_field["address"][0][:300] if "address" in reason_field_set else (c.address or "")
+            name_html = highlight_by_field.get("name", (c.name or "", ""))[0][:300] if "name" in reason_field_set else (c.name or "")
+            inn_html = highlight_by_field.get("inn", (c.inn or "", ""))[0][:120] if "inn" in reason_field_set else (c.inn or "")
+            address_html = highlight_by_field.get("address", (c.address or "", ""))[0][:300] if "address" in reason_field_set else (c.address or "")
 
             out[c.id] = SearchExplain(
                 company_id=c.id,
