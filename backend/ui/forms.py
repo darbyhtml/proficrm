@@ -410,6 +410,7 @@ class CompanyInlineEditForm(forms.ModelForm):
         "work_schedule",
         "region",
         "contract_amount",
+        "employees_count",
     )
 
     def __init__(self, *args, **kwargs):
@@ -483,6 +484,16 @@ class CompanyInlineEditForm(forms.ModelForm):
                 raise ValidationError("Сумма договора может быть указана только для годовых договоров.")
         return amount
 
+    def clean_employees_count(self):
+        val = self.cleaned_data.get("employees_count")
+        if val is None or (isinstance(val, str) and str(val).strip() == ""):
+            return None
+        try:
+            n = int(val) if not isinstance(val, int) else val
+            return max(0, n) if n is not None else None
+        except (TypeError, ValueError):
+            return None
+
     class Meta:
         model = Company
         fields = [
@@ -497,6 +508,7 @@ class CompanyInlineEditForm(forms.ModelForm):
             "work_schedule",
             "region",
             "contract_amount",
+            "employees_count",
         ]
 
 

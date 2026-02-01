@@ -5239,6 +5239,9 @@ def company_inline_update(request: HttpRequest, company_id) -> HttpResponse:
     # Для внешних ключей и спец-полей приводим значение к строке для JSON.
     if field == "region":
         updated_value = company.region.name if company.region else ""
+    elif field == "employees_count":
+        v = getattr(company, field, None)
+        updated_value = str(v) if v is not None else ""
     elif field == "contract_amount":
         # Для суммы форматируем как число с двумя знаками после запятой
         amount = getattr(company, field, None)
