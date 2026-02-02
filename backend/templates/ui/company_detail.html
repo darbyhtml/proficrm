@@ -1037,6 +1037,42 @@
                     <div class="text-xs text-brand-dark/70">
                       {{ c.position }}
                     </div>
+
+                    {# Инлайновый комментарий к контакту — сразу под должностью #}
+                    {% if c.note %}
+                      <div class="mt-1 rounded-lg border border-amber-200 bg-amber-50/70 px-2.5 py-1.5">
+                        <div class="flex items-start justify-between gap-2">
+                          <div class="text-[11px] font-semibold text-amber-900 uppercase tracking-wide">
+                            Комментарий к контакту
+                          </div>
+                          {% if can_edit_company %}
+                            <a
+                              href="/contacts/{{ c.id }}/edit/?modal=1"
+                              class="text-[11px] text-brand-teal hover:text-brand-dark underline-offset-2 hover:underline whitespace-nowrap"
+                              data-contact-panel-open
+                            >
+                              Редактировать
+                            </a>
+                          {% endif %}
+                        </div>
+                        <div class="mt-1 text-xs text-brand-dark/90 whitespace-pre-line">
+                          {{ c.note }}
+                        </div>
+                      </div>
+                    {% elif can_edit_company %}
+                      <div class="mt-1">
+                        <a
+                          href="/contacts/{{ c.id }}/edit/?modal=1"
+                          class="inline-flex items-center gap-1.5 text-[11px] px-2 py-1 rounded-full border border-dashed border-brand-soft text-brand-dark/70 hover:bg-brand-soft/40 hover:text-brand-dark transition-colors"
+                          data-contact-panel-open
+                          title="Добавить важный комментарий к контакту"
+                        >
+                          <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+                          <span>Комментарий к контакту</span>
+                        </a>
+                      </div>
+                    {% endif %}
+
                     {% if c.is_cold_call or c.cold_marked_at %}
                       <div class="mt-1 text-xs text-brand-dark/70">
                         <span class="font-medium">Холодный звонок:</span>
