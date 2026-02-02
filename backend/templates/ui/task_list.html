@@ -3,7 +3,7 @@
 {% block title %}Задачи — CRM ПРОФИ{% endblock %}
 
 {% block content %}
-  <div class="space-y-4">
+  <div class="space-y-6">
     <div class="flex items-end justify-between gap-4">
       <div>
         <h1 class="text-2xl font-semibold">Задачи</h1>
@@ -88,7 +88,7 @@
     {% if can_bulk_reschedule %}
       <style>
         /* Блок «Перенести на дату» — изолированные стили, один источник истины, без конфликта с Tailwind */
-        #task-bulk-reschedule{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:0.75rem 1rem!important;padding:0.75rem 1rem!important;margin:0 0 1rem 0!important;background:#fff!important;border:1px solid var(--brand-soft)!important;border-radius:0.75rem!important;box-shadow:0 1px 3px rgba(0,61,56,.06)!important;}
+        #task-bulk-reschedule{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:0.75rem 1rem!important;padding:0.75rem 1rem!important;margin:0!important;background:#fff!important;border:1px solid var(--brand-soft)!important;border-radius:0.75rem!important;box-shadow:0 1px 3px rgba(0,61,56,.06)!important;}
         #task-bulk-reschedule form{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:0.75rem 1rem!important;flex:1 1 0%!important;min-width:0!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;}
         #task-bulk-reschedule .tbr-label{display:flex!important;align-items:center!important;gap:0.5rem!important;flex-shrink:0!important;font-size:0.875rem!important;font-weight:500!important;color:rgba(0,61,56,.85)!important;}
         #task-bulk-reschedule .tbr-icon{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:2rem!important;height:2rem!important;border-radius:0.5rem!important;background:rgba(1,148,142,.12)!important;color:var(--brand-teal)!important;flex-shrink:0!important;}
@@ -126,7 +126,7 @@
     {% if is_admin %}
       <style>
         /* Блок «Переназначить на» — изолированные стили, один источник истины */
-        #task-bulk-actions{display:flex!important;flex-direction:column!important;gap:1rem!important;margin:0 0 1rem 0!important;}
+        #task-bulk-actions{display:flex!important;flex-direction:column!important;gap:1rem!important;margin:0!important;}
         #task-bulk-actions form{margin:0!important;padding:0!important;border:0!important;background:transparent!important;}
         #task-bulk-actions .task-bulk-block{background:#fff!important;border:1px solid var(--brand-soft)!important;border-radius:0.75rem!important;padding:1rem!important;box-shadow:0 1px 3px rgba(0,61,56,.06)!important;}
         #task-bulk-actions .task-bulk-row{display:grid!important;grid-template-columns:11rem auto 1fr!important;align-items:center!important;column-gap:1.25rem!important;row-gap:0!important;}
