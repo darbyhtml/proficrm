@@ -94,6 +94,56 @@ def only_digits(s: str) -> str:
     return _DIGITS_RE.sub("", str(s))
 
 
+# Стоп-токены для текстового поиска: не искать по ним отдельно, чтобы не плодить мусор.
+# Минимальный безопасный набор (ОПФ, аббревиатуры адресов, общие слова).
+_SEARCH_STOP_TOKENS = frozenset({
+    "ооо", "ип", "ао", "зао", "оао", "пао", "нко", "тк", "г", "ул", "д", "дом",
+    "офис", "кв", "корп", "стр", "строение", "компания", "организация",
+})
+
+# Тип текстового запроса для поле-зависимого ранжирования.
+TEXT_QUERY_WEBSITE = "website"
+TEXT_QUERY_PERSON = "person"
+TEXT_QUERY_ADDRESS = "address"
+TEXT_QUERY_COMPANY_OR_GENERAL = "company_name_or_general"
+
+
+def filter_stop_tokens(text_tokens: tuple[str, ...]) -> tuple[str, ...]:
+    """
+    Убирает стоп-токены из списка. Если после фильтрации 0 значимых — вызывающий код
+    должен вернуть пустую выдачу (кроме exact-фазы).
+    """
+    if not text_tokens:
+        return ()
+    out = [t for t in text_tokens if t and t.lower() not in _SEARCH_STOP_TOKENS]
+    return tuple(out)
+
+
+def classify_text_query(raw: str, text_tokens: tuple[str, ...]) -> str:
+    """
+    Простая эвристика типа запроса: website, person, address, company_name_or_general.
+    Используется для поле-зависимого буста (сайт → t_other, ФИО → t_contacts, название → t_name).
+    """
+    r = (raw or "").strip()
+    if not r:
+        return TEXT_QUERY_COMPANY_OR_GENERAL
+    r_lower = r.lower()
+    # Похож на домен/сайт: точка, нет пробелов, или начинается с http(s)
+    if r.startswith("http://") or r.startswith("https://"):
+        return TEXT_QUERY_WEBSITE
+    if "." in r and " " not in r and not any(c.isdigit() for c in r[:r.index(".")]):
+        return TEXT_QUERY_WEBSITE
+    # Похож на адрес: ключевые слова
+    addr_keywords = ("ул", "улица", "пр-т", "проспект", "пр ", "дом", " д ", "кв", "оф", "корп", "строение")
+    if any(kw in r_lower for kw in addr_keywords):
+        return TEXT_QUERY_ADDRESS
+    # Похож на ФИО: 2–3 слова буквами, без цифр, каждое >= 2 символов
+    tokens = [t for t in text_tokens if len(t) >= 2 and t.isalpha()]
+    if 2 <= len(tokens) <= 3 and not any(only_digits(t) for t in text_tokens):
+        return TEXT_QUERY_PERSON
+    return TEXT_QUERY_COMPANY_OR_GENERAL
+
+
 @dataclass(frozen=True)
 class ParsedQuery:
     raw: str

@@ -14,7 +14,17 @@ from django.utils.html import escape
 from companies.models import Company, CompanyEmail, CompanyNote, CompanyPhone, Contact, ContactEmail, ContactPhone
 from tasksapp.models import Task
 
-from .search_index import ParsedQuery, parse_query, fold_text, only_digits
+from .search_index import (
+    ParsedQuery,
+    parse_query,
+    fold_text,
+    only_digits,
+    filter_stop_tokens,
+    classify_text_query,
+    TEXT_QUERY_WEBSITE,
+    TEXT_QUERY_PERSON,
+    TEXT_QUERY_COMPANY_OR_GENERAL,
+)
 
 
 def _merge_ranges(ranges: list[tuple[int, int]]) -> list[tuple[int, int]]:
@@ -274,6 +284,17 @@ class CompanySearchService:
                 if all(len(d) <= 3 for d in pq.weak_digit_tokens):
                     return qs.none()
 
+        # Стоп-токены: если после удаления стоп-токенов 0 значимых — пустая выдача
+        significant_tokens = filter_stop_tokens(pq.text_tokens) if pq.text_tokens else ()
+        if pq.text_tokens and len(significant_tokens) == 0:
+            return qs.none()
+
+        # Тип запроса для поле-зависимого буста (website / person / company_name)
+        query_type = classify_text_query(pq.raw, pq.text_tokens) if pq.text_tokens else TEXT_QUERY_COMPANY_OR_GENERAL
+
+        # Для FTS и fallback используем значимые токены (без стоп-слов)
+        tokens_for_search = significant_tokens if significant_tokens else pq.text_tokens
+
         indexed = Q(search_index__isnull=False)
         indexed_match = Q()
         fallback_match = Q()
@@ -300,16 +321,16 @@ class CompanySearchService:
                 fb |= Q(phone__contains=v)
             fallback_match &= fb
 
-        # AND по text tokens (fts на индексе, icontains на fallback)
-        if pq.text_tokens:
-            tsq = SearchQuery(" ".join(pq.text_tokens), search_type="plain", config="russian")
+        # AND по значимым text tokens (plainto_tsquery = AND по словам), FTS на индексе
+        if tokens_for_search:
+            tsq = SearchQuery(" ".join(tokens_for_search), search_type="plain", config="russian")
             indexed_match &= (
                 Q(search_index__vector_a=tsq)
                 | Q(search_index__vector_b=tsq)
                 | Q(search_index__vector_c=tsq)
                 | Q(search_index__vector_d=tsq)
             )
-            for tok in pq.text_tokens:
+            for tok in tokens_for_search:
                 fallback_match &= (
                     Q(name__icontains=tok)
                     | Q(legal_name__icontains=tok)
@@ -336,11 +357,10 @@ class CompanySearchService:
         # при этом не ломая существующий FTS и ранжирование.
         # Similarity fallback: для запросов по названию (1–2 слова) FTS с plain+AND часто
         # не матчит из‑за стемминга/кавычек. Добавляем pg_trgm word_similarity по name и t_name:
-        # только для токенов >= SIMILARITY_MIN_TOKEN_LEN и с порогом SIMILARITY_THRESHOLD,
-        # чтобы не возвращать "всё подряд" на коротких/шумовых запросах.
+        # только для значимых токенов >= SIMILARITY_MIN_TOKEN_LEN и с порогом SIMILARITY_THRESHOLD.
         similarity_match = Q()
-        if pq.text_tokens and not strong_digits:
-            long_tokens = [t for t in pq.text_tokens if len(t) >= SIMILARITY_MIN_TOKEN_LEN]
+        if tokens_for_search and not strong_digits:
+            long_tokens = [t for t in tokens_for_search if len(t) >= SIMILARITY_MIN_TOKEN_LEN]
             if long_tokens:
                 token = max(long_tokens, key=len)
                 sim_name_ids = (
@@ -373,17 +393,50 @@ class CompanySearchService:
         if email_direct_match:
             qs = qs.distinct()
 
-        # Ранжирование (важность)
+        # Текстовый score_boost: точное/фразовое совпадение по индексу (без JOIN)
+        folded_raw = fold_text(pq.raw or "") if pq.raw else ""
+        score_boost = Value(0.0, output_field=FloatField())
+        if folded_raw and tsq is not None:
+            # exact equality plain_text: +100000; phrase in plain_text: +50000; t_name contains: +20000
+            boost_exact_phrase = Case(
+                When(search_index__plain_text__iexact=folded_raw, then=Value(100000.0)),
+                When(search_index__plain_text__icontains=folded_raw, then=Value(50000.0)),
+                default=Value(0.0),
+                output_field=FloatField(),
+            )
+            boost_name = Case(
+                When(search_index__t_name__icontains=folded_raw, then=Value(20000.0)),
+                default=Value(0.0),
+                output_field=FloatField(),
+            )
+            score_boost = boost_exact_phrase + boost_name
+            if query_type == TEXT_QUERY_WEBSITE:
+                boost_website = Case(
+                    When(search_index__t_other__icontains=folded_raw, then=Value(20000.0)),
+                    default=Value(0.0),
+                    output_field=FloatField(),
+                )
+                score_boost = score_boost + boost_website
+            elif query_type == TEXT_QUERY_PERSON:
+                boost_person = Case(
+                    When(search_index__t_contacts__icontains=folded_raw, then=Value(15000.0)),
+                    default=Value(0.0),
+                    output_field=FloatField(),
+                )
+                score_boost = score_boost + boost_person
+
+        # Ранжирование: название (vector_b) >> идентификаторы (a) >> контакты (c) >> прочее (d)
         score = Value(0.0, output_field=FloatField())
         if tsq is not None:
             rank_a = SearchRank(F("search_index__vector_a"), tsq)
             rank_b = SearchRank(F("search_index__vector_b"), tsq)
             rank_c = SearchRank(F("search_index__vector_c"), tsq)
             rank_d = SearchRank(F("search_index__vector_d"), tsq)
+            # Веса: название 10, идентификаторы 5, контакты 3, прочее 1
             score = (
-                Coalesce(rank_a, 0.0) * Value(10.0)
-                + Coalesce(rank_b, 0.0) * Value(5.0)
-                + Coalesce(rank_c, 0.0) * Value(2.0)
+                Coalesce(rank_b, 0.0) * Value(10.0)
+                + Coalesce(rank_a, 0.0) * Value(5.0)
+                + Coalesce(rank_c, 0.0) * Value(3.0)
                 + Coalesce(rank_d, 0.0) * Value(1.0)
             )
 
@@ -392,12 +445,11 @@ class CompanySearchService:
             w = 2.0 if len(dt) >= 9 else 0.6
             digit_boost = digit_boost + Case(When(search_index__digits__contains=dt, then=Value(w)), default=Value(0.0), output_field=FloatField())
         for dt in weak_digits:
-            # слабые цифры — только буст, НЕ фильтр
             digit_boost = digit_boost + Case(When(search_index__digits__contains=dt, then=Value(0.15)), default=Value(0.0), output_field=FloatField())
 
         qs = qs.annotate(
             search_score=Case(
-                When(search_index__isnull=False, then=score + digit_boost),
+                When(search_index__isnull=False, then=score_boost + score + digit_boost),
                 default=Value(0.0),
                 output_field=FloatField(),
             )

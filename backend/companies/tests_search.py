@@ -5,7 +5,14 @@ import unittest
 from django.db import connection
 from django.test import TestCase
 
-from companies.search_index import parse_query
+from companies.search_index import (
+    parse_query,
+    filter_stop_tokens,
+    classify_text_query,
+    TEXT_QUERY_WEBSITE,
+    TEXT_QUERY_PERSON,
+    TEXT_QUERY_COMPANY_OR_GENERAL,
+)
 from companies.search_service import highlight_html, CompanySearchService
 from companies.models import Company, CompanyStatus, Contact, ContactPhone, CompanyPhone, CompanySearchIndex
 from companies.search_index import rebuild_company_search_index
@@ -36,6 +43,17 @@ class QueryParseTests(TestCase):
         # "7" игнорируем, "926" считаем weak
         self.assertEqual(pq.strong_digit_tokens, ())
         self.assertEqual(pq.weak_digit_tokens, ("926",))
+
+    def test_filter_stop_tokens(self):
+        self.assertEqual(filter_stop_tokens(("ооо", "ромашка")), ("ромашка",))
+        self.assertEqual(filter_stop_tokens(("ооо",)), ())
+        self.assertEqual(filter_stop_tokens(("ип", "ао")), ())
+
+    def test_classify_text_query(self):
+        self.assertEqual(classify_text_query("romashka.ru", ("romashka", "ru")), TEXT_QUERY_WEBSITE)
+        self.assertEqual(classify_text_query("Иван Петров", ("иван", "петров")), TEXT_QUERY_PERSON)
+        self.assertEqual(classify_text_query("ул Ленина 5", ("ул", "ленина", "5")), TEXT_QUERY_ADDRESS)
+        self.assertEqual(classify_text_query("ООО Ромашка", ("ооо", "ромашка")), TEXT_QUERY_COMPANY_OR_GENERAL)
 
 
 class HighlightTests(TestCase):
@@ -364,6 +382,94 @@ class SearchServicePostgresTests(TestCase):
         glued = fold_text_glued("ООО Сиб-Энерго")
         self.assertGreater(len(glued), 0)
         self.assertIn("сиб", glued.lower())
+
+    def test_text_exact_name_first(self):
+        """Точное название: нужная компания первой."""
+        c1 = Company.objects.create(name="ООО Ромашка", inn="1111111111", status=self.status)
+        c2 = Company.objects.create(name="Ромашка Плюс", inn="2222222222", status=self.status)
+        rebuild_company_search_index(c1.id)
+        rebuild_company_search_index(c2.id)
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="ООО Ромашка")
+        ids = list(qs.values_list("id", flat=True)[:5])
+        self.assertEqual(ids[0], c1.id, "Точное название должно вернуть компанию первой")
+
+    def test_text_legal_name_first(self):
+        """Юр. название: нужная компания первой."""
+        c1 = Company.objects.create(
+            name="Краткое", legal_name="Общество с ограниченной ответственностью Ромашка",
+            inn="1111111111", status=self.status,
+        )
+        c2 = Company.objects.create(name="Другое", inn="2222222222", status=self.status)
+        rebuild_company_search_index(c1.id)
+        rebuild_company_search_index(c2.id)
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="Ромашка")
+        ids = list(qs.values_list("id", flat=True)[:5])
+        self.assertIn(c1.id, ids)
+        self.assertEqual(ids[0], c1.id, "Совпадение по юр. названию должно быть выше")
+
+    def test_text_website_first(self):
+        """Сайт: компания с этим сайтом первой."""
+        c1 = Company.objects.create(name="Сайтовая", website="https://romashka.ru", inn="1111111111", status=self.status)
+        c2 = Company.objects.create(name="Другая", inn="2222222222", status=self.status)
+        rebuild_company_search_index(c1.id)
+        rebuild_company_search_index(c2.id)
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="romashka.ru")
+        ids = list(qs.values_list("id", flat=True)[:5])
+        self.assertEqual(ids[0], c1.id, "Запрос по домену должен вернуть компанию с этим сайтом первой")
+
+    def test_text_contact_name_in_top(self):
+        """ФИО контакта: компания с этим контактом в топе."""
+        from companies.models import Contact
+
+        c1 = Company.objects.create(name="Альфа", inn="1111111111", status=self.status)
+        c2 = Company.objects.create(name="Бета", inn="2222222222", status=self.status)
+        Contact.objects.create(company=c1, first_name="Иван", last_name="Петров")
+        Contact.objects.create(company=c2, first_name="Пётр", last_name="Иванов")
+        rebuild_company_search_index(c1.id)
+        rebuild_company_search_index(c2.id)
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="Иван Петров")
+        ids = list(qs.values_list("id", flat=True)[:5])
+        self.assertIn(c1.id, ids)
+        self.assertEqual(ids[0], c1.id, "ФИО контакта должно поднять компанию с этим контактом")
+
+    def test_stop_tokens_empty_query(self):
+        """Только стоп-токены (ооо/ип) — пустая выдача."""
+        Company.objects.create(name="ООО Ромашка", inn="1111111111", status=self.status)
+        rebuild_company_search_index(Company.objects.first().id)
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="ооо")
+        self.assertEqual(list(qs.values_list("id", flat=True)), [])
+        qs2 = CompanySearchService().apply(qs=Company.objects.all(), query="ип")
+        self.assertEqual(list(qs2.values_list("id", flat=True)), [])
+
+    def test_stop_tokens_with_significant_works(self):
+        """ООО Ромашка: значимый токен «ромашка» — поиск работает."""
+        c = Company.objects.create(name="ООО Ромашка", inn="1111111111", status=self.status)
+        rebuild_company_search_index(c.id)
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="ооо ромашка")
+        ids = list(qs.values_list("id", flat=True)[:5])
+        self.assertIn(c.id, ids)
+
+    def test_regression_exact_phone_unchanged(self):
+        """Regression: exact телефон по-прежнему возвращает одну компанию."""
+        c1 = Company.objects.create(name="Тел", inn="4444444444", phone="+7 999 111-22-33", status=self.status)
+        rebuild_company_search_index(c1.id)
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="+7 999 111-22-33")
+        self.assertEqual(list(qs.values_list("id", flat=True)), [c1.id])
+
+    def test_regression_exact_email_unchanged(self):
+        """Regression: exact email по-прежнему возвращает только совпадения."""
+        c1 = Company.objects.create(name="Почта", inn="5555555555", email="unique@test.com", status=self.status)
+        rebuild_company_search_index(c1.id)
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="unique@test.com")
+        self.assertEqual(list(qs.values_list("id", flat=True)), [c1.id])
+
+    def test_regression_exact_inn_unchanged(self):
+        """Regression: exact ИНН по-прежнему возвращает только совпадения."""
+        c1 = Company.objects.create(name="ИНН-тест", inn="1234567890", status=self.status)
+        rebuild_company_search_index(c1.id)
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="1234567890")
+        self.assertIn(c1.id, qs.values_list("id", flat=True))
+        self.assertEqual(qs.count(), 1)
 
 
 class SearchBackendFacadeTests(TestCase):
