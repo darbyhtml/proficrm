@@ -8233,7 +8233,13 @@ def settings_activity(request: HttpRequest) -> HttpResponse:
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")
         return redirect("dashboard")
-    events = ActivityEvent.objects.select_related("actor").order_by("-created_at")[:500]
+    # Не показываем в журнале события типа "policy" (решения политики доступа: poll, page и т.д.),
+    # чтобы видны были только реальные действия сотрудников. В БД и логах на сервере они остаются.
+    events = (
+        ActivityEvent.objects.select_related("actor")
+        .exclude(entity_type="policy")
+        .order_by("-created_at")[:500]
+    )
     return render(request, "ui/settings/activity.html", {"events": events})
 
 

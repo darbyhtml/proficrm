@@ -2,67 +2,84 @@
 {% block title %}Журнал действий — CRM ПРОФИ{% endblock %}
 
 {% block content %}
-  <div class="space-y-4">
-    <div>
-      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> /</div>
-      <h1 class="text-2xl font-semibold">Журнал действий</h1>
-      <div class="text-sm text-brand-dark/70">Последние 500 событий</div>
+  <div class="max-w-7xl mx-auto space-y-5">
+    <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+      <div>
+        <nav class="text-sm text-brand-dark/70 mb-1">
+          <a class="hover:text-brand-teal underline" href="/settings/">Настройки</a>
+          <span class="mx-1">/</span>
+          <span class="text-brand-dark/90">Журнал действий</span>
+        </nav>
+        <h1 class="text-2xl font-semibold text-brand-dark">Журнал действий</h1>
+        <p class="text-sm text-brand-dark/60 mt-0.5">
+          Последние 500 событий. События политики доступа (poll, страницы и т.д.) в журнале не показываются — в БД и логах на сервере они сохраняются.
+        </p>
+      </div>
     </div>
 
-    <div class="bg-white border rounded-2xl overflow-hidden">
-      <table class="min-w-full text-sm">
-        <thead class="bg-brand-soft/40 text-brand-dark/80">
-          <tr>
-            <th class="text-left px-4 py-3">Когда</th>
-            <th class="text-left px-4 py-3">Кто</th>
-            <th class="text-left px-4 py-3">Сущность</th>
-            <th class="text-left px-4 py-3">Описание</th>
-            <th class="text-left px-4 py-3">Детали</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for e in events %}
-            <tr class="border-t align-top">
-              <td class="px-4 py-3 text-brand-dark/70 whitespace-nowrap">{{ e.created_at|date:"d.m.Y H:i" }}</td>
-              <td class="px-4 py-3">{{ e.actor|default:"—" }}</td>
-              <td class="px-4 py-3 font-mono text-xs">{{ e.entity_type }}:{{ e.entity_id }}</td>
-              <td class="px-4 py-3">{{ e.message|default:e.get_verb_display }}</td>
-              <td class="px-4 py-3 text-xs text-brand-dark/60">
-                {% if e.entity_type == "company_bulk_transfer" and e.meta %}
-                  <div class="space-y-1">
-                    {% if e.meta.count %}
-                      <div>Количество: <b>{{ e.meta.count }}</b></div>
-                    {% endif %}
-                    {% if e.meta.to %}
-                      <div>→ {{ e.meta.to.name|default:e.meta.to }} ({{ e.meta.to.role|default:"" }})</div>
-                    {% endif %}
-                    {% if e.meta.from %}
-                      <div>От: {% for old in e.meta.from %}{{ old.name }} ({{ old.count }}){% if not forloop.last %}, {% endif %}{% endfor %}</div>
-                    {% endif %}
-                    {% if e.meta.mode %}
-                      <div class="text-brand-dark/50">Режим: {{ e.meta.mode }}</div>
-                    {% endif %}
-                    {% if e.meta.companies_sample %}
-                      <div class="text-brand-dark/50">Компаний в логе: {{ e.meta.companies_sample|length }}</div>
-                    {% endif %}
-                  </div>
-                {% elif e.meta %}
-                  <details class="cursor-pointer">
-                    <summary class="text-brand-dark/70 hover:text-brand-dark">Показать детали</summary>
-                    <pre class="mt-2 text-xs bg-brand-soft/20 p-2 rounded overflow-x-auto">{{ e.meta }}</pre>
-                  </details>
-                {% else %}
-                  —
-                {% endif %}
-              </td>
+    <div class="bg-white rounded-2xl border border-brand-soft/90 shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="min-w-full text-sm">
+          <thead class="bg-brand-dark/5 border-b border-brand-soft/80">
+            <tr>
+              <th scope="col" class="text-left px-4 py-3.5 font-medium text-brand-dark/80 whitespace-nowrap">Когда</th>
+              <th scope="col" class="text-left px-4 py-3.5 font-medium text-brand-dark/80 whitespace-nowrap">Кто</th>
+              <th scope="col" class="text-left px-4 py-3.5 font-medium text-brand-dark/80 whitespace-nowrap">Сущность</th>
+              <th scope="col" class="text-left px-4 py-3.5 font-medium text-brand-dark/80 whitespace-nowrap">Описание</th>
+              <th scope="col" class="text-left px-4 py-3.5 font-medium text-brand-dark/80 whitespace-nowrap">Детали</th>
             </tr>
-          {% empty %}
-            <tr><td class="px-4 py-6 text-brand-dark/70" colspan="5">Пока событий нет.</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+          </thead>
+          <tbody class="divide-y divide-brand-soft/50">
+            {% for e in events %}
+              <tr class="hover:bg-brand-soft/20 transition-colors align-top">
+                <td class="px-4 py-3 text-brand-dark/70 whitespace-nowrap tabular-nums">{{ e.created_at|date:"d.m.Y H:i" }}</td>
+                <td class="px-4 py-3 text-brand-dark/90">{{ e.actor|default:"—" }}</td>
+                <td class="px-4 py-3">
+                  <span class="font-mono text-xs bg-brand-soft/30 text-brand-dark/90 px-2 py-0.5 rounded">{{ e.entity_type }}:{{ e.entity_id }}</span>
+                </td>
+                <td class="px-4 py-3 text-brand-dark/85">{{ e.message|default:e.get_verb_display }}</td>
+                <td class="px-4 py-3 text-xs text-brand-dark/60">
+                  {% if e.entity_type == "company_bulk_transfer" and e.meta %}
+                    <div class="space-y-1">
+                      {% if e.meta.count %}
+                        <div>Количество: <b>{{ e.meta.count }}</b></div>
+                      {% endif %}
+                      {% if e.meta.to %}
+                        <div>→ {{ e.meta.to.name|default:e.meta.to }} ({{ e.meta.to.role|default:"" }})</div>
+                      {% endif %}
+                      {% if e.meta.from %}
+                        <div>От: {% for old in e.meta.from %}{{ old.name }} ({{ old.count }}){% if not forloop.last %}, {% endif %}{% endfor %}</div>
+                      {% endif %}
+                      {% if e.meta.mode %}
+                        <div class="text-brand-dark/50">Режим: {{ e.meta.mode }}</div>
+                      {% endif %}
+                      {% if e.meta.companies_sample %}
+                        <div class="text-brand-dark/50">Компаний в логе: {{ e.meta.companies_sample|length }}</div>
+                      {% endif %}
+                    </div>
+                  {% elif e.meta %}
+                    <details class="group cursor-pointer">
+                      <summary class="inline-flex items-center gap-1 text-brand-dark/70 hover:text-brand-teal list-none select-none">
+                        <span class="group-open:rotate-90 transition-transform inline-block">▶</span>
+                        <span>Показать детали</span>
+                      </summary>
+                      <pre class="mt-2 text-xs bg-brand-soft/20 p-3 rounded-lg overflow-x-auto border border-brand-soft/60">{{ e.meta }}</pre>
+                    </details>
+                  {% else %}
+                    <span class="text-brand-dark/40">—</span>
+                  {% endif %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="5" class="px-4 py-12 text-center text-brand-dark/60">
+                  Пока событий нет.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 {% endblock %}
-
-
