@@ -1064,20 +1064,45 @@ def _map_amo_user_to_local(amo_user: dict[str, Any]) -> User | None:
     """
     Best-effort сопоставление пользователя amo -> локальный User по имени.
     В amo имя может быть "Иванова Юлия Олеговна", а у нас "Иванова Юлия".
+
+    Дополнительно поддерживаем явные project-specific маппинги по ID amo-пользователя,
+    когда в amo используются "служебные" аккаунты вроде «ГК Директор» без прямого аналога
+    в CRM и их нужно всегда назначать на конкретного сотрудника.
     """
+    amo_id = 0
+    try:
+        amo_id = int(amo_user.get("id") or 0)
+    except Exception:
+        amo_id = 0
+
     name = (amo_user.get("name") or "").strip()
-    if not name:
+    if not name and not amo_id:
         return None
+
     parts = [p for p in name.split(" ") if p]
     if len(parts) >= 2:
         ln, fn = parts[0], parts[1]
         u = User.objects.filter(last_name__iexact=ln, first_name__iexact=fn, is_active=True).first()
         if u:
             return u
-    # fallback: contains
-    for u in User.objects.filter(is_active=True):
-        if _norm(name) in _norm(str(u)) or _norm(str(u)) in _norm(name):
+
+    # Явные маппинги по amo_id для "служебных" аккаунтов.
+    # Пример: (ГК) Директор (amo id=5714119) -> Женина Наталья.
+    explicit_mapping: dict[int, tuple[str, str]] = {
+        5714119: ("Женина", "Наталья"),
+    }
+    if amo_id in explicit_mapping:
+        ln, fn = explicit_mapping[amo_id]
+        u = User.objects.filter(last_name__iexact=ln, first_name__iexact=fn, is_active=True).first()
+        if u:
             return u
+
+    # fallback: contains
+    if name:
+        for u in User.objects.filter(is_active=True):
+            if _norm(name) in _norm(str(u)) or _norm(str(u)) in _norm(name):
+                return u
+
     return None
 
 
