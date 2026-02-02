@@ -2452,7 +2452,6 @@
         function initCustomDatetimePicker() {
           document.querySelectorAll('input[type="datetime-local"], input[type="date"]').forEach(function(input) {
             if (input.dataset.customPickerInitialized) return;
-            if (input.closest('#task-bulk-reschedule')) return;
             input.dataset.customPickerInitialized = 'true';
             
             // Скрываем нативный календарик

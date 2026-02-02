@@ -79,11 +79,10 @@
         <button class="btn btn-primary btn-sm py-1.5 px-3 text-sm" type="submit">Применить</button>
         <a class="btn btn-outline btn-sm py-1.5 px-2.5 text-sm" href="/tasks/" id="taskFilterResetBtn">Сброс</a>
       </div>
+      <!-- Скрытые поля для фильтра по датам (внутри формы, чтобы не ломать вертикальные отступы между блоками) -->
+      <input type="hidden" name="date_from" id="dateFromInput" value="{{ date_from|default:'' }}" />
+      <input type="hidden" name="date_to" id="dateToInput" value="{{ date_to|default:'' }}" />
     </form>
-
-    <!-- Скрытые поля для фильтра по датам -->
-    <input type="hidden" name="date_from" id="dateFromInput" value="{{ date_from|default:'' }}" form="taskFilterForm" />
-    <input type="hidden" name="date_to" id="dateToInput" value="{{ date_to|default:'' }}" form="taskFilterForm" />
 
     <style>
       /* Bulk-действия в «Задачах»: единый, ровный UI */
@@ -168,6 +167,14 @@
         max-width:18rem!important;
       }
 
+      /* Если подключён глобальный custom-datetime-picker (как в редактировании задачи) */
+      #task-bulk-reschedule .tbr-fields .custom-datetime-picker{
+        flex-shrink:0!important;
+        min-width:11rem!important;
+        max-width:18rem!important;
+      }
+      #task-bulk-reschedule .tbr-fields .custom-datetime-picker .input{width:100%;}
+
       #task-bulk-reschedule .tbr-fields .btn,
       #task-bulk-actions .task-bulk-controls .btn{
         min-height:2.25rem!important;
@@ -251,8 +258,8 @@
             <col />
             <col />
             <col />
-            <col />
-            <col style="width: 4.5rem;" />
+            <col style="width: 12rem;" />
+            <col style="width: 5.5rem;" />
             <col style="width: 6rem;" />
             <col style="width: 7.5rem;" />
           </colgroup>
@@ -432,10 +439,10 @@
                 </td>
                 <td class="px-2 py-2 min-w-0 break-words"><span style="line-height:1.4">{{ t.assigned_to|default:"—" }}</span></td>
                 <td class="px-2 py-2 min-w-0 break-words"><span style="line-height:1.4">{{ t.created_by|default:"—" }}</span></td>
-                <td class="muted px-2 py-2 min-w-0 break-words">
+                <td class="muted px-2 py-2 min-w-0 break-words" style="width:12rem;min-width:12rem;max-width:12rem;">
                   <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}" style="line-height:1.4">{{ t.due_at|default:"—" }}</span>
                 </td>
-                <td class="px-2 py-2" style="width:4.5rem;min-width:4.5rem;max-width:4.5rem;"><span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span></td>
+                <td class="px-2 py-2" style="width:5.5rem;min-width:5.5rem;max-width:5.5rem;"><span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span></td>
                 <td class="px-2 py-2 w-24 shrink-0">
                   <div class="grid grid-cols-2 gap-1">
                     {% if t.can_edit_task %}
