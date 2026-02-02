@@ -463,7 +463,7 @@ CELERY_BEAT_SCHEDULE = {
     },
     "reindex-companies-daily": {
         "task": "companies.tasks.reindex_companies_daily",
-        "schedule": crontab(hour=0, minute=0, tz="Europe/Moscow"),  # Ежедневно 00:00 UTC+3 (Москва)
+        "schedule": crontab(hour=0, minute=0),  # Ежедневно 00:00 (по CELERY_TIMEZONE = Europe/Moscow)
     },
 }
 
