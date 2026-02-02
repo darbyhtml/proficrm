@@ -87,16 +87,21 @@
 
     {% if can_bulk_reschedule %}
       <style>
-        #task-bulk-reschedule{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:0.75rem 1rem!important;padding:0.75rem 1rem!important;margin-bottom:1rem!important;background:#fff!important;border:1px solid var(--brand-soft)!important;border-radius:0.75rem!important;box-shadow:0 1px 3px rgba(0,61,56,.06)!important;}
+        /* Блок «Перенести на дату» — изолированные стили, один источник истины, без конфликта с Tailwind */
+        #task-bulk-reschedule{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:0.75rem 1rem!important;padding:0.75rem 1rem!important;margin:0 0 1rem 0!important;background:#fff!important;border:1px solid var(--brand-soft)!important;border-radius:0.75rem!important;box-shadow:0 1px 3px rgba(0,61,56,.06)!important;}
+        #task-bulk-reschedule form{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:0.75rem 1rem!important;flex:1 1 0%!important;min-width:0!important;margin:0!important;padding:0!important;border:0!important;background:transparent!important;}
         #task-bulk-reschedule .tbr-label{display:flex!important;align-items:center!important;gap:0.5rem!important;flex-shrink:0!important;font-size:0.875rem!important;font-weight:500!important;color:rgba(0,61,56,.85)!important;}
+        #task-bulk-reschedule .tbr-icon{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:2rem!important;height:2rem!important;border-radius:0.5rem!important;background:rgba(1,148,142,.12)!important;color:var(--brand-teal)!important;flex-shrink:0!important;}
         #task-bulk-reschedule .tbr-sep{color:rgba(0,61,56,.25)!important;user-select:none!important;flex-shrink:0!important;}
-        #task-bulk-reschedule .tbr-fields{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:0.5rem!important;flex:1!important;min-width:0!important;}
+        #task-bulk-reschedule .tbr-fields{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:0.5rem!important;flex:1 1 0%!important;min-width:0!important;}
+        #task-bulk-reschedule .tbr-fields input[type="datetime-local"]{flex-shrink:0!important;min-width:11rem!important;padding:0.375rem 0.5rem!important;font-size:0.875rem!important;border:1px solid rgba(194,226,222,.8)!important;border-radius:0.5rem!important;background:#fff!important;}
+        #task-bulk-reschedule .tbr-fields .btn{flex-shrink:0!important;padding:0.375rem 0.75rem!important;font-size:0.875rem!important;}
       </style>
       <div id="task-bulk-reschedule">
-        <form method="post" action="{% url 'task_bulk_reschedule' %}" id="bulkRescheduleForm" style="display:flex;align-items:center;gap:0.75rem 1rem;flex-wrap:nowrap;flex:1;min-width:0;" {% if is_admin %}data-copy-task-ids="1"{% endif %}>
+        <form method="post" action="{% url 'task_bulk_reschedule' %}" id="bulkRescheduleForm" {% if is_admin %}data-copy-task-ids="1"{% endif %}>
           {% csrf_token %}
           <span class="tbr-label">
-            <span style="display:inline-flex;align-items:center;justify-content:center;width:2rem;height:2rem;border-radius:0.5rem;background:rgba(1,148,142,.12);color:var(--brand-teal);">
+            <span class="tbr-icon">
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
             </span>
             Перенести на дату
@@ -106,14 +111,9 @@
             <input type="datetime-local" name="due_at" id="bulkRescheduleDateTime" required
               value="{{ default_bulk_reschedule_datetime|default:'' }}"
               title="Рабочие часы 8:00–17:50"
-              style="flex-shrink:0;min-width:11rem;padding:0.375rem 0.5rem;font-size:0.875rem;border:1px solid rgba(194,226,222,.8);border-radius:0.5rem;background:#fff;"
             />
-            <button type="submit" name="apply_mode" value="selected" class="btn btn-primary" style="flex-shrink:0;padding:0.375rem 0.75rem;font-size:0.875rem;">
-              Выбранные
-            </button>
-            <button type="submit" name="apply_mode" value="filtered" class="btn btn-outline" style="flex-shrink:0;padding:0.375rem 0.75rem;font-size:0.875rem;">
-              По фильтру
-            </button>
+            <button type="submit" name="apply_mode" value="selected" class="btn btn-primary">Выбранные</button>
+            <button type="submit" name="apply_mode" value="filtered" class="btn btn-outline">По фильтру</button>
           </div>
           <input type="hidden" name="status" value="{{ status }}" />
           <input type="hidden" name="mine" value="{{ mine }}" />
@@ -125,12 +125,18 @@
 
     {% if is_admin %}
       <style>
-        #task-bulk-actions{display:flex!important;flex-direction:column!important;gap:1rem!important;margin-bottom:1rem!important;}
+        /* Блок «Переназначить на» — изолированные стили, один источник истины */
+        #task-bulk-actions{display:flex!important;flex-direction:column!important;gap:1rem!important;margin:0 0 1rem 0!important;}
+        #task-bulk-actions form{margin:0!important;padding:0!important;border:0!important;background:transparent!important;}
         #task-bulk-actions .task-bulk-block{background:#fff!important;border:1px solid var(--brand-soft)!important;border-radius:0.75rem!important;padding:1rem!important;box-shadow:0 1px 3px rgba(0,61,56,.06)!important;}
         #task-bulk-actions .task-bulk-row{display:grid!important;grid-template-columns:11rem auto 1fr!important;align-items:center!important;column-gap:1.25rem!important;row-gap:0!important;}
         #task-bulk-actions .task-bulk-head{display:flex!important;align-items:center!important;gap:0.5rem!important;min-width:0!important;}
+        #task-bulk-actions .task-bulk-icon{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:2rem!important;height:2rem!important;border-radius:0.5rem!important;background:rgba(1,148,142,.12)!important;color:var(--brand-teal)!important;flex-shrink:0!important;}
+        #task-bulk-actions .task-bulk-head span:last-child{font-size:0.875rem!important;font-weight:500!important;color:rgba(0,61,56,.85)!important;}
         #task-bulk-actions .task-bulk-sep{justify-self:center!important;color:rgba(0,61,56,.25)!important;user-select:none!important;}
         #task-bulk-actions .task-bulk-controls{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:0.5rem!important;min-width:0!important;}
+        #task-bulk-actions .task-bulk-controls select{min-width:11rem!important;max-width:15rem!important;padding:0.375rem 0.5rem!important;font-size:0.875rem!important;border:1px solid rgba(194,226,222,.8)!important;border-radius:0.5rem!important;background:#fff!important;}
+        #task-bulk-actions .task-bulk-controls .btn{flex-shrink:0!important;padding:0.375rem 0.75rem!important;font-size:0.875rem!important;}
       </style>
       <div id="task-bulk-actions">
         <div class="task-bulk-block">
@@ -138,14 +144,14 @@
             {% csrf_token %}
             <div class="task-bulk-row">
               <div class="task-bulk-head">
-                <span style="display:inline-flex;align-items:center;justify-content:center;width:2rem;height:2rem;border-radius:0.5rem;background:rgba(1,148,142,.12);color:var(--brand-teal);">
+                <span class="task-bulk-icon">
                   <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
                 </span>
-                <span style="font-size:0.875rem;font-weight:500;color:rgba(0,61,56,.85);">Переназначить на</span>
+                <span>Переназначить на</span>
               </div>
               <span class="task-bulk-sep">|</span>
               <div class="task-bulk-controls">
-                <select name="assigned_to_id" required style="min-width:11rem;max-width:15rem;padding:0.375rem 0.5rem;font-size:0.875rem;border:1px solid rgba(194,226,222,.8);border-radius:0.5rem;">
+                <select name="assigned_to_id" required>
                   <option value="">Выберите сотрудника</option>
                   {% regroup transfer_targets by branch as branches_list %}
                   {% for branch_group in branches_list %}
@@ -156,8 +162,8 @@
                     </optgroup>
                   {% endfor %}
                 </select>
-                <button type="submit" name="apply_mode" value="selected" class="btn btn-primary" style="padding:0.375rem 0.75rem;font-size:0.875rem;">Выбранные</button>
-                <button type="submit" name="apply_mode" value="filtered" class="btn btn-outline" style="padding:0.375rem 0.75rem;font-size:0.875rem;">По фильтру</button>
+                <button type="submit" name="apply_mode" value="selected" class="btn btn-primary">Выбранные</button>
+                <button type="submit" name="apply_mode" value="filtered" class="btn btn-outline">По фильтру</button>
               </div>
             </div>
             <input type="hidden" name="status" value="{{ status }}" />

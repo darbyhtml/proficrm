@@ -1,6 +1,8 @@
 #!/bin/bash
 # Деплой production (docker-compose.prod.yml).
 # Требует: .env с POSTGRES_PASSWORD, DJANGO_SECRET_KEY, DJANGO_ALLOWED_HOSTS, DJANGO_CSRF_TRUSTED_ORIGINS.
+# Поиск через Typesense: в .env добавить SEARCH_ENGINE_BACKEND=typesense (и TYPESENSE_API_KEY при необходимости).
+# Ежедневная переиндексация компаний: 00:00 UTC+3 (Celery Beat).
 # Запускать из корня проекта.
 
 set -e
@@ -43,9 +45,13 @@ $COMPOSE run --rm web python manage.py migrate --noinput
 echo ">>> collectstatic"
 $COMPOSE run --rm web python manage.py collectstatic --noinput
 
-# 6.1) Перестроение поискового индекса компаний (FTS)
+# 6.1) Перестроение поискового индекса компаний (Postgres FTS)
 echo ">>> rebuild_company_search_index"
 $COMPOSE run --rm web python manage.py rebuild_company_search_index
+
+# 6.2) Индексация в Typesense (если в .env задано SEARCH_ENGINE_BACKEND=typesense)
+echo ">>> index_companies_typesense (при Typesense — заполнит индекс)"
+$COMPOSE run --rm web python manage.py index_companies_typesense --chunk 300 || true
 
 # 7) Запуск всех сервисов
 echo ">>> up -d"

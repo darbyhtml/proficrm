@@ -328,7 +328,22 @@ class CompanySearchService:
                 )
                 similarity_match = Q(pk__in=sim_name_ids) | Q(pk__in=sim_tname_ids)
 
-        qs = qs.filter((indexed & indexed_match) | fallback_match | similarity_match)
+        # Поиск по email: явно по основному и доп. почтам (компания + контакты)
+        email_direct_match = Q()
+        if pq.text_tokens and "@" in pq.raw:
+            q_raw = pq.raw.strip()
+            if q_raw:
+                email_direct_match = (
+                    Q(email__icontains=q_raw)
+                    | Q(companyemail__value__icontains=q_raw)
+                    | Q(contacts__emails__value__icontains=q_raw)
+                )
+
+        qs = qs.filter(
+            (indexed & indexed_match) | fallback_match | similarity_match | email_direct_match
+        )
+        if email_direct_match:
+            qs = qs.distinct()
 
         # Ранжирование (важность)
         score = Value(0.0, output_field=FloatField())

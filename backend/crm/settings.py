@@ -14,6 +14,7 @@ from pathlib import Path
 import os
 from datetime import timedelta
 
+from celery.schedules import crontab
 from dotenv import load_dotenv
 from django.core.exceptions import ImproperlyConfigured
 
@@ -459,6 +460,10 @@ CELERY_BEAT_SCHEDULE = {
     "clean-old-call-requests": {
         "task": "phonebridge.tasks.clean_old_call_requests",
         "schedule": 3600.0,  # Каждый час
+    },
+    "reindex-companies-daily": {
+        "task": "companies.tasks.reindex_companies_daily",
+        "schedule": crontab(hour=0, minute=0, tz="Europe/Moscow"),  # Ежедневно 00:00 UTC+3 (Москва)
     },
 }
 

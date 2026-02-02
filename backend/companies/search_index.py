@@ -75,6 +75,17 @@ def parse_query(q: str, *, max_tokens: int = 12) -> ParsedQuery:
             weak_digit_tokens=(),
         )
 
+    # Поиск по email: не разбивать на токены по @ и точке — ищем как одну строку
+    if "@" in raw and "." in raw.split("@")[-1]:
+        email_norm = fold_text(raw)
+        if len(email_norm) >= 5:
+            return ParsedQuery(
+                raw=raw,
+                text_tokens=(email_norm,),
+                strong_digit_tokens=(),
+                weak_digit_tokens=(),
+            )
+
     text_tokens: list[str] = []
     strong_digits: list[str] = []
     weak_digits: list[str] = []
@@ -205,8 +216,8 @@ def build_company_index_payload(company: Company) -> dict[str, str]:
         raw = company.raw_fields or {}
         if raw:
             raw_str = json.dumps(raw, ensure_ascii=False, sort_keys=True)
-            raw_str = raw_str[:5000]
-            other_parts.append(f"raw_fields: {raw_str}")
+            if len(raw_str) <= 600 and "http" not in raw_str.lower() and '"href"' not in raw_str:
+                other_parts.append(f"raw_fields: {raw_str}")
     except Exception:
         pass
 
