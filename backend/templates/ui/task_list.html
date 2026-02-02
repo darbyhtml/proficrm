@@ -3,7 +3,7 @@
 {% block title %}Задачи — CRM ПРОФИ{% endblock %}
 
 {% block content %}
-  <div class="space-y-8">
+  <div class="tasks-layout">
     <div class="flex items-end justify-between gap-4">
       <div>
         <h1 class="text-2xl font-semibold">Задачи</h1>
@@ -17,7 +17,7 @@
       <button type="button" class="btn btn-primary" data-create-task>+ Новая задача</button>
     </div>
 
-    <form class="bg-white border border-brand-soft/60 rounded-2xl px-3 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2" method="get" id="taskFilterForm" data-user-id="{{ request.user.id }}">
+    <form class="bg-white border border-brand-soft/60 rounded-2xl px-3 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 tasks-layout-block" method="get" id="taskFilterForm" data-user-id="{{ request.user.id }}">
       <div class="flex items-center gap-2 flex-shrink-0">
         <span class="flex items-center gap-1.5 text-brand-dark/50" title="Статус">
           <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -85,6 +85,11 @@
     </form>
 
     <style>
+      /* Ровные отступы между основными блоками (фильтры / bulk / таблица) */
+      .tasks-layout > .tasks-layout-block + .tasks-layout-block{
+        margin-top:1.75rem;
+      }
+
       /* Bulk-действия в «Задачах»: единый, ровный UI */
       #task-bulk-reschedule,
       #task-bulk-actions .task-bulk-block{
@@ -185,7 +190,7 @@
     </style>
 
     {% if can_bulk_reschedule %}
-      <div id="task-bulk-reschedule">
+      <div id="task-bulk-reschedule" class="tasks-layout-block">
         <form method="post" action="{% url 'task_bulk_reschedule' %}" id="bulkRescheduleForm" {% if is_admin %}data-copy-task-ids="1"{% endif %}>
           {% csrf_token %}
           <span class="tbr-label">
@@ -212,7 +217,7 @@
     {% endif %}
 
     {% if is_admin %}
-      <div id="task-bulk-actions">
+      <div id="task-bulk-actions" class="tasks-layout-block">
         <div class="task-bulk-block">
           <form method="post" action="{% url 'task_bulk_reassign' %}" id="bulkReassignForm">
             {% csrf_token %}
@@ -249,7 +254,7 @@
       </div>
     {% endif %}
 
-    <div class="bg-white border rounded-2xl overflow-hidden">
+    <div class="bg-white border rounded-2xl overflow-hidden tasks-layout-block">
       <div class="overflow-x-auto">
         <table class="table w-full" style="table-layout: fixed; min-width: 60rem;">
           <colgroup>
