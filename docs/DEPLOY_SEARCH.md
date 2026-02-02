@@ -130,56 +130,14 @@ $COMPOSE run --rm web python manage.py collectstatic --noinput
 
 ---
 
-## Включение Typesense на проде (рекомендуется)
-
-Typesense уже поднят в Docker и даёт поиск с опечатками, префиксами и весами полей. Чтобы использовать его вместо Postgres:
-
-**1. В `.env` на сервере добавить или изменить:**
-
-```bash
-# В /opt/proficrm/.env
-SEARCH_ENGINE_BACKEND=typesense
-TYPESENSE_HOST=typesense
-TYPESENSE_PORT=8108
-TYPESENSE_PROTOCOL=http
-TYPESENSE_API_KEY=xyz
-```
-Значение `TYPESENSE_API_KEY` должно совпадать с ключом контейнера Typesense (в `docker-compose.prod.yml` используется `${TYPESENSE_API_KEY:-xyz}` — задайте тот же ключ в `.env` или оставьте `xyz` для внутренней сети).
-
-**2. Перезапустить приложение (подхватить переменные):**
-
-```bash
-cd /opt/proficrm
-docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml up -d --force-recreate web celery celery-beat
-```
-
-**3. Заполнить индекс Typesense (один раз, ~32k компаний займёт несколько минут):**
-
-```bash
-cd /opt/proficrm
-docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml run --rm web python manage.py index_companies_typesense
-```
-
-**4. По желанию — стоп-слова и синонимы:**
-
-```bash
-docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml run --rm web python manage.py sync_typesense_stopwords
-docker compose -f docker-compose.prod.yml -f docker-compose.vds.yml run --rm web python manage.py sync_typesense_synonyms
-```
-
-**5. Проверка:** https://crm.groupprofi.ru → «Компании» → поиск. В `/health/` при Typesense появится `checks.search_typesense` (`ok` или `unavailable`).
-
-При недоступности Typesense поиск автоматически идёт через Postgres (`TYPESENSE_FALLBACK_TO_POSTGRES=1` по умолчанию). Дальнейшие изменения компаний синхронизируются в Typesense через сигналы.
-
----
-
 ## Подтверждение стека
 
-- **По умолчанию:** PostgreSQL (FTS + pg_trgm), `SEARCH_ENGINE_BACKEND=postgres`.
-- **С Typesense:** задать `SEARCH_ENGINE_BACKEND=typesense` и `TYPESENSE_*`, выполнить `index_companies_typesense`.
-- **БД:** `DB_ENGINE=postgres`. Postgres всегда используется для данных; Typesense — только для поиска при включённом бэкенде.
+- **По умолчанию и единственный вариант:** PostgreSQL (FTS + pg_trgm), `SEARCH_ENGINE_BACKEND=postgres`.
+- **Typesense:** полностью отключён; контейнер может оставаться в docker-compose, но приложение его больше не использует.
+- **БД:** `DB_ENGINE=postgres`. Postgres всегда используется и для данных, и для поиска.
 
 ## Поддержка актуальности индекса
 
 - **Postgres:** сигналы обновляют `CompanySearchIndex`; ручной `rebuild_company_search_index` — после массового импорта.
-- **Typesense:** сигналы вызывают `index_company()` при сохранении компании; полная переиндексация — `index_companies_typesense`.
+- **Ночная гигиена:** команда `normalize_companies_data` приводится в действие задачей Celery `companies.tasks.reindex_companies_daily`
+  перед полным `rebuild_company_search_index`.

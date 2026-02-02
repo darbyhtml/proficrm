@@ -13,7 +13,8 @@
 | **Production** | `/opt/proficrm` | crm.groupprofi.ru | prod.yml + vds.yml | `.env` |
 | **Staging** | `/opt/proficrm-staging` | crm-staging.groupprofi.ru | staging.yml | `.env.staging` |
 
-У каждого окружения свои тома БД, Redis, Typesense и свои контейнеры — конфликтов нет.
+У каждого окружения свои тома БД, Redis (и, при необходимости, Typesense) и свои контейнеры — конфликтов нет.
+Typesense может оставаться в docker-compose, но приложение его больше не использует (поиск полностью на PostgreSQL FTS).
 
 ---
 

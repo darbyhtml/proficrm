@@ -10,7 +10,7 @@ from .permissions import can_edit_company
 
 class CompanySearchFilterBackend(BaseFilterBackend):
     """
-    Поиск по компаниям через общий backend (Postgres FTS или Typesense).
+    Поиск по компаниям через общий backend (PostgreSQL FTS).
     Параметр запроса: search. Тот же движок, что и в UI-списке компаний.
     """
 

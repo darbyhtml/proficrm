@@ -13,7 +13,7 @@ from rest_framework.test import APIClient
 from rest_framework import status
 
 from .normalizers import normalize_phone, normalize_inn, normalize_work_schedule
-from .models import Company, CompanyStatus
+from .models import Company, CompanyStatus, CompanyEmail, CompanyPhone, Contact, ContactEmail, ContactPhone
 
 User = get_user_model()
 
@@ -428,6 +428,65 @@ class ContactPhoneNormalizationTestCase(TestCase):
         # Проверяем, что телефон нормализован
         self.assertTrue(phone.value.startswith("+7"))
         self.assertIn("9991234567", phone.value)
+
+
+class CompanyPhoneNormalizationTestCase(TestCase):
+    """Тесты нормализации дополнительных телефонов компании"""
+
+    def setUp(self):
+        """Настройка тестовых данных"""
+        self.company = Company.objects.create(name="Тестовая компания")
+
+    def test_company_phone_normalization_in_save(self):
+        """Тест нормализации дополнительного телефона компании в save()"""
+        from .models import CompanyPhone
+
+        phone = CompanyPhone.objects.create(
+            company=self.company,
+            value="+7 (999) 123-45-67",
+        )
+
+        # Проверяем, что телефон нормализован
+        self.assertTrue(phone.value.startswith("+7"))
+        self.assertIn("9991234567", phone.value)
+
+
+class NormalizeCompaniesDataCommandTestCase(TestCase):
+    """Минимальные тесты для команды normalize_companies_data."""
+
+    def test_command_normalizes_phones_and_emails(self):
+        from django.core.management import call_command
+
+        company = Company.objects.create(
+            name="Компания",
+            phone="8 (999) 123-45-67",
+            email="TEST@EXAMPLE.COM ",
+        )
+        CompanyPhone.objects.create(company=company, value="89991234568")
+
+        contact = Contact.objects.create(company=company, first_name="Иван", last_name="Иванов")
+        ContactPhone.objects.create(contact=contact, value="+7 (999) 000-00-00")
+
+        CompanyEmail.objects.create(company=company, value="HELLO@EXAMPLE.COM ")
+        ContactEmail.objects.create(contact=contact, value="USER@Example.COM")
+
+        call_command("normalize_companies_data", batch_size=10)
+
+        company.refresh_from_db()
+        self.assertTrue(company.phone.startswith("+7"))
+        self.assertEqual(company.email, "test@example.com")
+
+        c_phone = CompanyPhone.objects.get(company=company)
+        self.assertTrue(c_phone.value.startswith("+7"))
+
+        ct_phone = ContactPhone.objects.get(contact=contact)
+        self.assertTrue(ct_phone.value.startswith("+7"))
+
+        c_email = CompanyEmail.objects.get(company=company)
+        self.assertEqual(c_email.value, "hello@example.com")
+
+        ct_email = ContactEmail.objects.get(contact=contact)
+        self.assertEqual(ct_email.value, "user@example.com")
 
 
 class CompanyModelNormalizationTestCase(TestCase):

@@ -162,20 +162,11 @@ sudo systemctl restart crm  # или имя вашего сервиса
 sudo supervisorctl restart crm  # или имя вашего процесса
 ```
 
-### Шаг 5.1: Опционально — Typesense (поиск компаний)
+### Шаг 5.1: Поиск компаний (PostgreSQL FTS)
 
-Если включён поиск через Typesense (`SEARCH_ENGINE_BACKEND=typesense` в окружении):
-
-1. Убедитесь, что контейнер Typesense запущен (в `docker-compose.prod.yml` и `docker-compose.staging.yml` есть сервис `typesense`).
-2. После миграций выполните полную переиндексацию:
-   ```bash
-   docker compose exec web python manage.py index_companies_typesense
-   ```
-3. При необходимости обновите стоп-слова:
-   ```bash
-   docker compose exec web python manage.py sync_typesense_stopwords
-   ```
-4. Проверка в `/health/`: при `SEARCH_ENGINE_BACKEND=typesense` в ответе будет `checks.search_typesense` (`ok` или `unavailable`). При недоступности Typesense поиск автоматически идёт через Postgres (если `TYPESENSE_FALLBACK_TO_POSTGRES=1`).
+Typesense отключён; поиск компаний использует только PostgreSQL (`SEARCH_ENGINE_BACKEND=postgres`).
+Команда `index_companies_typesense` оставлена как no-op для обратной совместимости и может
+безопасно игнорироваться.
 
 ### Шаг 6: Очистите кэш (опционально, но рекомендуется)
 
@@ -313,12 +304,10 @@ Staging поднят на **отдельном поддомене** `crm-staging
 
 4. **Хост-Nginx (staging и прод на одном сервере):** прод слушает 80/443, staging-контейнер — только `127.0.0.1:8080`. Добавьте на хосте в конфиг Nginx блок для staging: скопируйте содержимое `nginx/snippets/staging-proxy.conf` в конфиг или в секцию `http { }` добавьте `include /path/to/project/nginx/snippets/staging-proxy.conf;`, затем `nginx -t` и `systemctl reload nginx`. После выдачи HTTPS для staging — добавьте `listen 443 ssl` и редирект с 80 на 443 для `crm-staging.groupprofi.ru`.
 
-5. **После первого запуска (миграции уже в command):** при необходимости включите Typesense и переиндексируйте:
+5. **После первого запуска (миграции уже в command):** при необходимости выполните переиндексацию поиска:
    ```bash
-   # В .env.staging: SEARCH_ENGINE_BACKEND=typesense (и TYPESENSE_*)
-   docker compose -f docker-compose.staging.yml exec web python manage.py index_companies_typesense
-   docker compose -f docker-compose.staging.yml exec web python manage.py sync_typesense_stopwords
-   docker compose -f docker-compose.staging.yml exec web python manage.py sync_typesense_synonyms
+   docker compose -f docker-compose.staging.yml exec web python manage.py normalize_companies_data
+   docker compose -f docker-compose.staging.yml exec web python manage.py rebuild_company_search_index
    ```
 
 6. **HTTPS (опционально):** на сервере с staging установите certbot и получите сертификат:

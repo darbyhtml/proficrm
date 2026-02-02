@@ -1,7 +1,7 @@
 #!/bin/bash
 # Деплой production на VDS (docker-compose.prod.yml + docker-compose.vds.yml).
 # Прод с gunicorn, healthchecks, лимитами; vds — порт БД 15432 и web 8001.
-# Поиск через Typesense: в .env добавить SEARCH_ENGINE_BACKEND=typesense.
+# Поиск компаний: используется только PostgreSQL FTS (CompanySearchIndex, SEARCH_ENGINE_BACKEND=postgres).
 # Ежедневная переиндексация компаний: 00:00 UTC+3 (Celery Beat).
 # Использование: ./deploy_security.sh
 
@@ -32,7 +32,7 @@ chown 1000:1000 data/staticfiles data/media 2>/dev/null || true
 echo "📥 Обновление кода..."
 git pull origin main
 
-# 4. Сборка и подъём db, redis, typesense
+# 4. Сборка и подъём db, redis, typesense (typesense остаётся в docker-compose, но не используется приложением)
 echo "📦 Сборка образов и запуск db/redis/typesense..."
 $COMPOSE build
 $COMPOSE up -d db redis typesense
@@ -50,8 +50,8 @@ $COMPOSE run --rm web python manage.py collectstatic --noinput
 echo "🔍 Перестроение поискового индекса компаний (FTS)..."
 $COMPOSE run --rm web python manage.py rebuild_company_search_index
 
-# 5.2. Индексация в Typesense (если в .env задано SEARCH_ENGINE_BACKEND=typesense)
-echo "🔍 Индексация Typesense (при Typesense — заполнит индекс)..."
+# 5.2. Историческая команда индексации в Typesense (no-op; оставлена для обратной совместимости)
+echo "🔍 Индексация Typesense (Typesense отключён, команда no-op)..."
 $COMPOSE run --rm web python manage.py index_companies_typesense --chunk 300 || true
 
 # 6. Запуск всех сервисов

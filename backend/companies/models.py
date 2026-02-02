@@ -401,6 +401,21 @@ class CompanyPhone(models.Model):
     def __str__(self) -> str:
         return self.value
 
+    def save(self, *args, **kwargs):
+        """
+        Сохранение дополнительного телефона компании с нормализацией.
+
+        ВАЖНО: Нормализация работает только при вызове через .save().
+        Операции типа CompanyPhone.objects.filter(...).update(value="...") или bulk_update()
+        ОБХОДЯТ save() и не применяют нормализацию!
+        """
+        if self.value:
+            # Используем единый нормализатор телефонов
+            from .normalizers import normalize_phone
+
+            self.value = normalize_phone(self.value)
+        super().save(*args, **kwargs)
+
 
 class ContactEmail(models.Model):
     class EmailType(models.TextChoices):

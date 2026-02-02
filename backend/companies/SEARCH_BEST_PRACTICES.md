@@ -2,7 +2,19 @@
 
 Документ привязывает описанные в спецификации практики к текущей реализации в коде.
 
-**Вариант с внешним движком:** спецификация требований и план внедрения Typesense/Elasticsearch — см. `docs/INTELLIGENT_SEARCH_SPEC.md` и `docs/SEARCH_ENGINE_ROADMAP.md`. Реализован backend **Typesense**: при `SEARCH_ENGINE_BACKEND=typesense` используется `companies/search_backends/typesense_backend.py`; переключение через `get_company_search_backend()` в `search_service.py`. Полная переиндексация: `python manage.py index_companies_typesense`. Стоп-слова и синонимы: `sync_typesense_stopwords`, `sync_typesense_synonyms`.
+Поиск компаний **полностью реализован на PostgreSQL** (FTS + pg_trgm) через
+`CompanySearchService` и модель `CompanySearchIndex`. Внешний движок Typesense
+отключён и больше не используется.
+
+Ключевые свойства текущего поиска:
+
+- **EXACT-first**: при вводе email / полного телефона / ИНН сначала выполняется точный поиск
+  по соответствующим полям (без FTS/trigram), с сортировкой по `updated_at desc`.
+- **Команды обслуживания**:
+  - `python manage.py normalize_companies_data` — ночная «гигиена» данных (телефоны → `normalize_phone`, email → `lower().strip()`).
+  - `python manage.py rebuild_company_search_index` — полная переиндексация `CompanySearchIndex`.
+- **Настройки окружения**:
+  - `SEARCH_ENGINE_BACKEND=postgres` — явное указание, что используется PostgreSQL FTS.
 
 ---
 

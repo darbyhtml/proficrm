@@ -1,6 +1,11 @@
-# Backends поиска компаний: Postgres (CompanySearchService) и Typesense (TypesenseSearchBackend).
-# Выбор backend — через SEARCH_ENGINE_BACKEND в settings.
+"""
+Исторический пакет backend'ов поиска компаний.
 
-from .typesense_backend import TypesenseSearchBackend
+Ранее здесь размещался TypesenseSearchBackend; после миграции на PostgreSQL FTS
+поиск компаний реализован исключительно через CompanySearchService
+(`companies.search_service.CompanySearchService`), без внешних движков.
 
-__all__ = ["TypesenseSearchBackend"]
+Модуль оставлен для обратной совместимости импорта, но не экспортирует backend'ы.
+"""
+
+__all__: list[str] = []

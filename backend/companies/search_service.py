@@ -245,6 +245,15 @@ class CompanySearchService:
         if not pq.raw:
             return qs
 
+        # Сохраняем "базовый" queryset с уже применёнными внешними фильтрами (права, филиал и т.п.).
+        base_qs = qs
+
+        # ФАЗА A: exact‑first поиск по email / телефону / ИНН.
+        # Если есть точные совпадения — возвращаем ТОЛЬКО их, без FTS/trigram fallback.
+        exact_qs = self._apply_exact_phase(base_qs=base_qs, pq=pq)
+        if exact_qs is not None:
+            return exact_qs.order_by("-updated_at")
+
         indexed = Q(search_index__isnull=False)
         indexed_match = Q()
         fallback_match = Q()
@@ -314,7 +323,6 @@ class CompanySearchService:
             long_tokens = [t for t in pq.text_tokens if len(t) >= SIMILARITY_MIN_TOKEN_LEN]
             if long_tokens:
                 token = max(long_tokens, key=len)
-                base_qs = qs  # сохраняем фильтры (филиал, права)
                 sim_name_ids = (
                     base_qs.annotate(sim=TrigramWordSimilarity(token, "name"))
                     .filter(sim__gt=SIMILARITY_THRESHOLD)
@@ -392,6 +400,83 @@ class CompanySearchService:
             return qs.order_by("-exact_phone", "-search_score", "-updated_at")
 
         return qs.order_by("-search_score", "-updated_at")
+
+    def _apply_exact_phase(self, *, base_qs, pq: ParsedQuery):
+        """
+        Фаза A: exact‑first поиск.
+
+        Приоритет:
+        1) email — Company.email / CompanyEmail.value / ContactEmail.value (точное совпадение, регистронезависимо)
+        2) телефон — один номер (11 цифр, 7/8), нормализованный через normalize_phone
+        3) ИНН — 10/12 цифр; поле Company.inn может содержать несколько ИНН, разделённых запятой/слешем.
+
+        Возвращает queryset с точными совпадениями или None, если:
+        - запрос не подходит под паттерн exact‑поиска;
+        - либо точных совпадений нет.
+        """
+        raw = (pq.raw or "").strip()
+        if not raw:
+            return None
+
+        # 1) Email exact
+        if "@" in raw and "." in raw.split("@")[-1]:
+            email_q = raw.strip()
+            if email_q:
+                exact_qs = base_qs.filter(
+                    Q(email__iexact=email_q)
+                    | Q(emails__value__iexact=email_q)
+                    | Q(contacts__emails__value__iexact=email_q)
+                ).distinct()
+                if exact_qs.exists():
+                    return exact_qs
+
+        # 2) Телефон (один номер, 11 цифр, 7/8) — нормализуем ввод и ищем по полям телефонов
+        digits_only = only_digits(raw)
+        if len(digits_only) == 11 and digits_only[0] in ("7", "8"):
+            try:
+                from companies.normalizers import normalize_phone
+            except Exception:
+                normalize_phone = None  # type: ignore[assignment]
+
+            phone_norm = normalize_phone(raw) if normalize_phone is not None else None
+            if phone_norm:
+                # Ожидаем формат +7XXXXXXXXXX после нормализации.
+                phone_digits = only_digits(phone_norm)
+                if phone_norm.startswith("+") and len(phone_digits) == 11:
+                    exact_qs = base_qs.filter(
+                        Q(phone=phone_norm)
+                        | Q(phones__value=phone_norm)
+                        | Q(contacts__phones__value=phone_norm)
+                    ).distinct()
+                    if exact_qs.exists():
+                        return exact_qs
+
+        # 3) ИНН (10/12 цифр), Company.inn может содержать несколько ИНН через запятую/слеш
+        if len(digits_only) in (10, 12):
+            inn_token = digits_only
+
+            candidate_qs = base_qs.filter(inn__icontains=inn_token).only("id", "inn")
+            matched_ids = []
+            for c in candidate_qs.iterator(chunk_size=500):
+                raw_inn = (c.inn or "").strip()
+                if not raw_inn:
+                    continue
+                # Разделяем по запятой/слешу/точке с запятой и пробелам.
+                parts: list[str] = []
+                tmp = raw_inn.replace(";", ",").replace("/", ",")
+                for chunk in tmp.split(","):
+                    part = (chunk or "").strip()
+                    if part:
+                        parts.append(part)
+                for part in parts:
+                    if only_digits(part) == inn_token:
+                        matched_ids.append(c.id)
+                        break
+
+            if matched_ids:
+                return base_qs.filter(pk__in=matched_ids)
+
+        return None
 
     def explain(self, *, companies: list[Company], query: str, max_reasons_per_company: int = 50) -> dict[UUID, SearchExplain]:
         """
@@ -679,13 +764,10 @@ class CompanySearchService:
 
 def get_company_search_backend(*, max_results_cap: int = 5000):
     """
-    Возвращает backend поиска компаний по настройке SEARCH_ENGINE_BACKEND:
-    "typesense" — TypesenseSearchBackend, иначе — CompanySearchService (Postgres).
+    Возвращает backend поиска компаний.
+
+    После отказа от Typesense единственным backend'ом является CompanySearchService
+    (PostgreSQL FTS + pg_trgm). Функция оставлена как фасад для обратной совместимости.
     """
-    from django.conf import settings as django_settings
-    backend = (getattr(django_settings, "SEARCH_ENGINE_BACKEND", "postgres") or "postgres").strip().lower()
-    if backend == "typesense":
-        from companies.search_backends import TypesenseSearchBackend
-        return TypesenseSearchBackend(max_results_cap=max_results_cap)
     return CompanySearchService(max_results_cap=max_results_cap)
 

@@ -171,60 +171,145 @@ class SearchServicePostgresTests(TestCase):
             "Запрос из одного символа не должен возвращать неограниченную выдачу.",
         )
 
+    def test_exact_first_email_search(self):
+        """EXACT‑first: поиск по email возвращает только точные совпадения и сортирует по updated_at desc."""
+        c1 = Company.objects.create(
+            name="Email 1",
+            inn="1111111111",
+            email="client@example.com",
+            status=self.status,
+        )
+        c2 = Company.objects.create(
+            name="Email 2",
+            inn="2222222222",
+            email="other@example.com",
+            status=self.status,
+        )
+        # Дополнительный email на другой компании
+        from companies.models import CompanyEmail
+
+        c3 = Company.objects.create(
+            name="Email 3",
+            inn="3333333333",
+            status=self.status,
+        )
+        CompanyEmail.objects.create(company=c3, value="client@example.com")
+
+        rebuild_company_search_index(c1.id)
+        rebuild_company_search_index(c2.id)
+        rebuild_company_search_index(c3.id)
+
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="client@example.com")
+        ids = list(qs.values_list("id", flat=True))
+        self.assertEqual(
+            set(ids),
+            {c1.id, c3.id},
+            "EXACT‑поиск по email должен возвращать только компании с точным совпадением email.",
+        )
+
+    def test_exact_first_phone_search(self):
+        """EXACT‑first: поиск по телефону (11 цифр, 7/8) использует нормализованный номер."""
+        c1 = Company.objects.create(
+            name="Телефон 1",
+            inn="4444444444",
+            phone="8 (999) 123-45-67",
+            status=self.status,
+        )
+        c2 = Company.objects.create(
+            name="Телефон 2",
+            inn="5555555555",
+            phone="+7 999 123-45-68",
+            status=self.status,
+        )
+        rebuild_company_search_index(c1.id)
+        rebuild_company_search_index(c2.id)
+
+        # Вводим номер в «пользовательском» формате с 8 и форматированием
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="8 (999) 123-45-67")
+        ids = list(qs.values_list("id", flat=True))
+        self.assertEqual(
+            ids,
+            [c1.id],
+            "EXACT‑поиск по телефону должен вернуть только компанию с этим номером.",
+        )
+
+    def test_exact_first_inn_search_including_multi_inn_field(self):
+        """EXACT‑first: поиск по ИНН (10/12 цифр), в т.ч. когда поле хранит несколько ИНН через запятую."""
+        c1 = Company.objects.create(
+            name="ИНН одиночный",
+            inn="1234567890",
+            status=self.status,
+        )
+        c2 = Company.objects.create(
+            name="ИНН список",
+            inn="1234567890, 9876543210",
+            status=self.status,
+        )
+        c3 = Company.objects.create(
+            name="ИНН другой",
+            inn="9876543210",
+            status=self.status,
+        )
+
+        rebuild_company_search_index(c1.id)
+        rebuild_company_search_index(c2.id)
+        rebuild_company_search_index(c3.id)
+
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="1234567890")
+        ids = list(qs.values_list("id", flat=True))
+        self.assertEqual(
+            set(ids),
+            {c1.id, c2.id},
+            "EXACT‑поиск по ИНН должен находить как одиночный ИНН, так и запись, где он в списке.",
+        )
+
+        # Убеждаемся, что поиск по второму ИНН из списка не находит первую компанию
+        qs2 = CompanySearchService().apply(qs=Company.objects.all(), query="9876543210")
+        ids2 = list(qs2.values_list("id", flat=True))
+        self.assertEqual(
+            set(ids2),
+            {c2.id, c3.id},
+            "EXACT‑поиск по ИНН из списка должен находить только компании, где этот ИНН реально присутствует.",
+        )
+
+    def test_company_name_punct_and_glued_normalization(self):
+        """
+        Нормализация названий (тире/кавычки/склейка) в индексе:
+        компания ООО «Сиб-Энерго» (ЮГ) должна находиться по разным вариантам запроса.
+        """
+        c = Company.objects.create(
+            name='ООО "Сиб-Энерго" (ЮГ)',
+            inn="7705555555",
+            status=self.status,
+        )
+        rebuild_company_search_index(c.id)
+
+        service = CompanySearchService()
+        queries = [
+            "сиб энерго юг",
+            "сиб-энерго",
+            "сибэнерго",
+            "ооо сибэнерго",
+        ]
+        for q in queries:
+            qs = service.apply(qs=Company.objects.all(), query=q)
+            ids = list(qs.values_list("id", flat=True)[:10])
+            self.assertIn(
+                c.id,
+                ids,
+                f"Запрос «{q}» должен находить компанию с названием «ООО \"Сиб-Энерго\" (ЮГ)».",
+            )
+
 
 class SearchBackendFacadeTests(TestCase):
-    """Тесты фасада get_company_search_backend и Typesense backend без поднятого Typesense."""
+    """Тесты фасада get_company_search_backend при единственном backend (PostgreSQL)."""
 
-    def test_get_backend_default_is_postgres(self):
+    def test_get_backend_always_returns_postgres_service(self):
         from companies.search_service import get_company_search_backend, CompanySearchService
-        with self.settings(SEARCH_ENGINE_BACKEND="postgres"):
-            backend = get_company_search_backend()
-        self.assertIsInstance(backend, CompanySearchService)
 
-    def test_get_backend_typesense_returns_typesense_backend(self):
-        from companies.search_service import get_company_search_backend
-        from companies.search_backends import TypesenseSearchBackend
-        with self.settings(SEARCH_ENGINE_BACKEND="typesense"):
-            backend = get_company_search_backend()
-        self.assertIsInstance(backend, TypesenseSearchBackend)
-
-    def test_typesense_apply_returns_none_when_unavailable_and_no_fallback(self):
-        """При недоступности Typesense и отключённом fallback apply возвращает qs.none()."""
-        from unittest.mock import patch
-        from companies.models import Company, CompanyStatus
-        from companies.search_backends.typesense_backend import TypesenseSearchBackend
-        status = CompanyStatus.objects.create(name="Т")
-        Company.objects.create(name="Тест", inn="1234567890", status=status)
-        backend = TypesenseSearchBackend()
-        with patch("companies.search_backends.typesense_backend._typesense_available", return_value=False), \
-             self.settings(TYPESENSE_FALLBACK_TO_POSTGRES=False):
-            qs = backend.apply(qs=Company.objects.all(), query="тест")
-        self.assertEqual(qs.count(), 0)
-
-    def test_build_company_document_structure(self):
-        """build_company_document возвращает dict с полями схемы Typesense."""
-        from companies.models import Company, CompanyStatus
-        from companies.search_backends.typesense_backend import build_company_document
-        status = CompanyStatus.objects.create(name="Т")
-        c = Company.objects.create(
-            name="ООО Док",
-            legal_name="Общество Док",
-            inn="7701000000",
-            kpp="770101001",
-            address="Москва",
-            status=status,
-        )
-        doc = build_company_document(c)
-        self.assertEqual(doc["id"], str(c.id))
-        self.assertIn("name", doc)
-        self.assertIn("legal_name", doc)
-        self.assertIn("inn", doc)
-        self.assertIn("kpp", doc)
-        self.assertIn("address", doc)
-        self.assertIn("contacts", doc)
-        self.assertIn("emails", doc)
-        self.assertIn("phones", doc)
-        self.assertIn("notes", doc)
-        self.assertIn("updated_at", doc)
-        self.assertIsInstance(doc["updated_at"], int)
+        for backend_value in ("postgres", "typesense", "unknown", "", None):
+            with self.subTest(backend_value=backend_value):
+                with self.settings(SEARCH_ENGINE_BACKEND=backend_value):
+                    backend = get_company_search_backend()
+                self.assertIsInstance(backend, CompanySearchService)
 

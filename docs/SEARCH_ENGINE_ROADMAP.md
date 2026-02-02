@@ -84,36 +84,14 @@
 
 ---
 
-## Реализовано (первая итерация)
+## Реализовано (итоговое состояние)
 
-- **Docker:** сервис `typesense` в `docker-compose.yml`, переменные TYPESENSE_* в web.
-- **Настройки:** `SEARCH_ENGINE_BACKEND`, `TYPESENSE_HOST/PORT/PROTOCOL/API_KEY`, `TYPESENSE_COLLECTION_COMPANIES` в `settings.py`.
-- **Backend:** `companies/search_backends/typesense_backend.py` — схема коллекции, `build_company_document()`, `TypesenseSearchBackend.apply()` / `.explain()`, `index_company()`, `delete_company_from_index()`.
-- **Фасад:** `get_company_search_backend()` в `search_service.py`; во views используется фасад вместо прямого `CompanySearchService()`.
-- **Синхронизация:** в `_rebuild_index_for_company` (signals) при `SEARCH_ENGINE_BACKEND=typesense` вызывается `index_company()`; при удалении компании — `delete_company_from_index()`.
-- **Команда:** `python manage.py index_companies_typesense` — полная переиндексация (или `--company-id=UUID` для одной компании).
-- **Схема:** для полей name, legal_name, contacts, address, notes заданы `locale: "ru"` и `stem: true` (русский стемминг).
-- **Стоп-слова:** набор `ru_org` (ООО, ИП, ЗАО, федеральное и т.д.) создаётся при `ensure_collection`; при поиске передаётся параметр `stopwords: ru_org`. При необходимости обновить список: `python manage.py sync_typesense_stopwords`.
-- **Fallback на Postgres:** при недоступности Typesense (клиент не создан или ошибка поиска) по умолчанию используется поиск через Postgres (`TYPESENSE_FALLBACK_TO_POSTGRES=1`). Чтобы возвращать пустую выдачу, задать `TYPESENSE_FALLBACK_TO_POSTGRES=0`.
-- **REST API:** список компаний (`/api/companies/`) при параметре `?search=...` использует тот же backend (Typesense или Postgres) — фильтр `CompanySearchFilterBackend` в `companies/api.py`.
-- **Health:** при `SEARCH_ENGINE_BACKEND=typesense` в ответе `/health/` добавляется `checks.search_typesense` (`ok` или `unavailable`).
-- **Синонимы:** стоп-слова реализованы (набор `ru_org`). Синонимы (ул→улица, пр→проспект и т.д.) загружаются через `python manage.py sync_typesense_synonyms` (использует `ensure_synonyms()` в backend).
-
-**Переменные окружения (Typesense):**
-
-| Переменная | По умолчанию | Описание |
-|------------|--------------|----------|
-| `SEARCH_ENGINE_BACKEND` | `postgres` | `postgres` — FTS+pg_trgm, `typesense` — Typesense |
-| `TYPESENSE_HOST` | `localhost` | Хост Typesense |
-| `TYPESENSE_PORT` | `8108` | Порт |
-| `TYPESENSE_PROTOCOL` | `http` | `http` или `https` |
-| `TYPESENSE_API_KEY` | `xyz` | API-ключ (в production задать свой) |
-| `TYPESENSE_COLLECTION_COMPANIES` | `companies` | Имя коллекции |
-| `TYPESENSE_FALLBACK_TO_POSTGRES` | `1` | При недоступности Typesense искать через Postgres |
-
-Для включения Typesense: задать `SEARCH_ENGINE_BACKEND=typesense` и `TYPESENSE_API_KEY`, запустить `index_companies_typesense`, затем перезапустить приложение.
-
-**Порядок деплоя с Typesense:** (1) поднять контейнер Typesense (или отдельный хост); (2) задать в окружении `SEARCH_ENGINE_BACKEND=typesense`, `TYPESENSE_*`; (3) после миграций выполнить `python manage.py index_companies_typesense`; (4) при необходимости — `sync_typesense_stopwords`, `sync_typesense_synonyms`. При падении Typesense поиск автоматически идёт через Postgres (если `TYPESENSE_FALLBACK_TO_POSTGRES=1`). Синтаксис `filter_by` для списка id (`id:[uuid1,uuid2,...]`) корректен для Typesense (OR по значениям строкового поля).
+- **Поисковый backend:** PostgreSQL FTS + pg_trgm (`CompanySearchService`, `CompanySearchIndex`).
+- **Фасад:** `get_company_search_backend()` в `companies/search_service.py` всегда возвращает `CompanySearchService`.
+- **Нормализация и индекс:** см. `backend/companies/SEARCH_BEST_PRACTICES.md` (fold_text, only_digits, EXACT-first, команды `normalize_companies_data` и `rebuild_company_search_index`).
+- **REST API и UI:** используют тот же backend через `get_company_search_backend()`.
+- **Typesense:** конфигурация и код backend'а удалены; команды `index_companies_typesense`, `sync_typesense_stopwords`, `sync_typesense_synonyms`
+  оставлены как no-op для обратной совместимости, но больше не выполняют действий.
 
 ---
 

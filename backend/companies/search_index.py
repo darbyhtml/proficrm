@@ -25,6 +25,8 @@ from tasksapp.models import Task
 _TOKEN_RE = re.compile(r"[0-9]+|[A-Za-zА-Яа-яЁё]+", re.UNICODE)
 _DIGITS_RE = re.compile(r"\D+")
 _WS_RE = re.compile(r"\s+")
+# Пунктуация, которую для поискового индекса имеет смысл превращать в пробел
+_PUNCT_TO_SPACE_RE = re.compile(r"[\"'«»()[\]{}\-–—_/]+")
 
 
 def fold_text(s: str) -> str:
@@ -41,6 +43,33 @@ def fold_text(s: str) -> str:
     s = s.lower().replace("ё", "е")
     s = _WS_RE.sub(" ", s).strip()
     return s
+
+
+def fold_text_punct_to_space(s: str) -> str:
+    """
+    Нормализует текст для поиска, дополнительно приводя "разделительную" пунктуацию к пробелу.
+
+    Используется для формирования альтернативного представления названий:
+    - "ООО «Сиб-Энерго» (ЮГ)" → "ооо сиб энерго юг"
+    """
+    if not s:
+        return ""
+    s = str(s)
+    s = _PUNCT_TO_SPACE_RE.sub(" ", s)
+    return fold_text(s)
+
+
+def fold_text_glued(s: str) -> str:
+    """
+    Нормализует текст и склеивает токены без пробелов.
+
+    Пример: "ООО «Сиб-Энерго» (ЮГ)" → "ооосибэнергоюг".
+    Используется только для коротких строк (название/юр.название), чтобы не раздувать индекс.
+    """
+    base = fold_text_punct_to_space(s)
+    if not base:
+        return ""
+    return base.replace(" ", "")
 
 
 def only_digits(s: str) -> str:
@@ -148,13 +177,37 @@ def build_company_index_payload(company: Company) -> dict[str, str]:
         f"amo_id: {company.amocrm_company_id}" if company.amocrm_company_id else "",
     ]
 
-    name_parts = [
-        f"название: {company.name}" if (company.name or "").strip() else "",
-        f"юр_название: {company.legal_name}" if (company.legal_name or "").strip() else "",
-        f"вид_деятельности: {company.activity_kind}" if (company.activity_kind or "").strip() else "",
-        f"контакт_фио_в_карточке: {company.contact_name}" if (company.contact_name or "").strip() else "",
-        f"контакт_должность_в_карточке: {company.contact_position}" if (company.contact_position or "").strip() else "",
-    ]
+    name_parts: list[str] = []
+
+    # Название компании + нормализованные представления (тире/кавычки/склейка)
+    if (company.name or "").strip():
+        name_parts.append(f"название: {company.name}")
+        # "ООО «Сиб-Энерго» (ЮГ)" → "ооо сиб энерго юг"
+        folded = fold_text_punct_to_space(company.name)
+        if folded:
+            name_parts.append(f"название_norm: {folded}")
+        # "ООО «Сиб-Энерго» (ЮГ)" → "ооосибэнергоюг"
+        glued = fold_text_glued(company.name)
+        if glued and len(glued) <= 64:
+            name_parts.append(f"название_слито: {glued}")
+
+    # Юридическое название + нормализованные представления
+    if (company.legal_name or "").strip():
+        name_parts.append(f"юр_название: {company.legal_name}")
+        folded_legal = fold_text_punct_to_space(company.legal_name)
+        if folded_legal:
+            name_parts.append(f"юр_название_norm: {folded_legal}")
+        glued_legal = fold_text_glued(company.legal_name)
+        if glued_legal and len(glued_legal) <= 64:
+            name_parts.append(f"юр_название_слито: {glued_legal}")
+
+    # Прочие поля, которые логически относятся к "имени"
+    if (company.activity_kind or "").strip():
+        name_parts.append(f"вид_деятельности: {company.activity_kind}")
+    if (company.contact_name or "").strip():
+        name_parts.append(f"контакт_фио_в_карточке: {company.contact_name}")
+    if (company.contact_position or "").strip():
+        name_parts.append(f"контакт_должность_в_карточке: {company.contact_position}")
 
     other_parts = [
         f"адрес: {company.address}" if (company.address or "").strip() else "",
