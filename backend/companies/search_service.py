@@ -335,7 +335,7 @@ class CompanySearchService:
             if q_raw:
                 email_direct_match = (
                     Q(email__icontains=q_raw)
-                    | Q(companyemail__value__icontains=q_raw)
+                    | Q(emails__value__icontains=q_raw)
                     | Q(contacts__emails__value__icontains=q_raw)
                 )
 
