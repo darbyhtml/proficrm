@@ -80,7 +80,22 @@ class Command(BaseCommand):
                 obj.t_other = payload["t_other"]
                 obj.plain_text = payload["plain_text"]
                 obj.digits = payload["digits"]
-                obj.save(update_fields=["t_ident", "t_name", "t_contacts", "t_other", "plain_text", "digits"])
+                obj.normalized_phones = payload.get("normalized_phones", [])
+                obj.normalized_emails = payload.get("normalized_emails", [])
+                obj.normalized_inns = payload.get("normalized_inns", [])
+                obj.save(
+                    update_fields=[
+                        "t_ident",
+                        "t_name",
+                        "t_contacts",
+                        "t_other",
+                        "plain_text",
+                        "digits",
+                        "normalized_phones",
+                        "normalized_emails",
+                        "normalized_inns",
+                    ]
+                )
 
         return len(ids)
 

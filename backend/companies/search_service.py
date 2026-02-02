@@ -254,6 +254,26 @@ class CompanySearchService:
         if exact_qs is not None:
             return exact_qs.order_by("-updated_at")
 
+        # Защита от слишком коротких запросов (не exact-типа): не запускать heavy FTS/trigram.
+        # Исключения: короткие ОПФ ("ип", "ооо") разрешены только если они часть большего запроса
+        # или если есть точные совпадения в названии (но это уже обработано выше через exact).
+        raw_clean = (pq.raw or "").strip()
+        is_exact_type = (
+            ("@" in raw_clean and "." in raw_clean.split("@")[-1])
+            or (len(only_digits(raw_clean)) == 11 and only_digits(raw_clean)[0] in ("7", "8"))
+            or (len(only_digits(raw_clean)) in (10, 12))
+        )
+        if not is_exact_type:
+            # Проверяем минимальную длину для текстовых запросов
+            text_only = "".join(c for c in raw_clean if c.isalnum() or c.isspace()).strip()
+            if len(text_only) < 3:
+                # Слишком короткий запрос — возвращаем пустую выдачу (кроме exact, который уже обработан)
+                return qs.none()
+            # Для цифровых запросов: если только слабые цифры (2-3 символа) без текста — тоже пусто
+            if not pq.text_tokens and pq.weak_digit_tokens and not pq.strong_digit_tokens:
+                if all(len(d) <= 3 for d in pq.weak_digit_tokens):
+                    return qs.none()
+
         indexed = Q(search_index__isnull=False)
         indexed_match = Q()
         fallback_match = Q()
@@ -403,12 +423,12 @@ class CompanySearchService:
 
     def _apply_exact_phase(self, *, base_qs, pq: ParsedQuery):
         """
-        Фаза A: exact‑first поиск.
+        Фаза A: exact‑first поиск через денормализованные поля индекса (без JOIN).
 
         Приоритет:
-        1) email — Company.email / CompanyEmail.value / ContactEmail.value (точное совпадение, регистронезависимо)
-        2) телефон — один номер (11 цифр, 7/8), нормализованный через normalize_phone
-        3) ИНН — 10/12 цифр; поле Company.inn может содержать несколько ИНН, разделённых запятой/слешем.
+        1) email — поиск в CompanySearchIndex.normalized_emails (быстро, без JOIN)
+        2) телефон — один номер (11 цифр, 7/8), нормализованный через normalize_phone, поиск в normalized_phones
+        3) ИНН — 10/12 цифр, поиск в normalized_inns (уже распарсенные списки)
 
         Возвращает queryset с точными совпадениями или None, если:
         - запрос не подходит под паттерн exact‑поиска;
@@ -418,19 +438,16 @@ class CompanySearchService:
         if not raw:
             return None
 
-        # 1) Email exact
+        # 1) Email exact — через денормализованный массив (без JOIN)
         if "@" in raw and "." in raw.split("@")[-1]:
-            email_q = raw.strip()
+            email_q = raw.strip().lower()
             if email_q:
-                exact_qs = base_qs.filter(
-                    Q(email__iexact=email_q)
-                    | Q(emails__value__iexact=email_q)
-                    | Q(contacts__emails__value__iexact=email_q)
-                ).distinct()
+                # Поиск в normalized_emails через contains (GIN индекс)
+                exact_qs = base_qs.filter(search_index__normalized_emails__contains=[email_q]).distinct()
                 if exact_qs.exists():
                     return exact_qs
 
-        # 2) Телефон (один номер, 11 цифр, 7/8) — нормализуем ввод и ищем по полям телефонов
+        # 2) Телефон (один номер, 11 цифр, 7/8) — нормализуем ввод и ищем в normalized_phones
         digits_only = only_digits(raw)
         if len(digits_only) == 11 and digits_only[0] in ("7", "8"):
             try:
@@ -443,38 +460,18 @@ class CompanySearchService:
                 # Ожидаем формат +7XXXXXXXXXX после нормализации.
                 phone_digits = only_digits(phone_norm)
                 if phone_norm.startswith("+") and len(phone_digits) == 11:
-                    exact_qs = base_qs.filter(
-                        Q(phone=phone_norm)
-                        | Q(phones__value=phone_norm)
-                        | Q(contacts__phones__value=phone_norm)
-                    ).distinct()
+                    # Поиск в normalized_phones через contains (GIN индекс)
+                    exact_qs = base_qs.filter(search_index__normalized_phones__contains=[phone_norm]).distinct()
                     if exact_qs.exists():
                         return exact_qs
 
-        # 3) ИНН (10/12 цифр), Company.inn может содержать несколько ИНН через запятую/слеш
+        # 3) ИНН (10/12 цифр) — поиск в normalized_inns (уже распарсенные списки)
         if len(digits_only) in (10, 12):
             inn_token = digits_only
-
-            candidate_qs = base_qs.filter(inn__icontains=inn_token).only("id", "inn")
-            matched_ids = []
-            for c in candidate_qs.iterator(chunk_size=500):
-                raw_inn = (c.inn or "").strip()
-                if not raw_inn:
-                    continue
-                # Разделяем по запятой/слешу/точке с запятой и пробелам.
-                parts: list[str] = []
-                tmp = raw_inn.replace(";", ",").replace("/", ",")
-                for chunk in tmp.split(","):
-                    part = (chunk or "").strip()
-                    if part:
-                        parts.append(part)
-                for part in parts:
-                    if only_digits(part) == inn_token:
-                        matched_ids.append(c.id)
-                        break
-
-            if matched_ids:
-                return base_qs.filter(pk__in=matched_ids)
+            # Поиск в normalized_inns через contains (GIN индекс)
+            exact_qs = base_qs.filter(search_index__normalized_inns__contains=[inn_token]).distinct()
+            if exact_qs.exists():
+                return exact_qs
 
         return None
 

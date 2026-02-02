@@ -43,9 +43,14 @@
 ## Поиск компаний (Postgres)
 
 - **Backend:** `SEARCH_ENGINE_BACKEND=postgres` (единственный вариант) — используется `CompanySearchService` (FTS + pg_trgm, EXACT-first).
+- **EXACT-first через денормализованные поля:** точные совпадения по email / телефону / ИНН выполняются через `CompanySearchIndex.normalized_emails/phones/inns` (ArrayField с GIN индексами) без JOIN, что обеспечивает высокую скорость на больших объёмах данных.
 - **EXACT-first:** проверить, что точные совпадения по email / телефону / ИНН возвращают только соответствующие компании и сортируются по `updated_at desc`.
+- **Защита от коротких запросов:** запросы < 3 символов (не exact-типа) не запускают heavy FTS/trigram поиск.
+- **Glued-нормализация:** склейка токенов применяется только для строк >= 6 символов и не применяется для строк из одних ОПФ (ооо, ип и т.д.).
 - **Проверки поиска:** запрос по ИНН/названию/контакту/телефону возвращает релевантные компании; подсветка и «причины совпадения» отображаются в списке.
 - **Тесты:** `companies.tests_search` — `SearchBackendFacadeTests`, `SearchServicePostgresTests` (требуют PostgreSQL).
+  - **Запуск тестов:** `DB_ENGINE=postgres python backend/manage.py test companies.tests_search`
+  - **SQLite:** тесты с `@skipUnless(connection.vendor == "postgresql", ...)` автоматически пропускаются на SQLite.
 
 ## Чеклист ручного тестирования
 

@@ -2,6 +2,7 @@ import uuid
 
 from django.conf import settings
 from django.contrib.postgres.indexes import GinIndex, OpClass
+from django.contrib.postgres.fields import ArrayField
 from django.contrib.postgres.search import SearchVectorField
 from django.db import models
 from django.db.models.functions import Upper
@@ -579,6 +580,27 @@ class CompanySearchIndex(models.Model):
     # Все цифры по карточке (ИНН/КПП/телефоны/и т.п.) — для быстрых “цифровых” запросов.
     digits = models.TextField(blank=True, default="")
 
+    # Денормализованные массивы для быстрого exact-поиска (без JOIN).
+    # Заполняются при перестройке индекса из всех телефонов/email/ИНН компании и её контактов.
+    normalized_phones = ArrayField(
+        models.TextField(),
+        default=list,
+        blank=True,
+        help_text="Нормализованные телефоны (E.164 формат) из Company.phone, CompanyPhone, ContactPhone",
+    )
+    normalized_emails = ArrayField(
+        models.TextField(),
+        default=list,
+        blank=True,
+        help_text="Нормализованные email (lower) из Company.email, CompanyEmail, ContactEmail",
+    )
+    normalized_inns = ArrayField(
+        models.TextField(),
+        default=list,
+        blank=True,
+        help_text="ИНН (только цифры, 10/12) из Company.inn (распарсенные списки)",
+    )
+
     # FTS-вектора по группам (заполняются в БД-триггере).
     vector_a = SearchVectorField(null=True)
     vector_b = SearchVectorField(null=True)
@@ -596,5 +618,9 @@ class CompanySearchIndex(models.Model):
             # Trigram индексы для быстрого LIKE/ILIKE и % (pg_trgm) по агрегированному тексту/цифрам.
             GinIndex(OpClass(Upper("plain_text"), name="gin_trgm_ops"), name="cmp_si_plain_trgm_idx"),
             GinIndex(OpClass("digits", name="gin_trgm_ops"), name="cmp_si_digits_trgm_idx"),
+            # GIN индексы для быстрого exact-поиска по массивам (contains оператор).
+            GinIndex(fields=["normalized_phones"], name="cmp_si_nphones_gin_idx"),
+            GinIndex(fields=["normalized_emails"], name="cmp_si_nemails_gin_idx"),
+            GinIndex(fields=["normalized_inns"], name="cmp_si_ninns_gin_idx"),
         ]
 

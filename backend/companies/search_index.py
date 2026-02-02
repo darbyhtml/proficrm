@@ -59,17 +59,33 @@ def fold_text_punct_to_space(s: str) -> str:
     return fold_text(s)
 
 
+# Организационно-правовые формы (для фильтрации glued-шума)
+_ORG_FORMS_SET = frozenset({"ооо", "ип", "зао", "оао", "пао", "ао", "нко", "тк", "ооо."})
+
+
 def fold_text_glued(s: str) -> str:
     """
     Нормализует текст и склеивает токены без пробелов.
 
     Пример: "ООО «Сиб-Энерго» (ЮГ)" → "ооосибэнергоюг".
     Используется только для коротких строк (название/юр.название), чтобы не раздувать индекс.
+
+    Ограничения для снижения шума:
+    - минимальная длина glued-строки >= 6 символов
+    - не добавлять glued, если строка состоит только из ОПФ (ооо, ип и т.д.)
     """
     base = fold_text_punct_to_space(s)
     if not base:
         return ""
-    return base.replace(" ", "")
+    glued = base.replace(" ", "")
+    # Минимальная длина для glued-варианта
+    if len(glued) < 6:
+        return ""
+    # Проверка: не состоит ли только из ОПФ (токены из _ORG_FORMS_SET)
+    tokens = base.split()
+    if tokens and all(tok in _ORG_FORMS_SET for tok in tokens):
+        return ""
+    return glued
 
 
 def only_digits(s: str) -> str:
@@ -165,10 +181,42 @@ def _safe_join(parts: Iterable[str], sep: str = "\n") -> str:
     return sep.join(out)
 
 
-def build_company_index_payload(company: Company) -> dict[str, str]:
+def _normalize_email_for_index(value: str | None) -> str:
+    """Нормализует email для индекса: lower().strip()."""
+    if not value:
+        return ""
+    return str(value).strip().lower()
+
+
+def _parse_inn_list(inn_str: str | None) -> list[str]:
+    """
+    Парсит Company.inn (может быть списком через запятую/слеш) и возвращает список валидных ИНН (10/12 цифр).
+    """
+    if not inn_str:
+        return []
+    raw = str(inn_str).strip()
+    if not raw:
+        return []
+    # Разделяем по запятой/слешу/точке с запятой
+    parts: list[str] = []
+    tmp = raw.replace(";", ",").replace("/", ",")
+    for chunk in tmp.split(","):
+        part = (chunk or "").strip()
+        if part:
+            parts.append(part)
+    # Извлекаем только валидные ИНН (10 или 12 цифр)
+    valid_inns: list[str] = []
+    for part in parts:
+        digits = only_digits(part)
+        if len(digits) in (10, 12):
+            valid_inns.append(digits)
+    return valid_inns
+
+
+def build_company_index_payload(company: Company) -> dict[str, str | list[str]]:
     """
     Строит payload для CompanySearchIndex из “истины” (Company + связанные модели).
-    Возвращает текстовые группы и агрегаты.
+    Возвращает текстовые группы, агрегаты и денормализованные массивы для exact-поиска.
     """
     # Основные поля компании
     ident_parts = [
@@ -186,7 +234,7 @@ def build_company_index_payload(company: Company) -> dict[str, str]:
         folded = fold_text_punct_to_space(company.name)
         if folded:
             name_parts.append(f"название_norm: {folded}")
-        # "ООО «Сиб-Энерго» (ЮГ)" → "ооосибэнергоюг"
+        # "ООО «Сиб-Энерго» (ЮГ)" → "ооосибэнергоюг" (только если glued не пустой и не слишком длинный)
         glued = fold_text_glued(company.name)
         if glued and len(glued) <= 64:
             name_parts.append(f"название_слито: {glued}")
@@ -197,6 +245,7 @@ def build_company_index_payload(company: Company) -> dict[str, str]:
         folded_legal = fold_text_punct_to_space(company.legal_name)
         if folded_legal:
             name_parts.append(f"юр_название_norm: {folded_legal}")
+        # Юридическое название: glued только если не пустой и не слишком длинный
         glued_legal = fold_text_glued(company.legal_name)
         if glued_legal and len(glued_legal) <= 64:
             name_parts.append(f"юр_название_слито: {glued_legal}")
@@ -297,6 +346,52 @@ def build_company_index_payload(company: Company) -> dict[str, str]:
             digit_sources.append(str(c.amocrm_contact_id))
     digits = " ".join([only_digits(x) for x in digit_sources if x])
 
+    # Денормализованные массивы для быстрого exact-поиска (без JOIN).
+    normalized_phones: list[str] = []
+    normalized_emails: list[str] = []
+    normalized_inns: list[str] = []
+
+    # Телефоны: Company.phone + CompanyPhone + ContactPhone
+    from companies.normalizers import normalize_phone
+
+    if company.phone:
+        phone_norm = normalize_phone(company.phone)
+        if phone_norm and phone_norm.startswith("+"):
+            normalized_phones.append(phone_norm)
+    for p in getattr(company, "phones", []).all():
+        if p.value:
+            phone_norm = normalize_phone(p.value)
+            if phone_norm and phone_norm.startswith("+") and phone_norm not in normalized_phones:
+                normalized_phones.append(phone_norm)
+    for c in getattr(company, "contacts", []).all():
+        for cp in getattr(c, "phones", []).all():
+            if cp.value:
+                phone_norm = normalize_phone(cp.value)
+                if phone_norm and phone_norm.startswith("+") and phone_norm not in normalized_phones:
+                    normalized_phones.append(phone_norm)
+
+    # Email: Company.email + CompanyEmail + ContactEmail
+    if company.email:
+        email_norm = _normalize_email_for_index(company.email)
+        if email_norm:
+            normalized_emails.append(email_norm)
+    for e in getattr(company, "emails", []).all():
+        if e.value:
+            email_norm = _normalize_email_for_index(e.value)
+            if email_norm and email_norm not in normalized_emails:
+                normalized_emails.append(email_norm)
+    for c in getattr(company, "contacts", []).all():
+        for ce in getattr(c, "emails", []).all():
+            if ce.value:
+                email_norm = _normalize_email_for_index(ce.value)
+                if email_norm and email_norm not in normalized_emails:
+                    normalized_emails.append(email_norm)
+
+    # ИНН: парсим Company.inn (может быть списком)
+    if company.inn:
+        parsed_inns = _parse_inn_list(company.inn)
+        normalized_inns.extend(parsed_inns)
+
     return {
         "t_ident": t_ident,
         "t_name": t_name,
@@ -304,6 +399,9 @@ def build_company_index_payload(company: Company) -> dict[str, str]:
         "t_other": t_other,
         "plain_text": plain_text,
         "digits": digits,
+        "normalized_phones": normalized_phones,
+        "normalized_emails": normalized_emails,
+        "normalized_inns": normalized_inns,
     }
 
 
@@ -340,8 +438,22 @@ def rebuild_company_search_index(company_id: UUID) -> None:
         obj.t_other = payload["t_other"]
         obj.plain_text = payload["plain_text"]
         obj.digits = payload["digits"]
+        obj.normalized_phones = payload.get("normalized_phones", [])
+        obj.normalized_emails = payload.get("normalized_emails", [])
+        obj.normalized_inns = payload.get("normalized_inns", [])
         obj.updated_at = timezone.now()
         obj.save(
-            update_fields=["t_ident", "t_name", "t_contacts", "t_other", "plain_text", "digits", "updated_at"]
+            update_fields=[
+                "t_ident",
+                "t_name",
+                "t_contacts",
+                "t_other",
+                "plain_text",
+                "digits",
+                "normalized_phones",
+                "normalized_emails",
+                "normalized_inns",
+                "updated_at",
+            ]
         )
 

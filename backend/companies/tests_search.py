@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import unittest
+
 from django.db import connection
 from django.test import TestCase
 
@@ -44,14 +46,11 @@ class HighlightTests(TestCase):
         self.assertIn("…", highlight_html("X " * 200 + "ромашка" + " Y" * 200, text_tokens=("ромашка",), digit_tokens=(), max_len=80))
 
 
+@unittest.skipUnless(connection.vendor == "postgresql", "PostgreSQL required (tsvector/pg_trgm/ArrayField)")
 class SearchServicePostgresTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.status = CompanyStatus.objects.create(name="Тест")
-
-    def setUp(self):
-        if connection.vendor != "postgresql":
-            self.skipTest("Поиск v2 требует PostgreSQL (tsvector/pg_trgm).")
 
     def test_search_by_inn_has_priority(self):
         c1 = Company.objects.create(name="ООО Ромашка", inn="7701000000", kpp="770101001", status=self.status)
@@ -299,6 +298,72 @@ class SearchServicePostgresTests(TestCase):
                 ids,
                 f"Запрос «{q}» должен находить компанию с названием «ООО \"Сиб-Энерго\" (ЮГ)».",
             )
+
+    def test_exact_search_via_index_no_join(self):
+        """EXACT‑поиск должен использовать денормализованные поля индекса (без JOIN)."""
+        from companies.models import ContactEmail, ContactPhone
+
+        c1 = Company.objects.create(
+            name="Компания с контактом",
+            inn="1111111111",
+            status=self.status,
+        )
+        contact = Contact.objects.create(
+            company=c1,
+            first_name="Иван",
+            last_name="Иванов",
+        )
+        ContactEmail.objects.create(contact=contact, value="contact@example.com")
+        ContactPhone.objects.create(contact=contact, value="+7 999 111-22-33")
+
+        rebuild_company_search_index(c1.id)
+
+        # Email exact через индекс (не JOIN)
+        qs_email = CompanySearchService().apply(qs=Company.objects.all(), query="contact@example.com")
+        self.assertIn(c1.id, qs_email.values_list("id", flat=True))
+
+        # Phone exact через индекс (не JOIN)
+        qs_phone = CompanySearchService().apply(qs=Company.objects.all(), query="+7 999 111-22-33")
+        self.assertIn(c1.id, qs_phone.values_list("id", flat=True))
+
+    def test_short_query_guard(self):
+        """Слишком короткие запросы (не exact) не должны запускать heavy поиск."""
+        c = Company.objects.create(name="Тестовая компания", inn="1234567890", status=self.status)
+        rebuild_company_search_index(c.id)
+
+        service = CompanySearchService()
+        # Очень короткие запросы должны возвращать пустую выдачу
+        short_queries = ["а", "-", "12", "ab"]
+        for q in short_queries:
+            qs = service.apply(qs=Company.objects.all(), query=q)
+            ids = list(qs.values_list("id", flat=True))
+            self.assertEqual(
+                ids,
+                [],
+                f"Короткий запрос «{q}» должен возвращать пустую выдачу (не запускать heavy поиск).",
+            )
+
+        # Exact-запросы (email/phone/inn) должны работать даже если короткие
+        c2 = Company.objects.create(name="Тест", inn="1234567890", email="a@b.co", status=self.status)
+        rebuild_company_search_index(c2.id)
+        qs_exact = service.apply(qs=Company.objects.all(), query="a@b.co")
+        self.assertIn(c2.id, qs_exact.values_list("id", flat=True))
+
+    def test_glued_normalization_noise_reduction(self):
+        """Glued-нормализация не должна создавать шум на коротких/ОПФ-строках."""
+        from companies.search_index import fold_text_glued
+
+        # Короткая строка не должна генерировать glued
+        self.assertEqual(fold_text_glued("ООО"), "")
+        self.assertEqual(fold_text_glued("ИП"), "")
+
+        # Только ОПФ не должна генерировать glued
+        self.assertEqual(fold_text_glued("ООО ИП"), "")
+
+        # Нормальная строка должна генерировать glued
+        glued = fold_text_glued("ООО Сиб-Энерго")
+        self.assertGreater(len(glued), 0)
+        self.assertIn("сиб", glued.lower())
 
 
 class SearchBackendFacadeTests(TestCase):

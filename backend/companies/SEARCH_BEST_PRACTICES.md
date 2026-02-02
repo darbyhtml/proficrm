@@ -9,10 +9,17 @@
 Ключевые свойства текущего поиска:
 
 - **EXACT-first**: при вводе email / полного телефона / ИНН сначала выполняется точный поиск
-  по соответствующим полям (без FTS/trigram), с сортировкой по `updated_at desc`.
+  по денормализованным полям индекса (`normalized_phones`, `normalized_emails`, `normalized_inns`)
+  без тяжёлых JOIN, с сортировкой по `updated_at desc`.
+- **Денормализованные поля для exact-поиска**: `CompanySearchIndex` содержит массивы нормализованных
+  телефонов, email и ИНН из всех связанных сущностей (Company, CompanyPhone, CompanyEmail, ContactPhone, ContactEmail),
+  что позволяет выполнять быстрый exact-поиск через GIN индексы без JOIN.
+- **Защита от коротких запросов**: запросы длиной < 3 символов (не exact-типа) не запускают heavy FTS/trigram поиск.
+- **Улучшенная glued-нормализация**: склейка токенов применяется только для строк длиной >= 6 символов
+  и не применяется для строк, состоящих только из ОПФ (ооо, ип и т.д.), чтобы снизить шум.
 - **Команды обслуживания**:
   - `python manage.py normalize_companies_data` — ночная «гигиена» данных (телефоны → `normalize_phone`, email → `lower().strip()`).
-  - `python manage.py rebuild_company_search_index` — полная переиндексация `CompanySearchIndex`.
+  - `python manage.py rebuild_company_search_index` — полная переиндексация `CompanySearchIndex` (включая денормализованные поля).
 - **Настройки окружения**:
   - `SEARCH_ENGINE_BACKEND=postgres` — явное указание, что используется PostgreSQL FTS.
 
@@ -37,6 +44,7 @@
 | Регистронезависимость | Индексы на `Upper(email)` / `Upper(value)`; в индексе — `fold_text()` (lower). |
 | GIN триграммный индекс по email | `Company`: `cmp_email_trgm_gin_idx`; `CompanyEmail`, `ContactEmail`: GIN по `value`. |
 | Поиск по всем email (компания + контакты) | `search_index.py`: в `t_other` попадают `email_осн`, `email_компании`, `email_контакта`; поиск идёт по единому индексу. |
+| **EXACT-поиск через денормализованное поле** | `CompanySearchIndex.normalized_emails` (ArrayField) содержит все email из Company.email, CompanyEmail.value, ContactEmail.value (normalized: lower().strip()). Поиск через `search_index__normalized_emails__contains=[email]` с GIN индексом `cmp_si_nemails_gin_idx` — без JOIN. |
 
 ---
 
@@ -69,6 +77,7 @@
 |----------|------------|
 | Сильные (≥4 цифр) vs слабые (2–3) токены | `parse_query()`: `strong_digit_tokens` и `weak_digit_tokens`; только strong участвуют в AND-фильтрации. |
 | Индексы | `Company`: btree по `inn`; GIN trgm по `inn` и по `kpp` (миграция 0042). `CompanySearchIndex.digits` — все цифры карточки, GIN trgm по `digits`. |
+| **EXACT-поиск через денормализованное поле** | `CompanySearchIndex.normalized_inns` (ArrayField) содержит все валидные ИНН (10/12 цифр) из Company.inn (распарсенные списки через запятую/слеш). Поиск через `search_index__normalized_inns__contains=[inn_digits]` с GIN индексом `cmp_si_ninns_gin_idx` — без JOIN и без итерации по записям. |
 | Приоритет в ранжировании | ИНН/КПП в vector_a (вес A); digit_boost: +2.0 за совпадение последовательности ≥9 цифр, +0.6 за shorter. |
 
 ---
@@ -79,7 +88,8 @@
 |----------|------------|
 | Единый формат (E.164) | Нормализация при сохранении: `ui/forms._normalize_phone`, `_normalize_phone_for_search` в views. |
 | Агрегат цифр для поиска | `CompanySearchIndex.digits` — цифры из inn, kpp, phone, CompanyPhone, ContactPhone; поиск по `search_index__digits__contains=dt`. |
-| Защита от коротких запросов | Запрос только из слабых цифр (2–3) без текста → пустая выдача (`qs.none()`). |
+| **EXACT-поиск через денормализованное поле** | `CompanySearchIndex.normalized_phones` (ArrayField) содержит все телефоны из Company.phone, CompanyPhone.value, ContactPhone.value (normalized: `normalize_phone()` → E.164 формат `+7XXXXXXXXXX`). Поиск через `search_index__normalized_phones__contains=[phone_norm]` с GIN индексом `cmp_si_nphones_gin_idx` — без JOIN. |
+| Защита от коротких запросов | Запрос только из слабых цифр (2–3) без текста → пустая выдача (`qs.none()`). Также защита от запросов < 3 символов (не exact-типа). |
 | Подсветка в номере | `_find_ranges_digits()` + `highlight_html()` — маппинг позиций цифр в исходную строку. |
 
 ---
@@ -94,7 +104,19 @@
 
 ---
 
-## 8. Индексы и технологии PostgreSQL
+## 8. Денормализованные поля для exact-поиска
+
+Для ускорения exact-поиска по email/телефонам/ИНН без тяжёлых JOIN в `CompanySearchIndex` добавлены массивы:
+
+- **`normalized_phones`** (ArrayField): все телефоны из `Company.phone`, `CompanyPhone.value`, `ContactPhone.value`, нормализованные через `normalize_phone()` в формат E.164 (`+7XXXXXXXXXX`).
+- **`normalized_emails`** (ArrayField): все email из `Company.email`, `CompanyEmail.value`, `ContactEmail.value`, нормализованные через `lower().strip()`.
+- **`normalized_inns`** (ArrayField): все валидные ИНН (10/12 цифр) из `Company.inn`, распарсенные из списков (запятая/слеш).
+
+Поля заполняются в `build_company_index_payload()` и пересобираются при выполнении `rebuild_company_search_index`. GIN индексы (`cmp_si_nphones_gin_idx`, `cmp_si_nemails_gin_idx`, `cmp_si_ninns_gin_idx`) обеспечивают быстрый поиск через оператор `contains` без JOIN.
+
+---
+
+## 9. Индексы и технологии PostgreSQL
 
 | Технология | Использование |
 |------------|----------------|
