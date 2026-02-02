@@ -166,14 +166,14 @@
         <table class="table w-full" style="table-layout: fixed; min-width: 60rem;">
           <colgroup>
             {% if show_task_checkboxes %}<col style="width: 2.25rem;" />{% endif %}
+            <col style="width: 13rem;" />
             <col />
             <col />
             <col />
             <col />
-            <col />
-            <col />
+            <col style="width: 4.5rem;" />
             <col style="width: 6rem;" />
-            <col />
+            <col style="width: 7.5rem;" />
           </colgroup>
           <thead>
             <tr>
@@ -297,7 +297,7 @@
                     <input type="checkbox" name="task_ids" value="{{ t.id }}" form="{% if is_admin %}bulkReassignForm{% else %}bulkRescheduleForm{% endif %}" class="task-checkbox" aria-label="Выбрать задачу" />
                   </td>
                 {% endif %}
-                <td class="px-2 py-2" style="width:12.5rem;min-width:12.5rem;max-width:12.5rem;word-wrap:break-word;overflow-wrap:break-word">
+                <td class="px-2 py-2" style="width:13rem;min-width:13rem;max-width:13rem;word-wrap:break-word;overflow-wrap:break-word">
                   <div class="flex items-start gap-2">
                     {% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}
                       <div class="flex items-center justify-center w-5 h-5 rounded-full border-2 border-red-600 flex-shrink-0" title="Просрочено">
@@ -354,7 +354,7 @@
                 <td class="muted px-2 py-2 min-w-0 break-words">
                   <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}" style="line-height:1.4">{{ t.due_at|default:"—" }}</span>
                 </td>
-                <td class="px-2 py-2 min-w-0"><span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span></td>
+                <td class="px-2 py-2" style="width:4.5rem;min-width:4.5rem;max-width:4.5rem;"><span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span></td>
                 <td class="px-2 py-2 w-24 shrink-0">
                   <div class="grid grid-cols-2 gap-1">
                     {% if t.can_edit_task %}
@@ -419,7 +419,7 @@
                     {% endif %}
                   </div>
                 </td>
-                <td class="muted px-2 py-2 min-w-0 break-words"><span style="line-height:1.4">{{ t.created_at|date:"d.m.Y H:i" }}</span></td>
+                <td class="muted px-2 py-2" style="width:7.5rem;min-width:7.5rem;max-width:7.5rem;word-wrap:break-word;overflow-wrap:break-word;"><span style="line-height:1.4">{{ t.created_at|date:"d.m.Y H:i" }}</span></td>
               </tr>
             {% empty %}
               <tr><td class="muted" colspan="{% if show_task_checkboxes %}8{% else %}7{% endif %}" style="padding:1.25rem 1rem">Задач нет.</td></tr>
