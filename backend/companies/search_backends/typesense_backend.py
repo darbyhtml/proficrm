@@ -494,8 +494,10 @@ class TypesenseSearchBackend:
                     )
                 continue
 
-            # Собираем причины по приоритету, не более 3 (без шума заметок)
+            # Собираем причины по приоритету; при поиске по email — сначала emails, потом остальное
             FIELD_PRIORITY = ("inn", "kpp", "phones", "name", "legal_name", "contacts", "address", "emails", "website", "notes")
+            if "@" in q:
+                FIELD_PRIORITY = ("inn", "kpp", "emails", "phones", "name", "legal_name", "contacts", "address", "website", "notes")
             order = {f: i for i, f in enumerate(FIELD_PRIORITY)}
             highlight_by_field = {}
             for hl in highlights:

@@ -638,6 +638,14 @@ class CompanySearchService:
             has_primary = any(c.field in PRIMARY_FIELDS for c in selected)
             if has_primary:
                 selected = [c for c in selected if c.field not in NOISE_FIELDS]
+            # При поиске по email показываем в первую очередь причину «Email», а не контакт/заметку
+            EMAIL_REASON_FIELDS = frozenset({
+                "company.email", "company.emails.value", "contact.emails.value",
+            })
+            if "@" in pq.raw and selected:
+                email_cands = [x for x in selected if x.field in EMAIL_REASON_FIELDS]
+                other_cands = [x for x in selected if x.field not in EMAIL_REASON_FIELDS]
+                selected = (email_cands[:1] + other_cands)[:2]
             selected_for_ui = selected[:2]
             selected_fields = {x.field for x in selected_for_ui}
 
