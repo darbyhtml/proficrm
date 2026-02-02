@@ -3,7 +3,7 @@
 {% block title %}Задачи — CRM ПРОФИ{% endblock %}
 
 {% block content %}
-  <div class="space-y-6">
+  <div class="space-y-8">
     <div class="flex items-end justify-between gap-4">
       <div>
         <h1 class="text-2xl font-semibold">Задачи</h1>
@@ -106,7 +106,7 @@
             </span>
             Перенести на дату
           </span>
-          <span class="tbr-sep">|</span>
+          <span class="tbr-sep" aria-hidden="true"></span>
           <div class="tbr-fields">
             <input type="datetime-local" name="due_at" id="bulkRescheduleDateTime" required
               value="{{ default_bulk_reschedule_datetime|default:'' }}"
@@ -124,20 +124,6 @@
     {% endif %}
 
     {% if is_admin %}
-      <style>
-        /* Блок «Переназначить на» — изолированные стили, один источник истины */
-        #task-bulk-actions{display:flex!important;flex-direction:column!important;gap:1rem!important;margin:0!important;}
-        #task-bulk-actions form{margin:0!important;padding:0!important;border:0!important;background:transparent!important;}
-        #task-bulk-actions .task-bulk-block{background:#fff!important;border:1px solid var(--brand-soft)!important;border-radius:0.75rem!important;padding:1rem!important;box-shadow:0 1px 3px rgba(0,61,56,.06)!important;}
-        #task-bulk-actions .task-bulk-row{display:grid!important;grid-template-columns:11rem auto 1fr!important;align-items:center!important;column-gap:1.25rem!important;row-gap:0!important;}
-        #task-bulk-actions .task-bulk-head{display:flex!important;align-items:center!important;gap:0.5rem!important;min-width:0!important;}
-        #task-bulk-actions .task-bulk-icon{display:inline-flex!important;align-items:center!important;justify-content:center!important;width:2rem!important;height:2rem!important;border-radius:0.5rem!important;background:rgba(1,148,142,.12)!important;color:var(--brand-teal)!important;flex-shrink:0!important;}
-        #task-bulk-actions .task-bulk-head span:last-child{font-size:0.875rem!important;font-weight:500!important;color:rgba(0,61,56,.85)!important;}
-        #task-bulk-actions .task-bulk-sep{justify-self:center!important;color:rgba(0,61,56,.25)!important;user-select:none!important;}
-        #task-bulk-actions .task-bulk-controls{display:flex!important;flex-wrap:nowrap!important;align-items:center!important;gap:0.5rem!important;min-width:0!important;}
-        #task-bulk-actions .task-bulk-controls select{min-width:11rem!important;max-width:15rem!important;padding:0.375rem 0.5rem!important;font-size:0.875rem!important;border:1px solid rgba(194,226,222,.8)!important;border-radius:0.5rem!important;background:#fff!important;}
-        #task-bulk-actions .task-bulk-controls .btn{flex-shrink:0!important;padding:0.375rem 0.75rem!important;font-size:0.875rem!important;}
-      </style>
       <div id="task-bulk-actions">
         <div class="task-bulk-block">
           <form method="post" action="{% url 'task_bulk_reassign' %}" id="bulkReassignForm">
@@ -149,7 +135,7 @@
                 </span>
                 <span>Переназначить на</span>
               </div>
-              <span class="task-bulk-sep">|</span>
+              <span class="task-bulk-sep" aria-hidden="true"></span>
               <div class="task-bulk-controls">
                 <select name="assigned_to_id" required>
                   <option value="">Выберите сотрудника</option>
