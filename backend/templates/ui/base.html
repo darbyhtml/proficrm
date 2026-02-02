@@ -95,10 +95,17 @@
       .line-clamp-3{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
       .line-clamp-4{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
 
-      /* Прогресс рассылки: по умолчанию только % в квадратике, при наведении — подробности */
+      /* Почтовый виджет рассылки — современный UI 2026: по умолчанию только % в pill, при наведении раскрывается */
       .mail-progress{
-        max-width:min(360px, calc(100vw - 32px));
-        padding: 5px; /* равные отступы — зелёный квадрат не в прямоугольнике */
+        max-width: min(380px, calc(100vw - 24px));
+        padding: 6px;
+        box-shadow: 0 4px 20px rgba(0,61,56,.1), 0 2px 6px rgba(0,0,0,.05);
+        border-radius: 1rem;
+        border: 1px solid rgba(194,226,222,.85);
+        transition: box-shadow .25s ease, max-width .25s ease;
+      }
+      .mail-progress:hover{
+        box-shadow: 0 8px 28px rgba(0,61,56,.14), 0 4px 10px rgba(0,0,0,.07);
       }
       .mail-progress__body{
         min-width: 0;
@@ -109,15 +116,15 @@
         padding: 0;
         display: flex;
         flex-direction: column;
-        gap: 0.125rem;
-        transition: max-width .2s ease, opacity .2s ease, margin-left .2s ease;
+        gap: 0.25rem;
+        transition: max-width .25s ease, opacity .2s ease, margin-left .2s ease, padding .2s ease;
       }
       .mail-progress:hover .mail-progress__body{
-        max-width: 16.25rem; /* не залезать на контент */
+        max-width: 17rem;
         opacity: 1;
-        margin-left: 0.625rem;
-        padding: 0 1.25rem 0 0;
-        overflow: visible; /* крестик (-top-1 -right-1) не обрезается */
+        margin-left: 0.75rem;
+        padding: 0.25rem 1.75rem 0.25rem 0;
+        overflow: visible;
       }
       .mail-progress__title,
       .mail-progress__counts{
@@ -126,19 +133,24 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .mail-progress__counts-short{
-        display: none !important;
-        max-width: 15rem;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
+      .mail-progress__counts-short{ display: none !important; }
       .mail-progress__limit{ display:none; }
       .mail-progress--limit .mail-progress__limit{ display:block; }
-      /* На совсем узких экранах поднимаем выше кнопок/панелей */
+      .mail-progress__pct{
+        width: 2.75rem; height: 2.75rem;
+        border-radius: 0.75rem;
+        flex-shrink: 0;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 0.8125rem;
+        color: var(--brand-dark);
+        border: 2px solid rgba(1,148,142,.4);
+        box-sizing: border-box;
+      }
+      .mail-progress[data-status="sent"] #mailProgressPrefix{ color: #059669; }
       @media (max-width: 480px){
-        .mail-progress{ left: 0.75rem; right: 0.75rem; bottom: 4.75rem; max-width:none; }
-        .mail-progress__title, .mail-progress__counts{ max-width: 11.25rem; }
+        .mail-progress{ left: 0.75rem; right: 0.75rem; bottom: 4.75rem; max-width: none; }
+        .mail-progress:hover .mail-progress__body{ max-width: 12rem; }
+        .mail-progress__title, .mail-progress__counts{ max-width: 11rem; }
       }
       
       /* Глобальные стили скроллбаров (как в календаре) */
@@ -1073,19 +1085,19 @@
       </div>
     </div>
 
-    {# Глобальный прогресс рассылки: по умолчанию только % в квадратике; при наведении — подробности; клик — страница кампании #}
-    <a id="mailProgressWidget" href="#" class="hidden fixed bottom-5 left-5 z-50 bg-white border border-brand-soft rounded-2xl shadow-lg flex items-center hover:bg-brand-soft/20 mail-progress">
-      <div id="mailProgressCircle" class="w-10 h-10 flex-shrink-0 rounded-lg flex items-center justify-center text-xs font-semibold" style="background:conic-gradient(var(--brand-teal) 0deg, rgba(194,226,222,.6) 0deg); color:var(--brand-dark); border:0.09375rem solid rgba(1,148,142,.45); box-sizing:border-box;">
+    {# Почтовый виджет рассылки — современная карточка (z-[100] выше сайдбара, ниже модалок) #}
+    <a id="mailProgressWidget" href="#" class="hidden fixed bottom-5 left-5 z-[100] bg-white flex items-start gap-3 p-3 rounded-2xl mail-progress" style="border-radius: 1rem;">
+      <div id="mailProgressCircle" class="mail-progress__pct" style="background: conic-gradient(var(--brand-teal) 0deg, rgba(194,226,222,.55) 0deg);">
         <span id="mailProgressPct">0%</span>
       </div>
-      <div class="leading-tight relative mail-progress__body">
-        <span id="mailProgressPrefix" class="text-xs muted">Рассылка</span>
-        <div id="mailProgressText" class="text-sm font-medium mail-progress__title">—</div>
-        <div id="mailProgressCounts" class="muted-2 mail-progress__counts" style="font-size:0.6875rem;">—</div>
+      <div class="leading-tight relative mail-progress__body flex-1 min-w-0">
+        <span id="mailProgressPrefix" class="text-xs font-medium text-brand-teal uppercase tracking-wide">Рассылка</span>
+        <div id="mailProgressText" class="text-sm font-semibold text-brand-dark mail-progress__title mt-0.5">—</div>
+        <div id="mailProgressCounts" class="text-brand-dark/65 mail-progress__counts mt-0.5" style="font-size:0.6875rem;">—</div>
         <div id="mailProgressCountsShort" class="muted-2 mail-progress__counts-short" style="font-size:0.6875rem;">—</div>
-        <div id="mailProgressLimit" class="hidden text-red-700 font-medium mail-progress__limit" style="font-size:0.6875rem;">Лимит на сегодня исчерпан</div>
-        <button id="mailProgressClose" type="button" class="hidden absolute -top-1 -right-1 w-5 h-5 flex items-center justify-center rounded-full border border-brand-soft bg-white text-brand-dark/60 hover:text-red-500 hover:border-red-400 transition-colors" title="Закрыть">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <div id="mailProgressLimit" class="hidden text-red-600 font-medium mail-progress__limit mt-1" style="font-size:0.6875rem;">Лимит на сегодня исчерпан</div>
+        <button id="mailProgressClose" type="button" class="absolute top-0 right-0 w-6 h-6 flex items-center justify-center rounded-full bg-brand-soft/30 text-brand-dark/60 hover:bg-red-50 hover:text-red-500 transition-colors" title="Закрыть">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M18 6L6 18"/>
             <path d="M6 6l12 12"/>
           </svg>
@@ -2163,9 +2175,15 @@
           // 1) Немодальная панель контакта на карточке компании
           const contactPanel = document.getElementById('contactPanel');
           if (contactPanel && !contactPanel.classList.contains('hidden')) return true;
-          // 2) Любые модалки-оверлеи (типовой паттерн: fixed inset-0 + hidden)
-          const overlay = document.querySelector('.fixed.inset-0:not(.hidden)');
-          if (overlay) return true;
+          // 2) Только реально видимые оверлеи (fixed inset-0 и display !== none)
+          const overlays = document.querySelectorAll('.fixed.inset-0');
+          for (let i = 0; i < overlays.length; i++) {
+            const el = overlays[i];
+            if (el.classList.contains('hidden')) continue;
+            const s = window.getComputedStyle(el);
+            if (s.display === 'none' || s.visibility === 'hidden') continue;
+            return true;
+          }
           return false;
         }
 
@@ -2209,6 +2227,7 @@
             if (status === 'sending') prefix = 'Отправка';
             if (status === 'ready') prefix = 'В очереди';
             prefixEl.textContent = prefix;
+            widget.dataset.status = status || '';
             const reason = (a.reason_text || '').trim();
             const mainBits = [];
             mainBits.push(`${prefix}: ${name}`);
