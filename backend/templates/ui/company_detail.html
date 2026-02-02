@@ -2581,15 +2581,29 @@
 
         <!-- Контакты -->
         <div class="card card-pad">
-          <div class="font-medium mb-3">Контакты</div>
+          <div class="flex items-end justify-between gap-3 mb-3">
+            <div class="font-medium">Контакты</div>
+            {% if can_edit_company %}
+              <a class="btn btn-outline btn-sm" href="/companies/{{ company.id }}/contacts/new/?modal=1" data-contact-panel-open>+ Добавить контакт</a>
+            {% endif %}
+          </div>
           {% if contacts %}
             <div class="space-y-3">
               {% for contact in contacts|slice:":5" %}
                 <div class="border rounded-lg p-3">
-                  <div class="font-medium text-sm">{{ contact.first_name }} {{ contact.last_name }}</div>
-                  {% if contact.position %}
-                    <div class="text-xs text-brand-dark/70 mt-1">{{ contact.position }}</div>
-                  {% endif %}
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                      <div class="font-medium text-sm">{{ contact.first_name }} {{ contact.last_name }}</div>
+                      {% if contact.position %}
+                        <div class="text-xs text-brand-dark/70 mt-1">{{ contact.position }}</div>
+                      {% endif %}
+                    </div>
+                    {% if can_edit_company %}
+                      <a class="btn btn-outline btn-xxs shrink-0" href="/contacts/{{ contact.id }}/edit/?modal=1" data-contact-panel-open title="Редактировать" aria-label="Редактировать контакт">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
+                      </a>
+                    {% endif %}
+                  </div>
                   {% if contact.phones.all %}
                     <div class="text-xs text-brand-dark/80 mt-2">
                       {% for phone in contact.phones.all|slice:":2" %}
@@ -2618,10 +2632,19 @@
               <div id="contactsRestModern" class="hidden space-y-3 mt-3">
                 {% for contact in contacts_rest %}
                   <div class="border rounded-lg p-3">
-                    <div class="font-medium text-sm">{{ contact.first_name }} {{ contact.last_name }}</div>
-                    {% if contact.position %}
-                      <div class="text-xs text-brand-dark/70 mt-1">{{ contact.position }}</div>
-                    {% endif %}
+                    <div class="flex items-start justify-between gap-2">
+                      <div class="min-w-0">
+                        <div class="font-medium text-sm">{{ contact.first_name }} {{ contact.last_name }}</div>
+                        {% if contact.position %}
+                          <div class="text-xs text-brand-dark/70 mt-1">{{ contact.position }}</div>
+                        {% endif %}
+                      </div>
+                      {% if can_edit_company %}
+                        <a class="btn btn-outline btn-xxs shrink-0" href="/contacts/{{ contact.id }}/edit/?modal=1" data-contact-panel-open title="Редактировать" aria-label="Редактировать контакт">
+                          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
+                        </a>
+                      {% endif %}
+                    </div>
                     {% if contact.phones.all %}
                       <div class="text-xs text-brand-dark/80 mt-2">
                         {% for phone in contact.phones.all|slice:":2" %}
@@ -5062,7 +5085,7 @@
           if (ct.includes('application/json')) {
             const data = await res.json();
             if (data.ok) {
-              // Успешно сохранено: закрываем панель и обновляем страницу
+              if (window.uiToast) window.uiToast('Контакт сохранён', 'success');
               closePanel();
               window.location.reload();
               return;

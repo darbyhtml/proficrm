@@ -46,7 +46,8 @@ from companies.permissions import (
     get_users_for_lists,
     can_transfer_companies,
 )
-from companies.policy import can_view_company as can_view_company_policy
+from companies.policy import can_view_company as can_view_company_policy, visible_companies_qs
+from companies.decorators import require_can_view_company
 from tasksapp.models import Task, TaskType
 from tasksapp.policy import visible_tasks_qs, can_manage_task_status
 from notifications.models import Notification
@@ -2786,6 +2787,8 @@ def company_export(request: HttpRequest) -> HttpResponse:
     )
     f = _apply_company_filters(qs=qs, params=request.GET)
     qs = f["qs"]
+    # Экспортируем только компании, видимые пользователю (единая политика с UI и API)
+    qs = qs.filter(pk__in=visible_companies_qs(user).values_list("pk", flat=True))
 
     # Полный экспорт: данные компании + агрегированные связанные сущности.
     # Важно: для больших объёмов соединяем связанные сущности в одну ячейку (Excel-friendly).
@@ -3275,6 +3278,7 @@ def company_duplicates(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @policy_required(resource_type="page", resource="ui:companies:detail")
+@require_can_view_company
 def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     logger = logging.getLogger(__name__)
     user: User = request.user
@@ -3297,8 +3301,6 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         ),
         id=company_id,
     )
-    if not can_view_company_policy(user, company):
-        raise PermissionDenied("Нет доступа к этой компании")
     can_edit_company = _can_edit_company(user, company)
     can_view_activity = bool(user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD))
     can_delete_company = _can_delete_company(user, company)
@@ -3524,6 +3526,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:delete_request:create")
+@require_can_view_company
 def company_delete_request_create(request: HttpRequest, company_id) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
@@ -3590,6 +3593,7 @@ def company_delete_request_create(request: HttpRequest, company_id) -> HttpRespo
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:delete_request:cancel")
+@require_can_view_company
 def company_delete_request_cancel(request: HttpRequest, company_id, req_id: int) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
@@ -3641,6 +3645,7 @@ def company_delete_request_cancel(request: HttpRequest, company_id, req_id: int)
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:delete_request:approve")
+@require_can_view_company
 def company_delete_request_approve(request: HttpRequest, company_id, req_id: int) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
@@ -3714,6 +3719,7 @@ def company_delete_request_approve(request: HttpRequest, company_id, req_id: int
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:delete")
+@require_can_view_company
 def company_delete_direct(request: HttpRequest, company_id) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
@@ -3776,6 +3782,7 @@ def company_delete_direct(request: HttpRequest, company_id) -> HttpResponse:
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:contract:update")
+@require_can_view_company
 def company_contract_update(request: HttpRequest, company_id) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
@@ -3823,6 +3830,7 @@ def company_contract_update(request: HttpRequest, company_id) -> HttpResponse:
 
 
 @login_required
+@require_can_view_company
 def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
     """
     Отметить основной контакт компании как холодный звонок.
@@ -4011,6 +4019,7 @@ def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
 
 
 @login_required
+@require_can_view_company
 def company_cold_call_reset(request: HttpRequest, company_id) -> HttpResponse:
     """
     Откатить отметку холодного звонка для основного контакта компании.
@@ -4508,6 +4517,7 @@ def company_phone_cold_call_reset(request: HttpRequest, company_phone_id) -> Htt
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:update")
+@require_can_view_company
 def company_main_phone_update(request: HttpRequest, company_id) -> HttpResponse:
     """Обновление основного телефона компании (AJAX)"""
     if request.method != "POST":
@@ -4607,6 +4617,7 @@ def company_phone_value_update(request: HttpRequest, company_phone_id) -> HttpRe
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:update")
+@require_can_view_company
 def company_phone_create(request: HttpRequest, company_id) -> HttpResponse:
     """Создание дополнительного телефона компании (AJAX)"""
     if request.method != "POST":
@@ -4657,6 +4668,7 @@ def company_phone_create(request: HttpRequest, company_id) -> HttpResponse:
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:update")
+@require_can_view_company
 def company_main_email_update(request: HttpRequest, company_id) -> HttpResponse:
     """Обновление основного email компании (AJAX)"""
     if request.method != "POST":
@@ -4748,6 +4760,7 @@ def company_email_value_update(request: HttpRequest, company_email_id) -> HttpRe
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:update")
+@require_can_view_company
 def company_main_phone_comment_update(request: HttpRequest, company_id) -> HttpResponse:
     """Обновление комментария к основному телефону компании (AJAX)"""
     if request.method != "POST":
@@ -4886,6 +4899,7 @@ def contact_phone_comment_update(request: HttpRequest, contact_phone_id) -> Http
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:update")
+@require_can_view_company
 def company_note_pin_toggle(request: HttpRequest, company_id, note_id: int) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
@@ -4935,6 +4949,7 @@ def company_note_pin_toggle(request: HttpRequest, company_id, note_id: int) -> H
 
 @login_required
 @policy_required(resource_type="page", resource="ui:companies:detail")
+@require_can_view_company
 def company_note_attachment_open(request: HttpRequest, company_id, note_id: int) -> HttpResponse:
     """
     Открыть вложение заметки в новом окне (inline). Доступ: всем пользователям (как просмотр компании).
@@ -4957,6 +4972,7 @@ def company_note_attachment_open(request: HttpRequest, company_id, note_id: int)
 
 @login_required
 @policy_required(resource_type="page", resource="ui:companies:detail")
+@require_can_view_company
 def company_note_attachment_download(request: HttpRequest, company_id, note_id: int) -> HttpResponse:
     """
     Скачать вложение заметки (attachment). Доступ: всем пользователям (как просмотр компании).
@@ -4979,6 +4995,7 @@ def company_note_attachment_download(request: HttpRequest, company_id, note_id: 
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:update")
+@require_can_view_company
 def company_edit(request: HttpRequest, company_id) -> HttpResponse:
     user: User = request.user
     company = get_object_or_404(Company.objects.select_related("responsible", "branch", "status"), id=company_id)
@@ -5110,6 +5127,7 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:transfer")
 @transaction.atomic
+@require_can_view_company
 def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
@@ -5177,6 +5195,7 @@ def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:update")
+@require_can_view_company
 def company_update(request: HttpRequest, company_id) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
@@ -5207,6 +5226,7 @@ def company_update(request: HttpRequest, company_id) -> HttpResponse:
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:update")
+@require_can_view_company
 def company_inline_update(request: HttpRequest, company_id) -> HttpResponse:
     """
     Инлайн-обновление одного поля компании (AJAX) из карточки компании.
@@ -5469,6 +5489,7 @@ def contact_delete(request: HttpRequest, contact_id) -> HttpResponse:
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:update")
+@require_can_view_company
 def company_note_add(request: HttpRequest, company_id) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
@@ -5518,6 +5539,7 @@ def company_note_add(request: HttpRequest, company_id) -> HttpResponse:
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:update")
+@require_can_view_company
 def company_note_edit(request: HttpRequest, company_id, note_id: int) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
@@ -5606,6 +5628,7 @@ def company_note_edit(request: HttpRequest, company_id, note_id: int) -> HttpRes
 
 @login_required
 @policy_required(resource_type="action", resource="ui:companies:update")
+@require_can_view_company
 def company_note_delete(request: HttpRequest, company_id, note_id: int) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
