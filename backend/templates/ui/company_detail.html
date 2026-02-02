@@ -479,10 +479,12 @@
               <div class="whitespace-pre-line font-mono text-xs" data-work-schedule-display="1" data-company-id="{{ company.id }}">{{ company.work_schedule|default:"—" }}</div>
             {% endif %}
           </div>
+          {% if not contacts %}
           <div>
             <div class="text-brand-dark/50">Руководитель</div>
             <div>{{ company.contact_name|default:"—" }}</div>
           </div>
+          {% endif %}
           <div class="{% if contract_alert == 'danger' %}rounded-xl border border-red-400/40 bg-red-500/5 p-2 -m-2{% elif contract_alert == 'warn' %}rounded-xl border border-brand-orange/50 bg-brand-orange/10 p-2 -m-2{% endif %}">
             <div class="text-brand-dark/50 flex items-center gap-2">
               <span>Договор</span>
@@ -823,7 +825,7 @@
               {% for email in company.emails.all %}
                 <div class="flex items-start justify-between gap-2">
                   <div class="min-w-0">
-                    <div class="font-mono text-xs" data-company-email-display="{{ email.id }}">{{ email.value }}</div>
+                    <a href="mailto:{{ email.value }}" class="font-mono text-xs text-brand-teal hover:underline" data-company-email-display="{{ email.id }}" title="Написать">{{ email.value }}</a>
                     {% if can_edit_company %}
                       <div class="hidden mt-1" data-company-email-edit="{{ email.id }}">
                         <input class="input text-xs" data-company-email-input value="{{ email.value|default:'' }}" placeholder="email@example.com" style="padding:.35rem .5rem;font-size:.75rem;min-height:2.25rem;width:17.5rem" />
@@ -852,6 +854,7 @@
               {% endif %}
             </div>
           </div>
+          {% if not contacts %}
           <div>
             <div class="text-brand-dark/50">Контакт (ФИО)</div>
             <div>{{ company.contact_name|default:"—" }}</div>
@@ -860,6 +863,7 @@
             <div class="text-brand-dark/50">Контакт (должность)</div>
             <div>{{ company.contact_position|default:"—" }}</div>
           </div>
+          {% endif %}
           <div class="md:col-span-2">
             <div class="text-brand-dark/50">Адрес</div>
             {% if can_edit_company %}
@@ -1098,7 +1102,8 @@
                     <div class="text-brand-dark/50 text-xs">Email</div>
                     {% for e in c.emails.all %}
                       <div class="flex items-center gap-2">
-                        <a class="link font-mono text-xs js-copy-email" href="#" data-email="{{ e.value }}" onclick="event.preventDefault(); return false;">{{ e.value }}</a>
+                        <a href="mailto:{{ e.value }}" class="link font-mono text-xs text-brand-teal hover:underline" title="Написать">{{ e.value }}</a>
+                        <button type="button" class="btn btn-outline btn-xxs js-copy-email" data-email="{{ e.value }}" title="Копировать">📋</button>
                         <button type="button" class="btn btn-outline btn-xs js-add-email-to-campaign" data-email="{{ e.value }}" data-company-id="{{ company.id }}" title="Добавить в рассылочную кампанию">
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
@@ -1237,7 +1242,14 @@
             {% endfor %}
           </div>
         {% else %}
-          <div class="text-sm text-brand-dark/70">Контактов нет.</div>
+          <div class="text-sm text-brand-dark/70 py-4 text-center">
+            Контактов нет.
+            {% if can_edit_company %}
+              <div class="mt-3">
+                <a class="btn btn-primary" href="/companies/{{ company.id }}/contacts/new/?modal=1" data-contact-panel-open>+ Добавить контакт</a>
+              </div>
+            {% endif %}
+          </div>
         {% endif %}
       </section>
 
@@ -2595,18 +2607,79 @@
                   {% if contact.emails.all %}
                     <div class="text-xs text-brand-dark/80 mt-1">
                       {% for email in contact.emails.all|slice:":2" %}
-                        <div>{{ email.value }}</div>
+                        <div><a href="mailto:{{ email.value }}" class="text-brand-teal hover:underline" title="Написать">{{ email.value }}</a></div>
                       {% endfor %}
                     </div>
                   {% endif %}
                 </div>
               {% endfor %}
             </div>
-            {% if contacts|length > 5 %}
-              <div class="mt-3 text-xs text-brand-dark/60 text-center">+{{ contacts|length|add:"-5" }} контактов</div>
+            {% if contacts_rest %}
+              <div id="contactsRestModern" class="hidden space-y-3 mt-3">
+                {% for contact in contacts_rest %}
+                  <div class="border rounded-lg p-3">
+                    <div class="font-medium text-sm">{{ contact.first_name }} {{ contact.last_name }}</div>
+                    {% if contact.position %}
+                      <div class="text-xs text-brand-dark/70 mt-1">{{ contact.position }}</div>
+                    {% endif %}
+                    {% if contact.phones.all %}
+                      <div class="text-xs text-brand-dark/80 mt-2">
+                        {% for phone in contact.phones.all|slice:":2" %}
+                          <div class="flex items-center gap-2">
+                            <span>{{ phone.value|format_phone }}</span>
+                            <button type="button" class="btn btn-outline btn-xxs js-call-phone" data-phone="{{ phone.value }}" data-company="{{ company.id }}" data-contact="{{ contact.id }}" title="Позвонить">
+                              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
+                              </svg>
+                            </button>
+                          </div>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                    {% if contact.emails.all %}
+                      <div class="text-xs text-brand-dark/80 mt-1">
+                        {% for email in contact.emails.all|slice:":2" %}
+                          <div><a href="mailto:{{ email.value }}" class="text-brand-teal hover:underline" title="Написать">{{ email.value }}</a></div>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+              <div class="mt-3 text-center">
+                <button type="button" class="btn btn-outline btn-sm" id="contactsShowAllModern" data-contacts-rest="contactsRestModern" title="Показать остальные контакты">
+                  Показать всех ({{ contacts_rest|length }})
+                </button>
+              </div>
+              <script>
+                (function() {
+                  const btn = document.getElementById('contactsShowAllModern');
+                  const restId = btn && btn.getAttribute('data-contacts-rest');
+                  const restEl = restId ? document.getElementById(restId) : null;
+                  if (btn && restEl) {
+                    btn.addEventListener('click', function() {
+                      restEl.classList.toggle('hidden');
+                      if (!restEl.classList.contains('hidden')) {
+                        btn.textContent = 'Свернуть контакты';
+                        btn.setAttribute('title', 'Свернуть список контактов');
+                      } else {
+                        btn.textContent = 'Показать всех ({{ contacts_rest|length }})';
+                        btn.setAttribute('title', 'Показать остальные контакты');
+                      }
+                    });
+                  }
+                })();
+              </script>
             {% endif %}
           {% else %}
-            <div class="text-sm text-brand-dark/50 italic py-4 text-center">Нет контактов</div>
+            <div class="text-sm text-brand-dark/50 italic py-4 text-center">
+              Нет контактов
+              {% if can_edit_company %}
+                <div class="mt-3">
+                  <a class="btn btn-primary" href="/companies/{{ company.id }}/contacts/new/?modal=1" data-contact-panel-open>+ Добавить контакт</a>
+                </div>
+              {% endif %}
+            </div>
           {% endif %}
         </div>
 
@@ -2630,7 +2703,7 @@
               </div>
             {% endif %}
             {% if company.email %}
-              <div><span class="text-brand-dark/50">Email:</span> {{ company.email }}</div>
+              <div><span class="text-brand-dark/50">Email:</span> <a href="mailto:{{ company.email }}" class="text-brand-teal hover:underline" title="Написать">{{ company.email }}</a></div>
             {% endif %}
           </div>
         </div>
@@ -5045,6 +5118,13 @@
           e.preventDefault();
           closePanel();
           return;
+        }
+      });
+
+      // Закрытие по Escape
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && panel && !panel.classList.contains('hidden')) {
+          closePanel();
         }
       });
 

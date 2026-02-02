@@ -46,6 +46,7 @@ from companies.permissions import (
     get_users_for_lists,
     can_transfer_companies,
 )
+from companies.policy import can_view_company as can_view_company_policy
 from tasksapp.models import Task, TaskType
 from tasksapp.policy import visible_tasks_qs, can_manage_task_status
 from notifications.models import Notification
@@ -3296,6 +3297,8 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         ),
         id=company_id,
     )
+    if not can_view_company_policy(user, company):
+        raise PermissionDenied("Нет доступа к этой компании")
     can_edit_company = _can_edit_company(user, company)
     can_view_activity = bool(user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD))
     can_delete_company = _can_delete_company(user, company)
@@ -3514,6 +3517,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "display_note": display_note,  # Для modern layout: pinned или latest
             "upcoming_tasks": upcoming_tasks,  # Ближайшие 2-3 задачи для modern layout
             "statuses": CompanyStatus.objects.order_by("name"),  # Для быстрого изменения статуса в Modern
+            "contacts_rest": list(contacts)[5:],  # Контакты с 6-го для кнопки «Показать всех» в Modern
         },
     )
 

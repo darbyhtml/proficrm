@@ -23,102 +23,101 @@
         margin-top:1.75rem;
       }
 
-      /* Bulk-действия в «Задачах»: единый, ровный UI */
-      #task-bulk-reschedule,
-      #task-bulk-actions .task-bulk-block{
-        background:#fff!important;
-        border:1px solid var(--brand-soft)!important;
-        border-radius:0.75rem!important;
-        box-shadow:0 1px 3px rgba(0,61,56,.06)!important;
-        padding:0.875rem 1rem!important;
-        margin:0!important;
+      /* Bulk-действия в «Задачах»: единый UI в обёртке .task-bulk-panel (без !important) */
+      .task-bulk-panel #task-bulk-reschedule,
+      .task-bulk-panel #task-bulk-actions .task-bulk-block{
+        background:#fff;
+        border:1px solid var(--brand-soft);
+        border-radius:0.75rem;
+        box-shadow:0 1px 3px rgba(0,61,56,.06);
+        padding:0.875rem 1rem;
+        margin:0;
       }
 
-      #task-bulk-reschedule form,
-      #task-bulk-actions .task-bulk-row{
-        display:flex!important;
-        align-items:center!important;
-        gap:1rem!important;
-        flex-wrap:wrap!important; /* без горизонтального скролла на узких экранах */
-        margin:0!important;
-        padding:0!important;
-        border:0!important;
-        background:transparent!important;
+      .task-bulk-panel #task-bulk-reschedule form,
+      .task-bulk-panel #task-bulk-actions .task-bulk-row{
+        display:flex;
+        align-items:center;
+        gap:1rem;
+        flex-wrap:wrap;
+        margin:0;
+        padding:0;
+        border:0;
+        background:transparent;
       }
 
-      #task-bulk-reschedule .tbr-label,
-      #task-bulk-actions .task-bulk-head{
-        display:flex!important;
-        align-items:center!important;
-        gap:0.5rem!important;
-        flex-shrink:0!important;
-        font-size:0.875rem!important;
-        font-weight:500!important;
-        color:rgba(0,61,56,.85)!important;
-        min-width:10.5rem!important; /* чтобы оба блока визуально были одинаковой «шапкой» */
+      .task-bulk-panel #task-bulk-reschedule .tbr-label,
+      .task-bulk-panel #task-bulk-actions .task-bulk-head{
+        display:flex;
+        align-items:center;
+        gap:0.5rem;
+        flex-shrink:0;
+        font-size:0.875rem;
+        font-weight:500;
+        color:rgba(0,61,56,.85);
+        min-width:10.5rem;
       }
 
-      #task-bulk-reschedule .tbr-icon,
-      #task-bulk-actions .task-bulk-icon{
-        display:inline-flex!important;
-        align-items:center!important;
-        justify-content:center!important;
-        width:2rem!important;
-        height:2rem!important;
-        border-radius:0.5rem!important;
-        background:rgba(1,148,142,.12)!important;
-        color:var(--brand-teal)!important;
-        flex-shrink:0!important;
+      .task-bulk-panel #task-bulk-reschedule .tbr-icon,
+      .task-bulk-panel #task-bulk-actions .task-bulk-icon{
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+        width:2rem;
+        height:2rem;
+        border-radius:0.5rem;
+        background:rgba(1,148,142,.12);
+        color:var(--brand-teal);
+        flex-shrink:0;
       }
 
-      #task-bulk-reschedule .tbr-sep,
-      #task-bulk-actions .task-bulk-sep{
-        width:1px!important;
-        align-self:stretch!important;
-        background:rgba(0,61,56,.25)!important;
-        border-radius:999px!important;
-        min-height:2rem!important;
-        flex-shrink:0!important;
+      .task-bulk-panel #task-bulk-reschedule .tbr-sep,
+      .task-bulk-panel #task-bulk-actions .task-bulk-sep{
+        width:1px;
+        align-self:stretch;
+        background:rgba(0,61,56,.25);
+        border-radius:999px;
+        min-height:2rem;
+        flex-shrink:0;
       }
 
-      #task-bulk-reschedule .tbr-fields,
-      #task-bulk-actions .task-bulk-controls{
-        display:flex!important;
-        align-items:center!important;
-        gap:0.5rem!important;
-        flex-wrap:wrap!important;
-        min-width:0!important;
-        flex:1 1 auto!important;
+      .task-bulk-panel #task-bulk-reschedule .tbr-fields,
+      .task-bulk-panel #task-bulk-actions .task-bulk-controls{
+        display:flex;
+        align-items:center;
+        gap:0.5rem;
+        flex-wrap:wrap;
+        min-width:0;
+        flex:1 1 auto;
       }
 
-      #task-bulk-reschedule .tbr-fields input[type="datetime-local"],
-      #task-bulk-actions .task-bulk-controls select{
-        min-height:2.25rem!important;
-        padding:0.5rem 0.625rem!important;
-        font-size:0.875rem!important;
-        line-height:1.25!important;
-        border:1px solid rgba(194,226,222,.8)!important;
-        border-radius:0.5rem!important;
-        background:#fff!important;
-        box-sizing:border-box!important;
-        min-width:11rem!important;
-        max-width:18rem!important;
+      .task-bulk-panel #task-bulk-reschedule .tbr-fields input[type="datetime-local"],
+      .task-bulk-panel #task-bulk-actions .task-bulk-controls select{
+        min-height:2.25rem;
+        padding:0.5rem 0.625rem;
+        font-size:0.875rem;
+        line-height:1.25;
+        border:1px solid rgba(194,226,222,.8);
+        border-radius:0.5rem;
+        background:#fff;
+        box-sizing:border-box;
+        min-width:11rem;
+        max-width:18rem;
       }
 
-      /* Если подключён глобальный custom-datetime-picker (как в редактировании задачи) */
-      #task-bulk-reschedule .tbr-fields .custom-datetime-picker{
-        flex-shrink:0!important;
-        min-width:11rem!important;
-        max-width:18rem!important;
+      .task-bulk-panel #task-bulk-reschedule .tbr-fields .custom-datetime-picker{
+        flex-shrink:0;
+        min-width:11rem;
+        max-width:18rem;
       }
-      #task-bulk-reschedule .tbr-fields .custom-datetime-picker .input{width:100%;}
+      .task-bulk-panel #task-bulk-reschedule .tbr-fields .custom-datetime-picker .input{width:100%;}
 
-      #task-bulk-reschedule .tbr-fields .btn,
-      #task-bulk-actions .task-bulk-controls .btn{
-        min-height:2.25rem!important;
-        padding:0.5rem 0.75rem!important;
-        font-size:0.875rem!important;
-        box-sizing:border-box!important;
+      .task-bulk-panel #task-bulk-reschedule .tbr-fields .btn,
+      .task-bulk-panel #task-bulk-actions .task-bulk-controls .btn{
+        min-height:2.25rem;
+        padding:0.5rem 0.75rem;
+        font-size:0.875rem;
+        box-sizing:border-box;
       }
     </style>
 
@@ -189,6 +188,7 @@
       <input type="hidden" name="date_to" id="dateToInput" value="{{ date_to|default:'' }}" />
     </form>
 
+    <div class="task-bulk-panel">
     {% if can_bulk_reschedule %}
       <div id="task-bulk-reschedule" class="tasks-layout-block">
         <form method="post" action="{% url 'task_bulk_reschedule' %}" id="bulkRescheduleForm" {% if is_admin %}data-copy-task-ids="1"{% endif %}>
@@ -253,6 +253,7 @@
         </div>
       </div>
     {% endif %}
+    </div>
 
     <div class="bg-white border rounded-2xl overflow-hidden tasks-layout-block">
       <div class="overflow-x-auto">
