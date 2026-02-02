@@ -5125,8 +5125,8 @@
         }
       }
 
-      // Открытие панели по кнопке
-      document.addEventListener('click', (e) => {
+      // Открытие панели по кнопке (делегирование на body для динамически добавленных элементов)
+      document.body.addEventListener('click', (e) => {
         const a = e.target.closest('[data-contact-panel-open]');
         if (a) {
           e.preventDefault();

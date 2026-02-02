@@ -47,7 +47,7 @@ from companies.permissions import (
     can_transfer_companies,
 )
 from companies.policy import can_view_company as can_view_company_policy, visible_companies_qs
-from companies.decorators import require_can_view_company
+from companies.decorators import require_can_view_company, require_can_view_note_company
 from tasksapp.models import Task, TaskType
 from tasksapp.policy import visible_tasks_qs, can_manage_task_status
 from notifications.models import Notification
@@ -4949,7 +4949,7 @@ def company_note_pin_toggle(request: HttpRequest, company_id, note_id: int) -> H
 
 @login_required
 @policy_required(resource_type="page", resource="ui:companies:detail")
-@require_can_view_company
+@require_can_view_note_company
 def company_note_attachment_open(request: HttpRequest, company_id, note_id: int) -> HttpResponse:
     """
     Открыть вложение заметки в новом окне (inline). Доступ: всем пользователям (как просмотр компании).
@@ -4972,7 +4972,7 @@ def company_note_attachment_open(request: HttpRequest, company_id, note_id: int)
 
 @login_required
 @policy_required(resource_type="page", resource="ui:companies:detail")
-@require_can_view_company
+@require_can_view_note_company
 def company_note_attachment_download(request: HttpRequest, company_id, note_id: int) -> HttpResponse:
     """
     Скачать вложение заметки (attachment). Доступ: всем пользователям (как просмотр компании).
