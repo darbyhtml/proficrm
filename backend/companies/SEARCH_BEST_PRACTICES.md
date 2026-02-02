@@ -25,6 +25,10 @@
 - **Настройки окружения**:
   - `SEARCH_ENGINE_BACKEND=postgres` — явное указание, что используется PostgreSQL FTS.
 - **Тюнинг весов**: в `search_service.py` — константы score_boost (100000/50000/20000/15000), веса ранжирования (10/5/3/1 для vector_b/a/c/d). Стоп-токены — `_SEARCH_STOP_TOKENS` в `search_index.py`.
+- **Phase 1.5**: при точном/фразовом совпадении запроса с plain_text или t_name, если найдено ≤ N записей (по умолчанию 20), возвращаются только они, без FTS-хвоста.
+- **Quality cutoff**: после ранжирования отсекаются результаты с score ниже порога (max(ABS_MIN_SCORE, top_score × RELATIVE_MIN_FACTOR); при top_score ≥ 50000 — порог top_score × 0.5). Не применяется к exact-first (телефон/email/ИНН).
+- **Similarity fallback**: pg_trgm по name и t_name включается только когда FTS дал мало результатов (< 5), порог — из `SEARCH_TEXT_SIMILARITY_THRESHOLD` (по умолчанию 0.4).
+- **Параметры через env** (опционально, дефолты не требуют .env): `SEARCH_TEXT_ABS_MIN_SCORE`, `SEARCH_TEXT_RELATIVE_MIN_FACTOR`, `SEARCH_TEXT_EXACT_CUTOFF_LIMIT`, `SEARCH_TEXT_SIMILARITY_ONLY_IF_FTS_EMPTY`, `SEARCH_TEXT_SIMILARITY_THRESHOLD` — см. раздел «Тюнинг текстового поиска» ниже.
 
 ---
 
@@ -147,7 +151,7 @@
 | **Стоп-токены текстового поиска** | `filter_stop_tokens()` в `search_index.py`: ооо, ип, ао, зао, ул, дом, офис, кв, корп, компания и т.п. Если после удаления 0 значимых токенов → пустая выдача. Запрос «ооо ромашка» ищет по «ромашка». |
 | Стоп-слова FTS | FTS config `russian`; ORG_FORMS при объяснении. |
 | Fuzzy только для длинных токенов | Similarity fallback только для значимых токенов `len(t) >= SIMILARITY_MIN_TOKEN_LEN` (3). |
-| Порог схожести | `sim__gt=SIMILARITY_THRESHOLD` (0.3). |
+| Порог схожести | `sim__gt=SEARCH_TEXT_SIMILARITY_THRESHOLD` (по умолчанию 0.4). Similarity только по name и t_name; включается только при пустом/малом FTS, если SEARCH_TEXT_SIMILARITY_ONLY_IF_FTS_EMPTY=1. |
 
 ---
 
@@ -159,7 +163,24 @@
 4. **Классификация типа запроса** (`classify_text_query`): website / person / address / company_name_or_general — для поле-зависимого буста (сайт/ФИО выше в релевантности).
 5. **FTS по значимым токенам**: plainto_tsquery (AND по словам) по vector_a..d; fallback по основным полям Company (icontains по каждому токену).
 6. **Score_boost** (только по полям индекса): exact plain_text +100000, phrase in plain_text +50000, t_name contains +20000; при типе website — t_other +20000; при типе person — t_contacts +15000.
-7. **Ранжирование**: score_boost + 10×rank_b + 5×rank_a + 3×rank_c + 1×rank_d + digit_boost. Название (b) побеждает контакты (c) и прочее (d).
+7. **Phase 1.5 (текстовый exact)**: если fold_text(query) совпадает с plain_text (iexact) или входит в plain_text/t_name (icontains) и таких записей ≤ EXACT_CUTOFF_LIMIT (20) — возвращаются только они, сортировка по updated_at. Только для текстовых запросов.
+8. **Ранжирование**: score_boost + 10×rank_b + 5×rank_a + 3×rank_c + 1×rank_d + digit_boost. Название (b) побеждает контакты (c) и прочее (d).
+9. **Quality cutoff**: отсечка по score (см. выше). Только для текстового пути; exact-first без отсечки.
+10. **Similarity**: только по name и t_name, только если FTS дал < 5 результатов (при SEARCH_TEXT_SIMILARITY_ONLY_IF_FTS_EMPTY=1).
+
+---
+
+## Тюнинг текстового поиска (env)
+
+| Переменная | Описание | Дефолт |
+|------------|----------|--------|
+| SEARCH_TEXT_ABS_MIN_SCORE | Минимальный score для попадания в выдачу (абсолютный порог). | 0.5 |
+| SEARCH_TEXT_RELATIVE_MIN_FACTOR | Доля от top_score (0..1): результаты с score < top_score × factor отсекаются. | 0.15 |
+| SEARCH_TEXT_EXACT_CUTOFF_LIMIT | При точном/фразовом совпадении по plain_text/t_name, если найдено ≤ N записей — вернуть только их. | 20 |
+| SEARCH_TEXT_SIMILARITY_ONLY_IF_FTS_EMPTY | 1/true — включать pg_trgm similarity только когда FTS дал < 5 результатов. | 1 |
+| SEARCH_TEXT_SIMILARITY_THRESHOLD | Порог TrigramWordSimilarity для name/t_name (0.3–0.5). | 0.4 |
+
+Ужесточение выдачи: увеличить RELATIVE_MIN_FACTOR (например 0.2–0.3) или ABS_MIN_SCORE. Ослабить: уменьшить RELATIVE_MIN_FACTOR. Увеличить «точный» порог: увеличить EXACT_CUTOFF_LIMIT.
 
 ---
 

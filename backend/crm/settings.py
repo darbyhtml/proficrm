@@ -421,6 +421,24 @@ CELERY_WORKER_LOG_COLOR = False  # Отключить цветной вывод 
 # SEARCH_ENGINE_BACKEND оставлен для обратной совместимости, но поддерживает только значение "postgres".
 SEARCH_ENGINE_BACKEND = "postgres"
 
+# Текстовый поиск: отсечка мусора и пороги (опционально через env, дефолты — без обязательного .env).
+# ABS_MIN_SCORE: минимальный score для попадания в выдачу (абсолютный порог).
+# RELATIVE_MIN_FACTOR: доля от top_score (0..1): результаты с score < top_score * factor отсекаются.
+# EXACT_CUTOFF_LIMIT: при точном/фразовом совпадении по plain_text/t_name, если найдено <= N записей — вернуть только их.
+# SIMILARITY_ONLY_IF_FTS_EMPTY: включать pg_trgm similarity fallback только когда FTS дал мало результатов (< 5).
+def _float_env(name: str, default: float) -> float:
+    try:
+        v = os.getenv(name)
+        return float(v) if v not in (None, "") else default
+    except (TypeError, ValueError):
+        return default
+
+SEARCH_TEXT_ABS_MIN_SCORE = _float_env("SEARCH_TEXT_ABS_MIN_SCORE", 0.5)
+SEARCH_TEXT_RELATIVE_MIN_FACTOR = _float_env("SEARCH_TEXT_RELATIVE_MIN_FACTOR", 0.15)
+SEARCH_TEXT_EXACT_CUTOFF_LIMIT = int(os.getenv("SEARCH_TEXT_EXACT_CUTOFF_LIMIT", "20") or "20")
+SEARCH_TEXT_SIMILARITY_ONLY_IF_FTS_EMPTY = (os.getenv("SEARCH_TEXT_SIMILARITY_ONLY_IF_FTS_EMPTY", "1") or "1").strip().lower() in ("1", "true", "yes")
+SEARCH_TEXT_SIMILARITY_THRESHOLD = _float_env("SEARCH_TEXT_SIMILARITY_THRESHOLD", 0.4)
+
 # Celery Beat Schedule (периодические задачи)
 # Частота синхронизации квоты smtp.bz (сек). По умолчанию раз в 5 минут.
 SMTP_BZ_QUOTA_SYNC_SECONDS = float(os.getenv("SMTP_BZ_QUOTA_SYNC_SECONDS", "300") or "300")

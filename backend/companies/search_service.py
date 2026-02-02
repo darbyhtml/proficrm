@@ -14,6 +14,8 @@ from django.utils.html import escape
 from companies.models import Company, CompanyEmail, CompanyNote, CompanyPhone, Contact, ContactEmail, ContactPhone
 from tasksapp.models import Task
 
+from django.conf import settings as django_settings
+
 from .search_index import (
     ParsedQuery,
     parse_query,
@@ -23,6 +25,7 @@ from .search_index import (
     classify_text_query,
     TEXT_QUERY_WEBSITE,
     TEXT_QUERY_PERSON,
+    TEXT_QUERY_ADDRESS,
     TEXT_QUERY_COMPANY_OR_GENERAL,
 )
 
@@ -191,11 +194,9 @@ def highlight_html(
 
 
 # Пороги для trigram similarity fallback (поиск по названию при слабом/пустом FTS).
-# Fallback включается только для текстовых токенов длины >= MIN_TOKEN_LEN, чтобы
-# короткие/шумовые запросы (1–2 символа) не возвращали "всё подряд".
-# Порог 0.3 даёт баланс: "янтарь"/"янтар"/"ФКУ «Янтарь»" матчатся, случайные слова — нет.
+# Fallback включается только для значимых токенов длины >= MIN_TOKEN_LEN.
+# Порог по умолчанию 0.4 (можно переопределить через SEARCH_TEXT_SIMILARITY_THRESHOLD).
 SIMILARITY_MIN_TOKEN_LEN = 3
-SIMILARITY_THRESHOLD = 0.3
 
 
 @dataclass(frozen=True)
@@ -289,11 +290,30 @@ class CompanySearchService:
         if pq.text_tokens and len(significant_tokens) == 0:
             return qs.none()
 
-        # Тип запроса для поле-зависимого буста (website / person / company_name)
+        # Тип запроса для поле-зависимого буста и для расширенной фильтрации стоп-токенов (адрес)
         query_type = classify_text_query(pq.raw, pq.text_tokens) if pq.text_tokens else TEXT_QUERY_COMPANY_OR_GENERAL
+        if query_type == TEXT_QUERY_ADDRESS:
+            significant_tokens = filter_stop_tokens(pq.text_tokens, for_address=True)
+            if len(significant_tokens) == 0:
+                return qs.none()
 
         # Для FTS и fallback используем значимые токены (без стоп-слов)
         tokens_for_search = significant_tokens if significant_tokens else pq.text_tokens
+
+        folded_raw = fold_text(pq.raw or "") if pq.raw else ""
+
+        # Фаза 1.5: текстовые точные/фразовые совпадения по индексу (только для текстовых запросов)
+        # Если найдено мало записей (<= EXACT_CUTOFF_LIMIT) с exact/phrase по plain_text или t_name — вернуть только их.
+        exact_cutoff_limit = getattr(django_settings, "SEARCH_TEXT_EXACT_CUTOFF_LIMIT", 20)
+        if folded_raw and tokens_for_search and exact_cutoff_limit > 0:
+            phase15_qs = base_qs.filter(
+                Q(search_index__plain_text__iexact=folded_raw)
+                | Q(search_index__plain_text__icontains=folded_raw)
+                | Q(search_index__t_name__icontains=folded_raw),
+            ).distinct()
+            phase15_ids = list(phase15_qs.values_list("id", flat=True)[: exact_cutoff_limit + 1])
+            if 1 <= len(phase15_ids) <= exact_cutoff_limit:
+                return base_qs.filter(pk__in=phase15_ids).order_by("-updated_at")
 
         indexed = Q(search_index__isnull=False)
         indexed_match = Q()
@@ -355,26 +375,39 @@ class CompanySearchService:
         # Это делает поиск по названию более “прощающим” к опечаткам/окончаниям
         # (например, "сибирские медвед" всё равно найдёт "Сибирские медведи"),
         # при этом не ломая существующий FTS и ранжирование.
-        # Similarity fallback: для запросов по названию (1–2 слова) FTS с plain+AND часто
-        # не матчит из‑за стемминга/кавычек. Добавляем pg_trgm word_similarity по name и t_name:
-        # только для значимых токенов >= SIMILARITY_MIN_TOKEN_LEN и с порогом SIMILARITY_THRESHOLD.
+        # Similarity fallback: только по name и t_name, с порогом из settings.
+        # Включается только если FTS дал мало результатов (SEARCH_TEXT_SIMILARITY_ONLY_IF_FTS_EMPTY).
         similarity_match = Q()
+        similarity_threshold = getattr(django_settings, "SEARCH_TEXT_SIMILARITY_THRESHOLD", 0.4)
+        similarity_only_if_empty = getattr(django_settings, "SEARCH_TEXT_SIMILARITY_ONLY_IF_FTS_EMPTY", True)
+        use_similarity = False
         if tokens_for_search and not strong_digits:
             long_tokens = [t for t in tokens_for_search if len(t) >= SIMILARITY_MIN_TOKEN_LEN]
             if long_tokens:
-                token = max(long_tokens, key=len)
-                sim_name_ids = (
-                    base_qs.annotate(sim=TrigramWordSimilarity(token, "name"))
-                    .filter(sim__gt=SIMILARITY_THRESHOLD)
-                    .values_list("id", flat=True)[: self.max_results_cap]
-                )
-                sim_tname_ids = (
-                    base_qs.filter(search_index__isnull=False).distinct()
-                    .annotate(sim=TrigramWordSimilarity(token, "search_index__t_name"))
-                    .filter(sim__gt=SIMILARITY_THRESHOLD)
-                    .values_list("id", flat=True)[: self.max_results_cap]
-                )
-                similarity_match = Q(pk__in=sim_name_ids) | Q(pk__in=sim_tname_ids)
+                if similarity_only_if_empty:
+                    # Проверяем, дал ли FTS достаточно результатов (без similarity)
+                    ids_fts = list(
+                        base_qs.filter((indexed & indexed_match) | fallback_match | email_direct_match)
+                        .distinct()
+                        .values_list("id", flat=True)[:10]
+                    )
+                    use_similarity = len(ids_fts) < 5
+                else:
+                    use_similarity = True
+                if use_similarity:
+                    token = max(long_tokens, key=len)
+                    sim_name_ids = (
+                        base_qs.annotate(sim=TrigramWordSimilarity(token, "name"))
+                        .filter(sim__gt=similarity_threshold)
+                        .values_list("id", flat=True)[: self.max_results_cap]
+                    )
+                    sim_tname_ids = (
+                        base_qs.filter(search_index__isnull=False).distinct()
+                        .annotate(sim=TrigramWordSimilarity(token, "search_index__t_name"))
+                        .filter(sim__gt=similarity_threshold)
+                        .values_list("id", flat=True)[: self.max_results_cap]
+                    )
+                    similarity_match = Q(pk__in=sim_name_ids) | Q(pk__in=sim_tname_ids)
 
         # Поиск по email: явно по основному и доп. почтам (компания + контакты)
         email_direct_match = Q()
@@ -394,7 +427,6 @@ class CompanySearchService:
             qs = qs.distinct()
 
         # Текстовый score_boost: точное/фразовое совпадение по индексу (без JOIN)
-        folded_raw = fold_text(pq.raw or "") if pq.raw else ""
         score_boost = Value(0.0, output_field=FloatField())
         if folded_raw and tsq is not None:
             # exact equality plain_text: +100000; phrase in plain_text: +50000; t_name contains: +20000
@@ -455,7 +487,7 @@ class CompanySearchService:
             )
         )
 
-        # Поиск по одному номеру (11 цифр): сначала компании с точным совпадением телефона
+        # Поиск по одному номеру (11 цифр): сначала компании с точным совпадением телефона (без отсечки)
         phone_norm = None
         if not pq.text_tokens and len(strong_digits) == 1 and len(strong_digits[0]) == 11:
             phone_norm = strong_digits[0]
@@ -470,6 +502,24 @@ class CompanySearchService:
                 )
             )
             return qs.order_by("-exact_phone", "-search_score", "-updated_at")
+
+        # Quality cutoff только для текстового поиска: отсекаем мусор по порогу score
+        if tsq is not None:
+            abs_min = getattr(django_settings, "SEARCH_TEXT_ABS_MIN_SCORE", 0.5)
+            rel_factor = getattr(django_settings, "SEARCH_TEXT_RELATIVE_MIN_FACTOR", 0.15)
+            ordered = qs.order_by("-search_score")
+            top = ordered.first()
+            if top is not None and getattr(top, "search_score", None) is not None:
+                try:
+                    top_score = float(top.search_score)
+                except (TypeError, ValueError):
+                    top_score = None
+                if top_score is not None:
+                    if top_score >= 50000:
+                        threshold = top_score * 0.5
+                    else:
+                        threshold = max(abs_min, top_score * rel_factor)
+                    qs = qs.filter(search_score__gte=threshold)
 
         return qs.order_by("-search_score", "-updated_at")
 

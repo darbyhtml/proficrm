@@ -471,6 +471,58 @@ class SearchServicePostgresTests(TestCase):
         self.assertIn(c1.id, qs.values_list("id", flat=True))
         self.assertEqual(qs.count(), 1)
 
+    def test_exact_name_top1_no_junk_tail(self):
+        """Точное название: топ-1 и без мусорного хвоста (phase 1.5 или quality cutoff)."""
+        c1 = Company.objects.create(name="ООО Ромашка", inn="1111111111", status=self.status)
+        for i in range(5):
+            Company.objects.create(name=f"Другая компания {i}", inn=f"222222222{i}", status=self.status)
+        rebuild_company_search_index(c1.id)
+        for c in Company.objects.filter(inn__startswith="222"):
+            rebuild_company_search_index(c.id)
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="ООО Ромашка")
+        ids = list(qs.values_list("id", flat=True))
+        self.assertEqual(ids[0], c1.id)
+        self.assertLessEqual(len(ids), 20, "Точное название не должно тянуть десятки мусорных результатов")
+
+    def test_exact_site_top1_no_junk(self):
+        """Точный сайт: топ-1 и без мусора."""
+        c1 = Company.objects.create(name="Сайтовая", website="https://romashka.ru", inn="1111111111", status=self.status)
+        Company.objects.create(name="Другая", inn="2222222222", status=self.status)
+        rebuild_company_search_index(c1.id)
+        rebuild_company_search_index(Company.objects.get(inn="2222222222").id)
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="romashka.ru")
+        ids = list(qs.values_list("id", flat=True))
+        self.assertEqual(ids[0], c1.id)
+        self.assertLessEqual(len(ids), 20)
+
+    def test_contact_fio_in_top3(self):
+        """ФИО контакта: компания с этим контактом в топ-3."""
+        from companies.models import Contact
+
+        c1 = Company.objects.create(name="Альфа", inn="1111111111", status=self.status)
+        Contact.objects.create(company=c1, first_name="Сидоров", last_name="Иван")
+        for i in range(3):
+            co = Company.objects.create(name=f"Компания {i}", inn=f"333333333{i}", status=self.status)
+            rebuild_company_search_index(co.id)
+        rebuild_company_search_index(c1.id)
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="Иван Сидоров")
+        ids = list(qs.values_list("id", flat=True)[:5])
+        self.assertIn(c1.id, ids)
+        self.assertIn(c1.id, ids[:3], "Компания с контактом Иван Сидоров должна быть в топ-3")
+
+    def test_exact_name_romashka_no_similarity_junk(self):
+        """Запрос «ООО Ромашка» не должен подмешивать десятки лишь похожих по trigram."""
+        c1 = Company.objects.create(name="ООО Ромашка", inn="1111111111", status=self.status)
+        Company.objects.create(name="Ромашк", inn="2222222222", status=self.status)
+        Company.objects.create(name="Ромаш", inn="3333333333", status=self.status)
+        rebuild_company_search_index(c1.id)
+        rebuild_company_search_index(Company.objects.get(inn="2222222222").id)
+        rebuild_company_search_index(Company.objects.get(inn="3333333333").id)
+        qs = CompanySearchService().apply(qs=Company.objects.all(), query="ООО Ромашка")
+        ids = list(qs.values_list("id", flat=True))
+        self.assertEqual(ids[0], c1.id)
+        self.assertLessEqual(len(ids), 20, "Точное совпадение не должно раздувать выдачу similarity-мусором")
+
 
 class SearchBackendFacadeTests(TestCase):
     """Тесты фасада get_company_search_backend при единственном backend (PostgreSQL)."""
