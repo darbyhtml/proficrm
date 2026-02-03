@@ -668,10 +668,10 @@ class DashboardViewTestCase(TestCase):
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
         
-        # Проверяем наличие min-height:38px для всех кнопок
+        # Проверяем наличие единой минимальной высоты для кнопок (в шаблоне используется 2.375rem ≈ 38px)
         # ХЗ день, ХЗ месяц (если can_view_cold_call_reports=True), + Новая компания, + Новая задача
         # Для менеджера должно быть 4 кнопки
-        self.assertContains(response, 'style="min-height:38px"', count=4)
+        self.assertContains(response, 'style="min-height:2.375rem"', count=4)
 
     def test_new_company_button_text(self):
         """Тест: кнопка создания компании имеет правильный текст."""

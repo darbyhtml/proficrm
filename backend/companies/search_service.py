@@ -362,6 +362,18 @@ class CompanySearchService:
         else:
             tsq = None
 
+        # Поиск по email: явно по основному и доп. почтам (компания + контакты).
+        # Определяем до блока similarity, т.к. там используется в фильтре.
+        email_direct_match = Q()
+        if pq.text_tokens and "@" in pq.raw:
+            q_raw = pq.raw.strip()
+            if q_raw:
+                email_direct_match = (
+                    Q(email__icontains=q_raw)
+                    | Q(emails__value__icontains=q_raw)
+                    | Q(contacts__emails__value__icontains=q_raw)
+                )
+
         # Если запрос состоит только из цифр, но они все “слишком слабые” (например "7" или "12"),
         # чтобы не вернуть “всё”, просто ничего не фильтруем → пустая выдача.
         if not pq.text_tokens and not strong_digits and not weak_digits and pq.raw:
@@ -408,17 +420,6 @@ class CompanySearchService:
                         .values_list("id", flat=True)[: self.max_results_cap]
                     )
                     similarity_match = Q(pk__in=sim_name_ids) | Q(pk__in=sim_tname_ids)
-
-        # Поиск по email: явно по основному и доп. почтам (компания + контакты)
-        email_direct_match = Q()
-        if pq.text_tokens and "@" in pq.raw:
-            q_raw = pq.raw.strip()
-            if q_raw:
-                email_direct_match = (
-                    Q(email__icontains=q_raw)
-                    | Q(emails__value__icontains=q_raw)
-                    | Q(contacts__emails__value__icontains=q_raw)
-                )
 
         qs = qs.filter(
             (indexed & indexed_match) | fallback_match | similarity_match | email_direct_match

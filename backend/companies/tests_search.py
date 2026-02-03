@@ -11,6 +11,7 @@ from companies.search_index import (
     classify_text_query,
     TEXT_QUERY_WEBSITE,
     TEXT_QUERY_PERSON,
+    TEXT_QUERY_ADDRESS,
     TEXT_QUERY_COMPANY_OR_GENERAL,
 )
 from companies.search_service import highlight_html, CompanySearchService
