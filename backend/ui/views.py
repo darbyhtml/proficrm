@@ -14,8 +14,10 @@ from django.http import HttpRequest, HttpResponse
 from django.http import StreamingHttpResponse
 from django.http import JsonResponse
 from django.http import FileResponse, Http404
+from django.conf import settings
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils._os import safe_join
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 
@@ -4981,14 +4983,19 @@ def company_note_attachment_download(request: HttpRequest, company_id, note_id: 
     note = get_object_or_404(CompanyNote.objects.select_related("company"), id=note_id, company_id=company.id)
     if not note.attachment:
         raise Http404("Файл не найден")
-    path = getattr(note.attachment, "path", None)
-    if not path:
+    filepath = safe_join(settings.MEDIA_ROOT, note.attachment.name)
+    if not filepath:
         raise Http404("Файл недоступен")
     ctype = (note.attachment_content_type or "").strip()
     if not ctype:
         ctype = mimetypes.guess_type(note.attachment_name or note.attachment.name)[0] or "application/octet-stream"
     try:
-        return FileResponse(open(path, "rb"), as_attachment=True, filename=(note.attachment_name or "file"), content_type=ctype)
+        return FileResponse(
+            open(filepath, "rb"),
+            as_attachment=True,
+            filename=(note.attachment_name or "file"),
+            content_type=ctype,
+        )
     except FileNotFoundError:
         raise Http404("Файл не найден")
 

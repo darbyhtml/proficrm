@@ -11,7 +11,7 @@ import uuid
 from typing import Any, Callable
 
 from django.core.exceptions import PermissionDenied
-from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, HttpResponseNotFound
+from django.http import Http404, HttpRequest, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.shortcuts import get_object_or_404
 
 from accounts.models import User
@@ -55,7 +55,7 @@ def require_can_view_company(
         try:
             company = Company.objects.only("id").get(id=company_id)
         except Company.DoesNotExist:
-            return HttpResponseNotFound()
+            raise Http404()
         if not can_view_company(user, company):
             raise PermissionDenied("Нет доступа к этой компании")
         return view_func(request, *args, **kwargs)
@@ -83,7 +83,7 @@ def require_can_view_note_company(
             id=note_id,
         )
         if not can_view_company(user, note.company):
-            raise PermissionDenied("Нет доступа к этой компании")
+            return HttpResponseForbidden("Нет доступа к компании заметки")
         return view_func(request, *args, **kwargs)
 
     return wrapper
