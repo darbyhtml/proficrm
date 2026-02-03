@@ -13,7 +13,7 @@ from django.db import models, transaction, IntegrityError
 from django.http import HttpRequest, HttpResponse
 from django.http import StreamingHttpResponse
 from django.http import JsonResponse
-from django.http import FileResponse, Http404
+from django.http import FileResponse, Http404, HttpResponseNotFound
 from django.conf import settings
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -4969,7 +4969,7 @@ def company_note_attachment_open(request: HttpRequest, company_id, note_id: int)
     try:
         return FileResponse(open(path, "rb"), as_attachment=False, filename=(note.attachment_name or "file"), content_type=ctype)
     except FileNotFoundError:
-        raise Http404("Файл не найден")
+        return HttpResponseNotFound("Файл вложения не найден.")
 
 
 @login_required
@@ -4997,7 +4997,7 @@ def company_note_attachment_download(request: HttpRequest, company_id, note_id: 
             content_type=ctype,
         )
     except FileNotFoundError:
-        raise Http404("Файл не найден")
+        return HttpResponseNotFound("Файл вложения не найден.")
 
 
 @login_required

@@ -58,6 +58,7 @@ def require_can_view_company(
             raise Http404()
         if not can_view_company(user, company):
             raise PermissionDenied("Нет доступа к этой компании")
+        request.company = company
         return view_func(request, *args, **kwargs)
 
     return wrapper

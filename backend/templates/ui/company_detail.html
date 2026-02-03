@@ -5056,6 +5056,10 @@
         const html = await res.text();
         body.innerHTML = html;
         openPanel();
+        const firstInput = panel.querySelector("input");
+        if (firstInput) {
+          setTimeout(() => firstInput.focus(), 50);
+        }
       }
 
       async function submitForm(form) {
