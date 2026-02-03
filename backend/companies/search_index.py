@@ -257,27 +257,12 @@ def _normalize_email_for_index(value: str | None) -> str:
 
 def _parse_inn_list(inn_str: str | None) -> list[str]:
     """
-    Парсит Company.inn (может быть списком через запятую/слеш) и возвращает список валидных ИНН (10/12 цифр).
+    Парсит Company.inn (может быть списком через запятую/слеш) и возвращает список ИНН для индекса.
+    Использует общий parse_inns из inn_utils (10/12 цифр + fallback 8–12 цифр), чтобы индекс
+    совпадал с тем, что хранится в поле, и поиск по normalized_inns работал для всех форматов.
     """
-    if not inn_str:
-        return []
-    raw = str(inn_str).strip()
-    if not raw:
-        return []
-    # Разделяем по запятой/слешу/точке с запятой
-    parts: list[str] = []
-    tmp = raw.replace(";", ",").replace("/", ",")
-    for chunk in tmp.split(","):
-        part = (chunk or "").strip()
-        if part:
-            parts.append(part)
-    # Извлекаем только валидные ИНН (10 или 12 цифр)
-    valid_inns: list[str] = []
-    for part in parts:
-        digits = only_digits(part)
-        if len(digits) in (10, 12):
-            valid_inns.append(digits)
-    return valid_inns
+    from companies.inn_utils import parse_inns
+    return parse_inns(inn_str)
 
 
 def build_company_index_payload(company: Company) -> dict[str, str | list[str]]:

@@ -460,8 +460,8 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
         # Базовые фильтры по полям компании (обычный поиск)
         # Для ИНН: ищем как подстроку в поле, а также по каждому отдельному ИНН из строки
         inn_filters = Q(inn__icontains=q)
-        # Если запрос похож на ИНН (только цифры, 10-12 символов), ищем по каждому ИНН отдельно
-        if q.isdigit() and 10 <= len(q) <= 12:
+        # Если запрос похож на ИНН (только цифры, 8–12 символов), ищем по каждому ИНН отдельно
+        if q.isdigit() and 8 <= len(q) <= 12:
             from companies.inn_utils import parse_inns
             # Парсим все ИНН из запроса (на случай, если введено несколько)
             query_inns = parse_inns(q)
@@ -489,7 +489,7 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
         if normalized_q and len(normalized_q) >= 2:  # Минимум 2 символа для нормализованного поиска
             # Для ИНН: ищем как подстроку, а также по каждому отдельному ИНН
             normalized_inn_filters = Q(inn__icontains=normalized_q)
-            if normalized_q.isdigit() and 10 <= len(normalized_q) <= 12:
+            if normalized_q.isdigit() and 8 <= len(normalized_q) <= 12:
                 from companies.inn_utils import parse_inns
                 query_inns = parse_inns(normalized_q)
                 if query_inns:
@@ -534,7 +534,7 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
             for tok in tokens:
                 # Для ИНН: ищем как подстроку, а также по каждому отдельному ИНН
                 tok_inn_filters = Q(inn__icontains=tok)
-                if tok.isdigit() and 10 <= len(tok) <= 12:
+                if tok.isdigit() and 8 <= len(tok) <= 12:
                     from companies.inn_utils import parse_inns
                     query_inns = parse_inns(tok)
                     if query_inns:
@@ -3227,9 +3227,12 @@ def company_duplicates(request: HttpRequest) -> HttpResponse:
     """
     JSON: подсказки дублей при создании компании.
     Проверяем по ИНН/КПП/названию/адресу и возвращаем только то, что пользователь может видеть.
+    ИНН нормализуем через normalize_inn, чтобы совпадали и "901000327", и "901 000 327".
     """
     user: User = request.user
-    inn = (request.GET.get("inn") or "").strip()
+    inn_raw = (request.GET.get("inn") or "").strip()
+    from companies.normalizers import normalize_inn
+    inn = normalize_inn(inn_raw) if inn_raw else ""
     kpp = (request.GET.get("kpp") or "").strip()
     name = (request.GET.get("name") or "").strip()
     address = (request.GET.get("address") or "").strip()

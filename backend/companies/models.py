@@ -91,7 +91,7 @@ class Company(models.Model):
 
     name = models.CharField("Название", max_length=255, db_index=True)
     legal_name = models.CharField("Юр. название", max_length=255, blank=True, default="")
-    # Может содержать несколько ИНН (10/12 цифр), разделённых запятой: "123..., 456..."
+    # Может содержать несколько ИНН (10/12 цифр, fallback 8–12), разделённых запятой/слешем
     inn = models.CharField("ИНН", max_length=255, blank=True, default="", db_index=True)
     kpp = models.CharField("КПП", max_length=20, blank=True, default="")
     address = models.CharField("Адрес", max_length=500, blank=True, default="")
@@ -598,7 +598,7 @@ class CompanySearchIndex(models.Model):
         models.TextField(),
         default=list,
         blank=True,
-        help_text="ИНН (только цифры, 10/12) из Company.inn (распарсенные списки)",
+        help_text="ИНН (цифры 8–12) из Company.inn (parse_inns: 10/12 + fallback 8–12)",
     )
 
     # FTS-вектора по группам (заполняются в БД-триггере).

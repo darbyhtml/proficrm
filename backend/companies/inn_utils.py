@@ -41,6 +41,10 @@ def parse_inns(value: str | None) -> List[str]:
                     i += length  # Пропускаем найденный ИНН
                 else:
                     i += 1
+        # Если ничего не нашли (например, 9 цифр "901000327"), но строка — только цифры
+        # и длина типична для ИНН/кодов (8–12 цифр), сохраняем как одно значение, чтобы не терять ввод
+        if not inns and digits_only and 8 <= len(digits_only) <= 12:
+            inns.append(digits_only)
     
     return inns
 

@@ -252,7 +252,7 @@ class SearchServicePostgresTests(TestCase):
         )
 
     def test_exact_first_inn_search_including_multi_inn_field(self):
-        """EXACT‑first: поиск по ИНН (10/12 цифр), в т.ч. когда поле хранит несколько ИНН через запятую."""
+        """EXACT‑first: поиск по ИНН (8–12 цифр), в т.ч. когда поле хранит несколько ИНН через запятую."""
         c1 = Company.objects.create(
             name="ИНН одиночный",
             inn="1234567890",

@@ -272,7 +272,7 @@ class CompanySearchService:
         is_exact_type = (
             ("@" in raw_clean and "." in raw_clean.split("@")[-1])
             or (len(only_digits(raw_clean)) == 11 and only_digits(raw_clean)[0] in ("7", "8"))
-            or (len(only_digits(raw_clean)) in (10, 12))
+            or (8 <= len(only_digits(raw_clean)) <= 12)  # ИНН (в т.ч. 9 цифр)
         )
         if not is_exact_type:
             # Проверяем минимальную длину для текстовых запросов
@@ -531,7 +531,7 @@ class CompanySearchService:
         Приоритет:
         1) email — поиск в CompanySearchIndex.normalized_emails (быстро, без JOIN)
         2) телефон — один номер (11 цифр, 7/8), нормализованный через normalize_phone, поиск в normalized_phones
-        3) ИНН — 10/12 цифр, поиск в normalized_inns (уже распарсенные списки)
+        3) ИНН — 8–12 цифр, поиск в normalized_inns (уже распарсенные списки)
 
         Возвращает queryset с точными совпадениями или None, если:
         - запрос не подходит под паттерн exact‑поиска;
@@ -568,8 +568,8 @@ class CompanySearchService:
                     if exact_qs.exists():
                         return exact_qs
 
-        # 3) ИНН (10/12 цифр) — поиск в normalized_inns (уже распарсенные списки)
-        if len(digits_only) in (10, 12):
+        # 3) ИНН (8–12 цифр) — поиск в normalized_inns (те же значения, что в индексе: 10/12 + fallback 8–12)
+        if 8 <= len(digits_only) <= 12:
             inn_token = digits_only
             # Поиск в normalized_inns через contains (GIN индекс)
             exact_qs = base_qs.filter(search_index__normalized_inns__contains=[inn_token]).distinct()

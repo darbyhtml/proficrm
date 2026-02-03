@@ -84,7 +84,7 @@
 |----------|------------|
 | Сильные (≥4 цифр) vs слабые (2–3) токены | `parse_query()`: `strong_digit_tokens` и `weak_digit_tokens`; только strong участвуют в AND-фильтрации. |
 | Индексы | `Company`: btree по `inn`; GIN trgm по `inn` и по `kpp` (миграция 0042). `CompanySearchIndex.digits` — все цифры карточки, GIN trgm по `digits`. |
-| **EXACT-поиск через денормализованное поле** | `CompanySearchIndex.normalized_inns` (ArrayField) содержит все валидные ИНН (10/12 цифр) из Company.inn (распарсенные списки через запятую/слеш). Поиск через `search_index__normalized_inns__contains=[inn_digits]` с GIN индексом `cmp_si_ninns_gin_idx` — без JOIN и без итерации по записям. |
+| **EXACT-поиск через денормализованное поле** | `CompanySearchIndex.normalized_inns` (ArrayField) содержит ИНН из Company.inn (parse_inns: 10/12 цифр + fallback 8–12). Поиск через `search_index__normalized_inns__contains=[inn_digits]` с GIN индексом `cmp_si_ninns_gin_idx` — без JOIN. |
 | Приоритет в ранжировании | ИНН/КПП в vector_a (вес A); digit_boost: +2.0 за совпадение последовательности ≥9 цифр, +0.6 за shorter. |
 
 ---
@@ -117,7 +117,7 @@
 
 - **`normalized_phones`** (ArrayField): все телефоны из `Company.phone`, `CompanyPhone.value`, `ContactPhone.value`, нормализованные через `normalize_phone()` в формат E.164 (`+7XXXXXXXXXX`).
 - **`normalized_emails`** (ArrayField): все email из `Company.email`, `CompanyEmail.value`, `ContactEmail.value`, нормализованные через `lower().strip()`.
-- **`normalized_inns`** (ArrayField): все валидные ИНН (10/12 цифр) из `Company.inn`, распарсенные из списков (запятая/слеш).
+- **`normalized_inns`** (ArrayField): ИНН из `Company.inn` через `parse_inns` (10/12 цифр + fallback 8–12 цифр).
 
 Поля заполняются в `build_company_index_payload()` и пересобираются при выполнении `rebuild_company_search_index`. GIN индексы (`cmp_si_nphones_gin_idx`, `cmp_si_nemails_gin_idx`, `cmp_si_ninns_gin_idx`) обеспечивают быстрый поиск через оператор `contains` без JOIN.
 

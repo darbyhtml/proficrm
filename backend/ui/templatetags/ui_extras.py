@@ -8,7 +8,6 @@ from django.utils import timezone
 register = template.Library()
 
 _HAS_SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*://")
-_INN_RE = re.compile(r"\b(\d{10}|\d{12})\b")
 
 
 @register.filter(name="external_url")
@@ -73,22 +72,13 @@ def format_phone(value: str) -> str:
 @register.filter(name="split_inns")
 def split_inns(value: str) -> list[str]:
     """
-    Возвращает список ИНН (10/12 цифр) из строки.
+    Возвращает список ИНН из строки (те же правила, что в companies.inn_utils.parse_inns: 10/12 + fallback 8–12 цифр).
     Нужно для красивого отображения множественных ИНН в шаблонах.
     """
     if value is None:
         return []
-    s = str(value).strip()
-    if not s:
-        return []
-    out: list[str] = []
-    seen = set()
-    for m in _INN_RE.finditer(s):
-        inn = m.group(1)
-        if inn not in seen:
-            out.append(inn)
-            seen.add(inn)
-    return out
+    from companies.inn_utils import parse_inns
+    return parse_inns(value)
 
 
 @register.filter(name="format_call_direction")
