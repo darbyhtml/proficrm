@@ -11,7 +11,7 @@ import uuid
 from typing import Any, Callable
 
 from django.core.exceptions import PermissionDenied
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponseBadRequest, HttpResponseNotFound
 from django.shortcuts import get_object_or_404
 
 from accounts.models import User
@@ -48,11 +48,14 @@ def require_can_view_company(
             if company_id is not None:
                 kwargs = dict(kwargs, company_id=company_id)
         if company_id is None:
-            return view_func(request, *args, **kwargs)
+            return HttpResponseBadRequest("Missing company_id")
         user: User = request.user
         if not user.is_authenticated:
             raise PermissionDenied("Требуется авторизация")
-        company = get_object_or_404(Company.objects.only("id"), id=company_id)
+        try:
+            company = Company.objects.only("id").get(id=company_id)
+        except Company.DoesNotExist:
+            return HttpResponseNotFound()
         if not can_view_company(user, company):
             raise PermissionDenied("Нет доступа к этой компании")
         return view_func(request, *args, **kwargs)
