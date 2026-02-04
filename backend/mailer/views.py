@@ -375,6 +375,7 @@ def mail_admin(request: HttpRequest) -> HttpResponse:
                     if not getattr(settings, "MAILER_FERNET_KEY", ""):
                         messages.error(request, "MAILER_FERNET_KEY не задан. Нельзя сохранить пароль.")
                         settings_form = form
+                        # Продолжаем выполнение, чтобы показать форму с ошибкой
                     else:
                         old_api_key = cfg.smtp_bz_api_key if cfg.pk else None
                         form.save()
