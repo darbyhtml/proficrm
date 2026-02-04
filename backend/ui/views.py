@@ -7697,6 +7697,27 @@ def settings_users(request: HttpRequest) -> HttpResponse:
     
     # Получаем queryset пользователей
     users = User.objects.select_related("branch")
+
+    # Фильтры
+    status = (request.GET.get("status") or "").strip()
+    role_filter = (request.GET.get("role") or "").strip()
+    query = (request.GET.get("q") or "").strip()
+
+    if status == "active":
+        users = users.filter(is_active=True)
+    elif status == "inactive":
+        users = users.filter(is_active=False)
+
+    if role_filter == User.Role.ADMIN:
+        users = users.filter(role=User.Role.ADMIN)
+
+    if query:
+        users = users.filter(
+            Q(username__icontains=query)
+            | Q(first_name__icontains=query)
+            | Q(last_name__icontains=query)
+            | Q(email__icontains=query)
+        )
     
     # Сортировка: читаем из GET или из cookies
     sort_field = (request.GET.get("sort") or "").strip()
@@ -7744,6 +7765,11 @@ def settings_users(request: HttpRequest) -> HttpResponse:
             users = users.order_by("is_active", "username")
         else:
             users = users.order_by("-is_active", "username")
+    elif sort_field == "last_login":
+        if sort_dir == "asc":
+            users = users.order_by("last_login", "username")
+        else:
+            users = users.order_by("-last_login", "username")
     else:
         # По умолчанию: сортировка по логину
         sort_field = "username"
@@ -7759,13 +7785,20 @@ def settings_users(request: HttpRequest) -> HttpResponse:
     qs = qs_params.urlencode()
     
     # Сохраняем сортировку в cookie, если она была изменена через GET параметры
-    response = render(request, "ui/settings/users.html", {
-        "users": users,
-        "view_as_enabled": view_as_enabled,
-        "sort_field": sort_field,
-        "sort_dir": sort_dir,
-        "qs": qs,
-    })
+    response = render(
+        request,
+        "ui/settings/users.html",
+        {
+            "users": users,
+            "view_as_enabled": view_as_enabled,
+            "sort_field": sort_field,
+            "sort_dir": sort_dir,
+            "qs": qs,
+            "status_filter": status,
+            "role_filter": role_filter,
+            "q": query,
+        },
+    )
     
     # Устанавливаем cookie для сохранения сортировки (срок действия 1 год)
     if sort_field:
