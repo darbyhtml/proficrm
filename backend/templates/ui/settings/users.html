@@ -107,6 +107,22 @@
               <td class="px-4 py-3">{% if u.is_active %}Да{% else %}Нет{% endif %}</td>
               <td class="px-4 py-3">
                 <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    class="flex items-center justify-center w-8 h-8 rounded bg-white border border-brand-soft hover:bg-brand-soft/40 transition-colors{% if not u.is_active %} opacity-40 cursor-not-allowed{% endif %}"
+                    title="Сгенерировать ключ доступа"
+                    aria-label="Сгенерировать ключ доступа"
+                    data-magic-link-generate
+                    data-user-id="{{ u.id }}"
+                    data-user-name="{{ u.get_full_name|default:u.username }}"
+                    {% if not u.is_active %}disabled aria-disabled="true"{% endif %}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="7.5" cy="12" r="3.25"/>
+                      <path d="M10.75 12H20"/>
+                      <path d="M15.5 9.25V14.75"/>
+                    </svg>
+                  </button>
                   <a href="/settings/users/{{ u.id }}/edit/" class="flex items-center justify-center w-8 h-8 rounded bg-white border border-brand-soft hover:bg-brand-soft/40 transition-colors" title="Редактировать" aria-label="Редактировать">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M12 20h9"/>
@@ -133,6 +149,196 @@
       </table>
     </div>
   </div>
-{% endblock %}
+  
+  <div
+    id="magic-link-modal"
+    class="fixed inset-0 z-40 hidden items-center justify-center bg-black/30 px-4"
+  >
+    <div class="w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-brand-soft/60">
+      <div class="flex items-start justify-between gap-3 border-b border-brand-soft/60 px-5 py-4">
+        <div>
+          <div class="text-xs uppercase tracking-wide text-brand-dark/60">Ключ доступа</div>
+          <div class="text-base font-semibold text-brand-dark">
+            Для пользователя <span id="magic-link-user-name"></span>
+          </div>
+        </div>
+        <button
+          type="button"
+          id="magic-link-modal-close"
+          class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-brand-soft/70 text-brand-dark/70 hover:bg-brand-soft/30 hover:text-brand-dark transition"
+          aria-label="Закрыть"
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div class="space-y-4 px-5 py-4">
+        <div class="space-y-1">
+          <div class="text-xs font-medium text-brand-dark/70 uppercase">Ключ (для ввода на странице входа)</div>
+          <div class="flex items-center gap-2 rounded-xl border border-brand-soft bg-brand-soft/10 px-3 py-2">
+            <code id="magic-link-token" class="font-mono text-sm text-brand-dark break-all"></code>
+            <button
+              type="button"
+              id="magic-link-copy-token"
+              class="ml-auto inline-flex items-center gap-1 rounded-lg border border-brand-soft bg-white px-2 py-1 text-xs font-medium text-brand-dark hover:bg-brand-soft/40 transition"
+            >
+              Скопировать ключ
+            </button>
+          </div>
+        </div>
+        <div class="space-y-1">
+          <div class="text-xs font-medium text-brand-dark/70 uppercase">Прямая ссылка</div>
+          <div class="flex items-center gap-2 rounded-xl border border-brand-soft bg-brand-soft/5 px-3 py-2">
+            <div id="magic-link-url" class="text-xs text-brand-dark/80 break-all"></div>
+            <button
+              type="button"
+              id="magic-link-copy-url"
+              class="ml-auto inline-flex items-center gap-1 rounded-lg border border-brand-soft bg-white px-2 py-1 text-xs font-medium text-brand-dark hover:bg-brand-soft/40 transition"
+            >
+              Скопировать ссылку
+            </button>
+          </div>
+        </div>
+        <div class="text-xs text-brand-dark/70">
+          Ключ действует в течение 24 часов и одноразовый. Передайте его пользователю удобным способом (чат, почта и т.п.).
+        </div>
+        <div id="magic-link-error" class="hidden text-xs text-red-600"></div>
+      </div>
+      <div class="flex items-center justify-end gap-2 border-t border-brand-soft/60 bg-brand-soft/10 px-5 py-3 text-xs text-brand-dark/70">
+        <button
+          type="button"
+          class="px-3 py-1.5 rounded-lg border border-brand-soft bg-white hover:bg-brand-soft/40 transition"
+          id="magic-link-modal-close-bottom"
+        >
+          Закрыть
+        </button>
+      </div>
+    </div>
+  </div>
 
+  <script>
+    (function () {
+      const modal = document.getElementById("magic-link-modal");
+      const userNameEl = document.getElementById("magic-link-user-name");
+      const tokenEl = document.getElementById("magic-link-token");
+      const urlEl = document.getElementById("magic-link-url");
+      const errorEl = document.getElementById("magic-link-error");
+      const btnCopyToken = document.getElementById("magic-link-copy-token");
+      const btnCopyUrl = document.getElementById("magic-link-copy-url");
+      const btnClose = document.getElementById("magic-link-modal-close");
+      const btnCloseBottom = document.getElementById("magic-link-modal-close-bottom");
+
+      if (!modal || !userNameEl || !tokenEl || !urlEl || !btnCopyToken || !btnCopyUrl) {
+        return;
+      }
+
+      function getCsrfToken() {
+        const input = document.querySelector("input[name=csrfmiddlewaretoken]");
+        return input ? input.value : null;
+      }
+
+      function openModal(data) {
+        errorEl.classList.add("hidden");
+        errorEl.textContent = "";
+        userNameEl.textContent = data.userName || "";
+        tokenEl.textContent = data.token || "";
+        urlEl.textContent = data.link || "";
+        modal.classList.remove("hidden");
+        modal.classList.add("flex");
+      }
+
+      function closeModal() {
+        modal.classList.remove("flex");
+        modal.classList.add("hidden");
+      }
+
+      function copyText(text) {
+        if (!text) return;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).catch(function () {});
+        } else {
+          const temp = document.createElement("textarea");
+          temp.value = text;
+          temp.style.position = "fixed";
+          temp.style.left = "-9999px";
+          document.body.appendChild(temp);
+          temp.select();
+          try {
+            document.execCommand("copy");
+          } catch (e) {}
+          document.body.removeChild(temp);
+        }
+      }
+
+      btnCopyToken.addEventListener("click", function () {
+        copyText(tokenEl.textContent.trim());
+      });
+
+      btnCopyUrl.addEventListener("click", function () {
+        copyText(urlEl.textContent.trim());
+      });
+
+      [btnClose, btnCloseBottom].forEach(function (btn) {
+        if (btn) {
+          btn.addEventListener("click", closeModal);
+        }
+      });
+
+      modal.addEventListener("click", function (event) {
+        if (event.target === modal) {
+          closeModal();
+        }
+      });
+
+      document.querySelectorAll("[data-magic-link-generate]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          const userId = btn.getAttribute("data-user-id");
+          const userName = btn.getAttribute("data-user-name") || "";
+          if (!userId || btn.disabled) {
+            return;
+          }
+
+          btn.disabled = true;
+          const originalText = btn.innerHTML;
+          btn.innerHTML = '<svg class="animate-spin h-4 w-4 text-brand-dark" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3.5-3.5L12 0v4a8 8 0 00-8 8h4z"></path></svg>';
+
+          const csrfToken = getCsrfToken();
+          fetch("/settings/users/" + userId + "/magic-link/generate/", {
+            method: "POST",
+            headers: {
+              "X-Requested-With": "XMLHttpRequest",
+              "Content-Type": "application/json",
+              ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
+            },
+            body: "{}",
+          })
+            .then(function (response) {
+              const contentType = response.headers.get("Content-Type") || "";
+              if (!contentType.includes("application/json")) {
+                throw new Error("unexpected_response");
+              }
+              return response.json();
+            })
+            .then(function (data) {
+              if (!data || data.success !== true) {
+                throw new Error("error_response");
+              }
+              openModal({ userName: userName, token: data.token, link: data.link });
+            })
+            .catch(function () {
+              errorEl.textContent = "Не удалось сгенерировать ключ доступа. Попробуйте ещё раз через несколько секунд.";
+              errorEl.classList.remove("hidden");
+              openModal({ userName: userName, token: "", link: "" });
+            })
+            .finally(function () {
+              btn.disabled = false;
+              btn.innerHTML = originalText;
+            });
+        });
+      });
+    })();
+  </script>
+{% endblock %}
 
