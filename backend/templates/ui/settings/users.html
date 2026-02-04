@@ -297,9 +297,12 @@
                     {% if not u.is_active %}disabled aria-disabled="true"{% endif %}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M15.5 7.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Z"/>
-                      <path d="M12 12v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9"/>
-                      <path d="M8.5 7.5V4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3.5"/>
+                      <!-- Кольцо ключа (круглое) -->
+                      <circle cx="8" cy="8" r="3.5" />
+                      <!-- Стержень ключа -->
+                      <path d="M11.5 8h6.5" />
+                      <!-- Бородка ключа (прямоугольная) -->
+                      <rect x="18" y="6" width="3.5" height="5" rx="0.5" />
                     </svg>
                   </button>
                   <button
@@ -347,7 +350,7 @@
   
   <div
     id="magic-link-modal"
-    class="fixed inset-0 z-40 hidden items-center justify-center bg-black/30 px-4"
+    class="fixed inset-0 z-[80] hidden items-center justify-center bg-black/30 px-4"
   >
     <div class="w-full max-w-lg rounded-2xl bg-white shadow-2xl border border-brand-soft/60">
       <div class="flex items-start justify-between gap-3 border-b border-brand-soft/60 px-5 py-4">
@@ -415,9 +418,9 @@
 
   <div
     id="user-edit-panel"
-    class="fixed inset-y-0 right-0 z-50 w-full max-w-2xl bg-white shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out overflow-y-auto"
+    class="fixed inset-y-0 right-0 z-[90] w-full max-w-2xl bg-white shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out overflow-y-auto"
   >
-    <div class="sticky top-0 z-10 bg-white border-b border-brand-soft/60 px-6 py-4 flex items-center justify-between">
+    <div class="sticky top-0 z-20 bg-white border-b border-brand-soft/60 px-6 py-4 flex items-center justify-between">
       <div>
         <div class="text-xs uppercase tracking-wide text-brand-dark/60">Редактирование</div>
         <div class="text-lg font-semibold text-brand-dark" id="user-edit-panel-title">Пользователь</div>
@@ -463,6 +466,15 @@
       }
 
       function openModal(data) {
+        // Закрываем панель редактирования если она открыта
+        const editPanel = document.getElementById("user-edit-panel");
+        const editOverlay = document.getElementById("user-edit-overlay");
+        if (editPanel && !editPanel.classList.contains("translate-x-full")) {
+          editPanel.classList.add("translate-x-full");
+          if (editOverlay) editOverlay.classList.add("hidden");
+          document.body.style.overflow = "";
+        }
+        
         errorEl.classList.add("hidden");
         errorEl.textContent = "";
         userNameEl.textContent = data.userName || "";
@@ -570,8 +582,10 @@
       const editPanelClose = document.getElementById("user-edit-panel-close");
       const overlay = document.createElement("div");
       overlay.id = "user-edit-overlay";
-      overlay.className = "fixed inset-0 z-40 bg-black/30 hidden";
+      overlay.className = "fixed inset-0 z-[85] bg-black/30 hidden";
       document.body.appendChild(overlay);
+
+      let isLoadingForm = false; // Флаг для предотвращения множественных загрузок
 
       function getCsrfToken() {
         const input = document.querySelector("input[name=csrfmiddlewaretoken]");
@@ -579,6 +593,13 @@
       }
 
       function openPanel() {
+        // Закрываем модалку ключа если она открыта
+        const magicModal = document.getElementById("magic-link-modal");
+        if (magicModal && !magicModal.classList.contains("hidden")) {
+          magicModal.classList.remove("flex");
+          magicModal.classList.add("hidden");
+        }
+        
         overlay.classList.remove("hidden");
         editPanel.classList.remove("translate-x-full");
         document.body.style.overflow = "hidden";
@@ -588,7 +609,9 @@
         editPanel.classList.add("translate-x-full");
         overlay.classList.add("hidden");
         document.body.style.overflow = "";
+        // Сбрасываем содержимое панели (это также сбросит флаг handlersAttached при следующей загрузке)
         editPanelContent.innerHTML = '<div class="flex items-center justify-center py-12"><div class="animate-spin h-8 w-8 border-2 border-brand-teal border-t-transparent rounded-full"></div></div>';
+        isLoadingForm = false; // Сбрасываем флаг загрузки при закрытии панели
       }
 
       overlay.addEventListener("click", closePanel);
@@ -662,11 +685,19 @@
             })
             .then(function (data) {
               if (data.ok) {
-                closePanel();
+                // При успешном сохранении ВСЕГДА перезагружаем страницу, даже если панель была закрыта
+                // Данные изменились на сервере, пользователь должен видеть актуальные данные
+                if (!editPanel.classList.contains("translate-x-full")) {
+                  closePanel();
+                }
                 window.location.reload();
               } else {
+                // При ошибке валидации проверяем, что панель все еще открыта
+                if (editPanel.classList.contains("translate-x-full")) {
+                  return; // Панель закрыта, игнорируем ошибки валидации
+                }
+                
                 // Сохраняем состояние кнопки перед заменой HTML
-                const wasDisabled = submitBtn ? submitBtn.disabled : false;
                 const savedOriginalText = originalText;
                 
                 editPanelContent.innerHTML = data.html || '<div class="text-red-600 p-4 rounded-lg border border-red-200 bg-red-50">Ошибка сохранения: ' + (data.error || "Неизвестная ошибка") + '</div>';
@@ -676,7 +707,7 @@
                 
                 // Восстанавливаем состояние кнопки если форма была загружена
                 const newForm = editPanelContent.querySelector("#user-edit-form-inline");
-                if (newForm && wasDisabled) {
+                if (newForm) {
                   const newSubmitBtn = newForm.querySelector('button[type="submit"]');
                   if (newSubmitBtn) {
                     newSubmitBtn.disabled = false;
@@ -686,21 +717,28 @@
               }
             })
             .catch(function (error) {
-              console.error("Ошибка сохранения:", error);
-              editPanelContent.innerHTML = '<div class="text-red-600 p-4 rounded-lg border border-red-200 bg-red-50">Ошибка сохранения. Попробуйте ещё раз или обновите страницу.</div>';
-              if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = originalText;
+              // Проверяем, что панель все еще открыта перед установкой ошибки
+              if (editPanel.classList.contains("translate-x-full")) {
+                return; // Панель закрыта, игнорируем ошибку
               }
+              
+              console.error("Ошибка сохранения:", error);
+              const errorHtml = '<div class="space-y-3 text-red-600 p-4 rounded-lg border border-red-200 bg-red-50">' +
+                '<div class="font-medium">Ошибка сохранения</div>' +
+                '<div class="text-sm">' + (error.message || "Неизвестная ошибка") + '. Попробуйте ещё раз или обновите страницу.</div>' +
+                '<button type="button" onclick="document.getElementById(\'user-edit-panel-close\').click()" class="text-xs underline hover:no-underline">Закрыть панель</button>' +
+                '</div>';
+              editPanelContent.innerHTML = errorHtml;
             });
         });
       }
-
+      
       document.querySelectorAll("[data-user-edit]").forEach(function (btn) {
         btn.addEventListener("click", function () {
           const userId = btn.getAttribute("data-user-id");
-          if (!userId) return;
+          if (!userId || isLoadingForm) return; // Предотвращаем множественные клики
 
+          isLoadingForm = true;
           openPanel();
           editPanelContent.innerHTML = '<div class="flex items-center justify-center py-12"><div class="animate-spin h-8 w-8 border-2 border-brand-teal border-t-transparent rounded-full"></div></div>';
 
@@ -723,6 +761,12 @@
               return response.json();
             })
             .then(function (data) {
+              // Проверяем, что панель все еще открыта (пользователь мог закрыть её во время загрузки)
+              if (editPanel.classList.contains("translate-x-full")) {
+                isLoadingForm = false;
+                return;
+              }
+              
               if (!data || !data.ok) {
                 throw new Error(data.error || "Ошибка загрузки формы");
               }
@@ -732,10 +776,23 @@
               editPanelTitle.textContent = data.user.full_name || data.user.username || "Пользователь";
               editPanelContent.innerHTML = data.html;
               setupEditForm(userId);
+              isLoadingForm = false; // Сбрасываем флаг после успешной загрузки
             })
             .catch(function (error) {
+              // Проверяем, что панель все еще открыта перед установкой ошибки
+              if (editPanel.classList.contains("translate-x-full")) {
+                isLoadingForm = false;
+                return;
+              }
+              
               console.error("Ошибка загрузки формы:", error);
-              editPanelContent.innerHTML = '<div class="text-red-600 p-4 rounded-lg border border-red-200 bg-red-50">Ошибка загрузки формы: ' + (error.message || "Неизвестная ошибка") + '. Попробуйте ещё раз или обновите страницу.</div>';
+              const errorHtml = '<div class="space-y-3 text-red-600 p-4 rounded-lg border border-red-200 bg-red-50">' +
+                '<div class="font-medium">Ошибка загрузки формы</div>' +
+                '<div class="text-sm">' + (error.message || "Неизвестная ошибка") + '. Попробуйте ещё раз или обновите страницу.</div>' +
+                '<button type="button" onclick="document.getElementById(\'user-edit-panel-close\').click()" class="text-xs underline hover:no-underline">Закрыть панель</button>' +
+                '</div>';
+              editPanelContent.innerHTML = errorHtml;
+              isLoadingForm = false; // Сбрасываем флаг при ошибке
             });
         });
       });
