@@ -2,63 +2,468 @@
 {% block title %}Настройки — CRM ПРОФИ{% endblock %}
 
 {% block content %}
-  <div class="space-y-4">
-    <div>
-      <h1 class="text-2xl font-semibold">Настройки</h1>
-      <div class="text-sm text-brand-dark/70">Доступно только администратору</div>
+  <div class="space-y-4 bg-gradient-to-b from-brand-soft/40 via-white to-white -mx-4 px-4 pb-6 rounded-b-3xl">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-semibold">Настройки</h1>
+        <div class="text-sm text-brand-dark/70">Доступно только администратору</div>
+      </div>
+      <button
+        type="button"
+        id="settings-layout-toggle"
+        class="inline-flex items-center gap-2 rounded-full border border-brand-soft bg-white/80 px-3 py-1.5 text-xs font-medium text-brand-dark shadow-sm hover:bg-brand-soft/40 hover:shadow transition"
+      >
+        <span class="inline-flex h-4 w-4 items-center justify-center rounded-full bg-brand-teal/10 text-[10px] text-brand-teal">
+          ⋮⋮
+        </span>
+        <span>Настроить разделы</span>
+      </button>
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <a href="/settings/access/" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
-        <div class="font-medium">Доступы</div>
-        <div class="text-sm text-brand-dark/70">страницы/действия по ролям + режим observe/enforce</div>
+    <div
+      id="settings-sections-grid"
+      class="grid grid-cols-1 md:grid-cols-3 gap-4"
+      data-user-id="{{ request.user.id }}"
+      data-edit-mode="0"
+    >
+      <a
+        href="/settings/access/"
+        class="group relative flex flex-col gap-3 bg-white/90 border border-brand-soft rounded-2xl p-4 shadow-sm backdrop-blur-sm hover:bg-white hover:-translate-y-0.5 hover:shadow-xl hover:border-brand-teal/40 hover:ring-1 hover:ring-brand-teal/30 transition-all"
+        data-section-key="access"
+      >
+        <div class="flex items-start gap-3">
+          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-teal/10 text-brand-teal">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 12a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 20.25a6.75 6.75 0 0 1 13.5 0" />
+            </svg>
+          </div>
+          <div class="space-y-1">
+            <div class="font-medium text-brand-dark">Доступы</div>
+            <div class="text-sm text-brand-dark/70">страницы/действия по ролям + режим observe/enforce</div>
+          </div>
+        </div>
+        <div class="pointer-events-none absolute inset-x-4 bottom-3 hidden items-center justify-between text-[11px] text-brand-dark/60 group-[data-editing='1']:flex">
+          <span>Потяните, чтобы изменить порядок</span>
+          <span class="rounded-full border border-brand-soft/60 bg-white/80 px-2 py-0.5 text-[10px]">⋮⋮</span>
+        </div>
       </a>
-      <a href="/settings/users/" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
-        <div class="font-medium">Пользователи</div>
-        <div class="text-sm text-brand-dark/70">учётки, роли, доступ к базе</div>
+      <a
+        href="/settings/users/"
+        class="group relative flex flex-col gap-3 bg-white/90 border border-brand-soft rounded-2xl p-4 shadow-sm backdrop-blur-sm hover:bg-white hover:-translate-y-0.5 hover:shadow-xl hover:border-brand-teal/40 hover:ring-1 hover:ring-brand-teal/30 transition-all"
+        data-section-key="users"
+      >
+        <div class="flex items-start gap-3">
+          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-orange/10 text-brand-orange">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.5a3 3 0 0 0-6 0M18 8.25A3.75 3.75 0 1 1 10.5 8.25 3.75 3.75 0 0 1 18 8.25Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5a7.5 7.5 0 0 1 14.995-.25V19.5" />
+            </svg>
+          </div>
+          <div class="space-y-1">
+            <div class="font-medium text-brand-dark">Пользователи</div>
+            <div class="text-sm text-brand-dark/70">учётки, роли, доступ к базе</div>
+          </div>
+        </div>
+        <div class="pointer-events-none absolute inset-x-4 bottom-3 hidden items-center justify-between text-[11px] text-brand-dark/60 group-[data-editing='1']:flex">
+          <span>Потяните, чтобы изменить порядок</span>
+          <span class="rounded-full border border-brand-soft/60 bg-white/80 px-2 py-0.5 text-[10px]">⋮⋮</span>
+        </div>
       </a>
-      <a href="/settings/branches/" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
-        <div class="font-medium">Филиалы</div>
-        <div class="text-sm text-brand-dark/70">ЕКБ / КРД / ТМН и т.д.</div>
+      <a
+        href="/settings/branches/"
+        class="group relative flex flex-col gap-3 bg-white/90 border border-brand-soft rounded-2xl p-4 shadow-sm backdrop-blur-sm hover:bg-white hover:-translate-y-0.5 hover:shadow-xl hover:border-brand-teal/40 hover:ring-1 hover:ring-brand-teal/30 transition-all"
+        data-section-key="branches"
+      >
+        <div class="flex items-start gap-3">
+          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-teal/10 text-brand-teal">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5v6m0 0a3 3 0 1 0 0 6m0-6h7.5m0 0a3 3 0 1 0 0-6m0 6v6" />
+            </svg>
+          </div>
+          <div class="space-y-1">
+            <div class="font-medium text-brand-dark">Филиалы</div>
+            <div class="text-sm text-brand-dark/70">ЕКБ / КРД / ТМН и т.д.</div>
+          </div>
+        </div>
+        <div class="pointer-events-none absolute inset-x-4 bottom-3 hidden items-center justify-between text-[11px] text-brand-dark/60 group-[data-editing='1']:flex">
+          <span>Потяните, чтобы изменить порядок</span>
+          <span class="rounded-full border border-brand-soft/60 bg-white/80 px-2 py-0.5 text-[10px]">⋮⋮</span>
+        </div>
       </a>
-      <a href="/settings/dicts/" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
-        <div class="font-medium">Справочники</div>
-        <div class="text-sm text-brand-dark/70">статусы, сферы, типы задач</div>
+      <a
+        href="/settings/dicts/"
+        class="group relative flex flex-col gap-3 bg-white/90 border border-brand-soft rounded-2xl p-4 shadow-sm backdrop-blur-sm hover:bg-white hover:-translate-y-0.5 hover:shadow-xl hover:border-brand-teal/40 hover:ring-1 hover:ring-brand-teal/30 transition-all"
+        data-section-key="dicts"
+      >
+        <div class="flex items-start gap-3">
+          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-orange/10 text-brand-orange">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.25h13.5v13.5H5.25z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 9h6M9 12h6M9 15h3" />
+            </svg>
+          </div>
+          <div class="space-y-1">
+            <div class="font-medium text-brand-dark">Справочники</div>
+            <div class="text-sm text-brand-dark/70">статусы, сферы, типы задач</div>
+          </div>
+        </div>
+        <div class="pointer-events-none absolute inset-x-4 bottom-3 hidden items-center justify-between text-[11px] text-brand-dark/60 group-[data-editing='1']:flex">
+          <span>Потяните, чтобы изменить порядок</span>
+          <span class="rounded-full border border-brand-soft/60 bg-white/80 px-2 py-0.5 text-[10px]">⋮⋮</span>
+        </div>
       </a>
-      <a href="/settings/activity/" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
-        <div class="font-medium">Журнал действий</div>
-        <div class="text-sm text-brand-dark/70">кто что сделал и когда</div>
+      <a
+        href="/settings/activity/"
+        class="group relative flex flex-col gap-3 bg-white/90 border border-brand-soft rounded-2xl p-4 shadow-sm backdrop-blur-sm hover:bg-white hover:-translate-y-0.5 hover:shadow-xl hover:border-brand-teal/40 hover:ring-1 hover:ring-brand-teal/30 transition-all"
+        data-section-key="activity"
+      >
+        <div class="flex items-start gap-3">
+          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-teal/10 text-brand-teal">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 19.5 9 10.5l4.5 4.5L19.5 4.5" />
+            </svg>
+          </div>
+          <div class="space-y-1">
+            <div class="font-medium text-brand-dark">Журнал действий</div>
+            <div class="text-sm text-brand-dark/70">кто что сделал и когда</div>
+          </div>
+        </div>
+        <div class="pointer-events-none absolute inset-x-4 bottom-3 hidden items-center justify-between text-[11px] text-brand-dark/60 group-[data-editing='1']:flex">
+          <span>Потяните, чтобы изменить порядок</span>
+          <span class="rounded-full border border-brand-soft/60 bg-white/80 px-2 py-0.5 text-[10px]">⋮⋮</span>
+        </div>
       </a>
-      <a href="/settings/import/" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
-        <div class="font-medium">Импорт</div>
-        <div class="text-sm text-brand-dark/70">amo CSV компаний + .ics задач</div>
+      <a
+        href="/settings/import/"
+        class="group relative flex flex-col gap-3 bg-white/90 border border-brand-soft rounded-2xl p-4 shadow-sm backdrop-blur-sm hover:bg-white hover:-translate-y-0.5 hover:shadow-xl hover:border-brand-teal/40 hover:ring-1 hover:ring-brand-teal/30 transition-all"
+        data-section-key="import"
+      >
+        <div class="flex items-start gap-3">
+          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-orange/10 text-brand-orange">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4.5-4.5M12 15 7.5 10.5M4.5 19.5h15" />
+            </svg>
+          </div>
+          <div class="space-y-1">
+            <div class="font-medium text-brand-dark">Импорт</div>
+            <div class="text-sm text-brand-dark/70">amo CSV компаний + .ics задач</div>
+          </div>
+        </div>
+        <div class="pointer-events-none absolute inset-x-4 bottom-3 hidden items-center justify-between text-[11px] text-brand-dark/60 group-[data-editing='1']:flex">
+          <span>Потяните, чтобы изменить порядок</span>
+          <span class="rounded-full border border-brand-soft/60 bg-white/80 px-2 py-0.5 text-[10px]">⋮⋮</span>
+        </div>
       </a>
-      <a href="/settings/amocrm/" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
-        <div class="font-medium">amoCRM (API)</div>
-        <div class="text-sm text-brand-dark/70">точная миграция по фильтрам</div>
+      <a
+        href="/settings/amocrm/"
+        class="group relative flex flex-col gap-3 bg-white/90 border border-brand-soft rounded-2xl p-4 shadow-sm backdrop-blur-sm hover:bg-white hover:-translate-y-0.5 hover:shadow-xl hover:border-brand-teal/40 hover:ring-1 hover:ring-brand-teal/30 transition-all"
+        data-section-key="amocrm"
+      >
+        <div class="flex items-start gap-3">
+          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-teal/10 text-brand-teal">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 6h10.5M9 12h10.5M9 18h10.5M4.5 6h.008v.008H4.5zM4.5 12h.008v.008H4.5zM4.5 18h.008v.008H4.5z" />
+            </svg>
+          </div>
+          <div class="space-y-1">
+            <div class="font-medium text-brand-dark">amoCRM (API)</div>
+            <div class="text-sm text-brand-dark/70">точная миграция по фильтрам</div>
+          </div>
+        </div>
+        <div class="pointer-events-none absolute inset-x-4 bottom-3 hidden items-center justify-between text-[11px] text-brand-dark/60 group-[data-editing='1']:flex">
+          <span>Потяните, чтобы изменить порядок</span>
+          <span class="rounded-full border border-brand-soft/60 bg-white/80 px-2 py-0.5 text-[10px]">⋮⋮</span>
+        </div>
       </a>
-      <a href="/settings/company-columns/" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
-        <div class="font-medium">Колонки компаний</div>
-        <div class="text-sm text-brand-dark/70">что показывать в таблице</div>
+      <a
+        href="/settings/company-columns/"
+        class="group relative flex flex-col gap-3 bg-white/90 border border-brand-soft rounded-2xl p-4 shadow-sm backdrop-blur-sm hover:bg-white hover:-translate-y-0.5 hover:shadow-xl hover:border-brand-teal/40 hover:ring-1 hover:ring-brand-teal/30 transition-all"
+        data-section-key="company-columns"
+      >
+        <div class="flex items-start gap-3">
+          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-orange/10 text-brand-orange">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.25h3.5v13.5h-3.5zM10.25 5.25h3.5v13.5h-3.5zM15.25 5.25h3.5v13.5h-3.5z" />
+            </svg>
+          </div>
+          <div class="space-y-1">
+            <div class="font-medium text-brand-dark">Колонки компаний</div>
+            <div class="text-sm text-brand-dark/70">что показывать в таблице</div>
+          </div>
+        </div>
+        <div class="pointer-events-none absolute inset-x-4 bottom-3 hidden items-center justify-between text-[11px] text-brand-dark/60 group-[data-editing='1']:flex">
+          <span>Потяните, чтобы изменить порядок</span>
+          <span class="rounded-full border border-brand-soft/60 bg-white/80 px-2 py-0.5 text-[10px]">⋮⋮</span>
+        </div>
       </a>
-      <a href="/settings/security/" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
-        <div class="font-medium">Безопасность</div>
-        <div class="text-sm text-brand-dark/70">экспорты, попытки, подозрительные действия</div>
+      <a
+        href="/settings/security/"
+        class="group relative flex flex-col gap-3 bg-white/90 border border-brand-soft rounded-2xl p-4 shadow-sm backdrop-blur-sm hover:bg-white hover:-translate-y-0.5 hover:shadow-xl hover:border-brand-teal/40 hover:ring-1 hover:ring-brand-teal/30 transition-all"
+        data-section-key="security"
+      >
+        <div class="flex items-start gap-3">
+          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-teal/10 text-brand-teal">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3.75 6.75 6v4.5c0 4.028 2.66 7.69 6 8.75 3.34-1.06 6-4.722 6-8.75V6L12 3.75Z" />
+            </svg>
+          </div>
+          <div class="space-y-1">
+            <div class="font-medium text-brand-dark">Безопасность</div>
+            <div class="text-sm text-brand-dark/70">экспорты, попытки, подозрительные действия</div>
+          </div>
+        </div>
+        <div class="pointer-events-none absolute inset-x-4 bottom-3 hidden items-center justify-between text-[11px] text-brand-dark/60 group-[data-editing='1']:flex">
+          <span>Потяните, чтобы изменить порядок</span>
+          <span class="rounded-full border border-brand-soft/60 bg-white/80 px-2 py-0.5 text-[10px]">⋮⋮</span>
+        </div>
       </a>
-      <a href="/settings/mobile/overview/" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
-        <div class="font-medium">Мобильное приложение</div>
-        <div class="text-sm text-brand-dark/70">обзор, устройства, статус опроса, версия приложения</div>
+      <a
+        href="/settings/mobile/overview/"
+        class="group relative flex flex-col gap-3 bg-white/90 border border-brand-soft rounded-2xl p-4 shadow-sm backdrop-blur-sm hover:bg-white hover:-translate-y-0.5 hover:shadow-xl hover:border-brand-teal/40 hover:ring-1 hover:ring-brand-teal/30 transition-all"
+        data-section-key="mobile"
+      >
+        <div class="flex items-start gap-3">
+          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-orange/10 text-brand-orange">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 4.5h4.5A2.25 2.25 0 0 1 16.5 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-4.5A2.25 2.25 0 0 1 7.5 17.25V6.75A2.25 2.25 0 0 1 9.75 4.5Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 8.25h4.5" />
+            </svg>
+          </div>
+          <div class="space-y-1">
+            <div class="font-medium text-brand-dark">Мобильное приложение</div>
+            <div class="text-sm text-brand-dark/70">обзор, устройства, статус опроса, версия приложения</div>
+          </div>
+        </div>
+        <div class="pointer-events-none absolute inset-x-4 bottom-3 hidden items-center justify-between text-[11px] text-brand-dark/60 group-[data-editing='1']:flex">
+          <span>Потяните, чтобы изменить порядок</span>
+          <span class="rounded-full border border-brand-soft/60 bg-white/80 px-2 py-0.5 text-[10px]">⋮⋮</span>
+        </div>
       </a>
-      <a href="/settings/calls/stats/" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
-        <div class="font-medium">Статистика звонков</div>
-        <div class="text-sm text-brand-dark/70">звонки менеджеров за день/месяц, статусы, длительность</div>
+      <a
+        href="/settings/calls/stats/"
+        class="group relative flex flex-col gap-3 bg-white/90 border border-brand-soft rounded-2xl p-4 shadow-sm backdrop-blur-sm hover:bg-white hover:-translate-y-0.5 hover:shadow-xl hover:border-brand-teal/40 hover:ring-1 hover:ring-brand-teal/30 transition-all"
+        data-section-key="calls-stats"
+      >
+        <div class="flex items-start gap-3">
+          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-teal/10 text-brand-teal">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.5h16.5M3.75 9.75h10.5M3.75 15h7.5M3.75 20.25h12" />
+            </svg>
+          </div>
+          <div class="space-y-1">
+            <div class="font-medium text-brand-dark">Статистика звонков</div>
+            <div class="text-sm text-brand-dark/70">звонки менеджеров за день/месяц, статусы, длительность</div>
+          </div>
+        </div>
+        <div class="pointer-events-none absolute inset-x-4 bottom-3 hidden items-center justify-between text-[11px] text-brand-dark/60 group-[data-editing='1']:flex">
+          <span>Потяните, чтобы изменить порядок</span>
+          <span class="rounded-full border border-brand-soft/60 bg-white/80 px-2 py-0.5 text-[10px]">⋮⋮</span>
+        </div>
       </a>
-      <a href="/settings/error-log/" class="bg-white border border-brand-soft rounded-2xl p-4 hover:bg-brand-soft/25">
-        <div class="font-medium">Лог ошибок</div>
-        <div class="text-sm text-brand-dark/70">ошибки, исключения, предупреждения на сайте</div>
+      <a
+        href="/settings/error-log/"
+        class="group relative flex flex-col gap-3 bg-white/90 border border-brand-soft rounded-2xl p-4 shadow-sm backdrop-blur-sm hover:bg-white hover:-translate-y-0.5 hover:shadow-xl hover:border-brand-teal/40 hover:ring-1 hover:ring-brand-teal/30 transition-all"
+        data-section-key="error-log"
+      >
+        <div class="flex items-start gap-3">
+          <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-orange/10 text-brand-orange">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4.5m0 3v.75M4.5 4.5h15l-1.5 13.5h-12z" />
+            </svg>
+          </div>
+          <div class="space-y-1">
+            <div class="font-medium text-brand-dark">Лог ошибок</div>
+            <div class="text-sm text-brand-dark/70">ошибки, исключения, предупреждения на сайте</div>
+          </div>
+        </div>
+        <div class="pointer-events-none absolute inset-x-4 bottom-3 hidden items-center justify-between text-[11px] text-brand-dark/60 group-[data-editing='1']:flex">
+          <span>Потяните, чтобы изменить порядок</span>
+          <span class="rounded-full border border-brand-soft/60 bg-white/80 px-2 py-0.5 text-[10px]">⋮⋮</span>
+        </div>
       </a>
     </div>
+
+    <div
+      id="settings-layout-panel"
+      class="hidden items-center justify-between rounded-2xl border border-dashed border-brand-soft bg-white/70 px-4 py-3 text-xs text-brand-dark/80 md:flex"
+    >
+      <div class="space-y-1">
+        <div class="font-medium text-brand-dark text-sm">Режим настройки</div>
+        <div class="text-[11px]">
+          Потяните карточки, чтобы изменить порядок. Настройки сохраняются локально для вашего браузера.
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <label class="flex items-center gap-1.5">
+          <span>Столбцов:</span>
+          <select
+            id="settings-columns-select"
+            class="rounded-lg border border-brand-soft bg-white px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-brand-teal"
+          >
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3" selected>3</option>
+            <option value="4">4</option>
+          </select>
+        </label>
+      </div>
+    </div>
   </div>
+
+  <script>
+    (function () {
+      const grid = document.getElementById("settings-sections-grid");
+      const toggleBtn = document.getElementById("settings-layout-toggle");
+      const panel = document.getElementById("settings-layout-panel");
+      const columnsSelect = document.getElementById("settings-columns-select");
+
+      if (!grid || !toggleBtn || !panel || !columnsSelect) {
+        return;
+      }
+
+      const userId = grid.getAttribute("data-user-id") || "anonymous";
+      const storageKey = "crm_settings_dashboard_layout_v1_" + userId;
+
+      function readState() {
+        try {
+          const raw = localStorage.getItem(storageKey);
+          if (!raw) return null;
+          return JSON.parse(raw);
+        } catch (e) {
+          return null;
+        }
+      }
+
+      function writeState(state) {
+        try {
+          localStorage.setItem(storageKey, JSON.stringify(state));
+        } catch (e) {
+          // ignore quota errors
+        }
+      }
+
+      function getCards() {
+        return Array.from(grid.querySelectorAll("a[data-section-key]"));
+      }
+
+      function applyOrder(order) {
+        if (!Array.isArray(order) || !order.length) return;
+        const byKey = new Map();
+        getCards().forEach((card) => {
+          byKey.set(card.getAttribute("data-section-key"), card);
+        });
+        order.forEach((key) => {
+          const card = byKey.get(key);
+          if (card) {
+            grid.appendChild(card);
+          }
+        });
+      }
+
+      function applyColumns(columns) {
+        const cols = Number(columns) || 3;
+        columnsSelect.value = String(cols);
+        grid.style.gridTemplateColumns = "repeat(" + cols + ", minmax(0, 1fr))";
+      }
+
+      function saveCurrentState() {
+        const order = getCards().map((card) => card.getAttribute("data-section-key"));
+        const columns = Number(columnsSelect.value) || 3;
+        writeState({ order, columns });
+      }
+
+      function setEditMode(on) {
+        grid.setAttribute("data-edit-mode", on ? "1" : "0");
+        panel.classList.toggle("hidden", !on);
+        panel.classList.toggle("flex", on);
+        toggleBtn.classList.toggle("bg-brand-soft/40", on);
+        toggleBtn.classList.toggle("border-brand-teal", on);
+        toggleBtn.querySelector("span:nth-child(2)").textContent = on ? "Готово" : "Настроить разделы";
+
+        getCards().forEach((card) => {
+          card.setAttribute("draggable", on ? "true" : "false");
+          card.dataset.editing = on ? "1" : "0";
+        });
+      }
+
+      // Drag & drop
+      let draggedKey = null;
+
+      grid.addEventListener("dragstart", (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const card = target.closest("a[data-section-key]");
+        if (grid.getAttribute("data-edit-mode") !== "1") {
+          event.preventDefault();
+          return;
+        }
+        if (!card) return;
+        draggedKey = card.getAttribute("data-section-key");
+        if (!event.dataTransfer) return;
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", draggedKey || "");
+      });
+
+      grid.addEventListener("dragover", (event) => {
+        if (grid.getAttribute("data-edit-mode") !== "1") return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+      });
+
+      grid.addEventListener("drop", (event) => {
+        if (grid.getAttribute("data-edit-mode") !== "1") return;
+        event.preventDefault();
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const card = target.closest("a[data-section-key]");
+        if (!card || !draggedKey) return;
+        const draggedCard = grid.querySelector('a[data-section-key="' + draggedKey + '"]');
+        if (!draggedCard || draggedCard === card) return;
+        const cards = getCards();
+        const targetIndex = cards.indexOf(card);
+        if (targetIndex === -1) return;
+        const referenceNode = cards[targetIndex];
+        grid.insertBefore(draggedCard, referenceNode);
+        saveCurrentState();
+      });
+
+      grid.addEventListener("dragend", () => {
+        draggedKey = null;
+      });
+
+      // Не переходим по ссылкам в режиме редактирования
+      grid.addEventListener("click", (event) => {
+        if (grid.getAttribute("data-edit-mode") === "1") {
+          event.preventDefault();
+        }
+      });
+
+      toggleBtn.addEventListener("click", () => {
+        const isEdit = grid.getAttribute("data-edit-mode") === "1";
+        if (isEdit) {
+          saveCurrentState();
+        }
+        setEditMode(!isEdit);
+      });
+
+      columnsSelect.addEventListener("change", () => {
+        applyColumns(columnsSelect.value);
+        saveCurrentState();
+      });
+
+      // Инициализация из localStorage
+      const initial = readState();
+      if (initial) {
+        applyOrder(initial.order);
+        applyColumns(initial.columns);
+      } else {
+        applyColumns(3);
+      }
+
+      setEditMode(false);
+    })();
+  </script>
 {% endblock %}
 
 
