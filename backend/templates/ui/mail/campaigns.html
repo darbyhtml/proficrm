@@ -1,4 +1,5 @@
 {% extends "ui/base.html" %}
+{% load humanize %}
 {% block title %}Почта — CRM ПРОФИ{% endblock %}
 
 {% block content %}
@@ -34,23 +35,29 @@
     {% if quota %}
       {% if is_admin %}
         {# Компактный виджет для администратора с ссылкой на админ-панель #}
-        <div class="card card-pad" id="quota-card">
+        <div class="card card-pad bg-gradient-to-r from-brand-soft/20 to-transparent border border-brand-soft/30" id="quota-card">
           <div class="flex items-center justify-between gap-3">
-            <div class="flex items-center gap-4 text-sm">
-              <div>
-                <div class="text-xs text-brand-dark/60">Квота (месяц)</div>
-                <div class="font-medium {% if quota.emails_available < quota.emails_limit|add:'-'|add:'100' %}text-orange-600{% elif quota.emails_available == 0 %}text-red-600{% else %}text-green-600{% endif %}">
-                  <span id="quota-emails-available">{{ quota.emails_available }}</span> / <span id="quota-emails-limit">{{ quota.emails_limit }}</span>
+            <div class="flex items-center gap-6 text-sm">
+              <div class="flex items-center gap-2">
+                <div class="w-1 h-8 rounded-full {% if quota.emails_available < quota.emails_limit|add:'-'|add:'100' %}bg-orange-400{% elif quota.emails_available == 0 %}bg-red-400{% else %}bg-green-400{% endif %}"></div>
+                <div>
+                  <div class="text-xs text-brand-dark/60">Квота</div>
+                  <div class="font-semibold {% if quota.emails_available < quota.emails_limit|add:'-'|add:'100' %}text-orange-600{% elif quota.emails_available == 0 %}text-red-600{% else %}text-green-600{% endif %}">
+                    <span id="quota-emails-available">{{ quota.emails_available|intcomma }}</span><span class="text-brand-dark/50 font-normal">/{{ quota.emails_limit|intcomma }}</span>
+                  </div>
                 </div>
               </div>
-              <div>
-                <div class="text-xs text-brand-dark/60">Лимит (час)</div>
-                <div class="font-medium">
-                  <span id="quota-sent-per-hour">{{ quota.sent_per_hour|default:0 }}</span> / <span id="quota-max-per-hour">{{ quota.max_per_hour|default:100 }}</span>
+              <div class="flex items-center gap-2">
+                <div class="w-1 h-8 rounded-full bg-blue-400"></div>
+                <div>
+                  <div class="text-xs text-brand-dark/60">Час</div>
+                  <div class="font-semibold">
+                    <span id="quota-sent-per-hour">{{ quota.sent_per_hour|default:0 }}</span><span class="text-brand-dark/50 font-normal">/{{ quota.max_per_hour|default:100 }}</span>
+                  </div>
                 </div>
               </div>
             </div>
-            <a href="/mail/admin/?tab=overview" class="btn btn-outline btn-sm">Подробнее →</a>
+            <a href="/mail/admin/?tab=overview" class="btn btn-outline btn-sm hover:bg-brand hover:text-white transition-all">Подробнее →</a>
           </div>
         </div>
       {% else %}
@@ -111,27 +118,39 @@
 
     {% if is_admin and analytics %}
       {# Компактный виджет аналитики для администратора со ссылкой на админ-панель #}
-      <div class="card card-pad mb-4">
-        <div class="flex items-center justify-between gap-3 mb-3">
-          <div class="font-medium">Статистика (сегодня)</div>
-          <a href="/mail/admin/?tab=analytics" class="btn btn-outline btn-sm">Подробная аналитика →</a>
+      <div class="card card-pad mb-4 bg-gradient-to-br from-white to-brand-soft/5 border border-brand-soft/20">
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <div class="font-semibold text-sm">Статистика (сегодня)</div>
+          <a href="/mail/admin/?tab=analytics" class="btn btn-outline btn-sm hover:bg-brand hover:text-white transition-all">Подробнее →</a>
         </div>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-          <div>
-            <div class="text-xs text-brand-dark/60">Отправлено</div>
-            <div class="font-medium">{{ analytics.total_sent_today }}</div>
+        <div class="grid grid-cols-4 gap-3 text-sm">
+          <div class="flex items-center gap-2">
+            <div class="w-1 h-8 rounded-full bg-green-400"></div>
+            <div>
+              <div class="text-xs text-brand-dark/60">Отправлено</div>
+              <div class="font-semibold text-lg">{{ analytics.total_sent_today }}</div>
+            </div>
           </div>
-          <div>
-            <div class="text-xs text-brand-dark/60">Ошибки</div>
-            <div class="font-medium {% if analytics.total_failed_today > 0 %}text-red-600{% endif %}">{{ analytics.total_failed_today }}</div>
+          <div class="flex items-center gap-2">
+            <div class="w-1 h-8 rounded-full {% if analytics.total_failed_today > 0 %}bg-red-400{% else %}bg-gray-300{% endif %}"></div>
+            <div>
+              <div class="text-xs text-brand-dark/60">Ошибки</div>
+              <div class="font-semibold text-lg {% if analytics.total_failed_today > 0 %}text-red-600{% endif %}">{{ analytics.total_failed_today }}</div>
+            </div>
           </div>
-          <div>
-            <div class="text-xs text-brand-dark/60">Кампаний</div>
-            <div class="font-medium">{{ analytics.campaigns_stats.total }}</div>
+          <div class="flex items-center gap-2">
+            <div class="w-1 h-8 rounded-full bg-blue-400"></div>
+            <div>
+              <div class="text-xs text-brand-dark/60">Кампаний</div>
+              <div class="font-semibold text-lg">{{ analytics.campaigns_stats.total }}</div>
+            </div>
           </div>
-          <div>
-            <div class="text-xs text-brand-dark/60">Активных</div>
-            <div class="font-medium text-green-600">{{ analytics.campaigns_stats.active }}</div>
+          <div class="flex items-center gap-2">
+            <div class="w-1 h-8 rounded-full bg-emerald-400"></div>
+            <div>
+              <div class="text-xs text-brand-dark/60">Активных</div>
+              <div class="font-semibold text-lg text-green-600">{{ analytics.campaigns_stats.active }}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -186,13 +205,27 @@
             {% if campaigns_grouped %}
               {% for group in campaigns_grouped %}
                 {% if group.branch_name %}
-                  <tr class="bg-brand-soft/30">
-                    <td colspan="7" class="font-medium py-2">Филиал: {{ group.branch_name }}</td>
+                  <tr class="bg-gradient-to-r from-brand-soft/40 to-brand-soft/20 border-b border-brand-soft/30">
+                    <td colspan="{% if show_creator_column %}7{% else %}6{% endif %}" class="font-medium py-1.5 px-3 text-sm">
+                      <div class="flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 .75.75v3M18 21v-3a.75.75 0 0 0-.75-.75h-3a.75.75 0 0 0-.75.75v3M3 3h12m-1 1v13a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" />
+                        </svg>
+                        <span>Филиал: {{ group.branch_name }}</span>
+                      </div>
+                    </td>
                   </tr>
                 {% endif %}
                 {% for m in group.managers %}
-                  <tr class="bg-gray-50/80">
-                    <td colspan="7" class="text-sm py-1.5">Менеджер: {{ m.user.get_full_name|default:m.user.username }}</td>
+                  <tr class="bg-gray-50/60">
+                    <td colspan="{% if show_creator_column %}7{% else %}6{% endif %}" class="text-xs py-1 px-3 font-medium text-brand-dark/70">
+                      <div class="flex items-center gap-2">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+                        </svg>
+                        <span>Менеджер: {{ m.user.get_full_name|default:m.user.username }}</span>
+                      </div>
+                    </td>
                   </tr>
                   {% for c in m.campaigns %}
                     {% include "ui/mail/_campaign_row.html" with campaign=c show_creator_column=show_creator_column is_admin=is_admin %}

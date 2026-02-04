@@ -1,52 +1,170 @@
 {% extends "ui/base.html" %}
+{% load humanize %}
 {% block title %}Админ-панель рассылок — CRM ПРОФИ{% endblock %}
 
 {% block content %}
   <style>
+    :root {
+      --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      --gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      --gradient-warning: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      --gradient-danger: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+      --gradient-info: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      --glass-bg: rgba(255, 255, 255, 0.7);
+      --glass-border: rgba(255, 255, 255, 0.18);
+    }
+    
+    .glass-card {
+      background: var(--glass-bg);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--glass-border);
+      box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+    }
+    
     .tab-button {
-      @apply px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200;
-      @apply border border-transparent;
+      @apply px-5 py-2.5 text-sm font-semibold rounded-xl transition-all duration-300;
+      @apply border border-transparent relative overflow-hidden;
+      position: relative;
+    }
+    .tab-button::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+      transition: left 0.5s;
+    }
+    .tab-button:hover::before {
+      left: 100%;
     }
     .tab-button.active {
-      @apply bg-brand text-white shadow-sm;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+      transform: translateY(-2px);
     }
     .tab-button:not(.active) {
-      @apply text-brand-dark/70 hover:text-brand-dark hover:bg-brand-soft/30;
+      background: rgba(255, 255, 255, 0.8);
+      color: #4b5563;
+      border: 1px solid rgba(0, 0, 0, 0.1);
     }
+    .tab-button:not(.active):hover {
+      background: rgba(102, 126, 234, 0.1);
+      color: #667eea;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+    
     .tab-content {
       display: none;
     }
     .tab-content.active {
       display: block;
-      animation: fadeIn 0.2s ease-in;
+      animation: slideInFade 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(4px); }
-      to { opacity: 1; transform: translateY(0); }
+    @keyframes slideInFade {
+      from { 
+        opacity: 0; 
+        transform: translateY(20px) scale(0.98);
+      }
+      to { 
+        opacity: 1; 
+        transform: translateY(0) scale(1);
+      }
     }
+    
     .stat-card {
-      @apply p-4 rounded-lg border border-brand-soft/50 bg-white transition-all duration-200;
+      background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255,255,255,0.5);
+      border-radius: 16px;
+      padding: 1.5rem;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: var(--gradient-primary);
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform 0.3s;
     }
     .stat-card:hover {
-      @apply shadow-md border-brand-soft;
-      transform: translateY(-1px);
+      transform: translateY(-4px) scale(1.02);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    }
+    .stat-card:hover::before {
+      transform: scaleX(1);
+    }
+    
+    .metric-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+      border: 1px solid rgba(102, 126, 234, 0.2);
+      transition: all 0.3s;
+    }
+    .metric-badge:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+    
+    .pulse-ring {
+      animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+    @keyframes pulse-ring {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(1.1); }
+    }
+    
+    .gradient-text {
+      background: var(--gradient-primary);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
   </style>
   
-  <div class="space-y-4">
+  <div class="space-y-6">
     {# Заголовок и навигация #}
-    <div class="flex items-end justify-between gap-3">
-      <div>
-        <div class="text-sm muted mb-1"><a class="link" href="/mail/campaigns/">Почта</a> /</div>
-        <h1 class="text-2xl font-semibold">Админ-панель рассылок</h1>
-        <div class="muted text-sm mt-1">Управление настройками, лимитами и аналитика</div>
+    <div class="glass-card rounded-2xl p-6 bg-gradient-to-br from-white via-brand-soft/10 to-white">
+      <div class="flex items-end justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2 mb-2">
+            <div class="w-1 h-6 rounded-full bg-gradient-to-b from-purple-500 to-pink-500"></div>
+            <a class="text-sm text-brand-dark/60 hover:text-brand transition-colors" href="/mail/campaigns/">Почта</a>
+            <span class="text-brand-dark/40">/</span>
+            <span class="text-sm font-medium gradient-text">Админ-панель</span>
+          </div>
+          <h1 class="text-3xl font-bold mb-2 gradient-text">Админ-панель рассылок</h1>
+          <div class="text-brand-dark/70 text-sm">Управление настройками, лимитами и аналитика</div>
+        </div>
+        <a href="/mail/campaigns/" class="btn btn-outline hover:bg-gradient-to-r hover:from-purple-500 hover:to-pink-500 hover:text-white hover:border-transparent transition-all duration-300 transform hover:scale-105">
+          <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+          </svg>
+          К кампаниям
+        </a>
       </div>
-      <a href="/mail/campaigns/" class="btn btn-outline">← К кампаниям</a>
     </div>
 
     {# Табы #}
-    <div class="card card-pad">
-      <div class="flex flex-wrap gap-2 border-b border-brand-soft/30 pb-3 mb-4">
+    <div class="glass-card rounded-2xl p-6">
+      <div class="flex flex-wrap gap-3 mb-6 pb-4 border-b border-gradient-to-r from-transparent via-brand-soft/30 to-transparent">
         <a href="?tab=overview" class="tab-button {% if active_tab == 'overview' %}active{% endif %}">
           <span class="flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
@@ -95,34 +213,72 @@
         {% if overview_data %}
           <div class="space-y-4">
             {# Ключевые метрики #}
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div class="stat-card">
-                <div class="text-xs text-brand-dark/60 mb-1">Отправлено сегодня</div>
-                <div class="text-2xl font-semibold text-brand">{{ overview_data.total_sent_today }}</div>
-                <div class="text-xs text-brand-dark/50 mt-1">писем</div>
-              </div>
-              <div class="stat-card">
-                <div class="text-xs text-brand-dark/60 mb-1">Ошибки</div>
-                <div class="text-2xl font-semibold {% if overview_data.total_failed_today > 0 %}text-red-600{% else %}text-green-600{% endif %}">
-                  {{ overview_data.total_failed_today }}
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+              <div class="stat-card group relative overflow-hidden" style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.05) 100%);">
+                <div class="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-purple-400/20 to-pink-400/20 rounded-full blur-2xl"></div>
+                <div class="relative">
+                  <div class="flex items-center justify-between mb-2">
+                    <div class="text-xs font-medium text-brand-dark/60 uppercase tracking-wide">Отправлено</div>
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                      <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div class="text-3xl font-bold gradient-text mb-1">{{ overview_data.total_sent_today|intcomma }}</div>
+                  <div class="text-xs text-brand-dark/50">писем сегодня</div>
                 </div>
-                <div class="text-xs text-brand-dark/50 mt-1">недоставлено</div>
               </div>
-              <div class="stat-card">
-                <div class="text-xs text-brand-dark/60 mb-1">Активных кампаний</div>
-                <div class="text-2xl font-semibold text-green-600">{{ overview_data.campaigns_stats.active }}</div>
-                <div class="text-xs text-brand-dark/50 mt-1">из {{ overview_data.campaigns_stats.total }} всего</div>
+              <div class="stat-card group relative overflow-hidden" style="background: linear-gradient(135deg, {% if overview_data.total_failed_today > 0 %}rgba(239, 68, 68, 0.1){% else %}rgba(16, 185, 129, 0.1){% endif %} 0%, {% if overview_data.total_failed_today > 0 %}rgba(220, 38, 38, 0.05){% else %}rgba(5, 150, 105, 0.05){% endif %} 100%);">
+                <div class="absolute top-0 right-0 w-20 h-20 {% if overview_data.total_failed_today > 0 %}bg-gradient-to-br from-red-400/20 to-orange-400/20{% else %}bg-gradient-to-br from-green-400/20 to-emerald-400/20{% endif %} rounded-full blur-2xl"></div>
+                <div class="relative">
+                  <div class="flex items-center justify-between mb-2">
+                    <div class="text-xs font-medium text-brand-dark/60 uppercase tracking-wide">Ошибки</div>
+                    <div class="w-8 h-8 rounded-lg {% if overview_data.total_failed_today > 0 %}bg-gradient-to-br from-red-500 to-orange-500{% else %}bg-gradient-to-br from-green-500 to-emerald-500{% endif %} flex items-center justify-center">
+                      <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{% if overview_data.total_failed_today > 0 %}M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z{% else %}M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z{% endif %}" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div class="text-3xl font-bold {% if overview_data.total_failed_today > 0 %}text-red-600{% else %}text-green-600{% endif %} mb-1">{{ overview_data.total_failed_today|intcomma }}</div>
+                  <div class="text-xs text-brand-dark/50">недоставлено</div>
+                </div>
               </div>
-              <div class="stat-card">
-                <div class="text-xs text-brand-dark/60 mb-1">За последний час</div>
-                <div class="text-2xl font-semibold">{{ overview_data.sent_last_hour }}</div>
-                <div class="text-xs text-brand-dark/50 mt-1">/ {{ overview_data.max_per_hour }} лимит</div>
+              <div class="stat-card group relative overflow-hidden" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.1) 0%, rgba(5, 150, 105, 0.05) 100%);">
+                <div class="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-green-400/20 to-emerald-400/20 rounded-full blur-2xl"></div>
+                <div class="relative">
+                  <div class="flex items-center justify-between mb-2">
+                    <div class="text-xs font-medium text-brand-dark/60 uppercase tracking-wide">Активных</div>
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center pulse-ring">
+                      <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div class="text-3xl font-bold text-green-600 mb-1">{{ overview_data.campaigns_stats.active }}</div>
+                  <div class="text-xs text-brand-dark/50">из {{ overview_data.campaigns_stats.total }} всего</div>
+                </div>
+              </div>
+              <div class="stat-card group relative overflow-hidden" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(37, 99, 235, 0.05) 100%);">
+                <div class="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-blue-400/20 to-indigo-400/20 rounded-full blur-2xl"></div>
+                <div class="relative">
+                  <div class="flex items-center justify-between mb-2">
+                    <div class="text-xs font-medium text-brand-dark/60 uppercase tracking-wide">За час</div>
+                    <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
+                      <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                  </div>
+                  <div class="text-3xl font-bold text-blue-600 mb-1">{{ overview_data.sent_last_hour|intcomma }}</div>
+                  <div class="text-xs text-brand-dark/50">/ {{ overview_data.max_per_hour }} лимит</div>
+                </div>
               </div>
             </div>
 
             {# Квота smtp.bz #}
             {% if overview_data.quota %}
-              <div class="card card-pad bg-gradient-to-r from-brand-soft/20 to-brand-soft/5">
+              <div class="glass-card rounded-2xl p-6 bg-gradient-to-br from-purple-50 via-pink-50 to-blue-50 border-2 border-purple-200/50">
                 <div class="flex items-center justify-between gap-3 mb-3">
                   <div class="font-medium">Тариф smtp.bz</div>
                   <div class="flex items-center gap-2 text-xs">
@@ -169,46 +325,60 @@
             {% endif %}
 
             {# Статус SMTP #}
-            <div class="card card-pad">
+            <div class="glass-card rounded-2xl p-6 {% if overview_data.smtp_enabled %}bg-gradient-to-br from-green-50 to-emerald-50 border-green-200/50{% else %}bg-gradient-to-br from-red-50 to-orange-50 border-red-200/50{% endif %}">
               <div class="flex items-center justify-between">
-                <div>
-                  <div class="font-medium mb-1">Статус SMTP</div>
-                  <div class="text-sm text-brand-dark/70">
-                    {% if overview_data.smtp_enabled %}
-                      <span class="text-green-600">✓ Включен</span>
-                    {% else %}
-                      <span class="text-red-600">✗ Отключен</span>
-                    {% endif %}
+                <div class="flex items-center gap-4">
+                  <div class="w-12 h-12 rounded-xl {% if overview_data.smtp_enabled %}bg-gradient-to-br from-green-500 to-emerald-500{% else %}bg-gradient-to-br from-red-500 to-orange-500{% endif %} flex items-center justify-center shadow-lg">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="{% if overview_data.smtp_enabled %}M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z{% else %}M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z{% endif %}" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div class="font-semibold text-lg mb-1">Статус SMTP</div>
+                    <div class="text-sm {% if overview_data.smtp_enabled %}text-green-700{% else %}text-red-700{% endif %} font-medium">
+                      {% if overview_data.smtp_enabled %}
+                        ✓ Включен и готов к работе
+                      {% else %}
+                        ✗ Отключен
+                      {% endif %}
+                    </div>
                   </div>
                 </div>
-                <a href="?tab=settings" class="btn btn-outline btn-sm">Настроить →</a>
+                <a href="?tab=settings" class="btn btn-outline btn-sm hover:bg-gradient-to-r hover:from-purple-500 hover:to-pink-500 hover:text-white hover:border-transparent transition-all duration-300 transform hover:scale-105">Настроить →</a>
               </div>
             </div>
 
             {# Статистика smtp.bz #}
             {% if overview_data.smtp_bz %}
-              <div class="card card-pad">
-                <div class="font-medium mb-3">Статистика smtp.bz (сегодня)</div>
-                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
-                  <div>
-                    <div class="text-xs text-brand-dark/60">Открытия</div>
-                    <div class="font-medium">{{ overview_data.smtp_bz.opened|default:"—" }}</div>
+              <div class="glass-card rounded-2xl p-6 bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 border-indigo-200/50">
+                <div class="flex items-center gap-2 mb-4">
+                  <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center">
+                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
                   </div>
-                  <div>
-                    <div class="text-xs text-brand-dark/60">Отписки</div>
-                    <div class="font-medium">{{ overview_data.smtp_bz.unsub|default:"—" }}</div>
+                  <div class="font-semibold text-lg">Статистика smtp.bz (сегодня)</div>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
+                  <div class="bg-white/60 rounded-xl p-3 border border-white/80">
+                    <div class="text-xs font-medium text-brand-dark/60 mb-1 uppercase tracking-wide">Открытия</div>
+                    <div class="text-xl font-bold text-indigo-600">{{ overview_data.smtp_bz.opened|default:"—"|intcomma }}</div>
                   </div>
-                  <div>
-                    <div class="text-xs text-brand-dark/60">Bounce</div>
-                    <div class="font-medium">{{ overview_data.smtp_bz.bounce|default:"—" }}</div>
+                  <div class="bg-white/60 rounded-xl p-3 border border-white/80">
+                    <div class="text-xs font-medium text-brand-dark/60 mb-1 uppercase tracking-wide">Отписки</div>
+                    <div class="text-xl font-bold text-orange-600">{{ overview_data.smtp_bz.unsub|default:"—"|intcomma }}</div>
                   </div>
-                  <div>
-                    <div class="text-xs text-brand-dark/60">Return</div>
-                    <div class="font-medium">{{ overview_data.smtp_bz.return|default:"—" }}</div>
+                  <div class="bg-white/60 rounded-xl p-3 border border-white/80">
+                    <div class="text-xs font-medium text-brand-dark/60 mb-1 uppercase tracking-wide">Bounce</div>
+                    <div class="text-xl font-bold text-red-600">{{ overview_data.smtp_bz.bounce|default:"—"|intcomma }}</div>
                   </div>
-                  <div>
-                    <div class="text-xs text-brand-dark/60">Cancel</div>
-                    <div class="font-medium">{{ overview_data.smtp_bz.cancel|default:"—" }}</div>
+                  <div class="bg-white/60 rounded-xl p-3 border border-white/80">
+                    <div class="text-xs font-medium text-brand-dark/60 mb-1 uppercase tracking-wide">Return</div>
+                    <div class="text-xl font-bold text-yellow-600">{{ overview_data.smtp_bz.return|default:"—"|intcomma }}</div>
+                  </div>
+                  <div class="bg-white/60 rounded-xl p-3 border border-white/80">
+                    <div class="text-xs font-medium text-brand-dark/60 mb-1 uppercase tracking-wide">Cancel</div>
+                    <div class="text-xl font-bold text-gray-600">{{ overview_data.smtp_bz.cancel|default:"—"|intcomma }}</div>
                   </div>
                 </div>
               </div>
