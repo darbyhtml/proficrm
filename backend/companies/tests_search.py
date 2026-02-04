@@ -116,6 +116,7 @@ class SearchServicePostgresTests(TestCase):
         """
         Регрессия: запрос "иванов 8926" с разнесёнными токенами (контакт + телефон компании)
         должен не только найти компанию, но и дать ненулевой explain.
+        Queryset ограничен одной компанией, чтобы не зависеть от порога score при большом числе компаний в БД.
         """
         c = Company.objects.create(name="ООО Тест", inn="1234567890", status=self.status)
         # text‑токен уходит в контакт
@@ -125,7 +126,8 @@ class SearchServicePostgresTests(TestCase):
 
         rebuild_company_search_index(c.id)
 
-        qs = CompanySearchService().apply(qs=Company.objects.all(), query="иванов 8926")
+        base_qs = Company.objects.filter(id=c.id)
+        qs = CompanySearchService().apply(qs=base_qs, query="иванов 8926")
         page = list(qs[:10])
         self.assertTrue(any(x.id == c.id for x in page), "Компания должна быть в выдаче по AND-запросу.")
 
