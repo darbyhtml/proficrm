@@ -1757,6 +1757,18 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
     # next_run_at берется из deferred_until
     next_run_at = deferred_until.isoformat() if deferred_until else None
 
+    # Достигнут ли дневной лимит пользователя (для виджета «Лимит на сегодня исчерпан»)
+    per_user_daily_limit = smtp_cfg.per_user_daily_limit or PER_USER_DAILY_LIMIT_DEFAULT
+    start_day_utc, end_day_utc, _ = msk_day_bounds(timezone.now())
+    sent_today_user = SendLog.objects.filter(
+        provider="smtp_global",
+        status="sent",
+        campaign__created_by=user,
+        created_at__gte=start_day_utc,
+        created_at__lt=end_day_utc,
+    ).count()
+    limit_reached = bool(per_user_daily_limit and sent_today_user >= per_user_daily_limit)
+
     return JsonResponse(
         {
             "ok": True,
@@ -1776,6 +1788,7 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
                 "deferred_until": deferred_until.isoformat() if deferred_until else None,
                 "defer_reason": defer_reason,
                 "next_run_at": next_run_at,
+                "limit_reached": limit_reached,
             },
             "active_campaign": active_campaign,
             "queued_count": queued_count,
