@@ -621,8 +621,12 @@ def send_pending_emails(self, batch_size: int = 50):
             
             # Проверка доступных писем из квоты
             if emails_available <= 0:
+                from datetime import timedelta
+                next_check = timezone.now() + timedelta(minutes=30)
+                if quota.last_synced_at:
+                    next_check = quota.last_synced_at + timedelta(minutes=30)
                 logger.info(
-                    f"Campaign {camp.id}: quota exhausted ({emails_available}/{emails_limit}), deferring",
+                    f"Campaign {camp.id}: quota exhausted ({emails_available}/{emails_limit}), deferring until {next_check}",
                     extra={
                         "campaign_id": str(camp.id),
                         "queue_id": str(queue_entry.id) if queue_entry else None,
@@ -632,12 +636,6 @@ def send_pending_emails(self, batch_size: int = 50):
                         "emails_limit": emails_limit,
                     }
                 )
-                # Вычисляем время следующей проверки (через час или после следующего sync)
-                from datetime import timedelta
-                next_check = timezone.now() + timedelta(hours=1)
-                if quota.last_synced_at:
-                    # Если есть sync, проверяем после следующего sync (примерно через 30 минут)
-                    next_check = quota.last_synced_at + timedelta(minutes=30)
                 defer_queue(queue_entry, DEFER_REASON_QUOTA, next_check, notify=True)
                 continue
             

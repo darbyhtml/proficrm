@@ -20,7 +20,7 @@
     <div class="card card-pad">
       {# Статус в самом правом верхнем углу над всеми кнопками #}
       <div class="flex items-start justify-end mb-3">
-        <span class="badge {% if campaign.status == 'sending' %}bg-green-100 text-green-800{% elif campaign.status == 'paused' %}bg-orange-100 text-orange-800{% elif campaign.status == 'sent' %}bg-blue-100 text-blue-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+        <span class="badge" id="campaign-status-badge" data-status="{{ campaign.status }}" {% if campaign.status == 'sending' %}class="bg-green-100 text-green-800"{% elif campaign.status == 'paused' %}class="bg-orange-100 text-orange-800"{% elif campaign.status == 'sent' %}class="bg-blue-100 text-blue-800"{% else %}class="bg-gray-100 text-gray-800"{% endif %}>
           {% if campaign.status == 'sent' and counts.failed > 0 %}
             Завершено с ошибками
           {% else %}
@@ -36,26 +36,24 @@
           <h1 class="text-xl font-semibold truncate">{{ campaign.name }}</h1>
         </div>
         
-        {# Компактная статистика #}
-        <div class="flex items-center gap-3 flex-wrap">
+        {# Компактная статистика (обновляется по опросу для live-прогресса) #}
+        <div class="flex items-center gap-3 flex-wrap" id="campaign-stats" data-campaign-id="{{ campaign.id }}">
           <div class="flex items-center gap-1 text-sm">
             <span class="text-brand-dark/60">Всего:</span>
-            <span class="font-medium">{{ counts.total }}</span>
+            <span class="font-medium" id="campaign-stat-total">{{ counts.total }}</span>
           </div>
           <div class="flex items-center gap-1 text-sm">
             <span class="text-brand-dark/60">Очередь:</span>
-            <span class="font-medium {% if counts.pending > 0 %}text-orange-600{% endif %}">{{ counts.pending }}</span>
+            <span class="font-medium {% if counts.pending > 0 %}text-orange-600{% endif %}" id="campaign-stat-pending">{{ counts.pending }}</span>
           </div>
           <div class="flex items-center gap-1 text-sm">
             <span class="text-brand-dark/60">Отправлено:</span>
-            <span class="font-medium {% if counts.sent > 0 %}text-green-600{% endif %}">{{ counts.sent }}</span>
+            <span class="font-medium {% if counts.sent > 0 %}text-green-600{% endif %}" id="campaign-stat-sent">{{ counts.sent }}</span>
           </div>
-          {% if counts.failed > 0 %}
-            <div class="flex items-center gap-1 text-sm">
-              <span class="text-brand-dark/60">Ошибки:</span>
-              <span class="font-medium text-red-600">{{ counts.failed }}</span>
-            </div>
-          {% endif %}
+          <div class="flex items-center gap-1 text-sm" id="campaign-stat-failed-wrap" {% if counts.failed == 0 %}style="display:none"{% endif %}>
+            <span class="text-brand-dark/60">Ошибки:</span>
+            <span class="font-medium text-red-600" id="campaign-stat-failed">{{ counts.failed }}</span>
+          </div>
         </div>
         
         {# Кнопки управления #}
@@ -997,6 +995,42 @@
       branchSelect.addEventListener('change', filterResponsibles);
       // При открытии модалки/первом рендере тоже применяем фильтр
       filterResponsibles();
+    })();
+  </script>
+{% endblock %}
+
+{% block extra_js %}
+  <script>
+    (function () {
+      const statsEl = document.getElementById('campaign-stats');
+      const campaignId = statsEl && statsEl.getAttribute('data-campaign-id');
+      if (!campaignId) return;
+      const POLL_MS = 30000;
+      const statusBadge = document.getElementById('campaign-status-badge');
+      const el = (id) => document.getElementById(id);
+      const statusClasses = { sending: 'bg-green-100 text-green-800', paused: 'bg-orange-100 text-orange-800', sent: 'bg-blue-100 text-blue-800', ready: 'bg-gray-100 text-gray-800', draft: 'bg-gray-100 text-gray-800', stopped: 'bg-gray-100 text-gray-800' };
+      const statusLabels = { sending: 'Отправляется', paused: 'На паузе', sent: 'Отправлено', ready: 'Готово', draft: 'Черновик', stopped: 'Остановлено' };
+      function updateUi(data) {
+        if (!data || !data.ok) return;
+        if (el('campaign-stat-total')) el('campaign-stat-total').textContent = data.total;
+        if (el('campaign-stat-pending')) { el('campaign-stat-pending').textContent = data.pending; el('campaign-stat-pending').className = 'font-medium' + (data.pending > 0 ? ' text-orange-600' : ''); }
+        if (el('campaign-stat-sent')) { el('campaign-stat-sent').textContent = data.sent; el('campaign-stat-sent').className = 'font-medium' + (data.sent > 0 ? ' text-green-600' : ''); }
+        if (el('campaign-stat-failed')) el('campaign-stat-failed').textContent = data.failed;
+        const failedWrap = el('campaign-stat-failed-wrap');
+        if (failedWrap) failedWrap.style.display = (data.failed > 0 ? '' : 'none');
+        if (statusBadge && data.status) {
+          statusBadge.setAttribute('data-status', data.status);
+          statusBadge.className = 'badge ' + (statusClasses[data.status] || 'bg-gray-100 text-gray-800');
+          statusBadge.textContent = (data.status === 'sent' && data.failed > 0) ? 'Завершено с ошибками' : (statusLabels[data.status] || data.status);
+        }
+      }
+      function poll() {
+        fetch('/mail/campaigns/' + campaignId + '/progress/poll/', { credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(updateUi)
+          .catch(function () {});
+      }
+      setInterval(poll, POLL_MS);
     })();
   </script>
 {% endblock %}

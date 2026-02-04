@@ -15,6 +15,7 @@ urlpatterns = [
     path("mail/campaigns/pick/", views.campaign_pick, name="campaign_pick"),
     path("mail/campaigns/add-email/", views.campaign_add_email, name="campaign_add_email"),
     path("mail/campaigns/<uuid:campaign_id>/", views.campaign_detail, name="campaign_detail"),
+    path("mail/campaigns/<uuid:campaign_id>/progress/poll/", views.campaign_progress_poll, name="campaign_progress_poll"),
     path("mail/campaigns/<uuid:campaign_id>/edit/", views.campaign_edit, name="campaign_edit"),
     path("mail/campaigns/<uuid:campaign_id>/attachment/download/", views.campaign_attachment_download, name="campaign_attachment_download"),
     path("mail/campaigns/<uuid:campaign_id>/attachment/delete/", views.campaign_attachment_delete, name="campaign_attachment_delete"),

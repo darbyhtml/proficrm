@@ -454,7 +454,22 @@ def campaigns(request: HttpRequest) -> HttpResponse:
             # Если у пользователя нет филиала, показываем только свои
             qs = qs.filter(created_by=user)
     # Для админа и управляющего - все кампании (без фильтрации)
-    
+
+    # Фильтры по филиалу и менеджеру (для ролей с широкой видимостью)
+    show_creator_column = (is_admin or is_group_manager or is_branch_director or is_sales_head)
+    filter_branch_id = request.GET.get("branch", "").strip()
+    filter_manager_id = request.GET.get("manager", "").strip()
+    if show_creator_column and filter_branch_id:
+        try:
+            qs = qs.filter(created_by__branch_id=filter_branch_id)
+        except (ValueError, TypeError):
+            pass
+    if show_creator_column and filter_manager_id:
+        try:
+            qs = qs.filter(created_by_id=int(filter_manager_id))
+        except (ValueError, TypeError):
+            pass
+
     # Аналитика для администратора
     analytics = None
     if is_admin:
@@ -640,9 +655,6 @@ def campaigns(request: HttpRequest) -> HttpResponse:
         "active_campaigns": user_active_campaigns,
     }
     
-    # Определяем, показывать ли колонку "Создатель" в таблице
-    show_creator_column = (is_admin or is_group_manager or is_branch_director or is_sales_head)
-    
     # Добавляем информацию о паузе и рабочем времени для каждой кампании
     from mailer.tasks import _is_working_hours
     campaigns_list = list(qs)
@@ -667,6 +679,27 @@ def campaigns(request: HttpRequest) -> HttpResponse:
     # Оптимизация: предзагружаем queue_entry одним запросом
     campaign_ids = [c.id for c in campaigns_list]
     queue_entries = {str(q.campaign_id): q for q in CampaignQueue.objects.filter(campaign_id__in=campaign_ids).select_related("campaign")}
+
+    # Счётчики по кампаниям (отправлено/всего) для прогресса в списке
+    rec_agg = (
+        CampaignRecipient.objects.filter(campaign_id__in=campaign_ids)
+        .values("campaign_id")
+        .annotate(
+            sent=Count("id", filter=Q(status=CampaignRecipient.Status.SENT)),
+            pending=Count("id", filter=Q(status=CampaignRecipient.Status.PENDING)),
+            failed=Count("id", filter=Q(status=CampaignRecipient.Status.FAILED)),
+            total=Count("id"),
+        )
+    )
+    counts_by_campaign = {str(r["campaign_id"]): r for r in rec_agg}
+    for camp in campaigns_list:
+        c = counts_by_campaign.get(str(camp.id), {})
+        camp.counts = {  # type: ignore[attr-defined]
+            "sent": int(c.get("sent") or 0),
+            "pending": int(c.get("pending") or 0),
+            "failed": int(c.get("failed") or 0),
+            "total": int(c.get("total") or 0),
+        }
 
     # Оптимизация: сколько отправлено "сегодня" по каждому создателю (для pause reasons) одним запросом
     creator_ids = [c.created_by_id for c in campaigns_list if getattr(c, "created_by_id", None)]
@@ -717,12 +750,46 @@ def campaigns(request: HttpRequest) -> HttpResponse:
         camp.is_working_time = is_working_time  # type: ignore[attr-defined]
         camp.current_time_msk = current_time_msk  # type: ignore[attr-defined]
         camp.queue_entry = queue_entries.get(str(camp.id))  # type: ignore[attr-defined]
-    
+
+    # Группировка по филиалу и менеджеру для ролей с широкой видимостью
+    campaigns_grouped = []
+    if show_creator_column and campaigns_list:
+        from collections import OrderedDict
+        by_branch = OrderedDict()
+        for camp in campaigns_list:
+            branch = getattr(camp.created_by, "branch", None) if camp.created_by else None
+            branch_key = (branch.id if branch else None, branch.name if branch else "Без филиала")
+            creator = camp.created_by
+            creator_id = creator.id if creator else 0
+            if branch_key not in by_branch:
+                by_branch[branch_key] = OrderedDict()
+            if creator_id not in by_branch[branch_key]:
+                by_branch[branch_key][creator_id] = (creator, [])
+            by_branch[branch_key][creator_id][1].append(camp)
+        for (branch_id, branch_name), creators in by_branch.items():
+            managers = [{"user": u, "campaigns": camps} for u, camps in creators.values()]
+            campaigns_grouped.append({"branch_id": branch_id, "branch_name": branch_name, "managers": managers})
+
+    # Данные для фильтров (филиалы и менеджеры)
+    branches_for_filter = []
+    managers_for_filter = []
+    if show_creator_column:
+        if is_admin or is_group_manager:
+            branches_for_filter = list(Branch.objects.all().order_by("name"))
+        elif user.branch:
+            branches_for_filter = [user.branch]
+        manager_ids = list(dict.fromkeys([c.created_by_id for c in campaigns_list if c.created_by_id]))
+        if manager_ids:
+            managers_for_filter = list(
+                User.objects.filter(id__in=manager_ids).order_by("first_name", "last_name", "username")
+            )
+
     return render(
         request,
         "ui/mail/campaigns.html",
         {
             "campaigns": campaigns_list,
+            "campaigns_grouped": campaigns_grouped,
             "is_admin": is_admin,
             "is_group_manager": is_group_manager,
             "is_branch_director": is_branch_director,
@@ -733,6 +800,10 @@ def campaigns(request: HttpRequest) -> HttpResponse:
             "show_creator_column": show_creator_column,
             "is_working_time": is_working_time,
             "current_time_msk": current_time_msk,
+            "filter_branch_id": filter_branch_id,
+            "filter_manager_id": filter_manager_id,
+            "branches_for_filter": branches_for_filter,
+            "managers_for_filter": managers_for_filter,
         }
     )
 
@@ -1349,6 +1420,62 @@ def mail_progress_poll(request: HttpRequest) -> JsonResponse:
             "next_campaign_at": next_campaign_at.isoformat() if next_campaign_at else None,
         }
     )
+
+
+@login_required
+def campaign_progress_poll(request: HttpRequest, campaign_id) -> JsonResponse:
+    """
+    Опрос прогресса одной кампании для live-обновления на странице детали.
+    Возвращает счётчики и статус очереди.
+    """
+    user: User = request.user
+    enforce(
+        user=request.user,
+        resource_type="action",
+        resource="ui:mail:campaigns:detail",
+        context={"path": request.path, "method": request.method},
+    )
+    camp = get_object_or_404(Campaign, id=campaign_id)
+    if not _can_manage_campaign(user, camp):
+        return JsonResponse({"ok": False, "error": "forbidden"}, status=403)
+    agg = camp.recipients.aggregate(
+        pending=Count("id", filter=Q(status=CampaignRecipient.Status.PENDING)),
+        sent=Count("id", filter=Q(status=CampaignRecipient.Status.SENT)),
+        failed=Count("id", filter=Q(status=CampaignRecipient.Status.FAILED)),
+        total=Count("id"),
+    )
+    pending = int(agg.get("pending") or 0)
+    sent = int(agg.get("sent") or 0)
+    failed = int(agg.get("failed") or 0)
+    total = int(agg.get("total") or 0)
+    done = sent + failed
+    percent = int(round((done / total) * 100)) if total > 0 else 0
+    percent = max(0, min(100, percent))
+    q = getattr(camp, "queue_entry", None)
+    deferred_until = getattr(q, "deferred_until", None) if q else None
+    defer_reason = (getattr(q, "defer_reason", None) or "") if q else ""
+    reason_texts = {
+        "daily_limit": "Дневной лимит достигнут",
+        "quota_exhausted": "Квота smtp.bz исчерпана",
+        "outside_hours": "Вне рабочего времени",
+        "rate_per_hour": "Лимит в час достигнут",
+        "transient_error": "Временная ошибка отправки",
+    }
+    reason_text = reason_texts.get(defer_reason, defer_reason) if defer_reason else ""
+    return JsonResponse({
+        "ok": True,
+        "campaign_id": str(camp.id),
+        "status": camp.status,
+        "pending": pending,
+        "sent": sent,
+        "failed": failed,
+        "total": total,
+        "percent": percent,
+        "queue_status": getattr(q, "status", None) if q else None,
+        "deferred_until": deferred_until.isoformat() if deferred_until else None,
+        "defer_reason": defer_reason,
+        "reason_text": reason_text,
+    })
 
 
 @login_required

@@ -97,7 +97,7 @@ def defer_queue(
             time_str = until_msk.strftime("%H:%M")
             date_str = until_msk.strftime("%d.%m")
             
-            body = f"{title}. Продолжим в {time_str} МСК ({date_str})."
+            body = f"{title}. Продолжим в {time_str} МСК ({date_str}). Кампания возобновится автоматически."
             
             notify_user(
                 user=user,
