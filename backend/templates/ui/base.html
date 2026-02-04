@@ -97,6 +97,7 @@
 
       /* Почтовый виджет рассылки — 2026: стекло, мягкое свечение, плавное появление и раскрытие по hover */
       .mail-progress-2026{
+        position: fixed;
         max-width: min(400px, calc(100vw - 2rem));
         text-decoration: none;
         color: inherit;
@@ -219,6 +220,8 @@
         .mail-progress-2026{ left: 1rem !important; bottom: 5rem !important; }
         .mail-progress-2026:hover .mail-progress-2026__body{ max-width: 12rem; }
         .mail-progress-2026__title{ max-width: 11rem; }
+        .mail-progress-2026__counts{ display: none; }
+        .mail-progress-2026__counts-short{ display: block; }
       }
       
       /* Глобальные стили скроллбаров (как в календаре) */
