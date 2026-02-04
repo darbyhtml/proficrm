@@ -291,7 +291,7 @@
       {% endif %}
     {% endif %}
 
-    {% if show_creator_column and (branches_for_filter|length > 1 or managers_for_filter|length > 1) %}
+    {% if show_creator_column and branches_for_filter and branches_for_filter|length > 1 or show_creator_column and managers_for_filter and managers_for_filter|length > 1 %}
       <div class="card card-pad mb-4">
         <div class="flex flex-wrap items-center gap-3">
           <span class="text-sm font-medium text-brand-dark/70">Фильтр:</span>
