@@ -154,6 +154,10 @@ def classify_text_query(raw: str, text_tokens: tuple[str, ...]) -> str:
     )
     if any(kw in r_lower for kw in addr_keywords):
         return TEXT_QUERY_ADDRESS
+    # ОПФ в начале/в токенах → скорее название компании, не ФИО
+    company_prefixes = {"ооо", "оао", "зао", "ип", "ао", "пао", "нао", "нко", "тк"}
+    if any(t in company_prefixes for t in (x.lower() for x in text_tokens)):
+        return TEXT_QUERY_COMPANY_OR_GENERAL
     # Похож на ФИО: 2–3 слова буквами, без цифр, каждое >= 2 символов
     tokens = [t for t in text_tokens if len(t) >= 2 and t.isalpha()]
     if 2 <= len(tokens) <= 3 and not any(only_digits(t) for t in text_tokens):
@@ -290,6 +294,13 @@ def build_company_index_payload(company: Company) -> dict[str, str | list[str]]:
         glued = fold_text_glued(company.name)
         if glued and len(glued) <= 64:
             name_parts.append(f"название_слито: {glued}")
+        # Дефисные части как отдельное слово: "Сиб-Энерго" → "сибэнерго" (запрос "сибэнерго" находит)
+        hyphen_word_re = re.compile(r"[A-Za-zА-Яа-яЁё]+-[A-Za-zА-Яа-яЁё]+")
+        for m in hyphen_word_re.finditer(company.name):
+            segment = m.group(0)
+            glued = "".join(fold_text(p).strip() for p in segment.split("-") if fold_text(p).strip())
+            if glued and len(glued) <= 48:
+                name_parts.append(f"название_дефис_склейка: {glued}")
 
     # Юридическое название + нормализованные представления
     if (company.legal_name or "").strip():

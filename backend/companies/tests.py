@@ -12,8 +12,11 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
 
+from django.db import connection
+
 from .normalizers import normalize_phone, normalize_inn, normalize_work_schedule
 from .models import Company, CompanyStatus, CompanyEmail, CompanyPhone, Contact, ContactEmail, ContactPhone
+from .search_index import rebuild_company_search_index
 
 User = get_user_model()
 
@@ -546,6 +549,12 @@ class CompanyAutocompleteOrgFlagsTestCase(TestCase):
         # Организация: головная + филиал
         self.head = Company.objects.create(name="Head Org")
         self.branch = Company.objects.create(name="Head Org Branch", head_company=self.head)
+
+        # Индекс поиска нужен для автокомплита на PostgreSQL
+        if connection.vendor == "postgresql":
+            rebuild_company_search_index(self.single.id)
+            rebuild_company_search_index(self.head.id)
+            rebuild_company_search_index(self.branch.id)
 
     def _autocomplete(self, q: str):
         resp = self.client.get(f"/companies/autocomplete/?q={q}", follow=True)

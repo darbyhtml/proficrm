@@ -335,10 +335,13 @@ class CompanySearchService:
             for v in group:
                 q_group |= Q(search_index__digits__contains=v)
             indexed_match &= q_group
-            # fallback по основным полям (телефон может быть +7 или 8)
+            # fallback: по сырым полям и по digits в индексе (сырой "8 (926)..." не содержит подстроку "8926")
             fb = Q(inn__contains=dt) | Q(kpp__contains=dt)
             for v in group:
+                fb |= Q(search_index__digits__contains=v)
                 fb |= Q(phone__contains=v)
+                fb |= Q(phones__value__contains=v)
+                fb |= Q(contacts__phones__value__contains=v)
             fallback_match &= fb
 
         # AND по значимым text tokens (plainto_tsquery = AND по словам), FTS на индексе
@@ -358,6 +361,9 @@ class CompanySearchService:
                     | Q(email__icontains=tok)
                     | Q(contact_name__icontains=tok)
                     | Q(contact_position__icontains=tok)
+                    | Q(contacts__last_name__icontains=tok)
+                    | Q(contacts__first_name__icontains=tok)
+                    | Q(search_index__t_name__icontains=tok)
                 )
         else:
             tsq = None
