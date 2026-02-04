@@ -40,6 +40,7 @@ RESOURCES: tuple[PolicyResource, ...] = (
     PolicyResource("ui:mail", "page", "Почта (раздел)"),
     PolicyResource("ui:notifications", "page", "Уведомления (раздел)"),
     PolicyResource("ui:mail:settings", "page", "Почта: настройки (страница)"),
+    PolicyResource("ui:mail:admin", "page", "Почта: админ-панель (страница)"),
     PolicyResource("ui:mail:signature", "page", "Почта: подпись (страница)"),
     PolicyResource("ui:mail:campaigns", "page", "Почта: кампании (список)"),
     PolicyResource("ui:mail:campaigns:detail", "page", "Почта: кампания (карточка)"),

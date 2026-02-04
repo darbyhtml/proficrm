@@ -4,6 +4,7 @@ from . import views
 
 urlpatterns = [
     path("mail/settings/", views.mail_settings, name="mail_settings"),
+    path("mail/admin/", views.mail_admin, name="mail_admin"),
     path("mail/signature/", views.mail_signature, name="mail_signature"),
     path("mail/progress/poll/", views.mail_progress_poll, name="mail_progress_poll"),
     path("mail/quota/poll/", views.mail_quota_poll, name="mail_quota_poll"),

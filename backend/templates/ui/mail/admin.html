@@ -1,0 +1,709 @@
+{% extends "ui/base.html" %}
+{% block title %}Админ-панель рассылок — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <style>
+    .tab-button {
+      @apply px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200;
+      @apply border border-transparent;
+    }
+    .tab-button.active {
+      @apply bg-brand text-white shadow-sm;
+    }
+    .tab-button:not(.active) {
+      @apply text-brand-dark/70 hover:text-brand-dark hover:bg-brand-soft/30;
+    }
+    .tab-content {
+      display: none;
+    }
+    .tab-content.active {
+      display: block;
+      animation: fadeIn 0.2s ease-in;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .stat-card {
+      @apply p-4 rounded-lg border border-brand-soft/50 bg-white transition-all duration-200;
+    }
+    .stat-card:hover {
+      @apply shadow-md border-brand-soft;
+      transform: translateY(-1px);
+    }
+  </style>
+  
+  <div class="space-y-4">
+    {# Заголовок и навигация #}
+    <div class="flex items-end justify-between gap-3">
+      <div>
+        <div class="text-sm muted mb-1"><a class="link" href="/mail/campaigns/">Почта</a> /</div>
+        <h1 class="text-2xl font-semibold">Админ-панель рассылок</h1>
+        <div class="muted text-sm mt-1">Управление настройками, лимитами и аналитика</div>
+      </div>
+      <a href="/mail/campaigns/" class="btn btn-outline">← К кампаниям</a>
+    </div>
+
+    {# Табы #}
+    <div class="card card-pad">
+      <div class="flex flex-wrap gap-2 border-b border-brand-soft/30 pb-3 mb-4">
+        <a href="?tab=overview" class="tab-button {% if active_tab == 'overview' %}active{% endif %}">
+          <span class="flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 13l8 0M3 6l8 0M3 20l8 0M13 13l8 0M13 6l8 0M13 20l8 0" />
+            </svg>
+            Обзор
+          </span>
+        </a>
+        <a href="?tab=settings" class="tab-button {% if active_tab == 'settings' %}active{% endif %}">
+          <span class="flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 0 1 0 .255c.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 0 1 0-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+            </svg>
+            Настройки SMTP
+          </span>
+        </a>
+        <a href="?tab=limits" class="tab-button {% if active_tab == 'limits' %}active{% endif %}">
+          <span class="flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z" />
+            </svg>
+            Лимиты и квота
+          </span>
+        </a>
+        <a href="?tab=analytics" class="tab-button {% if active_tab == 'analytics' %}active{% endif %}">
+          <span class="flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 13l8 0M3 6l8 0M3 20l8 0M13 13l8 0M13 6l8 0M13 20l8 0" />
+            </svg>
+            Аналитика
+          </span>
+        </a>
+        <a href="?tab=queue" class="tab-button {% if active_tab == 'queue' %}active{% endif %}">
+          <span class="flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 0 1 0 3.75H5.625a1.875 1.875 0 0 1 0-3.75Z" />
+            </svg>
+            Очередь рассылок
+          </span>
+        </a>
+      </div>
+
+      {# Контент табов #}
+      <div class="tab-content {% if active_tab == 'overview' %}active{% endif %}" id="tab-overview">
+        {% if overview_data %}
+          <div class="space-y-4">
+            {# Ключевые метрики #}
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div class="stat-card">
+                <div class="text-xs text-brand-dark/60 mb-1">Отправлено сегодня</div>
+                <div class="text-2xl font-semibold text-brand">{{ overview_data.total_sent_today }}</div>
+                <div class="text-xs text-brand-dark/50 mt-1">писем</div>
+              </div>
+              <div class="stat-card">
+                <div class="text-xs text-brand-dark/60 mb-1">Ошибки</div>
+                <div class="text-2xl font-semibold {% if overview_data.total_failed_today > 0 %}text-red-600{% else %}text-green-600{% endif %}">
+                  {{ overview_data.total_failed_today }}
+                </div>
+                <div class="text-xs text-brand-dark/50 mt-1">недоставлено</div>
+              </div>
+              <div class="stat-card">
+                <div class="text-xs text-brand-dark/60 mb-1">Активных кампаний</div>
+                <div class="text-2xl font-semibold text-green-600">{{ overview_data.campaigns_stats.active }}</div>
+                <div class="text-xs text-brand-dark/50 mt-1">из {{ overview_data.campaigns_stats.total }} всего</div>
+              </div>
+              <div class="stat-card">
+                <div class="text-xs text-brand-dark/60 mb-1">За последний час</div>
+                <div class="text-2xl font-semibold">{{ overview_data.sent_last_hour }}</div>
+                <div class="text-xs text-brand-dark/50 mt-1">/ {{ overview_data.max_per_hour }} лимит</div>
+              </div>
+            </div>
+
+            {# Квота smtp.bz #}
+            {% if overview_data.quota %}
+              <div class="card card-pad bg-gradient-to-r from-brand-soft/20 to-brand-soft/5">
+                <div class="flex items-center justify-between gap-3 mb-3">
+                  <div class="font-medium">Тариф smtp.bz</div>
+                  <div class="flex items-center gap-2 text-xs">
+                    <span class="text-brand-dark/60" id="quota-auto-refresh-status">Автообновление включено</span>
+                    <button type="button" class="btn btn-outline" style="padding:.25rem .5rem" onclick="window.__refreshQuota && window.__refreshQuota(true)">
+                      Обновить
+                    </button>
+                  </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <div class="text-brand-dark/70 mb-1">Тариф:</div>
+                    <div class="font-medium" id="quota-tariff-name">{{ overview_data.quota.tariff_name|default:"—" }}</div>
+                    {% if overview_data.quota.tariff_renewal_date %}
+                      <div class="text-xs text-brand-dark/60 mt-1">
+                        Продление: <span id="quota-renewal-date">{{ overview_data.quota.tariff_renewal_date|date:"d.m.Y" }}</span>
+                      </div>
+                    {% endif %}
+                  </div>
+                  <div>
+                    <div class="text-brand-dark/70 mb-1">Доступно писем (в месяц):</div>
+                    <div class="font-medium {% if overview_data.quota.emails_available < overview_data.quota.emails_limit|add:'-'|add:'100' %}text-orange-600{% elif overview_data.quota.emails_available == 0 %}text-red-600{% else %}text-green-600{% endif %}">
+                      <span id="quota-emails-available">{{ overview_data.quota.emails_available }}</span> / <span id="quota-emails-limit">{{ overview_data.quota.emails_limit }}</span>
+                    </div>
+                    {% if overview_data.quota.last_synced_at %}
+                      <div class="text-xs text-brand-dark/60 mt-1">
+                        Обновлено: <span id="quota-last-synced">{{ overview_data.quota.last_synced_at|date:"d.m.Y H:i" }}</span>
+                      </div>
+                    {% endif %}
+                  </div>
+                  <div>
+                    <div class="text-brand-dark/70 mb-1">Лимит в час:</div>
+                    <div class="font-medium">
+                      <span id="quota-sent-per-hour">{{ overview_data.quota.sent_per_hour|default:0 }}</span> / <span id="quota-max-per-hour">{{ overview_data.quota.max_per_hour|default:100 }}</span>
+                    </div>
+                    {% if overview_data.quota.sync_error %}
+                      <div class="text-xs text-red-600 mt-1" id="quota-sync-error">
+                        Ошибка синхронизации
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+
+            {# Статус SMTP #}
+            <div class="card card-pad">
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="font-medium mb-1">Статус SMTP</div>
+                  <div class="text-sm text-brand-dark/70">
+                    {% if overview_data.smtp_enabled %}
+                      <span class="text-green-600">✓ Включен</span>
+                    {% else %}
+                      <span class="text-red-600">✗ Отключен</span>
+                    {% endif %}
+                  </div>
+                </div>
+                <a href="?tab=settings" class="btn btn-outline btn-sm">Настроить →</a>
+              </div>
+            </div>
+
+            {# Статистика smtp.bz #}
+            {% if overview_data.smtp_bz %}
+              <div class="card card-pad">
+                <div class="font-medium mb-3">Статистика smtp.bz (сегодня)</div>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+                  <div>
+                    <div class="text-xs text-brand-dark/60">Открытия</div>
+                    <div class="font-medium">{{ overview_data.smtp_bz.opened|default:"—" }}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-brand-dark/60">Отписки</div>
+                    <div class="font-medium">{{ overview_data.smtp_bz.unsub|default:"—" }}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-brand-dark/60">Bounce</div>
+                    <div class="font-medium">{{ overview_data.smtp_bz.bounce|default:"—" }}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-brand-dark/60">Return</div>
+                    <div class="font-medium">{{ overview_data.smtp_bz.return|default:"—" }}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-brand-dark/60">Cancel</div>
+                    <div class="font-medium">{{ overview_data.smtp_bz.cancel|default:"—" }}</div>
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+
+      {# Таб "Настройки SMTP" #}
+      <div class="tab-content {% if active_tab == 'settings' %}active{% endif %}" id="tab-settings">
+        {% if settings_data %}
+          <div class="space-y-4">
+            {% if settings_data.key_missing %}
+              <div class="card card-pad bg-red-50 border-red-200">
+                <div class="text-sm text-red-800">
+                  ⚠️ <strong>MAILER_FERNET_KEY</strong> не задан в настройках. Пароль SMTP не может быть сохранён.
+                </div>
+              </div>
+            {% endif %}
+
+            <details class="card card-pad">
+              <summary class="cursor-pointer font-medium">Как подключить smtp.bz (FREE) — быстро</summary>
+              <div class="mt-3 text-sm muted space-y-2">
+                <div>1) В кабинете smtp.bz создайте <b>логин/пароль SMTP</b> (мы их сохраним в БД в зашифрованном виде).</div>
+                <div>2) Заполните SMTP: <span class="font-mono">connect.smtp.bz</span>, порт <span class="font-mono">587</span>, включите <b>STARTTLS</b> (альтернатива: порт <span class="font-mono">2525</span>).</div>
+                <div>3) Получите <b>API ключ</b> в личном кабинете smtp.bz и введите его в поле ниже. Лимиты и квота будут синхронизироваться автоматически.</div>
+                <div>4) Нажмите <b>Проверить отправку</b> — CRM отправит тестовое письмо на ваш email (из профиля).</div>
+              </div>
+            </details>
+
+            <div class="card card-pad">
+              <div class="font-medium mb-4">Настройки SMTP (smtp.bz)</div>
+              {% if settings_data.form %}
+                <form method="post" action="?tab=settings">
+                  {% csrf_token %}
+                  <div class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label class="block text-sm muted mb-1">SMTP host</label>
+                        {{ settings_data.form.smtp_host }}
+                        {% if settings_data.form.smtp_host.errors %}
+                          <div class="text-xs text-red-600 mt-1">{{ settings_data.form.smtp_host.errors }}</div>
+                        {% endif %}
+                      </div>
+                      <div>
+                        <label class="block text-sm muted mb-1">SMTP port</label>
+                        {{ settings_data.form.smtp_port }}
+                        {% if settings_data.form.smtp_port.errors %}
+                          <div class="text-xs text-red-600 mt-1">{{ settings_data.form.smtp_port.errors }}</div>
+                        {% endif %}
+                      </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 text-sm">
+                      {{ settings_data.form.use_starttls }} <span class="muted">STARTTLS</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label class="block text-sm muted mb-1">Логин SMTP</label>
+                        {{ settings_data.form.smtp_username }}
+                        {% if settings_data.form.smtp_username.errors %}
+                          <div class="text-xs text-red-600 mt-1">{{ settings_data.form.smtp_username.errors }}</div>
+                        {% endif %}
+                      </div>
+                      <div>
+                        <label class="block text-sm muted mb-1">Пароль SMTP</label>
+                        {{ settings_data.form.smtp_password }}
+                        <div class="text-xs muted-2 mt-1">{{ settings_data.form.smtp_password.help_text }}</div>
+                        {% if settings_data.form.smtp_password.errors %}
+                          <div class="text-xs text-red-600 mt-1">{{ settings_data.form.smtp_password.errors }}</div>
+                        {% endif %}
+                      </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label class="block text-sm muted mb-1">Email отправителя (From)</label>
+                        {{ settings_data.form.from_email }}
+                        <div class="text-xs muted-2 mt-1">Все рассылки будут уходить с этого адреса (например: <span class="font-mono">no-reply@groupprofi.ru</span>).</div>
+                        {% if settings_data.form.from_email.errors %}
+                          <div class="text-xs text-red-600 mt-1">{{ settings_data.form.from_email.errors }}</div>
+                        {% endif %}
+                      </div>
+                      <div>
+                        <label class="block text-sm muted mb-1">Reply-To (автоматически)</label>
+                        <div class="input bg-brand-soft/20" style="display:flex;align-items:center">email менеджера из профиля</div>
+                        <div class="text-xs muted-2 mt-1">Чтобы получатели отвечали конкретному менеджеру.</div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label class="block text-sm muted mb-1">Имя отправителя (по умолчанию)</label>
+                      {{ settings_data.form.from_name }}
+                      <div class="text-xs muted-2 mt-1">Если у пользователя задано ФИО — оно будет использоваться, иначе это значение.</div>
+                      {% if settings_data.form.from_name.errors %}
+                        <div class="text-xs text-red-600 mt-1">{{ settings_data.form.from_name.errors }}</div>
+                      {% endif %}
+                    </div>
+
+                    <div class="border-t border-brand-soft pt-3">
+                      <div class="font-medium mb-2">Интеграция с API smtp.bz</div>
+                      <div>
+                        <label class="block text-sm muted mb-1">API ключ smtp.bz</label>
+                        {{ settings_data.form.smtp_bz_api_key }}
+                        <div class="text-xs muted-2 mt-1">{{ settings_data.form.smtp_bz_api_key.help_text }}</div>
+                        {% if settings_data.form.smtp_bz_api_key.errors %}
+                          <div class="text-xs text-red-600 mt-1">{{ settings_data.form.smtp_bz_api_key.errors }}</div>
+                        {% endif %}
+                      </div>
+                      
+                      {% if settings_data.has_api_key %}
+                        <div class="mt-3 p-3 rounded-lg border {% if settings_data.api_connected %}border-green-300 bg-green-50{% elif settings_data.api_pending %}border-yellow-300 bg-yellow-50{% else %}border-orange-300 bg-orange-50{% endif %}">
+                          <div class="text-sm font-medium {% if settings_data.api_connected %}text-green-900{% elif settings_data.api_pending %}text-yellow-900{% else %}text-orange-900{% endif %} mb-2">
+                            {% if settings_data.api_connected %}
+                              ✅ Подключение к API активно
+                            {% elif settings_data.api_pending %}
+                              ⏳ Ожидание синхронизации...
+                            {% else %}
+                              ⚠️ Ошибка подключения к API
+                            {% endif %}
+                          </div>
+                          {% if settings_data.quota.last_synced_at %}
+                            <div class="text-xs {% if settings_data.api_connected %}text-green-800{% elif settings_data.api_pending %}text-yellow-800{% else %}text-orange-800{% endif %}">
+                              Последняя синхронизация: {{ settings_data.quota.last_synced_at|date:"d.m.Y H:i" }}
+                            </div>
+                          {% elif settings_data.api_pending %}
+                            <div class="text-xs text-yellow-800">
+                              Синхронизация запущена, ожидайте обновления данных...
+                            </div>
+                          {% endif %}
+                          {% if settings_data.quota.sync_error %}
+                            <div class="text-xs text-red-600 mt-1">
+                              <b>Ошибка:</b> {{ settings_data.quota.sync_error|truncatechars:200 }}
+                              <div class="mt-1 text-xs">Проверьте правильность API ключа в личном кабинете smtp.bz</div>
+                            </div>
+                          {% endif %}
+                          {% if settings_data.api_connected and settings_data.quota.emails_limit > 0 %}
+                            <div class="text-xs {% if settings_data.api_connected %}text-green-800{% else %}text-orange-800{% endif %} mt-2">
+                              Тариф: <b>{{ settings_data.quota.tariff_name|default:"—" }}</b> | 
+                              Доступно: <b>{{ settings_data.quota.emails_available }} / {{ settings_data.quota.emails_limit }}</b> | 
+                              Лимит в час: <b>{{ settings_data.quota.max_per_hour }}</b>
+                            </div>
+                          {% endif %}
+                        </div>
+                      {% else %}
+                        <div class="mt-3 p-3 rounded-lg border border-gray-300 bg-gray-50">
+                          <div class="text-sm font-medium text-gray-700 mb-2">
+                            ℹ️ API ключ не указан
+                          </div>
+                          <div class="text-xs text-gray-600">
+                            Введите API ключ для автоматической синхронизации квоты и лимитов
+                          </div>
+                        </div>
+                      {% endif %}
+                    </div>
+
+                    <div class="flex items-center gap-2 text-sm">
+                      {{ settings_data.form.is_enabled }} <span class="muted">Включить отправку</span>
+                    </div>
+
+                    {% if settings_data.form.errors %}
+                      <div class="rounded-xl border border-brand-orange/60 bg-brand-orange/20 px-4 py-3 text-sm text-brand-dark">Проверь поля формы.</div>
+                    {% endif %}
+
+                    <div class="flex gap-2 pt-2">
+                      <button type="submit" name="update_smtp" value="1" class="btn btn-primary">Сохранить настройки</button>
+                      {% if settings_data.user_sender_email %}
+                        <button type="submit" name="test_send" value="1" class="btn btn-outline">Проверить отправку</button>
+                      {% endif %}
+                    </div>
+                  </div>
+                </form>
+              {% endif %}
+            </div>
+
+          </div>
+        {% endif %}
+      </div>
+
+      {# Таб "Лимиты и квота" #}
+      <div class="tab-content {% if active_tab == 'limits' %}active{% endif %}" id="tab-limits">
+        {% if limits_data %}
+          <div class="space-y-4">
+            {# Дневной лимит пользователя #}
+            <div class="card card-pad">
+              <div class="font-medium mb-4">Дневной лимит пользователя</div>
+              <form method="post" action="?tab=limits" class="space-y-4">
+                {% csrf_token %}
+                <input type="hidden" name="update_limits" value="1">
+                <div>
+                  <label class="block text-sm font-medium mb-2">Максимум писем в день на пользователя</label>
+                  <input 
+                    type="number" 
+                    name="per_user_daily_limit" 
+                    value="{{ limits_data.per_user_daily_limit|default:'' }}" 
+                    class="input"
+                    placeholder="100"
+                    min="1"
+                    style="max-width:12rem"
+                  >
+                  <div class="text-xs text-brand-dark/60 mt-1">
+                    Оставьте пустым для снятия ограничения. Текущее значение: <strong>{{ limits_data.per_user_daily_limit|default:"не задано" }}</strong>
+                  </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Сохранить лимит</button>
+              </form>
+            </div>
+
+            {# Информация о квоте #}
+            {% if limits_data.quota %}
+              <div class="card card-pad">
+                <div class="font-medium mb-3">Квота smtp.bz</div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <div class="text-brand-dark/70 mb-1">Доступно писем (в месяц):</div>
+                    <div class="font-medium text-lg {% if limits_data.quota.emails_available < limits_data.quota.emails_limit|add:'-'|add:'100' %}text-orange-600{% elif limits_data.quota.emails_available == 0 %}text-red-600{% else %}text-green-600{% endif %}">
+                      {{ limits_data.quota.emails_available }} / {{ limits_data.quota.emails_limit }}
+                    </div>
+                    {% if limits_data.quota.last_synced_at %}
+                      <div class="text-xs text-brand-dark/60 mt-1">
+                        Обновлено: {{ limits_data.quota.last_synced_at|date:"d.m.Y H:i" }}
+                      </div>
+                    {% endif %}
+                  </div>
+                  <div>
+                    <div class="text-brand-dark/70 mb-1">Лимит в час:</div>
+                    <div class="font-medium text-lg">
+                      {{ limits_data.quota.sent_per_hour|default:0 }} / {{ limits_data.quota.max_per_hour|default:100 }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+
+      {# Таб "Аналитика" #}
+      <div class="tab-content {% if active_tab == 'analytics' %}active{% endif %}" id="tab-analytics">
+        {% if analytics_data %}
+          <div class="space-y-4">
+            {# Общая статистика #}
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div class="stat-card">
+                <div class="text-xs text-brand-dark/60 mb-1">Отправлено сегодня</div>
+                <div class="text-2xl font-semibold text-brand">{{ analytics_data.total_sent_today }}</div>
+              </div>
+              <div class="stat-card">
+                <div class="text-xs text-brand-dark/60 mb-1">Ошибки</div>
+                <div class="text-2xl font-semibold {% if analytics_data.total_failed_today > 0 %}text-red-600{% else %}text-green-600{% endif %}">
+                  {{ analytics_data.total_failed_today }}
+                </div>
+              </div>
+              <div class="stat-card">
+                <div class="text-xs text-brand-dark/60 mb-1">Процент успеха</div>
+                <div class="text-2xl font-semibold text-green-600">
+                  {% if analytics_data.total_sent_today|add:analytics_data.total_failed_today > 0 %}
+                    {% widthratio analytics_data.total_sent_today analytics_data.total_sent_today|add:analytics_data.total_failed_today 100 %}%
+                  {% else %}
+                    —
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+
+            {# Статистика по пользователям #}
+            <div class="card card-pad">
+              <div class="font-medium mb-3">Статистика по пользователям (сегодня)</div>
+              <div class="overflow-x-auto">
+                <table class="table text-sm">
+                  <thead>
+                    <tr>
+                      <th>Пользователь</th>
+                      <th>Роль</th>
+                      <th>Отправлено</th>
+                      <th>Ошибки</th>
+                      <th>Кампании</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for stat in analytics_data.user_stats %}
+                      <tr class="{% if stat.is_limit_reached %}bg-red-50{% endif %}">
+                        <td class="font-medium">
+                          {{ stat.user.get_full_name|default:stat.user.username }}
+                          <div class="text-xs text-brand-dark/60">
+                            {% if stat.user.branch %}{{ stat.user.branch.name }}{% endif %}
+                          </div>
+                        </td>
+                        <td class="muted">{{ stat.user.get_role_display }}</td>
+                        <td>
+                          <span class="font-medium {% if stat.is_limit_reached %}text-red-600{% endif %}">{{ stat.sent_today }}</span>
+                          <span class="muted">/ {{ stat.limit }}</span>
+                          {% if stat.remaining is not None %}
+                            <div class="text-xs text-brand-dark/60">осталось: {{ stat.remaining }}</div>
+                          {% endif %}
+                        </td>
+                        <td>
+                          <span class="font-medium {% if stat.failed_today > 0 %}text-red-600{% endif %}">{{ stat.failed_today }}</span>
+                        </td>
+                        <td class="muted">
+                          <span>{{ stat.active_campaigns }}</span><span class="text-xs text-brand-dark/60"> активных</span>,
+                          <span>{{ stat.campaigns_count }}</span><span class="text-xs text-brand-dark/60"> всего</span>
+                        </td>
+                      </tr>
+                    {% empty %}
+                      <tr><td class="muted" colspan="5" style="padding:1rem">Нет данных</td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {# Статистика smtp.bz #}
+            {% if analytics_data.smtp_bz %}
+              <div class="card card-pad">
+                <div class="font-medium mb-3">Статистика smtp.bz (сегодня)</div>
+                <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+                  <div>
+                    <div class="text-xs text-brand-dark/60">Открытия</div>
+                    <div class="font-medium">{{ analytics_data.smtp_bz.opened|default:"—" }}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-brand-dark/60">Отписки</div>
+                    <div class="font-medium">{{ analytics_data.smtp_bz.unsub|default:"—" }}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-brand-dark/60">Bounce</div>
+                    <div class="font-medium">{{ analytics_data.smtp_bz.bounce|default:"—" }}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-brand-dark/60">Return</div>
+                    <div class="font-medium">{{ analytics_data.smtp_bz.return|default:"—" }}</div>
+                  </div>
+                  <div>
+                    <div class="text-xs text-brand-dark/60">Cancel</div>
+                    <div class="font-medium">{{ analytics_data.smtp_bz.cancel|default:"—" }}</div>
+                  </div>
+                </div>
+              </div>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+
+      {# Таб "Очередь рассылок" #}
+      <div class="tab-content {% if active_tab == 'queue' %}active{% endif %}" id="tab-queue">
+        {% if queue_data %}
+          <div class="space-y-4">
+            {# Информация о рабочем времени #}
+            <div class="card card-pad">
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="font-medium mb-1">Рабочее время</div>
+                  <div class="text-sm text-brand-dark/70">
+                    {% if queue_data.is_working_time %}
+                      <span class="text-green-600">✓ Сейчас рабочее время ({{ queue_data.current_time_msk }} МСК)</span>
+                    {% else %}
+                      <span class="text-orange-600">✗ Вне рабочего времени ({{ queue_data.current_time_msk }} МСК, рабочие часы: 9:00-18:00)</span>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {# Очередь #}
+            {% if queue_data.queue_list %}
+              <div class="card card-pad">
+                <div class="font-medium mb-3">Очередь рассылок — {{ queue_data.queue_list|length }}</div>
+                <div class="overflow-x-auto">
+                  <table class="table text-sm">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        <th>Кампания</th>
+                        <th>Статус</th>
+                        <th>Создатель</th>
+                        <th>В очереди с</th>
+                        <th>Возобновление</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for item in queue_data.queue_list %}
+                        <tr class="{% if item.status == 'processing' %}bg-green-50{% endif %}">
+                          <td class="muted">#{{ item.position }}</td>
+                          <td>
+                            <a href="/mail/campaigns/{{ item.campaign.id }}/" class="link">{{ item.campaign.name }}</a>
+                          </td>
+                          <td>
+                            <span class="badge {% if item.status == 'processing' %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-800{% endif %} text-xs">
+                              {% if item.status == 'processing' %}Обрабатывается{% elif item.status == 'pending' %}В очереди{% else %}{{ item.status }}{% endif %}
+                            </span>
+                          </td>
+                          <td class="muted">{{ item.campaign.created_by.get_full_name|default:item.campaign.created_by.username }}</td>
+                          <td class="muted">{{ item.queued_at|date:"d.m.Y H:i" }}</td>
+                          <td class="text-xs">
+                            {% if item.deferred_until %}
+                              <span class="text-orange-600">{{ item.deferred_until|date:"d.m H:i" }} МСК</span>
+                              {% if item.defer_reason_text %}
+                                <div class="text-brand-dark/60">{{ item.defer_reason_text }}</div>
+                              {% endif %}
+                            {% else %}
+                              <span class="text-green-600">Скоро</span>
+                            {% endif %}
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            {% else %}
+              <div class="card card-pad text-center text-brand-dark/60">
+                Очередь пуста
+              </div>
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% endblock %}
+
+{% block extra_js %}
+  <script>
+    (function () {
+      const quotaCard = document.getElementById('quota-card');
+      if (!quotaCard) return;
+
+      const REFRESH_MS = 60_000;
+      const url = '/mail/quota/poll/';
+
+      function fmtDateTimeMsk(iso) {
+        if (!iso) return '—';
+        try {
+          const d = new Date(iso);
+          return d.toLocaleString('ru-RU', {
+            timeZone: 'Europe/Moscow',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+          }).replace(',', '');
+        } catch (e) {
+          return '—';
+        }
+      }
+
+      function setText(id, value, fallback) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = (value === null || value === undefined || value === '') ? (fallback ?? '—') : String(value);
+      }
+
+      async function refreshQuota(isManual) {
+        const statusEl = document.getElementById('quota-auto-refresh-status');
+        if (statusEl && isManual) statusEl.textContent = 'Обновляю…';
+
+        try {
+          const res = await fetch(url, { credentials: 'same-origin' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const data = await res.json();
+
+          setText('quota-tariff-name', data.tariff_name || '—');
+          if (data.tariff_renewal_date) {
+            setText('quota-renewal-date', fmtDateTimeMsk(data.tariff_renewal_date).slice(0, 10));
+          }
+          setText('quota-emails-available', data.emails_available);
+          setText('quota-emails-limit', data.emails_limit);
+          setText('quota-sent-per-hour', data.sent_per_hour);
+          setText('quota-max-per-hour', data.max_per_hour);
+          setText('quota-last-synced', data.last_synced_at ? fmtDateTimeMsk(data.last_synced_at) : '—');
+
+          const errEl = document.getElementById('quota-sync-error');
+          if (errEl) {
+            if (data.sync_error) {
+              errEl.style.display = '';
+              errEl.textContent = 'Ошибка синхронизации';
+              errEl.title = data.sync_error;
+            } else {
+              errEl.style.display = 'none';
+              errEl.title = '';
+            }
+          }
+
+          if (statusEl) statusEl.textContent = 'Автообновление включено';
+        } catch (e) {
+          if (statusEl) statusEl.textContent = 'Не удалось обновить';
+        }
+      }
+
+      window.__refreshQuota = refreshQuota;
+      refreshQuota(false);
+      setInterval(() => refreshQuota(false), REFRESH_MS);
+    })();
+  </script>
+{% endblock %}

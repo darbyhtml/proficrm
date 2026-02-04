@@ -23,59 +23,34 @@
       </div>
       <div class="flex gap-2">
         {% if is_admin %}
-          <a class="btn btn-outline" href="/mail/settings/">Настройки SMTP</a>
+          <a class="btn btn-outline" href="/mail/admin/">Админ-панель</a>
         {% endif %}
         <a class="btn btn-outline" href="/mail/signature/">Настройка подписи</a>
         <a class="btn btn-primary" href="/mail/campaigns/new/">+ Новая кампания</a>
       </div>
     </div>
 
-    {# Информация о тарифе и квоте smtp.bz #}
+    {# Компактный виджет квоты для всех #}
     {% if quota %}
       {% if is_admin %}
-        {# Полная информация для администратора #}
+        {# Компактный виджет для администратора с ссылкой на админ-панель #}
         <div class="card card-pad" id="quota-card">
-          <div class="flex items-center justify-between gap-3 mb-3">
-            <div class="font-medium">Тариф smtp.bz</div>
-            <div class="flex items-center gap-2 text-xs">
-              <span class="text-brand-dark/60" id="quota-auto-refresh-status">Автообновление включено</span>
-              <button type="button" class="btn btn-outline" style="padding:.25rem .5rem" onclick="window.__refreshQuota && window.__refreshQuota(true)">
-                Обновить
-              </button>
-            </div>
-          </div>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div>
-              <div class="text-brand-dark/70 mb-1">Тариф:</div>
-              <div class="font-medium" id="quota-tariff-name">{{ quota.tariff_name|default:"—" }}</div>
-              {% if quota.tariff_renewal_date %}
-                <div class="text-xs text-brand-dark/60 mt-1">
-                  Продление: <span id="quota-renewal-date">{{ quota.tariff_renewal_date|date:"d.m.Y" }}</span>
+          <div class="flex items-center justify-between gap-3">
+            <div class="flex items-center gap-4 text-sm">
+              <div>
+                <div class="text-xs text-brand-dark/60">Квота (месяц)</div>
+                <div class="font-medium {% if quota.emails_available < quota.emails_limit|add:'-'|add:'100' %}text-orange-600{% elif quota.emails_available == 0 %}text-red-600{% else %}text-green-600{% endif %}">
+                  <span id="quota-emails-available">{{ quota.emails_available }}</span> / <span id="quota-emails-limit">{{ quota.emails_limit }}</span>
                 </div>
-              {% endif %}
-            </div>
-            <div>
-              <div class="text-brand-dark/70 mb-1">Доступно писем (в месяц):</div>
-              <div class="font-medium {% if quota.emails_available < quota.emails_limit|add:'-'|add:'100' %}text-orange-600{% elif quota.emails_available == 0 %}text-red-600{% else %}text-green-600{% endif %}">
-                <span id="quota-emails-available">{{ quota.emails_available }}</span> / <span id="quota-emails-limit">{{ quota.emails_limit }}</span>
               </div>
-              {% if quota.last_synced_at %}
-                <div class="text-xs text-brand-dark/60 mt-1">
-                  Обновлено: <span id="quota-last-synced">{{ quota.last_synced_at|date:"d.m.Y H:i" }}</span>
+              <div>
+                <div class="text-xs text-brand-dark/60">Лимит (час)</div>
+                <div class="font-medium">
+                  <span id="quota-sent-per-hour">{{ quota.sent_per_hour|default:0 }}</span> / <span id="quota-max-per-hour">{{ quota.max_per_hour|default:100 }}</span>
                 </div>
-              {% endif %}
-            </div>
-            <div>
-              <div class="text-brand-dark/70 mb-1">Лимит в час:</div>
-              <div class="font-medium">
-                <span id="quota-sent-per-hour">{{ quota.sent_per_hour }}</span> / <span id="quota-max-per-hour">{{ quota.max_per_hour }}</span>
               </div>
-              {% if quota.sync_error %}
-                <div class="text-xs text-red-600 mt-1" id="quota-sync-error">
-                  Ошибка синхронизации
-                </div>
-              {% endif %}
             </div>
+            <a href="/mail/admin/?tab=overview" class="btn btn-outline btn-sm">Подробнее →</a>
           </div>
         </div>
       {% else %}
@@ -135,26 +110,20 @@
     {% endif %}
 
     {% if is_admin and analytics %}
-      {# Аналитика для администратора — компактно #}
+      {# Компактный виджет аналитики для администратора со ссылкой на админ-панель #}
       <div class="card card-pad mb-4">
         <div class="flex items-center justify-between gap-3 mb-3">
-          <div class="font-medium">Почта — аналитика (сегодня)</div>
-          <button type="button" class="btn btn-outline" style="padding:.25rem .5rem" id="open-unsubscribes-modal">
-            Отписки
-          </button>
+          <div class="font-medium">Статистика (сегодня)</div>
+          <a href="/mail/admin/?tab=analytics" class="btn btn-outline btn-sm">Подробная аналитика →</a>
         </div>
-        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3 text-sm">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
           <div>
             <div class="text-xs text-brand-dark/60">Отправлено</div>
-            <div class="font-medium">{{ analytics.total_sent_today }}/{{ analytics.global_limit }}</div>
+            <div class="font-medium">{{ analytics.total_sent_today }}</div>
           </div>
           <div>
             <div class="text-xs text-brand-dark/60">Ошибки</div>
             <div class="font-medium {% if analytics.total_failed_today > 0 %}text-red-600{% endif %}">{{ analytics.total_failed_today }}</div>
-          </div>
-          <div>
-            <div class="text-xs text-brand-dark/60">За час</div>
-            <div class="font-medium">{{ analytics.sent_last_hour }}/{{ analytics.max_per_hour }}</div>
           </div>
           <div>
             <div class="text-xs text-brand-dark/60">Кампаний</div>
@@ -164,131 +133,8 @@
             <div class="text-xs text-brand-dark/60">Активных</div>
             <div class="font-medium text-green-600">{{ analytics.campaigns_stats.active }}</div>
           </div>
-          <div>
-            <div class="text-xs text-brand-dark/60">На паузе</div>
-            <div class="font-medium text-orange-600">{{ analytics.campaigns_stats.paused }}</div>
-          </div>
         </div>
-
-        {% if analytics.smtp_bz %}
-          <div class="mt-3 pt-3 border-t">
-            <div class="text-xs text-brand-dark/60 mb-2">По данным smtp.bz (последняя минута кеша)</div>
-            <div class="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
-              <div>
-                <div class="text-xs text-brand-dark/60">Открытия</div>
-                <div class="font-medium">{{ analytics.smtp_bz.opened|default:"—" }}</div>
-              </div>
-              <div>
-                <div class="text-xs text-brand-dark/60">Отписки</div>
-                <div class="font-medium">{{ analytics.smtp_bz.unsub|default:"—" }}</div>
-              </div>
-              <div>
-                <div class="text-xs text-brand-dark/60">Bounce</div>
-                <div class="font-medium">{{ analytics.smtp_bz.bounce|default:"—" }}</div>
-              </div>
-              <div>
-                <div class="text-xs text-brand-dark/60">Return</div>
-                <div class="font-medium">{{ analytics.smtp_bz.return|default:"—" }}</div>
-              </div>
-              <div>
-                <div class="text-xs text-brand-dark/60">Cancel</div>
-                <div class="font-medium">{{ analytics.smtp_bz.cancel|default:"—" }}</div>
-              </div>
-            </div>
-          </div>
-        {% endif %}
       </div>
-
-      <details class="card card-pad mb-4">
-        <summary class="cursor-pointer font-medium">Пользователи (сегодня) — {{ analytics.user_stats|length }}</summary>
-        <div class="mt-3 overflow-x-auto">
-          <table class="table text-sm">
-            <thead>
-              <tr>
-                <th>Пользователь</th>
-                <th>Роль</th>
-                <th>Отправлено</th>
-                <th>Ошибки</th>
-                <th>Кампании</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for stat in analytics.user_stats %}
-                <tr class="{% if stat.is_limit_reached %}bg-red-50{% endif %}">
-                  <td class="font-medium">
-                    {{ stat.user.get_full_name|default:stat.user.username }}
-                    <div class="text-xs text-brand-dark/60">
-                      {% if stat.user.branch %}{{ stat.user.branch.name }}{% endif %}
-                    </div>
-                  </td>
-                  <td class="muted">{{ stat.user.get_role_display }}</td>
-                  <td>
-                    <span class="font-medium {% if stat.is_limit_reached %}text-red-600{% endif %}">{{ stat.sent_today }}</span>
-                    <span class="muted">/ {{ stat.limit }}</span>
-                    {% if stat.remaining is not None %}
-                      <div class="text-xs text-brand-dark/60">осталось: {{ stat.remaining }}</div>
-                    {% endif %}
-                  </td>
-                  <td>
-                    <span class="font-medium {% if stat.failed_today > 0 %}text-red-600{% endif %}">{{ stat.failed_today }}</span>
-                  </td>
-                  <td class="muted">
-                    <span>{{ stat.active_campaigns }}</span><span class="text-xs text-brand-dark/60"> активных</span>,
-                    <span>{{ stat.campaigns_count }}</span><span class="text-xs text-brand-dark/60"> всего</span>
-                  </td>
-                </tr>
-              {% empty %}
-                <tr><td class="muted" colspan="5" style="padding:1rem">Нет данных</td></tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-      </details>
-
-      {% if analytics.queue_list %}
-        <details class="card card-pad mb-4">
-          <summary class="cursor-pointer font-medium">Очередь рассылок — {{ analytics.queue_list|length }}</summary>
-          <div class="mt-3 overflow-x-auto">
-            <table class="table text-sm">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Кампания</th>
-                  <th>Статус</th>
-                  <th>Создатель</th>
-                  <th>В очереди с</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for item in analytics.queue_list %}
-                  <tr class="{% if item.status == 'processing' %}bg-green-50{% endif %}">
-                    <td class="muted">#{{ item.position }}</td>
-                    <td>
-                      <a href="/mail/campaigns/{{ item.campaign.id }}/" class="link">{{ item.campaign.name }}</a>
-                      {% if not analytics.is_working_time and item.next_working_time %}
-                        <div class="text-xs text-blue-600 mt-1">
-                          Старт: {{ item.next_working_time|date:"d.m.Y H:i" }} МСК (раб. время 9:00–18:00)
-                        </div>
-                      {% elif analytics.is_working_time and item.status == 'pending' %}
-                        <div class="text-xs text-green-600 mt-1">
-                          Старт в ближайшее время (сейчас {{ analytics.current_time_msk }} МСК)
-                        </div>
-                      {% endif %}
-                    </td>
-                    <td>
-                      <span class="badge {% if item.status == 'processing' %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-800{% endif %} text-xs">
-                        {% if item.status == 'processing' %}Обрабатывается{% elif item.status == 'pending' %}В очереди{% else %}{{ item.status }}{% endif %}
-                      </span>
-                    </td>
-                    <td class="muted">{{ item.campaign.created_by.get_full_name|default:item.campaign.created_by.username }}</td>
-                    <td class="muted">{{ item.queued_at|date:"d.m.Y H:i" }}</td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        </details>
-      {% endif %}
     {% endif %}
 
     {% if show_creator_column and branches_for_filter and branches_for_filter|length > 1 or show_creator_column and managers_for_filter and managers_for_filter|length > 1 %}
