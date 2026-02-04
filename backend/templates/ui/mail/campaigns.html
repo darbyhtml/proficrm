@@ -1,5 +1,4 @@
 {% extends "ui/base.html" %}
-{% load humanize %}
 {% block title %}Почта — CRM ПРОФИ{% endblock %}
 
 {% block content %}
@@ -43,7 +42,7 @@
                 <div>
                   <div class="text-xs text-brand-dark/60">Квота</div>
                   <div class="font-semibold {% if quota.emails_available < quota.emails_limit|add:'-'|add:'100' %}text-orange-600{% elif quota.emails_available == 0 %}text-red-600{% else %}text-green-600{% endif %}">
-                    <span id="quota-emails-available">{{ quota.emails_available|intcomma }}</span><span class="text-brand-dark/50 font-normal">/{{ quota.emails_limit|intcomma }}</span>
+                    <span id="quota-emails-available">{{ quota.emails_available }}</span><span class="text-brand-dark/50 font-normal">/{{ quota.emails_limit }}</span>
                   </div>
                 </div>
               </div>

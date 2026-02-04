@@ -1,5 +1,4 @@
 {% extends "ui/base.html" %}
-{% load humanize %}
 {% block title %}Админ-панель рассылок — CRM ПРОФИ{% endblock %}
 
 {% block content %}
@@ -225,7 +224,7 @@
                       </svg>
                     </div>
                   </div>
-                  <div class="text-3xl font-bold gradient-text mb-1">{{ overview_data.total_sent_today|intcomma }}</div>
+                  <div class="text-3xl font-bold gradient-text mb-1">{{ overview_data.total_sent_today }}</div>
                   <div class="text-xs text-brand-dark/50">писем сегодня</div>
                 </div>
               </div>
@@ -240,7 +239,7 @@
                       </svg>
                     </div>
                   </div>
-                  <div class="text-3xl font-bold {% if overview_data.total_failed_today > 0 %}text-red-600{% else %}text-green-600{% endif %} mb-1">{{ overview_data.total_failed_today|intcomma }}</div>
+                  <div class="text-3xl font-bold {% if overview_data.total_failed_today > 0 %}text-red-600{% else %}text-green-600{% endif %} mb-1">{{ overview_data.total_failed_today }}</div>
                   <div class="text-xs text-brand-dark/50">недоставлено</div>
                 </div>
               </div>
@@ -270,7 +269,7 @@
                       </svg>
                     </div>
                   </div>
-                  <div class="text-3xl font-bold text-blue-600 mb-1">{{ overview_data.sent_last_hour|intcomma }}</div>
+                  <div class="text-3xl font-bold text-blue-600 mb-1">{{ overview_data.sent_last_hour }}</div>
                   <div class="text-xs text-brand-dark/50">/ {{ overview_data.max_per_hour }} лимит</div>
                 </div>
               </div>
@@ -362,23 +361,23 @@
                 <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
                   <div class="bg-white/60 rounded-xl p-3 border border-white/80">
                     <div class="text-xs font-medium text-brand-dark/60 mb-1 uppercase tracking-wide">Открытия</div>
-                    <div class="text-xl font-bold text-indigo-600">{{ overview_data.smtp_bz.opened|default:"—"|intcomma }}</div>
+                    <div class="text-xl font-bold text-indigo-600">{{ overview_data.smtp_bz.opened|default:"—" }}</div>
                   </div>
                   <div class="bg-white/60 rounded-xl p-3 border border-white/80">
                     <div class="text-xs font-medium text-brand-dark/60 mb-1 uppercase tracking-wide">Отписки</div>
-                    <div class="text-xl font-bold text-orange-600">{{ overview_data.smtp_bz.unsub|default:"—"|intcomma }}</div>
+                    <div class="text-xl font-bold text-orange-600">{{ overview_data.smtp_bz.unsub|default:"—" }}</div>
                   </div>
                   <div class="bg-white/60 rounded-xl p-3 border border-white/80">
                     <div class="text-xs font-medium text-brand-dark/60 mb-1 uppercase tracking-wide">Bounce</div>
-                    <div class="text-xl font-bold text-red-600">{{ overview_data.smtp_bz.bounce|default:"—"|intcomma }}</div>
+                    <div class="text-xl font-bold text-red-600">{{ overview_data.smtp_bz.bounce|default:"—" }}</div>
                   </div>
                   <div class="bg-white/60 rounded-xl p-3 border border-white/80">
                     <div class="text-xs font-medium text-brand-dark/60 mb-1 uppercase tracking-wide">Return</div>
-                    <div class="text-xl font-bold text-yellow-600">{{ overview_data.smtp_bz.return|default:"—"|intcomma }}</div>
+                    <div class="text-xl font-bold text-yellow-600">{{ overview_data.smtp_bz.return|default:"—" }}</div>
                   </div>
                   <div class="bg-white/60 rounded-xl p-3 border border-white/80">
                     <div class="text-xs font-medium text-brand-dark/60 mb-1 uppercase tracking-wide">Cancel</div>
-                    <div class="text-xl font-bold text-gray-600">{{ overview_data.smtp_bz.cancel|default:"—"|intcomma }}</div>
+                    <div class="text-xl font-bold text-gray-600">{{ overview_data.smtp_bz.cancel|default:"—" }}</div>
                   </div>
                 </div>
               </div>
