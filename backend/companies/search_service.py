@@ -678,8 +678,17 @@ class CompanySearchService:
             for t in pq.text_tokens:
                 if t in vf:
                     hit_t.add(t)
+            # Для цифровых токенов учитываем 7/8-вариант, как и в основном поиске:
+            # номер может быть сохранён/нормализован с другой первой цифрой.
             for d in pq.strong_digit_tokens + pq.weak_digit_tokens:
-                if d and d in vd:
+                if not d:
+                    continue
+                variants = [d]
+                if d[0] in ("7", "8") and len(d) >= 4:
+                    alt = ("7" if d[0] == "8" else "8") + d[1:]
+                    if alt not in variants:
+                        variants.append(alt)
+                if any(v in vd for v in variants):
                     hit_d.add(d)
             return hit_t, hit_d
 
