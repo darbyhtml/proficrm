@@ -22,9 +22,14 @@
     }
     
     .tab-button {
-      @apply px-5 py-2.5 text-sm font-semibold rounded-xl transition-all duration-300;
-      @apply border border-transparent relative overflow-hidden;
+      padding: 0.625rem 1.25rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      border-radius: 0.75rem;
+      transition: all 0.3s;
+      border: 1px solid transparent;
       position: relative;
+      overflow: hidden;
     }
     .tab-button::before {
       content: '';
@@ -78,8 +83,9 @@
     .stat-card {
       background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%);
       backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
       border: 1px solid rgba(255,255,255,0.5);
-      border-radius: 16px;
+      border-radius: 1rem;
       padding: 1.5rem;
       transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       position: relative;
@@ -163,7 +169,7 @@
 
     {# Табы #}
     <div class="glass-card rounded-2xl p-6">
-      <div class="flex flex-wrap gap-3 mb-6 pb-4 border-b border-gradient-to-r from-transparent via-brand-soft/30 to-transparent">
+      <div class="flex flex-wrap gap-3 mb-6 pb-4 border-b border-brand-soft/30">
         <a href="?tab=overview" class="tab-button {% if active_tab == 'overview' %}active{% endif %}">
           <span class="flex items-center gap-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">

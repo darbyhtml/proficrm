@@ -35,7 +35,7 @@
   <td class="muted text-sm">{{ campaign.subject|truncatewords:8 }}</td>
   <td>
     <div class="flex flex-col gap-0.5">
-      <span class="badge {% if campaign.status == 'sending' %}bg-green-100 text-green-800{% elif campaign.status == 'paused' %}bg-orange-100 text-orange-800{% elif campaign.status == 'sent' %}{% if campaign.counts and campaign.counts.failed == campaign.counts.total %}bg-red-100 text-red-800{% else %}bg-blue-100 text-blue-800{% endif %}{% else %}bg-gray-100 text-gray-800{% endif %} text-xs">{{ campaign.get_status_display }}</span>
+      <span class="badge {% if campaign.status == 'sending' %}bg-green-100 text-green-800{% elif campaign.status == 'paused' %}bg-orange-100 text-orange-800{% elif campaign.status == 'sent' %}{% if campaign.counts and campaign.counts.total > 0 and campaign.counts.failed == campaign.counts.total %}bg-red-100 text-red-800{% else %}bg-blue-100 text-blue-800{% endif %}{% else %}bg-gray-100 text-gray-800{% endif %} text-xs">{{ campaign.get_status_display }}</span>
       {% if campaign.queue_entry and campaign.queue_entry.status != 'cancelled' and campaign.queue_entry.status != 'completed' %}
         <span class="text-xs text-brand-dark/50">{{ campaign.queue_entry.get_status_display }}</span>
       {% endif %}
@@ -46,7 +46,7 @@
       <div class="flex flex-col gap-0.5">
         <span class="font-medium">{{ campaign.counts.sent }}/{{ campaign.counts.total }}</span>
         {% if campaign.counts.failed > 0 %}
-          <span class="text-xs {% if campaign.counts.failed == campaign.counts.total %}text-red-600 font-medium{% else %}text-orange-600{% endif %}">{{ campaign.counts.failed }} ош.</span>
+          <span class="text-xs {% if campaign.counts.total > 0 and campaign.counts.failed == campaign.counts.total %}text-red-600 font-medium{% else %}text-orange-600{% endif %}">{{ campaign.counts.failed }} ош.</span>
         {% endif %}
       </div>
     {% else %}

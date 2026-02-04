@@ -120,7 +120,10 @@
       <div class="card card-pad mb-4 bg-gradient-to-br from-white to-brand-soft/5 border border-brand-soft/20">
         <div class="flex items-center justify-between gap-3 mb-2">
           <div class="font-semibold text-sm">Статистика (сегодня)</div>
-          <a href="/mail/admin/?tab=analytics" class="btn btn-outline btn-sm hover:bg-brand hover:text-white transition-all">Подробнее →</a>
+          <div class="flex items-center gap-2">
+            <button type="button" class="btn btn-outline btn-sm" id="open-unsubscribes-modal" style="padding:.25rem .5rem">Отписки</button>
+            <a href="/mail/admin/?tab=analytics" class="btn btn-outline btn-sm hover:bg-brand hover:text-white transition-all">Подробнее →</a>
+          </div>
         </div>
         <div class="grid grid-cols-4 gap-3 text-sm">
           <div class="flex items-center gap-2">
