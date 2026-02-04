@@ -322,11 +322,16 @@ class CompanySearchService:
         strong_digits = pq.strong_digit_tokens
         weak_digits = pq.weak_digit_tokens
 
-        # Группы цифровых токенов: 8 и 7 — один номер, достаточно совпадения по любому варианту
+        # Группы цифровых токенов: 8 и 7 — один номер, достаточно совпадения по любому варианту.
+        # Важно: телефоны часто нормализуются к "7..." (E.164), поэтому и для коротких фрагментов
+        # вида "8926" нужно искать также "7926", иначе токен не найдёт нормализованный номер.
         def _digit_group(dt: str) -> list[str]:
-            if len(dt) == 11 and dt.startswith("8"):
-                return [dt, "7" + dt[1:]]
-            return [dt]
+            out = [dt]
+            if dt and dt[0] in ("7", "8") and len(dt) >= 4:
+                alt = ("7" if dt[0] == "8" else "8") + dt[1:]
+                if alt not in out:
+                    out.append(alt)
+            return out
 
         # AND по группам strong digit (внутри группы — OR: 8 или 7)
         for dt in strong_digits:
