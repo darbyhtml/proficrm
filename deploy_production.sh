@@ -1,9 +1,9 @@
 #!/bin/bash
 # Деплой production (docker-compose.prod.yml).
 # Требует: .env с POSTGRES_PASSWORD, DJANGO_SECRET_KEY, DJANGO_ALLOWED_HOSTS, DJANGO_CSRF_TRUSTED_ORIGINS.
-# Поиск компаний: используется только PostgreSQL FTS (CompanySearchIndex, SEARCH_ENGINE_BACKEND=postgres).
-# Ежедневная переиндексация компаний: 00:00 UTC+3 (Celery Beat).
-# Запускать из корня проекта.
+# Поиск компаний: только PostgreSQL FTS (CompanySearchIndex). Ежедневная переиндексация: Celery Beat.
+# Быстрый деплой без ожидания индексирования: SKIP_INDEXING=1 ./deploy_production.sh
+# Индекс потом: docker compose -f docker-compose.prod.yml run --rm web python manage.py rebuild_company_search_index
 
 set -e
 
@@ -45,13 +45,15 @@ $COMPOSE run --rm web python manage.py migrate --noinput
 echo ">>> collectstatic"
 $COMPOSE run --rm web python manage.py collectstatic --noinput
 
-# 6.1) Перестроение поискового индекса компаний (Postgres FTS)
-echo ">>> rebuild_company_search_index"
-$COMPOSE run --rm web python manage.py rebuild_company_search_index
-
-# 6.2) Историческая команда индексации в Typesense (no-op; оставлена для обратной совместимости)
-echo ">>> index_companies_typesense (Typesense отключён, команда no-op)"
-$COMPOSE run --rm web python manage.py index_companies_typesense --chunk 300 || true
+# 6.1) Перестроение поискового индекса (пропуск при SKIP_INDEXING=1 — потом: docker compose run --rm web python manage.py rebuild_company_search_index)
+if [ -z "${SKIP_INDEXING}" ] || [ "${SKIP_INDEXING}" = "0" ]; then
+  echo ">>> rebuild_company_search_index"
+  $COMPOSE run --rm web python manage.py rebuild_company_search_index
+  echo ">>> index_companies_typesense (Typesense отключён, команда no-op)"
+  $COMPOSE run --rm web python manage.py index_companies_typesense --chunk 300 || true
+else
+  echo ">>> SKIP_INDEXING=1 — индексирование пропущено. Позже: $COMPOSE run --rm web python manage.py rebuild_company_search_index"
+fi
 
 # 7) Запуск всех сервисов
 echo ">>> up -d"

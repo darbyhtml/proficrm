@@ -1,7 +1,7 @@
 #!/bin/bash
 # Деплой staging (crm-staging.groupprofi.ru, docker-compose.staging.yml).
 # Требует: .env.staging с POSTGRES_PASSWORD, DJANGO_SECRET_KEY и т.д.
-# На одном хосте с продом (5.181.254.172): staging nginx слушает 127.0.0.1:8080; хост-Nginx проксирует crm-staging.groupprofi.ru на 8080.
+# Быстрый деплой без индексирования: SKIP_INDEXING=1 ./deploy_staging.sh
 # Запускать из корня проекта.
 
 set -e
@@ -54,9 +54,13 @@ $COMPOSE run --rm web python manage.py migrate --noinput
 echo ">>> collectstatic"
 $COMPOSE run --rm -u root web python manage.py collectstatic --noinput
 
-# 5.1) Перестроение поискового индекса компаний (FTS)
-echo ">>> rebuild_company_search_index"
-$COMPOSE run --rm web python manage.py rebuild_company_search_index
+# 5.1) Перестроение поискового индекса (пропуск при SKIP_INDEXING=1 — потом: docker compose -f docker-compose.staging.yml run --rm web python manage.py rebuild_company_search_index)
+if [ -z "${SKIP_INDEXING}" ] || [ "${SKIP_INDEXING}" = "0" ]; then
+  echo ">>> rebuild_company_search_index"
+  $COMPOSE run --rm web python manage.py rebuild_company_search_index
+else
+  echo ">>> SKIP_INDEXING=1 — индексирование пропущено. Позже: $COMPOSE run --rm web python manage.py rebuild_company_search_index"
+fi
 
 # 6) Запуск всех сервисов (удаляем старый контейнер nginx, если имя занято от предыдущего запуска)
 echo ">>> up -d"
