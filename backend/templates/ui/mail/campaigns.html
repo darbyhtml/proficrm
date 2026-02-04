@@ -60,45 +60,51 @@
           </div>
         </div>
       {% else %}
-        {# Компактный виджет квоты для менеджеров, директоров, РОП (в тех же цветах и стиле, что и у админа) #}
-        <div class="card card-pad bg-gradient-to-r from-brand-soft/20 to-transparent border border-brand-soft/30" id="quota-card">
-          <div class="flex items-center justify-between gap-3 flex-wrap">
+        {# Лимиты для менеджеров, директоров, РОП — понятно и стильно, в духе 2026 #}
+        <div class="card card-pad" id="quota-card">
+          <div class="flex items-center justify-between gap-2 mb-3">
+            <h2 class="text-sm font-semibold text-brand-dark">Лимиты отправки</h2>
+          </div>
+          <div class="flex items-center justify-between gap-4 flex-wrap">
             <div class="flex items-center gap-6 text-sm">
-              <div class="flex items-center gap-2">
-                <div class="w-1 h-8 rounded-full {% if quota.emails_available < quota.emails_limit|add:'-'|add:'100' %}bg-orange-400{% elif quota.emails_available == 0 %}bg-red-400{% else %}bg-green-400{% endif %}"></div>
+              <div class="flex items-center gap-3">
+                <div class="w-1 h-9 rounded-full shrink-0 {% if quota.emails_available < quota.emails_limit|add:'-'|add:'100' %}bg-orange-400{% elif quota.emails_available == 0 %}bg-red-400{% else %}bg-green-400{% endif %}"></div>
                 <div>
-                  <div class="text-xs text-brand-dark/60">Квота</div>
                   <div class="font-semibold {% if quota.emails_available < quota.emails_limit|add:'-'|add:'100' %}text-orange-600{% elif quota.emails_available == 0 %}text-red-600{% else %}text-green-600{% endif %}">
                     <span id="quota-emails-available">{{ quota.emails_available }}</span><span class="text-brand-dark/50 font-normal">/{{ quota.emails_limit }}</span>
                   </div>
+                  <div class="text-xs muted mt-0.5">писем в месяц (осталось)</div>
                 </div>
               </div>
-              <div class="flex items-center gap-2">
-                <div class="w-1 h-8 rounded-full bg-brand-teal/70"></div>
+              <div class="flex items-center gap-3">
+                <div class="w-1 h-9 rounded-full shrink-0 bg-brand-teal/70"></div>
                 <div>
-                  <div class="text-xs text-brand-dark/60">Час</div>
                   <div class="font-semibold">
                     <span id="quota-sent-per-hour">{{ quota.sent_per_hour|default:0 }}</span><span class="text-brand-dark/50 font-normal">/{{ quota.max_per_hour|default:100 }}</span>
                   </div>
+                  <div class="text-xs muted mt-0.5">отправлено в этот час</div>
                 </div>
               </div>
-              <div class="flex items-center gap-2">
-                <div class="w-1 h-8 rounded-full {% if user_limit_info.is_limit_reached %}bg-red-400{% elif user_limit_info.remaining is not None and user_limit_info.remaining < 20 %}bg-orange-400{% else %}bg-green-400{% endif %}"></div>
+              <div class="flex items-center gap-3">
+                <div class="w-1 h-9 rounded-full shrink-0 {% if user_limit_info.is_limit_reached %}bg-red-400{% elif user_limit_info.remaining is not None and user_limit_info.remaining < 20 %}bg-orange-400{% else %}bg-green-400{% endif %}"></div>
                 <div>
-                  <div class="text-xs text-brand-dark/60">День</div>
                   <div class="font-semibold {% if user_limit_info.is_limit_reached %}text-red-600{% elif user_limit_info.remaining is not None and user_limit_info.remaining < 20 %}text-orange-600{% else %}text-green-600{% endif %}">
                     {{ user_limit_info.sent_today }}<span class="text-brand-dark/50 font-normal">/{{ user_limit_info.limit }}</span>
                   </div>
+                  <div class="text-xs muted mt-0.5">ваш лимит на сегодня</div>
                 </div>
               </div>
             </div>
-            <div class="flex items-center gap-2 text-xs">
-              <span class="text-brand-dark/60" id="quota-auto-refresh-status">Автообновление включено</span>
-              <button type="button" class="btn btn-outline btn-sm" style="padding:.25rem .5rem" onclick="window.__refreshQuota && window.__refreshQuota(true)">Обновить</button>
+            <div class="flex items-center gap-2 text-xs muted shrink-0">
+              <span id="quota-auto-refresh-status">Обновляется автоматически</span>
+              <button type="button" class="btn btn-outline btn-sm" onclick="window.__refreshQuota && window.__refreshQuota(true)">Обновить</button>
             </div>
           </div>
           {% if user_limit_info.is_limit_reached %}
-            <div class="mt-2 text-xs text-red-600">⚠️ Достигнут дневной лимит. Новые письма — завтра.</div>
+            <div class="mt-3 pt-3 border-t border-brand-soft/50 text-sm text-red-600 flex items-center gap-2">
+              <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126Z"/></svg>
+              Дневной лимит исчерпан. Отправка возобновится завтра.
+            </div>
           {% endif %}
         </div>
       {% endif %}
@@ -148,11 +154,11 @@
     {% endif %}
 
     {% if show_creator_column and branches_for_filter and branches_for_filter|length > 1 or show_creator_column and managers_for_filter and managers_for_filter|length > 1 %}
-      <div class="flex flex-wrap items-center gap-2 py-1.5 px-3 rounded-lg bg-brand-soft/15 border border-brand-soft/25 mb-3">
-        <span class="text-xs font-medium text-brand-dark/60">Фильтр:</span>
-        <form method="get" action="" class="flex flex-wrap items-center gap-2">
+      <div class="card card-pad overflow-x-auto">
+        <form method="get" action="" class="flex items-center gap-3 flex-nowrap min-w-0">
+          <span class="text-sm font-medium muted shrink-0">Фильтр:</span>
           {% if branches_for_filter|length > 1 %}
-            <select name="branch" class="input text-xs py-1.5 px-2 rounded border-brand-soft/40 bg-white" style="min-width:8rem" onchange="this.form.submit()">
+            <select name="branch" class="input w-auto min-w-[10rem] shrink-0" onchange="this.form.submit()">
               <option value="">Все филиалы</option>
               {% for b in branches_for_filter %}
                 <option value="{{ b.id }}" {% if filter_branch_id and filter_branch_id|add:0 == b.id %}selected{% endif %}>{{ b.name }}</option>
@@ -160,7 +166,7 @@
             </select>
           {% endif %}
           {% if managers_for_filter|length > 1 %}
-            <select name="manager" class="input text-xs py-1.5 px-2 rounded border-brand-soft/40 bg-white" style="min-width:9rem" onchange="this.form.submit()">
+            <select name="manager" class="input w-auto min-w-[11rem] shrink-0" onchange="this.form.submit()">
               <option value="">Все менеджеры</option>
               {% for u in managers_for_filter %}
                 <option value="{{ u.id }}" {% if filter_manager_id and filter_manager_id|add:0 == u.id %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>
@@ -168,7 +174,7 @@
             </select>
           {% endif %}
           {% if filter_branch_id or filter_manager_id %}
-            <a href="?" class="btn btn-outline btn-sm text-xs py-1 px-2">Сбросить</a>
+            <a href="?" class="btn btn-outline btn-sm shrink-0">Сбросить</a>
           {% endif %}
         </form>
       </div>
