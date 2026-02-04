@@ -7701,6 +7701,8 @@ def settings_users(request: HttpRequest) -> HttpResponse:
     # Фильтры
     status = (request.GET.get("status") or "").strip()
     role_filter = (request.GET.get("role") or "").strip()
+    branch_filter = (request.GET.get("branch") or "").strip()
+    online_filter = (request.GET.get("online") or "").strip()
     query = (request.GET.get("q") or "").strip()
 
     if status == "active":
@@ -7708,8 +7710,15 @@ def settings_users(request: HttpRequest) -> HttpResponse:
     elif status == "inactive":
         users = users.filter(is_active=False)
 
-    if role_filter == User.Role.ADMIN:
-        users = users.filter(role=User.Role.ADMIN)
+    if role_filter and role_filter in [r[0] for r in User.Role.choices]:
+        users = users.filter(role=role_filter)
+
+    if branch_filter:
+        try:
+            branch_id = int(branch_filter)
+            users = users.filter(branch_id=branch_id)
+        except (ValueError, TypeError):
+            pass
 
     if query:
         users = users.filter(
@@ -7719,7 +7728,69 @@ def settings_users(request: HttpRequest) -> HttpResponse:
             | Q(email__icontains=query)
         )
     
-    # Сортировка: читаем из GET или из cookies
+    # Получаем информацию об активных сессиях для определения онлайн статуса
+    from django.contrib.sessions.models import Session
+    from django.contrib.auth import SESSION_KEY
+    
+    recently_online_threshold = timezone.now() - timedelta(minutes=15)
+    
+    # Применяем фильтр по онлайн статусу (учитывая и сессии, и last_login)
+    if online_filter == "online":
+        # Фильтр по онлайн: либо есть активная сессия, либо last_login за последние 15 минут
+        # Получаем ID пользователей с активными сессиями (только из текущего queryset)
+        user_ids_in_queryset = set(users.values_list('id', flat=True))
+        online_user_ids_from_sessions = set()
+        if user_ids_in_queryset:
+            active_sessions = Session.objects.filter(expire_date__gte=timezone.now())
+            for session in active_sessions:
+                try:
+                    session_data = session.get_decoded()
+                    user_id_from_session = session_data.get(SESSION_KEY)
+                    if user_id_from_session and int(user_id_from_session) in user_ids_in_queryset:
+                        online_user_ids_from_sessions.add(int(user_id_from_session))
+                except Exception:
+                    pass
+        
+        # Получаем ID пользователей с недавним last_login из текущего queryset
+        users_with_recent_login = set(
+            users.filter(last_login__gte=recently_online_threshold).values_list('id', flat=True)
+        )
+        # Объединяем с пользователями, у которых есть активная сессия
+        online_ids = online_user_ids_from_sessions | users_with_recent_login
+        if online_ids:
+            users = users.filter(id__in=online_ids)
+        else:
+            users = users.none()  # Нет онлайн пользователей
+    elif online_filter == "offline":
+        # Фильтр по офлайн: нет активной сессии И нет недавнего last_login
+        # Получаем ID пользователей с активными сессиями (только из текущего queryset)
+        user_ids_in_queryset = set(users.values_list('id', flat=True))
+        if not user_ids_in_queryset:
+            users = users.none()  # Нет пользователей для фильтрации
+        else:
+            online_user_ids_from_sessions = set()
+            active_sessions = Session.objects.filter(expire_date__gte=timezone.now())
+            for session in active_sessions:
+                try:
+                    session_data = session.get_decoded()
+                    user_id_from_session = session_data.get(SESSION_KEY)
+                    if user_id_from_session and int(user_id_from_session) in user_ids_in_queryset:
+                        online_user_ids_from_sessions.add(int(user_id_from_session))
+                except Exception:
+                    pass
+            
+            # Получаем ID пользователей с недавним last_login из текущего queryset
+            users_with_recent_login = set(
+                users.filter(last_login__gte=recently_online_threshold).values_list('id', flat=True)
+            )
+            # Офлайн = все пользователи минус онлайн (сессии или недавний вход)
+            offline_ids = user_ids_in_queryset - online_user_ids_from_sessions - users_with_recent_login
+            if offline_ids:
+                users = users.filter(id__in=offline_ids)
+            else:
+                users = users.none()  # Нет офлайн пользователей
+    
+    # Сортировка: читаем из GET или из cookies (ПЕРЕД выполнением queryset!)
     sort_field = (request.GET.get("sort") or "").strip()
     sort_dir = (request.GET.get("dir") or "").strip().lower()
     
@@ -7739,7 +7810,7 @@ def settings_users(request: HttpRequest) -> HttpResponse:
     if sort_dir not in ("asc", "desc"):
         sort_dir = "asc"  # По умолчанию asc
     
-    # Применяем сортировку
+    # Применяем сортировку ПЕРЕД выполнением queryset
     if sort_field == "username":
         if sort_dir == "asc":
             users = users.order_by("username")
@@ -7776,6 +7847,28 @@ def settings_users(request: HttpRequest) -> HttpResponse:
         sort_dir = "asc"
         users = users.order_by("username")
     
+    # Получаем ID пользователей с активными сессиями для отображения статуса (ПОСЛЕ сортировки, но ДО выполнения queryset)
+    online_user_ids = set()
+    user_ids_for_status = set(users.values_list('id', flat=True))  # Выполняем queryset один раз для получения ID
+    if user_ids_for_status:
+        active_sessions = Session.objects.filter(expire_date__gte=timezone.now())
+        for session in active_sessions:
+            try:
+                session_data = session.get_decoded()
+                user_id_from_session = session_data.get(SESSION_KEY)
+                if user_id_from_session and int(user_id_from_session) in user_ids_for_status:
+                    online_user_ids.add(int(user_id_from_session))
+            except Exception:
+                pass
+    
+    # Теперь выполняем queryset и помечаем пользователей как онлайн
+    users_list = list(users)  # Выполняем queryset один раз (уже отсортированный)
+    for user in users_list:
+        user.is_online = (
+            user.id in online_user_ids
+            or (user.last_login and user.last_login >= recently_online_threshold)
+        )
+    
     # Формируем строку параметров для сохранения в URL (без sort и dir)
     qs_params = request.GET.copy()
     if "sort" in qs_params:
@@ -7784,19 +7877,25 @@ def settings_users(request: HttpRequest) -> HttpResponse:
         del qs_params["dir"]
     qs = qs_params.urlencode()
     
+    # Получаем список филиалов для фильтра
+    branches = Branch.objects.order_by("name")
+    
     # Сохраняем сортировку в cookie, если она была изменена через GET параметры
     response = render(
         request,
         "ui/settings/users.html",
         {
-            "users": users,
+            "users": users_list,  # Используем уже выполненный список
             "view_as_enabled": view_as_enabled,
             "sort_field": sort_field,
             "sort_dir": sort_dir,
             "qs": qs,
             "status_filter": status,
             "role_filter": role_filter,
+            "branch_filter": branch_filter,
+            "online_filter": online_filter,
             "q": query,
+            "branches": branches,
         },
     )
     
@@ -8067,6 +8166,95 @@ def settings_user_logout(request: HttpRequest, user_id: int) -> HttpResponse:
         return redirect("settings_users")
     
     return redirect("settings_users")
+
+
+@login_required
+def settings_user_form_ajax(request: HttpRequest, user_id: int) -> JsonResponse:
+    """
+    AJAX endpoint для получения формы редактирования пользователя (для модалки).
+    """
+    if not require_admin(request.user):
+        return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
+    
+    user = get_object_or_404(User, id=user_id)
+    from ui.forms import UserEditForm
+    
+    form = UserEditForm(instance=user)
+    
+    # Рендерим форму в HTML
+    from django.template.loader import render_to_string
+    form_html = render_to_string(
+        "ui/settings/user_form_inline.html",
+        {
+            "form": form,
+            "u": user,
+        },
+        request=request,
+    )
+    
+    return JsonResponse({
+        "ok": True,
+        "html": form_html,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "full_name": str(user),
+            "email": user.email,
+            "role": user.role,
+            "role_display": user.get_role_display(),
+            "branch": str(user.branch) if user.branch else None,
+            "is_active": user.is_active,
+        },
+    })
+
+
+@login_required
+def settings_user_update_ajax(request: HttpRequest, user_id: int) -> JsonResponse:
+    """
+    AJAX endpoint для сохранения изменений пользователя (для модалки).
+    """
+    if not require_admin(request.user):
+        return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
+    
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Метод не поддерживается."}, status=405)
+    
+    user = get_object_or_404(User, id=user_id)
+    from ui.forms import UserEditForm
+    
+    form = UserEditForm(request.POST, instance=user)
+    
+    if form.is_valid():
+        form.save()
+        return JsonResponse({
+            "ok": True,
+            "message": "Пользователь обновлён.",
+            "user": {
+                "id": user.id,
+                "username": user.username,
+                "full_name": str(user),
+                "email": user.email,
+                "role": user.role,
+                "role_display": user.get_role_display(),
+                "branch": str(user.branch) if user.branch else None,
+                "is_active": user.is_active,
+            },
+        })
+    else:
+        from django.template.loader import render_to_string
+        form_html = render_to_string(
+            "ui/settings/user_form_inline.html",
+            {
+                "form": form,
+                "u": user,
+            },
+            request=request,
+        )
+        return JsonResponse({
+            "ok": False,
+            "errors": form.errors,
+            "html": form_html,
+        }, status=400)
 
 
 @login_required

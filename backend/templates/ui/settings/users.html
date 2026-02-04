@@ -25,49 +25,98 @@
       </div>
     </form>
 
-    <form method="get" class="bg-white border rounded-2xl p-4 flex flex-wrap items-end gap-3">
-      <div class="flex-1 min-w-[200px]">
-        <label for="users-search" class="text-xs font-medium text-brand-dark/70 uppercase">Поиск</label>
-        <input
-          id="users-search"
-          type="text"
-          name="q"
-          value="{{ q }}"
-          placeholder="ФИО, логин или email"
-          class="mt-1 w-full rounded-xl border border-brand-soft/80 px-3 py-1.5 text-sm text-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-teal focus:border-brand-teal bg-white"
-        />
-      </div>
-      <div>
-        <label for="users-status" class="text-xs font-medium text-brand-dark/70 uppercase">Статус</label>
-        <select
-          id="users-status"
-          name="status"
-          class="mt-1 rounded-xl border border-brand-soft/80 bg-white px-3 py-1.5 text-sm text-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-teal focus:border-brand-teal"
+    <form method="get" class="bg-white border rounded-2xl p-4 shadow-sm">
+      <div class="flex flex-wrap items-end gap-3">
+        <div class="flex-1 min-w-[200px]">
+          <label for="users-search" class="block text-xs font-medium text-brand-dark/70 uppercase mb-1.5">Поиск</label>
+          <div class="relative">
+            <input
+              id="users-search"
+              type="text"
+              name="q"
+              value="{{ q }}"
+              placeholder="ФИО, логин или email"
+              class="w-full rounded-xl border border-brand-soft/80 px-3 py-2 text-sm text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-teal/30 focus:border-brand-teal bg-white transition-all"
+            />
+            <svg class="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-dark/40 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+          </div>
+        </div>
+        <div class="min-w-[140px]">
+          <label for="users-status" class="block text-xs font-medium text-brand-dark/70 uppercase mb-1.5">Активность</label>
+          <select
+            id="users-status"
+            name="status"
+            class="w-full rounded-xl border border-brand-soft/80 bg-white px-3 py-2 text-sm text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-teal/30 focus:border-brand-teal transition-all"
+          >
+            <option value="" {% if not status_filter %}selected{% endif %}>Все</option>
+            <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Активные</option>
+            <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Заблокированные</option>
+          </select>
+        </div>
+        <div class="min-w-[160px]">
+          <label for="users-role" class="block text-xs font-medium text-brand-dark/70 uppercase mb-1.5">Роль</label>
+          <select
+            id="users-role"
+            name="role"
+            class="w-full rounded-xl border border-brand-soft/80 bg-white px-3 py-2 text-sm text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-teal/30 focus:border-brand-teal transition-all"
+          >
+            <option value="" {% if not role_filter %}selected{% endif %}>Все</option>
+            <option value="admin" {% if role_filter == 'admin' %}selected{% endif %}>Администраторы</option>
+            <option value="manager" {% if role_filter == 'manager' %}selected{% endif %}>Менеджеры</option>
+            <option value="branch_director" {% if role_filter == 'branch_director' %}selected{% endif %}>Директоры филиалов</option>
+            <option value="sales_head" {% if role_filter == 'sales_head' %}selected{% endif %}>Руководители отдела продаж</option>
+            <option value="group_manager" {% if role_filter == 'group_manager' %}selected{% endif %}>Управляющие группой</option>
+          </select>
+        </div>
+        <div class="min-w-[140px]">
+          <label for="users-branch" class="block text-xs font-medium text-brand-dark/70 uppercase mb-1.5">Филиал</label>
+          <select
+            id="users-branch"
+            name="branch"
+            class="w-full rounded-xl border border-brand-soft/80 bg-white px-3 py-2 text-sm text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-teal/30 focus:border-brand-teal transition-all"
+          >
+            <option value="" {% if not branch_filter %}selected{% endif %}>Все</option>
+            {% for branch in branches %}
+              <option value="{{ branch.id }}" {% if branch_filter == branch.id|stringformat:"s" %}selected{% endif %}>{{ branch.name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="min-w-[120px]">
+          <label for="users-online" class="block text-xs font-medium text-brand-dark/70 uppercase mb-1.5">Онлайн</label>
+          <select
+            id="users-online"
+            name="online"
+            class="w-full rounded-xl border border-brand-soft/80 bg-white px-3 py-2 text-sm text-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-teal/30 focus:border-brand-teal transition-all"
+          >
+            <option value="" {% if not online_filter %}selected{% endif %}>Все</option>
+            <option value="online" {% if online_filter == 'online' %}selected{% endif %}>Онлайн</option>
+            <option value="offline" {% if online_filter == 'offline' %}selected{% endif %}>Офлайн</option>
+          </select>
+        </div>
+        <input type="hidden" name="sort" value="{{ sort_field }}" />
+        <input type="hidden" name="dir" value="{{ sort_dir }}" />
+        <button
+          type="submit"
+          class="inline-flex items-center gap-2 rounded-xl bg-brand-teal text-white px-5 py-2 text-sm font-medium shadow-sm hover:bg-emerald-600 hover:shadow-md transition-all"
         >
-          <option value="" {% if not status_filter %}selected{% endif %}>Все</option>
-          <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Активные</option>
-          <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Заблокированные</option>
-        </select>
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
+          </svg>
+          Применить
+        </button>
       </div>
-      <div>
-        <label for="users-role" class="text-xs font-medium text-brand-dark/70 uppercase">Роль</label>
-        <select
-          id="users-role"
-          name="role"
-          class="mt-1 rounded-xl border border-brand-soft/80 bg-white px-3 py-1.5 text-sm text-brand-dark focus:outline-none focus:ring-1 focus:ring-brand-teal focus:border-brand-teal"
-        >
-          <option value="" {% if not role_filter %}selected{% endif %}>Все</option>
-          <option value="admin" {% if role_filter == 'admin' %}selected{% endif %}>Администраторы</option>
-        </select>
-      </div>
-      <input type="hidden" name="sort" value="{{ sort_field }}" />
-      <input type="hidden" name="dir" value="{{ sort_dir }}" />
-      <button
-        type="submit"
-        class="ml-auto inline-flex items-center gap-2 rounded-xl bg-brand-teal text-white px-4 py-2 text-sm font-medium shadow hover:bg-emerald-600 transition-colors"
-      >
-        Применить
-      </button>
+      {% if q or status_filter or role_filter or branch_filter or online_filter %}
+        <div class="mt-3 pt-3 border-t border-brand-soft/60">
+          <a href="/settings/users/" class="inline-flex items-center gap-1.5 text-xs text-brand-dark/60 hover:text-brand-teal transition-colors">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+            Сбросить фильтры
+          </a>
+        </div>
+      {% endif %}
     </form>
 
     <div class="bg-white border rounded-2xl overflow-hidden">
@@ -160,9 +209,18 @@
             <tr class="border-t hover:bg-brand-soft/20 transition-colors">
               <td class="px-4 py-3 font-mono text-brand-dark/90">{{ u.username }}</td>
               <td class="px-4 py-3">
-                <div class="flex flex-col">
-                  <span class="text-brand-dark">{{ u.get_full_name|default:"—" }}</span>
-                  <span class="text-xs text-brand-dark/60">{{ u.email|default:"" }}</span>
+                <div class="flex items-center gap-2">
+                  {% if u.is_online %}
+                    <span class="inline-flex items-center justify-center h-2.5 w-2.5 rounded-full bg-emerald-500 ring-2 ring-emerald-500/30" title="Онлайн">
+                      <span class="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+                    </span>
+                  {% else %}
+                    <span class="inline-block h-2.5 w-2.5 rounded-full bg-gray-300" title="Офлайн"></span>
+                  {% endif %}
+                  <div class="flex flex-col">
+                    <span class="text-brand-dark">{{ u.get_full_name|default:"—" }}</span>
+                    <span class="text-xs text-brand-dark/60">{{ u.email|default:"" }}</span>
+                  </div>
                 </div>
               </td>
               <td class="px-4 py-3">
@@ -172,7 +230,23 @@
                     {{ u.get_role_display }}
                   </span>
                 {% elif u.role == 'manager' %}
-                  <span class="inline-flex items-center gap-1 rounded-full bg-brand-soft/40 text-brand-dark px-2 py-0.5 text-xs font-medium border border-brand-soft/80">
+                  <span class="inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-800 px-2 py-0.5 text-xs font-medium border border-blue-100">
+                    <span class="inline-block h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                    {{ u.get_role_display }}
+                  </span>
+                {% elif u.role == 'branch_director' %}
+                  <span class="inline-flex items-center gap-1 rounded-full bg-purple-50 text-purple-800 px-2 py-0.5 text-xs font-medium border border-purple-100">
+                    <span class="inline-block h-1.5 w-1.5 rounded-full bg-purple-500"></span>
+                    {{ u.get_role_display }}
+                  </span>
+                {% elif u.role == 'sales_head' %}
+                  <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-800 px-2 py-0.5 text-xs font-medium border border-amber-100">
+                    <span class="inline-block h-1.5 w-1.5 rounded-full bg-amber-500"></span>
+                    {{ u.get_role_display }}
+                  </span>
+                {% elif u.role == 'group_manager' %}
+                  <span class="inline-flex items-center gap-1 rounded-full bg-indigo-50 text-indigo-800 px-2 py-0.5 text-xs font-medium border border-indigo-100">
+                    <span class="inline-block h-1.5 w-1.5 rounded-full bg-indigo-500"></span>
                     {{ u.get_role_display }}
                   </span>
                 {% else %}
@@ -222,18 +296,25 @@
                     data-user-name="{{ u.get_full_name|default:u.username }}"
                     {% if not u.is_active %}disabled aria-disabled="true"{% endif %}
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                      <circle cx="7.5" cy="12" r="3.25"/>
-                      <path d="M10.75 12H20"/>
-                      <path d="M15.5 9.25V14.75"/>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M15.5 7.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Z"/>
+                      <path d="M12 12v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-9"/>
+                      <path d="M8.5 7.5V4a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2v3.5"/>
                     </svg>
                   </button>
-                  <a href="/settings/users/{{ u.id }}/edit/" class="flex items-center justify-center w-8 h-8 rounded bg-white border border-brand-soft hover:bg-brand-soft/40 transition-colors" title="Редактировать" aria-label="Редактировать">
+                  <button
+                    type="button"
+                    class="flex items-center justify-center w-8 h-8 rounded bg-white border border-brand-soft hover:bg-brand-soft/40 transition-colors"
+                    title="Редактировать"
+                    aria-label="Редактировать"
+                    data-user-edit
+                    data-user-id="{{ u.id }}"
+                  >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M12 20h9"/>
                       <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
                     </svg>
-                  </a>
+                  </button>
                   <form method="post" action="/settings/users/{{ u.id }}/logout/" onsubmit="return confirm('Вы уверены, что хотите разлогинить этого пользователя? Все его активные сессии будут завершены.');" style="display:inline">
                     {% csrf_token %}
                     <button type="submit" class="flex items-center justify-center w-8 h-8 rounded bg-white border border-red-300 hover:bg-red-50 transition-colors" title="Разлогинить пользователя" aria-label="Разлогинить пользователя" style="border-color:rgba(220,38,38,.5);color:#b91c1c;">
@@ -250,7 +331,7 @@
           {% empty %}
             <tr>
               <td class="px-4 py-6 text-brand-dark/70 text-sm" colspan="7">
-                {% if q or status_filter or role_filter %}
+                {% if q or status_filter or role_filter or branch_filter or online_filter %}
                   По текущим фильтрам пользователей не найдено.
                   <a href="/settings/users/" class="underline text-brand-teal">Сбросить фильтры</a>
                 {% else %}
@@ -328,6 +409,34 @@
         >
           Закрыть
         </button>
+      </div>
+    </div>
+  </div>
+
+  <div
+    id="user-edit-panel"
+    class="fixed inset-y-0 right-0 z-50 w-full max-w-2xl bg-white shadow-2xl transform translate-x-full transition-transform duration-300 ease-in-out overflow-y-auto"
+  >
+    <div class="sticky top-0 z-10 bg-white border-b border-brand-soft/60 px-6 py-4 flex items-center justify-between">
+      <div>
+        <div class="text-xs uppercase tracking-wide text-brand-dark/60">Редактирование</div>
+        <div class="text-lg font-semibold text-brand-dark" id="user-edit-panel-title">Пользователь</div>
+      </div>
+      <button
+        type="button"
+        id="user-edit-panel-close"
+        class="inline-flex h-8 w-8 items-center justify-center rounded-full border border-brand-soft/70 text-brand-dark/70 hover:bg-brand-soft/30 hover:text-brand-dark transition"
+        aria-label="Закрыть"
+      >
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+    </div>
+    <div class="p-6" id="user-edit-panel-content">
+      <div class="flex items-center justify-center py-12">
+        <div class="animate-spin h-8 w-8 border-2 border-brand-teal border-t-transparent rounded-full"></div>
       </div>
     </div>
   </div>
@@ -449,6 +558,184 @@
             .finally(function () {
               btn.disabled = false;
               btn.innerHTML = originalText;
+            });
+        });
+      });
+    })();
+
+    (function () {
+      const editPanel = document.getElementById("user-edit-panel");
+      const editPanelContent = document.getElementById("user-edit-panel-content");
+      const editPanelTitle = document.getElementById("user-edit-panel-title");
+      const editPanelClose = document.getElementById("user-edit-panel-close");
+      const overlay = document.createElement("div");
+      overlay.id = "user-edit-overlay";
+      overlay.className = "fixed inset-0 z-40 bg-black/30 hidden";
+      document.body.appendChild(overlay);
+
+      function getCsrfToken() {
+        const input = document.querySelector("input[name=csrfmiddlewaretoken]");
+        return input ? input.value : null;
+      }
+
+      function openPanel() {
+        overlay.classList.remove("hidden");
+        editPanel.classList.remove("translate-x-full");
+        document.body.style.overflow = "hidden";
+      }
+
+      function closePanel() {
+        editPanel.classList.add("translate-x-full");
+        overlay.classList.add("hidden");
+        document.body.style.overflow = "";
+        editPanelContent.innerHTML = '<div class="flex items-center justify-center py-12"><div class="animate-spin h-8 w-8 border-2 border-brand-teal border-t-transparent rounded-full"></div></div>';
+      }
+
+      overlay.addEventListener("click", closePanel);
+      if (editPanelClose) {
+        editPanelClose.addEventListener("click", closePanel);
+      }
+
+      function setupEditForm(userId) {
+        const form = editPanelContent.querySelector("#user-edit-form-inline");
+        if (!form) return;
+
+        // Проверяем, не были ли уже добавлены обработчики (предотвращаем дублирование)
+        if (form.dataset.handlersAttached === "true") {
+          return;
+        }
+        form.dataset.handlersAttached = "true";
+
+        const toggleBtn = editPanelContent.querySelector("#toggle-new-password-inline");
+        const passwordField = editPanelContent.querySelector("#id_new_password");
+        const eyeIcon = editPanelContent.querySelector("#eye-icon-new-password-inline");
+        const eyeOffIcon = editPanelContent.querySelector("#eye-off-icon-new-password-inline");
+
+        if (toggleBtn && passwordField && eyeIcon && eyeOffIcon) {
+          toggleBtn.addEventListener("click", function () {
+            if (passwordField.type === "password") {
+              passwordField.type = "text";
+              eyeIcon.classList.add("hidden");
+              eyeOffIcon.classList.remove("hidden");
+            } else {
+              passwordField.type = "password";
+              eyeIcon.classList.remove("hidden");
+              eyeOffIcon.classList.add("hidden");
+            }
+          });
+        }
+
+        const cancelBtn = editPanelContent.querySelector("#user-edit-panel-cancel");
+        if (cancelBtn) {
+          cancelBtn.addEventListener("click", closePanel);
+        }
+
+        form.addEventListener("submit", function (e) {
+          e.preventDefault();
+          const submitBtn = form.querySelector('button[type="submit"]');
+          const originalText = submitBtn ? submitBtn.innerHTML : "";
+          if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<svg class="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4l3.5-3.5L12 0v4a8 8 0 00-8 8h4z"></path></svg>';
+          }
+
+          const formData = new FormData(form);
+          const csrfToken = getCsrfToken();
+
+          fetch("/settings/users/" + userId + "/update/", {
+            method: "POST",
+            headers: {
+              "X-Requested-With": "XMLHttpRequest",
+              ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
+            },
+            body: formData,
+          })
+            .then(function (response) {
+              if (!response.ok) {
+                throw new Error("HTTP " + response.status);
+              }
+              const contentType = response.headers.get("Content-Type") || "";
+              if (!contentType.includes("application/json")) {
+                throw new Error("Неверный формат ответа");
+              }
+              return response.json();
+            })
+            .then(function (data) {
+              if (data.ok) {
+                closePanel();
+                window.location.reload();
+              } else {
+                // Сохраняем состояние кнопки перед заменой HTML
+                const wasDisabled = submitBtn ? submitBtn.disabled : false;
+                const savedOriginalText = originalText;
+                
+                editPanelContent.innerHTML = data.html || '<div class="text-red-600 p-4 rounded-lg border border-red-200 bg-red-50">Ошибка сохранения: ' + (data.error || "Неизвестная ошибка") + '</div>';
+                
+                // Повторно привязываем обработчики для формы с ошибками
+                setupEditForm(userId);
+                
+                // Восстанавливаем состояние кнопки если форма была загружена
+                const newForm = editPanelContent.querySelector("#user-edit-form-inline");
+                if (newForm && wasDisabled) {
+                  const newSubmitBtn = newForm.querySelector('button[type="submit"]');
+                  if (newSubmitBtn) {
+                    newSubmitBtn.disabled = false;
+                    newSubmitBtn.innerHTML = savedOriginalText;
+                  }
+                }
+              }
+            })
+            .catch(function (error) {
+              console.error("Ошибка сохранения:", error);
+              editPanelContent.innerHTML = '<div class="text-red-600 p-4 rounded-lg border border-red-200 bg-red-50">Ошибка сохранения. Попробуйте ещё раз или обновите страницу.</div>';
+              if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalText;
+              }
+            });
+        });
+      }
+
+      document.querySelectorAll("[data-user-edit]").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          const userId = btn.getAttribute("data-user-id");
+          if (!userId) return;
+
+          openPanel();
+          editPanelContent.innerHTML = '<div class="flex items-center justify-center py-12"><div class="animate-spin h-8 w-8 border-2 border-brand-teal border-t-transparent rounded-full"></div></div>';
+
+          const csrfToken = getCsrfToken();
+          fetch("/settings/users/" + userId + "/form/", {
+            method: "GET",
+            headers: {
+              "X-Requested-With": "XMLHttpRequest",
+              ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
+            },
+          })
+            .then(function (response) {
+              if (!response.ok) {
+                throw new Error("HTTP " + response.status);
+              }
+              const contentType = response.headers.get("Content-Type") || "";
+              if (!contentType.includes("application/json")) {
+                throw new Error("Неверный формат ответа");
+              }
+              return response.json();
+            })
+            .then(function (data) {
+              if (!data || !data.ok) {
+                throw new Error(data.error || "Ошибка загрузки формы");
+              }
+              if (!data.html || !data.user) {
+                throw new Error("Неполные данные формы");
+              }
+              editPanelTitle.textContent = data.user.full_name || data.user.username || "Пользователь";
+              editPanelContent.innerHTML = data.html;
+              setupEditForm(userId);
+            })
+            .catch(function (error) {
+              console.error("Ошибка загрузки формы:", error);
+              editPanelContent.innerHTML = '<div class="text-red-600 p-4 rounded-lg border border-red-200 bg-red-50">Ошибка загрузки формы: ' + (error.message || "Неизвестная ошибка") + '. Попробуйте ещё раз или обновите страницу.</div>';
             });
         });
       });

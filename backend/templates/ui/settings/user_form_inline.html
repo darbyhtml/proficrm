@@ -1,0 +1,102 @@
+<form method="post" id="user-edit-form-inline" class="space-y-4">
+  {% csrf_token %}
+  
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <div>
+      <label class="block text-xs font-medium text-brand-dark/70 uppercase mb-1">Логин</label>
+      {{ form.username }}
+      {% if form.username.errors %}
+        <div class="text-xs text-red-600 mt-1">{{ form.username.errors.0 }}</div>
+      {% endif %}
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-brand-dark/70 uppercase mb-1">Email</label>
+      {{ form.email }}
+      {% if form.email.errors %}
+        <div class="text-xs text-red-600 mt-1">{{ form.email.errors.0 }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <div>
+      <label class="block text-xs font-medium text-brand-dark/70 uppercase mb-1">Имя</label>
+      {{ form.first_name }}
+      {% if form.first_name.errors %}
+        <div class="text-xs text-red-600 mt-1">{{ form.first_name.errors.0 }}</div>
+      {% endif %}
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-brand-dark/70 uppercase mb-1">Фамилия</label>
+      {{ form.last_name }}
+      {% if form.last_name.errors %}
+        <div class="text-xs text-red-600 mt-1">{{ form.last_name.errors.0 }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+    <div>
+      <label class="block text-xs font-medium text-brand-dark/70 uppercase mb-1">Роль</label>
+      {{ form.role }}
+      {% if form.role.errors %}
+        <div class="text-xs text-red-600 mt-1">{{ form.role.errors.0 }}</div>
+      {% endif %}
+    </div>
+    <div>
+      <label class="block text-xs font-medium text-brand-dark/70 uppercase mb-1">Филиал</label>
+      {{ form.branch }}
+      {% if form.branch.errors %}
+        <div class="text-xs text-red-600 mt-1">{{ form.branch.errors.0 }}</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="flex items-center gap-2 text-sm">
+    {{ form.is_active }}
+    <label class="text-brand-dark/80">Активен</label>
+    {% if form.is_active.errors %}
+      <div class="text-xs text-red-600">{{ form.is_active.errors.0 }}</div>
+    {% endif %}
+  </div>
+
+  {% if u.role == 'admin' %}
+    <div class="space-y-2">
+      <div>
+        <label class="block text-xs font-medium text-brand-dark/70 uppercase mb-1">Новый пароль (только для администраторов)</label>
+        <div class="relative">
+          {{ form.new_password }}
+          <button
+            type="button"
+            class="absolute right-2 top-1/2 -translate-y-1/2 text-brand-dark/60 hover:text-brand-dark"
+            id="toggle-new-password-inline"
+            title="Показать/скрыть пароль"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" id="eye-icon-new-password-inline">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+            </svg>
+            <svg class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" id="eye-off-icon-new-password-inline">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.29 3.29m0 0A9.976 9.976 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="text-xs text-brand-dark/60 mt-1">Оставьте пустым, чтобы не менять пароль.</div>
+        {% if form.new_password.errors %}
+          <div class="text-xs text-red-600 mt-1">{{ form.new_password.errors.0 }}</div>
+        {% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+  {% if form.non_field_errors %}
+    <div class="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800">
+      {{ form.non_field_errors.0 }}
+    </div>
+  {% endif %}
+
+  <div class="flex gap-2 pt-2">
+    <button type="submit" class="btn btn-primary">Сохранить</button>
+    <button type="button" id="user-edit-panel-cancel" class="btn btn-outline">Отмена</button>
+  </div>
+</form>
