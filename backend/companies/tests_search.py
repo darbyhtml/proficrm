@@ -116,12 +116,17 @@ class SearchServicePostgresTests(TestCase):
         """
         Регрессия: запрос "иванов 8926" с разнесёнными токенами (контакт + телефон компании)
         должен не только найти компанию, но и дать ненулевой explain.
-        Queryset ограничен одной компанией, чтобы не зависеть от порога score при большом числе компаний в БД.
+        Данные дублируем на Company (contact_name, phone), чтобы fallback срабатывал без зависимости
+        от индекса/триггеров: сырой phone содержит подстроку "8926", contact_name — "Иванов".
         """
-        c = Company.objects.create(name="ООО Тест", inn="1234567890", status=self.status)
-        # text‑токен уходит в контакт
+        c = Company.objects.create(
+            name="ООО Тест",
+            inn="1234567890",
+            status=self.status,
+            contact_name="Иванов Иван",
+            phone="8926-123-45-67",  # сырая строка содержит "8926" для fallback
+        )
         ct = Contact.objects.create(company=c, first_name="Иван", last_name="Иванов")
-        # digit‑токен уходит в телефон КОМПАНИИ; номер должен содержать "8926" в digits
         CompanyPhone.objects.create(company=c, value="8 (926) 123-45-67")
 
         rebuild_company_search_index(c.id)
