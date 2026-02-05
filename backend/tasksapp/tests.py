@@ -9,6 +9,7 @@ from rest_framework import status
 from companies.models import Company
 from companies.services import resolve_target_companies
 from tasksapp.models import Task, TaskType
+from ui import views as ui_views
 
 User = get_user_model()
 
@@ -296,3 +297,114 @@ class BulkTransferBranchRestrictionTestCase(TestCase):
         # Должны быть только пользователи из branch1
         self.assertIn(self.manager1.id, target_ids, "Менеджер из того же филиала должен быть в списке")
         self.assertNotIn(self.manager2.id, target_ids, "Менеджер из другого филиала не должен быть в списке")
+
+
+class TaskBulkFilterSummaryUnitTestCase(TestCase):
+    """Юнит‑тесты для вспомогательной функции _apply_task_filters_for_bulk_ui (bulk‑операции задач)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="bulk_user",
+            email="bulk@example.com",
+            password="testpass123",
+            role=User.Role.ADMIN,
+        )
+        self.other_user = User.objects.create_user(
+            username="bulk_other",
+            email="other@example.com",
+            password="testpass123",
+            role=User.Role.MANAGER,
+        )
+        self.company = Company.objects.create(name="BulkTest", responsible=self.user)
+        self.task_type = TaskType.objects.create(name="Bulk type")
+
+        now = timezone.now()
+        # Задача в пределах периода и на нужного исполнителя
+        self.t1 = Task.objects.create(
+            title="В период, мой исполнитель",
+            status=Task.Status.NEW,
+            company=self.company,
+            type=self.task_type,
+            assigned_to=self.user,
+            due_at=now.replace(hour=10, minute=0, second=0, microsecond=0),
+        )
+        # Задача вне периода
+        self.t2 = Task.objects.create(
+            title="Вне периода",
+            status=Task.Status.NEW,
+            company=self.company,
+            type=self.task_type,
+            assigned_to=self.user,
+            due_at=now - timedelta(days=30),
+        )
+        # Задача с другим исполнителем
+        self.t3 = Task.objects.create(
+            title="Другой исполнитель",
+            status=Task.Status.NEW,
+            company=self.company,
+            type=self.task_type,
+            assigned_to=self.other_user,
+            due_at=now,
+        )
+        # Выполненная задача (DONE), чтобы проверить show_done по умолчанию
+        self.t_done = Task.objects.create(
+            title="Выполненная",
+            status=Task.Status.DONE,
+            company=self.company,
+            type=self.task_type,
+            assigned_to=self.user,
+            due_at=now,
+        )
+
+    def test_apply_task_filters_for_bulk_ui_period_and_assignee(self):
+        """Фильтры по исполнителю + периоду по due_at отрабатывают как в task_list, а summary человекочитаемо описывает их."""
+        today = timezone.localdate()
+        date_from = today.strftime("%Y-%m-%d")
+        date_to = today.strftime("%Y-%m-%d")
+
+        qs = Task.objects.all()
+        params = {
+            "status": "",  # без явного статуса — по умолчанию DONE исключается
+            "mine": "1",
+            "assigned_to": str(self.user.id),
+            "overdue": "",
+            "today": "",
+            "date_from": date_from,
+            "date_to": date_to,
+            "show_done": "",  # как в UI по умолчанию
+        }
+
+        qs_filtered, summary = ui_views._apply_task_filters_for_bulk_ui(qs, self.user, params)
+
+        ids = set(qs_filtered.values_list("id", flat=True))
+        # Ожидаем только t1 в выборке
+        self.assertIn(self.t1.id, ids)
+        self.assertNotIn(self.t2.id, ids)
+        self.assertNotIn(self.t3.id, ids)
+        self.assertNotIn(self.t_done.id, ids)
+
+        summary_text = " | ".join(summary)
+        self.assertIn("Исполнитель:", summary_text)
+        self.assertIn("Период дедлайна:", summary_text)
+        self.assertIn("Без выполненных задач", summary_text)
+
+    def test_apply_task_filters_for_bulk_ui_show_done_included(self):
+        """При show_done=1 выполненные задачи не отфильтровываются и summary отражает это."""
+        qs = Task.objects.all()
+        params = {
+            "status": "",
+            "mine": "",
+            "assigned_to": "",
+            "overdue": "",
+            "today": "",
+            "date_from": "",
+            "date_to": "",
+            "show_done": "1",
+        }
+
+        qs_filtered, summary = ui_views._apply_task_filters_for_bulk_ui(qs, self.user, params)
+        ids = set(qs_filtered.values_list("id", flat=True))
+        self.assertIn(self.t_done.id, ids)
+
+        summary_text = " | ".join(summary)
+        self.assertIn("Включая выполненные задачи", summary_text)

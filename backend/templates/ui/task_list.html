@@ -225,6 +225,10 @@
           <input type="hidden" name="mine" value="{{ mine }}" />
           <input type="hidden" name="overdue" value="{{ overdue }}" />
           <input type="hidden" name="today" value="{{ today }}" />
+          <input type="hidden" name="assigned_to" value="{{ assigned_to|default:'' }}" />
+          <input type="hidden" name="show_done" value="{{ show_done|default:'' }}" />
+          <input type="hidden" name="date_from" value="{{ date_from|default:'' }}" />
+          <input type="hidden" name="date_to" value="{{ date_to|default:'' }}" />
         </form>
       </div>
     {% endif %}
@@ -262,6 +266,10 @@
             <input type="hidden" name="mine" value="{{ mine }}" />
             <input type="hidden" name="overdue" value="{{ overdue }}" />
             <input type="hidden" name="today" value="{{ today }}" />
+            <input type="hidden" name="assigned_to" value="{{ assigned_to|default:'' }}" />
+            <input type="hidden" name="show_done" value="{{ show_done|default:'' }}" />
+            <input type="hidden" name="date_from" value="{{ date_from|default:'' }}" />
+            <input type="hidden" name="date_to" value="{{ date_to|default:'' }}" />
           </form>
         </div>
       </div>
@@ -692,6 +700,8 @@
       (function(){
         const selectAll = document.getElementById('bulkSelectAll');
         const checkboxes = document.querySelectorAll('.task-checkbox');
+        const rescheduleForm = document.getElementById('bulkRescheduleForm');
+        const reassignForm = document.getElementById('bulkReassignForm');
         
         if (selectAll) {
           selectAll.addEventListener('change', function() {
@@ -699,6 +709,79 @@
           });
         }
         
+        function updateBulkButtonsState() {
+          const dateInput = document.getElementById('bulkRescheduleDateTime');
+          const hasDate = !!(dateInput && dateInput.value);
+          const checked = document.querySelectorAll('.task-checkbox:checked').length;
+          const hasSelected = checked > 0;
+
+          if (rescheduleForm) {
+            const btnSelected = rescheduleForm.querySelector('button[name="apply_mode"][value="selected"]');
+            const btnFiltered = rescheduleForm.querySelector('button[name="apply_mode"][value="filtered"]');
+            if (btnSelected) {
+              const enabled = hasDate && hasSelected;
+              btnSelected.disabled = !enabled;
+              btnSelected.classList.toggle('opacity-60', !enabled);
+              btnSelected.classList.toggle('pointer-events-none', !enabled);
+              btnSelected.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+              if (!hasDate) {
+                btnSelected.title = 'Укажите новую дату дедлайна';
+              } else if (!hasSelected) {
+                btnSelected.title = 'Выберите хотя бы одну задачу (чекбоксы слева)';
+              } else {
+                btnSelected.title = 'Перенести дедлайн только у отмеченных галочкой задач';
+              }
+            }
+            if (btnFiltered) {
+              const enabled = hasDate;
+              btnFiltered.disabled = !enabled;
+              btnFiltered.classList.toggle('opacity-60', !enabled);
+              btnFiltered.classList.toggle('pointer-events-none', !enabled);
+              btnFiltered.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+              if (!hasDate) {
+                btnFiltered.title = 'Укажите новую дату дедлайна';
+              } else {
+                btnFiltered.title = 'Перенести дедлайн у всех задач, подходящих под фильтры выше';
+              }
+            }
+          }
+
+          if (reassignForm) {
+            const selectAssignee = reassignForm.querySelector('select[name="assigned_to_id"]');
+            const hasAssignee = !!(selectAssignee && selectAssignee.value);
+            const btnReassignSelected = reassignForm.querySelector('button[name="apply_mode"][value="selected"]');
+            const btnReassignFiltered = reassignForm.querySelector('button[name="apply_mode"][value="filtered"]');
+
+            if (btnReassignSelected) {
+              const enabled = hasAssignee && hasSelected;
+              btnReassignSelected.disabled = !enabled;
+              btnReassignSelected.classList.toggle('opacity-60', !enabled);
+              btnReassignSelected.classList.toggle('pointer-events-none', !enabled);
+              btnReassignSelected.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+              if (!hasAssignee) {
+                btnReassignSelected.title = 'Выберите сотрудника';
+              } else if (!hasSelected) {
+                btnReassignSelected.title = 'Выберите хотя бы одну задачу (чекбоксы слева)';
+              } else {
+                btnReassignSelected.title = 'Переназначить только отмеченные галочкой задачи';
+              }
+            }
+
+            if (btnReassignFiltered) {
+              const enabled = hasAssignee;
+              btnReassignFiltered.disabled = !enabled;
+              btnReassignFiltered.classList.toggle('opacity-60', !enabled);
+              btnReassignFiltered.classList.toggle('pointer-events-none', !enabled);
+              btnReassignFiltered.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+              if (!hasAssignee) {
+                btnReassignFiltered.title = 'Выберите сотрудника';
+              } else {
+                btnReassignFiltered.title = 'Переназначить все задачи по фильтру выше';
+              }
+            }
+          }
+        }
+
         checkboxes.forEach(cb => {
           cb.addEventListener('change', function() {
             const allChecked = Array.from(checkboxes).every(cb => cb.checked);
@@ -707,11 +790,20 @@
               selectAll.checked = allChecked;
               selectAll.indeterminate = someChecked && !allChecked;
             }
+            updateBulkButtonsState();
           });
         });
 
+        updateBulkButtonsState();
+
+        if (reassignForm) {
+          const selectAssignee = reassignForm.querySelector('select[name=\"assigned_to_id\"]');
+          if (selectAssignee) {
+            selectAssignee.addEventListener('change', updateBulkButtonsState);
+          }
+        }
+
         // Массовый перенос дедлайна: красивое подтверждение (модалка) + preview/count с сервера
-        const rescheduleForm = document.getElementById('bulkRescheduleForm');
         if (rescheduleForm) {
           const modal = document.getElementById('bulkRescheduleConfirmModal');
           const modalTitle = document.getElementById('bulkRescheduleModalTitle');
@@ -723,10 +815,38 @@
           const modalError = document.getElementById('bulkRescheduleModalError');
           const modalCheckboxWrap = document.getElementById('bulkRescheduleModalAcknowledgeWrap');
           const modalCheckbox = document.getElementById('bulkRescheduleModalAcknowledge');
+          const modalFiltersWrap = document.getElementById('bulkRescheduleModalFiltersWrap');
+          const modalFilters = document.getElementById('bulkRescheduleModalFilters');
+          const modalStrongConfirmWrap = document.getElementById('bulkRescheduleModalStrongConfirmWrap');
+          const modalStrongConfirmInput = document.getElementById('bulkRescheduleModalStrongConfirmInput');
           const btnCancel = document.getElementById('bulkRescheduleModalCancel');
           const btnConfirm = document.getElementById('bulkRescheduleModalConfirm');
 
           let pendingMode = null;
+          let lastPreviewCount = 0;
+          const STRONG_CONFIRM_THRESHOLD = 200;
+
+          function updateFilteredConfirmState() {
+            const requireStrong = lastPreviewCount > STRONG_CONFIRM_THRESHOLD;
+            const hasAck = modalCheckbox && modalCheckbox.checked;
+            const strongOk = !requireStrong || (modalStrongConfirmInput && modalStrongConfirmInput.value.trim().toUpperCase() === 'ПЕРЕНЕСТИ');
+            const enabled = hasAck && strongOk;
+            btnConfirm.disabled = !enabled;
+            btnConfirm.classList.toggle('opacity-60', !enabled);
+            btnConfirm.classList.toggle('pointer-events-none', !enabled);
+          }
+
+          const dateInput = document.getElementById('bulkRescheduleDateTime');
+          if (dateInput) {
+            dateInput.addEventListener('change', function() {
+              updateBulkButtonsState();
+              if (modal && !modal.classList.contains('hidden')) {
+                btnConfirm.disabled = true;
+                btnConfirm.classList.add('opacity-60','pointer-events-none');
+                modalHint.textContent = 'Параметры переноса изменились. Закройте окно и откройте его заново, чтобы пересчитать задачи.';
+              }
+            });
+          }
 
           function fmtIso(iso){
             try{
@@ -763,6 +883,19 @@
             btnConfirm.classList.add('opacity-60','pointer-events-none');
             modalCheckboxWrap.classList.add('hidden');
             if(modalCheckbox) { modalCheckbox.checked = false; }
+            if (modalFiltersWrap) {
+              modalFiltersWrap.classList.add('hidden');
+            }
+            if (modalFilters) {
+              modalFilters.innerHTML = '';
+            }
+            if (modalStrongConfirmWrap) {
+              modalStrongConfirmWrap.classList.add('hidden');
+            }
+            if (modalStrongConfirmInput) {
+              modalStrongConfirmInput.value = '';
+            }
+            lastPreviewCount = 0;
           }
           function setError(msg){
             modalError.textContent = msg || 'Не удалось получить предварительный просмотр.';
@@ -772,6 +905,7 @@
           function setReady(data){
             const count = Number(data && data.count || 0);
             const cap = Number(data && data.cap || 5000);
+            lastPreviewCount = count;
             modalCount.textContent = String(count);
             const isFiltered = pendingMode === 'filtered';
 
@@ -780,7 +914,12 @@
             } else if (count === 0) {
               modalHint.textContent = 'По текущим условиям задач для переноса нет.';
             } else if (isFiltered) {
-              modalHint.textContent = 'Будут перенесены все задачи, подходящие под фильтры сверху.';
+              const filters = Array.isArray(data && data.filters_summary) ? data.filters_summary : [];
+              let hint = 'Будут перенесены все задачи, подходящие под фильтры сверху.';
+              if (count > STRONG_CONFIRM_THRESHOLD && filters.length <= 1) {
+                hint += ' Фильтры почти не ограничивают выборку — это изменит очень много задач.';
+              }
+              modalHint.textContent = hint;
             } else {
               const req = data && data.requested_count != null ? Number(data.requested_count) : null;
               if (req != null && req !== count) {
@@ -804,6 +943,20 @@
               }).join('');
             }
 
+            if (isFiltered && modalFiltersWrap && modalFilters) {
+              const filters = Array.isArray(data && data.filters_summary) ? data.filters_summary : [];
+              if (filters.length) {
+                modalFiltersWrap.classList.remove('hidden');
+                modalFilters.innerHTML = filters.map((line) => `<li>${line}</li>`).join('');
+              } else {
+                modalFiltersWrap.classList.add('hidden');
+                modalFilters.innerHTML = '';
+              }
+            } else if (modalFiltersWrap && modalFilters) {
+              modalFiltersWrap.classList.add('hidden');
+              modalFilters.innerHTML = '';
+            }
+
             if (count === 0 || count >= cap){
               btnConfirm.disabled = true;
               btnConfirm.classList.add('opacity-60','pointer-events-none');
@@ -814,8 +967,14 @@
               modalCheckboxWrap.classList.remove('hidden');
               const labelEl = document.getElementById('bulkRescheduleModalAcknowledgeLabel');
               if(labelEl) labelEl.textContent = `Понимаю и хочу перенести дедлайн у ${count} задач по фильтру`;
-              btnConfirm.disabled = true;
-              btnConfirm.classList.add('opacity-60','pointer-events-none');
+              if (modalStrongConfirmWrap) {
+                if (count > STRONG_CONFIRM_THRESHOLD) {
+                  modalStrongConfirmWrap.classList.remove('hidden');
+                } else {
+                  modalStrongConfirmWrap.classList.add('hidden');
+                }
+              }
+              updateFilteredConfirmState();
             } else {
               btnConfirm.disabled = false;
               btnConfirm.classList.remove('opacity-60','pointer-events-none');
@@ -846,12 +1005,16 @@
           document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && modal && !modal.classList.contains('hidden')) closeModal(); });
           if (modalCheckbox) modalCheckbox.addEventListener('change', function(){
             if (pendingMode === 'filtered') {
-              const ok = modalCheckbox.checked;
-              btnConfirm.disabled = !ok;
-              btnConfirm.classList.toggle('opacity-60', !ok);
-              btnConfirm.classList.toggle('pointer-events-none', !ok);
+              updateFilteredConfirmState();
             }
           });
+          if (modalStrongConfirmInput) {
+            modalStrongConfirmInput.addEventListener('input', function() {
+              if (pendingMode === 'filtered') {
+                updateFilteredConfirmState();
+              }
+            });
+          }
 
           if (btnConfirm) btnConfirm.addEventListener('click', function(e){
             e.preventDefault();
@@ -887,7 +1050,13 @@
               return;
             }
             modalTitle.textContent = pendingMode === 'filtered' ? 'Подтвердите перенос по фильтру' : 'Подтвердите перенос выбранных';
-            modalDate.textContent = dateLabel;
+            let tz = '';
+            try {
+              tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+            } catch (_e) {
+              tz = '';
+            }
+            modalDate.textContent = tz ? `${dateLabel} (${tz})` : dateLabel;
             setLoading();
 
             // Подготовка данных для preview
@@ -916,10 +1085,10 @@
                 });
               }
             } else {
-              // фильтры, которые реально использует backend task_bulk_reschedule
-              ['status','mine','overdue','today'].forEach((name) => {
+              // фильтры, которые реально использует backend task_bulk_reschedule (совпадают с task_list)
+              ['status','mine','overdue','today','assigned_to','show_done','date_from','date_to'].forEach((name) => {
                 const el = rescheduleForm.querySelector(`input[name="${name}"]`);
-                if (el && el.value != null) fd.append(name, el.value);
+                if (el && el.value != null && el.value !== '') fd.append(name, el.value);
               });
             }
 
@@ -957,6 +1126,11 @@
         <div id="bulkRescheduleModalError" class="hidden text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-2"></div>
         <div id="bulkRescheduleModalHint" class="text-sm text-brand-dark/70"></div>
 
+        <div id="bulkRescheduleModalFiltersWrap" class="hidden">
+          <div class="text-xs font-medium text-brand-dark/70 mb-1">Фильтры:</div>
+          <ul id="bulkRescheduleModalFilters" class="text-xs text-brand-dark/70 list-disc pl-4 space-y-0.5"></ul>
+        </div>
+
         <div id="bulkRescheduleModalSampleWrap" class="hidden">
           <div class="text-xs font-medium text-brand-dark/70 mb-2">Примеры задач (первые несколько):</div>
           <div id="bulkRescheduleModalSample" class="divide-y divide-brand-soft/60 border border-brand-soft/70 rounded-xl px-3 py-2 bg-brand-soft/10"></div>
@@ -968,6 +1142,13 @@
             <input id="bulkRescheduleModalAcknowledge" type="checkbox" class="mt-1 rounded border-brand-soft/80" />
             <span id="bulkRescheduleModalAcknowledgeLabel">Понимаю и хочу перенести</span>
           </label>
+        </div>
+
+        <div id="bulkRescheduleModalStrongConfirmWrap" class="hidden pt-1">
+          <label class="block text-xs text-brand-dark/70 mb-1">
+            Для подтверждения массового изменения введите <b>ПЕРЕНЕСТИ</b>:
+          </label>
+          <input id="bulkRescheduleModalStrongConfirmInput" type="text" class="input input-sm w-full" autocomplete="off" />
         </div>
       </div>
 

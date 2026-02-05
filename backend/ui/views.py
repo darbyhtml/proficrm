@@ -6722,30 +6722,14 @@ def task_bulk_reassign(request: HttpRequest) -> HttpResponse:
         messages.error(request, "Нового ответственного можно выбрать только из: менеджер / РОП / директор филиала.")
         return redirect("task_list")
 
-    # Режим "по фильтру" — применяем фильтры из POST
+    # Режим "по фильтру" — применяем те же фильтры, что и в списке задач (status/mine/assigned_to/overdue/today/date_from/date_to/show_done)
     if apply_mode == "filtered":
-        now = timezone.now()
-        local_now = timezone.localtime(now)
-        today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
-        tomorrow_start = today_start + timedelta(days=1)
-
-        qs = Task.objects.select_related("company", "assigned_to", "created_by", "type").order_by("-created_at").distinct()
-
-        status = (request.POST.get("status") or "").strip()
-        if status:
-            qs = qs.filter(status=status)
-
-        mine = (request.POST.get("mine") or "").strip()
-        if mine == "1":
-            qs = qs.filter(assigned_to=user)
-
-        overdue = (request.POST.get("overdue") or "").strip()
-        if overdue == "1":
-            qs = qs.filter(due_at__lt=now).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
-
-        today = (request.POST.get("today") or "").strip()
-        if today == "1":
-            qs = qs.filter(due_at__gte=today_start, due_at__lt=tomorrow_start).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+        qs = (
+            Task.objects.select_related("company", "assigned_to", "created_by", "type")
+            .order_by("-created_at")
+            .distinct()
+        )
+        qs, _ = _apply_task_filters_for_bulk_ui(qs, user, request.POST)
 
         # safety cap
         cap = 5000
@@ -6754,7 +6738,9 @@ def task_bulk_reassign(request: HttpRequest) -> HttpResponse:
             messages.error(request, "Нет задач для переназначения.")
             return redirect("task_list")
         if len(ids) >= cap:
-            messages.warning(request, f"Выбрано слишком много задач (>{cap}). Сузьте фильтр и повторите.")
+            messages.warning(
+                request, f"Выбрано слишком много задач (>{cap}). Сузьте фильтр и повторите."
+            )
             return redirect("task_list")
     else:
         ids = request.POST.getlist("task_ids") or []
@@ -6786,6 +6772,135 @@ def task_bulk_reassign(request: HttpRequest) -> HttpResponse:
             url="/tasks/?mine=1",
         )
     return redirect("task_list")
+
+
+def _apply_task_filters_for_bulk_ui(qs, user: User, data):
+    """
+    Общая утилита для применения UI‑фильтров задач в bulk‑операциях (перенос дедлайна, переназначение).
+    Принимает тот же набор параметров, что и task_list (status, mine, assigned_to, overdue, today,
+    date_from, date_to, show_done) и возвращает:
+      - отфильтрованный queryset
+      - человекочитаемый summary списка фильтров.
+    """
+    now = timezone.now()
+    local_now = timezone.localtime(now)
+    today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow_start = today_start + timedelta(days=1)
+
+    filters_summary: list[str] = []
+
+    # Статус + show_done (как в task_list: по умолчанию скрываем DONE, если статус не выбран и show_done != 1)
+    status_param = (data.get("status") or "").strip()
+    show_done = (data.get("show_done") or "").strip()
+
+    if status_param:
+        if "," in status_param:
+            statuses = [s.strip() for s in status_param.split(",") if s.strip()]
+            if statuses:
+                qs = qs.filter(status__in=statuses)
+        else:
+            qs = qs.filter(status=status_param)
+
+        status_labels_map = {value: label for value, label in Task.Status.choices}
+        raw_statuses = (
+            [s.strip() for s in status_param.split(",") if s.strip()]
+            if "," in status_param
+            else [status_param]
+        )
+        status_labels = [
+            status_labels_map.get(s, s) for s in raw_statuses if s
+        ]
+        if status_labels:
+            filters_summary.append("Статус: " + ", ".join(status_labels))
+    else:
+        if show_done != "1":
+            qs = qs.exclude(status=Task.Status.DONE)
+            filters_summary.append("Без выполненных задач")
+        else:
+            filters_summary.append("Включая выполненные задачи")
+
+    # Флаг "Мои" (mine)
+    mine = (data.get("mine") or "").strip()
+    if mine == "1":
+        qs = qs.filter(assigned_to=user)
+        filters_summary.append("Только мои задачи")
+
+    # Фильтр по конкретному исполнителю
+    assigned_to_param = (data.get("assigned_to") or "").strip()
+    if assigned_to_param:
+        try:
+            assigned_to_id = int(assigned_to_param)
+        except (ValueError, TypeError):
+            assigned_to_id = None
+        if assigned_to_id:
+            qs = qs.filter(assigned_to_id=assigned_to_id)
+            assignee = (
+                User.objects.filter(id=assigned_to_id)
+                .only("first_name", "last_name", "middle_name", "email")
+                .first()
+            )
+            if assignee:
+                filters_summary.append(f"Исполнитель: {assignee}")
+
+    # Просрочено / сегодня
+    overdue = (data.get("overdue") or "").strip()
+    if overdue == "1":
+        qs = qs.filter(due_at__lt=now).exclude(
+            status__in=[Task.Status.DONE, Task.Status.CANCELLED]
+        )
+        filters_summary.append("Только просроченные")
+
+    today = (data.get("today") or "").strip()
+    if today == "1":
+        qs = qs.filter(
+            due_at__gte=today_start,
+            due_at__lt=tomorrow_start,
+        ).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+        filters_summary.append("Только на сегодня")
+
+    # Период по due_at (date_from / date_to)
+    date_from = (data.get("date_from") or "").strip()
+    date_to = (data.get("date_to") or "").strip()
+
+    period_start_label: str | None = None
+    period_end_label: str | None = None
+
+    if date_from:
+        try:
+            date_from_dt = datetime.strptime(date_from, "%Y-%m-%d")
+            date_from_start = timezone.make_aware(
+                date_from_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+            )
+            qs = qs.filter(due_at__gte=date_from_start)
+            period_start_label = date_from_dt.strftime("%d.%m.%Y")
+        except (ValueError, TypeError):
+            pass
+
+    if date_to:
+        try:
+            date_to_dt = datetime.strptime(date_to, "%Y-%m-%d")
+            date_to_end = timezone.make_aware(
+                date_to_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
+            )
+            qs = qs.filter(due_at__lte=date_to_end)
+            period_end_label = date_to_dt.strftime("%d.%m.%Y")
+        except (ValueError, TypeError):
+            pass
+
+    if period_start_label or period_end_label:
+        if period_start_label and period_end_label:
+            filters_summary.append(
+                f"Период дедлайна: {period_start_label} – {period_end_label}"
+            )
+        elif period_start_label:
+            filters_summary.append(f"Дедлайн не раньше: {period_start_label}")
+        elif period_end_label:
+            filters_summary.append(f"Дедлайн не позже: {period_end_label}")
+
+    if not filters_summary:
+        filters_summary.append("Фильтры не ограничивают выборку (все доступные задачи).")
+
+    return qs, filters_summary
 
 
 @login_required
@@ -6850,28 +6965,8 @@ def task_bulk_reschedule(request: HttpRequest) -> HttpResponse:
     apply_mode = (request.POST.get("apply_mode") or "selected").strip().lower()
 
     if apply_mode == "filtered":
-        now = timezone.now()
-        local_now = timezone.localtime(now)
-        today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
-        tomorrow_start = today_start + timedelta(days=1)
-
         qs = visible_tasks_qs(user).order_by("-created_at").distinct()
-
-        status = (request.POST.get("status") or "").strip()
-        if status:
-            qs = qs.filter(status=status)
-
-        mine = (request.POST.get("mine") or "").strip()
-        if mine == "1":
-            qs = qs.filter(assigned_to=user)
-
-        overdue = (request.POST.get("overdue") or "").strip()
-        if overdue == "1":
-            qs = qs.filter(due_at__lt=now).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
-
-        today = (request.POST.get("today") or "").strip()
-        if today == "1":
-            qs = qs.filter(due_at__gte=today_start, due_at__lt=tomorrow_start).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+        qs, _ = _apply_task_filters_for_bulk_ui(qs, user, request.POST)
 
         cap = 5000
         ids = list(qs.values_list("id", flat=True)[:cap])
@@ -6879,7 +6974,9 @@ def task_bulk_reschedule(request: HttpRequest) -> HttpResponse:
             messages.error(request, "Нет задач для переноса даты.")
             return redirect("task_list")
         if len(ids) >= cap:
-            messages.warning(request, f"Выбрано слишком много задач (>{cap}). Сузьте фильтр и повторите.")
+            messages.warning(
+                request, f"Выбрано слишком много задач (>{cap}). Сузьте фильтр и повторите."
+            )
             return redirect("task_list")
     else:
         raw_ids = request.POST.getlist("task_ids") or []
@@ -6939,30 +7036,11 @@ def task_bulk_reschedule_preview(request: HttpRequest) -> JsonResponse:
     if apply_mode not in ("selected", "filtered"):
         return JsonResponse({"ok": False, "error": "Некорректный режим."}, status=400)
 
-    now = timezone.now()
-    local_now = timezone.localtime(now)
-    today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
-    tomorrow_start = today_start + timedelta(days=1)
-
     requested_count = None
     qs = visible_tasks_qs(user).select_related("company").distinct()
 
     if apply_mode == "filtered":
-        status = (request.POST.get("status") or "").strip()
-        if status:
-            qs = qs.filter(status=status)
-
-        mine = (request.POST.get("mine") or "").strip()
-        if mine == "1":
-            qs = qs.filter(assigned_to=user)
-
-        overdue = (request.POST.get("overdue") or "").strip()
-        if overdue == "1":
-            qs = qs.filter(due_at__lt=now).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
-
-        today = (request.POST.get("today") or "").strip()
-        if today == "1":
-            qs = qs.filter(due_at__gte=today_start, due_at__lt=tomorrow_start).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+        qs, filters_summary = _apply_task_filters_for_bulk_ui(qs, user, request.POST)
     else:
         raw_ids = request.POST.getlist("task_ids") or []
         raw_ids = [i for i in raw_ids if i]
@@ -6970,6 +7048,7 @@ def task_bulk_reschedule_preview(request: HttpRequest) -> JsonResponse:
         if not raw_ids:
             return JsonResponse({"ok": False, "error": "Не выбраны задачи."}, status=400)
         qs = qs.filter(id__in=raw_ids)
+        filters_summary: list[str] = []
 
     # cap как в основном хендлере (для filtered)
     cap = 5000
@@ -7000,6 +7079,7 @@ def task_bulk_reschedule_preview(request: HttpRequest) -> JsonResponse:
             "requested_count": requested_count,
             "cap": cap,
             "sample": sample,
+            "filters_summary": filters_summary,
         }
     )
 
