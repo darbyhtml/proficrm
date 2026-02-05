@@ -408,3 +408,53 @@ class TaskBulkFilterSummaryUnitTestCase(TestCase):
 
         summary_text = " | ".join(summary)
         self.assertIn("Включая выполненные задачи", summary_text)
+        self.assertIn(
+            "Фильтры не ограничивают выборку (все доступные задачи).",
+            summary_text,
+        )
+
+    def test_empty_filters_summary_warns_unrestricted(self):
+        """Пустые фильтры должны явно предупреждать, что выборка не ограничена."""
+        qs = Task.objects.all()
+        params = {
+            "status": "",
+            "mine": "",
+            "assigned_to": "",
+            "overdue": "",
+            "today": "",
+            "date_from": "",
+            "date_to": "",
+            "show_done": "",
+        }
+
+        _, summary = ui_views._apply_task_filters_for_bulk_ui(qs, self.user, params)
+
+        summary_text = " | ".join(summary)
+        self.assertIn(
+            "Фильтры не ограничивают выборку (все доступные задачи).",
+            summary_text,
+        )
+
+    def test_unknown_filter_keys_ignored_and_unrestricted_summary(self):
+        """Неизвестные ключи фильтров игнорируются и не ломают summary."""
+        qs = Task.objects.all()
+        params = {
+            "status": "",
+            "mine": "",
+            "assigned_to": "",
+            "overdue": "",
+            "today": "",
+            "date_from": "",
+            "date_to": "",
+            "show_done": "",
+            "foo": "bar",
+            "bar": "baz",
+        }
+
+        _, summary = ui_views._apply_task_filters_for_bulk_ui(qs, self.user, params)
+
+        summary_text = " | ".join(summary)
+        self.assertIn(
+            "Фильтры не ограничивают выборку (все доступные задачи).",
+            summary_text,
+        )

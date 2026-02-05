@@ -103,6 +103,7 @@ from ui.cleaners import clean_int_id
 
 # Константы для фильтров
 RESPONSIBLE_FILTER_NONE = "none"  # Значение для фильтрации компаний без ответственного
+STRONG_CONFIRM_THRESHOLD = 200  # Порог, после которого для bulk переноса включается усиленное подтверждение (логируется как strong_confirm_required)
 
 
 def _dup_reasons(*, c: Company, inn: str, kpp: str, name: str, address: str) -> list[str]:
@@ -6729,26 +6730,75 @@ def task_bulk_reassign(request: HttpRequest) -> HttpResponse:
             .order_by("-created_at")
             .distinct()
         )
-        qs, _ = _apply_task_filters_for_bulk_ui(qs, user, request.POST)
+        qs, filters_summary = _apply_task_filters_for_bulk_ui(qs, user, request.POST)
 
         # safety cap
         cap = 5000
         ids = list(qs.values_list("id", flat=True)[:cap])
         if not ids:
+            try:
+                logger.warning(
+                    "tasks.bulk_reassign.apply.reject",
+                    extra={
+                        "user_id": user.id,
+                        "apply_mode": apply_mode,
+                        "reason": "no_tasks_for_filters",
+                        "cap": cap,
+                        "path": request.path,
+                        "method": request.method,
+                    },
+                )
+            except Exception:
+                pass
             messages.error(request, "Нет задач для переназначения.")
             return redirect("task_list")
         if len(ids) >= cap:
+            try:
+                logger.warning(
+                    "tasks.bulk_reassign.apply.reject",
+                    extra={
+                        "user_id": user.id,
+                        "apply_mode": apply_mode,
+                        "reason": "cap_reached",
+                        "count": len(ids),
+                        "cap": cap,
+                        "path": request.path,
+                        "method": request.method,
+                    },
+                )
+            except Exception:
+                pass
             messages.warning(
                 request, f"Выбрано слишком много задач (>{cap}). Сузьте фильтр и повторите."
             )
             return redirect("task_list")
+        requested_count = None
     else:
-        ids = request.POST.getlist("task_ids") or []
-        ids = [i for i in ids if i]
-        if not ids:
+        raw_ids = request.POST.getlist("task_ids") or []
+        raw_ids = [i for i in raw_ids if i]
+        if not raw_ids:
+            try:
+                logger.warning(
+                    "tasks.bulk_reassign.apply.reject",
+                    extra={
+                        "user_id": user.id,
+                        "apply_mode": apply_mode,
+                        "reason": "no_task_ids_selected",
+                        "requested_count": 0,
+                        "path": request.path,
+                        "method": request.method,
+                    },
+                )
+            except Exception:
+                pass
             messages.error(request, "Выберите хотя бы одну задачу (чекбоксы слева).")
             return redirect("task_list")
+        ids = raw_ids
+        requested_count = len(raw_ids)
+        filters_summary = []
+        cap = None
 
+    target_count = len(ids)
     now_ts = timezone.now()
     with transaction.atomic():
         qs_to_update = Task.objects.filter(id__in=ids)
@@ -6763,6 +6813,30 @@ def task_bulk_reassign(request: HttpRequest) -> HttpResponse:
         message="Массовое переназначение задач",
         meta={"count": updated, "to": str(new_assigned), "mode": apply_mode},
     )
+    try:
+        logger.info(
+            "tasks.bulk_reassign.apply",
+            extra={
+                "user_id": user.id,
+                "apply_mode": apply_mode,
+                "count": updated,
+                "target_count": target_count,
+                "requested_count": requested_count,
+                "cap": cap,
+                "filters_summary": filters_summary,
+                "strong_confirm_required": bool(
+                    apply_mode == "filtered"
+                    and target_count is not None
+                    and target_count > STRONG_CONFIRM_THRESHOLD
+                ),
+                "cap_reached": bool(cap is not None and target_count >= cap),
+                "path": request.path,
+                "method": request.method,
+            },
+        )
+    except Exception:
+        # Логирование не должно ломать основной флоу.
+        pass
     if new_assigned.id != user.id:
         notify(
             user=new_assigned,
@@ -6782,18 +6856,55 @@ def _apply_task_filters_for_bulk_ui(qs, user: User, data):
       - отфильтрованный queryset
       - человекочитаемый summary списка фильтров.
     """
+    # Разрешённые ключи фильтров, приходящие из UI (QueryDict/POST/GET).
+    ALLOWED_FILTER_KEYS = {
+        "status",
+        "mine",
+        "assigned_to",
+        "overdue",
+        "today",
+        "date_from",
+        "date_to",
+        "show_done",
+    }
+    # Собираем исходные ключи (включая потенциальный мусор), чтобы при необходимости залогировать их.
+    try:
+        incoming_keys = set(data.keys())
+    except Exception:
+        incoming_keys = set()
+    unknown_keys = sorted(incoming_keys - ALLOWED_FILTER_KEYS)
+
+    # Строго фильтруем входящие параметры, чтобы не тащить случайный мусор
+    # (лишние ключи игнорируем, логику фильтрации не меняем).
+    data = {key: data.get(key) for key in ALLOWED_FILTER_KEYS if key in data}
+
+    if unknown_keys:
+        try:
+            logger.debug(
+                "tasks.bulk_filters.unknown_keys",
+                extra={
+                    "user_id": getattr(user, "id", None),
+                    "unknown_keys": unknown_keys,
+                    "source": "_apply_task_filters_for_bulk_ui",
+                },
+            )
+        except Exception:
+            pass
+
     now = timezone.now()
     local_now = timezone.localtime(now)
     today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
     tomorrow_start = today_start + timedelta(days=1)
 
     filters_summary: list[str] = []
+    has_restricting_filters = False
 
     # Статус + show_done (как в task_list: по умолчанию скрываем DONE, если статус не выбран и show_done != 1)
     status_param = (data.get("status") or "").strip()
     show_done = (data.get("show_done") or "").strip()
 
     if status_param:
+        # Ожидаем status как строку (в т.ч. через запятую), а не как getlist.
         if "," in status_param:
             statuses = [s.strip() for s in status_param.split(",") if s.strip()]
             if statuses:
@@ -6807,23 +6918,27 @@ def _apply_task_filters_for_bulk_ui(qs, user: User, data):
             if "," in status_param
             else [status_param]
         )
-        status_labels = [
-            status_labels_map.get(s, s) for s in raw_statuses if s
-        ]
+        status_labels = [status_labels_map.get(s, s) for s in raw_statuses if s]
         if status_labels:
             filters_summary.append("Статус: " + ", ".join(status_labels))
+        has_restricting_filters = True
     else:
         if show_done != "1":
             qs = qs.exclude(status=Task.Status.DONE)
+            # Скрытие выполненных задач — это дефолтное поведение списка,
+            # считаем его не «сужающим фильтром» для предупреждения про широкую выборку.
             filters_summary.append("Без выполненных задач")
         else:
             filters_summary.append("Включая выполненные задачи")
 
     # Флаг "Мои" (mine)
     mine = (data.get("mine") or "").strip()
+    # В bulk-операциях интерпретируем mine строго как "assigned_to = текущий пользователь",
+    # чтобы не расширять выборку за счёт сложной роль-логики из task_list.
     if mine == "1":
         qs = qs.filter(assigned_to=user)
         filters_summary.append("Только мои задачи")
+        has_restricting_filters = True
 
     # Фильтр по конкретному исполнителю
     assigned_to_param = (data.get("assigned_to") or "").strip()
@@ -6841,6 +6956,7 @@ def _apply_task_filters_for_bulk_ui(qs, user: User, data):
             )
             if assignee:
                 filters_summary.append(f"Исполнитель: {assignee}")
+            has_restricting_filters = True
 
     # Просрочено / сегодня
     overdue = (data.get("overdue") or "").strip()
@@ -6849,6 +6965,7 @@ def _apply_task_filters_for_bulk_ui(qs, user: User, data):
             status__in=[Task.Status.DONE, Task.Status.CANCELLED]
         )
         filters_summary.append("Только просроченные")
+        has_restricting_filters = True
 
     today = (data.get("today") or "").strip()
     if today == "1":
@@ -6857,6 +6974,7 @@ def _apply_task_filters_for_bulk_ui(qs, user: User, data):
             due_at__lt=tomorrow_start,
         ).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
         filters_summary.append("Только на сегодня")
+        has_restricting_filters = True
 
     # Период по due_at (date_from / date_to)
     date_from = (data.get("date_from") or "").strip()
@@ -6888,6 +7006,7 @@ def _apply_task_filters_for_bulk_ui(qs, user: User, data):
             pass
 
     if period_start_label or period_end_label:
+        has_restricting_filters = True
         if period_start_label and period_end_label:
             filters_summary.append(
                 f"Период дедлайна: {period_start_label} – {period_end_label}"
@@ -6897,7 +7016,9 @@ def _apply_task_filters_for_bulk_ui(qs, user: User, data):
         elif period_end_label:
             filters_summary.append(f"Дедлайн не позже: {period_end_label}")
 
-    if not filters_summary:
+    # Если не было ни одного «явного» фильтра (кроме базового поведения show_done),
+    # подсвечиваем, что выборка по сути не ограничена.
+    if not has_restricting_filters:
         filters_summary.append("Фильтры не ограничивают выборку (все доступные задачи).")
 
     return qs, filters_summary
@@ -6966,29 +7087,95 @@ def task_bulk_reschedule(request: HttpRequest) -> HttpResponse:
 
     if apply_mode == "filtered":
         qs = visible_tasks_qs(user).order_by("-created_at").distinct()
-        qs, _ = _apply_task_filters_for_bulk_ui(qs, user, request.POST)
+        qs, filters_summary = _apply_task_filters_for_bulk_ui(qs, user, request.POST)
 
         cap = 5000
         ids = list(qs.values_list("id", flat=True)[:cap])
         if not ids:
+            try:
+                logger.warning(
+                    "tasks.bulk_reschedule.apply.reject",
+                    extra={
+                        "user_id": user.id,
+                        "apply_mode": apply_mode,
+                        "reason": "no_tasks_for_filters",
+                        "cap": cap,
+                        "path": request.path,
+                        "method": request.method,
+                    },
+                )
+            except Exception:
+                pass
             messages.error(request, "Нет задач для переноса даты.")
             return redirect("task_list")
         if len(ids) >= cap:
+            try:
+                logger.warning(
+                    "tasks.bulk_reschedule.apply.reject",
+                    extra={
+                        "user_id": user.id,
+                        "apply_mode": apply_mode,
+                        "reason": "cap_reached",
+                        "count": len(ids),
+                        "cap": cap,
+                        "path": request.path,
+                        "method": request.method,
+                    },
+                )
+            except Exception:
+                pass
             messages.warning(
                 request, f"Выбрано слишком много задач (>{cap}). Сузьте фильтр и повторите."
             )
             return redirect("task_list")
+        requested_count = None
     else:
         raw_ids = request.POST.getlist("task_ids") or []
         raw_ids = [i for i in raw_ids if i]
         if not raw_ids:
-            messages.error(request, "Выберите хотя бы одну задачу (чекбоксы слева) или нажмите «Перенести по фильтру».")
+            try:
+                logger.warning(
+                    "tasks.bulk_reschedule.apply.reject",
+                    extra={
+                        "user_id": user.id,
+                        "apply_mode": apply_mode,
+                        "reason": "no_task_ids_selected",
+                        "requested_count": 0,
+                        "path": request.path,
+                        "method": request.method,
+                    },
+                )
+            except Exception:
+                pass
+            messages.error(
+                request,
+                "Выберите хотя бы одну задачу (чекбоксы слева) или нажмите «Перенести по фильтру».",
+            )
             return redirect("task_list")
+        requested_count = len(raw_ids)
         # Только задачи, видимые пользователю
-        ids = list(visible_tasks_qs(user).filter(id__in=raw_ids).values_list("id", flat=True))
+        ids = list(
+            visible_tasks_qs(user).filter(id__in=raw_ids).values_list("id", flat=True)
+        )
         if not ids:
+            try:
+                logger.warning(
+                    "tasks.bulk_reschedule.apply.reject",
+                    extra={
+                        "user_id": user.id,
+                        "apply_mode": apply_mode,
+                        "reason": "no_visible_tasks",
+                        "requested_count": requested_count,
+                        "path": request.path,
+                        "method": request.method,
+                    },
+                )
+            except Exception:
+                pass
             messages.error(request, "Нет доступа к выбранным задачам.")
             return redirect("task_list")
+        filters_summary = []
+        cap = None
 
     # Сохраняем старые due_at для возможности отмены переноса из журнала действий
     task_due_before = list(
@@ -6999,12 +7186,16 @@ def task_bulk_reschedule(request: HttpRequest) -> HttpResponse:
         for t in task_due_before
     ][:5000]  # ограничение размера meta
 
+    target_count = len(ids)
     now_ts = timezone.now()
     with transaction.atomic():
         qs_to_update = Task.objects.filter(id__in=ids)
         updated = qs_to_update.update(due_at=new_due_at, updated_at=now_ts)
 
-    messages.success(request, f"Перенесено на дату задач: {updated}. Новая дата: {new_due_at.strftime('%d.%m.%Y %H:%M')}.")
+    messages.success(
+        request,
+        f"Перенесено на дату задач: {updated}. Новая дата: {new_due_at.strftime('%d.%m.%Y %H:%M')}.",
+    )
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.UPDATE,
@@ -7018,6 +7209,29 @@ def task_bulk_reschedule(request: HttpRequest) -> HttpResponse:
             "task_due_before": task_due_before,
         },
     )
+    try:
+        logger.info(
+            "tasks.bulk_reschedule.apply",
+            extra={
+                "user_id": user.id,
+                "apply_mode": apply_mode,
+                "count": updated,
+                "target_count": target_count,
+                "requested_count": requested_count,
+                "cap": cap,
+                "filters_summary": filters_summary,
+                "strong_confirm_required": bool(
+                    apply_mode == "filtered"
+                    and target_count is not None
+                    and target_count > STRONG_CONFIRM_THRESHOLD
+                ),
+                "cap_reached": bool(cap is not None and target_count >= cap),
+                "path": request.path,
+                "method": request.method,
+            },
+        )
+    except Exception:
+        pass
     return redirect("task_list")
 
 
@@ -7046,6 +7260,20 @@ def task_bulk_reschedule_preview(request: HttpRequest) -> JsonResponse:
         raw_ids = [i for i in raw_ids if i]
         requested_count = len(raw_ids)
         if not raw_ids:
+            try:
+                logger.warning(
+                    "tasks.bulk_reschedule.preview.reject",
+                    extra={
+                        "user_id": user.id,
+                        "apply_mode": apply_mode,
+                        "reason": "no_task_ids_selected",
+                        "requested_count": 0,
+                        "path": request.path,
+                        "method": request.method,
+                    },
+                )
+            except Exception:
+                pass
             return JsonResponse({"ok": False, "error": "Не выбраны задачи."}, status=400)
         qs = qs.filter(id__in=raw_ids)
         filters_summary: list[str] = []
@@ -7055,10 +7283,24 @@ def task_bulk_reschedule_preview(request: HttpRequest) -> JsonResponse:
     ids = list(qs.values_list("id", flat=True)[:cap])
     count = len(ids)
 
-    sample_qs = (
-        Task.objects.filter(id__in=ids)
-        .select_related("company")
-        .order_by("due_at", "-created_at")
+    if count == 0:
+        try:
+            logger.warning(
+                "tasks.bulk_reschedule.preview.reject",
+                extra={
+                    "user_id": user.id,
+                    "apply_mode": apply_mode,
+                    "reason": "zero_count",
+                    "cap": cap,
+                    "path": request.path,
+                    "method": request.method,
+                },
+            )
+        except Exception:
+            pass
+
+    sample_qs = Task.objects.filter(id__in=ids).select_related("company").order_by(
+        "due_at", "-created_at"
     )
     sample = []
     for t in sample_qs[:6]:
@@ -7071,17 +7313,38 @@ def task_bulk_reschedule_preview(request: HttpRequest) -> JsonResponse:
             }
         )
 
-    return JsonResponse(
-        {
-            "ok": True,
-            "mode": apply_mode,
-            "count": count,
-            "requested_count": requested_count,
-            "cap": cap,
-            "sample": sample,
-            "filters_summary": filters_summary,
-        }
-    )
+    payload = {
+        "ok": True,
+        "mode": apply_mode,
+        "count": count,
+        "requested_count": requested_count,
+        "cap": cap,
+        "sample": sample,
+        "filters_summary": filters_summary,
+    }
+    try:
+        logger.info(
+            "tasks.bulk_reschedule.preview",
+            extra={
+                "user_id": user.id,
+                "apply_mode": apply_mode,
+                "count": count,
+                "requested_count": requested_count,
+                "cap": cap,
+                "filters_summary": filters_summary,
+                "strong_confirm_required": bool(
+                    apply_mode == "filtered"
+                    and count is not None
+                    and count > STRONG_CONFIRM_THRESHOLD
+                ),
+                "cap_reached": bool(cap is not None and count >= cap),
+                "path": request.path,
+                "method": request.method,
+            },
+        )
+    except Exception:
+        pass
+    return JsonResponse(payload)
 
 
 @login_required
