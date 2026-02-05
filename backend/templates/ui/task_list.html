@@ -825,6 +825,7 @@
           let pendingMode = null;
           let lastPreviewCount = 0;
           const STRONG_CONFIRM_THRESHOLD = 200;
+          let lastApplyMode = null;
 
           function updateFilteredConfirmState() {
             const requireStrong = lastPreviewCount > STRONG_CONFIRM_THRESHOLD;
@@ -1000,6 +1001,13 @@
             return data;
           }
 
+          const applyButtons = rescheduleForm.querySelectorAll('button[name="apply_mode"]');
+          applyButtons.forEach((btn) => {
+            btn.addEventListener('click', function () {
+              lastApplyMode = this.value;
+            });
+          });
+
           if (btnCancel) btnCancel.addEventListener('click', function(e){ e.preventDefault(); closeModal(); });
           if (modal) modal.addEventListener('click', function(e){ if(e.target === modal) closeModal(); });
           document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && modal && !modal.classList.contains('hidden')) closeModal(); });
@@ -1032,11 +1040,20 @@
           });
 
           rescheduleForm.addEventListener('submit', async function(e) {
-            const submitter = e.submitter;
-            if (!submitter || submitter.name !== 'apply_mode') return;
+            let mode = null;
+            if (e.submitter && e.submitter.name === 'apply_mode') {
+              mode = e.submitter.value;
+            } else if (lastApplyMode) {
+              mode = lastApplyMode;
+            } else {
+              // Если submit произошёл не через кнопки (например, Enter в поле даты),
+              // по умолчанию считаем, что пользователь имел в виду "Перенести выбранные".
+              mode = 'selected';
+            }
+
             e.preventDefault();
 
-            pendingMode = submitter.value;
+            pendingMode = mode;
             const dateInput = document.getElementById('bulkRescheduleDateTime');
             const dateLabel = dateInput && dateInput.value ? dateInput.value.replace('T', ' ') : '';
             if (!dateLabel) {
