@@ -217,8 +217,8 @@
               aria-label="Новая дата дедлайна для переноса"
               autocomplete="off"
             />
-            <button type="submit" name="apply_mode" value="selected" class="btn btn-primary" title="Перенести дедлайн только у отмеченных галочкой задач">Перенести выбранные</button>
-            <button type="submit" name="apply_mode" value="filtered" class="btn btn-outline" title="Перенести дедлайн у всех задач, подходящих под фильтры выше">Перенести по фильтру</button>
+            <button type="button" name="apply_mode" value="selected" data-apply-mode="selected" class="btn btn-primary" title="Перенести дедлайн только у отмеченных галочкой задач">Перенести выбранные</button>
+            <button type="button" name="apply_mode" value="filtered" data-apply-mode="filtered" class="btn btn-outline" title="Перенести дедлайн у всех задач, подходящих под фильтры выше">Перенести по фильтру</button>
           </div>
           <p class="text-xs text-brand-dark/60 mt-1.5 ml-0.5 basis-full">«Перенести по фильтру» затронет все задачи, подходящие под фильтры выше — убедитесь, что фильтр настроен правильно.</p>
           <input type="hidden" name="status" value="{{ status }}" />
@@ -1039,21 +1039,8 @@
             rescheduleForm.submit();
           });
 
-          rescheduleForm.addEventListener('submit', async function(e) {
-            let mode = null;
-            if (e.submitter && e.submitter.name === 'apply_mode') {
-              mode = e.submitter.value;
-            } else if (lastApplyMode) {
-              mode = lastApplyMode;
-            } else {
-              // Если submit произошёл не через кнопки (например, Enter в поле даты),
-              // по умолчанию считаем, что пользователь имел в виду "Перенести выбранные".
-              mode = 'selected';
-            }
-
-            e.preventDefault();
-
-            pendingMode = mode;
+          async function handleBulkReschedule(mode) {
+            pendingMode = mode === 'filtered' ? 'filtered' : 'selected';
             const dateInput = document.getElementById('bulkRescheduleDateTime');
             const dateLabel = dateInput && dateInput.value ? dateInput.value.replace('T', ' ') : '';
             if (!dateLabel) {
@@ -1115,6 +1102,15 @@
             }catch(err){
               setError(err && err.message ? err.message : String(err));
             }
+          }
+
+          const applyButtons = rescheduleForm.querySelectorAll('button[data-apply-mode]');
+          applyButtons.forEach((btn) => {
+            btn.addEventListener('click', function(e) {
+              e.preventDefault();
+              const mode = this.getAttribute('data-apply-mode') || 'selected';
+              handleBulkReschedule(mode);
+            });
           });
         }
       })();
