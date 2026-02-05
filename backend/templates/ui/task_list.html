@@ -217,10 +217,13 @@
               aria-label="Новая дата дедлайна для переноса"
               autocomplete="off"
             />
-            <button type="button" name="apply_mode" value="selected" data-apply-mode="selected" class="btn btn-primary" title="Перенести дедлайн только у отмеченных галочкой задач">Перенести выбранные</button>
-            <button type="button" name="apply_mode" value="filtered" data-apply-mode="filtered" class="btn btn-outline" title="Перенести дедлайн у всех задач, подходящих под фильтры выше">Перенести по фильтру</button>
+            <button type="button"
+                    data-apply-mode="selected"
+                    class="btn btn-primary"
+                    title="Перенести дедлайн только у отмеченных галочкой задач">
+              Перенести выбранные
+            </button>
           </div>
-          <p class="text-xs text-brand-dark/60 mt-1.5 ml-0.5 basis-full">«Перенести по фильтру» затронет все задачи, подходящие под фильтры выше — убедитесь, что фильтр настроен правильно.</p>
           <input type="hidden" name="status" value="{{ status }}" />
           <input type="hidden" name="mine" value="{{ mine }}" />
           <input type="hidden" name="overdue" value="{{ overdue }}" />
@@ -832,7 +835,6 @@
           let pendingMode = null;
           let lastPreviewCount = 0;
           const STRONG_CONFIRM_THRESHOLD = 200;
-          let lastApplyMode = null;
 
           function updateFilteredConfirmState() {
             const requireStrong = lastPreviewCount > STRONG_CONFIRM_THRESHOLD;
@@ -1008,13 +1010,6 @@
             return data;
           }
 
-          const applyButtons = rescheduleForm.querySelectorAll('button[name="apply_mode"]');
-          applyButtons.forEach((btn) => {
-            btn.addEventListener('click', function () {
-              lastApplyMode = this.value;
-            });
-          });
-
           if (btnCancel) btnCancel.addEventListener('click', function(e){ e.preventDefault(); closeModal(); });
           if (modal) modal.addEventListener('click', function(e){ if(e.target === modal) closeModal(); });
           document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && modal && !modal.classList.contains('hidden')) closeModal(); });
@@ -1047,7 +1042,8 @@
           });
 
           async function handleBulkReschedule(mode) {
-            pendingMode = mode === 'filtered' ? 'filtered' : 'selected';
+            // Сейчас поддерживаем только сценарий переноса выбранных задач.
+            pendingMode = 'selected';
             const dateInput = document.getElementById('bulkRescheduleDateTime');
             const dateLabel = dateInput && dateInput.value ? dateInput.value.replace('T', ' ') : '';
             if (!dateLabel) {
