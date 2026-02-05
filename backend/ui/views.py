@@ -6886,13 +6886,22 @@ def task_bulk_reschedule(request: HttpRequest) -> HttpResponse:
         raw_ids = request.POST.getlist("task_ids") or []
         raw_ids = [i for i in raw_ids if i]
         if not raw_ids:
-            messages.error(request, "Выберите хотя бы одну задачу (чекбоксы слева) или используйте «Перенести все по фильтру».")
+            messages.error(request, "Выберите хотя бы одну задачу (чекбоксы слева) или нажмите «Перенести по фильтру».")
             return redirect("task_list")
         # Только задачи, видимые пользователю
         ids = list(visible_tasks_qs(user).filter(id__in=raw_ids).values_list("id", flat=True))
         if not ids:
             messages.error(request, "Нет доступа к выбранным задачам.")
             return redirect("task_list")
+
+    # Сохраняем старые due_at для возможности отмены переноса из журнала действий
+    task_due_before = list(
+        Task.objects.filter(id__in=ids).values_list("id", "due_at")
+    )
+    task_due_before = [
+        {"id": str(t[0]), "due_at": t[1].isoformat() if t[1] else None}
+        for t in task_due_before
+    ][:5000]  # ограничение размера meta
 
     now_ts = timezone.now()
     with transaction.atomic():
@@ -6906,9 +6915,87 @@ def task_bulk_reschedule(request: HttpRequest) -> HttpResponse:
         entity_type="task_bulk_reschedule",
         entity_id="",
         message="Массовый перенос даты задач",
-        meta={"count": updated, "due_at": new_due_at.isoformat(), "mode": apply_mode},
+        meta={
+            "count": updated,
+            "due_at": new_due_at.isoformat(),
+            "mode": apply_mode,
+            "task_due_before": task_due_before,
+        },
     )
     return redirect("task_list")
+
+
+@login_required
+def task_bulk_reschedule_undo(request: HttpRequest, event_id: UUID) -> HttpResponse:
+    """
+    Отмена массового переноса даты задач по записи из журнала действий.
+    Доступно только администратору. В meta события должен быть task_due_before.
+    """
+    user: User = request.user
+    if request.method != "POST":
+        return redirect("settings_activity")
+
+    if not require_admin(user):
+        messages.error(request, "Отмена переноса доступна только администратору.")
+        return redirect("settings_activity")
+
+    event = get_object_or_404(ActivityEvent, pk=event_id)
+    if event.entity_type != "task_bulk_reschedule":
+        messages.error(request, "Это действие нельзя отменить.")
+        return redirect("settings_activity")
+    meta = event.meta or {}
+    task_due_before = meta.get("task_due_before")
+    if not task_due_before or meta.get("undone_at"):
+        messages.error(
+            request,
+            "Отмена недоступна: нет сохранённых прежних дат или перенос уже отменён.",
+        )
+        return redirect("settings_activity")
+    if not isinstance(task_due_before, list):
+        messages.error(request, "Некорректные данные события.")
+        return redirect("settings_activity")
+
+    now_ts = timezone.now()
+    restored = 0
+    with transaction.atomic():
+        for item in task_due_before:
+            task_id = item.get("id")
+            due_at_str = item.get("due_at")
+            if not task_id:
+                continue
+            try:
+                UUID(str(task_id))  # валидный UUID, иначе не дергать БД
+            except (ValueError, TypeError):
+                continue
+            try:
+                due_at = None
+                if due_at_str:
+                    due_at = datetime.fromisoformat(due_at_str.replace("Z", "+00:00"))
+                    if due_at.tzinfo is None:
+                        due_at = timezone.make_aware(due_at)
+                Task.objects.filter(pk=task_id).update(due_at=due_at, updated_at=now_ts)
+                restored += 1
+            except (ValueError, TypeError, ValidationError):
+                continue
+
+        meta["undone_at"] = now_ts.isoformat()
+        meta["undone_by_id"] = str(user.id)
+        event.meta = meta
+        event.save(update_fields=["meta"])
+
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.UPDATE,
+        entity_type="task_bulk_reschedule_undo",
+        entity_id=str(event_id),
+        message="Отмена массового переноса даты задач",
+        meta={"event_id": str(event_id), "restored": restored},
+    )
+    if restored:
+        messages.success(request, f"Перенос отменён: восстановлены даты у {restored} задач.")
+    else:
+        messages.warning(request, "Перенос отменён, но ни у одной задачи дата не изменилась (возможно, задачи удалены).")
+    return redirect("settings_activity")
 
 
 @login_required
@@ -8495,7 +8582,10 @@ def settings_activity(request: HttpRequest) -> HttpResponse:
         .exclude(entity_type="policy")
         .order_by("-created_at")[:500]
     )
-    return render(request, "ui/settings/activity.html", {"events": events})
+    return render(request, "ui/settings/activity.html", {
+        "events": events,
+        "can_undo_bulk_reschedule": require_admin(request.user),
+    })
 
 
 @login_required

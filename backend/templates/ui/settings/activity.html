@@ -57,6 +57,28 @@
                         <div class="text-brand-dark/50">Компаний в логе: {{ e.meta.companies_sample|length }}</div>
                       {% endif %}
                     </div>
+                  {% elif e.entity_type == "task_bulk_reschedule" and e.meta %}
+                    <div class="space-y-1">
+                      {% if e.meta.count %}
+                        <div>Количество: <b>{{ e.meta.count }}</b></div>
+                      {% endif %}
+                      {% if e.meta.due_at %}
+                        <div>Новая дата: {{ e.meta.due_at|slice:":16" }}</div>
+                      {% endif %}
+                      {% if e.meta.mode %}
+                        <div class="text-brand-dark/50">Режим: {{ e.meta.mode }}</div>
+                      {% endif %}
+                      {% if e.meta.undone_at %}
+                        <div class="text-brand-dark/50">Отменён {{ e.meta.undone_at|slice:":16" }}</div>
+                      {% elif e.meta.task_due_before and can_undo_bulk_reschedule|default:False %}
+                        <form method="post" action="{% url 'task_bulk_reschedule_undo' e.id %}" class="inline mt-2" onsubmit="return confirm('Вернуть даты задач как до этого переноса?');">
+                          {% csrf_token %}
+                          <button type="submit" class="btn btn-outline btn-sm">Отменить перенос</button>
+                        </form>
+                      {% elif e.meta.task_due_before %}
+                        <span class="text-brand-dark/50">Отменить перенос может только администратор.</span>
+                      {% endif %}
+                    </div>
                   {% elif e.meta %}
                     <details class="group cursor-pointer">
                       <summary class="inline-flex items-center gap-1 text-brand-dark/70 hover:text-brand-teal list-none select-none">

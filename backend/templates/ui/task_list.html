@@ -189,25 +189,31 @@
     </form>
 
     <div class="task-bulk-panel">
+    {% if can_bulk_reschedule or is_admin %}
+      <p class="text-sm font-medium text-brand-dark/80 mb-2 mt-0">Массовые действия с задачами</p>
+    {% endif %}
     {% if can_bulk_reschedule %}
       <div id="task-bulk-reschedule" class="tasks-layout-block">
+        <p class="text-xs text-brand-dark/60 mb-2 font-medium">Массовый перенос дедлайна: укажите <strong>новую дату</strong>, на которую нужно перенести задачи, и нажмите одну из кнопок справа. Это не фильтр — дедлайн изменится у отмеченных галочкой задач или у всех по фильтру (в зависимости от кнопки).</p>
         <form method="post" action="{% url 'task_bulk_reschedule' %}" id="bulkRescheduleForm" {% if is_admin %}data-copy-task-ids="1"{% endif %}>
           {% csrf_token %}
           <span class="tbr-label">
             <span class="tbr-icon">
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
             </span>
-            Перенести на дату
+            Новая дата дедлайна
           </span>
           <span class="tbr-sep" aria-hidden="true"></span>
           <div class="tbr-fields">
             <input type="datetime-local" name="due_at" id="bulkRescheduleDateTime" required
               value="{{ default_bulk_reschedule_datetime|default:'' }}"
-              title="Рабочие часы 8:00–17:50"
+              title="На эту дату будут перенесены выбранные задачи (рабочие часы 8:00–17:50)"
+              aria-label="Новая дата дедлайна для переноса"
             />
-            <button type="submit" name="apply_mode" value="selected" class="btn btn-primary">Выбранные</button>
-            <button type="submit" name="apply_mode" value="filtered" class="btn btn-outline">По фильтру</button>
+            <button type="submit" name="apply_mode" value="selected" class="btn btn-primary" title="Перенести дедлайн только у отмеченных галочкой задач">Перенести выбранные</button>
+            <button type="submit" name="apply_mode" value="filtered" class="btn btn-outline" title="Перенести дедлайн у всех задач, подходящих под фильтры выше">Перенести по фильтру</button>
           </div>
+          <p class="text-xs text-brand-dark/60 mt-1.5 ml-0.5 basis-full">«Перенести по фильтру» затронет все задачи, подходящие под фильтры выше — убедитесь, что фильтр настроен правильно.</p>
           <input type="hidden" name="status" value="{{ status }}" />
           <input type="hidden" name="mine" value="{{ mine }}" />
           <input type="hidden" name="overdue" value="{{ overdue }}" />
@@ -241,8 +247,8 @@
                     </optgroup>
                   {% endfor %}
                 </select>
-                <button type="submit" name="apply_mode" value="selected" class="btn btn-primary">Выбранные</button>
-                <button type="submit" name="apply_mode" value="filtered" class="btn btn-outline">По фильтру</button>
+                <button type="submit" name="apply_mode" value="selected" class="btn btn-primary" title="Переназначить только отмеченные галочкой задачи">Переназначить выбранные</button>
+                <button type="submit" name="apply_mode" value="filtered" class="btn btn-outline" title="Переназначить все задачи по фильтру выше">Переназначить по фильтру</button>
               </div>
             </div>
             <input type="hidden" name="status" value="{{ status }}" />
@@ -697,27 +703,40 @@
           });
         });
 
-        // Массовый перенос даты: при «Выбранные» подставляем task_ids из чекбоксов в bulkRescheduleForm
+        // Массовый перенос дедлайна: при «Перенести выбранные» подставляем task_ids из чекбоксов; подтверждение перед отправкой
         const rescheduleForm = document.getElementById('bulkRescheduleForm');
         if (rescheduleForm) {
           rescheduleForm.addEventListener('submit', function(e) {
             const submitter = e.submitter;
-            if (submitter && submitter.name === 'apply_mode' && submitter.value === 'selected') {
+            if (!submitter || submitter.name !== 'apply_mode') return;
+            const applyMode = submitter.value;
+            const dateInput = document.getElementById('bulkRescheduleDateTime');
+            const dateLabel = dateInput && dateInput.value ? dateInput.value.replace('T', ' ') : 'указанную дату';
+
+            if (applyMode === 'selected') {
               const checked = document.querySelectorAll('.task-checkbox:checked');
               if (!checked.length) {
                 e.preventDefault();
-                alert('Выберите хотя бы одну задачу (чекбокс слева) или нажмите «Перенести все по фильтру».');
+                alert('Выберите хотя бы одну задачу (чекбокс слева) или нажмите «Перенести по фильтру».');
+                return;
+              }
+              if (!confirm('Перенести дедлайн у ' + checked.length + ' задач на ' + dateLabel + '?\n\nПродолжить?')) {
+                e.preventDefault();
                 return;
               }
               if (rescheduleForm.dataset.copyTaskIds === '1') {
                 rescheduleForm.querySelectorAll('input[name="task_ids"]').forEach(el => el.remove());
                 checked.forEach(function(cb) {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'task_ids';
-                input.value = cb.value;
-                rescheduleForm.appendChild(input);
-              });
+                  const input = document.createElement('input');
+                  input.type = 'hidden';
+                  input.name = 'task_ids';
+                  input.value = cb.value;
+                  rescheduleForm.appendChild(input);
+                });
+              }
+            } else if (applyMode === 'filtered') {
+              if (!confirm('Перенести дедлайн у всех задач по текущему фильтру на ' + dateLabel + '?\n\nЭто затронет все задачи, подходящие под выбранные фильтры (статус, «Мои», «Просроченные», «На сегодня» и т.д.). Убедитесь, что фильтр настроен правильно.\n\nПродолжить?')) {
+                e.preventDefault();
               }
             }
           });
