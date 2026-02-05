@@ -881,7 +881,11 @@
               return;
             }
 
-            if (!openModal()) return;
+            if (!openModal()) {
+              // fallback: если модалка не открылась, не блокируем стандартный submit
+              rescheduleForm.submit();
+              return;
+            }
             modalTitle.textContent = pendingMode === 'filtered' ? 'Подтвердите перенос по фильтру' : 'Подтвердите перенос выбранных';
             modalDate.textContent = dateLabel;
             setLoading();
