@@ -259,7 +259,6 @@
                   {% endfor %}
                 </select>
                 <button type="submit" name="apply_mode" value="selected" class="btn btn-primary" title="Переназначить только отмеченные галочкой задачи">Переназначить выбранные</button>
-                <button type="submit" name="apply_mode" value="filtered" class="btn btn-outline" title="Переназначить все задачи по фильтру выше">Переназначить по фильтру</button>
               </div>
             </div>
             <input type="hidden" name="status" value="{{ status }}" />
@@ -409,7 +408,7 @@
               <tr class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %}">
                 {% if show_task_checkboxes %}
                   <td style="width:2.8125rem;min-width:2.8125rem;max-width:2.8125rem">
-                    <input type="checkbox" name="task_ids" value="{{ t.id }}" form="{% if is_admin %}bulkReassignForm{% else %}bulkRescheduleForm{% endif %}" class="task-checkbox" aria-label="Выбрать задачу" />
+                    <input type="checkbox" name="task_ids" value="{{ t.id }}" class="task-checkbox" aria-label="Выбрать задачу" />
                   </td>
                 {% endif %}
                 <td class="px-2 py-2" style="width:13rem;min-width:13rem;max-width:13rem;word-wrap:break-word;overflow-wrap:break-word">
@@ -750,7 +749,6 @@
             const selectAssignee = reassignForm.querySelector('select[name="assigned_to_id"]');
             const hasAssignee = !!(selectAssignee && selectAssignee.value);
             const btnReassignSelected = reassignForm.querySelector('button[name="apply_mode"][value="selected"]');
-            const btnReassignFiltered = reassignForm.querySelector('button[name="apply_mode"][value="filtered"]');
 
             if (btnReassignSelected) {
               const enabled = hasAssignee && hasSelected;
@@ -764,19 +762,6 @@
                 btnReassignSelected.title = 'Выберите хотя бы одну задачу (чекбоксы слева)';
               } else {
                 btnReassignSelected.title = 'Переназначить только отмеченные галочкой задачи';
-              }
-            }
-
-            if (btnReassignFiltered) {
-              const enabled = hasAssignee;
-              btnReassignFiltered.disabled = !enabled;
-              btnReassignFiltered.classList.toggle('opacity-60', !enabled);
-              btnReassignFiltered.classList.toggle('pointer-events-none', !enabled);
-              btnReassignFiltered.setAttribute('aria-disabled', enabled ? 'false' : 'true');
-              if (!hasAssignee) {
-                btnReassignFiltered.title = 'Выберите сотрудника';
-              } else {
-                btnReassignFiltered.title = 'Переназначить все задачи по фильтру выше';
               }
             }
           }
@@ -801,6 +786,28 @@
           if (selectAssignee) {
             selectAssignee.addEventListener('change', updateBulkButtonsState);
           }
+          // При сабмите на "Переназначить выбранные" всегда дублируем отмеченные task_ids в форму.
+          reassignForm.addEventListener('submit', function(e) {
+            const submitter = e.submitter;
+            if (!submitter || submitter.name !== 'apply_mode' || submitter.value !== 'selected') {
+              return;
+            }
+            const checked = document.querySelectorAll('.task-checkbox:checked');
+            if (!checked.length) {
+              e.preventDefault();
+              alert('Выберите хотя бы одну задачу (чекбоксы слева).');
+              return;
+            }
+            reassignForm.querySelectorAll('input[name=\"task_ids\"][data-injected=\"1\"]').forEach(el => el.remove());
+            checked.forEach(function(cb) {
+              const input = document.createElement('input');
+              input.type = 'hidden';
+              input.name = 'task_ids';
+              input.value = cb.value;
+              input.setAttribute('data-injected', '1');
+              reassignForm.appendChild(input);
+            });
+          });
         }
 
         // Массовый перенос дедлайна: красивое подтверждение (модалка) + preview/count с сервера
