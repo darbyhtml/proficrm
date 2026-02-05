@@ -6077,7 +6077,6 @@ def task_list(request: HttpRequest) -> HttpResponse:
             "is_admin": is_admin,
             "can_bulk_reschedule": can_bulk_reschedule,
             "show_task_checkboxes": show_task_checkboxes,
-            "default_bulk_reschedule_datetime": local_now.replace(hour=17, minute=0, second=0, microsecond=0).strftime("%Y-%m-%dT%H:%M"),
             "transfer_targets": transfer_targets,
             "view_task": view_task,
             "view_task_overdue_days": view_task_overdue_days,
@@ -6923,6 +6922,86 @@ def task_bulk_reschedule(request: HttpRequest) -> HttpResponse:
         },
     )
     return redirect("task_list")
+
+
+@login_required
+@policy_required(resource_type="action", resource="ui:tasks:bulk_reschedule")
+def task_bulk_reschedule_preview(request: HttpRequest) -> JsonResponse:
+    """
+    Preview для модалки подтверждения массового переноса дедлайна.
+    Возвращает количество задач и небольшой сэмпл (несколько задач), чтобы пользователь понимал, что изменится.
+    """
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Method not allowed"}, status=405)
+
+    user: User = request.user
+    apply_mode = (request.POST.get("apply_mode") or "").strip().lower()
+    if apply_mode not in ("selected", "filtered"):
+        return JsonResponse({"ok": False, "error": "Некорректный режим."}, status=400)
+
+    now = timezone.now()
+    local_now = timezone.localtime(now)
+    today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow_start = today_start + timedelta(days=1)
+
+    requested_count = None
+    qs = visible_tasks_qs(user).select_related("company").distinct()
+
+    if apply_mode == "filtered":
+        status = (request.POST.get("status") or "").strip()
+        if status:
+            qs = qs.filter(status=status)
+
+        mine = (request.POST.get("mine") or "").strip()
+        if mine == "1":
+            qs = qs.filter(assigned_to=user)
+
+        overdue = (request.POST.get("overdue") or "").strip()
+        if overdue == "1":
+            qs = qs.filter(due_at__lt=now).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+
+        today = (request.POST.get("today") or "").strip()
+        if today == "1":
+            qs = qs.filter(due_at__gte=today_start, due_at__lt=tomorrow_start).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+    else:
+        raw_ids = request.POST.getlist("task_ids") or []
+        raw_ids = [i for i in raw_ids if i]
+        requested_count = len(raw_ids)
+        if not raw_ids:
+            return JsonResponse({"ok": False, "error": "Не выбраны задачи."}, status=400)
+        qs = qs.filter(id__in=raw_ids)
+
+    # cap как в основном хендлере (для filtered)
+    cap = 5000
+    ids = list(qs.values_list("id", flat=True)[:cap])
+    count = len(ids)
+
+    sample_qs = (
+        Task.objects.filter(id__in=ids)
+        .select_related("company")
+        .order_by("due_at", "-created_at")
+    )
+    sample = []
+    for t in sample_qs[:6]:
+        sample.append(
+            {
+                "id": str(t.id),
+                "title": t.title,
+                "company": (t.company.name if t.company else None),
+                "due_at": t.due_at.isoformat() if t.due_at else None,
+            }
+        )
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "mode": apply_mode,
+            "count": count,
+            "requested_count": requested_count,
+            "cap": cap,
+            "sample": sample,
+        }
+    )
 
 
 @login_required
