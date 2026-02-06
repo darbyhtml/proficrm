@@ -49,8 +49,12 @@
               <span class="inline-flex items-center gap-1">
                 {{ s.name }}
                 {% if s.is_important %}
-                  <span class="inline-flex items-center justify-center w-4 h-4 rounded-full border border-brand-orange/70 text-brand-orange" title="Важная сфера (особое внимание при работе)">
-                    <span style="font-size:0.7rem;line-height:1;">?</span>
+                  <span
+                    class="inline-flex items-center justify-center rounded-full border border-brand-orange/80 text-brand-orange bg-white"
+                    style="width:1.15rem;height:1.15rem;border-width:1.5px;"
+                    title="Важная сфера (особое внимание при работе)"
+                  >
+                    <span style="font-size:0.8rem;line-height:1;font-weight:700;">?</span>
                   </span>
                 {% endif %}
               </span>
