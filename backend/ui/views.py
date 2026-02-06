@@ -3529,35 +3529,6 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
 
 
 @login_required
-@policy_required(resource_type="page", resource="ui:companies:detail")
-@require_can_view_company
-def company_tasks_history(request: HttpRequest, company_id) -> HttpResponse:
-    """
-    История выполненных задач по компании (для модального окна в карточке компании).
-    Показываем только задачи со статусом DONE, отсортированные от новых к старым.
-    """
-    user: User = request.user  # noqa: F841  # зарезервировано на будущее (фильтрация прав)
-    company = get_object_or_404(Company, id=company_id)
-
-    tasks = (
-        Task.objects.filter(company=company, status=Task.Status.DONE)
-        .select_related("assigned_to", "type", "created_by")
-        .order_by("-created_at")[:100]
-    )
-
-    local_now = timezone.localtime(timezone.now())
-
-    return render(
-        request,
-        "ui/partials/company_tasks_history.html",
-        {
-            "company": company,
-            "tasks": tasks,
-            "local_now": local_now,
-        },
-    )
-
-@login_required
 @policy_required(resource_type="action", resource="ui:companies:delete_request:create")
 @require_can_view_company
 def company_delete_request_create(request: HttpRequest, company_id) -> HttpResponse:
