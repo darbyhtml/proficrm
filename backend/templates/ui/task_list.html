@@ -1510,7 +1510,13 @@
         modal.classList.remove('hidden');
       });
 
-      // Быстрые кнопки
+      function applyPeriodAndSubmit() {
+        dateFromInput.value = dateFromPicker.value || '';
+        dateToInput.value = dateToPicker.value || '';
+        document.getElementById('taskFilterForm').submit();
+      }
+
+      // Быстрые кнопки: выставляют период и сразу применяют фильтр
       document.querySelectorAll('.date-quick-btn').forEach(b => {
         b.addEventListener('click', function() {
           const period = this.dataset.period;
@@ -1537,15 +1543,14 @@
           if (fromDate && toDate) {
             dateFromPicker.value = fromDate.toISOString().split('T')[0];
             dateToPicker.value = toDate.toISOString().split('T')[0];
+            applyPeriodAndSubmit();
           }
         });
       });
 
       // Применение фильтра
       applyBtn.addEventListener('click', () => {
-        dateFromInput.value = dateFromPicker.value || '';
-        dateToInput.value = dateToPicker.value || '';
-        document.getElementById('taskFilterForm').submit();
+        applyPeriodAndSubmit();
       });
 
       // Очистка фильтра
