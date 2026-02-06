@@ -15,6 +15,18 @@
       {{ form.name }}
     </div>
 
+    {% if form.is_important %}
+      <div class="mt-3">
+        <label class="flex items-center gap-2">
+          {{ form.is_important }}
+          <span class="text-sm text-brand-dark/80">Важно</span>
+        </label>
+        <div class="text-xs text-brand-dark/60 mt-1">
+          Отмечай для сфер, где решения об обучении принимаются через головную организацию или требуют особого внимания.
+        </div>
+      </div>
+    {% endif %}
+
     {% if form.is_annual %}
       <div class="mt-3">
         <label class="flex items-center gap-2">
