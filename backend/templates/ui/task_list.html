@@ -896,6 +896,13 @@
                 return;
               }
 
+              // Простое подтверждение перед массовым изменением дедлайна.
+              const prettyDate = dateEl.value.replace('T', ' ');
+              const ok = window.confirm(`Перенести дедлайн у ${count} задач на ${prettyDate}?`);
+              if (!ok) {
+                return;
+              }
+
               const tmpSubmit = document.createElement('button');
               tmpSubmit.type = 'submit';
               tmpSubmit.style.display = 'none';
