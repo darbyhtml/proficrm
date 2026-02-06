@@ -718,6 +718,16 @@
         function getCheckboxes() { return document.querySelectorAll('.task-checkbox'); }
         const rescheduleForm = document.getElementById('bulkRescheduleForm');
         const reassignForm = document.getElementById('bulkReassignForm');
+        const rescheduleModal = document.getElementById('bulkRescheduleModal');
+        const rescheduleModalDate = document.getElementById('bulkRescheduleModalDate');
+        const rescheduleModalCount = document.getElementById('bulkRescheduleModalCount');
+        const rescheduleModalConfirm = document.getElementById('bulkRescheduleModalConfirm');
+        const rescheduleModalCloseEls = document.querySelectorAll('[data-close-bulk-reschedule-modal]');
+        const reassignModal = document.getElementById('bulkReassignModal');
+        const reassignModalAssignee = document.getElementById('bulkReassignModalAssignee');
+        const reassignModalCount = document.getElementById('bulkReassignModalCount');
+        const reassignModalConfirm = document.getElementById('bulkReassignModalConfirm');
+        const reassignModalCloseEls = document.querySelectorAll('[data-close-bulk-reassign-modal]');
         
         function injectSelectedTaskIdsToForm(formEl) {
           if (!formEl) return 0;
@@ -759,6 +769,53 @@
             clearSelection();
           });
         }
+
+        function openRescheduleModal({ dateLabel, count }) {
+          if (!rescheduleModal || !rescheduleModalConfirm || !rescheduleModalDate || !rescheduleModalCount) {
+            return false;
+          }
+          rescheduleModalDate.textContent = dateLabel;
+          rescheduleModalCount.textContent = String(count);
+          rescheduleModal.classList.remove('hidden');
+          rescheduleModalConfirm.focus();
+          return true;
+        }
+        function closeRescheduleModal() {
+          if (!rescheduleModal) return;
+          rescheduleModal.classList.add('hidden');
+        }
+        rescheduleModalCloseEls.forEach(el => {
+          el.addEventListener('click', function() {
+            closeRescheduleModal();
+          });
+        });
+
+        function openReassignModal({ assigneeLabel, count }) {
+          if (!reassignModal || !reassignModalConfirm || !reassignModalAssignee || !reassignModalCount) {
+            return false;
+          }
+          reassignModalAssignee.textContent = assigneeLabel || '—';
+          reassignModalCount.textContent = String(count);
+          reassignModal.classList.remove('hidden');
+          reassignModalConfirm.focus();
+          return true;
+        }
+        function closeReassignModal() {
+          if (!reassignModal) return;
+          reassignModal.classList.add('hidden');
+        }
+        reassignModalCloseEls.forEach(el => {
+          el.addEventListener('click', function() {
+            closeReassignModal();
+          });
+        });
+
+        document.addEventListener('keydown', function(e) {
+          if (e.key === 'Escape') {
+            closeRescheduleModal();
+            closeReassignModal();
+          }
+        });
         
         function updateBulkButtonsState() {
           const dateInput = document.getElementById('bulkRescheduleDateTime');
@@ -834,31 +891,61 @@
           if (selectAssignee) {
             selectAssignee.addEventListener('change', updateBulkButtonsState);
           }
-          // При сабмите на "Переназначить выбранные" всегда дублируем отмеченные task_ids в форму.
+          // При сабмите на "Переназначить выбранные" всегда дублируем отмеченные task_ids в форму (страховка).
           reassignForm.addEventListener('submit', function(e) {
             const submitter = e.submitter;
             if (!submitter || submitter.name !== 'apply_mode' || submitter.value !== 'selected') {
               return;
             }
-            const checked = document.querySelectorAll('.task-checkbox:checked');
-            if (!checked.length) {
+            const count = injectSelectedTaskIdsToForm(reassignForm);
+            if (!count) {
               e.preventDefault();
               alert('Выберите хотя бы одну задачу (чекбоксы слева).');
-              return;
             }
-            reassignForm.querySelectorAll('input[name=\"task_ids\"][data-injected=\"1\"]').forEach(el => el.remove());
-            checked.forEach(function(cb) {
-              const input = document.createElement('input');
-              input.type = 'hidden';
-              input.name = 'task_ids';
-              input.value = cb.value;
-              input.setAttribute('data-injected', '1');
-              reassignForm.appendChild(input);
-            });
           });
+
+          const btnReassign = reassignForm.querySelector('button[name=\"apply_mode\"][value=\"selected\"]');
+          if (btnReassign) {
+            btnReassign.addEventListener('click', function(e) {
+              e.preventDefault();
+              const selectAssigneeEl = reassignForm.querySelector('select[name=\"assigned_to_id\"]');
+              if (!selectAssigneeEl || !selectAssigneeEl.value) {
+                alert('Выберите сотрудника.');
+                return;
+              }
+              const count = injectSelectedTaskIdsToForm(reassignForm);
+              if (!count) {
+                alert('Выберите хотя бы одну задачу (чекбоксы слева).');
+                return;
+              }
+              const label = (selectAssigneeEl.options[selectAssigneeEl.selectedIndex] || {}).textContent || '';
+              if (openReassignModal({ assigneeLabel: label.trim(), count })) {
+                reassignModalConfirm.onclick = function() {
+                  const tmpSubmit = document.createElement('button');
+                  tmpSubmit.type = 'submit';
+                  tmpSubmit.style.display = 'none';
+                  tmpSubmit.setAttribute('data-injected', '1');
+                  reassignForm.appendChild(tmpSubmit);
+                  try {
+                    closeReassignModal();
+                    if (typeof reassignForm.requestSubmit === 'function') {
+                      reassignForm.requestSubmit(tmpSubmit);
+                    } else {
+                      tmpSubmit.click();
+                    }
+                  } finally {
+                    tmpSubmit.remove();
+                  }
+                };
+              } else {
+                // Фолбэк: если модалка недоступна, просто отправляем форму сразу.
+                reassignForm.submit();
+              }
+            });
+          }
         }
 
-        // Массовый перенос дедлайна: простой перенос выбранных задач (без отдельной модалки)
+        // Массовый перенос дедлайна: перенос выбранных задач с подтверждением
         if (rescheduleForm) {
           const dateInput = document.getElementById('bulkRescheduleDateTime');
           if (dateInput) {
@@ -895,27 +982,41 @@
                 alert('Выберите хотя бы одну задачу (чекбоксы слева).');
                 return;
               }
-
-              // Простое подтверждение перед массовым изменением дедлайна.
               const prettyDate = dateEl.value.replace('T', ' ');
-              const ok = window.confirm(`Перенести дедлайн у ${count} задач на ${prettyDate}?`);
-              if (!ok) {
-                return;
-              }
-
-              const tmpSubmit = document.createElement('button');
-              tmpSubmit.type = 'submit';
-              tmpSubmit.style.display = 'none';
-              tmpSubmit.setAttribute('data-injected', '1');
-              rescheduleForm.appendChild(tmpSubmit);
-              try {
-                if (typeof rescheduleForm.requestSubmit === 'function') {
-                  rescheduleForm.requestSubmit(tmpSubmit);
-                } else {
-                  tmpSubmit.click();
+              if (openRescheduleModal({ dateLabel: prettyDate, count })) {
+                rescheduleModalConfirm.onclick = function() {
+                  const tmpSubmit = document.createElement('button');
+                  tmpSubmit.type = 'submit';
+                  tmpSubmit.style.display = 'none';
+                  tmpSubmit.setAttribute('data-injected', '1');
+                  rescheduleForm.appendChild(tmpSubmit);
+                  try {
+                    closeRescheduleModal();
+                    if (typeof rescheduleForm.requestSubmit === 'function') {
+                      rescheduleForm.requestSubmit(tmpSubmit);
+                    } else {
+                      tmpSubmit.click();
+                    }
+                  } finally {
+                    tmpSubmit.remove();
+                  }
+                };
+              } else {
+                // Фолбэк: если модалка недоступна, просто отправляем форму сразу.
+                const tmpSubmit = document.createElement('button');
+                tmpSubmit.type = 'submit';
+                tmpSubmit.style.display = 'none';
+                tmpSubmit.setAttribute('data-injected', '1');
+                rescheduleForm.appendChild(tmpSubmit);
+                try {
+                  if (typeof rescheduleForm.requestSubmit === 'function') {
+                    rescheduleForm.requestSubmit(tmpSubmit);
+                  } else {
+                    tmpSubmit.click();
+                  }
+                } finally {
+                  tmpSubmit.remove();
                 }
-              } finally {
-                tmpSubmit.remove();
               }
             });
           }
@@ -923,6 +1024,73 @@
       })();
     </script>
   {% endif %}
+
+  <!-- Модальное окно подтверждения массового переноса дедлайна -->
+  <div id="bulkRescheduleModal" class="fixed inset-0 z-[200] hidden">
+    <div class="fixed inset-0 bg-black/35" data-close-bulk-reschedule-modal></div>
+    <div class="absolute inset-x-4 top-12 mx-auto max-w-md">
+      <div class="bg-white border rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold">Перенести дедлайн задач?</h2>
+          <button type="button" class="btn btn-outline btn-sm flex-shrink-0" data-close-bulk-reschedule-modal aria-label="Закрыть" title="Закрыть">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="space-y-3">
+          <p class="text-sm text-brand-dark/80">
+            Будет изменён дедлайн у
+            <b id="bulkRescheduleModalCount">0</b>
+            задач на
+            <b id="bulkRescheduleModalDate">—</b>.
+          </p>
+          <p class="text-xs text-brand-dark/60">
+            Действие затронет все отмеченные задачи. Его нельзя отменить из интерфейса.
+          </p>
+          <div class="flex gap-2 pt-2 border-t">
+            <button type="button" class="btn btn-primary flex-1" id="bulkRescheduleModalConfirm">Перенести</button>
+            <button type="button" class="btn btn-outline flex-1" data-close-bulk-reschedule-modal>Отмена</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модальное окно подтверждения массового переназначения задач -->
+  <div id="bulkReassignModal" class="fixed inset-0 z-[200] hidden">
+    <div class="fixed inset-0 bg-black/35" data-close-bulk-reassign-modal></div>
+    <div class="absolute inset-x-4 top-12 mx-auto max-w-md">
+      <div class="bg-white border rounded-2xl p-4">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-lg font-semibold">Переназначить задачи?</h2>
+          <button type="button" class="btn btn-outline btn-sm flex-shrink-0" data-close-bulk-reassign-modal aria-label="Закрыть" title="Закрыть">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </div>
+        <div class="space-y-3">
+          <p class="text-sm text-brand-dark/80">
+            Новым ответственным станет
+            <b id="bulkReassignModalAssignee">—</b>.
+          </p>
+          <p class="text-sm text-brand-dark/80">
+            Будут переназначены
+            <b id="bulkReassignModalCount">0</b>
+            задач.
+          </p>
+          <p class="text-xs text-brand-dark/60">
+            Действие затронет все отмеченные задачи. Его нельзя отменить из интерфейса.
+          </p>
+          <div class="flex gap-2 pt-2 border-t">
+            <button type="button" class="btn btn-primary flex-1" id="bulkReassignModalConfirm">Переназначить</button>
+            <button type="button" class="btn btn-outline flex-1" data-close-bulk-reassign-modal>Отмена</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- Модальное окно для создания задач -->
   <div id="taskCreateModal" class="fixed inset-0 z-[200] hidden">
