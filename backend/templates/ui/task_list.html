@@ -194,10 +194,19 @@
       <input type="hidden" name="date_to" id="dateToInput" value="{{ date_to|default:'' }}" />
     </form>
 
-    <div class="task-bulk-panel">
-    {% if can_bulk_reschedule or is_admin %}
-      <p class="text-sm font-medium text-brand-dark/80 mb-2 mt-0">Массовые действия с задачами</p>
-    {% endif %}
+    {% if can_bulk_actions %}
+    <div class="task-bulk-panel tasks-layout-block">
+      <div class="tasks-layout-block" style="position: sticky; top: .75rem; z-index: 30;">
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <p class="text-sm font-medium text-brand-dark/80 m-0">Массовые действия с задачами</p>
+          <div class="flex items-center gap-2">
+            <span class="text-xs text-brand-dark/60" aria-live="polite">
+              Выбрано: <b id="bulkSelectedCount">0</b>
+            </span>
+            <button type="button" class="btn btn-outline btn-sm opacity-60 pointer-events-none" id="bulkClearSelectionBtn" title="Снять все галочки" disabled aria-disabled="true">Снять выбор</button>
+          </div>
+        </div>
+      </div>
     {% if can_bulk_reschedule %}
       <div id="task-bulk-reschedule" class="tasks-layout-block">
         <p class="text-xs text-brand-dark/60 mb-2 font-medium">Массовый перенос дедлайна: укажите <strong>новую дату</strong>, на которую нужно перенести задачи, и нажмите одну из кнопок справа. Это не фильтр — дедлайн изменится у отмеченных галочкой задач или у всех по фильтру (в зависимости от кнопки).</p>
@@ -222,6 +231,12 @@
                     class="btn btn-primary"
                     title="Перенести дедлайн только у отмеченных галочкой задач">
               Перенести выбранные
+            </button>
+            <button type="button"
+                    data-apply-mode="filtered"
+                    class="btn btn-outline"
+                    title="Перенести дедлайн у всех задач, подходящих под фильтры выше">
+              Перенести по фильтру
             </button>
           </div>
           <input type="hidden" name="status" value="{{ status }}" />
@@ -262,6 +277,7 @@
                   {% endfor %}
                 </select>
                 <button type="submit" name="apply_mode" value="selected" class="btn btn-primary" title="Переназначить только отмеченные галочкой задачи">Переназначить выбранные</button>
+                <button type="submit" name="apply_mode" value="filtered" class="btn btn-outline" title="Переназначить все задачи по фильтру (без выбора чекбоксов)">Переназначить по фильтру</button>
               </div>
             </div>
             <input type="hidden" name="status" value="{{ status }}" />
@@ -277,6 +293,7 @@
       </div>
     {% endif %}
     </div>
+    {% endif %}
 
     <div class="bg-white border rounded-2xl overflow-hidden tasks-layout-block">
       <div class="overflow-x-auto">
@@ -701,25 +718,55 @@
     <script>
       (function(){
         const selectAll = document.getElementById('bulkSelectAll');
-        const checkboxes = document.querySelectorAll('.task-checkbox');
+        const selectedCountEl = document.getElementById('bulkSelectedCount');
+        const clearBtn = document.getElementById('bulkClearSelectionBtn');
+        function getCheckboxes() { return document.querySelectorAll('.task-checkbox'); }
         const rescheduleForm = document.getElementById('bulkRescheduleForm');
         const reassignForm = document.getElementById('bulkReassignForm');
         
+        function getSelectedCount() {
+          return document.querySelectorAll('.task-checkbox:checked').length;
+        }
+
+        function clearSelection() {
+          getCheckboxes().forEach(cb => { cb.checked = false; });
+          if (selectAll) {
+            selectAll.checked = false;
+            selectAll.indeterminate = false;
+          }
+          updateBulkButtonsState();
+        }
+
         if (selectAll) {
           selectAll.addEventListener('change', function() {
-            checkboxes.forEach(cb => cb.checked = this.checked);
+            getCheckboxes().forEach(cb => cb.checked = this.checked);
+            updateBulkButtonsState();
+          });
+        }
+
+        if (clearBtn) {
+          clearBtn.addEventListener('click', function() {
+            clearSelection();
           });
         }
         
         function updateBulkButtonsState() {
           const dateInput = document.getElementById('bulkRescheduleDateTime');
           const hasDate = !!(dateInput && dateInput.value);
-          const checked = document.querySelectorAll('.task-checkbox:checked').length;
+          const checked = getSelectedCount();
           const hasSelected = checked > 0;
 
+          if (selectedCountEl) selectedCountEl.textContent = String(checked);
+          if (clearBtn) {
+            clearBtn.disabled = !hasSelected;
+            clearBtn.classList.toggle('opacity-60', !hasSelected);
+            clearBtn.classList.toggle('pointer-events-none', !hasSelected);
+            clearBtn.setAttribute('aria-disabled', hasSelected ? 'false' : 'true');
+          }
+
           if (rescheduleForm) {
-            const btnSelected = rescheduleForm.querySelector('button[name="apply_mode"][value="selected"]');
-            const btnFiltered = rescheduleForm.querySelector('button[name="apply_mode"][value="filtered"]');
+            const btnSelected = rescheduleForm.querySelector('button[data-apply-mode="selected"]');
+            const btnFiltered = rescheduleForm.querySelector('button[data-apply-mode="filtered"]');
             if (btnSelected) {
               const enabled = hasDate && hasSelected;
               btnSelected.disabled = !enabled;
@@ -752,6 +799,7 @@
             const selectAssignee = reassignForm.querySelector('select[name="assigned_to_id"]');
             const hasAssignee = !!(selectAssignee && selectAssignee.value);
             const btnReassignSelected = reassignForm.querySelector('button[name="apply_mode"][value="selected"]');
+            const btnReassignFiltered = reassignForm.querySelector('button[name="apply_mode"][value="filtered"]');
 
             if (btnReassignSelected) {
               const enabled = hasAssignee && hasSelected;
@@ -767,13 +815,26 @@
                 btnReassignSelected.title = 'Переназначить только отмеченные галочкой задачи';
               }
             }
+            if (btnReassignFiltered) {
+              const enabled = hasAssignee;
+              btnReassignFiltered.disabled = !enabled;
+              btnReassignFiltered.classList.toggle('opacity-60', !enabled);
+              btnReassignFiltered.classList.toggle('pointer-events-none', !enabled);
+              btnReassignFiltered.setAttribute('aria-disabled', enabled ? 'false' : 'true');
+              if (!hasAssignee) {
+                btnReassignFiltered.title = 'Выберите сотрудника';
+              } else {
+                btnReassignFiltered.title = 'Переназначить все задачи по фильтру (без выбора чекбоксов)';
+              }
+            }
           }
         }
 
-        checkboxes.forEach(cb => {
+        getCheckboxes().forEach(cb => {
           cb.addEventListener('change', function() {
-            const allChecked = Array.from(checkboxes).every(cb => cb.checked);
-            const someChecked = Array.from(checkboxes).some(cb => cb.checked);
+            const all = Array.from(getCheckboxes());
+            const allChecked = all.length > 0 && all.every(cb => cb.checked);
+            const someChecked = all.some(cb => cb.checked);
             if (selectAll) {
               selectAll.checked = allChecked;
               selectAll.indeterminate = someChecked && !allChecked;
@@ -1042,8 +1103,7 @@
           });
 
           async function handleBulkReschedule(mode) {
-            // Сейчас поддерживаем только сценарий переноса выбранных задач.
-            pendingMode = 'selected';
+            pendingMode = (mode === 'filtered') ? 'filtered' : 'selected';
             const dateInput = document.getElementById('bulkRescheduleDateTime');
             const dateLabel = dateInput && dateInput.value ? dateInput.value.replace('T', ' ') : '';
             if (!dateLabel) {

@@ -6029,9 +6029,13 @@ def task_list(request: HttpRequest) -> HttpResponse:
     # Подсчитываем общее количество задач после всех фильтров (до пагинации)
     tasks_count = qs.count()
 
-    # Массовый перенос даты доступен всем ролям с доступом к задачам; чекбоксы показываем, если можно переносить дату или переназначать (админ)
-    can_bulk_reschedule = policy_decide(user=user, resource_type="action", resource="ui:tasks:bulk_reschedule").allowed
-    show_task_checkboxes = can_bulk_reschedule or is_admin
+    # Bulk-действия в задачах должны жить на одном флаге,
+    # чтобы не было ситуации "панель есть — чекбоксов нет" и наоборот.
+    can_bulk_reschedule = policy_decide(
+        user=user, resource_type="action", resource="ui:tasks:bulk_reschedule"
+    ).allowed
+    can_bulk_actions = bool(can_bulk_reschedule or is_admin)
+    show_task_checkboxes = can_bulk_actions
 
     # Сопоставляем задачи без типа с TaskType по точному совпадению названия
     # Загружаем все TaskType для сопоставления
@@ -6077,6 +6081,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
             "per_page": per_page,
             "is_admin": is_admin,
             "can_bulk_reschedule": can_bulk_reschedule,
+            "can_bulk_actions": can_bulk_actions,
             "show_task_checkboxes": show_task_checkboxes,
             "transfer_targets": transfer_targets,
             "view_task": view_task,
@@ -6725,11 +6730,9 @@ def task_bulk_reassign(request: HttpRequest) -> HttpResponse:
 
     # Режим "по фильтру" — применяем те же фильтры, что и в списке задач (status/mine/assigned_to/overdue/today/date_from/date_to/show_done)
     if apply_mode == "filtered":
-        qs = (
-            Task.objects.select_related("company", "assigned_to", "created_by", "type")
-            .order_by("-created_at")
-            .distinct()
-        )
+        # ВАЖНО: даже для админа bulk должен работать только по "видимым" задачам,
+        # иначе можно затронуть задачи, которые не должны быть в текущем контексте видимости.
+        qs = visible_tasks_qs(user).select_related("type").order_by("-created_at").distinct()
         qs, filters_summary = _apply_task_filters_for_bulk_ui(qs, user, request.POST)
 
         # safety cap
@@ -6793,7 +6796,13 @@ def task_bulk_reassign(request: HttpRequest) -> HttpResponse:
                 pass
             messages.error(request, "Выберите хотя бы одну задачу (чекбоксы слева).")
             return redirect("task_list")
-        ids = raw_ids
+        # Только задачи, видимые пользователю (на случай подмены task_ids в POST).
+        ids = list(
+            visible_tasks_qs(user).filter(id__in=raw_ids).values_list("id", flat=True)
+        )
+        if not ids:
+            messages.error(request, "Нет доступа к выбранным задачам.")
+            return redirect("task_list")
         requested_count = len(raw_ids)
         filters_summary = []
         cap = None
