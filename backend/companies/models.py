@@ -26,6 +26,11 @@ class CompanyStatus(models.Model):
 
 class CompanySphere(models.Model):
     name = models.CharField("Название", max_length=120, unique=True)
+    is_important = models.BooleanField(
+        "Важно",
+        default=False,
+        help_text="Если включено, рядом с этой сферой в интерфейсе показывается оранжевая иконка с вопросительным знаком.",
+    )
 
     def __str__(self) -> str:
         return self.name

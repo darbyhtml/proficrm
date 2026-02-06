@@ -788,8 +788,11 @@ class CompanyStatusForm(forms.ModelForm):
 class CompanySphereForm(forms.ModelForm):
     class Meta:
         model = CompanySphere
-        fields = ["name"]
-        widgets = {"name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"})}
+        fields = ["name", "is_important"]
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "is_important": forms.CheckboxInput(attrs={"class": "rounded border"}),
+        }
 
 
 class ContractTypeForm(forms.ModelForm):

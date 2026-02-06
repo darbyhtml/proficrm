@@ -24,6 +24,8 @@ class CompanyStatusAdmin(admin.ModelAdmin):
 @admin.register(CompanySphere)
 class CompanySphereAdmin(admin.ModelAdmin):
     search_fields = ("name",)
+    list_display = ("name", "is_important")
+    list_editable = ("is_important",)
 
 
 @admin.register(Region)

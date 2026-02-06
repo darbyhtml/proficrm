@@ -46,7 +46,14 @@
         <ul class="space-y-2 text-sm">
           {% for s in company_spheres %}
             <li class="rounded-lg border px-3 py-2 flex items-center justify-between gap-2" data-dict-item data-dict-type="company-sphere" data-dict-id="{{ s.id }}" data-dict-name="{{ s.name }}">
-              <span>{{ s.name }}</span>
+              <span class="inline-flex items-center gap-1">
+                {{ s.name }}
+                {% if s.is_important %}
+                  <span class="inline-flex items-center justify-center w-4 h-4 rounded-full border border-brand-orange/70 text-brand-orange" title="Важная сфера (особое внимание при работе)">
+                    <span style="font-size:0.7rem;line-height:1;">?</span>
+                  </span>
+                {% endif %}
+              </span>
               <div class="flex items-center gap-1">
                 <button type="button" class="text-brand-dark/60 hover:text-brand-orange transition-colors" data-edit-dict title="Редактировать" aria-label="Редактировать">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
