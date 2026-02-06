@@ -1630,24 +1630,16 @@
         setSavedQs(qs);
       });
 
-      // Авто-сохранение при изменении основных полей фильтра,
-      // чтобы "Запомнить" работало ожидаемо без обязательного нажатия "Применить".
-      const watchedSelectors = [
-        'select[name="status"]',
-        'select[name="assigned_to"]',
-        'input[name="mine"]',
-        'input[name="today"]',
-        'input[name="overdue"]',
-        'input[name="show_done"]',
-        '#dateFromInput',
-        '#dateToInput',
-      ];
-      form.querySelectorAll(watchedSelectors.join(',')).forEach((el) => {
-        el.addEventListener('change', () => {
-          if (!rememberCb.checked) return;
-          const qs = buildQsFromForm();
-          setSavedQs(qs);
-        });
+      // Глобальное автосохранение: любые изменения чекбоксов/селектов в форме,
+      // пока включено «Запомнить», пересохраняют текущий фильтр.
+      form.addEventListener('change', (e) => {
+        if (!rememberCb.checked) return;
+        const target = e.target;
+        if (!target) return;
+        // Игнорируем сам чекбокс remember — для него уже есть отдельная логика выше.
+        if (target === rememberCb) return;
+        const qs = buildQsFromForm();
+        setSavedQs(qs);
       });
 
       // Сброс должен очищать сохранённое, иначе оно тут же восстановится на чистом /tasks/
