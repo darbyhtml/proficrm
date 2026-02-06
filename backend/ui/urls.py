@@ -26,6 +26,7 @@ urlpatterns = [
     path("companies/new/", views.company_create, name="company_create"),
     path("companies/<uuid:company_id>/", views.company_detail, name="company_detail"),
     path("companies/<uuid:company_id>/edit/", views.company_edit, name="company_edit"),
+    path("companies/<uuid:company_id>/tasks/history/", views.company_tasks_history, name="company_tasks_history"),
     path("companies/<uuid:company_id>/update/", views.company_update, name="company_update"),
     path("companies/<uuid:company_id>/inline/", views.company_inline_update, name="company_inline_update"),
     path("companies/<uuid:company_id>/main-phone/update/", views.company_main_phone_update, name="company_main_phone_update"),

@@ -1,0 +1,69 @@
+{% load ui_extras %}
+
+<div class="space-y-3">
+  <div class="flex items-start justify-between gap-3">
+    <div>
+      <h2 class="text-lg font-semibold text-brand-dark">История задач</h2>
+      <div class="text-xs text-brand-dark/70">
+        Выполненные задачи по компании «{{ company.name|default:"(без названия)" }}»
+      </div>
+    </div>
+  </div>
+
+  {% if tasks %}
+    <div class="space-y-2">
+      {% for t in tasks %}
+        <div class="rounded-lg border border-brand-soft p-3 bg-white/80">
+          <div class="flex items-start justify-between gap-3">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-start gap-2 mb-0.5">
+                {% if t.type %}
+                  {% include "ui/partials/task_type_badge.html" with task_type=t.type only %}
+                {% else %}
+                  <span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-800">
+                    {{ t.title|default:"Без названия" }}
+                  </span>
+                {% endif %}
+              </div>
+              {% if t.description %}
+                <div class="text-xs text-brand-dark/70 mt-1" style="line-height:1.3">
+                  {{ t.description|truncatechars:180 }}
+                </div>
+              {% endif %}
+              <div class="text-[11px] text-brand-dark/60 mt-1 flex flex-wrap gap-2 items-center">
+                <span>Статус: {{ t.get_status_display }}</span>
+                {% if t.assigned_to %}
+                  <span>· Ответственный: {{ t.assigned_to }}</span>
+                {% endif %}
+                {% if t.due_at %}
+                  <span>· Дедлайн: {{ t.due_at }}</span>
+                {% endif %}
+                <span>· Создана: {{ t.created_at }}</span>
+              </div>
+            </div>
+            <div class="text-right text-[11px] text-brand-dark/60 flex-shrink-0">
+              <div class="mb-1">ID: {{ t.id }}</div>
+              <button
+                type="button"
+                class="inline-flex items-center gap-1 text-xs text-brand-teal hover:text-brand-dark"
+                data-view-task
+                data-task-id="{{ t.id }}"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <polyline points="11 8 11 11 14 12"></polyline>
+                </svg>
+                Открыть
+              </button>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="text-sm text-brand-dark/70 py-4 text-center">
+      Выполненных задач по этой компании пока нет.
+    </div>
+  {% endif %}
+</div>
+
