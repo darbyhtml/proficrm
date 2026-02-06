@@ -209,8 +209,8 @@
       </div>
     {% if can_bulk_reschedule %}
       <div id="task-bulk-reschedule" class="tasks-layout-block">
-        <p class="text-xs text-brand-dark/60 mb-2 font-medium">Массовый перенос дедлайна: укажите <strong>новую дату</strong>, на которую нужно перенести задачи, и нажмите одну из кнопок справа. Это не фильтр — дедлайн изменится у отмеченных галочкой задач или у всех по фильтру (в зависимости от кнопки).</p>
-        <form method="post" action="{% url 'task_bulk_reschedule' %}" id="bulkRescheduleForm" {% if is_admin %}data-copy-task-ids="1"{% endif %}>
+        <p class="text-xs text-brand-dark/60 mb-2 font-medium">Массовый перенос дедлайна: укажите <strong>новую дату</strong>, на которую нужно перенести задачи, и нажмите кнопку справа — дедлайн изменится у отмеченных галочкой задач.</p>
+        <form method="post" action="{% url 'task_bulk_reschedule' %}" id="bulkRescheduleForm">
           {% csrf_token %}
           <span class="tbr-label">
             <span class="tbr-icon">
@@ -231,12 +231,6 @@
                     class="btn btn-primary"
                     title="Перенести дедлайн только у отмеченных галочкой задач">
               Перенести выбранные
-            </button>
-            <button type="button"
-                    data-apply-mode="filtered"
-                    class="btn btn-outline"
-                    title="Перенести дедлайн у всех задач, подходящих под фильтры выше">
-              Перенести по фильтру
             </button>
           </div>
           <input type="hidden" name="status" value="{{ status }}" />
@@ -277,7 +271,6 @@
                   {% endfor %}
                 </select>
                 <button type="submit" name="apply_mode" value="selected" class="btn btn-primary" title="Переназначить только отмеченные галочкой задачи">Переназначить выбранные</button>
-                <button type="submit" name="apply_mode" value="filtered" class="btn btn-outline" title="Переназначить все задачи по фильтру (без выбора чекбоксов)">Переназначить по фильтру</button>
               </div>
             </div>
             <input type="hidden" name="status" value="{{ status }}" />
@@ -766,7 +759,6 @@
 
           if (rescheduleForm) {
             const btnSelected = rescheduleForm.querySelector('button[data-apply-mode="selected"]');
-            const btnFiltered = rescheduleForm.querySelector('button[data-apply-mode="filtered"]');
             if (btnSelected) {
               const enabled = hasDate && hasSelected;
               btnSelected.disabled = !enabled;
@@ -781,25 +773,12 @@
                 btnSelected.title = 'Перенести дедлайн только у отмеченных галочкой задач';
               }
             }
-            if (btnFiltered) {
-              const enabled = hasDate;
-              btnFiltered.disabled = !enabled;
-              btnFiltered.classList.toggle('opacity-60', !enabled);
-              btnFiltered.classList.toggle('pointer-events-none', !enabled);
-              btnFiltered.setAttribute('aria-disabled', enabled ? 'false' : 'true');
-              if (!hasDate) {
-                btnFiltered.title = 'Укажите новую дату дедлайна';
-              } else {
-                btnFiltered.title = 'Перенести дедлайн у всех задач, подходящих под фильтры выше';
-              }
-            }
           }
 
           if (reassignForm) {
             const selectAssignee = reassignForm.querySelector('select[name="assigned_to_id"]');
             const hasAssignee = !!(selectAssignee && selectAssignee.value);
             const btnReassignSelected = reassignForm.querySelector('button[name="apply_mode"][value="selected"]');
-            const btnReassignFiltered = reassignForm.querySelector('button[name="apply_mode"][value="filtered"]');
 
             if (btnReassignSelected) {
               const enabled = hasAssignee && hasSelected;
@@ -813,18 +792,6 @@
                 btnReassignSelected.title = 'Выберите хотя бы одну задачу (чекбоксы слева)';
               } else {
                 btnReassignSelected.title = 'Переназначить только отмеченные галочкой задачи';
-              }
-            }
-            if (btnReassignFiltered) {
-              const enabled = hasAssignee;
-              btnReassignFiltered.disabled = !enabled;
-              btnReassignFiltered.classList.toggle('opacity-60', !enabled);
-              btnReassignFiltered.classList.toggle('pointer-events-none', !enabled);
-              btnReassignFiltered.setAttribute('aria-disabled', enabled ? 'false' : 'true');
-              if (!hasAssignee) {
-                btnReassignFiltered.title = 'Выберите сотрудника';
-              } else {
-                btnReassignFiltered.title = 'Переназначить все задачи по фильтру (без выбора чекбоксов)';
               }
             }
           }
@@ -884,28 +851,12 @@
           const modalSample = document.getElementById('bulkRescheduleModalSample');
           const modalSampleWrap = document.getElementById('bulkRescheduleModalSampleWrap');
           const modalError = document.getElementById('bulkRescheduleModalError');
-          const modalCheckboxWrap = document.getElementById('bulkRescheduleModalAcknowledgeWrap');
-          const modalCheckbox = document.getElementById('bulkRescheduleModalAcknowledge');
-          const modalFiltersWrap = document.getElementById('bulkRescheduleModalFiltersWrap');
-          const modalFilters = document.getElementById('bulkRescheduleModalFilters');
-          const modalStrongConfirmWrap = document.getElementById('bulkRescheduleModalStrongConfirmWrap');
-          const modalStrongConfirmInput = document.getElementById('bulkRescheduleModalStrongConfirmInput');
           const btnCancel = document.getElementById('bulkRescheduleModalCancel');
           const btnConfirm = document.getElementById('bulkRescheduleModalConfirm');
 
           let pendingMode = null;
           let lastPreviewCount = 0;
           const STRONG_CONFIRM_THRESHOLD = 200;
-
-          function updateFilteredConfirmState() {
-            const requireStrong = lastPreviewCount > STRONG_CONFIRM_THRESHOLD;
-            const hasAck = modalCheckbox && modalCheckbox.checked;
-            const strongOk = !requireStrong || (modalStrongConfirmInput && modalStrongConfirmInput.value.trim().toUpperCase() === 'ПЕРЕНЕСТИ');
-            const enabled = hasAck && strongOk;
-            btnConfirm.disabled = !enabled;
-            btnConfirm.classList.toggle('opacity-60', !enabled);
-            btnConfirm.classList.toggle('pointer-events-none', !enabled);
-          }
 
           const dateInput = document.getElementById('bulkRescheduleDateTime');
           if (dateInput) {
@@ -952,20 +903,6 @@
             modalSampleWrap.classList.add('hidden');
             btnConfirm.disabled = true;
             btnConfirm.classList.add('opacity-60','pointer-events-none');
-            modalCheckboxWrap.classList.add('hidden');
-            if(modalCheckbox) { modalCheckbox.checked = false; }
-            if (modalFiltersWrap) {
-              modalFiltersWrap.classList.add('hidden');
-            }
-            if (modalFilters) {
-              modalFilters.innerHTML = '';
-            }
-            if (modalStrongConfirmWrap) {
-              modalStrongConfirmWrap.classList.add('hidden');
-            }
-            if (modalStrongConfirmInput) {
-              modalStrongConfirmInput.value = '';
-            }
             lastPreviewCount = 0;
           }
           function setError(msg){
@@ -978,19 +915,11 @@
             const cap = Number(data && data.cap || 5000);
             lastPreviewCount = count;
             modalCount.textContent = String(count);
-            const isFiltered = pendingMode === 'filtered';
 
             if (count >= cap) {
               modalHint.textContent = `Внимание: выбран предел (${cap}). Сузьте фильтр и повторите.`;
             } else if (count === 0) {
               modalHint.textContent = 'По текущим условиям задач для переноса нет.';
-            } else if (isFiltered) {
-              const filters = Array.isArray(data && data.filters_summary) ? data.filters_summary : [];
-              let hint = 'Будут перенесены все задачи, подходящие под фильтры сверху.';
-              if (count > STRONG_CONFIRM_THRESHOLD && filters.length <= 1) {
-                hint += ' Фильтры почти не ограничивают выборку — это изменит очень много задач.';
-              }
-              modalHint.textContent = hint;
             } else {
               const req = data && data.requested_count != null ? Number(data.requested_count) : null;
               if (req != null && req !== count) {
@@ -1014,42 +943,13 @@
               }).join('');
             }
 
-            if (isFiltered && modalFiltersWrap && modalFilters) {
-              const filters = Array.isArray(data && data.filters_summary) ? data.filters_summary : [];
-              if (filters.length) {
-                modalFiltersWrap.classList.remove('hidden');
-                modalFilters.innerHTML = filters.map((line) => `<li>${line}</li>`).join('');
-              } else {
-                modalFiltersWrap.classList.add('hidden');
-                modalFilters.innerHTML = '';
-              }
-            } else if (modalFiltersWrap && modalFilters) {
-              modalFiltersWrap.classList.add('hidden');
-              modalFilters.innerHTML = '';
-            }
-
             if (count === 0 || count >= cap){
               btnConfirm.disabled = true;
               btnConfirm.classList.add('opacity-60','pointer-events-none');
               return;
             }
-
-            if (isFiltered) {
-              modalCheckboxWrap.classList.remove('hidden');
-              const labelEl = document.getElementById('bulkRescheduleModalAcknowledgeLabel');
-              if(labelEl) labelEl.textContent = `Понимаю и хочу перенести дедлайн у ${count} задач по фильтру`;
-              if (modalStrongConfirmWrap) {
-                if (count > STRONG_CONFIRM_THRESHOLD) {
-                  modalStrongConfirmWrap.classList.remove('hidden');
-                } else {
-                  modalStrongConfirmWrap.classList.add('hidden');
-                }
-              }
-              updateFilteredConfirmState();
-            } else {
-              btnConfirm.disabled = false;
-              btnConfirm.classList.remove('opacity-60','pointer-events-none');
-            }
+            btnConfirm.disabled = false;
+            btnConfirm.classList.remove('opacity-60','pointer-events-none');
           }
 
           function csrfToken(){
@@ -1074,18 +974,6 @@
           if (btnCancel) btnCancel.addEventListener('click', function(e){ e.preventDefault(); closeModal(); });
           if (modal) modal.addEventListener('click', function(e){ if(e.target === modal) closeModal(); });
           document.addEventListener('keydown', function(e){ if(e.key === 'Escape' && modal && !modal.classList.contains('hidden')) closeModal(); });
-          if (modalCheckbox) modalCheckbox.addEventListener('change', function(){
-            if (pendingMode === 'filtered') {
-              updateFilteredConfirmState();
-            }
-          });
-          if (modalStrongConfirmInput) {
-            modalStrongConfirmInput.addEventListener('input', function() {
-              if (pendingMode === 'filtered') {
-                updateFilteredConfirmState();
-              }
-            });
-          }
 
           if (btnConfirm) btnConfirm.addEventListener('click', function(e){
             e.preventDefault();
@@ -1098,12 +986,26 @@
             m.value = pendingMode;
             m.setAttribute('data-injected', '1');
             rescheduleForm.appendChild(m);
+
+            // ВАЖНО: чекбоксы не находятся внутри формы, поэтому всегда дублируем выбранные task_ids в форму.
+            // Иначе backend не увидит выбранные задачи и вернёт "ни одной не выбрано".
+            rescheduleForm.querySelectorAll('input[name="task_ids"][data-injected="1"]').forEach(el => el.remove());
+            const checked = document.querySelectorAll('.task-checkbox:checked');
+            checked.forEach(function(cb) {
+              const input = document.createElement('input');
+              input.type = 'hidden';
+              input.name = 'task_ids';
+              input.value = cb.value;
+              input.setAttribute('data-injected', '1');
+              rescheduleForm.appendChild(input);
+            });
+
             closeModal();
             rescheduleForm.submit();
           });
 
           async function handleBulkReschedule(mode) {
-            pendingMode = (mode === 'filtered') ? 'filtered' : 'selected';
+            pendingMode = 'selected';
             const dateInput = document.getElementById('bulkRescheduleDateTime');
             const dateLabel = dateInput && dateInput.value ? dateInput.value.replace('T', ' ') : '';
             if (!dateLabel) {
@@ -1116,7 +1018,7 @@
               rescheduleForm.submit();
               return;
             }
-            modalTitle.textContent = pendingMode === 'filtered' ? 'Подтвердите перенос по фильтру' : 'Подтвердите перенос выбранных';
+            modalTitle.textContent = 'Подтвердите перенос выбранных';
             let tz = '';
             try {
               tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
@@ -1131,33 +1033,13 @@
             fd.append('apply_mode', pendingMode);
             fd.append('due_at', dateInput.value);
 
-            if (pendingMode === 'selected') {
-              const checked = document.querySelectorAll('.task-checkbox:checked');
-              if (!checked.length) {
-                closeModal();
-                alert('Выберите хотя бы одну задачу (чекбокс слева) или нажмите «Перенести по фильтру».');
-                return;
-              }
-              // для админа чекбоксы принадлежат другой форме — дублируем task_ids в fd и (при необходимости) в форму
-              checked.forEach(cb => fd.append('task_ids', cb.value));
-              if (rescheduleForm.dataset.copyTaskIds === '1') {
-                rescheduleForm.querySelectorAll('input[name="task_ids"][data-injected="1"]').forEach(el => el.remove());
-                checked.forEach(function(cb) {
-                  const input = document.createElement('input');
-                  input.type = 'hidden';
-                  input.name = 'task_ids';
-                  input.value = cb.value;
-                  input.setAttribute('data-injected', '1');
-                  rescheduleForm.appendChild(input);
-                });
-              }
-            } else {
-              // фильтры, которые реально использует backend task_bulk_reschedule (совпадают с task_list)
-              ['status','mine','overdue','today','assigned_to','show_done','date_from','date_to'].forEach((name) => {
-                const el = rescheduleForm.querySelector(`input[name="${name}"]`);
-                if (el && el.value != null && el.value !== '') fd.append(name, el.value);
-              });
+            const checked = document.querySelectorAll('.task-checkbox:checked');
+            if (!checked.length) {
+              closeModal();
+              alert('Выберите хотя бы одну задачу (чекбоксы слева).');
+              return;
             }
+            checked.forEach(cb => fd.append('task_ids', cb.value));
 
             try{
               const data = await fetchPreview(fd);
@@ -1202,29 +1084,10 @@
         <div id="bulkRescheduleModalError" class="hidden text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-2"></div>
         <div id="bulkRescheduleModalHint" class="text-sm text-brand-dark/70"></div>
 
-        <div id="bulkRescheduleModalFiltersWrap" class="hidden">
-          <div class="text-xs font-medium text-brand-dark/70 mb-1">Фильтры:</div>
-          <ul id="bulkRescheduleModalFilters" class="text-xs text-brand-dark/70 list-disc pl-4 space-y-0.5"></ul>
-        </div>
-
         <div id="bulkRescheduleModalSampleWrap" class="hidden">
           <div class="text-xs font-medium text-brand-dark/70 mb-2">Примеры задач (первые несколько):</div>
           <div id="bulkRescheduleModalSample" class="divide-y divide-brand-soft/60 border border-brand-soft/70 rounded-xl px-3 py-2 bg-brand-soft/10"></div>
           <div class="text-[11px] text-brand-dark/50 mt-1">Показаны только несколько задач для ориентира. Будут изменены все задачи из выбранного режима.</div>
-        </div>
-
-        <div id="bulkRescheduleModalAcknowledgeWrap" class="hidden pt-1">
-          <label class="inline-flex items-start gap-2 text-sm text-brand-dark/80 cursor-pointer select-none">
-            <input id="bulkRescheduleModalAcknowledge" type="checkbox" class="mt-1 rounded border-brand-soft/80" />
-            <span id="bulkRescheduleModalAcknowledgeLabel">Понимаю и хочу перенести</span>
-          </label>
-        </div>
-
-        <div id="bulkRescheduleModalStrongConfirmWrap" class="hidden pt-1">
-          <label class="block text-xs text-brand-dark/70 mb-1">
-            Для подтверждения массового изменения введите <b>ПЕРЕНЕСТИ</b>:
-          </label>
-          <input id="bulkRescheduleModalStrongConfirmInput" type="text" class="input input-sm w-full" autocomplete="off" />
         </div>
       </div>
 

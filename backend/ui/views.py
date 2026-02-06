@@ -6706,7 +6706,6 @@ def task_bulk_reassign(request: HttpRequest) -> HttpResponse:
     """
     Массовое переназначение задач:
     - либо по выбранным task_ids[]
-    - либо по текущему фильтру (apply_mode=filtered)
     Доступно только администраторам.
     """
     if request.method != "POST":
@@ -6728,7 +6727,8 @@ def task_bulk_reassign(request: HttpRequest) -> HttpResponse:
         messages.error(request, "Нового ответственного можно выбрать только из: менеджер / РОП / директор филиала.")
         return redirect("task_list")
 
-    # Режим "по фильтру" — применяем те же фильтры, что и в списке задач (status/mine/assigned_to/overdue/today/date_from/date_to/show_done)
+    # apply_mode=filtered поддерживается на уровне backend (служебно),
+    # но в UI используется только режим "selected" (выбранные чекбоксами).
     if apply_mode == "filtered":
         # ВАЖНО: даже для админа bulk должен работать только по "видимым" задачам,
         # иначе можно затронуть задачи, которые не должны быть в текущем контексте видимости.
@@ -7039,7 +7039,6 @@ def task_bulk_reschedule(request: HttpRequest) -> HttpResponse:
     """
     Массовый перенос даты (дедлайна) задач:
     - либо по выбранным task_ids[]
-    - либо по текущему фильтру (apply_mode=filtered).
     Доступно всем ролям с доступом к списку задач. Обновляются только задачи, видимые пользователю (visible_tasks_qs).
     """
     if request.method != "POST":
@@ -7158,7 +7157,7 @@ def task_bulk_reschedule(request: HttpRequest) -> HttpResponse:
                 pass
             messages.error(
                 request,
-                "Выберите хотя бы одну задачу (чекбоксы слева) или нажмите «Перенести по фильтру».",
+                "Выберите хотя бы одну задачу (чекбоксы слева).",
             )
             return redirect("task_list")
         requested_count = len(raw_ids)
