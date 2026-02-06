@@ -61,7 +61,18 @@
     {% if "spheres" in company_list_columns %}
       <td>
         {% for s in c.spheres.all %}
-          <span class="badge mr-1 mb-1">{{ s.name }}</span>
+          <span class="badge mr-1 mb-1 inline-flex items-center gap-1">
+            {{ s.name }}
+            {% if s.is_important %}
+              <span
+                class="inline-flex items-center justify-center rounded-full border border-brand-orange/80 text-brand-orange bg-white"
+                style="width:0.95rem;height:0.95rem;border-width:1.5px;"
+                title="Важная сфера: решение об обучении принимает головная организация или требуется особое внимание"
+              >
+                <span style="font-size:0.6rem;line-height:1;font-weight:700;">?</span>
+              </span>
+            {% endif %}
+          </span>
         {% empty %}
           <span class="text-brand-dark/70">—</span>
         {% endfor %}
