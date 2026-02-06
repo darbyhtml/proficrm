@@ -1662,7 +1662,6 @@
       // Автовосстановление при заходе на /tasks/ без querystring
       (function restoreOnLoad() {
         if (!rememberCb.checked) return;
-        if (window.location.search && window.location.search.length > 1) return;
         const saved = getSavedQs();
         if (!saved) return;
         // Защита от петли/дребезга: 1 раз на вкладку
