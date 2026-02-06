@@ -711,7 +711,7 @@
 
   {% if show_task_checkboxes %}
     <script>
-      (function(){
+      document.addEventListener('DOMContentLoaded', function(){
         const selectAll = document.getElementById('bulkSelectAll');
         const selectedCountEl = document.getElementById('bulkSelectedCount');
         const clearBtn = document.getElementById('bulkClearSelectionBtn');
@@ -1021,7 +1021,7 @@
             });
           }
         }
-      })();
+      });
     </script>
   {% endif %}
 
