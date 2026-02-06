@@ -228,8 +228,10 @@
             />
             <button type="button"
                     data-apply-mode="selected"
-                    class="btn btn-primary"
-                    title="Перенести дедлайн только у отмеченных галочкой задач">
+                    class="btn btn-primary opacity-60 pointer-events-none"
+                    title="Перенести дедлайн только у отмеченных галочкой задач"
+                    disabled
+                    aria-disabled="true">
               Перенести выбранные
             </button>
           </div>
@@ -270,7 +272,7 @@
                     </optgroup>
                   {% endfor %}
                 </select>
-                <button type="submit" name="apply_mode" value="selected" class="btn btn-primary" title="Переназначить только отмеченные галочкой задачи">Переназначить выбранные</button>
+                <button type="submit" name="apply_mode" value="selected" class="btn btn-primary opacity-60 pointer-events-none" title="Переназначить только отмеченные галочкой задачи" disabled aria-disabled="true">Переназначить выбранные</button>
               </div>
             </div>
             <input type="hidden" name="status" value="{{ status }}" />
@@ -717,6 +719,21 @@
         const rescheduleForm = document.getElementById('bulkRescheduleForm');
         const reassignForm = document.getElementById('bulkReassignForm');
         
+        function injectSelectedTaskIdsToForm(formEl) {
+          if (!formEl) return 0;
+          formEl.querySelectorAll('input[name="task_ids"][data-injected="1"]').forEach(el => el.remove());
+          const checked = document.querySelectorAll('.task-checkbox:checked');
+          checked.forEach(function(cb) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'task_ids';
+            input.value = cb.value;
+            input.setAttribute('data-injected', '1');
+            formEl.appendChild(input);
+          });
+          return checked.length;
+        }
+
         function getSelectedCount() {
           return document.querySelectorAll('.task-checkbox:checked').length;
         }
@@ -843,6 +860,16 @@
 
         // Массовый перенос дедлайна: красивое подтверждение (модалка) + preview/count с сервера
         if (rescheduleForm) {
+          // Защита от нативного submit (Enter в поле даты и т.п.): всегда инжектим task_ids.
+          rescheduleForm.addEventListener('submit', function(e) {
+            // Если submit пришёл не из нашего сценария подтверждения — всё равно инжектим выбранные.
+            const count = injectSelectedTaskIdsToForm(rescheduleForm);
+            if (!count) {
+              e.preventDefault();
+              alert('Выберите хотя бы одну задачу (чекбоксы слева).');
+            }
+          });
+
           const modal = document.getElementById('bulkRescheduleConfirmModal');
           const modalTitle = document.getElementById('bulkRescheduleModalTitle');
           const modalDate = document.getElementById('bulkRescheduleModalDate');
@@ -987,21 +1014,19 @@
             m.setAttribute('data-injected', '1');
             rescheduleForm.appendChild(m);
 
-            // ВАЖНО: чекбоксы не находятся внутри формы, поэтому всегда дублируем выбранные task_ids в форму.
-            // Иначе backend не увидит выбранные задачи и вернёт "ни одной не выбрано".
-            rescheduleForm.querySelectorAll('input[name="task_ids"][data-injected="1"]').forEach(el => el.remove());
-            const checked = document.querySelectorAll('.task-checkbox:checked');
-            checked.forEach(function(cb) {
-              const input = document.createElement('input');
-              input.type = 'hidden';
-              input.name = 'task_ids';
-              input.value = cb.value;
-              input.setAttribute('data-injected', '1');
-              rescheduleForm.appendChild(input);
-            });
+            const count = injectSelectedTaskIdsToForm(rescheduleForm);
+            if (!count) {
+              alert('Выберите хотя бы одну задачу (чекбоксы слева).');
+              return;
+            }
 
             closeModal();
-            rescheduleForm.submit();
+            // requestSubmit триггерит submit event и встроенную валидацию.
+            if (typeof rescheduleForm.requestSubmit === 'function') {
+              rescheduleForm.requestSubmit();
+            } else {
+              rescheduleForm.submit();
+            }
           });
 
           async function handleBulkReschedule(mode) {
