@@ -1020,12 +1020,22 @@
               return;
             }
 
-            closeModal();
-            // requestSubmit триггерит submit event и встроенную валидацию.
-            if (typeof rescheduleForm.requestSubmit === 'function') {
-              rescheduleForm.requestSubmit();
-            } else {
-              rescheduleForm.submit();
+            // Сабмитим максимально надёжно: через временный submit-элемент.
+            // Так мы избегаем кейсов, когда programmatic submit уходит без ожидаемых полей.
+            const tmpSubmit = document.createElement('button');
+            tmpSubmit.type = 'submit';
+            tmpSubmit.style.display = 'none';
+            tmpSubmit.setAttribute('data-injected', '1');
+            rescheduleForm.appendChild(tmpSubmit);
+            try {
+              closeModal();
+              if (typeof rescheduleForm.requestSubmit === 'function') {
+                rescheduleForm.requestSubmit(tmpSubmit);
+              } else {
+                tmpSubmit.click();
+              }
+            } finally {
+              tmpSubmit.remove();
             }
           });
 
