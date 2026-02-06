@@ -260,8 +260,15 @@
       </div>
 
       {% if form.errors %}
-        <div class="rounded-lg border border-brand-orange/60 bg-brand-orange/20 p-3 text-sm text-brand-dark">
-          Проверь поля формы (возможны обязательные поля или неверный формат).
+        <div class="rounded-lg border border-brand-orange/60 bg-brand-orange/20 p-3 text-sm text-brand-dark space-y-1">
+          <div>Проверь поля формы (возможны обязательные поля или неверный формат).</div>
+          {% if form.non_field_errors %}
+            <ul class="list-disc list-inside text-xs mt-1">
+              {% for err in form.non_field_errors %}
+                <li>{{ err }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
         </div>
       {% endif %}
 
