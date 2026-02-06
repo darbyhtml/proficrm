@@ -4961,145 +4961,156 @@
           if (e.target === e.currentTarget) closeModal();
         });
       }
-      
-      // Открытие задачи в модальном окне
-      document.querySelectorAll('[data-view-task]').forEach(btn => {
-        btn.addEventListener('click', async function(e) {
-          e.stopPropagation();
-          const taskId = this.dataset.taskId;
-          if (!taskId) return;
-          
-          openModal();
-          
-          try {
-            const res = await fetch(`/tasks/${taskId}/`, {
-              headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            });
-            if (!res.ok) {
-              let errorMsg = 'Ошибка загрузки задачи';
-              if (res.status === 403) {
-                errorMsg = 'Нет прав на просмотр этой задачи';
-              } else if (res.status === 404) {
-                errorMsg = 'Задача не найдена';
+
+      // Инициализация обработчиков открытия задачи в модальном окне
+      function initTaskViewModalTriggers(root) {
+        const scope = root || document;
+        scope.querySelectorAll('[data-view-task]').forEach(btn => {
+          if (btn._taskViewBound) return;
+          btn._taskViewBound = true;
+
+          btn.addEventListener('click', async function(e) {
+            e.stopPropagation();
+            const taskId = this.dataset.taskId;
+            if (!taskId) return;
+
+            openModal();
+
+            try {
+              const res = await fetch(`/tasks/${taskId}/`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+              });
+              if (!res.ok) {
+                let errorMsg = 'Ошибка загрузки задачи';
+                if (res.status === 403) {
+                  errorMsg = 'Нет прав на просмотр этой задачи';
+                } else if (res.status === 404) {
+                  errorMsg = 'Задача не найдена';
+                }
+                throw new Error(errorMsg);
               }
-              throw new Error(errorMsg);
-            }
-            const html = await res.text();
-            
-            const parser = new DOMParser();
-            const doc = parser.parseFromString(html, 'text/html');
-            const taskModal = doc.querySelector('#taskViewModal');
-            
-            if (taskModal) {
-              const card = taskModal.querySelector('.card');
-              if (card) {
-                const contentDiv = card.querySelector('.space-y-3');
-                if (contentDiv) {
-                  if (modalContent) modalContent.innerHTML = contentDiv.outerHTML;
-                } else {
-                  const allContent = card.innerHTML;
-                  const titleMatch = allContent.match(/<h2[^>]*>.*?<\/h2>/);
-                  if (modalContent) modalContent.innerHTML = allContent.replace(titleMatch?.[0] || '', '');
-                }
-                
-                const titleEl = taskModal.querySelector('h2');
-                if (titleEl && modalTitle) modalTitle.textContent = titleEl.textContent.trim();
-                
-                const badgeContainer = taskModal.querySelector('.flex.items-center.gap-2');
-                if (badgeContainer && modalBadges) {
-                  const badge = badgeContainer.querySelector('.badge, .inline-flex.items-center.gap-1');
-                  if (badge) modalBadges.innerHTML = badge.outerHTML;
-                }
-                
-                const editLink = taskModal.querySelector('a[href*="/tasks/"][href*="/edit/"]');
-                const editButton = taskModal.querySelector('button[data-edit-task]');
-                const canEdit = editLink || editButton;
-                
-                const statusBadge = taskModal.querySelector('.badge');
-                let status = 'new';
-                if (statusBadge) {
-                  const badgeText = statusBadge.textContent.toLowerCase();
-                  if (badgeText.includes('работа') || badgeText.includes('progress')) status = 'in_progress';
-                  else if (badgeText.includes('выполн') || badgeText.includes('done')) status = 'done';
-                  else if (badgeText.includes('отмен') || badgeText.includes('cancel')) status = 'cancelled';
-                }
-                
-                if (modalActions) {
-                  modalActions.style.display = 'flex';
-                  
-                  if (btnEdit) {
-                    btnEdit.style.display = canEdit ? 'inline-flex' : 'none';
-                    if (canEdit) {
-                      btnEdit.onclick = async () => {
-                        const url = `/tasks/${taskId}/edit/?modal=1`;
-                        try {
-                          const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-                          if (!res.ok) throw new Error('Ошибка загрузки формы');
-                          const html = await res.text();
-                          const editModal = document.getElementById('taskEditModal');
-                          const editModalContent = document.getElementById('taskEditModalContent');
-                          if (editModal && editModalContent) {
-                            editModalContent.innerHTML = html;
-                            editModal.classList.remove('hidden');
-                            if (modal) modal.classList.add('hidden');
-                            if (window.initTaskTypeSelects) window.initTaskTypeSelects();
-                            if (window.initMsSingleWidgets) window.initMsSingleWidgets(editModalContent);
+              const html = await res.text();
+
+              const parser = new DOMParser();
+              const doc = parser.parseFromString(html, 'text/html');
+              const taskModal = doc.querySelector('#taskViewModal');
+
+              if (taskModal) {
+                const card = taskModal.querySelector('.card');
+                if (card) {
+                  const contentDiv = card.querySelector('.space-y-3');
+                  if (contentDiv) {
+                    if (modalContent) modalContent.innerHTML = contentDiv.outerHTML;
+                  } else {
+                    const allContent = card.innerHTML;
+                    const titleMatch = allContent.match(/<h2[^>]*>.*?<\/h2>/);
+                    if (modalContent) modalContent.innerHTML = allContent.replace(titleMatch?.[0] || '', '');
+                  }
+
+                  const titleEl = taskModal.querySelector('h2');
+                  if (titleEl && modalTitle) modalTitle.textContent = titleEl.textContent.trim();
+
+                  const badgeContainer = taskModal.querySelector('.flex.items-center.gap-2');
+                  if (badgeContainer && modalBadges) {
+                    const badge = badgeContainer.querySelector('.badge, .inline-flex.items-center.gap-1');
+                    if (badge) modalBadges.innerHTML = badge.outerHTML;
+                  }
+
+                  const editLink = taskModal.querySelector('a[href*="/tasks/"][href*="/edit/"]');
+                  const editButton = taskModal.querySelector('button[data-edit-task]');
+                  const canEdit = editLink || editButton;
+
+                  const statusBadge = taskModal.querySelector('.badge');
+                  let status = 'new';
+                  if (statusBadge) {
+                    const badgeText = statusBadge.textContent.toLowerCase();
+                    if (badgeText.includes('работа') || badgeText.includes('progress')) status = 'in_progress';
+                    else if (badgeText.includes('выполн') || badgeText.includes('done')) status = 'done';
+                    else if (badgeText.includes('отмен') || badgeText.includes('cancel')) status = 'cancelled';
+                  }
+
+                  if (modalActions) {
+                    modalActions.style.display = 'flex';
+
+                    if (btnEdit) {
+                      btnEdit.style.display = canEdit ? 'inline-flex' : 'none';
+                      if (canEdit) {
+                        btnEdit.onclick = async () => {
+                          const url = `/tasks/${taskId}/edit/?modal=1`;
+                          try {
+                            const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+                            if (!res.ok) throw new Error('Ошибка загрузки формы');
+                            const html = await res.text();
+                            const editModal = document.getElementById('taskEditModal');
+                            const editModalContent = document.getElementById('taskEditModalContent');
+                            if (editModal && editModalContent) {
+                              editModalContent.innerHTML = html;
+                              editModal.classList.remove('hidden');
+                              if (modal) modal.classList.add('hidden');
+                              if (window.initTaskTypeSelects) window.initTaskTypeSelects();
+                              if (window.initMsSingleWidgets) window.initMsSingleWidgets(editModalContent);
+                            }
+                          } catch (err) {
+                            console.error('Error loading edit form:', err);
+                            if (window.uiToast) window.uiToast('Ошибка загрузки формы редактирования', 'error');
                           }
-                        } catch (err) {
-                          console.error('Error loading edit form:', err);
-                          if (window.uiToast) window.uiToast('Ошибка загрузки формы редактирования', 'error');
-                        }
-                      };
+                        };
+                      }
                     }
-                  }
-                  
-                  if (btnInProgress) {
-                    btnInProgress.style.display = (status === 'new' && canEdit) ? 'inline-block' : 'none';
-                    if (status === 'new' && canEdit) {
-                      btnInProgress.action = `/tasks/${taskId}/status/`;
+
+                    if (btnInProgress) {
+                      btnInProgress.style.display = (status === 'new' && canEdit) ? 'inline-block' : 'none';
+                      if (status === 'new' && canEdit) {
+                        btnInProgress.action = `/tasks/${taskId}/status/`;
+                      }
                     }
-                  }
-                  
-                  if (btnComplete) {
-                    btnComplete.style.display = (status !== 'done' && status !== 'cancelled' && canEdit) ? 'inline-flex' : 'none';
-                    if (status !== 'done' && status !== 'cancelled' && canEdit) {
-                      btnComplete.onclick = () => {
-                        const completeModal = document.getElementById('taskCompleteModal');
-                        if (completeModal) {
-                          completeModal.classList.remove('hidden');
-                          if (modal) modal.classList.add('hidden');
-                          const form = completeModal.querySelector('form');
-                          if (form) form.action = `/tasks/${taskId}/status/`;
-                        }
-                      };
+
+                    if (btnComplete) {
+                      btnComplete.style.display = (status !== 'done' && status !== 'cancelled' && canEdit) ? 'inline-flex' : 'none';
+                      if (status !== 'done' && status !== 'cancelled' && canEdit) {
+                        btnComplete.onclick = () => {
+                          const completeModal = document.getElementById('taskCompleteModal');
+                          if (completeModal) {
+                            completeModal.classList.remove('hidden');
+                            if (modal) modal.classList.add('hidden');
+                            const form = completeModal.querySelector('form');
+                            if (form) form.action = `/tasks/${taskId}/status/`;
+                          }
+                        };
+                      }
                     }
-                  }
-                  
-                  if (btnDelete) {
-                    btnDelete.style.display = canEdit ? 'inline-flex' : 'none';
-                    if (canEdit) {
-                      btnDelete.onclick = () => {
-                        const deleteModal = document.getElementById('taskDeleteModal');
-                        if (deleteModal) {
-                          deleteModal.classList.remove('hidden');
-                          if (modal) modal.classList.add('hidden');
-                          const form = deleteModal.querySelector('form');
-                          if (form) form.action = `/tasks/${taskId}/delete/`;
-                        }
-                      };
+
+                    if (btnDelete) {
+                      btnDelete.style.display = canEdit ? 'inline-flex' : 'none';
+                      if (canEdit) {
+                        btnDelete.onclick = () => {
+                          const deleteModal = document.getElementById('taskDeleteModal');
+                          if (deleteModal) {
+                            deleteModal.classList.remove('hidden');
+                            if (modal) modal.classList.add('hidden');
+                            const form = deleteModal.querySelector('form');
+                            if (form) form.action = `/tasks/${taskId}/delete/`;
+                          }
+                        };
+                      }
                     }
                   }
                 }
               }
+            } catch (error) {
+              console.error('Error loading task:', error);
+              const errorMsg = error.message || 'Ошибка загрузки задачи';
+              if (modalContent) modalContent.innerHTML = `<div class="text-center py-8 text-red-600">${errorMsg}</div>`;
+              if (window.uiToast) window.uiToast(errorMsg, 'error');
             }
-          } catch (error) {
-            console.error('Error loading task:', error);
-            const errorMsg = error.message || 'Ошибка загрузки задачи';
-            if (modalContent) modalContent.innerHTML = `<div class="text-center py-8 text-red-600">${errorMsg}</div>`;
-            if (window.uiToast) window.uiToast(errorMsg, 'error');
-          }
+          });
         });
-      });
+      }
+
+      // Инициализируем сразу для уже отрисованных задач
+      initTaskViewModalTriggers(document);
+      // Делаем функцию доступной глобально, чтобы можно было вызывать после подгрузки HTML (история задач)
+      window.initTaskViewModalTriggers = initTaskViewModalTriggers;
     })();
   </script>
   <script>
