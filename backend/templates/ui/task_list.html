@@ -186,7 +186,7 @@
             <span class="text-[10px] bg-brand-orange/25 text-brand-dark px-1 rounded">✓</span>
           {% endif %}
         </button>
-        <button class="btn btn-primary btn-sm py-1.5 px-3 text-sm" type="submit">Применить</button>
+        {# Кнопка "Применить" больше не нужна: фильтры применяются автоматически при изменении полей #}
         <a class="btn btn-outline btn-sm py-1.5 px-2.5 text-sm" href="/tasks/" id="taskFilterResetBtn">Сброс</a>
       </div>
       <!-- Скрытые поля для фильтра по датам (внутри формы, чтобы не ломать вертикальные отступы между блоками) -->
@@ -1565,6 +1565,31 @@
   </script>
 
   <script>
+  // Автоматическое применение фильтров задач:
+  // при изменении любого из основных полей фильтра форма отправляется сразу,
+  // так что отдельная кнопка "Применить" не требуется.
+  (function() {
+    const form = document.getElementById('taskFilterForm');
+    if (!form) return;
+
+    const autoFields = form.querySelectorAll(
+      'select[name="status"], select[name="assigned_to"],' +
+      'input[name="mine"], input[name="today"], input[name="overdue"], input[name="show_done"]'
+    );
+
+    function autoSubmit() {
+      // Используем стандартный submit, чтобы вся существующая серверная логика и
+      // сохранение фильтров продолжали работать как раньше.
+      form.submit();
+    }
+
+    autoFields.forEach(el => {
+      el.addEventListener('change', autoSubmit);
+    });
+  })();
+  </script>
+
+  <script>
     // Запоминание фильтров задач (localStorage, per-user). Восстановление только при заходе на /tasks/ без querystring.
     (function() {
       const form = document.getElementById('taskFilterForm');
@@ -1576,7 +1601,6 @@
       // Ключи с userId, чтобы после перелогина не подтягивались чужие фильтры
       const LS_PREF_KEY = `proficrm:${userId}:tasks:remember_filters`;
       const LS_QS_KEY = `proficrm:${userId}:tasks:filters_qs`;
-      const SS_RESTORED_KEY = `proficrm:${userId}:tasks:restored_once`;
 
       function setPref(v) {
         try { localStorage.setItem(LS_PREF_KEY, v ? '1' : '0'); } catch (e) {}
@@ -1664,11 +1688,11 @@
         if (!rememberCb.checked) return;
         const saved = getSavedQs();
         if (!saved) return;
-        // Защита от петли/дребезга: 1 раз на вкладку
-        try {
-          if (sessionStorage.getItem(SS_RESTORED_KEY) === '1') return;
-          sessionStorage.setItem(SS_RESTORED_KEY, '1');
-        } catch (e) {}
+        // Восстанавливаем только если пользователь пришёл на "чистый" /tasks/ без параметров.
+        // Это позволяет возвращаться с сохранёнными фильтрами каждый раз, пока включено «Запомнить».
+        if (window.location.search && window.location.search !== '?') {
+          return;
+        }
         window.location.replace('/tasks/?' + saved);
       })();
     })();
