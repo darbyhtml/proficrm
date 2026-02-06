@@ -1613,7 +1613,14 @@
       rememberCb.checked = getPref();
       rememberCb.addEventListener('change', () => {
         setPref(rememberCb.checked);
-        if (!rememberCb.checked) setSavedQs('');
+        if (!rememberCb.checked) {
+          setSavedQs('');
+        } else {
+          // При включении "Запомнить" сразу сохраняем текущие фильтры,
+          // даже если пользователь не нажал "Применить".
+          const qs = buildQsFromForm();
+          if (qs) setSavedQs(qs);
+        }
       });
 
       // Сохранение при применении фильтров
@@ -1621,6 +1628,26 @@
         if (!rememberCb.checked) return;
         const qs = buildQsFromForm();
         setSavedQs(qs);
+      });
+
+      // Авто-сохранение при изменении основных полей фильтра,
+      // чтобы "Запомнить" работало ожидаемо без обязательного нажатия "Применить".
+      const watchedSelectors = [
+        'select[name="status"]',
+        'select[name="assigned_to"]',
+        'input[name="mine"]',
+        'input[name="today"]',
+        'input[name="overdue"]',
+        'input[name="show_done"]',
+        '#dateFromInput',
+        '#dateToInput',
+      ];
+      form.querySelectorAll(watchedSelectors.join(',')).forEach((el) => {
+        el.addEventListener('change', () => {
+          if (!rememberCb.checked) return;
+          const qs = buildQsFromForm();
+          setSavedQs(qs);
+        });
       });
 
       // Сброс должен очищать сохранённое, иначе оно тут же восстановится на чистом /tasks/
