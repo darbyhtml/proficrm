@@ -966,12 +966,9 @@
           hasMore = data.has_next;
           
           // Обновляем относительное время (если функция доступна)
-          setTimeout(() => {
-            const updateRelativeTimesEl = document.querySelector('[data-updated-at]');
-            if (updateRelativeTimesEl && typeof updateRelativeTimes === 'function') {
-              updateRelativeTimes();
-            }
-          }, 100);
+          if (typeof window.updateRelativeTimes === 'function') {
+            window.updateRelativeTimes();
+          }
           
           // Обновляем чекбоксы для массового переназначения (если функция доступна)
           setTimeout(() => {
@@ -1319,7 +1316,8 @@
       let debounceTimer = null;
       let abortController = null;
 
-      function formatRelativeTime(dateStr) {
+      // Глобальные хелперы для отображения "N мин. назад" рядом с датой обновления
+      window.formatRelativeTime = function formatRelativeTime(dateStr) {
         if (!dateStr) return '';
         const date = new Date(dateStr);
         const now = new Date();
@@ -1333,15 +1331,28 @@
         if (diffHours < 24) return `${diffHours} ч. назад`;
         if (diffDays < 7) return `${diffDays} дн. назад`;
         return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      }
+      };
 
-      function updateRelativeTimes() {
+      window.updateRelativeTimes = function updateRelativeTimes() {
         document.querySelectorAll('[data-updated-at]').forEach(el => {
           const dateStr = el.getAttribute('data-updated-at');
           if (dateStr) {
-            el.textContent = formatRelativeTime(dateStr);
+            el.textContent = window.formatRelativeTime(dateStr);
           }
         });
+      };
+
+      // Инициализируем относительное время сразу после загрузки скрипта
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+          if (typeof window.updateRelativeTimes === 'function') {
+            window.updateRelativeTimes();
+          }
+        });
+      } else {
+        if (typeof window.updateRelativeTimes === 'function') {
+          window.updateRelativeTimes();
+        }
       }
 
       function escapeHtml(text) {
