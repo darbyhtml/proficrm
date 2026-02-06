@@ -194,6 +194,37 @@
       <input type="hidden" name="date_to" id="dateToInput" value="{{ date_to|default:'' }}" />
     </form>
 
+    <script>
+      (function() {
+        const form = document.getElementById('taskFilterForm');
+        if (!form) return;
+        const mineCb = form.querySelector('input[name="mine"]');
+        const assigneeSelect = form.querySelector('select[name="assigned_to"]');
+        if (!mineCb || !assigneeSelect) return;
+
+        function syncMineAndAssignee() {
+          if (mineCb.checked) {
+            // Сохраняем предыдущее значение, чтобы восстановить после снятия "Мои"
+            assigneeSelect.dataset.prevValue = assigneeSelect.value || '';
+            assigneeSelect.value = '';
+            assigneeSelect.disabled = true;
+            assigneeSelect.classList.add('opacity-60', 'pointer-events-none');
+            assigneeSelect.title = 'Для выбора конкретного исполнителя снимите галочку «Мои».';
+          } else {
+            assigneeSelect.disabled = false;
+            assigneeSelect.classList.remove('opacity-60', 'pointer-events-none');
+            assigneeSelect.title = '';
+            if (assigneeSelect.dataset.prevValue !== undefined) {
+              assigneeSelect.value = assigneeSelect.dataset.prevValue;
+            }
+          }
+        }
+
+        syncMineAndAssignee();
+        mineCb.addEventListener('change', syncMineAndAssignee);
+      })();
+    </script>
+
     {% if can_bulk_actions %}
     <div class="task-bulk-panel tasks-layout-block">
       <div class="tasks-layout-block" style="position: sticky; top: .75rem; z-index: 30;">
