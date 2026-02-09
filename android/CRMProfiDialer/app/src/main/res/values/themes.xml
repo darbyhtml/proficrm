@@ -1,19 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Material 3 тема для современного UI -->
     <style name="Theme.CRMProfiDialer" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/brand_teal</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorOnPrimary">@android:color/white</item>
         <item name="colorSecondary">@color/brand_orange</item>
-        <item name="colorOnSecondary">@color/brand_dark</item>
-        <item name="colorSurface">#F3FAF9</item>
-        <item name="colorOnSurface">#244B47</item>
-        <item name="colorSurfaceVariant">#C2E2DE</item>
-        <item name="colorOnSurfaceVariant">#5A6B69</item>
-        <!-- Для совместимости с Material Components -->
+        <item name="colorOnSecondary">@android:color/white</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/on_surface</item>
+        <item name="colorSurfaceVariant">@color/surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/on_surface_variant</item>
         <item name="colorPrimaryVariant">@color/brand_dark</item>
         <item name="colorSecondaryVariant">@color/brand_orange</item>
+        <item name="android:statusBarColor">@color/primary_dark</item>
+        <item name="android:navigationBarColor">@color/surface_card</item>
+        <item name="android:windowLightStatusBar">false</item>
     </style>
 </resources>
-
-

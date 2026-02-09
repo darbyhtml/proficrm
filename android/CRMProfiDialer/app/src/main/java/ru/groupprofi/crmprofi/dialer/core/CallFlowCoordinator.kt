@@ -16,6 +16,7 @@ import ru.groupprofi.crmprofi.dialer.domain.ActionSource
 import ru.groupprofi.crmprofi.dialer.domain.PhoneNumberNormalizer
 import ru.groupprofi.crmprofi.dialer.logs.AppLogger
 import ru.groupprofi.crmprofi.dialer.auth.TokenManager
+import ru.groupprofi.crmprofi.dialer.diagnostics.DiagnosticsMetricsBuffer
 
 /**
  * Координатор потока обработки команды на звонок.
@@ -172,7 +173,19 @@ class CallFlowCoordinator(
                 actionSource = actionSource
             )
             
+            // CALL_RESOLVE_START только при первом добавлении (не спамим при повторной доставке команды с тем же callRequestId)
+            val isNew = pendingCallStore.getPendingCall(callRequestId) == null
             pendingCallStore.addPendingCall(pendingCall)
+            if (isNew) {
+                DiagnosticsMetricsBuffer.addEvent(
+                    DiagnosticsMetricsBuffer.EventType.CALL_RESOLVE_START,
+                    "Поиск результата по CallLog",
+                    mapOf(
+                        "source" to actionSource.name,
+                        "callRequestId" to callRequestId.take(8) + "..."
+                    )
+                )
+            }
             AppLogger.i("CallFlowCoordinator", "Начато определение результата звонка: ${maskPhone(phone)}, actionSource=$actionSource")
             
             // Повторные проверки CallLog выполняются в CallListenerService через CallLogObserverManager

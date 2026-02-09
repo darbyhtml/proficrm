@@ -13,6 +13,8 @@
     <!-- Для чтения CallLog (нужно запросить разрешение в runtime) -->
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <!-- Разрешение на запрос отключения оптимизации батареи (кнопка «Разрешить работу в фоне») -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
         android:name=".CRMApplication"

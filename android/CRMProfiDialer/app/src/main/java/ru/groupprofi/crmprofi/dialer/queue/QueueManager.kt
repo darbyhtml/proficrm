@@ -10,6 +10,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
+import ru.groupprofi.crmprofi.dialer.config.AppFeatures
 import ru.groupprofi.crmprofi.dialer.core.AppContainer
 import java.io.IOException
 
@@ -99,12 +100,26 @@ class QueueManager(private val context: Context) {
     /**
      * Попытаться отправить накопленные элементы из очереди.
      * Вызывается периодически из сервиса или при восстановлении сети.
+     * 
+     * В режиме LOCAL_ONLY: НЕ отправляет данные в CRM, только логирует.
+     * В режиме FULL: отправляет как обычно.
+     * 
+     * When TelemetryMode.FULL is enabled, queue will be flushed to CRM.
      */
     suspend fun flushQueue(
         baseUrl: String,
         accessToken: String,
         httpClient: OkHttpClient
     ): Int {
+        // LOCAL_ONLY режим: не отправляем очередь
+        if (!AppFeatures.isCrmEnabled()) {
+            val pending = dao.getPending(limit = 50)
+            if (pending.isNotEmpty()) {
+                Log.d("QueueManager", "flushQueue: LOCAL_ONLY mode, skipping (${pending.size} items in queue)")
+            }
+            return 0
+        }
+        
         val pending = dao.getPending(limit = 50)
         if (pending.isEmpty()) return 0
         

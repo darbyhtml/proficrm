@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Spacing scale: 4dp base -->
+    <dimen name="spacing_xs">4dp</dimen>
+    <dimen name="spacing_sm">8dp</dimen>
+    <dimen name="spacing_md">12dp</dimen>
+    <dimen name="spacing_base">16dp</dimen>
+    <dimen name="spacing_lg">20dp</dimen>
+    <dimen name="spacing_xl">24dp</dimen>
+    <dimen name="spacing_xxl">32dp</dimen>
+
+    <!-- Touch targets (WCAG / Material) -->
+    <dimen name="touch_target_min">48dp</dimen>
+    <dimen name="button_height">48dp</dimen>
+
+    <!-- Cards: flat, no heavy elevation -->
+    <dimen name="card_corner_radius">16dp</dimen>
+    <dimen name="card_elevation">0dp</dimen>
+    <dimen name="card_stroke_width">1dp</dimen>
+
+    <!-- Typography scale -->
+    <dimen name="text_headline_size">22sp</dimen>
+    <dimen name="text_title_size">16sp</dimen>
+    <dimen name="text_body_size">14sp</dimen>
+    <dimen name="text_caption_size">12sp</dimen>
+    <dimen name="text_label_size">11sp</dimen>
+    <dimen name="dialer_input_text_size">20sp</dimen>
+
+    <!-- Bottom nav: высота и отступы, чтобы иконки не наплывали на подписи (в т.ч. на TECNO/Transsion) -->
+    <dimen name="bottom_nav_elevation">1dp</dimen>
+    <dimen name="bottom_nav_height">64dp</dimen>
+    <dimen name="bottom_nav_icon_size">24dp</dimen>
+    <dimen name="bottom_nav_padding_vertical">10dp</dimen>
+    <dimen name="bottom_nav_indicator_height">2dp</dimen>
+
+    <!-- История: иконка статуса не наплывает на номер -->
+    <dimen name="history_status_icon_size">24dp</dimen>
+</resources>

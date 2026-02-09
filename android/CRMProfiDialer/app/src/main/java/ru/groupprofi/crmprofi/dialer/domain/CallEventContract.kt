@@ -15,6 +15,7 @@ enum class CallStatusApi(val apiValue: String) {
     REJECTED("rejected"),
     MISSED("missed"),
     BUSY("busy"),
+    NO_ACTION("no_action"),  // Новое: звонок не был совершен (команда получена, но менеджер не позвонил)
     UNKNOWN("unknown");  // Новое: для случаев, когда результат не определён
     
     companion object {
@@ -26,6 +27,7 @@ enum class CallStatusApi(val apiValue: String) {
                 CallHistoryItem.CallStatus.CONNECTED -> CONNECTED
                 CallHistoryItem.CallStatus.NO_ANSWER -> NO_ANSWER
                 CallHistoryItem.CallStatus.REJECTED -> REJECTED
+                CallHistoryItem.CallStatus.NO_ACTION -> NO_ACTION
                 CallHistoryItem.CallStatus.UNKNOWN -> UNKNOWN
             }
         }
@@ -79,7 +81,8 @@ enum class ActionSource(val apiValue: String) {
     CRM_UI("crm_ui"),           // Команда из CRM (polling)
     NOTIFICATION("notification"), // Нажатие на уведомление "Пора позвонить"
     HISTORY("history"),         // Нажатие "Перезвонить" из истории звонков
-    UNKNOWN("unknown");          // Неизвестно (ручной звонок или не отслеживается)
+    MANUAL("manual"),           // Ручной звонок из вкладки "Телефон"
+    UNKNOWN("unknown");          // Неизвестно (старые записи или не отслеживается)
 }
 
 /**

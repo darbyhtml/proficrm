@@ -72,7 +72,7 @@
 
 | Файл | Статус | Описание |
 |------|--------|----------|
-| **companies/SEARCH_BEST_PRACTICES.md** | ✅ | Описание normalized_inns и exact-поиска обновлено: 8–12, parse_inns, fallback. |
+| **[SEARCH_BEST_PRACTICES.md](../search/SEARCH_BEST_PRACTICES.md)** | ✅ | Описание normalized_inns и exact-поиска обновлено: 8–12, parse_inns, fallback. |
 | **companies/tests.py** | ✅ | `test_normalize_inn`: добавлены кейсы для «901000327» и «901 000 327». Комментарий про пустой результат уточнён. |
 | **companies/tests_search.py** | ✅ | Docstring теста exact ИНН: «8–12 цифр». |
 | **Миграция 0043** | ⚪ Не меняем | Историческая; в модели актуальный help_text уже обновлён. |

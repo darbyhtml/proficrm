@@ -40,6 +40,8 @@ class TokenManager private constructor(private val prefs: SharedPreferences) {
         private const val KEY_LAST_COMMAND_RECEIVED_AT = "last_command_received_at"
         private const val KEY_LAST_DIALER_OPENED_AT = "last_dialer_opened_at"
         private const val KEY_LAST_DIALER_OPENED_CALL_REQUEST_ID = "last_dialer_opened_call_request_id"
+        private const val KEY_LAST_REFRESH_SUCCESS_AT = "last_refresh_success_at"
+        private const val KEY_REFRESH_FAILURE_COUNT = "refresh_failure_count"
 
         @Volatile
         private var INSTANCE: TokenManager? = null
@@ -241,6 +243,41 @@ class TokenManager private constructor(private val prefs: SharedPreferences) {
     }
 
     fun isAdmin(): Boolean = prefs.getBoolean(KEY_IS_ADMIN, false)
+    
+    /**
+     * Сохранить время последнего успешного refresh токена.
+     */
+    fun saveLastRefreshSuccessAt(timestamp: Long) {
+        prefs.edit().putLong(KEY_LAST_REFRESH_SUCCESS_AT, timestamp).apply()
+    }
+    
+    /**
+     * Получить время последнего успешного refresh токена.
+     */
+    fun getLastRefreshSuccessAt(): Long? {
+        val v = prefs.getLong(KEY_LAST_REFRESH_SUCCESS_AT, 0L)
+        return v.takeIf { it > 0L }
+    }
+    
+    /**
+     * Увеличить счетчик неудачных попыток refresh.
+     */
+    fun incrementRefreshFailureCount() {
+        val current = prefs.getInt(KEY_REFRESH_FAILURE_COUNT, 0)
+        prefs.edit().putInt(KEY_REFRESH_FAILURE_COUNT, current + 1).apply()
+    }
+    
+    /**
+     * Сбросить счетчик неудачных попыток refresh.
+     */
+    fun resetRefreshFailureCount() {
+        prefs.edit().remove(KEY_REFRESH_FAILURE_COUNT).apply()
+    }
+    
+    /**
+     * Получить счетчик неудачных попыток refresh.
+     */
+    fun getRefreshFailureCount(): Int = prefs.getInt(KEY_REFRESH_FAILURE_COUNT, 0)
 
     fun setServiceBlockReason(reason: ru.groupprofi.crmprofi.dialer.domain.ServiceBlockReason?) {
         val editor = prefs.edit()

@@ -54,6 +54,7 @@ class CallStatsUseCase {
                 CallHistoryItem.CallStatus.NO_ANSWER -> noAnswer++
                 CallHistoryItem.CallStatus.REJECTED -> dropped++
                 CallHistoryItem.CallStatus.UNKNOWN -> dropped++ // Не удалось определить = сброс
+                CallHistoryItem.CallStatus.NO_ACTION -> dropped++ // Звонок не был совершён
             }
             
             // Подсчитываем ожидающие отправки в CRM

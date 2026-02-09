@@ -3,6 +3,7 @@ package ru.groupprofi.crmprofi.dialer
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
@@ -136,7 +137,8 @@ class QRLoginActivity : AppCompatActivity() {
                         ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("QRLoginActivity", "QR login failed: ${result.message}")
                         runOnUiThread {
                             val errorMsg = result.message.ifEmpty { "Ошибка обмена QR-кода" }
-                            showError(errorMsg)
+                            val canRetry = errorMsg.contains("Повторить")
+                            showError(errorMsg, if (canRetry) qrToken else null)
                         }
                     }
                 }
@@ -150,11 +152,17 @@ class QRLoginActivity : AppCompatActivity() {
     }
     
     
-    private fun showError(message: String) {
-        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-        // Даем время прочитать сообщение, затем закрываем
-        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-            finish()
-        }, 3000)
+    private fun showError(message: String, retryToken: String? = null) {
+        if (retryToken != null) {
+            AlertDialog.Builder(this)
+                .setMessage(message)
+                .setPositiveButton("Повторить") { _, _ -> handleQrToken(retryToken) }
+                .setNegativeButton("Закрыть") { _, _ -> finish() }
+                .setCancelable(false)
+                .show()
+        } else {
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ finish() }, 3000)
+        }
     }
 }

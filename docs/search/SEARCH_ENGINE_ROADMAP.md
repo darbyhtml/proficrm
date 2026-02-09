@@ -65,7 +65,7 @@
 | 5.1 | Стоп-слова и синонимы | Загрузить стоп-слова (ООО, ИП, …), синонимы (ул → улица, транслитерация при необходимости). |
 | 5.2 | Пороги и лимиты | Минимальная длина запроса, max_typos / fuzziness, лимит результатов (например, 5000 как сейчас). |
 | 5.3 | Мониторинг | Логирование ошибок движка, время ответа; при необходимости — метрики (например, количество запросов к внешнему поиску). |
-| 5.4 | Документация | Обновить `SEARCH_BEST_PRACTICES.md`: описать два режима (Postgres / внешний движок), конфигурацию, команду переиндексации. |
+| 5.4 | Документация | Обновить [SEARCH_BEST_PRACTICES.md](SEARCH_BEST_PRACTICES.md): описать два режима (Postgres / внешний движок), конфигурацию, команду переиндексации. |
 
 ---
 
@@ -88,7 +88,7 @@
 
 - **Поисковый backend:** PostgreSQL FTS + pg_trgm (`CompanySearchService`, `CompanySearchIndex`).
 - **Фасад:** `get_company_search_backend()` в `companies/search_service.py` всегда возвращает `CompanySearchService`.
-- **Нормализация и индекс:** см. `backend/companies/SEARCH_BEST_PRACTICES.md` (fold_text, only_digits, EXACT-first, команды `normalize_companies_data` и `rebuild_company_search_index`).
+- **Нормализация и индекс:** см. [SEARCH_BEST_PRACTICES.md](SEARCH_BEST_PRACTICES.md) (fold_text, only_digits, EXACT-first, команды `normalize_companies_data` и `rebuild_company_search_index`).
 - **REST API и UI:** используют тот же backend через `get_company_search_backend()`.
 - **Typesense:** конфигурация и код backend'а удалены; команды `index_companies_typesense`, `sync_typesense_stopwords`, `sync_typesense_synonyms`
   оставлены как no-op для обратной совместимости, но больше не выполняют действий.

@@ -42,18 +42,12 @@ class AuthInterceptor(
         
         val response = chain.proceed(requestBuilder.build())
         
-        // Обрабатываем 401/403 для graceful logout
-        if ((response.code == 401 || response.code == 403) && context != null) {
-            ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("AuthInterceptor", "Received ${response.code}, clearing tokens and stopping service")
-            // Очищаем токены и останавливаем сервис в фоне
-            CoroutineScope(Dispatchers.IO).launch {
-                tokenManager.clearAll()
-                try {
-                    context.stopService(Intent(context, CallListenerService::class.java))
-                } catch (e: Exception) {
-                    ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("AuthInterceptor", "Failed to stop service: ${e.message}")
-                }
-            }
+        // НЕ очищаем токены в AuthInterceptor при 401/403 - это может быть временная ошибка.
+        // Очистка токенов должна происходить только в refreshToken() когда refresh token реально истек.
+        // AuthInterceptor только логирует для диагностики.
+        if (response.code == 401 || response.code == 403) {
+            ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("AuthInterceptor", "Received ${response.code}, will try refresh token in ApiClient")
+            // Не очищаем токены здесь - пусть ApiClient.refreshToken() решает, истек ли refresh token
         }
         
         return response

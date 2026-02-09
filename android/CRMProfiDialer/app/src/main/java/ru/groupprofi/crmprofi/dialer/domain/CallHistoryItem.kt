@@ -1,5 +1,6 @@
 package ru.groupprofi.crmprofi.dialer.domain
 
+import java.io.Serializable
 import java.util.Date
 
 /**
@@ -22,7 +23,7 @@ data class CallHistoryItem(
     val attemptsCount: Int? = null, // Количество попыток определения
     val actionSource: ActionSource? = null, // Источник действия пользователя
     val endedAt: Long? = null // Время окончания звонка (millis)
-) {
+) : Serializable {
     /**
      * Статус звонка (человеческий формат).
      */
@@ -30,6 +31,7 @@ data class CallHistoryItem(
         CONNECTED,      // Разговор состоялся
         NO_ANSWER,      // Не ответили
         REJECTED,       // Сброс
+        NO_ACTION,      // Звонок не был совершен (команда получена, но менеджер не позвонил)
         UNKNOWN         // Определяем результат...
     }
     
@@ -41,6 +43,7 @@ data class CallHistoryItem(
             CallStatus.CONNECTED -> "Разговор состоялся"
             CallStatus.NO_ANSWER -> "Не ответили"
             CallStatus.REJECTED -> "Сброс"
+            CallStatus.NO_ACTION -> "Звонок не совершен"
             CallStatus.UNKNOWN -> "Определяем результат..."
         }
     }

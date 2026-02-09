@@ -14,6 +14,7 @@ import ru.groupprofi.crmprofi.dialer.BuildConfig
 import ru.groupprofi.crmprofi.dialer.auth.TokenManager
 import ru.groupprofi.crmprofi.dialer.queue.QueueManager
 import ru.groupprofi.crmprofi.dialer.core.AppContainer
+import ru.groupprofi.crmprofi.dialer.config.AppFeatures
 import ru.groupprofi.crmprofi.dialer.domain.CallEventPayload
 import ru.groupprofi.crmprofi.dialer.domain.CallDirection
 import ru.groupprofi.crmprofi.dialer.domain.ResolveMethod
@@ -39,6 +40,8 @@ class ApiClient private constructor(context: Context) {
     private val callHistoryStore: ru.groupprofi.crmprofi.dialer.domain.CallHistoryStore
         get() = AppContainer.callHistoryStore
     private val httpClient: OkHttpClient
+    // Отдельный OkHttpClient для long-polling pullCall с увеличенными таймаутами
+    private val longPollHttpClient: OkHttpClient
     private val jsonMedia = "application/json; charset=utf-8".toMediaType()
     private val baseUrl = BuildConfig.BASE_URL
     private val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO)
@@ -58,6 +61,8 @@ class ApiClient private constructor(context: Context) {
         
         // TelemetryInterceptor использует только telemetryBatcher
         val telemetryInterceptor = TelemetryInterceptor(telemetryBatcher)
+        
+        // Основной httpClient для обычных API (короткие таймауты)
         httpClient = OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
@@ -71,13 +76,37 @@ class ApiClient private constructor(context: Context) {
                 }
             }
             .build()
+        
+        // Отдельный httpClient для long-polling pullCall (увеличенные таймауты)
+        longPollHttpClient = OkHttpClient.Builder()
+            .connectTimeout(15, TimeUnit.SECONDS) // Connect timeout остается таким же
+            .readTimeout(60, TimeUnit.SECONDS) // Read timeout увеличен до 60 сек для long-poll
+            .writeTimeout(30, TimeUnit.SECONDS) // Write не используется для GET
+            .callTimeout(70, TimeUnit.SECONDS) // Общий таймаут запроса 70 сек
+            .addInterceptor(AuthInterceptor(tokenManager, context))
+            // НЕ добавляем TelemetryInterceptor для long-poll (чтобы не создавать лавину метрик)
+            .apply {
+                // HTTP logging только в debug
+                if (BuildConfig.DEBUG) {
+                    addInterceptor(SafeHttpLoggingInterceptor())
+                }
+            }
+            .build()
     }
     
     /**
      * Принудительно отправить накопленную телеметрию (вызывается при важных событиях).
+     * 
+     * В режиме LOCAL_ONLY: завершает локальную обработку, НЕ делает network calls.
+     * В режиме FULL: отправляет телеметрию в CRM как обычно.
      */
     suspend fun flushTelemetry() {
-        telemetryBatcher.flushNow()
+        if (AppFeatures.isCrmEnabled()) {
+            telemetryBatcher.flushNow()
+        } else {
+            // LOCAL_ONLY режим: завершаем локальную обработку без отправки
+            ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("ApiClient", "flushTelemetry: LOCAL_ONLY mode, skipping network call")
+        }
     }
     
     companion object {
@@ -154,59 +183,63 @@ class ApiClient private constructor(context: Context) {
     /**
      * Обмен QR-токена на JWT access/refresh токены.
      * Используется для быстрого входа по QR-коду.
-     * Возвращает данные в формате (access, refresh, username, isAdmin).
+     * При временной ошибке DNS (UnknownHostException) повторяет запрос до 3 раз с паузой — часто сетевая готовность запаздывает после камеры/смены экрана.
      */
     suspend fun exchangeQrToken(qrToken: String): Result<QrTokenResult> = withContext(Dispatchers.IO) {
-        try {
-            val url = "$baseUrl/api/phone/qr/exchange/"
-            val bodyJson = JSONObject()
-                .put("token", qrToken)
-                .toString()
-            
-            val req = Request.Builder()
-                .url(url)
-                .post(bodyJson.toRequestBody(jsonMedia))
-                .build()
-            
-            httpClient.newCall(req).execute().use { res ->
-                val raw = res.body?.string() ?: ""
-                if (!res.isSuccessful) {
-                    val errorMsg = try {
-                        val errorObj = JSONObject(raw)
-                        errorObj.optString("detail", "QR-код истёк или уже использован")
-                    } catch (_: Exception) {
-                        when (res.code) {
-                            400 -> "QR-код истёк или уже использован"
-                            401 -> "QR-код недействителен"
-                            else -> "Ошибка обмена QR-кода: HTTP ${res.code}"
+        val url = "$baseUrl/api/phone/qr/exchange/"
+        val bodyJson = JSONObject().put("token", qrToken).toString()
+        val maxAttempts = 3
+        val retryDelayMs = 1500L
+
+        repeat(maxAttempts) { attempt ->
+            try {
+                val req = Request.Builder()
+                    .url(url)
+                    .post(bodyJson.toRequestBody(jsonMedia))
+                    .build()
+                httpClient.newCall(req).execute().use { res ->
+                    val raw = res.body?.string() ?: ""
+                    if (!res.isSuccessful) {
+                        val errorMsg = try {
+                            val errorObj = JSONObject(raw)
+                            errorObj.optString("detail", "QR-код истёк или уже использован")
+                        } catch (_: Exception) {
+                            when (res.code) {
+                                400 -> "QR-код истёк или уже использован"
+                                401 -> "QR-код недействителен"
+                                else -> "Ошибка обмена QR-кода: HTTP ${res.code}"
+                            }
                         }
+                        return@withContext Result.Error(errorMsg, res.code)
                     }
-                    return@withContext Result.Error(errorMsg, res.code)
+                    val obj = JSONObject(raw)
+                    val access = obj.optString("access", "")
+                    val refresh = obj.optString("refresh", "")
+                    val username = obj.optString("username", "").ifBlank { "user" }
+                    val isAdmin = obj.optBoolean("is_admin", false)
+                    if (access.isBlank() || refresh.isBlank()) {
+                        return@withContext Result.Error("Неверный формат ответа сервера")
+                    }
+                    return@withContext Result.Success(QrTokenResult(access, refresh, username, isAdmin))
                 }
-                
-                val obj = JSONObject(raw)
-                val access = obj.optString("access", "")
-                val refresh = obj.optString("refresh", "")
-                val username = obj.optString("username", "").ifBlank { "user" }
-                val isAdmin = obj.optBoolean("is_admin", false)
-                if (access.isBlank() || refresh.isBlank()) {
-                    return@withContext Result.Error("Неверный формат ответа сервера")
+            } catch (e: UnknownHostException) {
+                if (attempt == maxAttempts - 1) {
+                    return@withContext Result.Error("Не удалось подключиться к серверу. Проверьте интернет и нажмите «Повторить».")
                 }
-                
-                Result.Success(QrTokenResult(access, refresh, username, isAdmin))
+                kotlinx.coroutines.delay(retryDelayMs)
+            } catch (e: SocketTimeoutException) {
+                return@withContext Result.Error("Превышено время ожидания ответа")
+            } catch (e: Exception) {
+                return@withContext Result.Error("Ошибка сети: ${e.message}")
             }
-        } catch (e: UnknownHostException) {
-            Result.Error("Нет подключения к интернету")
-        } catch (e: SocketTimeoutException) {
-            Result.Error("Превышено время ожидания ответа")
-        } catch (e: Exception) {
-            Result.Error("Ошибка сети: ${e.message}")
         }
+        Result.Error("Не удалось подключиться к серверу. Проверьте интернет и нажмите «Повторить».")
     }
     
     /**
      * Refresh токен (вызывается из AuthInterceptor при 401).
      * Использует Mutex из TokenManager для предотвращения параллельных refresh.
+     * Улучшенная логика: не очищает токены при временных сетевых ошибках, только при реальном истечении refresh token.
      */
     suspend fun refreshToken(): Result<String?> = withContext(Dispatchers.IO) {
         val refresh = tokenManager.getRefreshToken()
@@ -214,9 +247,20 @@ class ApiClient private constructor(context: Context) {
             return@withContext Result.Error("Refresh token отсутствует", 401)
         }
         
+        // Проверяем, не слишком ли много неудачных попыток подряд (backoff)
+        val failureCount = tokenManager.getRefreshFailureCount()
+        val lastSuccess = tokenManager.getLastRefreshSuccessAt()
+        val now = System.currentTimeMillis()
+        
+        // Если было много неудачных попыток и последний успех был недавно (< 1 часа) - это временная ошибка
+        if (failureCount >= 3 && lastSuccess != null && (now - lastSuccess) < 3600000L) {
+            ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("ApiClient", "Too many refresh failures ($failureCount), but last success was recent. Skipping refresh to avoid clearing tokens.")
+            return@withContext Result.Error("Временная сетевая ошибка, повторите позже", 0)
+        }
+        
         return@withContext tokenManager.getRefreshMutex().withLock {
             try {
-                ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("ApiClient", "Refreshing access token")
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("ApiClient", "Refreshing access token (failure count: $failureCount)")
                 val url = "$baseUrl/api/token/refresh/"
                 val bodyJson = JSONObject().put("refresh", refresh).toString()
                 
@@ -229,34 +273,62 @@ class ApiClient private constructor(context: Context) {
                     val raw = res.body?.string() ?: ""
                     if (!res.isSuccessful) {
                         if (res.code == 401 || res.code == 403) {
-                            // Refresh token истек - требуется повторный вход
-                            ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("ApiClient", "Refresh token expired (${res.code}), clearing tokens")
-                            tokenManager.clearAll()
-                            return@withLock Result.Error("Сессия истекла, требуется повторный вход", res.code)
+                            // Refresh token истек на сервере - требуется повторный вход
+                            // НО: проверяем, не была ли это временная ошибка (если последний успех был недавно)
+                            val shouldClear = if (lastSuccess != null && (now - lastSuccess) < 3600000L) {
+                                // Последний успех был недавно - возможно временная ошибка сервера
+                                // Не очищаем токены, только логируем
+                                ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("ApiClient", "Refresh token returned ${res.code}, but last success was recent. Not clearing tokens (possible temporary server error).")
+                                false
+                            } else {
+                                // Последний успех был давно или его не было - refresh token реально истек
+                                ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("ApiClient", "Refresh token expired (${res.code}), clearing tokens")
+                                true
+                            }
+                            
+                            if (shouldClear) {
+                                tokenManager.clearAll()
+                                return@withLock Result.Error("Сессия истекла, требуется повторный вход", res.code)
+                            } else {
+                                // Временная ошибка - увеличиваем счетчик, но не очищаем токены
+                                tokenManager.incrementRefreshFailureCount()
+                                return@withLock Result.Error("Временная ошибка сервера, повторите позже", res.code)
+                            }
                         }
-                        ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("ApiClient", "Refresh token failed: HTTP ${res.code}")
+                        // Другие ошибки сервера (5xx) - не очищаем токены, это временная ошибка
+                        ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("ApiClient", "Refresh token failed: HTTP ${res.code} (temporary error, not clearing tokens)")
+                        tokenManager.incrementRefreshFailureCount()
                         return@withLock Result.Error("Ошибка сервера: HTTP ${res.code}", res.code)
                     }
                     
                     val access = JSONObject(raw).optString("access", "").ifBlank { null }
                     if (access == null) {
                         ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("ApiClient", "Refresh token: invalid response format")
+                        tokenManager.incrementRefreshFailureCount()
                         return@withLock Result.Error("Неверный формат ответа сервера")
                     }
                     
-                    // Сохраняем новый access token
+                    // Успешный refresh - сохраняем новый access token и сбрасываем счетчик ошибок
                     tokenManager.updateAccessToken(access)
+                    tokenManager.saveLastRefreshSuccessAt(now)
+                    tokenManager.resetRefreshFailureCount()
                     ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("ApiClient", "Access token refreshed successfully")
                     Result.Success(access)
                 }
             } catch (e: UnknownHostException) {
-                ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("ApiClient", "Refresh token: network error (no internet)")
+                // Сетевая ошибка - не очищаем токены, это временная проблема
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("ApiClient", "Refresh token: network error (no internet), not clearing tokens")
+                tokenManager.incrementRefreshFailureCount()
                 Result.Error("Нет подключения к интернету")
             } catch (e: SocketTimeoutException) {
-                ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("ApiClient", "Refresh token: timeout")
+                // Таймаут - не очищаем токены, это временная проблема
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("ApiClient", "Refresh token: timeout, not clearing tokens")
+                tokenManager.incrementRefreshFailureCount()
                 Result.Error("Превышено время ожидания ответа")
             } catch (e: Exception) {
-                ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("ApiClient", "Refresh token error: ${e.message}", e)
+                // Другие ошибки - не очищаем токены, это временная проблема
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("ApiClient", "Refresh token error: ${e.message}, not clearing tokens", e)
+                tokenManager.incrementRefreshFailureCount()
                 Result.Error("Ошибка сети: ${e.message}")
             }
         }
@@ -299,24 +371,42 @@ class ApiClient private constructor(context: Context) {
     }
     
     /**
-     * Получить следующую команду на звонок (polling).
+     * Получить следующую команду на звонок (long-polling).
+     * Использует long-pollHttpClient с увеличенными таймаутами.
+     * Поддерживает параметр wait_seconds для long-polling (если сервер поддерживает).
+     * 
      * Возвращает PullCallResult с информацией о Retry-After заголовке для rate limiting.
      */
-    suspend fun pullCall(deviceId: String): PullCallResult = withContext(Dispatchers.IO) {
+    suspend fun pullCall(
+        deviceId: String,
+        waitSeconds: Int = 25, // Таймаут ожидания для long-poll (25 секунд)
+        useLongPoll: Boolean = true // Использовать long-poll или обычный запрос
+    ): PullCallResult = withContext(Dispatchers.IO) {
         val token = tokenManager.getAccessToken()
         if (token.isNullOrBlank()) {
-            return@withContext PullCallResult(Result.Error("Токен отсутствует"), retryAfterSeconds = null)
+            return@withContext PullCallResult(Result.Error("Токен отсутствует"), retryAfterSeconds = null, latencyMs = 0L)
         }
         
+        val startTime = System.currentTimeMillis()
         try {
-            val url = "$baseUrl/api/phone/calls/pull/?device_id=$deviceId"
+            // Добавляем параметр wait_seconds для long-polling (если сервер поддерживает)
+            val url = if (useLongPoll && waitSeconds > 0) {
+                "$baseUrl/api/phone/calls/pull/?device_id=$deviceId&wait_seconds=$waitSeconds"
+            } else {
+                "$baseUrl/api/phone/calls/pull/?device_id=$deviceId"
+            }
+            
             val req = Request.Builder()
                 .url(url)
                 .get()
                 .addHeader("Authorization", "Bearer $token")
                 .build()
             
-            httpClient.newCall(req).execute().use { res ->
+            // Используем longPollHttpClient для long-polling запросов
+            val client = if (useLongPoll) longPollHttpClient else httpClient
+            
+            client.newCall(req).execute().use { res ->
+                val requestLatencyMs = System.currentTimeMillis() - startTime
                 val code = res.code
                 val body = res.body?.string()
                 
@@ -327,7 +417,7 @@ class ApiClient private constructor(context: Context) {
                 when (code) {
                     204 -> {
                         // Нет команд
-                        return@withContext PullCallResult(Result.Success(null), retryAfterSeconds = null)
+                        return@withContext PullCallResult(Result.Success(null), retryAfterSeconds = null, latencyMs = requestLatencyMs)
                     }
                     401 -> {
                         // Unauthorized - попробуем refresh
@@ -351,11 +441,11 @@ class ApiClient private constructor(context: Context) {
                                     retryCode == 204 -> Result.Success(null)
                                     else -> Result.Error("Ошибка после refresh: HTTP $retryCode", retryCode)
                                 }
-                                return@withContext PullCallResult(result, retryAfterSeconds = retryAfterRetry)
+                                return@withContext PullCallResult(result, retryAfterSeconds = retryAfterRetry, latencyMs = requestLatencyMs)
                             }
                         } else {
                             // Refresh не удался - требуется повторный вход
-                            return@withContext PullCallResult(Result.Error("Требуется повторный вход", 401), retryAfterSeconds = null)
+                            return@withContext PullCallResult(Result.Error("Требуется повторный вход", 401), retryAfterSeconds = null, latencyMs = requestLatencyMs)
                         }
                     }
                     200 -> {
@@ -364,35 +454,37 @@ class ApiClient private constructor(context: Context) {
                         } else {
                             parseCallResponse(body)
                         }
-                        return@withContext PullCallResult(result, retryAfterSeconds = null)
+                        return@withContext PullCallResult(result, retryAfterSeconds = null, latencyMs = requestLatencyMs)
                     }
                     429 -> {
                         // Rate limited - возвращаем ошибку с Retry-After
                         return@withContext PullCallResult(
                             Result.Error("Rate limited", 429),
-                            retryAfterSeconds = retryAfterSeconds
+                            retryAfterSeconds = retryAfterSeconds,
+                            latencyMs = requestLatencyMs
                         )
                     }
                     else -> {
-                        return@withContext PullCallResult(Result.Error("Неожиданный код ответа: $code", code), retryAfterSeconds = null)
+                        return@withContext PullCallResult(Result.Error("Неожиданный код ответа: $code", code), retryAfterSeconds = null, latencyMs = requestLatencyMs)
                     }
                 }
             }
         } catch (e: UnknownHostException) {
-            PullCallResult(Result.Error("Нет подключения к интернету", 0), retryAfterSeconds = null)
+            PullCallResult(Result.Error("Нет подключения к интернету", 0), retryAfterSeconds = null, latencyMs = System.currentTimeMillis() - startTime)
         } catch (e: SocketTimeoutException) {
-            PullCallResult(Result.Error("Превышено время ожидания ответа", 0), retryAfterSeconds = null)
+            PullCallResult(Result.Error("Превышено время ожидания ответа", 0), retryAfterSeconds = null, latencyMs = System.currentTimeMillis() - startTime)
         } catch (e: Exception) {
-            PullCallResult(Result.Error("Ошибка сети: ${e.message}", 0), retryAfterSeconds = null)
+            PullCallResult(Result.Error("Ошибка сети: ${e.message}", 0), retryAfterSeconds = null, latencyMs = System.currentTimeMillis() - startTime)
         }
     }
     
     /**
-     * Результат pullCall с информацией о Retry-After заголовке.
+     * Результат pullCall с информацией о Retry-After заголовке и latency.
      */
     data class PullCallResult(
         val result: Result<PullCallResponse?>,
-        val retryAfterSeconds: Int?
+        val retryAfterSeconds: Int?,
+        val latencyMs: Long = 0L // Latency запроса в миллисекундах
     )
     
     /**
@@ -421,6 +513,11 @@ class ApiClient private constructor(context: Context) {
     /**
      * Отправить данные о звонке.
      * ЭТАП 2: Расширенная версия с новыми полями (опциональными для обратной совместимости).
+     * 
+     * В режиме LOCAL_ONLY: сохраняет данные локально, НЕ отправляет в CRM.
+     * В режиме FULL: отправляет в CRM как обычно.
+     * 
+     * When TelemetryMode.FULL is enabled, events will be sent to CRM.
      */
     suspend fun sendCallUpdate(
         callRequestId: String,
@@ -436,6 +533,17 @@ class ApiClient private constructor(context: Context) {
         actionSource: ru.groupprofi.crmprofi.dialer.domain.ActionSource? = null,
         endedAt: Long? = null
     ): Result<Unit> = withContext(Dispatchers.IO) {
+        // LOCAL_ONLY режим: не отправляем в CRM, только логируем
+        if (!AppFeatures.isCrmEnabled()) {
+            ru.groupprofi.crmprofi.dialer.logs.AppLogger.i(
+                "ApiClient",
+                "sendCallUpdate: LOCAL_ONLY mode, call saved locally (id=$callRequestId, status=$callStatus, source=${actionSource?.apiValue})"
+            )
+            // Возвращаем Success, чтобы UI не зависел от сети
+            // sentToCrm будет false в CallHistoryItem
+            return@withContext Result.Success(Unit)
+        }
+        
         val token = tokenManager.getAccessToken()
         if (token.isNullOrBlank()) {
             return@withContext Result.Error("Токен отсутствует")
@@ -605,6 +713,9 @@ class ApiClient private constructor(context: Context) {
     
     /**
      * Отправить heartbeat.
+     * 
+     * В режиме LOCAL_ONLY: НЕ отправляет heartbeat в CRM.
+     * В режиме FULL: отправляет как обычно.
      */
     suspend fun sendHeartbeat(
         deviceId: String,
@@ -615,6 +726,12 @@ class ApiClient private constructor(context: Context) {
         encryptionEnabled: Boolean,
         stuckMetrics: QueueManager.StuckMetrics?
     ): Result<Unit> = withContext(Dispatchers.IO) {
+        // LOCAL_ONLY режим: не отправляем heartbeat
+        if (!AppFeatures.isCrmEnabled()) {
+            ru.groupprofi.crmprofi.dialer.logs.AppLogger.d("ApiClient", "sendHeartbeat: LOCAL_ONLY mode, skipping")
+            return@withContext Result.Success(Unit)
+        }
+        
         val token = tokenManager.getAccessToken()
         if (token.isNullOrBlank()) {
             return@withContext Result.Success(Unit) // Heartbeat не критичен
@@ -680,8 +797,20 @@ class ApiClient private constructor(context: Context) {
     
     /**
      * Отправить батч телеметрии.
+     * 
+     * В режиме LOCAL_ONLY: НЕ отправляет телеметрию в CRM.
+     * В режиме FULL: отправляет как обычно.
      */
     suspend fun sendTelemetryBatch(deviceId: String, items: List<TelemetryItem>): Result<Unit> = withContext(Dispatchers.IO) {
+        // LOCAL_ONLY режим: не отправляем телеметрию
+        if (!AppFeatures.isCrmEnabled()) {
+            ru.groupprofi.crmprofi.dialer.logs.AppLogger.d(
+                "ApiClient",
+                "sendTelemetryBatch: LOCAL_ONLY mode, skipping telemetry (${items.size} items)"
+            )
+            return@withContext Result.Success(Unit)
+        }
+        
         val token = tokenManager.getAccessToken()
         if (token.isNullOrBlank()) {
             return@withContext Result.Success(Unit) // Telemetry не критична

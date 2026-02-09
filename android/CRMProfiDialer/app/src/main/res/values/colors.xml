@@ -1,8 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="brand_teal">#01948E</color>
-    <color name="brand_dark">#003D38</color>
-    <color name="brand_orange">#FDAD3A</color>
+    <!-- Современная палитра 2026: мягкие, но контрастные тона -->
+    <color name="primary">#0D9488</color>
+    <color name="primary_dark">#0F766E</color>
+    <color name="accent">#10B981</color>
+    <color name="error">#DC2626</color>
+    <color name="warning">#D97706</color>
+
+    <color name="brand_teal">#0D9488</color>
+    <color name="brand_orange">#D97706</color>
+    <color name="brand_dark">#134E4A</color>
+
+    <!-- Фоны: лёгкие, без тяжёлых градиентов -->
+    <color name="surface">#FAFAFA</color>
+    <color name="surface_card">#FFFFFF</color>
+    <color name="surface_variant">#E6F2F1</color>
+    <color name="on_surface">#1F2937</color>
+    <color name="on_surface_variant">#6B7280</color>
+
+    <!-- Bottom Navigation: выбранная вкладка — спокойный акцент, без кричащего фона -->
+    <color name="bottom_nav_selected">#0F766E</color>
+    <color name="bottom_nav_unselected">#6B7280</color>
+    <color name="bottom_nav_ripple">#1A0D9488</color>
+    <color name="bottom_nav_logout">#DC2626</color>
 </resources>
-
-

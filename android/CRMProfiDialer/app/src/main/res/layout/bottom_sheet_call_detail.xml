@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="@dimen/spacing_base"
+    android:background="@color/surface_card">
+
+    <TextView
+        style="@style/TextAppearance.CRM.Title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/call_detail_title"
+        android:layout_marginBottom="@dimen/spacing_md" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="@dimen/spacing_sm">
+
+        <TextView
+            android:id="@+id/detailStatusIcon"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:gravity="center"
+            android:textSize="16sp"
+            android:layout_marginEnd="@dimen/spacing_sm"
+            android:contentDescription="@string/history_status_icon" />
+
+        <TextView
+            android:id="@+id/detailPhoneText"
+            style="@style/TextAppearance.CRM.Body"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:textStyle="bold"
+            android:ellipsize="end"
+            android:maxLines="1" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/detailNameText"
+        style="@style/TextAppearance.CRM.Caption"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/spacing_xs"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/detailStatusText"
+        style="@style/TextAppearance.CRM.BodySecondary"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/spacing_xs" />
+
+    <TextView
+        android:id="@+id/detailMetaText"
+        style="@style/TextAppearance.CRM.Caption"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/spacing_md" />
+
+    <TextView
+        android:id="@+id/detailCrmBadge"
+        style="@style/TextAppearance.CRM.Label"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:background="@drawable/badge_background"
+        android:paddingHorizontal="@dimen/spacing_sm"
+        android:paddingVertical="@dimen/spacing_xs"
+        android:layout_marginBottom="@dimen/spacing_lg" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="end">
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/detailCopyButton"
+            style="@style/Widget.CRM.Button.Text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="@dimen/touch_target_min"
+            android:text="@string/action_copy" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/detailCallButton"
+            style="@style/Widget.CRM.Button.Primary"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:minHeight="@dimen/touch_target_min"
+            android:layout_marginStart="@dimen/spacing_sm"
+            android:text="@string/action_call_back" />
+    </LinearLayout>
+</LinearLayout>

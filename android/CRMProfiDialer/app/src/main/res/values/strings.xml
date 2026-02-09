@@ -7,6 +7,8 @@
     <string name="status_not_ready">Не работает</string>
     <string name="status_resolving">Определяем результат звонка…</string>
     <string name="status_explanation_ready">Приложение работает в фоне и готово принимать команды из CRM</string>
+    <string name="status_last_command">Последняя команда: %1$s</string>
+    <string name="status_last_command_never">Команд пока не было</string>
     <string name="status_explanation_resolving">Проверяем журнал звонков. Это займёт несколько секунд.</string>
     <string name="button_fix">Исправить</string>
     <string name="button_allow_background">Разрешить работу в фоне</string>
@@ -23,11 +25,16 @@
     <!-- История звонков -->
     <string name="history_title">История звонков</string>
     <string name="history_empty">История звонков пуста</string>
+    <string name="call_detail_title">Детали звонка</string>
     <string name="filter_today">Сегодня</string>
     <string name="filter_7_days">7 дней</string>
     <string name="filter_all">Всё</string>
     <string name="search_hint">Поиск по номеру</string>
+    <string name="dialer_phone_hint">Номер телефона</string>
+    <string name="dialer_hint_recorded">Звонок будет зафиксирован в истории</string>
+    <string name="dialer_call_button">Позвонить</string>
     <string name="action_call_back">Перезвонить</string>
+    <string name="history_status_icon">Статус звонка</string>
     <string name="action_copy">Скопировать</string>
     <string name="copied">Скопировано</string>
     
@@ -88,6 +95,19 @@
     <string name="diagnostics_restart_done">Готово. Проверяем состояние…</string>
     <string name="diagnostics_flush_queue">Отправить очередь сейчас</string>
     
+    <!-- Настройки (экран) -->
+    <string name="settings_auth_title">Авторизация</string>
+    <string name="settings_auth_authorized">Авторизован</string>
+    <string name="settings_background_title">Работа в фоне</string>
+    <string name="settings_oem_help">Инструкции для Xiaomi / Huawei / Samsung</string>
+    <string name="settings_diagnostics_title">Поддержка и диагностика</string>
+    <string name="settings_diagnostics_hint">Отчёт пригодится при обращении в поддержку.</string>
+    <string name="settings_diagnostics_copy">Скопировать отчёт для поддержки</string>
+    <string name="settings_diagnostics_share">Поделиться отчётом</string>
+    <string name="settings_connection_check">Проверить соединение с сервером</string>
+    <string name="settings_about_title">О приложении</string>
+    <string name="settings_about_version_placeholder">Версия: —</string>
+
     <!-- Общие -->
     <string name="error_unknown">Неизвестно</string>
     <string name="error_failed_to_check">Не удалось проверить</string>

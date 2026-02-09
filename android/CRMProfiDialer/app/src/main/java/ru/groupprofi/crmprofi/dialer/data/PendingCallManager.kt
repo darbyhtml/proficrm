@@ -140,20 +140,19 @@ class PendingCallManager private constructor(context: Context) : PendingCallStor
     }
     
     /**
-     * Очистить устаревшие активные звонки (если прошло больше 10 минут и звонок не состоялся).
-     * Помечает их как FAILED и возвращает список ID для удаления из истории (если нужно).
-     * Увеличено до 10 минут для более надежного определения результата звонка.
+     * Очистить устаревшие активные звонки.
+     * Политика: единый таймаут 5 минут. Если за 5 минут результат не определён — сбрасываем локально,
+     * в CRM не отправляем (запись остаётся в истории для кнопки «Перезвонить»).
      */
     suspend fun cleanupExpiredPendingCalls(): List<String> = withContext(Dispatchers.IO) {
         mutex.withLock {
             val now = System.currentTimeMillis()
-            // Требование: максимум 2–5 минут ожидания результата (дальше это не "ошибка", а timeout → unknown)
-            val expiredTimeout = 5 * 60 * 1000L // 5 минут
+            val timeoutMs = 5 * 60 * 1000L // 5 минут
             
             val expired = cache.values.filter { call ->
-                (call.state == PendingCall.PendingState.PENDING || 
-                 call.state == PendingCall.PendingState.RESOLVING) &&
-                (now - call.startedAtMillis) > expiredTimeout
+                val elapsed = now - call.startedAtMillis
+                (call.state == PendingCall.PendingState.PENDING || call.state == PendingCall.PendingState.RESOLVING) &&
+                    elapsed > timeoutMs
             }
             
             // Помечаем устаревшие звонки как FAILED

@@ -145,8 +145,8 @@ masked = masked.replace(Regex("""("device_id"\s*:\s*")([A-Za-z0-9]{8,})(")""", R
 
 ## Документация
 
-- `TESTING_CHECKLIST.md` - Чеклист тестирования с ожидаемыми логами
-- `FIXES_SUMMARY.md` - Этот документ с резюме изменений
+- [TESTING_CHECKLIST.md](../checklists/TESTING_CHECKLIST.md) — чеклист тестирования с ожидаемыми логами
+- `FIXES_SUMMARY.md` — этот документ с резюме изменений
 
 ## Результат
 

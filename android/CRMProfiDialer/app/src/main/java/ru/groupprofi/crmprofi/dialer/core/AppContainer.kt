@@ -77,4 +77,14 @@ object AppContainer {
      * Проверить, инициализирован ли контейнер.
      */
     fun isInitialized(): Boolean = initialized
+    
+    /**
+     * Получить контекст приложения (для использования в компонентах без прямого доступа к Context).
+     */
+    fun getContext(): Context {
+        if (!initialized) {
+            throw IllegalStateException("AppContainer not initialized. Call init() first.")
+        }
+        return appContext
+    }
 }

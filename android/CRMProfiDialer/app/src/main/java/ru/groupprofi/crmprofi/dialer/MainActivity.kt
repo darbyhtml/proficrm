@@ -9,18 +9,15 @@ import android.os.Looper
 import android.net.Uri
 import android.os.PowerManager
 import android.provider.Settings
-import android.view.Choreographer
 import android.view.View
-import android.widget.Button
-import android.widget.EditText
-import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.core.view.ViewCompat
-import com.google.android.material.card.MaterialCardView
+import com.google.android.material.bottomnavigation.BottomNavigationView
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -39,6 +36,10 @@ import ru.groupprofi.crmprofi.dialer.domain.PendingCall
 import ru.groupprofi.crmprofi.dialer.network.ApiClient
 import ru.groupprofi.crmprofi.dialer.ui.CallsHistoryActivity
 import ru.groupprofi.crmprofi.dialer.ui.onboarding.OnboardingActivity
+import ru.groupprofi.crmprofi.dialer.ui.home.HomeFragment
+import ru.groupprofi.crmprofi.dialer.ui.dialer.DialerFragment
+import ru.groupprofi.crmprofi.dialer.ui.history.HistoryFragment
+import ru.groupprofi.crmprofi.dialer.ui.settings.SettingsFragment
 import ru.groupprofi.crmprofi.dialer.core.AppContainer
 import ru.groupprofi.crmprofi.dialer.domain.AppReadinessProvider
 import ru.groupprofi.crmprofi.dialer.domain.CallHistoryStore
@@ -46,49 +47,21 @@ import ru.groupprofi.crmprofi.dialer.domain.CallStatsUseCase
 import ru.groupprofi.crmprofi.dialer.domain.PendingCallStore
 
 /**
- * Главный экран приложения - экран уверенности.
- * Показывает статус готовности простым языком без технических терминов.
+ * Главный экран приложения с Bottom Navigation.
+ * Single-Activity подход с фрагментами для каждой вкладки.
  */
 class MainActivity : AppCompatActivity() {
-    // Используем интерфейсы из domain (не знаем о реализациях)
-    private lateinit var callHistoryStore: CallHistoryStore
-    private lateinit var pendingCallStore: PendingCallStore
-    private lateinit var readinessProvider: AppReadinessProvider
-    private val statsUseCase = CallStatsUseCase()
-    
-    // Инфраструктура (для совместимости со старым кодом)
+    private lateinit var bottomNavigation: BottomNavigationView
+    // Инфраструктура
     private lateinit var tokenManager: TokenManager
     private lateinit var apiClient: ApiClient
+    private lateinit var readinessProvider: AppReadinessProvider
+    
     // AutoRecoveryManager через AppContainer
     private val autoRecoveryManager: ru.groupprofi.crmprofi.dialer.recovery.AutoRecoveryManager
         get() = ru.groupprofi.crmprofi.dialer.core.AppContainer.autoRecoveryManager
     
-    // UI элементы статистики
-    private lateinit var todayTotal: TextView
-    private lateinit var todaySuccess: TextView
-    private lateinit var todayNoAnswer: TextView
-    private lateinit var todayDropped: TextView
-    private lateinit var todayPendingCrm: TextView
-    
-    // UI элементы из нового layout
-    private lateinit var statusCard: MaterialCardView
-    private lateinit var statusIcon: TextView
-    private lateinit var statusText: TextView
-    private lateinit var statusExplanation: TextView
-    private lateinit var fixButton: Button
-    private lateinit var callsHistoryCard: MaterialCardView
-    private lateinit var callsCount: TextView
-    private lateinit var logoutBtn: Button
-    
-    // Скрытый режим поддержки
-    private var supportModeEnabled = false
-    private var longPressStartTime = 0L
-    private val longPressDuration = 5000L // 5 секунд
-    
     private var pendingStartListening = false
-    private var currentFixAction: ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker.FixActionType = 
-        ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker.FixActionType.NONE
-
     private lateinit var onboardingLauncher: ActivityResultLauncher<Intent>
     
     private val deviceId: String by lazy {
@@ -109,9 +82,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Регистрация Activity Result launcher ОБЯЗАТЕЛЬНО в onCreate до STARTED (нельзя в корутине после onResume).
+        // Регистрация Activity Result launcher ОБЯЗАТЕЛЬНО в onCreate до STARTED
         onboardingLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            updateReadinessStatus()
+            // Onboarding завершен - фрагменты обновятся через реактивные подписки
         }
         
         // В debug режиме логируем время старта
@@ -125,14 +98,9 @@ class MainActivity : AppCompatActivity() {
             ru.groupprofi.crmprofi.dialer.core.AppContainer.init(applicationContext)
         }
         
-        callHistoryStore = AppContainer.callHistoryStore
-        pendingCallStore = AppContainer.pendingCallStore
         readinessProvider = AppContainer.readinessProvider
-        
-        // Инфраструктура (для совместимости)
         tokenManager = AppContainer.tokenManager
         apiClient = AppContainer.apiClient
-        // autoRecoveryManager теперь через getter, не нужно присваивать
         
         // Сначала проверяем авторизацию
         if (!tokenManager.hasTokens()) {
@@ -160,7 +128,7 @@ class MainActivity : AppCompatActivity() {
             // Продолжаем onCreate только если onboarding не нужен
             // Переключаемся на main thread для UI операций
             withContext(Dispatchers.Main) {
-                continueOnCreateAfterOnboardingCheck(startTime)
+                continueOnCreateAfterOnboardingCheck(startTime, savedInstanceState)
             }
         }
     }
@@ -168,7 +136,7 @@ class MainActivity : AppCompatActivity() {
     /**
      * Продолжение onCreate после проверки onboarding (вызывается из корутины на main thread).
      */
-    private fun continueOnCreateAfterOnboardingCheck(startTime: Long) {
+    private fun continueOnCreateAfterOnboardingCheck(startTime: Long, savedInstanceState: Bundle?) {
         // Логируем время старта в debug режиме
         if (BuildConfig.DEBUG && startTime > 0) {
             val elapsed = android.os.SystemClock.elapsedRealtime() - startTime
@@ -179,32 +147,24 @@ class MainActivity : AppCompatActivity() {
         try {
             Trace.beginSection("MainActivity.onCreate")
             
-            setContentView(R.layout.activity_main)
+            setContentView(R.layout.activity_main_with_nav)
             
-            // Находим UI элементы (быстрая операция)
-            initViews()
+            // Инициализируем Bottom Navigation
+            bottomNavigation = findViewById(R.id.bottomNavigation)
+            setupBottomNavigation()
             
-            // Настраиваем обработчики (быстрая операция)
-            setupClickListeners()
-            
-            // Настраиваем long-press для режима поддержки (быстрая операция)
-            setupSupportMode()
-            
-            // Настраиваем реактивные подписки (быстрая операция)
-            setupReactiveSubscriptions()
-            
-            // Сохраняем device_id если еще не сохранен (может быть тяжело - откладываем)
+            // Сохраняем device_id если еще не сохранен
             if (tokenManager.getDeviceId().isNullOrBlank()) {
                 lifecycleScope.launch(Dispatchers.IO) {
                     tokenManager.saveDeviceId(deviceId)
                 }
             }
             
-            // Обновляем UI после первого кадра (откладываем тяжелые проверки)
-            Choreographer.getInstance().postFrameCallback {
-                Trace.beginSection("MainActivity.updateReadinessStatus")
-                updateReadinessStatus()
-                Trace.endSection()
+            // Показываем HomeFragment по умолчанию
+            if (savedInstanceState == null) {
+                supportFragmentManager.beginTransaction()
+                    .replace(R.id.fragmentContainer, HomeFragment())
+                    .commit()
             }
             
             Trace.endSection()
@@ -215,66 +175,61 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    private fun initViews() {
-        statusCard = findViewById(R.id.statusCard)
-        statusIcon = findViewById(R.id.statusIcon)
-        statusText = findViewById(R.id.statusText)
-        statusExplanation = findViewById(R.id.statusExplanation)
-        fixButton = findViewById(R.id.fixButton)
-        callsHistoryCard = findViewById(R.id.callsHistoryCard)
-        callsCount = findViewById(R.id.callsCount)
-        logoutBtn = findViewById(R.id.logoutBtn)
-        
-        // Элементы статистики "Сегодня"
-        todayTotal = findViewById(R.id.todayTotal)
-        todaySuccess = findViewById(R.id.todaySuccess)
-        todayNoAnswer = findViewById(R.id.todayNoAnswer)
-        todayDropped = findViewById(R.id.todayDropped)
-        todayPendingCrm = findViewById(R.id.todayPendingCrm)
-    }
-    
-    private fun setupClickListeners() {
-        // Кнопка "Исправить"
-        fixButton.setOnClickListener {
-            handleFixAction(currentFixAction)
-        }
-        
-        // История звонков
-        callsHistoryCard.setOnClickListener {
-            val intent = Intent(this, CallsHistoryActivity::class.java)
-            startActivity(intent)
-        }
-        
-        // Выход
-        logoutBtn.setOnClickListener {
-            handleLogout()
-        }
-    }
-    
     /**
-     * Настройка long-press для режима поддержки (5 секунд на заголовок статуса).
+     * Настроить Bottom Navigation.
      */
-    private fun setupSupportMode() {
-        statusText.setOnLongClickListener {
-            longPressStartTime = System.currentTimeMillis()
-            Handler(Looper.getMainLooper()).postDelayed({
-                if (System.currentTimeMillis() - longPressStartTime >= longPressDuration) {
-                    showSupportModeDialog()
+    private fun setupBottomNavigation() {
+        bottomNavigation.setOnItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.nav_home -> {
+                    replaceFragment(HomeFragment())
+                    true
                 }
-            }, longPressDuration)
-            true
+                R.id.nav_dialer -> {
+                    replaceFragment(DialerFragment())
+                    true
+                }
+                R.id.nav_history -> {
+                    replaceFragment(HistoryFragment())
+                    true
+                }
+                R.id.nav_settings -> {
+                    replaceFragment(SettingsFragment())
+                    true
+                }
+                R.id.nav_logout -> {
+                    showLogoutConfirmation()
+                    false // Не переключаем вкладку, показываем диалог
+                }
+                else -> false
+            }
         }
     }
     
     /**
-     * Показать диалог подтверждения входа в режим поддержки.
+     * Заменить текущий фрагмент с лёгкой анимацией (crossfade + translateY ≤180ms).
      */
-    private fun showSupportModeDialog() {
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Режим поддержки")
-            .setMessage("Открыть диагностику?")
-            .setPositiveButton("Открыть") { _, _ ->
-                openDiagnostics()
+    private fun replaceFragment(fragment: Fragment) {
+        supportFragmentManager.beginTransaction()
+            .setCustomAnimations(
+                R.anim.fragment_open_enter,
+                R.anim.fragment_open_exit,
+                R.anim.fragment_close_enter,
+                R.anim.fragment_close_exit
+            )
+            .replace(R.id.fragmentContainer, fragment)
+            .commit()
+    }
+    
+    /**
+     * Показать диалог подтверждения выхода.
+     */
+    private fun showLogoutConfirmation() {
+        AlertDialog.Builder(this)
+            .setTitle("Выход из аккаунта")
+            .setMessage("Вы уверены, что хотите выйти? Приложение перестанет принимать команды на звонки из CRM.")
+            .setPositiveButton("Выйти") { _, _ ->
+                handleLogout()
             }
             .setNegativeButton("Отмена", null)
             .show()
@@ -290,15 +245,6 @@ class MainActivity : AppCompatActivity() {
         finish()
     }
     
-    /**
-     * Открыть экран диагностики.
-     */
-    private fun openDiagnostics() {
-        supportModeEnabled = true
-        val intent = Intent(this, ru.groupprofi.crmprofi.dialer.ui.support.SupportHealthActivity::class.java)
-        startActivity(intent)
-    }
-    
     override fun onResume() {
         super.onResume()
         AppState.isForeground = true
@@ -306,16 +252,33 @@ class MainActivity : AppCompatActivity() {
         // Запускаем автоматическое восстановление
         autoRecoveryManager.start()
         
-        // Обновляем статус только если UI уже инициализирован (continueOnCreateAfterOnboardingCheck уже выполнился).
-        // Иначе onResume может вызваться до завершения корутины проверки onboarding — statusIcon ещё не присвоен.
-        if (::statusIcon.isInitialized) {
-            updateReadinessStatus()
+        // Если готово - автоматически запускаем сервис
+        val state = readinessProvider.getState()
+        if (state == ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker.ReadyState.READY) {
+            startListeningServiceAuto()
         }
         
         // Если есть pending start - запускаем сервис
         if (pendingStartListening) {
             pendingStartListening = false
             startListeningServiceAuto()
+        }
+        
+        // Уведомляем CallListenerService об открытии приложения (для burst window с debounce)
+        notifyAppOpened()
+    }
+    
+    /**
+     * Уведомить сервис об открытии приложения (для активации burst window с debounce).
+     */
+    private fun notifyAppOpened() {
+        // Отправляем broadcast для пробуждения burst window (с debounce в сервисе)
+        try {
+            val intent = android.content.Intent("ru.groupprofi.crmprofi.dialer.APP_OPENED")
+                .setPackage(packageName)
+            sendBroadcast(intent)
+        } catch (e: Exception) {
+            // Игнорируем ошибки broadcast
         }
     }
     
@@ -331,220 +294,6 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
     
-    /**
-     * Настроить реактивные подписки на потоки данных.
-     */
-    private fun setupReactiveSubscriptions() {
-        // Подписка на количество звонков в истории
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                callHistoryStore.countFlow.collectLatest { count ->
-                    callsCount.text = count.toString()
-                }
-            }
-        }
-        
-        // Подписка на историю звонков для статистики "Сегодня"
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                callHistoryStore.callsFlow.collectLatest { calls ->
-                    updateTodayStats(calls)
-                }
-            }
-        }
-        
-        // Подписка на активные ожидаемые звонки (для показа "Определяем результат...")
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                pendingCallStore.hasActivePendingCallsFlow.collectLatest { _ ->
-                    updateReadinessStatus()
-                }
-            }
-        }
-    }
-    
-    /**
-     * Обновить статистику "Сегодня".
-     */
-    private fun updateTodayStats(calls: List<ru.groupprofi.crmprofi.dialer.domain.CallHistoryItem>) {
-        val stats = statsUseCase.calculate(calls, CallStatsUseCase.Period.TODAY)
-        
-        todayTotal.text = stats.total.toString()
-        todaySuccess.text = stats.success.toString()
-        todayNoAnswer.text = stats.noAnswer.toString()
-        todayDropped.text = stats.dropped.toString()
-        
-        // Показываем бейдж "Ожидает отправки" только если есть такие звонки
-        if (stats.pendingCrm > 0) {
-            todayPendingCrm.text = getString(R.string.stats_pending_crm, stats.pendingCrm)
-            todayPendingCrm.visibility = View.VISIBLE
-        } else {
-            todayPendingCrm.visibility = View.GONE
-        }
-    }
-    
-    /**
-     * Обновить статус готовности приложения с плавными анимациями.
-     * Не вызывать до инициализации UI (continueOnCreateAfterOnboardingCheck).
-     */
-    private fun updateReadinessStatus() {
-        if (!::statusIcon.isInitialized) return
-        val state = readinessProvider.getState()
-        val uiModel = readinessProvider.getUiModel()
-        
-        // Проверяем, есть ли активные ожидаемые звонки (используем текущее значение Flow)
-        val hasResolvingCalls = pendingCallStore.hasActivePendingCallsFlow.value
-        
-        // Если есть активные ожидаемые звонки - показываем "Определяем результат..."
-        if (hasResolvingCalls && state == ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker.ReadyState.READY) {
-            animateStatusChange(
-                icon = "🟡",
-                title = getString(R.string.status_resolving),
-                explanation = getString(R.string.status_explanation_resolving),
-                showFixButton = false
-            )
-        } else {
-            // Обычный статус готовности
-            animateStatusChange(
-                icon = uiModel.iconEmoji,
-                title = uiModel.title,
-                explanation = uiModel.message,
-                showFixButton = uiModel.showFixButton
-            )
-            currentFixAction = uiModel.fixActionType
-            updateFixButtonStyle(currentFixAction)
-        }
-        
-        // Показываем/скрываем кнопку выхода в зависимости от состояния
-        if (state == ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker.ReadyState.NEEDS_AUTH) {
-            // Если нет авторизации - перенаправляем на экран входа
-            startLoginActivity()
-            return
-        } else {
-            if (tokenManager.hasTokens()) {
-                logoutBtn.visibility = View.VISIBLE
-            } else {
-                logoutBtn.visibility = View.GONE
-            }
-        }
-        
-        // Если готово - автоматически запускаем сервис
-        if (state == ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker.ReadyState.READY) {
-            startListeningServiceAuto()
-        }
-    }
-
-    private fun updateFixButtonStyle(action: AppReadinessChecker.FixActionType) {
-        // Текст/цвет кнопки под разные сценарии: "критично не готово" vs "рекомендация по фону".
-        when (action) {
-            AppReadinessChecker.FixActionType.OPEN_BATTERY_SETTINGS -> {
-                fixButton.text = getString(R.string.button_allow_background)
-                ViewCompat.setBackgroundTintList(
-                    fixButton,
-                    android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#244B47"))
-                )
-            }
-            else -> {
-                fixButton.text = getString(R.string.button_fix)
-                ViewCompat.setBackgroundTintList(
-                    fixButton,
-                    android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#EF4444"))
-                )
-            }
-        }
-    }
-    
-    /**
-     * Анимировать изменение статуса с плавным fade-in/fade-out.
-     */
-    private fun animateStatusChange(
-        icon: String,
-        title: String,
-        explanation: String,
-        showFixButton: Boolean
-    ) {
-        // Анимация иконки и текста статуса (fade-out → изменение → fade-in)
-        val duration = 200L // 200ms для плавности
-        
-        // Проверяем, нужно ли анимировать (если текст не изменился - не анимируем)
-        val iconChanged = statusIcon.text != icon
-        val titleChanged = statusText.text != title
-        val explanationChanged = statusExplanation.text != explanation
-        
-        if (iconChanged) {
-            statusIcon.animate()
-                .alpha(0f)
-                .setDuration(duration / 2)
-                .withEndAction {
-                    statusIcon.text = icon
-                    statusIcon.animate()
-                        .alpha(1f)
-                        .setDuration(duration / 2)
-                        .start()
-                }
-                .start()
-        } else {
-            statusIcon.text = icon
-        }
-        
-        if (titleChanged) {
-            statusText.animate()
-                .alpha(0f)
-                .setDuration(duration / 2)
-                .withEndAction {
-                    statusText.text = title
-                    statusText.animate()
-                        .alpha(1f)
-                        .setDuration(duration / 2)
-                        .start()
-                }
-                .start()
-        } else {
-            statusText.text = title
-        }
-        
-        if (explanationChanged) {
-            statusExplanation.animate()
-                .alpha(0f)
-                .setDuration(duration / 2)
-                .withEndAction {
-                    statusExplanation.text = explanation
-                    statusExplanation.animate()
-                        .alpha(1f)
-                        .setDuration(duration / 2)
-                        .start()
-                }
-                .start()
-        } else {
-            statusExplanation.text = explanation
-        }
-        
-        // Анимация кнопки "Исправить" (scale + alpha)
-        if (showFixButton && fixButton.visibility != View.VISIBLE) {
-            // Появление
-            fixButton.alpha = 0f
-            fixButton.scaleX = 0.9f
-            fixButton.scaleY = 0.9f
-            fixButton.visibility = View.VISIBLE
-            fixButton.animate()
-                .alpha(1f)
-                .scaleX(1f)
-                .scaleY(1f)
-                .setDuration(duration)
-                .start()
-        } else if (!showFixButton && fixButton.visibility == View.VISIBLE) {
-            // Исчезновение
-            fixButton.animate()
-                .alpha(0f)
-                .scaleX(0.9f)
-                .scaleY(0.9f)
-                .setDuration(duration)
-                .withEndAction {
-                    fixButton.visibility = View.GONE
-                }
-                .start()
-        }
-    }
     
     /**
      * Проверить, нужно ли показывать onboarding.
@@ -565,9 +314,9 @@ class MainActivity : AppCompatActivity() {
     }
     
     /**
-     * Обработать действие кнопки "Исправить".
+     * Обработать действие кнопки "Исправить" (вызывается из HomeFragment).
      */
-    private fun handleFixAction(action: AppReadinessChecker.FixActionType) {
+    fun handleFixAction(action: AppReadinessChecker.FixActionType) {
         when (action) {
             ru.groupprofi.crmprofi.dialer.domain.AppReadinessChecker.FixActionType.REQUEST_PERMISSIONS -> {
                 // Если нужна последовательная настройка - открываем onboarding
@@ -623,31 +372,119 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun openBatteryOptimizationSettings() {
-        // Без принуждения: открываем системный диалог/настройки, объяснение уже в statusExplanation.
+    /**
+     * Открыть настройки батареи (публичный метод для SettingsFragment).
+     */
+    fun openBatteryOptimizationSettings() {
+        // Улучшенная версия с диагностикой и fallback для Android 12+
+        var intentOpened = false
+        
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 val pm = getSystemService(PowerManager::class.java)
                 val ignoring = pm?.isIgnoringBatteryOptimizations(packageName) == true
+                
                 if (!ignoring) {
-                    // Просим разрешение для конкретного приложения
+                    // Пробуем открыть диалог для конкретного приложения
                     val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                         data = Uri.parse("package:$packageName")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
-                    startActivity(intent)
+                    
+                    try {
+                        startActivity(intent)
+                        intentOpened = true
+                        ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("MainActivity", "Battery optimization dialog opened")
+                        
+                        // Проверяем через 1 секунду, открылся ли экран (Android 12+ может блокировать)
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            val stillIgnoring = pm?.isIgnoringBatteryOptimizations(packageName) == true
+                            if (!stillIgnoring && !intentOpened) {
+                                // Диалог не открылся - показываем инструкцию
+                                showBatteryOptimizationInstructions()
+                            }
+                        }, 1000)
+                        
+                        return
+                    } catch (e: android.content.ActivityNotFoundException) {
+                        ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("MainActivity", "ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS not available: ${e.message}")
+                    } catch (e: SecurityException) {
+                        ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("MainActivity", "SecurityException opening battery settings: ${e.message}")
+                    } catch (e: Exception) {
+                        ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("MainActivity", "Error opening battery optimization dialog: ${e.message}")
+                    }
+                } else {
+                    // Уже разрешено - показываем сообщение
+                    android.widget.Toast.makeText(this, "Работа в фоне уже разрешена", android.widget.Toast.LENGTH_SHORT).show()
                     return
                 }
             }
-        } catch (_: Exception) {
-            // fallback ниже
+        } catch (e: Exception) {
+            ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("MainActivity", "Error checking battery optimization: ${e.message}")
         }
         
-        // Fallback: открываем общий список
-        try {
-            startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-        } catch (e: Exception) {
-            android.widget.Toast.makeText(this, "Откройте настройки батареи вручную", android.widget.Toast.LENGTH_LONG).show()
+        // Fallback 1: открываем общий список настроек батареи
+        if (!intentOpened) {
+            try {
+                val fallbackIntent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(fallbackIntent)
+                intentOpened = true
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("MainActivity", "Battery optimization settings opened (fallback)")
+            } catch (e: android.content.ActivityNotFoundException) {
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("MainActivity", "ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS not available: ${e.message}")
+            } catch (e: Exception) {
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("MainActivity", "Error opening battery settings (fallback): ${e.message}")
+            }
         }
+        
+        // Fallback 2: открываем настройки приложения (пользователь может зайти в «Батарея» и отключить оптимизацию)
+        if (!intentOpened) {
+            try {
+                val appDetailsIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:$packageName")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(appDetailsIntent)
+                android.widget.Toast.makeText(this, "Откройте «Батарея» → «Не ограничивать» или «Не оптимизировать»", android.widget.Toast.LENGTH_LONG).show()
+                intentOpened = true
+            } catch (e: Exception) {
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("MainActivity", "Error opening app details: ${e.message}")
+            }
+        }
+        
+        // Fallback 3: если ничего не открылось — показываем инструкцию
+        if (!intentOpened) {
+            showBatteryOptimizationInstructions()
+        }
+    }
+    
+    /**
+     * Показать диалог с инструкцией по настройке батареи.
+     */
+    private fun showBatteryOptimizationInstructions() {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Настройка работы в фоне")
+            .setMessage("Для надежной работы приложения в фоне:\n\n" +
+                    "1. Откройте Настройки → Батарея\n" +
+                    "2. Найдите \"Оптимизация батареи\" или \"Неограниченное использование батареи\"\n" +
+                    "3. Найдите \"CRM ПРОФИ\" в списке\n" +
+                    "4. Выберите \"Не оптимизировать\" или \"Разрешить\"\n\n" +
+                    "На некоторых устройствах этот пункт может находиться в Настройки → Приложения → CRM ПРОФИ → Батарея")
+            .setPositiveButton("Открыть настройки приложения") { _, _ ->
+                try {
+                    val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:$packageName")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(this, "Откройте настройки приложения вручную", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNegativeButton("Отмена", null)
+            .show()
     }
     
     /**
@@ -667,10 +504,8 @@ class MainActivity : AppCompatActivity() {
         
         if (needed.isNotEmpty()) {
             ActivityCompat.requestPermissions(this, needed.toTypedArray(), REQ_CALL_PERMS)
-        } else {
-            // Если разрешения уже есть, но всё равно показываем NEEDS_PERMISSIONS - возможно проблема в другом
-            updateReadinessStatus()
         }
+        // Разрешения запрошены - фрагменты обновятся через реактивные подписки
     }
     
     /**
@@ -696,18 +531,11 @@ class MainActivity : AppCompatActivity() {
         // Останавливаем старый сервис
         stopService(Intent(this, CallListenerService::class.java))
         
-        // Показываем сообщение
-        statusExplanation.text = "Пробую восстановить..."
-        
         // Запускаем новый сервис
         CoroutineScope(Dispatchers.IO).launch {
             delay(1000) // Даём время на остановку
             runOnUiThread {
                 startListeningServiceAuto()
-                // Обновляем статус через 2 секунды
-                Handler(Looper.getMainLooper()).postDelayed({
-                    updateReadinessStatus()
-                }, 2000)
             }
         }
     }
@@ -777,20 +605,17 @@ class MainActivity : AppCompatActivity() {
                 if (granted && pendingStartListening) {
                     pendingStartListening = false
                     startListeningServiceAuto()
-                } else if (!granted) {
-                    updateReadinessStatus()
                 }
+                // Разрешения обработаны - фрагменты обновятся через реактивные подписки
             }
             
             REQ_CALL_PERMS -> {
                 val allGranted = grantResults.all { it == PackageManager.PERMISSION_GRANTED }
-                if (allGranted) {
-                    updateReadinessStatus()
-                } else {
+                if (!allGranted) {
                     // Если отказано - показываем сообщение
                     android.widget.Toast.makeText(this, "Разрешения необходимы для работы приложения", android.widget.Toast.LENGTH_LONG).show()
-                    updateReadinessStatus()
                 }
+                // Разрешения обработаны - фрагменты обновятся через реактивные подписки
             }
         }
     }

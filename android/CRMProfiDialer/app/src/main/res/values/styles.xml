@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Typography: functional, hierarchy through size/weight -->
+    <style name="TextAppearance.CRM.Headline" parent="TextAppearance.AppCompat.Large">
+        <item name="android:textSize">@dimen/text_headline_size</item>
+        <item name="android:textColor">@color/on_surface</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0</item>
+        <item name="android:lineSpacingMultiplier">1.2</item>
+    </style>
+    <style name="TextAppearance.CRM.Title" parent="TextAppearance.AppCompat.Medium">
+        <item name="android:textSize">@dimen/text_title_size</item>
+        <item name="android:textColor">@color/on_surface</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+    <style name="TextAppearance.CRM.Body" parent="TextAppearance.AppCompat.Body1">
+        <item name="android:textSize">@dimen/text_body_size</item>
+        <item name="android:textColor">@color/on_surface</item>
+    </style>
+    <style name="TextAppearance.CRM.BodySecondary" parent="TextAppearance.AppCompat.Body1">
+        <item name="android:textSize">@dimen/text_body_size</item>
+        <item name="android:textColor">@color/on_surface_variant</item>
+    </style>
+    <style name="TextAppearance.CRM.Caption" parent="TextAppearance.AppCompat.Caption">
+        <item name="android:textSize">@dimen/text_caption_size</item>
+        <item name="android:textColor">@color/on_surface_variant</item>
+    </style>
+    <style name="TextAppearance.CRM.Label" parent="TextAppearance.AppCompat.Caption">
+        <item name="android:textSize">@dimen/text_label_size</item>
+        <item name="android:textColor">@color/on_surface_variant</item>
+    </style>
+
+    <!-- Buttons: minimal, 48dp height -->
+    <style name="Widget.CRM.Button.Primary" parent="Widget.MaterialComponents.Button">
+        <item name="android:minHeight">@dimen/button_height</item>
+        <item name="android:minWidth">88dp</item>
+        <item name="cornerRadius">12dp</item>
+        <item name="android:textAllCaps">false</item>
+    </style>
+    <style name="Widget.CRM.Button.Text" parent="Widget.MaterialComponents.Button.TextButton">
+        <item name="android:minHeight">@dimen/touch_target_min</item>
+        <item name="android:minWidth">@dimen/touch_target_min</item>
+        <item name="android:textAllCaps">false</item>
+    </style>
+
+    <!-- Card: flat, spacing-based separation (parent: base Material CardView, .Filled removed in M3) -->
+    <style name="Widget.CRM.Card" parent="Widget.MaterialComponents.CardView">
+        <item name="cardCornerRadius">@dimen/card_corner_radius</item>
+        <item name="cardElevation">@dimen/card_elevation</item>
+        <item name="strokeWidth">@dimen/card_stroke_width</item>
+        <item name="strokeColor">@color/surface_variant</item>
+        <item name="cardBackgroundColor">@color/surface_card</item>
+    </style>
+
+    <!-- Убираем «таблетку» под выбранной вкладкой — она режет подпись пополам -->
+    <style name="BottomNavActiveIndicatorHidden" parent="">
+        <item name="android:color">@android:color/transparent</item>
+    </style>
+</resources>

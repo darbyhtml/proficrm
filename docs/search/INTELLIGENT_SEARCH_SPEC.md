@@ -1,6 +1,6 @@
 # Интеллектуальный поиск в CRM: инструменты и лучшие практики
 
-Спецификация требований и архитектуры поиска по контрагентам и контактам. Текущая реализация — PostgreSQL (FTS + pg_trgm), см. `backend/companies/SEARCH_BEST_PRACTICES.md`. Цель — оценка перехода на специализированный движок (Typesense / Elasticsearch / Meilisearch).
+Спецификация требований и архитектуры поиска по контрагентам и контактам. Текущая реализация — PostgreSQL (FTS + pg_trgm), см. [SEARCH_BEST_PRACTICES.md](SEARCH_BEST_PRACTICES.md). Цель — оценка перехода на специализированный движок (Typesense / Elasticsearch / Meilisearch).
 
 ---
 
