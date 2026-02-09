@@ -1,3 +1,4 @@
+{% load ui_extras %}
 {% for c in companies %}
   <tr onclick="window.location='/companies/{{ c.id }}/'" style="cursor:pointer" class="{% if c.has_overdue %}company-row-overdue{% endif %}">
     <td onclick="event.stopPropagation()">
@@ -29,6 +30,19 @@
             {% endfor %}
           </div>
         {% endif %}
+        {% with guessed=c.address|guess_ru_tz %}
+        {% with tz=c.work_timezone|default:guessed %}
+          {% if tz %}
+            <div class="mt-1">
+              <span class="badge badge-warn badge-xxxs" title="{{ tz }}" data-live-worktime="1" data-company-id="{{ c.id }}">
+                <span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span>
+                · {{ tz|tz_label }}
+              </span>
+            </div>
+            <span class="hidden" data-work-schedule-display="1" data-company-id="{{ c.id }}">{{ c.work_schedule|default:"" }}</span>
+          {% endif %}
+        {% endwith %}
+        {% endwith %}
       </td>
     {% endif %}
     {% if "overdue" in company_list_columns %}
