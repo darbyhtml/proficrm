@@ -270,10 +270,14 @@ USE_I18N = True
 USE_TZ = True
 
 # Настройки сессий для безопасности
-SESSION_COOKIE_AGE = 86400  # 24 часа
+# Длительность сессии в секундах. По умолчанию 2 недели (1209600), чтобы сотрудникам не нужно
+# было каждую неделю получать новую ссылку входа. Можно задать через DJANGO_SESSION_COOKIE_AGE в .env.
+SESSION_COOKIE_AGE = int(os.getenv("DJANGO_SESSION_COOKIE_AGE", "1209600"))  # 2 недели (14 * 24 * 3600)
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = 'Lax'  # Защита от CSRF
-SESSION_SAVE_EVERY_REQUEST = False  # Не сохранять сессию при каждом запросе (экономия ресурсов)
+SESSION_COOKIE_SAMESITE = "Lax"  # Защита от CSRF
+# При каждом запросе продлевать сессию (скользящее окно): пока сотрудник пользуется сайтом —
+# сессия не истекает; если не заходил 2 недели — выйдет. Удобно и безопасно.
+SESSION_SAVE_EVERY_REQUEST = True
 
 # Mailer encryption key (Fernet). Generate once and store in env on VDS.
 MAILER_FERNET_KEY = os.getenv("MAILER_FERNET_KEY", "")
