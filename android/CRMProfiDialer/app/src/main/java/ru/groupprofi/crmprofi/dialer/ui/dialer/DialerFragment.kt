@@ -4,12 +4,12 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.view.HapticFeedbackConstants
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.HapticFeedbackConstants
 import android.widget.TextView
 import android.widget.Toast
 import androidx.fragment.app.Fragment
@@ -39,6 +39,10 @@ class DialerFragment : Fragment() {
     private lateinit var phoneInput: TextInputEditText
     private lateinit var callButton: MaterialButton
     private lateinit var lastCallStatus: TextView
+    private lateinit var phoneDigitsInfo: TextView
+    private lateinit var minDigitsHint: TextView
+    private lateinit var quickActionsTitle: TextView
+    private lateinit var quickActionsContainer: ViewGroup
     
     private val callHistoryStore = AppContainer.callHistoryStore
     private val pendingCallStore = AppContainer.pendingCallStore
@@ -58,9 +62,15 @@ class DialerFragment : Fragment() {
         phoneInput = view.findViewById(R.id.phoneInput)
         callButton = view.findViewById(R.id.callButton)
         lastCallStatus = view.findViewById(R.id.lastCallStatus)
+        phoneDigitsInfo = view.findViewById(R.id.phoneDigitsInfo)
+        minDigitsHint = view.findViewById(R.id.dialerMinDigitsHint)
+        quickActionsTitle = view.findViewById(R.id.quickActionsTitle)
+        quickActionsContainer = view.findViewById(R.id.quickActionsContainer)
         
         setupPhoneInput()
         setupCallButton()
+        setupQuickActions()
+        setupKeypad(view)
     }
     
     private var isFormatting = false
@@ -80,9 +90,103 @@ class DialerFragment : Fragment() {
                     phoneInput.setSelection(newSel.coerceIn(0, formatted.length))
                     isFormatting = false
                 }
-                callButton.isEnabled = digits.length >= 7
+                val digitsCount = digits.length
+                // Обновляем доступность и текст кнопки
+                val canCall = digitsCount >= 11
+                callButton.isEnabled = canCall
+                callButton.text = if (canCall) {
+                    getString(R.string.dialer_call_button)
+                } else {
+                    getString(R.string.dialer_call_button_enter_number)
+                }
+
+                // Обновляем подсказку и счётчик цифр
+                if (digitsCount == 0) {
+                    phoneDigitsInfo.text = getString(R.string.dialer_enter_phone_hint)
+                    minDigitsHint.visibility = View.GONE
+                } else {
+                    phoneDigitsInfo.text = getString(R.string.dialer_digits_counter, digitsCount)
+                    minDigitsHint.visibility = if (canCall) View.GONE else View.VISIBLE
+                }
             }
         })
+    }
+
+    private fun setupQuickActions() {
+        // Берём несколько последних уникальных номеров из истории для «быстрого набора»
+        val allCalls = callHistoryStore.callsFlow.value
+        val recentUnique = allCalls
+            .sortedByDescending { it.startedAt }
+            .distinctBy { it.phone }
+            .take(3)
+
+        if (recentUnique.isEmpty()) {
+            quickActionsTitle.visibility = View.GONE
+            quickActionsContainer.visibility = View.GONE
+            return
+        }
+
+        quickActionsContainer.visibility = View.VISIBLE
+        quickActionsTitle.visibility = View.VISIBLE
+
+        if (quickActionsContainer is ViewGroup) {
+            (quickActionsContainer as ViewGroup).removeAllViews()
+        }
+
+        recentUnique.forEach { call ->
+            val context = requireContext()
+            val button = MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
+                text = call.phoneDisplayName ?: call.phone
+                minHeight = resources.getDimensionPixelSize(R.dimen.touch_target_min)
+                isAllCaps = false
+                setOnClickListener {
+                    val normalized = PhoneNumberNormalizer.normalize(call.phone)
+                    phoneInput.setText(formatPhoneDisplay(normalized.filter { it.isDigit() }))
+                    phoneInput.setSelection(phoneInput.text?.length ?: 0)
+                }
+            }
+            if (quickActionsContainer is ViewGroup) {
+                (quickActionsContainer as ViewGroup).addView(button)
+            }
+        }
+    }
+
+    private fun setupKeypad(root: View) {
+        val buttons = listOf(
+            R.id.digitButton1 to "1",
+            R.id.digitButton2 to "2",
+            R.id.digitButton3 to "3",
+            R.id.digitButton4 to "4",
+            R.id.digitButton5 to "5",
+            R.id.digitButton6 to "6",
+            R.id.digitButton7 to "7",
+            R.id.digitButton8 to "8",
+            R.id.digitButton9 to "9",
+            R.id.digitButton0 to "0",
+            R.id.digitButtonStar to "*",
+            R.id.digitButtonHash to "#",
+        )
+
+        buttons.forEach { (id, value) ->
+            val button = root.findViewById<MaterialButton>(id)
+            button?.setOnClickListener { view ->
+                performHaptic(view)
+                appendDigit(value)
+            }
+        }
+    }
+
+    private fun appendDigit(digit: String) {
+        phoneInput.append(digit)
+    }
+
+    private fun performHaptic(view: View) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            view.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
+        } else {
+            @Suppress("DEPRECATION")
+            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+        }
     }
 
     /** Автоформат номера: +7 (XXX) XXX-XX-XX для российских 11 цифр. */
@@ -108,12 +212,7 @@ class DialerFragment : Fragment() {
     
     private fun setupCallButton() {
         callButton.setOnClickListener {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                it.performHapticFeedback(HapticFeedbackConstants.CONTEXT_CLICK)
-            } else {
-                @Suppress("DEPRECATION")
-                it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            }
+            performHaptic(it)
             val phone = phoneInput.text?.toString()?.trim() ?: ""
             if (phone.isBlank()) {
                 Toast.makeText(requireContext(), "Введите номер телефона", Toast.LENGTH_SHORT).show()

@@ -23,6 +23,86 @@ def mask_phone(phone: str | None) -> str:
     return f"***{phone[-4:]}"
 
 
+_fcm_app = None
+
+
+def _get_fcm_app():
+    """
+    Ленивая инициализация Firebase Admin SDK.
+    Ожидает, что в settings.FIREBASE_CREDENTIALS_FILE задан путь к JSON с ключом сервисного аккаунта.
+    Если конфиг не задан или файл недоступен — тихо возвращает None и push не отправляется.
+    """
+    import logging
+    import os
+    from django.conf import settings
+
+    global _fcm_app
+    if _fcm_app is not None:
+        return _fcm_app
+
+    cred_path = getattr(settings, "FIREBASE_CREDENTIALS_FILE", None)
+    if not cred_path or not os.path.exists(cred_path):
+        logging.getLogger(__name__).warning(
+            "FCM: FIREBASE_CREDENTIALS_FILE is not configured or file does not exist, skipping push notifications"
+        )
+        return None
+
+    try:
+        from firebase_admin import credentials, initialize_app
+
+        cred = credentials.Certificate(cred_path)
+        _fcm_app = initialize_app(cred, name="crmprofi-phonebridge")
+        logging.getLogger(__name__).info("FCM: Firebase app initialized for phonebridge")
+        return _fcm_app
+    except Exception as e:
+        logging.getLogger(__name__).warning(f"FCM: failed to initialize Firebase app: {e}")
+        _fcm_app = None
+        return None
+
+
+def send_fcm_call_command_notification(phone_device: PhoneDevice, reason: str = "new_call") -> None:
+    """
+    Отправить FCM data-push на устройство, сигнализирующий о доступной команде CALL_COMMAND_AVAILABLE.
+    Push используется только как ускоритель: основная доставка команды остаётся через pullCall.
+    """
+    import logging
+
+    logger = logging.getLogger(__name__)
+    token = (phone_device.fcm_token or "").strip()
+    if not token:
+        return
+
+    app = _get_fcm_app()
+    if app is None:
+        return
+
+    try:
+        from firebase_admin import messaging
+
+        message = messaging.Message(
+            data={
+                "type": "CALL_COMMAND_AVAILABLE",
+                "reason": reason,
+            },
+            token=token,
+            android=messaging.AndroidConfig(priority="high"),
+        )
+        response = messaging.send(message, app=app)
+        logger.debug(
+            "FCM: sent CALL_COMMAND_AVAILABLE push to device %s (user=%s), response=%s",
+            phone_device.device_id,
+            phone_device.user_id,
+            response,
+        )
+    except Exception as e:
+        logger.warning(
+            "FCM: failed to send CALL_COMMAND_AVAILABLE push to device %s (user=%s): %s",
+            phone_device.device_id,
+            phone_device.user_id,
+            e,
+        )
+
+
 class RegisterDeviceSerializer(serializers.Serializer):
     device_id = serializers.CharField(max_length=64)
     device_name = serializers.CharField(max_length=120, required=False, allow_blank=True)

@@ -5816,9 +5816,24 @@ def phone_call_create(request: HttpRequest) -> HttpResponse:
     import logging
     logger = logging.getLogger(__name__)
     # Маскируем номер телефона для логов (защита от утечки персональных данных)
-    from phonebridge.api import mask_phone
+    from phonebridge.api import mask_phone, send_fcm_call_command_notification
     masked_phone = mask_phone(normalized) if normalized else "N/A"
-    logger.info(f"phone_call_create: created CallRequest {call.id} for user {user.id}, phone {masked_phone}, device check: {PhoneDevice.objects.filter(user=user).exists()}")
+    logger.info(
+        "phone_call_create: created CallRequest %s for user %s, phone %s, device check: %s",
+        call.id,
+        user.id,
+        masked_phone,
+        PhoneDevice.objects.filter(user=user).exists(),
+    )
+
+    # FCM-ускоритель: отправляем data-push на все устройства пользователя с fcm_token.
+    # Push только пробуждает pullCall на клиенте, сама команда всё равно будет доставлена через /calls/pull/.
+    try:
+        devices_with_fcm = PhoneDevice.objects.filter(user=user).exclude(fcm_token="")
+        for device in devices_with_fcm:
+            send_fcm_call_command_notification(device, reason="new_call")
+    except Exception as e:
+        logger.warning("phone_call_create: failed to send FCM notifications for CallRequest %s: %s", call.id, e)
     
     log_event(
         actor=user,

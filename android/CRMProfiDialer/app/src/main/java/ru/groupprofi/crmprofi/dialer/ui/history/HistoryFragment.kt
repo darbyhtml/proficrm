@@ -16,6 +16,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.button.MaterialButton
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -23,8 +24,8 @@ import kotlinx.coroutines.launch
 import ru.groupprofi.crmprofi.dialer.R
 import ru.groupprofi.crmprofi.dialer.core.AppContainer
 import ru.groupprofi.crmprofi.dialer.core.CallFlowCoordinator
-import ru.groupprofi.crmprofi.dialer.domain.ActionSource
 import ru.groupprofi.crmprofi.dialer.domain.CallHistoryItem
+import ru.groupprofi.crmprofi.dialer.domain.CallDirection
 import ru.groupprofi.crmprofi.dialer.domain.PhoneNumberNormalizer
 import androidx.core.content.ContextCompat
 
@@ -35,11 +36,22 @@ class HistoryFragment : Fragment() {
     private lateinit var recyclerView: RecyclerView
     private lateinit var searchInput: TextInputEditText
     private lateinit var emptyState: TextView
+    private lateinit var filterAllButton: MaterialButton
+    private lateinit var filterOutgoingButton: MaterialButton
+    private lateinit var filterIncomingButton: MaterialButton
+    private lateinit var filterMissedButton: MaterialButton
+    private lateinit var filterFailedButton: MaterialButton
     private lateinit var adapter: CallsHistoryAdapter
     
     private val callHistoryStore = AppContainer.callHistoryStore
     private var searchJob: Job? = null
     private var searchQuery = ""
+    
+    private enum class FilterType {
+        ALL, OUTGOING, INCOMING, MISSED, FAILED
+    }
+    
+    private var filterType: FilterType = FilterType.ALL
     
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -55,6 +67,11 @@ class HistoryFragment : Fragment() {
         recyclerView = view.findViewById(R.id.callsRecyclerView)
         searchInput = view.findViewById(R.id.searchInput)
         emptyState = view.findViewById(R.id.emptyState)
+        filterAllButton = view.findViewById(R.id.filterAllButton)
+        filterOutgoingButton = view.findViewById(R.id.filterOutgoingButton)
+        filterIncomingButton = view.findViewById(R.id.filterIncomingButton)
+        filterMissedButton = view.findViewById(R.id.filterMissedButton)
+        filterFailedButton = view.findViewById(R.id.filterFailedButton)
         
         adapter = CallsHistoryAdapter(
             onCallClick = { handleCallAction(it) },
@@ -65,7 +82,42 @@ class HistoryFragment : Fragment() {
         recyclerView.adapter = adapter
         
         setupSearch()
+        setupFilters()
         setupReactiveSubscription()
+    }
+    
+    private fun setupFilters() {
+        filterAllButton.setOnClickListener { setFilter(FilterType.ALL) }
+        filterOutgoingButton.setOnClickListener { setFilter(FilterType.OUTGOING) }
+        filterIncomingButton.setOnClickListener { setFilter(FilterType.INCOMING) }
+        filterMissedButton.setOnClickListener { setFilter(FilterType.MISSED) }
+        filterFailedButton.setOnClickListener { setFilter(FilterType.FAILED) }
+        updateFilterButtons()
+    }
+
+    private fun setFilter(type: FilterType) {
+        if (filterType == type) return
+        filterType = type
+        updateFilterButtons()
+        updateFilteredCalls()
+    }
+
+    private fun updateFilterButtons() {
+        val context = requireContext()
+        fun style(button: MaterialButton, selected: Boolean) {
+            if (selected) {
+                button.setBackgroundColor(ContextCompat.getColor(context, R.color.bottom_nav_selected))
+                button.setTextColor(ContextCompat.getColor(context, android.R.color.white))
+            } else {
+                button.setBackgroundColor(ContextCompat.getColor(context, R.color.surface_variant))
+                button.setTextColor(ContextCompat.getColor(context, R.color.on_surface))
+            }
+        }
+        style(filterAllButton, filterType == FilterType.ALL)
+        style(filterOutgoingButton, filterType == FilterType.OUTGOING)
+        style(filterIncomingButton, filterType == FilterType.INCOMING)
+        style(filterMissedButton, filterType == FilterType.MISSED)
+        style(filterFailedButton, filterType == FilterType.FAILED)
     }
     
     private fun setupSearch() {
@@ -99,7 +151,7 @@ class HistoryFragment : Fragment() {
             val allCalls = callHistoryStore.callsFlow.value
             
             // Фильтруем по поисковому запросу
-            val filtered = if (searchQuery.isBlank()) {
+            val searchFiltered = if (searchQuery.isBlank()) {
                 allCalls
             } else {
                 val normalizedQuery = PhoneNumberNormalizer.normalize(searchQuery)
@@ -109,6 +161,8 @@ class HistoryFragment : Fragment() {
                     call.phoneDisplayName?.contains(searchQuery, ignoreCase = true) == true
                 }
             }
+
+            val filtered = filterByType(searchFiltered)
             
             adapter.submitList(filtered.sortedByDescending { it.startedAt })
             
@@ -119,6 +173,22 @@ class HistoryFragment : Fragment() {
             } else {
                 emptyState.visibility = View.GONE
                 recyclerView.visibility = View.VISIBLE
+            }
+        }
+    }
+
+    private fun filterByType(calls: List<CallHistoryItem>): List<CallHistoryItem> {
+        return when (filterType) {
+            FilterType.ALL -> calls
+            FilterType.OUTGOING -> calls.filter { it.direction == CallDirection.OUTGOING }
+            FilterType.INCOMING -> calls.filter { it.direction == CallDirection.INCOMING }
+            FilterType.MISSED -> calls.filter {
+                it.direction == CallDirection.MISSED || it.status == CallHistoryItem.CallStatus.NO_ANSWER
+            }
+            FilterType.FAILED -> calls.filter {
+                it.status == CallHistoryItem.CallStatus.REJECTED ||
+                it.status == CallHistoryItem.CallStatus.UNKNOWN ||
+                it.status == CallHistoryItem.CallStatus.NO_ACTION
             }
         }
     }

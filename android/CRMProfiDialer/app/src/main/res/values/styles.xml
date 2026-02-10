@@ -37,10 +37,23 @@
         <item name="cornerRadius">12dp</item>
         <item name="android:textAllCaps">false</item>
     </style>
+
     <style name="Widget.CRM.Button.Text" parent="Widget.MaterialComponents.Button.TextButton">
         <item name="android:minHeight">@dimen/touch_target_min</item>
         <item name="android:minWidth">@dimen/touch_target_min</item>
         <item name="android:textAllCaps">false</item>
+    </style>
+
+    <!-- Chips / фильтры как в Figma: pill-кнопки на базе MaterialButton -->
+    <style name="Widget.CRM.Chip" parent="Widget.MaterialComponents.Button.OutlinedButton">
+        <item name="android:minHeight">@dimen/touch_target_min</item>
+        <item name="android:minWidth">@dimen/touch_target_min</item>
+        <item name="android:textAllCaps">false</item>
+        <!-- «Пилюля» -->
+        <item name="cornerRadius">999dp</item>
+        <!-- Без лишних внутренних отступов, чтобы чипы не раздувались -->
+        <item name="android:insetLeft">0dp</item>
+        <item name="android:insetRight">0dp</item>
     </style>
 
     <!-- Card: flat, spacing-based separation (parent: base Material CardView, .Filled removed in M3) -->

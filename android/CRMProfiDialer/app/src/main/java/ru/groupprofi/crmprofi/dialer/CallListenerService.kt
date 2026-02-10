@@ -609,12 +609,23 @@ class CallListenerService : Service() {
                 emitModeChangedIfNeeded()
                 BURST_POLL_INTERVAL_MS
             }
-            // Медленный режим: при отсутствии 429 — короткий интервал (1–2 сек задержки доставки)
+            // Медленный режим: при отсутствии 429 — короткий интервал (1–2 сек задержки доставки).
+            // Если включён FCM accelerator, можно позволить себе более редкий polling.
             else -> {
                 PullCallMetrics.setMode(PullCallMetrics.PullMode.SLOW)
                 emitModeChangedIfNeeded()
                 val inBackoff = pullCallBackoff.getBackoffLevel() > 0
-                if (inBackoff) SLOW_POLL_INTERVAL_MS else FAST_SLOW_POLL_INTERVAL_MS
+                if (inBackoff) {
+                    SLOW_POLL_INTERVAL_MS
+                } else {
+                    if (AppFeatures.isFcmAcceleratorEnabled()) {
+                        // При включённом FCM ускорителе базовый polling можно сделать более редким,
+                        // так как push будет будить сервис при появлении команды.
+                        10_000L
+                    } else {
+                        FAST_SLOW_POLL_INTERVAL_MS
+                    }
+                }
             }
         }
     }

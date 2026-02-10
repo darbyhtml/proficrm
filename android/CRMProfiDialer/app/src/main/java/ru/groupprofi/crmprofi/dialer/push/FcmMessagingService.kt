@@ -1,7 +1,14 @@
 package ru.groupprofi.crmprofi.dialer.push
 
+import android.content.Context
+import android.os.Build
 import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import ru.groupprofi.crmprofi.dialer.auth.TokenManager
 import ru.groupprofi.crmprofi.dialer.config.AppFeatures
+import ru.groupprofi.crmprofi.dialer.network.ApiClient
 
 /**
  * Firebase Cloud Messaging Service для ускорения доставки команд.
@@ -27,6 +34,7 @@ import ru.groupprofi.crmprofi.dialer.config.AppFeatures
 object FcmMessagingService {
     private const val TAG = "FcmMessagingService"
     private const val PUSH_TYPE_CALL_COMMAND = "CALL_COMMAND_AVAILABLE"
+    private val scope = CoroutineScope(Dispatchers.IO)
     
     /**
      * Обработать полученное push-сообщение.
@@ -62,10 +70,43 @@ object FcmMessagingService {
      * Обработать обновление FCM токена.
      * Вызывается из реального FirebaseMessagingService (если настроен).
      */
-    fun handleNewToken(token: String) {
+    fun handleNewToken(context: Context, token: String) {
         Log.i(TAG, "FCM token refreshed: ${token.take(20)}...")
-        // TODO: Отправить новый токен на сервер для регистрации устройства
-        // Это можно сделать через ApiClient.registerDevice() или отдельный endpoint
+
+        // Если accelerator выключен — просто логируем токен и выходим.
+        if (!AppFeatures.isFcmAcceleratorEnabled()) {
+            Log.d(TAG, "FCM accelerator disabled, skipping token registration")
+            return
+        }
+
+        val tm = try {
+            TokenManager.getInstanceOrNull()
+        } catch (e: IllegalStateException) {
+            null
+        }
+
+        val deviceId = tm?.getDeviceId()?.trim().orEmpty()
+        if (deviceId.isBlank()) {
+            Log.w(TAG, "handleNewToken: deviceId is empty, cannot register FCM token yet")
+            return
+        }
+
+        val appContext = context.applicationContext
+        val deviceName = Build.MODEL ?: "Android"
+        val apiClient = ApiClient.getInstance(appContext)
+
+        scope.launch {
+            try {
+                val result = apiClient.registerDevice(deviceId, deviceName, token)
+                if (result is ApiClient.Result.Error) {
+                    Log.w(TAG, "Failed to register FCM token on server: code=${result.code}, msg=${result.message}")
+                } else {
+                    Log.i(TAG, "FCM token registered on server for deviceId=${deviceId.takeLast(4)}")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Exception while registering FCM token: ${e.message}")
+            }
+        }
     }
 }
 
@@ -131,7 +172,7 @@ object PullCallCoordinator {
  *        }
  *        
  *        override fun onNewToken(token: String) {
- *            FcmMessagingService.handleNewToken(token)
+ *            FcmMessagingService.handleNewToken(applicationContext, token)
  *        }
  *    }
  * 

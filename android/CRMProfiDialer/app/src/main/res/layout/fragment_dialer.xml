@@ -17,7 +17,7 @@
             style="@style/TextAppearance.CRM.Headline"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Ручной звонок"
+            android:text="@string/dialer_screen_title"
             android:layout_marginBottom="@dimen/spacing_xxl" />
 
         <com.google.android.material.card.MaterialCardView
@@ -37,6 +37,7 @@
                     android:layout_height="wrap_content"
                     android:hint="@string/dialer_phone_hint"
                     app:startIconDrawable="@drawable/ic_nav_call"
+                    app:endIconMode="clear_text"
                     style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
 
                     <com.google.android.material.textfield.TextInputEditText
@@ -47,8 +48,18 @@
                         android:textSize="@dimen/dialer_input_text_size"
                         android:maxLines="1"
                         android:minHeight="@dimen/touch_target_min"
+                        android:gravity="center_horizontal"
                         android:contentDescription="@string/dialer_phone_hint" />
                 </com.google.android.material.textfield.TextInputLayout>
+
+                <TextView
+                    android:id="@+id/phoneDigitsInfo"
+                    style="@style/TextAppearance.CRM.BodySecondary"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_sm"
+                    android:gravity="center"
+                    android:text="@string/dialer_enter_phone_hint" />
 
                 <TextView
                     style="@style/TextAppearance.CRM.Caption"
@@ -58,6 +69,156 @@
                     android:layout_marginTop="@dimen/spacing_sm" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
+
+        <!-- Быстрый набор из недавних звонков -->
+        <TextView
+            android:id="@+id/quickActionsTitle"
+            style="@style/TextAppearance.CRM.Title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/dialer_quick_actions_title"
+            android:layout_marginBottom="@dimen/spacing_sm"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/quickActionsContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_horizontal"
+            android:layout_marginBottom="@dimen/spacing_lg" />
+
+        <!-- Цифровая клавиатура как в Figma -->
+        <LinearLayout
+            android:id="@+id/dialerKeypad"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="@dimen/spacing_xl">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/digitButton1"
+                    style="@style/Widget.CRM.Button.Text"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="1" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/digitButton2"
+                    style="@style/Widget.CRM.Button.Text"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="2" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/digitButton3"
+                    style="@style/Widget.CRM.Button.Text"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="3" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="@dimen/spacing_sm">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/digitButton4"
+                    style="@style/Widget.CRM.Button.Text"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="4" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/digitButton5"
+                    style="@style/Widget.CRM.Button.Text"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="5" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/digitButton6"
+                    style="@style/Widget.CRM.Button.Text"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="6" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="@dimen/spacing_sm">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/digitButton7"
+                    style="@style/Widget.CRM.Button.Text"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="7" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/digitButton8"
+                    style="@style/Widget.CRM.Button.Text"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="8" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/digitButton9"
+                    style="@style/Widget.CRM.Button.Text"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="9" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="@dimen/spacing_sm">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/digitButtonStar"
+                    style="@style/Widget.CRM.Button.Text"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="*" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/digitButton0"
+                    style="@style/Widget.CRM.Button.Text"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="0" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/digitButtonHash"
+                    style="@style/Widget.CRM.Button.Text"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="#" />
+            </LinearLayout>
+        </LinearLayout>
 
         <com.google.android.material.button.MaterialButton
             android:id="@+id/callButton"
@@ -69,6 +230,16 @@
             android:backgroundTint="@color/primary"
             android:minHeight="@dimen/touch_target_min"
             android:layout_marginBottom="@dimen/spacing_base" />
+
+        <TextView
+            android:id="@+id/dialerMinDigitsHint"
+            style="@style/TextAppearance.CRM.Caption"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:layout_marginBottom="@dimen/spacing_base"
+            android:text="@string/dialer_min_digits_hint"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/lastCallStatus"

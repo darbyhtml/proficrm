@@ -79,6 +79,15 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- Firebase Messaging Service (используется только при настроенном Firebase) -->
+        <service
+            android:name=".push.FcmMessagingServiceImpl"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
+
         <receiver
             android:name=".recovery.BootCompletedReceiver"
             android:enabled="true"

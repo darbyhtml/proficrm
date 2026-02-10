@@ -336,8 +336,13 @@ class ApiClient private constructor(context: Context) {
     
     /**
      * Регистрация устройства.
+     * Опционально может передавать fcmToken для push-ускорителя.
      */
-    suspend fun registerDevice(deviceId: String, deviceName: String): Result<Unit> = withContext(Dispatchers.IO) {
+    suspend fun registerDevice(
+        deviceId: String,
+        deviceName: String,
+        fcmToken: String? = null
+    ): Result<Unit> = withContext(Dispatchers.IO) {
         val token = tokenManager.getAccessToken()
         if (token.isNullOrBlank()) {
             return@withContext Result.Error("Токен отсутствует")
@@ -345,10 +350,14 @@ class ApiClient private constructor(context: Context) {
         
         try {
             val url = "$baseUrl/api/phone/devices/register/"
-            val bodyJson = JSONObject()
+            val bodyObj = JSONObject()
                 .put("device_id", deviceId)
                 .put("device_name", deviceName)
-                .toString()
+            val fcm = fcmToken?.trim().orEmpty()
+            if (fcm.isNotEmpty()) {
+                bodyObj.put("fcm_token", fcm)
+            }
+            val bodyJson = bodyObj.toString()
             
             val req = Request.Builder()
                 .url(url)

@@ -42,7 +42,7 @@ object AppFeatures {
      * ВАЖНО: Требует настройки Firebase Cloud Messaging в проекте.
      * По умолчанию: false (push не используется).
      */
-    val ENABLE_FCM_ACCELERATOR: Boolean = false
+    val ENABLE_FCM_ACCELERATOR: Boolean = true
     
     /**
      * Проверка, включен ли FCM accelerator.
