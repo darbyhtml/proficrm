@@ -35,6 +35,8 @@
     <color name="dialer_key_ripple">#E5E7EB</color>
     <color name="dialer_call_enabled_bg">@color/primary</color>
     <color name="dialer_call_disabled_bg">#E5E7EB</color>
+    <color name="dialer_backspace_bg">#F1F3F6</color>
+    <color name="dialer_backspace_icon">#9AA3AD</color>
 
     <!-- Главная: статистика -->
     <color name="home_stats_total_bg">#F9FAFB</color>
@@ -58,6 +60,22 @@
     <color name="history_badge_missed_text">#854D0E</color>
     <color name="history_badge_failed_bg">#FEE2E2</color>
     <color name="history_badge_failed_text">#B91C1C</color>
+
+    <!-- История: чипы и разделители -->
+    <color name="chipSelectedBg">@color/bottom_nav_selected</color>
+    <color name="chipSelectedText">@android:color/white</color>
+    <color name="chipUnselectedBg">@color/surface_variant</color>
+    <color name="chipUnselectedText">@color/on_surface</color>
+
+    <color name="statusDoneBg">@color/history_badge_completed_bg</color>
+    <color name="statusDoneText">@color/history_badge_completed_text</color>
+    <color name="statusMissedBg">@color/history_badge_missed_bg</color>
+    <color name="statusMissedText">@color/history_badge_missed_text</color>
+    <color name="statusFailBg">@color/history_badge_failed_bg</color>
+    <color name="statusFailText">@color/history_badge_failed_text</color>
+
+    <color name="softGrayBg">#F9FAFB</color>
+    <color name="dividerColor">@color/home_divider</color>
 
     <!-- Settings screen -->
     <color name="settings_background">#F5F5F7</color>

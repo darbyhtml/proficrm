@@ -30,7 +30,7 @@ import java.util.*
  * TODO: В будущем ограничить доступ только администраторам через AppLogger.canViewLogs().
  */
 class LogsActivity : AppCompatActivity() {
-    private lateinit var tokenManager: TokenManager
+    private var tokenManager: TokenManager? = null
     private lateinit var logsText: TextView
     private lateinit var statusText: TextView
     private lateinit var refreshBtn: Button
@@ -46,8 +46,13 @@ class LogsActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_logs)
-        
-        tokenManager = TokenManager.getInstance()
+
+        // Не падаем, если TokenManager ещё не успел инициализироваться — экрана логов это не блокирует.
+        val tm = TokenManager.getInstanceOrNull()
+        if (tm == null) {
+            android.util.Log.w("LogsActivity", "TokenManager not ready, some stats may be unavailable")
+        }
+        tokenManager = tm
         
         // ВРЕМЕННО: доступ для всех пользователей (для дебага)
         // Убрана проверка роли - все залогиненные пользователи могут видеть логи
@@ -130,10 +135,11 @@ class LogsActivity : AppCompatActivity() {
                     )
                 }
                 
-                // Получаем статус последнего polling
-                val lastPollCode = tokenManager.getLastPollCode()
-                val lastPollAt = tokenManager.getLastPollAt()
-                val deviceId = tokenManager.getDeviceId() ?: "unknown"
+                // Получаем статус последнего polling (если TokenManager уже инициализирован)
+                val tmLocal = tokenManager
+                val lastPollCode = tmLocal?.getLastPollCode() ?: -1
+                val lastPollAt = tmLocal?.getLastPollAt()
+                val deviceId = tmLocal?.getDeviceId() ?: "unknown"
                 val maskedDeviceId = if (deviceId.length > 8) {
                     "${deviceId.take(4)}***${deviceId.takeLast(4)}"
                 } else {
@@ -341,7 +347,7 @@ class LogsActivity : AppCompatActivity() {
                 }
                 
                 val apiClient = ru.groupprofi.crmprofi.dialer.network.ApiClient.getInstance(this@LogsActivity)
-                val deviceId = tokenManager.getDeviceId() ?: "unknown"
+                val deviceId = tokenManager?.getDeviceId() ?: "unknown"
                 
                 // Формируем параметры для sendLogBundle
                 val now = java.util.Date()

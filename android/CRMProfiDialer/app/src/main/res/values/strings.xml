@@ -73,6 +73,15 @@
     <string name="history_status_icon">Статус звонка</string>
     <string name="action_copy">Скопировать</string>
     <string name="copied">Скопировано</string>
+    <string name="call_detail_date_title">Дата и время</string>
+    <string name="call_detail_duration_title">Длительность</string>
+    <string name="call_detail_id_title">ID звонка</string>
+    <string name="call_detail_crm_synced">Синхронизировано с CRM</string>
+    <string name="call_detail_crm_not_synced">Не отправлено в CRM</string>
+    <string name="call_detail_duration_not_happened">Не состоялся</string>
+    <string name="close">Закрыть</string>
+    <string name="call_detail_crm_status">Статус синхронизации с CRM</string>
+    <string name="unknown_number">Неизвестный номер</string>
     
     <!-- Onboarding -->
     <string name="onboarding_intro_title">Добро пожаловать!</string>

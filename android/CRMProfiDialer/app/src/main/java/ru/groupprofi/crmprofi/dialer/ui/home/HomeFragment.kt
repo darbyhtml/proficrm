@@ -39,7 +39,6 @@ class HomeFragment : Fragment() {
 
     // Статистика
     private lateinit var statsPeriodButton: MaterialButton
-    private lateinit var statsExportButton: MaterialButton
     private lateinit var statsTotalValue: TextView
     private lateinit var statsSuccessValue: TextView
     private lateinit var statsNotCompletedValue: TextView
@@ -74,7 +73,6 @@ class HomeFragment : Fragment() {
         batteryButton = view.findViewById(R.id.batterySettingsButton)
 
         statsPeriodButton = view.findViewById(R.id.statsPeriodInput)
-        statsExportButton = view.findViewById(R.id.statsExportButton)
         statsTotalValue = view.findViewById(R.id.statsTotalValue)
         statsSuccessValue = view.findViewById(R.id.statsSuccessValue)
         statsNotCompletedValue = view.findViewById(R.id.statsNotCompletedValue)
@@ -85,7 +83,6 @@ class HomeFragment : Fragment() {
 
         setupBatteryCard()
         setupStatsPeriodDropdown()
-        setupExportButton()
         setupReactiveSubscriptions()
         startSyncRowUpdates()
         updateBatteryUi()
@@ -160,12 +157,6 @@ class HomeFragment : Fragment() {
         }
     }
 
-    private fun setupExportButton() {
-        statsExportButton.setOnClickListener {
-            exportStatsAsCsv()
-        }
-    }
-
     private fun updateStats() {
         val extended = statsUseCase.calculateExtended(latestCalls, currentPeriod)
         latestExtendedStats = extended
@@ -222,37 +213,5 @@ class HomeFragment : Fragment() {
         syncText.text = text
     }
 
-    private fun exportStatsAsCsv() {
-        val stats = latestExtendedStats
-        val periodLabel = when (currentPeriod) {
-            CallStatsUseCase.Period.TODAY -> getString(R.string.stats_period_today)
-            CallStatsUseCase.Period.LAST_7_DAYS -> getString(R.string.stats_period_week)
-            CallStatsUseCase.Period.LAST_30_DAYS -> getString(R.string.stats_period_month)
-            CallStatsUseCase.Period.ALL -> getString(R.string.filter_all)
-        }
-
-        val csv = buildString {
-            appendLine("metric,value")
-            appendLine("total_calls,${stats.totalCalls}")
-            appendLine("successful_calls,${stats.successfulCalls}")
-            appendLine("not_completed_calls,${stats.notCompletedCalls}")
-            appendLine("system_issues_calls,${stats.systemIssuesCalls}")
-            appendLine("total_talk_duration_sec,${stats.totalTalkDurationSec}")
-        }
-
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "text/csv"
-            putExtra(
-                Intent.EXTRA_SUBJECT,
-                getString(R.string.stats_export_subject, periodLabel)
-            )
-            putExtra(Intent.EXTRA_TEXT, csv)
-        }
-        startActivity(
-            Intent.createChooser(
-                intent,
-                getString(R.string.stats_export_chooser_title)
-            )
-        )
-    }
+    // Экспорт статистики больше не используется — данные смотрим в CRM.
 }

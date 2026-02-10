@@ -26,7 +26,11 @@ class AutoRecoveryManager private constructor(context: Context) {
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val readinessChecker = AppReadinessChecker(appContext)
-    private val tokenManager = TokenManager.getInstance()
+    /**
+     * TokenManager может быть ещё не готов сразу после старта процесса.
+     * Используем nullable ссылку и деградируем без крэша.
+     */
+    private val tokenManager: TokenManager? = TokenManager.getInstanceOrNull()
     private val notificationManager = AppNotificationManager.getInstance(appContext)
     
     private var recoveryJob: Job? = null
@@ -166,8 +170,13 @@ class AutoRecoveryManager private constructor(context: Context) {
     private suspend fun tryRefreshToken() {
         try {
             AppLogger.i("AutoRecoveryManager", "Попытка обновления токена...")
-            
-            val refreshToken = tokenManager.getRefreshToken()
+            val tm = tokenManager
+            if (tm == null) {
+                AppLogger.w("AutoRecoveryManager", "TokenManager not ready in tryRefreshToken()")
+                recoveryAttempts.incrementAndGet()
+                return
+            }
+            val refreshToken = tm.getRefreshToken()
             if (refreshToken.isNullOrBlank()) {
                 AppLogger.w("AutoRecoveryManager", "Refresh токен отсутствует")
                 recoveryAttempts.incrementAndGet()
@@ -182,7 +191,7 @@ class AutoRecoveryManager private constructor(context: Context) {
                 is ru.groupprofi.crmprofi.dialer.network.ApiClient.Result.Success -> {
                     val access = result.data
                     if (access != null) {
-                        tokenManager.updateAccessToken(access)
+                        tm.updateAccessToken(access)
                         AppLogger.i("AutoRecoveryManager", "Токен успешно обновлён")
                         recoveryAttempts.set(0)
                     } else {

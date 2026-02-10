@@ -1,35 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    style="@style/Widget.CRM.Card"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginHorizontal="@dimen/spacing_sm"
-    android:layout_marginVertical="@dimen/spacing_xs"
-    android:minHeight="@dimen/touch_target_min"
+    android:orientation="vertical"
+    android:background="@android:color/white"
+    android:clickable="true"
     android:focusable="true"
-    android:clickable="true">
+    android:foreground="?attr/selectableItemBackground">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="@dimen/spacing_base"
+        android:paddingStart="@dimen/screenPadding"
+        android:paddingEnd="@dimen/screenPadding"
+        android:paddingTop="@dimen/spacing_sm"
+        android:paddingBottom="@dimen/spacing_sm"
         android:gravity="center_vertical">
 
-        <!-- Иконка звонка -->
+        <!-- Иконка звонка в круглом фоне -->
         <FrameLayout
-            android:layout_width="@dimen/history_status_icon_size"
-            android:layout_height="@dimen/history_status_icon_size"
-            android:layout_marginEnd="@dimen/spacing_md">
+            android:layout_width="@dimen/rowIconSize"
+            android:layout_height="@dimen/rowIconSize"
+            android:layout_marginEnd="@dimen/spacing_md"
+            android:background="@drawable/bg_history_icon_circle">
 
             <ImageView
                 android:id="@+id/statusIcon"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="@drawable/badge_background"
-                android:padding="@dimen/spacing_xs"
-                android:scaleType="centerInside"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
                 android:src="@drawable/ic_nav_call"
                 android:contentDescription="@string/history_status_icon" />
         </FrameLayout>
@@ -89,9 +90,16 @@
             style="@style/TextAppearance.CRM.Label"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:background="@drawable/badge_background"
+            android:background="@drawable/bg_history_status_pill"
             android:paddingHorizontal="@dimen/spacing_sm"
             android:paddingVertical="@dimen/spacing_xs"
             android:layout_marginStart="@dimen/spacing_sm" />
     </LinearLayout>
-</com.google.android.material.card.MaterialCardView>
+
+    <!-- Разделитель между строками -->
+    <View
+        android:id="@+id/divider"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/dividerColor" />
+</LinearLayout>

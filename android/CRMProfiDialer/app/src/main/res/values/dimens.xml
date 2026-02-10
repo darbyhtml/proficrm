@@ -55,4 +55,15 @@
 
     <!-- История: иконка статуса не наплывает на номер -->
     <dimen name="history_status_icon_size">24dp</dimen>
+
+    <!-- История / bottom sheet: дополнительные размеры под макет -->
+    <dimen name="screenPadding">16dp</dimen>
+    <dimen name="chipHeight">34dp</dimen>
+    <dimen name="chipRadius">17dp</dimen>
+    <dimen name="rowIconSize">40dp</dimen>
+    <dimen name="rowIconRadius">20dp</dimen>
+    <dimen name="pillRadius">10dp</dimen>
+    <dimen name="historyCardRadius">14dp</dimen>
+    <dimen name="bottomSheetTitleSize">18sp</dimen>
+    <dimen name="bottomSheetPhoneTitleSize">22sp</dimen>
 </resources>

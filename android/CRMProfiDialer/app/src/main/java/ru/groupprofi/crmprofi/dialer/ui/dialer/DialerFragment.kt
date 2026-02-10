@@ -8,6 +8,7 @@ import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.content.ContextCompat
@@ -36,15 +37,21 @@ class DialerFragment : Fragment() {
     private lateinit var phoneDisplayText: TextView
     private lateinit var phoneHintText: TextView
     private lateinit var callButton: MaterialButton
-    private lateinit var backspaceButton: MaterialButton
+    private lateinit var backspaceButton: ImageButton
     private lateinit var lastCallStatus: TextView
-    
+
     private val callHistoryStore = AppContainer.callHistoryStore
     private val pendingCallStore = AppContainer.pendingCallStore
     private val apiClient = AppContainer.apiClient
 
-    // «Сырая» модель ввода: только цифры 0–9, без форматирования и символов +, пробелов и т.п.
+    private val COUNTRY_PREFIX = "+7"
+    private val TOLL_FREE_PREFIX = "8" // для номеров вида 8 800 ...
+
+    // «Сырая» модель ввода: только цифры 0–9, без префикса +7 / 8.
     private var rawDigits: String = ""
+
+    // Режим 8-800: отдельный UX, как у реальной звонилки.
+    private var isTollFree8800: Boolean = false
     
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -71,25 +78,25 @@ class DialerFragment : Fragment() {
 
     private fun setupKeypad(root: View) {
         val buttons = listOf(
-            R.id.digitButton1 to "1",
-            R.id.digitButton2 to "2",
-            R.id.digitButton3 to "3",
-            R.id.digitButton4 to "4",
-            R.id.digitButton5 to "5",
-            R.id.digitButton6 to "6",
-            R.id.digitButton7 to "7",
-            R.id.digitButton8 to "8",
-            R.id.digitButton9 to "9",
-            R.id.digitButton0 to "0",
-            R.id.digitButtonStar to "*",
-            R.id.digitButtonHash to "#",
+            R.id.digitButton1 to '1',
+            R.id.digitButton2 to '2',
+            R.id.digitButton3 to '3',
+            R.id.digitButton4 to '4',
+            R.id.digitButton5 to '5',
+            R.id.digitButton6 to '6',
+            R.id.digitButton7 to '7',
+            R.id.digitButton8 to '8',
+            R.id.digitButton9 to '9',
+            R.id.digitButton0 to '0',
+            R.id.digitButtonStar to '*',
+            R.id.digitButtonHash to '#',
         )
 
         buttons.forEach { (id, value) ->
             val button = root.findViewById<MaterialButton>(id)
             button?.setOnClickListener { view ->
                 performHaptic(view)
-                appendDigit(value)
+                onDigitPressed(value)
             }
         }
     }
@@ -97,29 +104,50 @@ class DialerFragment : Fragment() {
     private fun setupBackspace() {
         backspaceButton.setOnClickListener { view ->
             performHaptic(view)
-            if (rawDigits.isNotEmpty()) {
-                rawDigits = rawDigits.dropLast(1)
-                renderPhoneState()
-            }
+            onBackspace()
         }
         backspaceButton.setOnLongClickListener { view ->
             performHaptic(view)
-            rawDigits = ""
-            renderPhoneState()
+            onBackspaceLongPress()
             true
         }
     }
 
-    private fun appendDigit(digit: String) {
-        // Храним только цифры в модели ввода, * и # игнорируем для логики «готовности к звонку».
-        if (digit.firstOrNull()?.isDigit() == true) {
-            rawDigits += digit
-            // Ограничим разумную длину, чтобы не портить форматирование.
-            if (rawDigits.length > 20) {
-                rawDigits = rawDigits.takeLast(20)
-            }
+    private fun onDigitPressed(digit: Char) {
+        if (!digit.isDigit()) return
+
+        // Россия UX по умолчанию: первая «8» не уходит в номер,
+        // т.к. у нас уже есть +7. Но даём возможность набрать
+        // отдельный режим 8‑800… — обрабатываем его отдельно.
+        if (!isTollFree8800 && rawDigits.isEmpty() && digit == '8') {
+            // Кандидат на 8‑800: фиксируем режим, но не добавляем 8 в rawDigits,
+            // чтобы rawDigits по‑прежнему был “чистыми” цифрами без префикса.
+            isTollFree8800 = true
             renderPhoneState()
+            return
         }
+
+        if (rawDigits.length < 10) {
+            rawDigits += digit
+        }
+        renderPhoneState()
+    }
+
+    private fun onBackspace() {
+        if (rawDigits.isNotEmpty()) {
+            rawDigits = rawDigits.dropLast(1)
+        }
+        if (rawDigits.isEmpty()) {
+            // Возвращаемся в обычный российский режим с +7.
+            isTollFree8800 = false
+        }
+        renderPhoneState()
+    }
+
+    private fun onBackspaceLongPress() {
+        rawDigits = ""
+        isTollFree8800 = false
+        renderPhoneState()
     }
 
     private fun performHaptic(view: View) {
@@ -131,32 +159,102 @@ class DialerFragment : Fragment() {
         }
     }
 
-    /** Автоформат номера: +7 (XXX) XXX-XX-XX для российских 11 цифр. */
-    private fun formatPhoneDisplay(digits: String): String {
-        if (digits.isEmpty()) return ""
-        when {
-            digits == "8" -> return "8"
-            digits == "7" -> return "+7"
-            digits.startsWith("8") && digits.length <= 11 -> return formatPhoneDisplay("7" + digits.drop(1))
-            digits.startsWith("7") && digits.length <= 11 -> {
-                val rest = digits.drop(1)
-                return buildString {
-                    append("+7")
-                    if (rest.isNotEmpty()) append(" (").append(rest.take(3))
-                    if (rest.length > 3) append(") ").append(rest.drop(3).take(3))
-                    if (rest.length > 6) append("-").append(rest.drop(6).take(2))
-                    if (rest.length > 8) append("-").append(rest.drop(8).take(2))
+    /** Автоформат номера для отображения.
+     *
+     *  Режимы:
+     *  - обычный российский номер: +7 (XXX) XXX-XX-XX
+     *  - номер 8‑800…: 8 800 XXX-XX-XX
+     *
+     *  Вход: только «сырые» цифры номера без префиксов +7 / 8.
+     */
+    private fun formatPhoneDisplay(raw: String): String {
+        val digits = raw.take(10)
+
+        if (isTollFree8800) {
+            // Формат: 8 800 XXX-XX-XX (на реальном dialer’е часто без скобок)
+            if (digits.isEmpty()) {
+                return TOLL_FREE_PREFIX
+            }
+
+            val sb = StringBuilder(TOLL_FREE_PREFIX)
+            sb.append(" ")
+
+            when {
+                digits.length <= 3 -> {
+                    // Строим "800"
+                    sb.append(digits)
+                }
+                digits.length <= 6 -> {
+                    sb.append(digits.substring(0, 3))
+                        .append(" ")
+                        .append(digits.substring(3))
+                }
+                digits.length <= 8 -> {
+                    sb.append(digits.substring(0, 3))
+                        .append(" ")
+                        .append(digits.substring(3, 6))
+                        .append("-")
+                        .append(digits.substring(6))
+                }
+                else -> {
+                    sb.append(digits.substring(0, 3))
+                        .append(" ")
+                        .append(digits.substring(3, 6))
+                        .append("-")
+                        .append(digits.substring(6, 8))
+                        .append("-")
+                        .append(digits.substring(8))
                 }
             }
-            else -> return digits.chunked(3).joinToString(" ").take(20)
+
+            return sb.toString()
+        } else {
+            if (digits.isEmpty()) {
+                return COUNTRY_PREFIX
+            }
+
+            val sb = StringBuilder(COUNTRY_PREFIX).append(" ")
+
+            when {
+                digits.length <= 3 -> {
+                    sb.append("(")
+                    sb.append(digits)
+                }
+                digits.length <= 6 -> {
+                    sb.append("(")
+                        .append(digits.substring(0, 3))
+                        .append(") ")
+                        .append(digits.substring(3))
+                }
+                digits.length <= 8 -> {
+                    sb.append("(")
+                        .append(digits.substring(0, 3))
+                        .append(") ")
+                        .append(digits.substring(3, 6))
+                        .append("-")
+                        .append(digits.substring(6))
+                }
+                else -> {
+                    sb.append("(")
+                        .append(digits.substring(0, 3))
+                        .append(") ")
+                        .append(digits.substring(3, 6))
+                        .append("-")
+                        .append(digits.substring(6, 8))
+                        .append("-")
+                        .append(digits.substring(8))
+                }
+            }
+
+            return sb.toString()
         }
     }
     
     private fun setupCallButton() {
         callButton.setOnClickListener {
             performHaptic(it)
-            val digitsCount = rawDigits.count { it.isDigit() }
-            if (digitsCount < 11) {
+            val digitsCount = rawDigits.length
+            if (digitsCount != 10) {
                 Toast.makeText(requireContext(), getString(R.string.dialer_enter_phone_hint), Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
@@ -164,26 +262,28 @@ class DialerFragment : Fragment() {
                 Toast.makeText(requireContext(), getString(R.string.dialer_enter_phone_hint), Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            initiateManualCall(rawDigits)
+
+            // Для вызова используем полный номер c нужным префиксом.
+            val fullPhone = if (isTollFree8800) {
+                TOLL_FREE_PREFIX + rawDigits
+            } else {
+                COUNTRY_PREFIX + rawDigits
+            }
+            initiateManualCall(fullPhone)
         }
     }
 
     private fun renderPhoneState() {
-        val digitsCount = rawDigits.count { it.isDigit() }
+        val digitsCount = rawDigits.length
 
         // Отображение номера сверху
-        val display = if (rawDigits.isEmpty()) {
-            "+7"
-        } else {
-            formatPhoneDisplay(rawDigits)
-        }
-        phoneDisplayText.text = display
+        phoneDisplayText.text = formatPhoneDisplay(rawDigits)
 
         // Подсказка под номером: только при пустом вводе
         phoneHintText.visibility = if (digitsCount == 0) View.VISIBLE else View.GONE
 
         // Состояние кнопки звонка
-        val canCall = digitsCount >= 11
+        val canCall = digitsCount == 10
         callButton.isEnabled = canCall
         if (canCall) {
             callButton.text = getString(R.string.dialer_call_button)

@@ -16,7 +16,12 @@ import ru.groupprofi.crmprofi.dialer.CallListenerService
  * Определяет, готово ли приложение к работе, и что нужно исправить.
  */
 class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
-    private val tokenManager = TokenManager.getInstance()
+    /**
+     * TokenManager может быть ещё не инициализирован сразу после старта процесса.
+     * Используем getInstanceOrNull() и деградируем в NEEDS_AUTH вместо крэша.
+     */
+    private val tokenManager: TokenManager?
+        get() = TokenManager.getInstanceOrNull()
     
     /**
      * Состояние готовности приложения.
@@ -67,19 +72,21 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
      * Получить текущее состояние готовности (реализация интерфейса).
      */
     override fun getState(): ReadyState {
+        val tm = tokenManager ?: return ReadyState.NEEDS_AUTH
+
         // 0. Явная причина блокировки (сохраняется сервисом, чтобы не было silent fail)
         // Если причина есть, показываем её пользователю как "не готово к звонкам".
         // Важно: авторизация/permissions по-прежнему имеют приоритет.
-        val serviceBlockReason = tokenManager.getServiceBlockReason()
+        val serviceBlockReason = tm.getServiceBlockReason()
 
         // 1. Проверка авторизации (самое важное)
-        val hasTokens = tokenManager.hasTokens() && !tokenManager.getAccessToken().isNullOrBlank()
+        val hasTokens = tm.hasTokens() && !tm.getAccessToken().isNullOrBlank()
         if (!hasTokens) {
             return ReadyState.NEEDS_AUTH
         }
         // При восстановлении авторизации очищаем связанные причины блокировки.
         if (serviceBlockReason == ServiceBlockReason.AUTH_MISSING) {
-            tokenManager.setServiceBlockReason(null)
+            tm.setServiceBlockReason(null)
         }
         
         // 2. Проверка разрешений
@@ -100,7 +107,7 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
                 return ReadyState.NEEDS_NOTIFICATIONS
             } else if (serviceBlockReason == ServiceBlockReason.NOTIFICATION_PERMISSION_MISSING) {
                 // Разрешение выдали — очищаем причину блокировки.
-                tokenManager.setServiceBlockReason(null)
+                tm.setServiceBlockReason(null)
             }
         }
         
@@ -110,7 +117,7 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
             return ReadyState.NEEDS_NOTIFICATIONS
         } else if (serviceBlockReason == ServiceBlockReason.NOTIFICATIONS_DISABLED) {
             // Уведомления включили — очищаем причину блокировки.
-            tokenManager.setServiceBlockReason(null)
+            tm.setServiceBlockReason(null)
         }
         
         // 4. Проверка сети
@@ -126,7 +133,7 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
             val cleared = when (serviceBlockReason) {
                 ServiceBlockReason.BATTERY_OPTIMIZATION -> {
                     if (isIgnoringBatteryOptimizationsSafe()) {
-                        tokenManager.setServiceBlockReason(null)
+                        tm.setServiceBlockReason(null)
                         true
                     } else {
                         false
@@ -134,9 +141,9 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
                 }
                 ServiceBlockReason.FOREGROUND_START_FAILED -> {
                     // Если foreground уже успешно запускался, считаем, что причина устарела.
-                    val lastOk = tokenManager.getLastServiceForegroundOkAt()
+                    val lastOk = tm.getLastServiceForegroundOkAt()
                     if (lastOk != null && lastOk > 0L) {
-                        tokenManager.setServiceBlockReason(null)
+                        tm.setServiceBlockReason(null)
                         true
                     } else {
                         false
@@ -154,8 +161,8 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
         }
         
         // 5. Проверка сервиса (есть ли недавний polling)
-        val lastPollCode = tokenManager.getLastPollCode()
-        val lastPollAt = tokenManager.getLastPollAt()
+        val lastPollCode = tm.getLastPollCode()
+        val lastPollAt = tm.getLastPollAt()
         
         // Если код 401 - нужна авторизация (приоритет)
         if (lastPollCode == 401) {

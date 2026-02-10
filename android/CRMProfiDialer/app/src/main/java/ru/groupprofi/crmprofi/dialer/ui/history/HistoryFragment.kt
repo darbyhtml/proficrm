@@ -263,6 +263,7 @@ class HistoryFragment : Fragment() {
             private val durationText: TextView = itemView.findViewById(R.id.durationText)
             private val dateText: TextView = itemView.findViewById(R.id.dateText)
             private val crmBadge: TextView = itemView.findViewById(R.id.crmBadge)
+            private val divider: View = itemView.findViewById(R.id.divider)
 
             fun bind(call: CallHistoryItem) {
                 val context = itemView.context
@@ -270,32 +271,36 @@ class HistoryFragment : Fragment() {
                 // Левая иконка: обычные звонки — серая, пропущенные/неудачные — красная.
                 val (iconRes, iconBgColor, iconTint) = when {
                     isFailed(call) || isMissed(call) -> Triple(
-                        R.drawable.ic_nav_call,
+                        R.drawable.ic_call_failed_small,
                         ContextCompat.getColor(context, R.color.history_badge_failed_bg),
                         ContextCompat.getColor(context, R.color.history_badge_failed_text)
                     )
                     else -> Triple(
-                        R.drawable.ic_nav_call,
-                        ContextCompat.getColor(context, R.color.surface_variant),
+                        R.drawable.ic_call_small,
+                        ContextCompat.getColor(context, R.color.softGrayBg),
                         ContextCompat.getColor(context, R.color.on_surface_variant)
                     )
                 }
                 statusIcon.setImageResource(iconRes)
                 ViewCompat.setBackgroundTintList(
-                    statusIcon,
+                    statusIcon.parent as View,
                     ColorStateList.valueOf(iconBgColor)
                 )
                 statusIcon.imageTintList = ColorStateList.valueOf(iconTint)
 
                 // Первая строка: имя, если есть, иначе номер.
-                val title = call.phoneDisplayName ?: call.phone
+                val title = call.phoneDisplayName ?: formatPhoneForDisplay(call.phone)
                 phoneText.text = title
 
                 // Вторая строка: всегда номер (здесь можно добавить форматирование при необходимости).
-                nameText.text = call.phone
+                nameText.text = if (call.phoneDisplayName != null) {
+                    formatPhoneForDisplay(call.phone)
+                } else {
+                    ""
+                }
 
                 // Третья строка: время и длительность (только для успешных).
-                val timeText = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                val timeText = java.text.SimpleDateFormat("HH:mm", java.util.Locale("ru"))
                     .format(java.util.Date(call.startedAt))
                 val durationSec = call.durationSeconds ?: 0
                 val durationPart = if (call.status == CallHistoryItem.CallStatus.CONNECTED && durationSec > 0) {
@@ -349,8 +354,12 @@ class HistoryFragment : Fragment() {
                     ColorStateList.valueOf(badgeBg)
                 )
 
-                itemView.contentDescription = "${call.phone}, ${call.getStatusText()}"
+                itemView.contentDescription = "${formatPhoneForDisplay(call.phone)}, ${call.getStatusText()}"
                 itemView.setOnClickListener { onItemClick(call) }
+
+                // Разделитель скрываем у последнего элемента списка.
+                val isLast = bindingAdapterPosition == (bindingAdapter?.itemCount ?: 0) - 1
+                divider.visibility = if (isLast) View.GONE else View.VISIBLE
             }
 
             // Локальные помощники, чтобы ViewHolder мог использовать те же правила, что и фрагмент.
@@ -363,6 +372,30 @@ class HistoryFragment : Fragment() {
                 return call.status == CallHistoryItem.CallStatus.REJECTED ||
                         call.status == CallHistoryItem.CallStatus.NO_ACTION ||
                         call.status == CallHistoryItem.CallStatus.UNKNOWN
+            }
+
+            private fun formatPhoneForDisplay(phone: String): String {
+                val normalized = PhoneNumberNormalizer.normalize(phone)
+                if (normalized.length < 10) return phone
+
+                val digits = when {
+                    normalized.length == 11 && (normalized.startsWith("7") || normalized.startsWith("8")) ->
+                        normalized.substring(1)
+                    normalized.length == 10 -> normalized
+                    else -> normalized.takeLast(10)
+                }
+
+                return buildString {
+                    append("+7 ")
+                    append("(")
+                    append(digits.substring(0, 3))
+                    append(") ")
+                    append(digits.substring(3, 6))
+                    append("-")
+                    append(digits.substring(6, 8))
+                    append("-")
+                    append(digits.substring(8))
+                }
             }
         }
     }

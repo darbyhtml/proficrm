@@ -142,8 +142,10 @@ class CallFlowCoordinator(
             context.startActivity(dialIntent)
             val openedAt = System.currentTimeMillis()
             if (!callRequestId.isNullOrBlank()) {
-                TokenManager.getInstance().saveLastDialerOpened(callRequestId, openedAt)
-                val receivedAt = TokenManager.getInstance().getLastCallCommandReceivedAt()
+                // Не падаем, если TokenManager ещё не инициализирован — просто пропускаем метрику.
+                val tm = TokenManager.getInstanceOrNull()
+                tm?.saveLastDialerOpened(callRequestId, openedAt)
+                val receivedAt = tm?.getLastCallCommandReceivedAt()
                 val delta = if (receivedAt != null) (openedAt - receivedAt).coerceAtLeast(0L) else null
                 AppLogger.i("CallFlowCoordinator", "DIALER_OPENED id=$callRequestId deltaMs=${delta ?: -1}")
             } else {

@@ -4,96 +4,251 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="@dimen/spacing_base"
-    android:background="@color/surface_card">
+    android:background="@color/surface_card"
+    android:paddingTop="@dimen/spacing_base"
+    android:paddingBottom="@dimen/spacing_xl"
+    android:paddingStart="@dimen/screenPadding"
+    android:paddingEnd="@dimen/screenPadding">
 
-    <TextView
-        style="@style/TextAppearance.CRM.Title"
+    <!-- Шапка: заголовок + действия + крестик -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/call_detail_title"
-        android:layout_marginBottom="@dimen/spacing_md" />
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
 
+        <TextView
+            android:id="@+id/detailTitle"
+            style="@style/TextAppearance.CRM.Title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/call_detail_title"
+            android:textSize="@dimen/bottomSheetTitleSize" />
+
+        <ImageButton
+            android:id="@+id/detailCopyIcon"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_copy"
+            android:contentDescription="@string/action_copy" />
+
+        <ImageButton
+            android:id="@+id/detailCallIcon"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_call_small"
+            android:contentDescription="@string/action_call_back" />
+
+        <ImageButton
+            android:id="@+id/detailCloseIcon"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_close"
+            android:contentDescription="@string/close" />
+    </LinearLayout>
+
+    <!-- Заголовок номера -->
     <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:layout_marginTop="@dimen/spacing_lg"
+        android:layout_marginBottom="@dimen/spacing_md">
+
+        <TextView
+            android:id="@+id/detailNameText"
+            style="@style/TextAppearance.CRM.Title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Неизвестный номер"
+            android:textAlignment="center" />
+
+        <TextView
+            android:id="@+id/detailPhoneText"
+            style="@style/TextAppearance.CRM.BodySecondary"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_xs"
+            android:textSize="@dimen/bottomSheetPhoneTitleSize"
+            android:text="+7 (495) 555-55-55"
+            android:textAlignment="center" />
+    </LinearLayout>
+
+    <!-- Блок статуса -->
+    <LinearLayout
+        android:id="@+id/detailStatusBlock"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:layout_marginBottom="@dimen/spacing_sm">
+        android:background="@color/statusMissedBg"
+        android:padding="@dimen/spacing_base">
 
-        <TextView
-            android:id="@+id/detailStatusIcon"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:gravity="center"
-            android:textSize="16sp"
-            android:layout_marginEnd="@dimen/spacing_sm"
-            android:contentDescription="@string/history_status_icon" />
+        <FrameLayout
+            android:layout_width="@dimen/rowIconSize"
+            android:layout_height="@dimen/rowIconSize"
+            android:background="@drawable/bg_history_icon_circle">
 
-        <TextView
-            android:id="@+id/detailPhoneText"
-            style="@style/TextAppearance.CRM.Body"
+            <ImageView
+                android:id="@+id/detailStatusIcon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_gravity="center"
+                android:src="@drawable/ic_call_failed_small"
+                android:contentDescription="@string/history_status_icon" />
+        </FrameLayout>
+
+        <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:textStyle="bold"
-            android:ellipsize="end"
-            android:maxLines="1" />
+            android:orientation="vertical"
+            android:layout_marginStart="@dimen/spacing_md">
+
+            <TextView
+                android:id="@+id/detailStatusTitle"
+                style="@style/TextAppearance.CRM.Body"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Пропущен" />
+
+            <TextView
+                android:id="@+id/detailStatusSubtitle"
+                style="@style/TextAppearance.CRM.Caption"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_xs"
+                android:text="Пропущенный звонок" />
+        </LinearLayout>
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/detailNameText"
-        style="@style/TextAppearance.CRM.Caption"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="@dimen/spacing_xs"
-        android:visibility="gone" />
-
-    <TextView
-        android:id="@+id/detailStatusText"
-        style="@style/TextAppearance.CRM.BodySecondary"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="@dimen/spacing_xs" />
-
-    <TextView
-        android:id="@+id/detailMetaText"
-        style="@style/TextAppearance.CRM.Caption"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="@dimen/spacing_md" />
-
-    <TextView
-        android:id="@+id/detailCrmBadge"
-        style="@style/TextAppearance.CRM.Label"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:background="@drawable/badge_background"
-        android:paddingHorizontal="@dimen/spacing_sm"
-        android:paddingVertical="@dimen/spacing_xs"
-        android:layout_marginBottom="@dimen/spacing_lg" />
-
+    <!-- Информационные карточки -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="@dimen/spacing_lg">
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/detailDateCard"
+            style="@style/Widget.CRM.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="@dimen/historyCardRadius"
+            app:strokeWidth="0dp"
+            android:layout_marginBottom="@dimen/spacing_sm">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/spacing_base">
+
+                <TextView
+                    style="@style/TextAppearance.CRM.Caption"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/call_detail_date_title" />
+
+                <TextView
+                    android:id="@+id/detailDateValue"
+                    style="@style/TextAppearance.CRM.Body"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_xs"
+                    android:text="10 февраля 2026 г. в 12:00:00" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/detailDurationCard"
+            style="@style/Widget.CRM.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="@dimen/historyCardRadius"
+            app:strokeWidth="0dp"
+            android:layout_marginBottom="@dimen/spacing_sm">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/spacing_base">
+
+                <TextView
+                    style="@style/TextAppearance.CRM.Caption"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/call_detail_duration_title" />
+
+                <TextView
+                    android:id="@+id/detailDurationValue"
+                    style="@style/TextAppearance.CRM.Body"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_xs"
+                    android:text="Не состоялся" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/detailIdCard"
+            style="@style/Widget.CRM.Card"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="@dimen/historyCardRadius"
+            app:strokeWidth="0dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="@dimen/spacing_base">
+
+                <TextView
+                    style="@style/TextAppearance.CRM.Caption"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/call_detail_id_title" />
+
+                <TextView
+                    android:id="@+id/detailIdValue"
+                    style="@style/TextAppearance.CRM.Body"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/spacing_xs"
+                    android:text="—" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+    </LinearLayout>
+
+    <!-- Статус CRM внизу -->
+    <LinearLayout
+        android:id="@+id/detailCrmRow"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="end">
+        android:gravity="center_vertical"
+        android:layout_marginTop="@dimen/spacing_lg">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/detailCopyButton"
-            style="@style/Widget.CRM.Button.Text"
+        <ImageView
+            android:id="@+id/detailCrmIcon"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:src="@drawable/ic_check_circle"
+            android:contentDescription="@string/call_detail_crm_status" />
+
+        <TextView
+            android:id="@+id/detailCrmText"
+            style="@style/TextAppearance.CRM.BodySecondary"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:minHeight="@dimen/touch_target_min"
-            android:text="@string/action_copy" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/detailCallButton"
-            style="@style/Widget.CRM.Button.Primary"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:minHeight="@dimen/touch_target_min"
-            android:layout_marginStart="@dimen/spacing_sm"
-            android:text="@string/action_call_back" />
+            android:layout_marginStart="@dimen/spacing_xs"
+            android:text="@string/call_detail_crm_synced" />
     </LinearLayout>
 </LinearLayout>

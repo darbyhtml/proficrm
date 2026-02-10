@@ -5,11 +5,12 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import ru.groupprofi.crmprofi.dialer.auth.TokenManager
 import ru.groupprofi.crmprofi.dialer.network.ApiClient
 
@@ -47,19 +48,30 @@ class QRLoginActivity : AppCompatActivity() {
         
         // Фиксируем вертикальную ориентацию программно ДО setContentView
         requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        
-        tokenManager = TokenManager.getInstance()
-        apiClient = ApiClient.getInstance(this)
-        
-        // Проверяем, не вошли ли уже
-        if (tokenManager.hasTokens()) {
-            Toast.makeText(this, "Вы уже вошли в систему", Toast.LENGTH_SHORT).show()
-            finish()
-            return
+
+        // Гарантируем инициализацию TokenManager перед использованием QR-флоу.
+        // Тяжелая работа выполняется внутри TokenManager.init на Dispatchers.IO, UI-поток не блокируется.
+        lifecycleScope.launch {
+            try {
+                val tm = TokenManager.init(applicationContext)
+                tokenManager = tm
+                apiClient = ApiClient.getInstance(this@QRLoginActivity)
+
+                // Проверяем, не вошли ли уже
+                if (tm.hasTokens()) {
+                    Toast.makeText(this@QRLoginActivity, "Вы уже вошли в систему", Toast.LENGTH_SHORT).show()
+                    finish()
+                    return@launch
+                }
+
+                // Запускаем сканер QR-кода только после готовности TokenManager
+                startQrScanner()
+            } catch (e: Exception) {
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("QRLoginActivity", "TokenManager init failed in QR flow", e)
+                Toast.makeText(this@QRLoginActivity, "Ошибка инициализации. Повторите позже.", Toast.LENGTH_LONG).show()
+                finish()
+            }
         }
-        
-        // Запускаем сканер QR-кода
-        startQrScanner()
     }
     
     override fun onResume() {
@@ -103,11 +115,15 @@ class QRLoginActivity : AppCompatActivity() {
     }
     
     private fun handleQrToken(qrToken: String) {
-        CoroutineScope(Dispatchers.IO).launch {
+        // Привязываем корутину к жизненному циклу Activity, сетевые вызовы выполняем на IO.
+        lifecycleScope.launch {
             try {
                 ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("QRLoginActivity", "QR token exchange attempt")
-                val result = apiClient.exchangeQrToken(qrToken)
-                
+
+                val result = withContext(Dispatchers.IO) {
+                    apiClient.exchangeQrToken(qrToken)
+                }
+
                 when (result) {
                     is ApiClient.Result.Success -> {
                         val qrResult = result.data
@@ -115,38 +131,45 @@ class QRLoginActivity : AppCompatActivity() {
                         val refresh = qrResult.refresh
                         val username = qrResult.username
                         val isAdmin = qrResult.isAdmin
-                        
+
                         // Сохраняем токены и роль
-                        ru.groupprofi.crmprofi.dialer.logs.AppLogger.i("QRLoginActivity", "QR login success: username=$username, isAdmin=$isAdmin")
+                        ru.groupprofi.crmprofi.dialer.logs.AppLogger.i(
+                            "QRLoginActivity",
+                            "QR login success: username=$username, isAdmin=$isAdmin"
+                        )
                         tokenManager.saveTokens(access, refresh, username)
                         tokenManager.saveDeviceId(deviceId)
                         tokenManager.saveIsAdmin(isAdmin)
-                        
+
                         // Регистрация устройства (не критична)
-                        apiClient.registerDevice(deviceId, android.os.Build.MODEL ?: "Android")
-                        
-                        runOnUiThread {
-                            Toast.makeText(this@QRLoginActivity, "Вход выполнен успешно", Toast.LENGTH_SHORT).show()
-                            
-                            // Возвращаемся в LoginActivity с результатом успеха
-                            setResult(RESULT_OK)
-                            finish()
+                        withContext(Dispatchers.IO) {
+                            try {
+                                apiClient.registerDevice(deviceId, android.os.Build.MODEL ?: "Android")
+                            } catch (_: Exception) {
+                                // регистрация не критична для логина
+                            }
                         }
+
+                        Toast.makeText(this@QRLoginActivity, "Вход выполнен успешно", Toast.LENGTH_SHORT).show()
+
+                        // Возвращаемся в LoginActivity с результатом успеха
+                        setResult(RESULT_OK)
+                        finish()
                     }
+
                     is ApiClient.Result.Error -> {
-                        ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("QRLoginActivity", "QR login failed: ${result.message}")
-                        runOnUiThread {
-                            val errorMsg = result.message.ifEmpty { "Ошибка обмена QR-кода" }
-                            val canRetry = errorMsg.contains("Повторить")
-                            showError(errorMsg, if (canRetry) qrToken else null)
-                        }
+                        ru.groupprofi.crmprofi.dialer.logs.AppLogger.e(
+                            "QRLoginActivity",
+                            "QR login failed: ${result.message}"
+                        )
+                        val errorMsg = result.message.ifEmpty { "Ошибка обмена QR-кода" }
+                        val canRetry = errorMsg.contains("Повторить")
+                        showError(errorMsg, if (canRetry) qrToken else null)
                     }
                 }
             } catch (e: Exception) {
                 ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("QRLoginActivity", "QR login error", e)
-                runOnUiThread {
-                    showError("Ошибка: ${e.message}")
-                }
+                showError("Ошибка: ${e.message}")
             }
         }
     }

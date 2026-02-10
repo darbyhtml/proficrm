@@ -127,9 +127,9 @@ class SettingsFragment : Fragment() {
     }
 
     private fun updateUserRow() {
-        val tokenManager = TokenManager.getInstance()
-        val hasTokens = tokenManager.hasTokens()
-        val email = tokenManager.getUsername() ?: getString(R.string.settings_user_email_placeholder)
+        val tokenManager = TokenManager.getInstanceOrNull()
+        val hasTokens = tokenManager?.hasTokens() == true
+        val email = tokenManager?.getUsername() ?: getString(R.string.settings_user_email_placeholder)
 
         setRowStatus(rowUser, email)
         val hintRes = if (hasTokens) {
@@ -242,8 +242,8 @@ class SettingsFragment : Fragment() {
     // region Dialogs / navigation
 
     private fun showUserDialog() {
-        val tokenManager = TokenManager.getInstance()
-        val email = tokenManager.getUsername() ?: getString(R.string.settings_user_email_placeholder)
+        val tokenManager = TokenManager.getInstanceOrNull()
+        val email = tokenManager?.getUsername() ?: getString(R.string.settings_user_email_placeholder)
 
         androidx.appcompat.app.AlertDialog.Builder(requireContext())
             .setTitle(getString(R.string.settings_user_dialog_title))
