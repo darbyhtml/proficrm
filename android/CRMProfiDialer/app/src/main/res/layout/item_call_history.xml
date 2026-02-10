@@ -13,110 +13,85 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="@dimen/spacing_base">
+        android:orientation="horizontal"
+        android:padding="@dimen/spacing_base"
+        android:gravity="center_vertical">
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="@dimen/spacing_sm">
+        <!-- Иконка звонка -->
+        <FrameLayout
+            android:layout_width="@dimen/history_status_icon_size"
+            android:layout_height="@dimen/history_status_icon_size"
+            android:layout_marginEnd="@dimen/spacing_md">
 
-            <TextView
+            <ImageView
                 android:id="@+id/statusIcon"
-                android:layout_width="@dimen/history_status_icon_size"
-                android:layout_height="@dimen/history_status_icon_size"
-                android:minWidth="@dimen/history_status_icon_size"
-                android:gravity="center"
-                android:textSize="14sp"
-                android:layout_marginEnd="@dimen/spacing_md"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/badge_background"
+                android:padding="@dimen/spacing_xs"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_nav_call"
                 android:contentDescription="@string/history_status_icon" />
+        </FrameLayout>
 
+        <!-- Текстовая часть -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <!-- Первая строка: имя или номер (жирный) -->
             <TextView
                 android:id="@+id/phoneText"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginEnd="@dimen/spacing_xs"
                 style="@style/TextAppearance.CRM.Body"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
                 android:textStyle="bold"
                 android:ellipsize="end"
                 android:maxLines="1" />
 
+            <!-- Вторая строка: всегда номер -->
             <TextView
-                android:id="@+id/crmBadge"
-                style="@style/TextAppearance.CRM.Label"
-                android:layout_width="wrap_content"
+                android:id="@+id/nameText"
+                style="@style/TextAppearance.CRM.Caption"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@drawable/badge_background"
-                android:paddingHorizontal="@dimen/spacing_sm"
-                android:paddingVertical="@dimen/spacing_xs"
-                android:layout_marginStart="@dimen/spacing_sm" />
-        </LinearLayout>
+                android:layout_marginTop="@dimen/spacing_xs"
+                android:ellipsize="end"
+                android:maxLines="1" />
 
-        <TextView
-            android:id="@+id/nameText"
-            style="@style/TextAppearance.CRM.Caption"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="@dimen/spacing_xs"
-            android:visibility="gone" />
+            <!-- Третья строка: время и длительность -->
+            <TextView
+                android:id="@+id/statusText"
+                style="@style/TextAppearance.CRM.Caption"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="@dimen/spacing_xs" />
 
-        <TextView
-            android:id="@+id/statusText"
-            style="@style/TextAppearance.CRM.BodySecondary"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="@dimen/spacing_xs" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical">
-
+            <!-- Заглушки для совместимости с существующим кодом (не отображаются отдельно) -->
             <TextView
                 android:id="@+id/durationText"
-                style="@style/TextAppearance.CRM.Caption"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text=" · "
-                style="@style/TextAppearance.CRM.Caption" />
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/dateText"
-                style="@style/TextAppearance.CRM.Caption"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content" />
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
         </LinearLayout>
 
-        <LinearLayout
-            android:layout_width="match_parent"
+        <!-- Бейдж статуса (pill) -->
+        <TextView
+            android:id="@+id/crmBadge"
+            style="@style/TextAppearance.CRM.Label"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="end"
-            android:layout_marginTop="@dimen/spacing_md">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/copyButton"
-                style="@style/Widget.CRM.Button.Text"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/action_copy"
-                android:textSize="12sp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/callButton"
-                style="@style/Widget.CRM.Button.Text"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="@string/action_call_back"
-                android:textSize="12sp" />
-        </LinearLayout>
+            android:background="@drawable/badge_background"
+            android:paddingHorizontal="@dimen/spacing_sm"
+            android:paddingVertical="@dimen/spacing_xs"
+            android:layout_marginStart="@dimen/spacing_sm" />
     </LinearLayout>
 </com.google.android.material.card.MaterialCardView>

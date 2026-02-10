@@ -208,39 +208,28 @@ class CallsHistoryActivity : AppCompatActivity() {
             private val durationText: TextView = itemView.findViewById(R.id.durationText)
             private val dateText: TextView = itemView.findViewById(R.id.dateText)
             private val crmBadge: TextView = itemView.findViewById(R.id.crmBadge)
-            private val copyButton: com.google.android.material.button.MaterialButton = itemView.findViewById(R.id.copyButton)
-            private val callButton: com.google.android.material.button.MaterialButton = itemView.findViewById(R.id.callButton)
             
             fun bind(call: CallHistoryItem) {
-                phoneText.text = call.phone
-                nameText.text = call.phoneDisplayName ?: ""
-                nameText.visibility = if (call.phoneDisplayName != null) View.VISIBLE else View.GONE
-                
-                statusText.text = call.getStatusText()
-                durationText.text = call.getDurationText()
-                dateText.text = call.getDateTimeText()
-                
+                // Заголовок/подзаголовок как в HistoryFragment
+                val title = call.phoneDisplayName ?: call.phone
+                phoneText.text = title
+                nameText.text = call.phone
+
+                // Время + длительность
+                val timeText = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                    .format(java.util.Date(call.startedAt))
+                val durationSec = call.durationSeconds ?: 0
+                val durationPart = if (call.status == CallHistoryItem.CallStatus.CONNECTED && durationSec > 0) {
+                    val minutes = durationSec / 60
+                    val seconds = durationSec % 60
+                    String.format("%d:%02d", minutes, seconds)
+                } else null
+                statusText.text = if (durationPart != null) "$timeText · $durationPart" else timeText
+
+                durationText.text = ""
+                dateText.text = ""
+
                 crmBadge.text = call.getCrmBadgeText()
-                // Цвет бейджа: зеленый если отправлено, оранжевый если ожидает
-                val badgeColor = if (call.sentToCrm) {
-                    0xFF10B981.toInt() // Зеленый
-                } else {
-                    0xFFF59E0B.toInt() // Оранжевый
-                }
-                crmBadge.setTextColor(badgeColor)
-                
-                // Обработчики действий
-                copyButton.text = itemView.context.getString(R.string.action_copy)
-                copyButton.setOnClickListener {
-                    copyPhoneNumber(call.phone)
-                }
-                
-                callButton.text = itemView.context.getString(R.string.action_call_back)
-                callButton.setOnClickListener {
-                    // ЭТАП 2: Используем CallFlowCoordinator для отслеживания actionSource = HISTORY
-                    val coordinator = CallFlowCoordinator.getInstance(itemView.context)
-                    coordinator.handleCallCommandFromHistory(call.phone, call.id)
-                }
             }
             
             /**

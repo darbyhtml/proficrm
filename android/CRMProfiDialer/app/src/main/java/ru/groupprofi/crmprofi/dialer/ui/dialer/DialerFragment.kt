@@ -4,18 +4,16 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.text.Editable
-import android.text.TextWatcher
+import android.view.HapticFeedbackConstants
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.HapticFeedbackConstants
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.button.MaterialButton
-import com.google.android.material.textfield.TextInputEditText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -25,28 +23,28 @@ import ru.groupprofi.crmprofi.dialer.domain.ActionSource
 import ru.groupprofi.crmprofi.dialer.domain.CallHistoryItem
 import ru.groupprofi.crmprofi.dialer.domain.PhoneNumberNormalizer
 import ru.groupprofi.crmprofi.dialer.domain.ResolveMethod
+import ru.groupprofi.crmprofi.dialer.diagnostics.DiagnosticsMetricsBuffer
 import ru.groupprofi.crmprofi.dialer.logs.AppLogger
 import ru.groupprofi.crmprofi.dialer.network.ApiClient
-import ru.groupprofi.crmprofi.dialer.domain.CallStatusApi
-import ru.groupprofi.crmprofi.dialer.diagnostics.DiagnosticsMetricsBuffer
 import java.util.UUID
 
 /**
- * Фрагмент вкладки "Телефон" - ручной набор номера и звонок.
+ * Фрагмент вкладки "Набор" — ручной набор номера и звонок.
  * Фиксирует все ручные звонки в историю и отправляет в CRM/аналитику.
  */
 class DialerFragment : Fragment() {
-    private lateinit var phoneInput: TextInputEditText
+    private lateinit var phoneDisplayText: TextView
+    private lateinit var phoneHintText: TextView
     private lateinit var callButton: MaterialButton
+    private lateinit var backspaceButton: MaterialButton
     private lateinit var lastCallStatus: TextView
-    private lateinit var phoneDigitsInfo: TextView
-    private lateinit var minDigitsHint: TextView
-    private lateinit var quickActionsTitle: TextView
-    private lateinit var quickActionsContainer: ViewGroup
     
     private val callHistoryStore = AppContainer.callHistoryStore
     private val pendingCallStore = AppContainer.pendingCallStore
     private val apiClient = AppContainer.apiClient
+
+    // «Сырая» модель ввода: только цифры 0–9, без форматирования и символов +, пробелов и т.п.
+    private var rawDigits: String = ""
     
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -59,96 +57,16 @@ class DialerFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         
-        phoneInput = view.findViewById(R.id.phoneInput)
+        phoneDisplayText = view.findViewById(R.id.phoneDisplayText)
+        phoneHintText = view.findViewById(R.id.phoneHintText)
         callButton = view.findViewById(R.id.callButton)
+        backspaceButton = view.findViewById(R.id.backspaceButton)
         lastCallStatus = view.findViewById(R.id.lastCallStatus)
-        phoneDigitsInfo = view.findViewById(R.id.phoneDigitsInfo)
-        minDigitsHint = view.findViewById(R.id.dialerMinDigitsHint)
-        quickActionsTitle = view.findViewById(R.id.quickActionsTitle)
-        quickActionsContainer = view.findViewById(R.id.quickActionsContainer)
         
-        setupPhoneInput()
         setupCallButton()
-        setupQuickActions()
         setupKeypad(view)
-    }
-    
-    private var isFormatting = false
-    private fun setupPhoneInput() {
-        phoneInput.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
-            override fun afterTextChanged(s: Editable?) {
-                if (isFormatting) return
-                val raw = s?.toString() ?: ""
-                val digits = raw.filter { it.isDigit() }
-                val formatted = formatPhoneDisplay(digits)
-                if (formatted != raw) {
-                    isFormatting = true
-                    val newSel = formatted.length.coerceAtMost(phoneInput.selectionStart + (formatted.length - raw.length).coerceAtLeast(0))
-                    phoneInput.text?.replace(0, raw.length, formatted)
-                    phoneInput.setSelection(newSel.coerceIn(0, formatted.length))
-                    isFormatting = false
-                }
-                val digitsCount = digits.length
-                // Обновляем доступность и текст кнопки
-                val canCall = digitsCount >= 11
-                callButton.isEnabled = canCall
-                callButton.text = if (canCall) {
-                    getString(R.string.dialer_call_button)
-                } else {
-                    getString(R.string.dialer_call_button_enter_number)
-                }
-
-                // Обновляем подсказку и счётчик цифр
-                if (digitsCount == 0) {
-                    phoneDigitsInfo.text = getString(R.string.dialer_enter_phone_hint)
-                    minDigitsHint.visibility = View.GONE
-                } else {
-                    phoneDigitsInfo.text = getString(R.string.dialer_digits_counter, digitsCount)
-                    minDigitsHint.visibility = if (canCall) View.GONE else View.VISIBLE
-                }
-            }
-        })
-    }
-
-    private fun setupQuickActions() {
-        // Берём несколько последних уникальных номеров из истории для «быстрого набора»
-        val allCalls = callHistoryStore.callsFlow.value
-        val recentUnique = allCalls
-            .sortedByDescending { it.startedAt }
-            .distinctBy { it.phone }
-            .take(3)
-
-        if (recentUnique.isEmpty()) {
-            quickActionsTitle.visibility = View.GONE
-            quickActionsContainer.visibility = View.GONE
-            return
-        }
-
-        quickActionsContainer.visibility = View.VISIBLE
-        quickActionsTitle.visibility = View.VISIBLE
-
-        if (quickActionsContainer is ViewGroup) {
-            (quickActionsContainer as ViewGroup).removeAllViews()
-        }
-
-        recentUnique.forEach { call ->
-            val context = requireContext()
-            val button = MaterialButton(context, null, com.google.android.material.R.attr.materialButtonOutlinedStyle).apply {
-                text = call.phoneDisplayName ?: call.phone
-                minHeight = resources.getDimensionPixelSize(R.dimen.touch_target_min)
-                isAllCaps = false
-                setOnClickListener {
-                    val normalized = PhoneNumberNormalizer.normalize(call.phone)
-                    phoneInput.setText(formatPhoneDisplay(normalized.filter { it.isDigit() }))
-                    phoneInput.setSelection(phoneInput.text?.length ?: 0)
-                }
-            }
-            if (quickActionsContainer is ViewGroup) {
-                (quickActionsContainer as ViewGroup).addView(button)
-            }
-        }
+        setupBackspace()
+        renderPhoneState()
     }
 
     private fun setupKeypad(root: View) {
@@ -176,8 +94,32 @@ class DialerFragment : Fragment() {
         }
     }
 
+    private fun setupBackspace() {
+        backspaceButton.setOnClickListener { view ->
+            performHaptic(view)
+            if (rawDigits.isNotEmpty()) {
+                rawDigits = rawDigits.dropLast(1)
+                renderPhoneState()
+            }
+        }
+        backspaceButton.setOnLongClickListener { view ->
+            performHaptic(view)
+            rawDigits = ""
+            renderPhoneState()
+            true
+        }
+    }
+
     private fun appendDigit(digit: String) {
-        phoneInput.append(digit)
+        // Храним только цифры в модели ввода, * и # игнорируем для логики «готовности к звонку».
+        if (digit.firstOrNull()?.isDigit() == true) {
+            rawDigits += digit
+            // Ограничим разумную длину, чтобы не портить форматирование.
+            if (rawDigits.length > 20) {
+                rawDigits = rawDigits.takeLast(20)
+            }
+            renderPhoneState()
+        }
     }
 
     private fun performHaptic(view: View) {
@@ -213,13 +155,61 @@ class DialerFragment : Fragment() {
     private fun setupCallButton() {
         callButton.setOnClickListener {
             performHaptic(it)
-            val phone = phoneInput.text?.toString()?.trim() ?: ""
-            if (phone.isBlank()) {
-                Toast.makeText(requireContext(), "Введите номер телефона", Toast.LENGTH_SHORT).show()
+            val digitsCount = rawDigits.count { it.isDigit() }
+            if (digitsCount < 11) {
+                Toast.makeText(requireContext(), getString(R.string.dialer_enter_phone_hint), Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
-            initiateManualCall(phone)
+            if (rawDigits.isBlank()) {
+                Toast.makeText(requireContext(), getString(R.string.dialer_enter_phone_hint), Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            initiateManualCall(rawDigits)
         }
+    }
+
+    private fun renderPhoneState() {
+        val digitsCount = rawDigits.count { it.isDigit() }
+
+        // Отображение номера сверху
+        val display = if (rawDigits.isEmpty()) {
+            "+7"
+        } else {
+            formatPhoneDisplay(rawDigits)
+        }
+        phoneDisplayText.text = display
+
+        // Подсказка под номером: только при пустом вводе
+        phoneHintText.visibility = if (digitsCount == 0) View.VISIBLE else View.GONE
+
+        // Состояние кнопки звонка
+        val canCall = digitsCount >= 11
+        callButton.isEnabled = canCall
+        if (canCall) {
+            callButton.text = getString(R.string.dialer_call_button)
+            callButton.backgroundTintList =
+                android.content.res.ColorStateList.valueOf(
+                    ContextCompat.getColor(requireContext(), R.color.dialer_call_enabled_bg)
+                )
+            callButton.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.white))
+            callButton.iconTint =
+                android.content.res.ColorStateList.valueOf(
+                    ContextCompat.getColor(requireContext(), android.R.color.white)
+                )
+        } else {
+            callButton.text = getString(R.string.dialer_call_button_enter_number)
+            callButton.backgroundTintList =
+                android.content.res.ColorStateList.valueOf(
+                    ContextCompat.getColor(requireContext(), R.color.dialer_call_disabled_bg)
+                )
+            val disabledColor = ContextCompat.getColor(requireContext(), R.color.on_surface_variant)
+            callButton.setTextColor(disabledColor)
+            callButton.iconTint =
+                android.content.res.ColorStateList.valueOf(disabledColor)
+        }
+
+        // Статус последнего звонка по умолчанию скрыт, чтобы не ломать layout.
+        lastCallStatus.visibility = View.GONE
     }
     
     /**

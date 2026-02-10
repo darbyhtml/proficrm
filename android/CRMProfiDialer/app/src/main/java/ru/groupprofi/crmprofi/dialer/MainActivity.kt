@@ -197,10 +197,6 @@ class MainActivity : AppCompatActivity() {
                     replaceFragment(SettingsFragment())
                     true
                 }
-                R.id.nav_logout -> {
-                    showLogoutConfirmation()
-                    false // Не переключаем вкладку, показываем диалог
-                }
                 else -> false
             }
         }
@@ -223,15 +219,16 @@ class MainActivity : AppCompatActivity() {
     
     /**
      * Показать диалог подтверждения выхода.
+     * Доступен и из нижнего меню (ранее), и из экрана настроек.
      */
-    private fun showLogoutConfirmation() {
+    fun showLogoutConfirmation() {
         AlertDialog.Builder(this)
-            .setTitle("Выход из аккаунта")
-            .setMessage("Вы уверены, что хотите выйти? Приложение перестанет принимать команды на звонки из CRM.")
-            .setPositiveButton("Выйти") { _, _ ->
+            .setTitle(getString(R.string.settings_logout_confirm_title))
+            .setMessage(getString(R.string.settings_logout_confirm_message))
+            .setPositiveButton(getString(R.string.settings_logout_confirm_yes)) { _, _ ->
                 handleLogout()
             }
-            .setNegativeButton("Отмена", null)
+            .setNegativeButton(getString(R.string.settings_logout_confirm_no), null)
             .show()
     }
     

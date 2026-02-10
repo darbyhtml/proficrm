@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/settingsRowRoot"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:minHeight="64dp"
+    android:paddingStart="@dimen/spacing_base"
+    android:paddingEnd="@dimen/spacing_base">
+
+    <!-- Левая иконка в кружке -->
+    <FrameLayout
+        android:id="@+id/settingsRowIconCircle"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginEnd="@dimen/spacing_base"
+        android:background="@drawable/bg_settings_icon_circle">
+
+        <ImageView
+            android:id="@+id/settingsRowIcon"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center"
+            android:tint="@color/on_surface_variant" />
+    </FrameLayout>
+
+    <!-- Центральная текстовая часть -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/settingsRowTitle"
+            style="@style/TextAppearance.CRM.Title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+
+        <TextView
+            android:id="@+id/settingsRowStatus"
+            style="@style/TextAppearance.CRM.Body"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_xs" />
+
+        <TextView
+            android:id="@+id/settingsRowHint"
+            style="@style/TextAppearance.CRM.Caption"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="@dimen/spacing_xs" />
+    </LinearLayout>
+
+    <!-- Правый столбец: warning + chevron -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <ImageView
+            android:id="@+id/settingsRowWarning"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:layout_marginEnd="@dimen/spacing_xs"
+            android:visibility="gone"
+            android:tint="@color/warning"
+            android:src="@drawable/ic_warning" />
+
+        <ImageView
+            android:id="@+id/settingsRowChevron"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:tint="@color/on_surface_variant"
+            android:src="@drawable/ic_chevron_right" />
+    </LinearLayout>
+
+</LinearLayout>
+

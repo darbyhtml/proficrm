@@ -1,48 +1,42 @@
 package ru.groupprofi.crmprofi.dialer.ui.settings
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
-import androidx.fragment.app.Fragment
-import com.google.android.material.button.MaterialButton
-import ru.groupprofi.crmprofi.dialer.BuildConfig
+import android.widget.Toast
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.Fragment
+import com.google.android.material.bottomsheet.BottomSheetDialog
+import ru.groupprofi.crmprofi.dialer.BuildConfig
 import ru.groupprofi.crmprofi.dialer.R
 import ru.groupprofi.crmprofi.dialer.auth.TokenManager
-import ru.groupprofi.crmprofi.dialer.config.AppFeatures
-import ru.groupprofi.crmprofi.dialer.config.TelemetryMode
-import ru.groupprofi.crmprofi.dialer.network.PullCallMetrics
-import ru.groupprofi.crmprofi.dialer.diagnostics.DiagnosticsPanel
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.cancel
-import android.widget.Toast
+import ru.groupprofi.crmprofi.dialer.ui.support.SupportHealthActivity
 
 /**
- * Фрагмент вкладки "Настройки" - статус авторизации, настройки батареи, версия.
+ * Фрагмент вкладки "Настройки" — соответствует дизайну CRM Dialer.
  */
 class SettingsFragment : Fragment() {
-    private lateinit var authStatus: TextView
-    private lateinit var batteryButton: MaterialButton
-    private lateinit var oemHelpButton: MaterialButton
-    private lateinit var diagnosticsCopyButton: MaterialButton
-    private lateinit var diagnosticsShareButton: MaterialButton
-    private lateinit var connectionCheckButton: MaterialButton
-    private lateinit var versionText: TextView
-    private lateinit var telemetryModeText: TextView
-    private lateinit var pullCallModeText: TextView
-    private val updateScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private var devModeTapCount = 0
-    private var devModeLastTapTime = 0L
-    private var devModeEnabled = false
-    
+
+    private lateinit var rowUser: View
+    private lateinit var rowLogout: View
+    private lateinit var rowNotifications: View
+    private lateinit var rowBattery: View
+    private lateinit var rowAutostart: View
+    private lateinit var rowManufacturer: View
+    private lateinit var rowAbout: View
+    private lateinit var rowDiagnostics: View
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -50,102 +44,294 @@ class SettingsFragment : Fragment() {
     ): View? {
         return inflater.inflate(R.layout.fragment_settings, container, false)
     }
-    
+
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        
-        authStatus = view.findViewById(R.id.authStatus)
-        batteryButton = view.findViewById(R.id.batteryButton)
-        oemHelpButton = view.findViewById(R.id.oemHelpButton)
-        diagnosticsCopyButton = view.findViewById(R.id.diagnosticsCopyButton)
-        diagnosticsShareButton = view.findViewById(R.id.diagnosticsShareButton)
-        connectionCheckButton = view.findViewById(R.id.connectionCheckButton)
-        versionText = view.findViewById(R.id.versionText)
-        telemetryModeText = view.findViewById(R.id.telemetryModeText)
-        pullCallModeText = view.findViewById(R.id.pullCallModeText)
-        
-        updateAuthStatus()
-        setupBatteryButton()
-        setupOemHelpButton()
-        setupDiagnosticsButtons()
-        setupConnectionCheckButton()
-        updateVersion()
-        updateTelemetryMode()
-        startPullCallModeUpdates()
-        
-        // В DEBUG режиме добавляем long press на versionText для открытия диагностики
-        if (BuildConfig.DEBUG) {
-            versionText.setOnLongClickListener {
-                showDiagnosticsDialog()
-                true
-            }
-        } else {
-            // В release режиме - 7 тапов для dev mode
-            setupDevModeAccess()
-        }
+
+        rowUser = view.findViewById(R.id.rowUser)
+        rowLogout = view.findViewById(R.id.rowLogout)
+        rowNotifications = view.findViewById(R.id.rowNotifications)
+        rowBattery = view.findViewById(R.id.rowBattery)
+        rowAutostart = view.findViewById(R.id.rowAutostart)
+        rowManufacturer = view.findViewById(R.id.rowManufacturer)
+        rowAbout = view.findViewById(R.id.rowAbout)
+        rowDiagnostics = view.findViewById(R.id.rowDiagnostics)
+
+        setupStaticRows()
+        setupClickListeners()
     }
 
     override fun onResume() {
         super.onResume()
-        // После возврата из настроек системы (батарея, приложение) обновляем состояние экрана
-        updateAuthStatus()
+        // После возврата из системных настроек обновляем статусы.
+        updateUserRow()
+        updateNotificationsRow()
+        updateBatteryRow()
+        updateAutostartRow()
+        updateManufacturerRow()
+        updateAboutRow()
     }
-    
-    override fun onDestroyView() {
-        super.onDestroyView()
-        updateScope.cancel()
+
+    // region Row helpers
+
+    private fun setupStaticRows() {
+        // Titles and icons that не зависят от состояния.
+        setRowTitle(rowUser, getString(R.string.settings_user_title))
+
+        setRowTitle(rowLogout, getString(R.string.settings_logout_title))
+        setRowSubtitle(rowLogout, getString(R.string.settings_logout_subtitle))
+        styleLogoutRow(rowLogout)
+
+        setRowTitle(rowNotifications, getString(R.string.settings_notifications_title))
+        setRowHint(rowNotifications, getString(R.string.settings_notifications_hint))
+
+        setRowTitle(rowBattery, getString(R.string.settings_battery_title))
+        setRowHint(rowBattery, getString(R.string.settings_battery_hint))
+
+        setRowTitle(rowAutostart, getString(R.string.settings_autostart_title))
+        setRowHint(rowAutostart, getString(R.string.settings_autostart_hint))
+
+        setRowTitle(rowManufacturer, getString(R.string.settings_manufacturer_title))
+        setRowHint(rowManufacturer, getString(R.string.settings_manufacturer_hint))
+
+        setRowTitle(rowAbout, getString(R.string.settings_about_title))
+        setRowHint(rowAbout, getString(R.string.settings_about_hint))
+
+        setRowTitle(rowDiagnostics, getString(R.string.settings_diagnostics_title))
+        setRowStatus(rowDiagnostics, getString(R.string.settings_diagnostics_status))
+        setRowHint(rowDiagnostics, getString(R.string.settings_diagnostics_hint))
     }
-    
-    private fun updateAuthStatus() {
-        val tokenManager = TokenManager.getInstance()
-        val hasTokens = tokenManager.hasTokens()
-        
-        if (hasTokens) {
-            val username = tokenManager.getUsername() ?: "Пользователь"
-            authStatus.text = "Авторизован: $username"
-            authStatus.setTextColor(ContextCompat.getColor(requireContext(), R.color.accent))
-        } else {
-            authStatus.text = "Не авторизован"
-            authStatus.setTextColor(ContextCompat.getColor(requireContext(), R.color.error))
+
+    private fun setupClickListeners() {
+        rowUser.setOnClickListener { showUserDialog() }
+
+        rowLogout.setOnClickListener {
+            (activity as? ru.groupprofi.crmprofi.dialer.MainActivity)?.showLogoutConfirmation()
         }
-    }
-    
-    private fun setupBatteryButton() {
-        batteryButton.setOnClickListener {
+
+        rowNotifications.setOnClickListener { openNotificationSettings() }
+
+        rowBattery.setOnClickListener {
             (activity as? ru.groupprofi.crmprofi.dialer.MainActivity)?.openBatteryOptimizationSettings()
         }
-    }
-    
-    private fun setupOemHelpButton() {
-        oemHelpButton.setOnClickListener {
-            showOemHelpDialog()
+
+        rowAutostart.setOnClickListener { openAutostartSettings() }
+
+        rowManufacturer.setOnClickListener { showManufacturerInstructions() }
+
+        rowAbout.setOnClickListener { showAboutDialog() }
+
+        rowDiagnostics.setOnClickListener {
+            startActivity(Intent(requireContext(), SupportHealthActivity::class.java))
         }
     }
 
-    private fun setupDiagnosticsButtons() {
-        diagnosticsCopyButton.setOnClickListener {
-            val report = DiagnosticsPanel.generateReport(requireContext())
-            DiagnosticsPanel.copyToClipboard(requireContext(), report)
-            Toast.makeText(requireContext(), "Отчёт скопирован. Вставьте в письмо поддержке.", Toast.LENGTH_SHORT).show()
+    private fun updateUserRow() {
+        val tokenManager = TokenManager.getInstance()
+        val hasTokens = tokenManager.hasTokens()
+        val email = tokenManager.getUsername() ?: getString(R.string.settings_user_email_placeholder)
+
+        setRowStatus(rowUser, email)
+        val hintRes = if (hasTokens) {
+            R.string.settings_user_status_authorized
+        } else {
+            R.string.settings_user_status_unauthorized
         }
-        diagnosticsShareButton.setOnClickListener {
-            val report = DiagnosticsPanel.generateReport(requireContext())
-            DiagnosticsPanel.shareReport(requireContext(), report)
+        setRowHint(rowUser, getString(hintRes))
+    }
+
+    private fun updateNotificationsRow() {
+        val context = requireContext()
+        val notificationsEnabled = NotificationManagerCompat.from(context).areNotificationsEnabled()
+        val hasPermission = if (Build.VERSION.SDK_INT >= 33) {
+            ContextCompat.checkSelfPermission(
+                context,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        } else {
+            true
+        }
+
+        val enabled = notificationsEnabled && hasPermission
+        val status = if (enabled) {
+            getString(R.string.settings_notifications_status_enabled)
+        } else {
+            getString(R.string.settings_notifications_status_disabled)
+        }
+        setRowStatus(rowNotifications, status)
+    }
+
+    private fun updateBatteryRow() {
+        val optimizationEnabled = isBatteryOptimizationEnabled()
+        if (optimizationEnabled) {
+            setRowStatus(rowBattery, getString(R.string.settings_battery_status_needed))
+            showRowWarning(rowBattery, true)
+        } else {
+            setRowStatus(rowBattery, getString(R.string.settings_battery_status_ok))
+            showRowWarning(rowBattery, false)
         }
     }
 
-    private fun setupConnectionCheckButton() {
-        connectionCheckButton.setOnClickListener {
-            val mode = PullCallMetrics.currentMode
-            val reason = PullCallMetrics.degradationReason
-            val lastCmd = PullCallMetrics.getSecondsSinceLastCommand()
-            val msg = "Режим: $mode${if (reason.name != "NONE") " ($reason)" else ""}. " +
-                (lastCmd?.let { "Последняя команда: ${it}с назад" } ?: "Команд не было.")
-            Toast.makeText(requireContext(), msg, Toast.LENGTH_LONG).show()
+    private fun updateAutostartRow() {
+        val manufacturer = Build.MANUFACTURER.lowercase()
+        val isProblematic = listOf(
+            "xiaomi", "redmi", "poco",
+            "huawei", "honor",
+            "oppo", "vivo", "realme",
+            "samsung", "oneplus"
+        ).any { manufacturer.contains(it) }
+
+        val statusRes = if (isProblematic) {
+            R.string.settings_autostart_status_recommended
+        } else {
+            R.string.settings_autostart_status_generic
+        }
+        setRowStatus(rowAutostart, getString(statusRes))
+    }
+
+    private fun updateManufacturerRow() {
+        val manufacturer = Build.MANUFACTURER.ifBlank { "Android" }
+        val pretty = manufacturer.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+        setRowStatus(rowManufacturer, pretty)
+    }
+
+    private fun updateAboutRow() {
+        val status = getString(
+            R.string.settings_about_status,
+            BuildConfig.VERSION_NAME,
+            BuildConfig.VERSION_CODE
+        )
+        setRowStatus(rowAbout, status)
+    }
+
+    // endregion
+
+    // region Row view helpers
+
+    private fun setRowTitle(row: View, title: String) {
+        row.findViewById<TextView>(R.id.settingsRowTitle).text = title
+    }
+
+    private fun setRowStatus(row: View, status: String) {
+        row.findViewById<TextView>(R.id.settingsRowStatus).text = status
+    }
+
+    private fun setRowHint(row: View, hint: String) {
+        row.findViewById<TextView>(R.id.settingsRowHint).text = hint
+    }
+
+    private fun setRowSubtitle(row: View, subtitle: String) {
+        setRowStatus(row, subtitle)
+    }
+
+    private fun showRowWarning(row: View, show: Boolean) {
+        val icon = row.findViewById<View>(R.id.settingsRowWarning)
+        icon.visibility = if (show) View.VISIBLE else View.GONE
+    }
+
+    private fun styleLogoutRow(row: View) {
+        row.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.settings_row_logout_bg))
+        val titleView = row.findViewById<TextView>(R.id.settingsRowTitle)
+        val statusView = row.findViewById<TextView>(R.id.settingsRowStatus)
+        titleView.setTextColor(ContextCompat.getColor(requireContext(), R.color.error))
+        statusView.setTextColor(ContextCompat.getColor(requireContext(), R.color.error))
+    }
+
+    // endregion
+
+    // region Dialogs / navigation
+
+    private fun showUserDialog() {
+        val tokenManager = TokenManager.getInstance()
+        val email = tokenManager.getUsername() ?: getString(R.string.settings_user_email_placeholder)
+
+        androidx.appcompat.app.AlertDialog.Builder(requireContext())
+            .setTitle(getString(R.string.settings_user_dialog_title))
+            .setMessage(email)
+            .setPositiveButton(getString(R.string.settings_user_dialog_copy)) { _, _ ->
+                val clipboard = requireContext().getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("email", email))
+                Toast.makeText(requireContext(), "Скопировано", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun openNotificationSettings() {
+        val context = requireContext()
+        try {
+            val intent = Intent().apply {
+                action = Settings.ACTION_APP_NOTIFICATION_SETTINGS
+                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+            }
+            startActivity(intent)
+        } catch (_: Exception) {
+            // Fallback: настройки приложения
+            try {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                }
+                startActivity(intent)
+            } catch (_: Exception) {
+                Toast.makeText(context, "Откройте настройки приложения вручную", Toast.LENGTH_LONG).show()
+            }
         }
     }
-    
-    private fun showOemHelpDialog() {
+
+    private fun openAutostartSettings() {
+        val context = requireContext()
+        val manufacturer = Build.MANUFACTURER.lowercase()
+
+        fun tryStart(intent: Intent): Boolean {
+            return try {
+                startActivity(intent)
+                true
+            } catch (_: Exception) {
+                false
+            }
+        }
+
+        var opened = false
+
+        if (manufacturer.contains("xiaomi") || manufacturer.contains("redmi") || manufacturer.contains("poco")) {
+            opened = opened || tryStart(Intent("miui.intent.action.APP_PERM_EDITOR").apply {
+                setClassName("com.miui.securitycenter", "com.miui.permcenter.permissions.PermissionsEditorActivity")
+                putExtra("extra_pkgname", context.packageName)
+            })
+        }
+
+        if (!opened && (manufacturer.contains("huawei") || manufacturer.contains("honor"))) {
+            opened = opened || tryStart(Intent().apply {
+                setClassName("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity")
+            })
+        }
+
+        if (!opened && manufacturer.contains("samsung")) {
+            opened = opened || tryStart(Intent().apply {
+                setClassName("com.samsung.android.lool", "com.samsung.android.sm.battery.ui.BatteryActivity")
+            })
+        }
+
+        // Fallback: настройки приложения, если ничего не открыли.
+        if (!opened) {
+            try {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                }
+                startActivity(intent)
+            } catch (_: Exception) {
+                // ignore
+            }
+        }
+
+        Toast.makeText(
+            context,
+            getString(R.string.settings_autostart_toast),
+            Toast.LENGTH_LONG
+        ).show()
+    }
+
+    private fun showManufacturerInstructions() {
         val manufacturer = android.os.Build.MANUFACTURER.lowercase()
         val instructions = when {
             manufacturer.contains("xiaomi") || manufacturer.contains("redmi") -> getXiaomiInstructions()
@@ -153,12 +339,30 @@ class SettingsFragment : Fragment() {
             manufacturer.contains("samsung") -> getSamsungInstructions()
             else -> getGenericInstructions()
         }
-        
-        androidx.appcompat.app.AlertDialog.Builder(requireContext())
-            .setTitle("Настройка работы в фоне")
-            .setMessage(instructions)
-            .setPositiveButton("Понятно", null)
-            .show()
+
+        val dialog = BottomSheetDialog(requireContext())
+        val view = layoutInflater.inflate(R.layout.dialog_text_with_button, null, false)
+        val titleView = view.findViewById<TextView>(R.id.dialogTitle)
+        val messageView = view.findViewById<TextView>(R.id.dialogMessage)
+        val button = view.findViewById<android.widget.Button>(R.id.dialogButton)
+
+        titleView.text = getString(R.string.settings_manufacturer_dialog_title)
+        messageView.text = instructions
+        button.text = getString(R.string.settings_manufacturer_open_app_settings)
+        button.setOnClickListener {
+            dialog.dismiss()
+            try {
+                val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = Uri.parse("package:${requireContext().packageName}")
+                }
+                startActivity(intent)
+            } catch (_: Exception) {
+                Toast.makeText(requireContext(), "Откройте настройки приложения вручную", Toast.LENGTH_LONG).show()
+            }
+        }
+
+        dialog.setContentView(view)
+        dialog.show()
     }
     
     private fun getXiaomiInstructions(): String {
@@ -195,108 +399,52 @@ class SettingsFragment : Fragment() {
                 "Альтернативно:\n" +
                 "Настройки → Приложения → CRM ПРОФИ → Батарея → Неограниченное использование"
     }
-    
-    private fun updateVersion() {
-        versionText.text = "Версия: ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\nAndroid: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})"
-    }
-    
-    private fun updateTelemetryMode() {
-        val mode = AppFeatures.TELEMETRY_MODE
-        val modeText = when (mode) {
-            TelemetryMode.LOCAL_ONLY -> "Локальный"
-            TelemetryMode.FULL -> "Полный (CRM)"
-        }
-        telemetryModeText.text = "Режим аналитики: $modeText"
-    }
-    
-    private fun startPullCallModeUpdates() {
-        updateScope.launch {
-            while (isActive) {
-                updatePullCallMode()
-                delay(2000) // Обновляем каждые 2 секунды
-            }
-        }
-    }
-    
-    private fun updatePullCallMode() {
-        val mode = PullCallMetrics.currentMode
-        val degradationReason = PullCallMetrics.degradationReason
-        val lastCommandSeconds = PullCallMetrics.getSecondsSinceLastCommand()
-        val avgDeliveryLatency = PullCallMetrics.getAverageDeliveryLatencyMs()
-        val count429 = PullCallMetrics.get429CountLastHour()
-        val timeInBackoff = PullCallMetrics.getTimeSpentInBackoffMs()
-        
-        val modeText = when (mode) {
-            PullCallMetrics.PullMode.LONG_POLL -> "Long-Poll"
-            PullCallMetrics.PullMode.BURST -> "Burst"
-            PullCallMetrics.PullMode.SLOW -> "Медленный"
-        }
-        
-        val reasonText = when (degradationReason) {
-            PullCallMetrics.DegradationReason.NONE -> ""
-            PullCallMetrics.DegradationReason.RATE_LIMIT -> " (Rate Limit)"
-            PullCallMetrics.DegradationReason.NETWORK_ERROR -> " (Сеть)"
-            PullCallMetrics.DegradationReason.SERVER_ERROR -> " (Сервер)"
-        }
-        
-        val lastCommandText = lastCommandSeconds?.let { ", последняя команда: ${it}с назад" } ?: ", команд не было"
-        val avgLatencyText = avgDeliveryLatency?.let { ", средняя доставка: ${it}мс" } ?: ""
-        val metricsText = if (BuildConfig.DEBUG && (count429 > 0 || timeInBackoff > 0)) {
-            ", 429/час: $count429, backoff: ${timeInBackoff / 1000}с"
-        } else {
-            ""
-        }
-        
-        pullCallModeText.text = "Режим получения команд: $modeText$reasonText$lastCommandText$avgLatencyText$metricsText"
-    }
-    
-    /**
-     * Показать диалог диагностики (DEBUG режим).
-     */
-    private fun showDiagnosticsDialog() {
-        val report = DiagnosticsPanel.generateReport(requireContext())
-        
+
+    private fun showAboutDialog() {
+        val version = getString(
+            R.string.settings_about_status,
+            BuildConfig.VERSION_NAME,
+            BuildConfig.VERSION_CODE
+        )
+
         androidx.appcompat.app.AlertDialog.Builder(requireContext())
-            .setTitle("Диагностика (DEBUG)")
-            .setMessage(report.take(2000) + if (report.length > 2000) "\n\n... (отчет обрезан, используйте кнопки ниже)" else "")
-            .setPositiveButton("Копировать") { _, _ ->
-                DiagnosticsPanel.copyToClipboard(requireContext(), report)
-                Toast.makeText(requireContext(), "Отчет скопирован в буфер обмена", Toast.LENGTH_SHORT).show()
+            .setTitle(getString(R.string.settings_about_dialog_title))
+            .setMessage(version)
+            .setPositiveButton(getString(R.string.settings_about_play)) { _, _ ->
+                openInPlayStore()
             }
-            .setNeutralButton("Поделиться") { _, _ ->
-                DiagnosticsPanel.shareReport(requireContext(), report)
-            }
-            .setNegativeButton("Закрыть", null)
+            .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
-    
-    /**
-     * Настроить доступ к dev mode через 7 тапов (release-safe).
-     */
-    private fun setupDevModeAccess() {
-        versionText.setOnClickListener {
-            val currentTime = System.currentTimeMillis()
-            
-            // Сбрасываем счетчик, если прошло больше 2 секунд с последнего тапа
-            if (currentTime - devModeLastTapTime > 2000) {
-                devModeTapCount = 0
+
+    private fun openInPlayStore() {
+        val context = requireContext()
+        val appPackageName = context.packageName
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$appPackageName")))
+        } catch (_: Exception) {
+            try {
+                startActivity(
+                    Intent(
+                        Intent.ACTION_VIEW,
+                        Uri.parse("https://play.google.com/store/apps/details?id=$appPackageName")
+                    )
+                )
+            } catch (_: Exception) {
+                Toast.makeText(context, getString(R.string.settings_about_no_play), Toast.LENGTH_LONG).show()
             }
-            
-            devModeTapCount++
-            devModeLastTapTime = currentTime
-            
-            // Если 7 тапов - включаем dev mode
-            if (devModeTapCount >= 7) {
-                devModeEnabled = true
-                devModeTapCount = 0
-                Toast.makeText(requireContext(), "Dev mode enabled", Toast.LENGTH_SHORT).show()
-                
-                // Добавляем long press для диагностики
-                versionText.setOnLongClickListener {
-                    showDiagnosticsDialog()
-                    true
-                }
-            }
+        }
+    }
+
+    // endregion
+
+    private fun isBatteryOptimizationEnabled(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return false
+        return try {
+            val pm = requireContext().getSystemService(PowerManager::class.java)
+            pm?.isIgnoringBatteryOptimizations(requireContext().packageName) != true
+        } catch (_: Exception) {
+            false
         }
     }
 }

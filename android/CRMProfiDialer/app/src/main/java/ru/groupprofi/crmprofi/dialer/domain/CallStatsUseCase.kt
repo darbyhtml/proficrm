@@ -13,12 +13,13 @@ class CallStatsUseCase {
      */
     enum class Period {
         TODAY,          // Сегодня (с начала дня по локальному времени)
-        LAST_7_DAYS,   // Последние 7 дней
+        LAST_7_DAYS,    // Последние 7 дней
+        LAST_30_DAYS,   // Последние 30 дней
         ALL             // Всё время
     }
     
     /**
-     * Статистика звонков за период.
+     * Базовая статистика звонков за период (используется существующими экранами).
      */
     data class CallStats(
         val total: Int,           // Всего звонков
@@ -29,6 +30,29 @@ class CallStatsUseCase {
     ) {
         companion object {
             val EMPTY = CallStats(0, 0, 0, 0, 0)
+        }
+    }
+
+    /**
+     * Расширенная статистика для нового экрана «Главная».
+     *
+     * totalCalls           — всего звонков за период;
+     * successfulCalls      — звонок с фактическим разговором (CallStatus.CONNECTED);
+     * notCompletedCalls    — звонки, которые не дошли до разговора:
+     *                        NO_ANSWER, REJECTED, NO_ACTION, UNKNOWN
+     *                        (BUSY/FAILED попадают сюда на уровне API, см. CallStatusApi);
+     * systemIssuesCalls    — «системные» случаи, когда результат не удалось определить корректно;
+     * totalTalkDurationSec — суммарное время разговоров по успешным звонкам.
+     */
+    data class ExtendedCallStats(
+        val totalCalls: Int,
+        val successfulCalls: Int,
+        val notCompletedCalls: Int,
+        val systemIssuesCalls: Int,
+        val totalTalkDurationSec: Int
+    ) {
+        companion object {
+            val EMPTY = ExtendedCallStats(0, 0, 0, 0, 0)
         }
     }
     
@@ -65,6 +89,55 @@ class CallStatsUseCase {
         
         return CallStats(total, success, noAnswer, dropped, pendingCrm)
     }
+
+    /**
+     * Расширенная статистика для нового дашборда.
+     */
+    fun calculateExtended(
+        items: List<CallHistoryItem>,
+        period: Period,
+        nowMillis: Long = System.currentTimeMillis()
+    ): ExtendedCallStats {
+        val filtered = filterByPeriod(items, period, nowMillis)
+
+        var total = 0
+        var success = 0
+        var notCompleted = 0
+        var systemIssues = 0
+        var totalTalkSeconds = 0
+
+        filtered.forEach { call ->
+            total++
+            val duration = call.durationSeconds ?: 0
+
+            when (call.status) {
+                CallHistoryItem.CallStatus.CONNECTED -> {
+                    success++
+                    totalTalkSeconds += duration
+                }
+                // «Не состоялись» — все звонки без фактического разговора:
+                // NO_ANSWER, REJECTED, NO_ACTION, UNKNOWN.
+                CallHistoryItem.CallStatus.NO_ANSWER,
+                CallHistoryItem.CallStatus.REJECTED,
+                CallHistoryItem.CallStatus.NO_ACTION -> {
+                    notCompleted++
+                }
+                CallHistoryItem.CallStatus.UNKNOWN -> {
+                    // UNKNOWN считаем и как «не состоялись», и как системный кейс.
+                    notCompleted++
+                    systemIssues++
+                }
+            }
+        }
+
+        return ExtendedCallStats(
+            totalCalls = total,
+            successfulCalls = success,
+            notCompletedCalls = notCompleted,
+            systemIssuesCalls = systemIssues,
+            totalTalkDurationSec = totalTalkSeconds
+        )
+    }
     
     /**
      * Отфильтровать звонки по периоду (публичный метод для использования в UI).
@@ -97,7 +170,19 @@ class CallStatsUseCase {
                 
                 items.filter { it.startedAt >= sevenDaysAgoStart }
             }
-            
+
+            Period.LAST_30_DAYS -> {
+                // Последние 30 дней (включая текущий)
+                calendar.add(Calendar.DAY_OF_YEAR, -29)
+                calendar.set(Calendar.HOUR_OF_DAY, 0)
+                calendar.set(Calendar.MINUTE, 0)
+                calendar.set(Calendar.SECOND, 0)
+                calendar.set(Calendar.MILLISECOND, 0)
+                val thirtyDaysAgoStart = calendar.timeInMillis
+
+                items.filter { it.startedAt >= thirtyDaysAgoStart }
+            }
+
             Period.ALL -> items
         }
     }

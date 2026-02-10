@@ -59,6 +59,7 @@ backend/_compile_templates.py
 **/local.properties
 *.jks
 *.keystore
+**/google-services.json
 
 # Local notes (personal)
 Новинки.txt

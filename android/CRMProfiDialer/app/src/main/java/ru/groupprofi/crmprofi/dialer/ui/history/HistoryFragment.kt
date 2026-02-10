@@ -28,6 +28,8 @@ import ru.groupprofi.crmprofi.dialer.domain.CallHistoryItem
 import ru.groupprofi.crmprofi.dialer.domain.CallDirection
 import ru.groupprofi.crmprofi.dialer.domain.PhoneNumberNormalizer
 import androidx.core.content.ContextCompat
+import android.content.res.ColorStateList
+import androidx.core.view.ViewCompat
 
 /**
  * Фрагмент вкладки "История" - список всех звонков (AUTO и MANUAL).
@@ -149,7 +151,7 @@ class HistoryFragment : Fragment() {
     private fun updateFilteredCalls() {
         lifecycleScope.launch {
             val allCalls = callHistoryStore.callsFlow.value
-            
+
             // Фильтруем по поисковому запросу
             val searchFiltered = if (searchQuery.isBlank()) {
                 allCalls
@@ -158,14 +160,28 @@ class HistoryFragment : Fragment() {
                 allCalls.filter { call ->
                     val normalizedPhone = PhoneNumberNormalizer.normalize(call.phone)
                     normalizedPhone.contains(normalizedQuery, ignoreCase = true) ||
-                    call.phoneDisplayName?.contains(searchQuery, ignoreCase = true) == true
+                            call.phoneDisplayName?.contains(searchQuery, ignoreCase = true) == true
                 }
             }
 
-            val filtered = filterByType(searchFiltered)
-            
+            // Счётчики для всех фильтров (учитывают поиск)
+            val allCount = searchFiltered.size
+            val outgoingCount = filterByType(searchFiltered, FilterType.OUTGOING).size
+            val incomingCount = filterByType(searchFiltered, FilterType.INCOMING).size
+            val missedCount = filterByType(searchFiltered, FilterType.MISSED).size
+            val failedCount = filterByType(searchFiltered, FilterType.FAILED).size
+
+            filterAllButton.text = getString(R.string.history_filter_all, allCount)
+            filterOutgoingButton.text = getString(R.string.history_filter_outgoing, outgoingCount)
+            filterIncomingButton.text = getString(R.string.history_filter_incoming, incomingCount)
+            filterMissedButton.text = getString(R.string.history_filter_missed, missedCount)
+            filterFailedButton.text = getString(R.string.history_filter_failed, failedCount)
+
+            // Применяем текущий фильтр
+            val filtered = filterByType(searchFiltered, filterType)
+
             adapter.submitList(filtered.sortedByDescending { it.startedAt })
-            
+
             // Показываем пустое состояние
             if (filtered.isEmpty()) {
                 emptyState.visibility = View.VISIBLE
@@ -177,20 +193,28 @@ class HistoryFragment : Fragment() {
         }
     }
 
-    private fun filterByType(calls: List<CallHistoryItem>): List<CallHistoryItem> {
-        return when (filterType) {
+    private fun filterByType(calls: List<CallHistoryItem>, type: FilterType): List<CallHistoryItem> {
+        return when (type) {
             FilterType.ALL -> calls
             FilterType.OUTGOING -> calls.filter { it.direction == CallDirection.OUTGOING }
             FilterType.INCOMING -> calls.filter { it.direction == CallDirection.INCOMING }
-            FilterType.MISSED -> calls.filter {
-                it.direction == CallDirection.MISSED || it.status == CallHistoryItem.CallStatus.NO_ANSWER
-            }
-            FilterType.FAILED -> calls.filter {
-                it.status == CallHistoryItem.CallStatus.REJECTED ||
-                it.status == CallHistoryItem.CallStatus.UNKNOWN ||
-                it.status == CallHistoryItem.CallStatus.NO_ACTION
-            }
+            FilterType.MISSED -> calls.filter { isMissed(it) }
+            FilterType.FAILED -> calls.filter { isFailed(it) }
         }
+    }
+
+    // Пропущенные: звонки, которые не были приняты пользователем.
+    private fun isMissed(call: CallHistoryItem): Boolean {
+        return call.direction == CallDirection.MISSED ||
+                call.status == CallHistoryItem.CallStatus.NO_ANSWER
+    }
+
+    // «Неудачные»: технические/системные кейсы, не зависящие от менеджера.
+    // REJECTED, NO_ACTION, UNKNOWN (FAILED приходит как один из этих статусов).
+    private fun isFailed(call: CallHistoryItem): Boolean {
+        return call.status == CallHistoryItem.CallStatus.REJECTED ||
+                call.status == CallHistoryItem.CallStatus.NO_ACTION ||
+                call.status == CallHistoryItem.CallStatus.UNKNOWN
     }
     
     private fun handleCallAction(call: CallHistoryItem) {
@@ -232,48 +256,113 @@ class HistoryFragment : Fragment() {
             private val onCallClick: (CallHistoryItem) -> Unit,
             private val onItemClick: (CallHistoryItem) -> Unit
         ) : RecyclerView.ViewHolder(itemView) {
-            private val statusIcon: TextView = itemView.findViewById(R.id.statusIcon)
+            private val statusIcon: android.widget.ImageView = itemView.findViewById(R.id.statusIcon)
             private val phoneText: TextView = itemView.findViewById(R.id.phoneText)
             private val nameText: TextView = itemView.findViewById(R.id.nameText)
             private val statusText: TextView = itemView.findViewById(R.id.statusText)
             private val durationText: TextView = itemView.findViewById(R.id.durationText)
             private val dateText: TextView = itemView.findViewById(R.id.dateText)
             private val crmBadge: TextView = itemView.findViewById(R.id.crmBadge)
-            private val copyButton: com.google.android.material.button.MaterialButton = itemView.findViewById(R.id.copyButton)
-            private val callButton: com.google.android.material.button.MaterialButton = itemView.findViewById(R.id.callButton)
 
             fun bind(call: CallHistoryItem) {
-                val (icon, iconColor) = when (call.status) {
-                    CallHistoryItem.CallStatus.CONNECTED -> "✓" to ContextCompat.getColor(itemView.context, R.color.accent)
-                    CallHistoryItem.CallStatus.NO_ANSWER, CallHistoryItem.CallStatus.REJECTED -> "✕" to ContextCompat.getColor(itemView.context, R.color.warning)
-                    else -> "•" to ContextCompat.getColor(itemView.context, R.color.on_surface_variant)
+                val context = itemView.context
+
+                // Левая иконка: обычные звонки — серая, пропущенные/неудачные — красная.
+                val (iconRes, iconBgColor, iconTint) = when {
+                    isFailed(call) || isMissed(call) -> Triple(
+                        R.drawable.ic_nav_call,
+                        ContextCompat.getColor(context, R.color.history_badge_failed_bg),
+                        ContextCompat.getColor(context, R.color.history_badge_failed_text)
+                    )
+                    else -> Triple(
+                        R.drawable.ic_nav_call,
+                        ContextCompat.getColor(context, R.color.surface_variant),
+                        ContextCompat.getColor(context, R.color.on_surface_variant)
+                    )
                 }
-                statusIcon.text = icon
-                statusIcon.setTextColor(iconColor)
+                statusIcon.setImageResource(iconRes)
+                ViewCompat.setBackgroundTintList(
+                    statusIcon,
+                    ColorStateList.valueOf(iconBgColor)
+                )
+                statusIcon.imageTintList = ColorStateList.valueOf(iconTint)
 
-                phoneText.text = call.phone
-                nameText.text = call.phoneDisplayName ?: ""
-                nameText.visibility = if (call.phoneDisplayName != null) View.VISIBLE else View.GONE
+                // Первая строка: имя, если есть, иначе номер.
+                val title = call.phoneDisplayName ?: call.phone
+                phoneText.text = title
 
-                statusText.text = call.getStatusText()
-                durationText.text = call.getDurationText()
-                dateText.text = call.getDateTimeText()
+                // Вторая строка: всегда номер (здесь можно добавить форматирование при необходимости).
+                nameText.text = call.phone
 
-                val badgeText = if (call.sentToCrm) "Отправлено в CRM" else "Не отправлено в CRM"
+                // Третья строка: время и длительность (только для успешных).
+                val timeText = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+                    .format(java.util.Date(call.startedAt))
+                val durationSec = call.durationSeconds ?: 0
+                val durationPart = if (call.status == CallHistoryItem.CallStatus.CONNECTED && durationSec > 0) {
+                    val minutes = durationSec / 60
+                    val seconds = durationSec % 60
+                    String.format("%d:%02d", minutes, seconds)
+                } else {
+                    null
+                }
+                statusText.text = if (durationPart != null) {
+                    "$timeText · $durationPart"
+                } else {
+                    timeText
+                }
+
+                // Заглушки duration/date не используем в новом UI
+                durationText.text = ""
+                dateText.text = ""
+
+                // Бейдж статуса звонка как в макете: "Завершён", "Пропущен", "Не удалось соединить"
+                val (badgeText, badgeBg, badgeTextColor) = when {
+                    call.status == CallHistoryItem.CallStatus.CONNECTED ->
+                        Triple(
+                            "Завершён",
+                            ContextCompat.getColor(context, R.color.history_badge_completed_bg),
+                            ContextCompat.getColor(context, R.color.history_badge_completed_text)
+                        )
+                    isMissed(call) ->
+                        Triple(
+                            "Пропущен",
+                            ContextCompat.getColor(context, R.color.history_badge_missed_bg),
+                            ContextCompat.getColor(context, R.color.history_badge_missed_text)
+                        )
+                    isFailed(call) ->
+                        Triple(
+                            "Не удалось соединить",
+                            ContextCompat.getColor(context, R.color.history_badge_failed_bg),
+                            ContextCompat.getColor(context, R.color.history_badge_failed_text)
+                        )
+                    else ->
+                        Triple(
+                            "Не удалось соединить",
+                            ContextCompat.getColor(context, R.color.history_badge_failed_bg),
+                            ContextCompat.getColor(context, R.color.history_badge_failed_text)
+                        )
+                }
                 crmBadge.text = badgeText
-                val badgeColor = if (call.sentToCrm) ContextCompat.getColor(itemView.context, R.color.accent) else ContextCompat.getColor(itemView.context, R.color.on_surface_variant)
-                crmBadge.setTextColor(badgeColor)
+                crmBadge.setTextColor(badgeTextColor)
+                ViewCompat.setBackgroundTintList(
+                    crmBadge,
+                    ColorStateList.valueOf(badgeBg)
+                )
 
                 itemView.contentDescription = "${call.phone}, ${call.getStatusText()}"
                 itemView.setOnClickListener { onItemClick(call) }
+            }
 
-                copyButton.setOnClickListener {
-                    val clipboard = itemView.context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    val clip = android.content.ClipData.newPlainText("Номер телефона", call.phone)
-                    clipboard.setPrimaryClip(clip)
-                    android.widget.Toast.makeText(itemView.context, "Скопировано", android.widget.Toast.LENGTH_SHORT).show()
-                }
-                callButton.setOnClickListener { onCallClick(call) }
+            // Локальные помощники, чтобы ViewHolder мог использовать те же правила, что и фрагмент.
+            private fun isMissed(call: CallHistoryItem): Boolean {
+                return call.direction == CallDirection.MISSED ||
+                        call.status == CallHistoryItem.CallStatus.NO_ANSWER
+            }
+
+            private fun isFailed(call: CallHistoryItem): Boolean {
+                return call.status == CallHistoryItem.CallStatus.REJECTED ||
+                        call.status == CallHistoryItem.CallStatus.NO_ACTION ||
+                        call.status == CallHistoryItem.CallStatus.UNKNOWN
             }
         }
     }

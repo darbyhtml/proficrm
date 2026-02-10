@@ -9,198 +9,499 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="@dimen/spacing_base">
+        android:orientation="vertical">
 
-        <!-- Статус: одна карточка, разделение через spacing -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/statusCard"
-            style="@style/Widget.CRM.Card"
+        <!-- Оранжевый warning‑баннер как в макете -->
+        <LinearLayout
+            android:id="@+id/homeWarningBanner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="@dimen/spacing_base">
+            android:background="@color/home_banner_background"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="@dimen/spacing_base"
+            android:paddingEnd="@dimen/spacing_base"
+            android:paddingTop="@dimen/home_banner_padding_vertical"
+            android:paddingBottom="@dimen/home_banner_padding_vertical"
+            android:visibility="gone">
+
+            <FrameLayout
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginEnd="@dimen/spacing_base"
+                android:background="@drawable/home_warning_icon_background">
+
+                <ImageView
+                    android:id="@+id/homeWarningIcon"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@string/home_warning_title"
+                    android:src="@drawable/ic_warning"
+                    android:tint="@color/home_banner_icon_tint" />
+            </FrameLayout>
 
             <LinearLayout
-                android:layout_width="match_parent"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="@dimen/spacing_xl"
-                android:gravity="center">
+                android:layout_weight="1"
+                android:orientation="vertical">
 
                 <TextView
-                    android:id="@+id/statusIcon"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textSize="40sp"
-                    android:layout_marginBottom="@dimen/spacing_md"
-                    android:contentDescription="@string/status_ready" />
-
-                <TextView
-                    android:id="@+id/statusText"
-                    style="@style/TextAppearance.CRM.Headline"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center"
-                    android:layout_marginBottom="@dimen/spacing_sm" />
-
-                <TextView
-                    android:id="@+id/lastCommandText"
-                    style="@style/TextAppearance.CRM.Caption"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center"
-                    android:layout_marginBottom="@dimen/spacing_sm"
-                    android:visibility="gone" />
-
-                <TextView
-                    android:id="@+id/statusExplanation"
-                    style="@style/TextAppearance.CRM.BodySecondary"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center"
-                    android:layout_marginBottom="@dimen/spacing_base" />
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/fixButton"
-                    style="@style/Widget.CRM.Button.Primary"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="@string/button_fix"
-                    android:textColor="@android:color/white"
-                    android:backgroundTint="@color/error"
-                    android:visibility="gone"
-                    android:minHeight="@dimen/touch_target_min" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- Статистика «Сегодня» -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/todayStatsCard"
-            style="@style/Widget.CRM.Card"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="@dimen/spacing_base">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="@dimen/spacing_base">
-
-                <TextView
+                    android:id="@+id/homeWarningTitle"
                     style="@style/TextAppearance.CRM.Title"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="@string/stats_today_title"
-                    android:layout_marginBottom="@dimen/spacing_md" />
-
-                <FrameLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content">
-
-                <LinearLayout
-                    android:id="@+id/todayStatsContent"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical"
-                        android:gravity="center">
-                        <TextView
-                            android:id="@+id/todayTotal"
-                            style="@style/TextAppearance.CRM.Title"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="0" />
-                        <TextView
-                            style="@style/TextAppearance.CRM.Caption"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/stats_total" />
-                    </LinearLayout>
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical"
-                        android:gravity="center">
-                        <TextView
-                            android:id="@+id/todaySuccess"
-                            style="@style/TextAppearance.CRM.Title"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="0"
-                            android:textColor="@color/accent" />
-                        <TextView
-                            style="@style/TextAppearance.CRM.Caption"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/stats_success" />
-                    </LinearLayout>
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical"
-                        android:gravity="center">
-                        <TextView
-                            android:id="@+id/todayNoAnswer"
-                            style="@style/TextAppearance.CRM.Title"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="0"
-                            android:textColor="@color/warning" />
-                        <TextView
-                            style="@style/TextAppearance.CRM.Caption"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/stats_no_answer" />
-                    </LinearLayout>
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical"
-                        android:gravity="center">
-                        <TextView
-                            android:id="@+id/todayDropped"
-                            style="@style/TextAppearance.CRM.Title"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="0"
-                            android:textColor="@color/error" />
-                        <TextView
-                            style="@style/TextAppearance.CRM.Caption"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/stats_dropped" />
-                    </LinearLayout>
-                </LinearLayout>
-
-                <!-- Lightweight skeleton: один слой, без shimmer, скрывается при первой загрузке -->
-                <View
-                    android:id="@+id/todayStatsSkeleton"
-                    android:layout_width="match_parent"
-                    android:layout_height="52dp"
-                    android:background="@color/surface_variant"
-                    android:contentDescription="@string/stats_today_title" />
-
-                </FrameLayout>
+                    android:text="@string/home_warning_title"
+                    android:textColor="@android:color/white"
+                    android:textSize="18sp" />
 
                 <TextView
-                    android:id="@+id/todayPendingCrm"
+                    android:id="@+id/homeWarningSubtitle"
                     style="@style/TextAppearance.CRM.Caption"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="@dimen/spacing_sm"
-                    android:visibility="gone" />
+                    android:textColor="@android:color/white" />
             </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
 
+        </LinearLayout>
+
+        <!-- Лейбл "Требуется ваше внимание:" -->
+        <TextView
+            android:id="@+id/homeAttentionLabel"
+            style="@style/TextAppearance.CRM.Body"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="@dimen/spacing_base"
+            android:layout_marginEnd="@dimen/spacing_base"
+            android:layout_marginTop="@dimen/spacing_base"
+            android:layout_marginBottom="@dimen/spacing_sm"
+            android:text="@string/home_attention_label" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="@dimen/spacing_base">
+
+            <!-- Карточка «Энергосбережение» -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/batteryCard"
+                style="@style/Widget.CRM.Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="@dimen/home_section_spacing"
+                app:cardCornerRadius="@dimen/home_card_radius"
+                app:strokeColor="@color/home_battery_stroke"
+                app:strokeWidth="1dp"
+                app:cardBackgroundColor="@color/home_battery_background"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="@dimen/spacing_base">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <FrameLayout
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
+                            android:layout_marginEnd="@dimen/spacing_base"
+                            android:background="@drawable/home_battery_icon_background">
+
+                            <ImageView
+                                android:layout_width="18dp"
+                                android:layout_height="18dp"
+                                android:layout_gravity="center"
+                                android:src="@drawable/ic_warning"
+                                android:tint="@color/brand_orange" />
+                        </FrameLayout>
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:id="@+id/batteryTitle"
+                                style="@style/TextAppearance.CRM.Title"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/home_battery_title" />
+
+                            <TextView
+                                android:id="@+id/batterySubtitle"
+                                style="@style/TextAppearance.CRM.BodySecondary"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/home_battery_subtitle"
+                                android:layout_marginTop="@dimen/spacing_xs" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/batterySettingsButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="@dimen/home_header_control_height"
+                        android:layout_marginTop="@dimen/spacing_md"
+                        android:text="@string/home_battery_button"
+                        android:textSize="14sp"
+                        android:textAllCaps="false"
+                        android:paddingStart="@dimen/spacing_base"
+                        android:paddingEnd="@dimen/spacing_base"
+                        android:paddingTop="@dimen/spacing_sm"
+                        android:paddingBottom="@dimen/spacing_sm"
+                        android:insetLeft="0dp"
+                        android:insetRight="0dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:textColor="@android:color/white"
+                        android:backgroundTint="@color/brand_orange"
+                        app:cornerRadius="8dp" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Блок «Статистика звонков» -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/statsCard"
+                style="@style/Widget.CRM.Card"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:cardCornerRadius="@dimen/home_card_radius"
+                app:strokeWidth="0dp"
+                app:cardBackgroundColor="@android:color/white">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="@dimen/spacing_base">
+
+                    <!-- Заголовок + период + экспорт -->
+                    <androidx.constraintlayout.widget.ConstraintLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="@dimen/spacing_md">
+
+                        <TextView
+                            android:id="@+id/statsTitle"
+                            style="@style/TextAppearance.CRM.Title"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:textSize="@dimen/text_title_size"
+                            android:maxLines="1"
+                            android:ellipsize="end"
+                            android:minEms="10"
+                            android:text="@string/stats_calls_title"
+                            app:layout_constraintStart_toStartOf="parent"
+                            app:layout_constraintEnd_toStartOf="@id/statsPeriodInput"
+                            app:layout_constraintTop_toTopOf="parent"
+                            app:layout_constraintBottom_toBottomOf="parent" />
+
+                        <!-- Компактный period‑control как outlined‑кнопка -->
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/statsPeriodInput"
+                            style="@style/Widget.CRM.Button.OutlinedSmall"
+                            android:layout_width="wrap_content"
+                            android:layout_height="@dimen/home_header_control_height"
+                            android:layout_marginEnd="@dimen/spacing_sm"
+                            android:minWidth="86dp"
+                            android:maxWidth="110dp"
+                            android:insetLeft="0dp"
+                            android:insetRight="0dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:paddingStart="@dimen/spacing_md"
+                            android:paddingEnd="@dimen/spacing_sm"
+                            android:text="@string/stats_period_today"
+                            android:textSize="@dimen/text_caption_size"
+                            android:textAllCaps="false"
+                            app:icon="@drawable/ic_arrow_drop_down"
+                            app:iconGravity="textEnd"
+                            app:iconPadding="@dimen/spacing_xs"
+                            app:iconTint="@color/home_header_action_text"
+                            app:layout_constraintEnd_toStartOf="@id/statsExportButton"
+                            app:layout_constraintTop_toTopOf="parent"
+                            app:layout_constraintBottom_toBottomOf="parent" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/statsExportButton"
+                            style="@style/Widget.CRM.Button.OutlinedSmall"
+                            android:layout_width="wrap_content"
+                            android:layout_height="@dimen/home_header_control_height"
+                            android:text="@string/stats_export"
+                            android:textSize="@dimen/text_caption_size"
+                            android:minWidth="96dp"
+                            android:maxWidth="120dp"
+                            android:insetLeft="0dp"
+                            android:insetRight="0dp"
+                            android:insetTop="0dp"
+                            android:insetBottom="0dp"
+                            android:paddingStart="@dimen/spacing_md"
+                            android:paddingEnd="@dimen/spacing_md"
+                            app:icon="@drawable/ic_download"
+                            app:iconSize="18dp"
+                            app:iconPadding="@dimen/spacing_sm"
+                            app:iconTint="@color/home_header_action_text"
+                            app:layout_constraintEnd_toEndOf="parent"
+                            app:layout_constraintTop_toTopOf="parent"
+                            app:layout_constraintBottom_toBottomOf="parent" />
+                    </androidx.constraintlayout.widget.ConstraintLayout>
+
+                    <!-- Большая карточка «Всего звонков» -->
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/statsTotalCard"
+                        style="@style/Widget.CRM.Card"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="@dimen/spacing_md"
+                        app:cardCornerRadius="@dimen/home_card_radius"
+                        app:strokeWidth="0dp"
+                        app:cardBackgroundColor="@color/home_stats_total_bg">
+
+                        <androidx.constraintlayout.widget.ConstraintLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:padding="@dimen/spacing_base">
+
+                            <TextView
+                                android:id="@+id/statsTotalValue"
+                                style="@style/TextAppearance.CRM.Headline"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="0"
+                                android:textSize="40sp"
+                                app:layout_constraintStart_toStartOf="parent"
+                                app:layout_constraintTop_toTopOf="parent" />
+
+                            <TextView
+                                android:id="@+id/statsTotalLabel"
+                                style="@style/TextAppearance.CRM.BodySecondary"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/stats_total_title"
+                                app:layout_constraintBaseline_toBaselineOf="@id/statsTotalValue"
+                                app:layout_constraintStart_toEndOf="@id/statsTotalValue"
+                                app:layout_constraintHorizontal_bias="0"
+                                android:layout_marginStart="@dimen/spacing_sm" />
+
+                            <TextView
+                                android:id="@+id/statsTotalSubtitle"
+                                style="@style/TextAppearance.CRM.Caption"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/stats_total_subtitle"
+                                android:layout_marginTop="@dimen/spacing_sm"
+                                app:layout_constraintStart_toStartOf="@id/statsTotalValue"
+                                app:layout_constraintTop_toBottomOf="@id/statsTotalValue" />
+                        </androidx.constraintlayout.widget.ConstraintLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <!-- Три карточки в ряд -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginBottom="@dimen/spacing_md">
+
+                        <com.google.android.material.card.MaterialCardView
+                            android:id="@+id/statsSuccessCard"
+                            style="@style/Widget.CRM.Card"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="@dimen/spacing_sm"
+                            app:cardCornerRadius="@dimen/home_small_card_radius"
+                            app:strokeWidth="0dp"
+                            app:cardBackgroundColor="@color/home_stats_success_bg">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical"
+                                android:paddingStart="@dimen/home_small_card_horizontal_padding"
+                                android:paddingEnd="@dimen/home_small_card_horizontal_padding"
+                                android:paddingTop="@dimen/spacing_sm"
+                                android:paddingBottom="@dimen/spacing_sm">
+
+                                <TextView
+                                    android:id="@+id/statsSuccessValue"
+                                    style="@style/TextAppearance.CRM.Title"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="0"
+                                    android:textSize="24sp"
+                                    android:textColor="@color/home_stats_success_text" />
+
+                                <TextView
+                                    style="@style/TextAppearance.CRM.Caption"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="@string/stats_success_title"
+                                    android:maxLines="1"
+                                    android:ellipsize="end"
+                                    android:textColor="@color/home_stats_success_text"
+                                    android:textSize="@dimen/home_small_card_label_text_size" />
+                            </LinearLayout>
+                        </com.google.android.material.card.MaterialCardView>
+
+                        <com.google.android.material.card.MaterialCardView
+                            android:id="@+id/statsNotCompletedCard"
+                            style="@style/Widget.CRM.Card"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginEnd="@dimen/spacing_sm"
+                            app:cardCornerRadius="@dimen/home_small_card_radius"
+                            app:strokeWidth="0dp"
+                            app:cardBackgroundColor="@color/home_stats_missed_bg">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical"
+                                android:paddingStart="@dimen/home_small_card_horizontal_padding"
+                                android:paddingEnd="@dimen/home_small_card_horizontal_padding"
+                                android:paddingTop="@dimen/spacing_sm"
+                                android:paddingBottom="@dimen/spacing_sm">
+
+                                <TextView
+                                    android:id="@+id/statsNotCompletedValue"
+                                    style="@style/TextAppearance.CRM.Title"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="0"
+                                    android:textSize="24sp"
+                                    android:textColor="@color/home_stats_missed_text" />
+
+                                <TextView
+                                    style="@style/TextAppearance.CRM.Caption"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="@string/stats_not_completed_title"
+                                    android:maxLines="1"
+                                    android:ellipsize="end"
+                                    android:textColor="@color/home_stats_missed_text"
+                                    android:textSize="@dimen/home_small_card_label_text_size" />
+                            </LinearLayout>
+                        </com.google.android.material.card.MaterialCardView>
+
+                        <com.google.android.material.card.MaterialCardView
+                            android:id="@+id/statsSystemIssuesCard"
+                            style="@style/Widget.CRM.Card"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            app:cardCornerRadius="@dimen/home_small_card_radius"
+                            app:strokeWidth="0dp"
+                            app:cardBackgroundColor="@color/home_stats_errors_bg">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:orientation="vertical"
+                                android:paddingStart="@dimen/home_small_card_horizontal_padding"
+                                android:paddingEnd="@dimen/home_small_card_horizontal_padding"
+                                android:paddingTop="@dimen/spacing_sm"
+                                android:paddingBottom="@dimen/spacing_sm">
+
+                                <TextView
+                                    android:id="@+id/statsSystemIssuesValue"
+                                    style="@style/TextAppearance.CRM.Title"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="0"
+                                    android:textSize="24sp"
+                                    android:textColor="@color/home_stats_errors_text" />
+
+                                <TextView
+                                    style="@style/TextAppearance.CRM.Caption"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:text="@string/stats_system_issues_title"
+                                    android:maxLines="1"
+                                    android:ellipsize="end"
+                                    android:textColor="@color/home_stats_errors_text"
+                                    android:textSize="@dimen/home_small_card_label_text_size" />
+                            </LinearLayout>
+                        </com.google.android.material.card.MaterialCardView>
+                    </LinearLayout>
+
+                    <!-- Большая синяя карточка «Время разговоров» -->
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/statsTalkTimeCard"
+                        style="@style/Widget.CRM.Card"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        app:cardCornerRadius="@dimen/home_card_radius"
+                        app:strokeWidth="0dp"
+                        app:cardBackgroundColor="@color/home_stats_talk_bg">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:padding="@dimen/spacing_base">
+
+                            <TextView
+                                android:id="@+id/statsTalkTimeValue"
+                                style="@style/TextAppearance.CRM.Headline"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="0ч 0м"
+                                android:textColor="@color/home_stats_talk_text"
+                                android:textSize="24sp" />
+
+                            <TextView
+                                style="@style/TextAppearance.CRM.Caption"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="@dimen/spacing_xs"
+                                android:text="@string/stats_talk_time_title"
+                                android:textColor="@color/home_stats_talk_hint_text" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Разделитель перед строкой синхронизации -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="@dimen/home_sync_divider_top_spacing"
+                android:background="@color/home_divider" />
+
+            <!-- Строка синхронизации -->
+            <LinearLayout
+                android:id="@+id/syncRow"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="@dimen/spacing_md">
+
+                <ImageView
+                    android:id="@+id/syncIcon"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:layout_marginEnd="@dimen/spacing_xs"
+                    android:src="@drawable/ic_sync"
+                    android:contentDescription="@string/status_last_command_never" />
+
+                <TextView
+                    android:id="@+id/syncText"
+                    style="@style/TextAppearance.CRM.BodySecondary"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/status_last_command_never" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>

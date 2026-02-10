@@ -7,14 +7,39 @@
     <string name="status_not_ready">Не работает</string>
     <string name="status_resolving">Определяем результат звонка…</string>
     <string name="status_explanation_ready">Приложение работает в фоне и готово принимать команды из CRM</string>
-    <string name="status_last_command">Последняя команда: %1$s</string>
-    <string name="status_last_command_never">Команд пока не было</string>
+    <string name="status_last_command">Синхронизировано с CRM · %1$s</string>
+    <string name="status_last_command_never">Синхронизировано с CRM · ещё не было команд</string>
     <string name="status_explanation_resolving">Проверяем журнал звонков. Это займёт несколько секунд.</string>
     <string name="button_fix">Исправить</string>
     <string name="button_allow_background">Разрешить работу в фоне</string>
     <string name="security_notice">Приложение не записывает разговоры и не хранит аудио.</string>
+
+    <!-- Главная: баннер и энергосбережение -->
+    <string name="home_warning_title">Требует настройки</string>
+    <string name="home_warning_problems_count">Проблем: %1$d</string>
+    <string name="home_attention_label">Требуется ваше внимание:</string>
+    <string name="home_battery_title">Энергосбережение</string>
+    <string name="home_battery_subtitle">Отключите оптимизацию батареи</string>
+    <string name="home_battery_button">Открыть настройки</string>
     
-    <!-- Статистика "Сегодня" -->
+    <!-- Статистика -->
+    <string name="stats_calls_title">Статистика звонков</string>
+    <string name="stats_period_today">Сегодня</string>
+    <string name="stats_period_week">Неделя</string>
+    <string name="stats_period_month">Месяц</string>
+    <string name="stats_export">Экспорт</string>
+    <string name="stats_export_chooser_title">Экспорт статистики</string>
+    <string name="stats_export_subject">Статистика звонков (%1$s)</string>
+
+    <string name="stats_total_title">звонков</string>
+    <string name="stats_total_subtitle">Общее количество</string>
+
+    <string name="stats_success_title">Успешных</string>
+    <string name="stats_not_completed_title">Пропущено</string>
+    <string name="stats_system_issues_title">Ошибок</string>
+
+    <string name="stats_talk_time_title">Общее время разговоров</string>
+
     <string name="stats_today_title">Сегодня</string>
     <string name="stats_total">Всего</string>
     <string name="stats_success">Дозвон</string>
@@ -29,12 +54,12 @@
     <string name="filter_today">Сегодня</string>
     <string name="filter_7_days">7 дней</string>
     <string name="filter_all">Всё</string>
-    <string name="search_hint">Поиск по номеру</string>
-    <string name="history_filter_all">Все</string>
-    <string name="history_filter_outgoing">Исходящие</string>
-    <string name="history_filter_incoming">Входящие</string>
-    <string name="history_filter_missed">Пропущенные</string>
-    <string name="history_filter_failed">Неудачные</string>
+    <string name="search_hint">Поиск по номеру или имени</string>
+    <string name="history_filter_all">Все (%1$d)</string>
+    <string name="history_filter_outgoing">Исходящие (%1$d)</string>
+    <string name="history_filter_incoming">Входящие (%1$d)</string>
+    <string name="history_filter_missed">Пропущенные (%1$d)</string>
+    <string name="history_filter_failed">Неудачные (%1$d)</string>
     <string name="dialer_screen_title">Набор номера</string>
     <string name="dialer_phone_hint">Номер телефона</string>
     <string name="dialer_hint_recorded">Звонок будет зафиксирован в истории</string>
@@ -107,17 +132,60 @@
     <string name="diagnostics_flush_queue">Отправить очередь сейчас</string>
     
     <!-- Настройки (экран) -->
-    <string name="settings_auth_title">Авторизация</string>
-    <string name="settings_auth_authorized">Авторизован</string>
-    <string name="settings_background_title">Работа в фоне</string>
-    <string name="settings_oem_help">Инструкции для Xiaomi / Huawei / Samsung</string>
-    <string name="settings_diagnostics_title">Поддержка и диагностика</string>
-    <string name="settings_diagnostics_hint">Отчёт пригодится при обращении в поддержку.</string>
-    <string name="settings_diagnostics_copy">Скопировать отчёт для поддержки</string>
-    <string name="settings_diagnostics_share">Поделиться отчётом</string>
-    <string name="settings_connection_check">Проверить соединение с сервером</string>
+    <string name="settings_section_account">УЧЁТНАЯ ЗАПИСЬ</string>
+    <string name="settings_section_permissions">РАЗРЕШЕНИЯ СИСТЕМЫ</string>
+    <string name="settings_section_permissions_hint">Необходимо для корректной работы в фоновом режиме</string>
+    <string name="settings_section_info">ИНФОРМАЦИЯ</string>
+
+    <string name="settings_user_title">Пользователь</string>
+    <string name="settings_user_status_authorized">Вы авторизованы</string>
+    <string name="settings_user_status_unauthorized">Не авторизован</string>
+    <string name="settings_user_email_placeholder">—</string>
+    <string name="settings_user_dialog_title">Аккаунт</string>
+    <string name="settings_user_dialog_copy">Скопировать email</string>
+
+    <string name="settings_logout_title">Выйти</string>
+    <string name="settings_logout_subtitle">Завершить сеанс</string>
+    <string name="settings_logout_confirm_title">Выйти?</string>
+    <string name="settings_logout_confirm_message">Приложение перестанет принимать команды на звонки из CRM.</string>
+    <string name="settings_logout_confirm_yes">Выйти</string>
+    <string name="settings_logout_confirm_no">Отмена</string>
+
+    <string name="settings_notifications_title">Уведомления</string>
+    <string name="settings_notifications_status_enabled">Разрешены</string>
+    <string name="settings_notifications_status_disabled">Запрещены</string>
+    <string name="settings_notifications_hint">Приложение может показывать уведомления</string>
+
+    <string name="settings_battery_title">Оптимизация батареи</string>
+    <string name="settings_battery_status_needed">Требует настройки</string>
+    <string name="settings_battery_status_ok">Настроено</string>
+    <string name="settings_battery_hint">Отключите для стабильной работы</string>
+
+    <string name="settings_autostart_title">Автозапуск</string>
+    <string name="settings_autostart_status_recommended">Рекомендуется включить</string>
+    <string name="settings_autostart_status_generic">Зависит от системы</string>
+    <string name="settings_autostart_hint">Приложение запускается автоматически</string>
+    <string name="settings_autostart_toast">Если не нашли пункт автозапуска, откройте настройки приложения и разрешите работу в фоне.</string>
+
+    <string name="settings_manufacturer_title">Настройки производителя</string>
+    <string name="settings_manufacturer_hint">Специфичные настройки устройства</string>
+    <string name="settings_manufacturer_dialog_title">Рекомендации для устройства</string>
+    <string name="settings_manufacturer_open_app_settings">Открыть настройки приложения</string>
+
     <string name="settings_about_title">О приложении</string>
-    <string name="settings_about_version_placeholder">Версия: —</string>
+    <string name="settings_about_status">Версия %1$s (Build %2$d)</string>
+    <string name="settings_about_hint">Проверить обновления</string>
+    <string name="settings_about_dialog_title">О приложении</string>
+    <string name="settings_about_play">Открыть в Google Play</string>
+    <string name="settings_about_no_play">Обновления устанавливаются администратором</string>
+
+    <string name="settings_diagnostics_title">Диагностика</string>
+    <string name="settings_diagnostics_status">Проверить систему</string>
+    <string name="settings_diagnostics_hint">Тестирование подключения и настроек</string>
+
+    <string name="settings_footer_app_name">CRM Dialer</string>
+    <string name="settings_footer_copyright">© 2026 Все права защищены</string>
+    <string name="settings_footer_note">Для работы требуются разрешения на звонки, уведомления и работу в фоне</string>
 
     <!-- Общие -->
     <string name="error_unknown">Неизвестно</string>

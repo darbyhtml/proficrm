@@ -18,8 +18,53 @@
     <color name="on_surface">#1F2937</color>
     <color name="on_surface_variant">#6B7280</color>
 
+    <!-- Статус на главном экране -->
+    <color name="status_ready_background">#ECFDF3</color>
+    <color name="status_warning_background">#FACC15</color>
+    <color name="status_error_background">#FEE2E2</color>
+
+    <!-- Главная: баннер и карточки внимания -->
+    <color name="home_banner_background">#FBBF24</color> <!-- насыщённый жёлто-оранжевый -->
+    <color name="home_banner_icon_background">#FEF3C7</color>
+    <color name="home_banner_icon_tint">@android:color/white</color>
+    <color name="home_battery_stroke">#FDE68A</color>
+    <color name="home_battery_background">@android:color/white</color>
+
+    <!-- Dialer keypad -->
+    <color name="dialer_key_background">#F3F4F6</color>
+    <color name="dialer_key_ripple">#E5E7EB</color>
+    <color name="dialer_call_enabled_bg">@color/primary</color>
+    <color name="dialer_call_disabled_bg">#E5E7EB</color>
+
+    <!-- Главная: статистика -->
+    <color name="home_stats_total_bg">#F9FAFB</color>
+    <color name="home_stats_success_bg">#ECFDF3</color>
+    <color name="home_stats_success_text">#047857</color>
+    <color name="home_stats_missed_bg">#FEF9C3</color>
+    <color name="home_stats_missed_text">#92400E</color>
+    <color name="home_stats_errors_bg">#FEE2E2</color>
+    <color name="home_stats_errors_text">#B91C1C</color>
+    <color name="home_stats_talk_bg">#DBEAFE</color>
+    <color name="home_stats_talk_text">#1D4ED8</color>
+    <color name="home_stats_talk_hint_text">#1E40AF</color>
+    <color name="home_divider">#E5E7EB</color>
+    <color name="home_header_stroke">#D9DDE3</color>
+    <color name="home_header_action_text">#1E40AF</color>
+
+    <!-- История звонков: бейджи статуса -->
+    <color name="history_badge_completed_bg">#E0F2FE</color>
+    <color name="history_badge_completed_text">#1D4ED8</color>
+    <color name="history_badge_missed_bg">#FEF9C3</color>
+    <color name="history_badge_missed_text">#854D0E</color>
+    <color name="history_badge_failed_bg">#FEE2E2</color>
+    <color name="history_badge_failed_text">#B91C1C</color>
+
+    <!-- Settings screen -->
+    <color name="settings_background">#F5F5F7</color>
+    <color name="settings_row_logout_bg">#FEF2F2</color>
+
     <!-- Bottom Navigation: выбранная вкладка — спокойный акцент, без кричащего фона -->
-    <color name="bottom_nav_selected">#0F766E</color>
+    <color name="bottom_nav_selected">#2563EB</color>
     <color name="bottom_nav_unselected">#6B7280</color>
     <color name="bottom_nav_ripple">#1A0D9488</color>
     <color name="bottom_nav_logout">#DC2626</color>
