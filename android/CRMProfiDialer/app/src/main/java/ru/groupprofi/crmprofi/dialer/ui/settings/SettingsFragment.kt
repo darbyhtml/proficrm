@@ -77,6 +77,7 @@ class SettingsFragment : Fragment() {
     private fun setupStaticRows() {
         // Titles and icons that не зависят от состояния.
         setRowTitle(rowUser, getString(R.string.settings_user_title))
+        setRowIcon(rowUser, R.drawable.ic_settings_user, R.color.settings_icon_bg_neutral)
 
         setRowTitle(rowLogout, getString(R.string.settings_logout_title))
         setRowSubtitle(rowLogout, getString(R.string.settings_logout_subtitle))
@@ -84,22 +85,28 @@ class SettingsFragment : Fragment() {
 
         setRowTitle(rowNotifications, getString(R.string.settings_notifications_title))
         setRowHint(rowNotifications, getString(R.string.settings_notifications_hint))
+        setRowIcon(rowNotifications, R.drawable.ic_settings_bell, R.color.settings_icon_bg_neutral)
 
         setRowTitle(rowBattery, getString(R.string.settings_battery_title))
         setRowHint(rowBattery, getString(R.string.settings_battery_hint))
+        setRowIcon(rowBattery, R.drawable.ic_settings_battery, R.color.settings_icon_bg_battery)
 
         setRowTitle(rowAutostart, getString(R.string.settings_autostart_title))
         setRowHint(rowAutostart, getString(R.string.settings_autostart_hint))
+        setRowIcon(rowAutostart, R.drawable.ic_settings_shield, R.color.settings_icon_bg_neutral)
 
         setRowTitle(rowManufacturer, getString(R.string.settings_manufacturer_title))
         setRowHint(rowManufacturer, getString(R.string.settings_manufacturer_hint))
+        setRowIcon(rowManufacturer, R.drawable.ic_settings_device, R.color.settings_icon_bg_neutral)
 
         setRowTitle(rowAbout, getString(R.string.settings_about_title))
         setRowHint(rowAbout, getString(R.string.settings_about_hint))
+        setRowIcon(rowAbout, R.drawable.ic_settings_info, R.color.settings_icon_bg_neutral)
 
         setRowTitle(rowDiagnostics, getString(R.string.settings_diagnostics_title))
         setRowStatus(rowDiagnostics, getString(R.string.settings_diagnostics_status))
         setRowHint(rowDiagnostics, getString(R.string.settings_diagnostics_hint))
+        setRowIcon(rowDiagnostics, R.drawable.ic_settings_diagnostics, R.color.settings_icon_bg_neutral)
     }
 
     private fun setupClickListeners() {
@@ -159,6 +166,10 @@ class SettingsFragment : Fragment() {
             getString(R.string.settings_notifications_status_disabled)
         }
         setRowStatus(rowNotifications, status)
+        setRowStatusColor(
+            rowNotifications,
+            if (enabled) R.color.settings_status_ok else R.color.settings_status_warning_orange
+        )
     }
 
     private fun updateBatteryRow() {
@@ -166,9 +177,11 @@ class SettingsFragment : Fragment() {
         if (optimizationEnabled) {
             setRowStatus(rowBattery, getString(R.string.settings_battery_status_needed))
             showRowWarning(rowBattery, true)
+            setRowStatusColor(rowBattery, R.color.settings_status_warning_orange)
         } else {
             setRowStatus(rowBattery, getString(R.string.settings_battery_status_ok))
             showRowWarning(rowBattery, false)
+            setRowStatusColor(rowBattery, R.color.on_surface_variant)
         }
     }
 
@@ -224,6 +237,19 @@ class SettingsFragment : Fragment() {
         setRowStatus(row, subtitle)
     }
 
+    private fun setRowStatusColor(row: View, colorRes: Int) {
+        row.findViewById<TextView>(R.id.settingsRowStatus)
+            .setTextColor(ContextCompat.getColor(requireContext(), colorRes))
+    }
+
+    private fun setRowIcon(row: View, iconRes: Int, iconBgColorRes: Int) {
+        val iconCircle = row.findViewById<View>(R.id.settingsRowIconCircle)
+        val iconView = row.findViewById<android.widget.ImageView>(R.id.settingsRowIcon)
+        iconCircle.backgroundTintList =
+            android.content.res.ColorStateList.valueOf(ContextCompat.getColor(requireContext(), iconBgColorRes))
+        iconView.setImageResource(iconRes)
+    }
+
     private fun showRowWarning(row: View, show: Boolean) {
         val icon = row.findViewById<View>(R.id.settingsRowWarning)
         icon.visibility = if (show) View.VISIBLE else View.GONE
@@ -234,7 +260,8 @@ class SettingsFragment : Fragment() {
         val titleView = row.findViewById<TextView>(R.id.settingsRowTitle)
         val statusView = row.findViewById<TextView>(R.id.settingsRowStatus)
         titleView.setTextColor(ContextCompat.getColor(requireContext(), R.color.error))
-        statusView.setTextColor(ContextCompat.getColor(requireContext(), R.color.error))
+        statusView.setTextColor(ContextCompat.getColor(requireContext(), R.color.on_surface_variant))
+        setRowIcon(row, R.drawable.ic_nav_logout, R.color.settings_icon_bg_logout)
     }
 
     // endregion

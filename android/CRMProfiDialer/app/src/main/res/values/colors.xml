@@ -79,7 +79,14 @@
 
     <!-- Settings screen -->
     <color name="settings_background">#F5F5F7</color>
-    <color name="settings_row_logout_bg">#FEF2F2</color>
+    <color name="settings_row_bg">#FFFFFF</color>
+    <color name="settings_row_logout_bg">#FDECEC</color>
+    <color name="settings_divider">#E5E7EB</color>
+    <color name="settings_icon_bg_neutral">#EEF2F7</color>
+    <color name="settings_icon_bg_battery">#FEF3C7</color>
+    <color name="settings_icon_bg_logout">#FEE2E2</color>
+    <color name="settings_status_warning_orange">#D97706</color>
+    <color name="settings_status_ok">#059669</color>
 
     <!-- Bottom Navigation: выбранная вкладка — спокойный акцент, без кричащего фона -->
     <color name="bottom_nav_selected">#2563EB</color>

@@ -7,21 +7,24 @@
     android:orientation="horizontal"
     android:gravity="center_vertical"
     android:minHeight="64dp"
-    android:paddingStart="@dimen/spacing_base"
-    android:paddingEnd="@dimen/spacing_base">
+    android:paddingStart="@dimen/settings_row_padding_h"
+    android:paddingEnd="@dimen/settings_row_padding_h"
+    android:paddingTop="@dimen/settings_row_padding_v"
+    android:paddingBottom="@dimen/settings_row_padding_v"
+    android:background="@color/settings_row_bg">
 
     <!-- Левая иконка в кружке -->
     <FrameLayout
         android:id="@+id/settingsRowIconCircle"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
+        android:layout_width="@dimen/settings_icon_circle"
+        android:layout_height="@dimen/settings_icon_circle"
         android:layout_marginEnd="@dimen/spacing_base"
         android:background="@drawable/bg_settings_icon_circle">
 
         <ImageView
             android:id="@+id/settingsRowIcon"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
+            android:layout_width="@dimen/settings_icon_size"
+            android:layout_height="@dimen/settings_icon_size"
             android:layout_gravity="center"
             android:tint="@color/on_surface_variant" />
     </FrameLayout>
@@ -67,13 +70,14 @@
             android:layout_height="18dp"
             android:layout_marginEnd="@dimen/spacing_xs"
             android:visibility="gone"
-            android:tint="@color/warning"
+            android:tint="@color/settings_status_warning_orange"
             android:src="@drawable/ic_warning" />
 
         <ImageView
             android:id="@+id/settingsRowChevron"
-            android:layout_width="20dp"
-            android:layout_height="20dp"
+            android:layout_width="16dp"
+            android:layout_height="16dp"
+            android:layout_marginEnd="0dp"
             android:tint="@color/on_surface_variant"
             android:src="@drawable/ic_chevron_right" />
     </LinearLayout>

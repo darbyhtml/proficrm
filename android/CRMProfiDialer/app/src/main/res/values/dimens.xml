@@ -66,4 +66,12 @@
     <dimen name="historyCardRadius">14dp</dimen>
     <dimen name="bottomSheetTitleSize">18sp</dimen>
     <dimen name="bottomSheetPhoneTitleSize">22sp</dimen>
+
+    <!-- Настройки -->
+    <dimen name="settings_row_padding_v">14dp</dimen>
+    <dimen name="settings_row_padding_h">16dp</dimen>
+    <dimen name="settings_icon_circle">40dp</dimen>
+    <dimen name="settings_icon_size">20dp</dimen>
+    <dimen name="settings_section_top_spacing">18dp</dimen>
+    <dimen name="settings_divider_height">1dp</dimen>
 </resources>

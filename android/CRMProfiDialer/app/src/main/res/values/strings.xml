@@ -171,8 +171,8 @@
     <string name="settings_battery_hint">Отключите для стабильной работы</string>
 
     <string name="settings_autostart_title">Автозапуск</string>
-    <string name="settings_autostart_status_recommended">Рекомендуется включить</string>
-    <string name="settings_autostart_status_generic">Зависит от системы</string>
+    <string name="settings_autostart_status_recommended">Зависит от системы</string>
+    <string name="settings_autostart_status_generic">Разрешён</string>
     <string name="settings_autostart_hint">Приложение запускается автоматически</string>
     <string name="settings_autostart_toast">Если не нашли пункт автозапуска, откройте настройки приложения и разрешите работу в фоне.</string>
 

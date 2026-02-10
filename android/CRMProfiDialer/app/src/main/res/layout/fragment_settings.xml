@@ -29,11 +29,17 @@
             android:id="@+id/rowUser"
             layout="@layout/item_settings_row" />
 
+        <!-- divider внутри секции -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/settings_divider_height"
+            android:background="@color/settings_divider" />
+
         <include
             android:id="@+id/rowLogout"
             layout="@layout/item_settings_row" />
 
-        <!-- Разделитель -->
+        <!-- Разделитель между секциями -->
         <View
             android:layout_width="match_parent"
             android:layout_height="8dp" />
@@ -67,19 +73,34 @@
             android:id="@+id/rowNotifications"
             layout="@layout/item_settings_row" />
 
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/settings_divider_height"
+            android:background="@color/settings_divider" />
+
         <include
             android:id="@+id/rowBattery"
             layout="@layout/item_settings_row" />
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/settings_divider_height"
+            android:background="@color/settings_divider" />
 
         <include
             android:id="@+id/rowAutostart"
             layout="@layout/item_settings_row" />
 
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/settings_divider_height"
+            android:background="@color/settings_divider" />
+
         <include
             android:id="@+id/rowManufacturer"
             layout="@layout/item_settings_row" />
 
-        <!-- Разделитель -->
+        <!-- Разделитель между секциями -->
         <View
             android:layout_width="match_parent"
             android:layout_height="8dp" />
@@ -101,6 +122,11 @@
             android:id="@+id/rowAbout"
             layout="@layout/item_settings_row" />
 
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="@dimen/settings_divider_height"
+            android:background="@color/settings_divider" />
+
         <include
             android:id="@+id/rowDiagnostics"
             layout="@layout/item_settings_row" />
@@ -118,6 +144,7 @@
                 android:layout_height="wrap_content"
                 android:text="@string/settings_footer_app_name"
                 android:textStyle="bold"
+                android:textSize="14sp"
                 android:textColor="@color/on_surface" />
 
             <TextView
@@ -126,7 +153,7 @@
                 android:layout_marginTop="@dimen/spacing_xs"
                 android:text="@string/settings_footer_copyright"
                 android:textColor="@color/on_surface_variant"
-                android:textSize="12sp" />
+                android:textSize="11sp" />
 
             <TextView
                 android:layout_width="match_parent"
@@ -136,7 +163,7 @@
                 android:paddingEnd="@dimen/spacing_base"
                 android:text="@string/settings_footer_note"
                 android:textColor="@color/on_surface_variant"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:gravity="center_horizontal" />
         </LinearLayout>
     </LinearLayout>
