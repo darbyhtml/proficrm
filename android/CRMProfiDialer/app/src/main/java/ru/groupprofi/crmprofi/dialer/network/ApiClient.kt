@@ -114,6 +114,19 @@ class ApiClient private constructor(context: Context) {
         private var INSTANCE: ApiClient? = null
         
         fun getInstance(context: Context): ApiClient {
+            // Fail-fast с понятным логом, если кто-то дернул ApiClient до TokenManager.init().
+            // Это защищает от скрытых регрессий, когда новый ранний компонент создаёт ApiClient слишком рано.
+            val tm = TokenManager.getInstanceOrNull()
+            if (tm == null) {
+                ru.groupprofi.crmprofi.dialer.logs.AppLogger.e(
+                    "ApiClient",
+                    "getInstance() called before TokenManager.init(applicationContext). " +
+                        "Проверьте порядок инициализации: нельзя создавать ApiClient из ранних компонентов " +
+                        "(Service/Receiver/Activity) до TokenManager.init()."
+                )
+                throw IllegalStateException("ApiClient.getInstance() вызван до TokenManager.init(applicationContext)")
+            }
+
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: ApiClient(context.applicationContext).also { INSTANCE = it }
             }
