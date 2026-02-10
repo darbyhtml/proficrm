@@ -8,6 +8,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework import status as drf_status
 import logging
+import hashlib
 
 from accounts.security import (
     get_client_ip,
@@ -103,15 +104,18 @@ class LoggedTokenRefreshView(TokenRefreshView):
 
     def post(self, request, *args, **kwargs):
         refresh_raw = (request.data.get("refresh") or "").strip()
-        refresh_prefix = refresh_raw[:16] if refresh_raw else ""
+        # Безопасный fingerprint вместо префикса токена: не логируем сам токен, только хэш.
+        refresh_fingerprint = ""
+        if refresh_raw:
+            refresh_fingerprint = hashlib.sha256(refresh_raw.encode("utf-8")).hexdigest()[:12]
 
         try:
             response = super().post(request, *args, **kwargs)
         except Exception as e:
             # На всякий случай логируем неожиданные ошибки, если они не преобразованы в Response.
             logger.error(
-                "TokenRefreshView: unexpected error for refresh_prefix=%s…, path=%s, error=%s",
-                refresh_prefix,
+                "TokenRefreshView: unexpected error for refresh_fp=%s, path=%s, error=%s",
+                refresh_fingerprint or "empty",
                 request.path,
                 str(e),
                 exc_info=True,
@@ -124,17 +128,23 @@ class LoggedTokenRefreshView(TokenRefreshView):
                 detail = response.data.get("detail")
             except Exception:
                 detail = None
+            # detail может быть не строкой — приводим к строке для безопасного логирования.
+            detail_str = str(detail) if detail is not None else None
 
             # Если у вас есть middleware с request_id — его тоже можно залогировать из request.META.
             request_id = request.META.get("HTTP_X_REQUEST_ID") or request.META.get("X_REQUEST_ID")
+            ip = get_client_ip(request)
+            user_agent = request.META.get("HTTP_USER_AGENT", "")
 
             logger.warning(
-                "TokenRefreshView: status=%s, detail=%s, refresh_prefix=%s…, path=%s, request_id=%s",
+                "TokenRefreshView: status=%s, detail=%s, refresh_fp=%s, path=%s, request_id=%s, ip=%s, ua=%s",
                 response.status_code,
-                detail,
-                refresh_prefix if refresh_prefix else "empty",
+                detail_str,
+                refresh_fingerprint or "empty",
                 request.path,
                 request_id,
+                ip,
+                user_agent,
             )
 
         return response
