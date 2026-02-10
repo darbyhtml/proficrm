@@ -292,7 +292,7 @@ class AppReadinessChecker(private val context: Context) : AppReadinessProvider {
             )
 
             ReadyState.SERVICE_BLOCKED -> {
-                val reason = tokenManager.getServiceBlockReason()
+                val reason = tokenManager?.getServiceBlockReason()
                 val title = reason?.userTitle ?: "Приложение не готово к звонкам"
                 val msg = reason?.userMessage ?: "Приложение не готово к звонкам по неизвестной причине."
                 val fixAction = when (reason) {

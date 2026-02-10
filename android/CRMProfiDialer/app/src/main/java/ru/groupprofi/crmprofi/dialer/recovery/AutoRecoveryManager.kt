@@ -28,9 +28,10 @@ class AutoRecoveryManager private constructor(context: Context) {
     private val readinessChecker = AppReadinessChecker(appContext)
     /**
      * TokenManager может быть ещё не готов сразу после старта процесса.
-     * Используем nullable ссылку и деградируем без крэша.
+     * Берём его лениво через getInstanceOrNull(), чтобы "догнать" init() позже.
      */
-    private val tokenManager: TokenManager? = TokenManager.getInstanceOrNull()
+    private val tokenManager: TokenManager?
+        get() = TokenManager.getInstanceOrNull()
     private val notificationManager = AppNotificationManager.getInstance(appContext)
     
     private var recoveryJob: Job? = null
@@ -216,10 +217,16 @@ class AutoRecoveryManager private constructor(context: Context) {
     private suspend fun tryRestartService() {
         try {
             AppLogger.i("AutoRecoveryManager", "Попытка перезапуска сервиса... (попытка ${recoveryAttempts.get() + 1}/3)")
-            
-            val deviceId = tokenManager.getDeviceId() ?: return
-            val accessToken = tokenManager.getAccessToken() ?: return
-            val refreshToken = tokenManager.getRefreshToken() ?: return
+            val tm = tokenManager
+            if (tm == null) {
+                AppLogger.w("AutoRecoveryManager", "TokenManager not ready in tryRestartService()")
+                recoveryAttempts.incrementAndGet()
+                return
+            }
+
+            val deviceId = tm.getDeviceId() ?: return
+            val accessToken = tm.getAccessToken() ?: return
+            val refreshToken = tm.getRefreshToken() ?: return
             
             val intent = Intent(appContext, CallListenerService::class.java).apply {
                 putExtra(CallListenerService.EXTRA_TOKEN, accessToken)
