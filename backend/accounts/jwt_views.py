@@ -6,6 +6,8 @@ from __future__ import annotations
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework import status as drf_status
+import logging
 
 from accounts.security import (
     get_client_ip,
@@ -18,6 +20,9 @@ from accounts.security import (
 )
 from audit.service import log_event
 from audit.models import ActivityEvent
+
+
+logger = logging.getLogger(__name__)
 
 
 class SecureTokenObtainPairView(TokenObtainPairView):
@@ -88,4 +93,49 @@ class SecureTokenObtainPairView(TokenObtainPairView):
                 {"detail": "Неверные учетные данные."},
                 status=status.HTTP_401_UNAUTHORIZED
             )
+        
+
+class LoggedTokenRefreshView(TokenRefreshView):
+    """
+    Обёртка над стандартным TokenRefreshView с логированием причин 401/403.
+    Позволяет увидеть реальные источники "вылетов" по refresh без изменения поведения.
+    """
+
+    def post(self, request, *args, **kwargs):
+        refresh_raw = (request.data.get("refresh") or "").strip()
+        refresh_prefix = refresh_raw[:16] if refresh_raw else ""
+
+        try:
+            response = super().post(request, *args, **kwargs)
+        except Exception as e:
+            # На всякий случай логируем неожиданные ошибки, если они не преобразованы в Response.
+            logger.error(
+                "TokenRefreshView: unexpected error for refresh_prefix=%s…, path=%s, error=%s",
+                refresh_prefix,
+                request.path,
+                str(e),
+                exc_info=True,
+            )
+            raise
+
+        if response.status_code in (drf_status.HTTP_401_UNAUTHORIZED, drf_status.HTTP_403_FORBIDDEN):
+            detail = None
+            try:
+                detail = response.data.get("detail")
+            except Exception:
+                detail = None
+
+            # Если у вас есть middleware с request_id — его тоже можно залогировать из request.META.
+            request_id = request.META.get("HTTP_X_REQUEST_ID") or request.META.get("X_REQUEST_ID")
+
+            logger.warning(
+                "TokenRefreshView: status=%s, detail=%s, refresh_prefix=%s…, path=%s, request_id=%s",
+                response.status_code,
+                detail,
+                refresh_prefix if refresh_prefix else "empty",
+                request.path,
+                request_id,
+            )
+
+        return response
 

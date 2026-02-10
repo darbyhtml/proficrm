@@ -21,11 +21,10 @@ from django.views.generic import RedirectView
 from django.templatetags.static import static
 
 from rest_framework import routers
-from rest_framework_simplejwt.views import TokenRefreshView
 
 from accounts.models import User
 from accounts.views import SecureLoginView, magic_link_login
-from accounts.jwt_views import SecureTokenObtainPairView
+from accounts.jwt_views import SecureTokenObtainPairView, LoggedTokenRefreshView
 from companies.api import CompanyNoteViewSet, CompanyViewSet, ContactViewSet
 from tasksapp.api import TaskTypeViewSet, TaskViewSet
 from phonebridge.api import (
@@ -84,7 +83,7 @@ urlpatterns = [
     # Magic link authentication
     path("auth/magic/<str:token>/", magic_link_login, name="magic_link_login"),
     path("api/token/", SecureTokenObtainPairView.as_view(), name="token_obtain_pair"),
-    path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path("api/token/refresh/", LoggedTokenRefreshView.as_view(), name="token_refresh"),
     path("api/phone/devices/register/", RegisterDeviceView.as_view(), name="phone_register_device"),
     path("api/phone/devices/heartbeat/", DeviceHeartbeatView.as_view(), name="phone_device_heartbeat"),
     path("api/phone/calls/pull/", PullCallView.as_view(), name="phone_pull_call"),
