@@ -7007,7 +7007,7 @@ def _apply_task_filters_for_bulk_ui(qs, user: User, data):
             qs = qs.filter(assigned_to_id=assigned_to_id)
             assignee = (
                 User.objects.filter(id=assigned_to_id)
-                .only("first_name", "last_name", "middle_name", "email")
+                .only("first_name", "last_name", "email")
                 .first()
             )
             if assignee:

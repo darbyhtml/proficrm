@@ -123,9 +123,16 @@ class CallListenerService : Service() {
         private const val SERVER_SUPPORTS_LONG_POLL_THRESHOLD_MS = 1_000L // Если ответ < 1 сек, сервер не поддерживает long-poll
         private const val SERVER_FAST_RESPONSE_THRESHOLD_MS = 300L // Если ответ < 300мс, сервер точно не поддерживает long-poll
     }
-
+    
     override fun onBind(intent: Intent?): IBinder? = null
-
+    
+    override fun onCreate() {
+        super.onCreate()
+        // Регистрируем broadcast receiver синхронно при создании сервиса,
+        // чтобы избежать гонок между асинхронной регистрацией и остановкой сервиса.
+        registerBroadcastReceivers()
+    }
+    
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
@@ -272,13 +279,10 @@ class CallListenerService : Service() {
 
             // Активируем burst window при старте сервиса (только один раз, с debounce)
             activateBurstWindow("SERVICE_START", allowDebounce = false)
-
+            
             // Регистрируем network connectivity callback для отслеживания восстановления сети
             registerNetworkConnectivityCallback()
-
-            // Регистрируем broadcast receiver для внешних событий (APP_OPENED, WAKE_NOW)
-            registerBroadcastReceivers()
-
+            
             // Устанавливаем callback для PullCallCoordinator (для push-ускорителя)
             if (AppFeatures.isFcmAcceleratorEnabled()) {
                 try {
@@ -889,7 +893,6 @@ class CallListenerService : Service() {
      * Идемпотентно: при повторном вызове старый приёмник снимается, чтобы не было утечки (IntentReceiverLeaked).
      */
     private fun registerBroadcastReceivers() {
-        unregisterBroadcastReceivers()
         broadcastReceiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {

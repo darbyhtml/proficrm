@@ -29,16 +29,16 @@ class ViewAsUpdateTestCase(TestCase):
         self.client.force_login(self.admin)
 
     def test_view_as_update_requires_admin(self):
-        """Только администратор может вызывать view_as_update."""
+        """Только администратор может вызывать view_as_update; менеджер получает редирект и сессия не меняется."""
         self.client.force_login(self.manager)
         response = self.client.post(
             reverse("view_as_update"),
             {"view_as_branch_id": "1", "next": "/"},
             follow=False,
         )
-        self.assertIn(response.status_code, [302, 403])
-        if response.status_code == 302:
-            self.assertNotEqual(response.url, "/")
+        self.assertEqual(response.status_code, 302)  # редирект на dashboard
+        # Сессия не должна содержать view_as_branch_id — менеджер не мог изменить режим просмотра
+        self.assertIsNone(self.client.session.get("view_as_branch_id"))
 
     def test_view_as_update_saves_branch_id_in_session(self):
         """POST с view_as_branch_id сохраняет филиал в сессии."""
