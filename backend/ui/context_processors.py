@@ -77,11 +77,13 @@ def ui_globals(request):
                 if as_role in valid_roles:
                     view_as_role = as_role
 
+                # Филиал только из сессии: если не выбран — показываем «все», не филиал админа
+                view_as_branch = None
                 as_branch_id = session.get("view_as_branch_id")
                 if as_branch_id:
                     try:
                         bid = int(as_branch_id)
-                        view_as_branch = Branch.objects.filter(id=bid).first() or view_as_branch
+                        view_as_branch = Branch.objects.filter(id=bid).first()
                     except (TypeError, ValueError):
                         pass
 

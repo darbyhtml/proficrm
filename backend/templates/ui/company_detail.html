@@ -601,8 +601,8 @@
                         <input type="hidden" name="confirmed" value="1">
                         <button type="submit" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25">Отметить холодным</button>
                       </form>
-                      {% if is_admin %}
-                        <form
+                      {% if view_is_admin %}
+                      <form
                           method="post"
                           action="/companies/{{ company.id }}/cold-call/reset/"
                           class="js-cold-call-form"
@@ -735,7 +735,7 @@
                               <input type="hidden" name="confirmed" value="1">
                               <button type="submit" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25">Отметить холодным</button>
                             </form>
-                            {% if is_admin %}
+                            {% if view_is_admin %}
                               <form
                                 method="post"
                                 action="/company-phones/{{ phone.id }}/cold-call/reset/"
@@ -1200,7 +1200,7 @@
                                   </svg>
                                 </button>
                               </form>
-                              {% if is_admin %}
+                              {% if view_is_admin %}
                                 <form
                                   method="post"
                                   action="/contact-phones/{{ p.id }}/cold-call/reset/"
@@ -2099,7 +2099,7 @@
       })();
     </script>
 
-    {% if can_view_activity %}
+    {% if view_can_view_activity %}
       <details class="card card-pad">
         <summary class="cursor-pointer font-medium">История действий</summary>
         <div class="mt-3">

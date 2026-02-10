@@ -36,6 +36,7 @@
 ## Чеклисты и тестирование
 
 - **[TESTING_CHECKLIST.md](checklists/TESTING_CHECKLIST.md)** — чеклист тестирования с ожидаемыми логами.
+- **Тесты в Docker:** из корня проекта. Контейнер уже запущен: `docker compose exec web python manage.py test` (или `... test ui.tests.test_view_as`). Контейнер не запущен: `./scripts/run_tests_docker.sh [модуль]` или на Windows `scripts\run_tests_docker.bat [модуль]`.
 
 ---
 

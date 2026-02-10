@@ -278,7 +278,7 @@
       </div>
     {% endif %}
 
-    {% if is_admin %}
+    {% if view_is_admin %}
       <div id="task-bulk-actions" class="tasks-layout-block">
         <div class="task-bulk-block">
           <form method="post" action="{% url 'task_bulk_reassign' %}" id="bulkReassignForm">

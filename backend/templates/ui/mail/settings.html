@@ -6,7 +6,7 @@
     <div>
       <h1 class="text-2xl font-semibold">Почта: настройки SMTP</h1>
       <div class="muted text-sm">
-        {% if is_admin %}
+        {% if view_is_admin %}
           Администратор настраивает SMTP один раз — менеджерам ничего вводить не нужно.
         {% else %}
           SMTP настраивается администратором. Ваш адрес отправителя будет: <b>{{ user_sender_email|default:"(не задан в профиле)" }}</b>
@@ -30,7 +30,7 @@
       </div>
     </details>
 
-    {% if is_admin %}
+    {% if view_is_admin %}
       <form method="post" class="card card-pad space-y-3">
         {% csrf_token %}
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3">

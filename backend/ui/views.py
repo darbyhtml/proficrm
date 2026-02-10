@@ -195,7 +195,7 @@ def view_as_update(request: HttpRequest) -> HttpResponse:
 
     view_user_id = (request.POST.get("view_user_id") or "").strip()
     view_role = (request.POST.get("view_role") or "").strip()
-    view_branch_id = (request.POST.get("view_branch_id") or "").strip()
+    view_branch_id = (request.POST.get("view_as_branch_id") or request.POST.get("view_branch_id") or "").strip()
 
     # Приоритет: если выбран конкретный пользователь, используем его
     # и сбрасываем роль/филиал (они берутся из пользователя)
@@ -841,10 +841,12 @@ def _qs_without_page(request: HttpRequest, *, page_key: str = "page") -> str:
 def dashboard(request: HttpRequest) -> HttpResponse:
     """
     Dashboard (Рабочий стол) с оптимизированными запросами и кэшированием.
+    Доступ проверяется по request.user (policy_required); отображаемые данные — по эффективному пользователю (режим просмотра).
     """
     from django.core.cache import cache
-    
-    user: User = request.user
+
+    # Эффективный пользователь для отображения данных (режим «просмотр как»). Права не меняются.
+    user: User = get_effective_user(request)
     now = timezone.now()
     # Важно: при USE_TZ=True timezone.now() в UTC. Для фильтров "сегодня/неделя" считаем границы по локальной TZ.
     local_now = timezone.localtime(now)
@@ -1064,9 +1066,9 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 def dashboard_poll(request: HttpRequest) -> JsonResponse:
     """
     AJAX polling endpoint для обновления dashboard.
-    Возвращает JSON с обновлёнными данными, если были изменения после since.
+    Данные фильтруются по эффективному пользователю (режим просмотра).
     """
-    user: User = request.user
+    user: User = get_effective_user(request)
     since = request.GET.get('since')
     
     if since:
@@ -1274,12 +1276,12 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
 def dashboard_sse(request: HttpRequest) -> StreamingHttpResponse:
     """
     Server-Sent Events endpoint для live updates dashboard.
-    Отправляет события при изменении задач или договоров.
+    События строятся по данным эффективного пользователя (режим просмотра).
     """
     import json
     import time
-    
-    user: User = request.user
+
+    user: User = get_effective_user(request)
     
     def event_stream():
         last_check = timezone.now()
@@ -1335,15 +1337,14 @@ def dashboard_sse(request: HttpRequest) -> StreamingHttpResponse:
 @policy_required(resource_type="page", resource="ui:analytics")
 def analytics(request: HttpRequest) -> HttpResponse:
     """
-    Аналитика по звонкам/отметкам для руководителей:
-    - РОП/директор: по своему филиалу
-    - управляющий/админ: по всем филиалам (с группировкой)
+    Аналитика по звонкам/отметкам для руководителей.
+    Доступ только по реальному пользователю; список и данные — по эффективному (режим просмотра).
     """
-    user: User = request.user
-    if not (user.is_superuser or user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD)):
+    if not (request.user.is_superuser or request.user.role in (User.Role.ADMIN, User.Role.GROUP_MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD)):
         messages.error(request, "Нет доступа к аналитике.")
         return redirect("dashboard")
 
+    user: User = get_effective_user(request)
     now = timezone.now()
     local_now = timezone.localtime(now)
     period = (request.GET.get("period") or "day").strip()  # day|month
@@ -2026,17 +2027,26 @@ def cold_calls_report_last_7_days(request: HttpRequest) -> JsonResponse:
 @login_required
 @policy_required(resource_type="page", resource="ui:companies:list")
 def company_list(request: HttpRequest) -> HttpResponse:
+    # Реальный пользователь для проверки прав (is_admin и т.д.)
     user: User = request.user
+    # Эффективный пользователь для списков «Ответственный»/«Кому передать» в режиме просмотра
+    effective_user: User = get_effective_user(request)
     now = timezone.now()
     # Просмотр компаний: всем доступна вся база (без ограничения по филиалу/scope).
     # Кэшируем общее количество компаний (TTL 10 минут)
     from django.core.cache import cache
-    
-    # Кэш-ключ должен учитывать пользователя и режим view_as
+
+    # Кэш-ключ должен учитывать пользователя и режим view_as (только если режим включён)
     view_as_user = get_view_as_user(request)
     effective_user_id = view_as_user.id if view_as_user else user.id
-    view_as_role = request.session.get("view_as_role")
-    view_as_branch_id = request.session.get("view_as_branch_id")
+    view_as_enabled = request.session.get("view_as_enabled", False)
+    view_as_role = request.session.get("view_as_role") if view_as_enabled else None
+    view_as_branch_id = None
+    if view_as_enabled and request.session.get("view_as_branch_id"):
+        try:
+            view_as_branch_id = int(request.session.get("view_as_branch_id"))
+        except (TypeError, ValueError):
+            view_as_branch_id = None
     
     # Создаем уникальный ключ кэша с учетом прав доступа
     cache_key_parts = ["companies_total_count", str(effective_user_id)]
@@ -2233,14 +2243,14 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "dir": direction,
             "sort_field": sort,
             "sort_dir": direction,
-            "responsibles": get_users_for_lists(user),
+            "responsibles": get_users_for_lists(effective_user),
             "statuses": CompanyStatus.objects.order_by("name"),
             "spheres": CompanySphere.objects.order_by("name"),
             "branches": Branch.objects.order_by("name"),
             "regions": Region.objects.order_by("name"),
             "contract_types": ContractType.objects.order_by("order", "name"),
             "company_list_columns": columns,
-            "transfer_targets": get_transfer_targets(user),
+            "transfer_targets": get_transfer_targets(effective_user),
             "per_page": per_page,
             "is_admin": is_admin,
             "has_companies_without_responsible": has_companies_without_responsible,
@@ -2261,11 +2271,17 @@ def company_list_ajax(request: HttpRequest) -> JsonResponse:
     # Используем ту же логику, что и в company_list
     from django.core.cache import cache
     
-    # Кэш-ключ должен учитывать пользователя и режим view_as
+    # Кэш-ключ должен учитывать пользователя и режим view_as (только если режим включён)
     view_as_user = get_view_as_user(request)
     effective_user_id = view_as_user.id if view_as_user else user.id
-    view_as_role = request.session.get("view_as_role")
-    view_as_branch_id = request.session.get("view_as_branch_id")
+    view_as_enabled = request.session.get("view_as_enabled", False)
+    view_as_role = request.session.get("view_as_role") if view_as_enabled else None
+    view_as_branch_id = None
+    if view_as_enabled and request.session.get("view_as_branch_id"):
+        try:
+            view_as_branch_id = int(request.session.get("view_as_branch_id"))
+        except (TypeError, ValueError):
+            view_as_branch_id = None
     
     # Создаем уникальный ключ кэша с учетом прав доступа
     cache_key_parts = ["companies_total_count", str(effective_user_id)]
@@ -5819,7 +5835,8 @@ def phone_call_create(request: HttpRequest) -> HttpResponse:
 @login_required
 @policy_required(resource_type="page", resource="ui:tasks:list")
 def task_list(request: HttpRequest) -> HttpResponse:
-    user: User = request.user
+    # Эффективный пользователь для отображения списка (режим «просмотр как»). Права проверяются по request.user выше.
+    user: User = get_effective_user(request)
     now = timezone.now()
     local_now = timezone.localtime(now)
     today_start = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -8236,7 +8253,8 @@ def settings_users(request: HttpRequest) -> HttpResponse:
         view_as_enabled = request.POST.get("view_as_enabled") == "on"
         request.session["view_as_enabled"] = view_as_enabled
         if not view_as_enabled:
-            # Если режим отключён, сбрасываем настройки просмотра
+            # Если режим отключён, сбрасываем все настройки просмотра
+            request.session.pop("view_as_user_id", None)
             request.session.pop("view_as_role", None)
             request.session.pop("view_as_branch_id", None)
         messages.success(request, f"Режим просмотра администратора {'включён' if view_as_enabled else 'выключен'}.")
@@ -10240,7 +10258,7 @@ def settings_calls_stats(request: HttpRequest) -> HttpResponse:
     # Определяем, каких менеджеров показывать
     session = getattr(request, "session", {})
     view_as_branch_id = None
-    if (request.user.is_superuser or request.user.role == User.Role.ADMIN) and session.get("view_as_branch_id"):
+    if (request.user.is_superuser or request.user.role == User.Role.ADMIN) and session.get("view_as_enabled") and session.get("view_as_branch_id"):
         try:
             view_as_branch_id = int(session.get("view_as_branch_id"))
         except (TypeError, ValueError):

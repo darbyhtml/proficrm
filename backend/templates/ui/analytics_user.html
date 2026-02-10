@@ -102,7 +102,7 @@
                   {% if call.call_ended_at %}
                     <span>До: <span class="font-mono">{{ call.call_ended_at|date:"H:i" }}</span></span>
                   {% endif %}
-                  {% if call.action_source and is_admin %}
+                  {% if call.action_source and view_is_admin %}
                     <span>Источник: <span class="font-medium">{{ call.action_source|format_action_source }}</span></span>
                   {% endif %}
                 </div>
@@ -190,7 +190,7 @@
                   {% if call.call_ended_at %}
                     <span>До: <span class="font-mono">{{ call.call_ended_at|date:"H:i" }}</span></span>
                   {% endif %}
-                  {% if call.action_source and is_admin %}
+                  {% if call.action_source and view_is_admin %}
                     <span>Источник: <span class="font-medium">{{ call.action_source|format_action_source }}</span></span>
                   {% endif %}
                 </div>

@@ -15,14 +15,14 @@
     <div class="flex items-end justify-between gap-3">
       <div>
         <h1 class="text-2xl font-semibold">Кампании рассылок</h1>
-        {% if is_admin %}
+        {% if view_is_admin %}
           <div class="muted text-sm">Управление рассылками и аналитика по пользователям</div>
         {% else %}
           <div class="muted text-sm">Создай кампанию → сгенерируй получателей → отправляй батчами.</div>
         {% endif %}
       </div>
       <div class="flex gap-2">
-        {% if is_admin %}
+        {% if view_is_admin %}
           <a class="btn btn-outline" href="/mail/admin/">Админ-панель</a>
         {% endif %}
         <a class="btn btn-outline" href="/mail/signature/">Настройка подписи</a>
@@ -32,7 +32,7 @@
 
     {# Компактный виджет квоты для всех #}
     {% if quota %}
-      {% if is_admin %}
+      {% if view_is_admin %}
         {# Компактный виджет для администратора с ссылкой на админ-панель #}
         <div class="card card-pad bg-gradient-to-r from-brand-soft/20 to-transparent border border-brand-soft/30" id="quota-card">
           <div class="flex items-center justify-between gap-3">
@@ -110,7 +110,7 @@
       {% endif %}
     {% endif %}
 
-    {% if is_admin and analytics %}
+    {% if view_is_admin and analytics %}
       {# Компактный виджет аналитики для администратора со ссылкой на админ-панель #}
       <div class="card card-pad mb-4 bg-gradient-to-br from-white to-brand-soft/5 border border-brand-soft/20">
         <div class="flex items-center justify-between gap-3 mb-2">
@@ -223,13 +223,13 @@
                     </td>
                   </tr>
                   {% for c in m.campaigns %}
-                    {% include "ui/mail/_campaign_row.html" with campaign=c show_creator_column=show_creator_column is_admin=is_admin %}
+                    {% include "ui/mail/_campaign_row.html" with campaign=c show_creator_column=show_creator_column is_admin=view_is_admin %}
                   {% endfor %}
                 {% endfor %}
               {% endfor %}
             {% else %}
             {% for c in campaigns %}
-              {% include "ui/mail/_campaign_row.html" with campaign=c show_creator_column=show_creator_column is_admin=is_admin %}
+              {% include "ui/mail/_campaign_row.html" with campaign=c show_creator_column=show_creator_column is_admin=view_is_admin %}
             {% empty %}
               <tr><td class="muted" colspan="{% if show_creator_column %}7{% else %}6{% endif %}" style="padding:1.25rem 1rem">Кампаний нет.</td></tr>
             {% endfor %}
@@ -253,7 +253,7 @@
     </div>
 
     {# Модальное окно "Отписки" — только для администратора #}
-    {% if is_admin %}
+    {% if view_is_admin %}
       <div id="unsubscribes-modal" class="hidden fixed inset-0 z-50">
         <div class="absolute inset-0 bg-black/40" data-close-unsubscribes></div>
         <div class="absolute inset-0 flex items-center justify-center p-4">
@@ -384,7 +384,7 @@
     })();
   </script>
 
-  {% if is_admin %}
+  {% if view_is_admin %}
     <script>
       (function () {
         const modal = document.getElementById('unsubscribes-modal');

@@ -599,7 +599,7 @@
         {# Дополнительные действия #}
         {# В Django templates нельзя использовать скобки в if-условиях #}
         {% if counts.total > 0 %}
-          {% if counts.failed > 0 or is_admin %}
+          {% if counts.failed > 0 or view_is_admin %}
           <div class="card card-pad">
             <div class="font-medium mb-2 text-sm">Дополнительные действия</div>
             <div class="text-xs text-brand-dark/60 mb-3">
@@ -619,7 +619,7 @@
                   </button>
                 </form>
               {% endif %}
-              {% if is_admin %}
+              {% if view_is_admin %}
                 <form method="post" action="/mail/campaigns/{{ campaign.id }}/recipients/reset/" onsubmit="return confirm('ВНИМАНИЕ: это вернёт в очередь даже УЖЕ ОТПРАВЛЕННЫЕ email. Письма могут уйти повторно. Продолжить?');" class="inline">
                   {% csrf_token %}
                   <input type="hidden" name="scope" value="all" />
@@ -651,7 +651,7 @@
         {% endif %}
         
         {# Детальная статистика ошибок - только для администратора #}
-        {% if is_admin and error_types %}
+        {% if view_is_admin and error_types %}
           <details class="card card-pad">
             <summary class="cursor-pointer font-medium text-sm flex items-center gap-2">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">

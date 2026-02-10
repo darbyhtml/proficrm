@@ -20,7 +20,7 @@
         </div>
         <div class="flex gap-2">
           <a href="/companies/new/" class="btn btn-primary">+ Добавить компанию</a>
-          {% if is_admin %}
+          {% if view_is_admin %}
             <a href="/companies/export/?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}{% for r_id in selected_regions %}&region={{ r_id }}{% endfor %}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}" class="btn btn-outline">Экспорт CSV</a>
           {% endif %}
         </div>
