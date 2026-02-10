@@ -129,6 +129,7 @@ class CallListenerService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_STOP -> {
+                unregisterBroadcastReceivers()
                 stopSelf()
                 return START_NOT_STICKY
             }
@@ -151,6 +152,7 @@ class CallListenerService : Service() {
         if (tm == null) {
             ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "TokenManager not ready")
             scheduleRetryIfNeeded(intent)
+            unregisterBroadcastReceivers()
             stopSelf()
             // Возвращаем START_STICKY чтобы ОС перезапустила сервис после убийства процесса
             return START_STICKY
@@ -193,6 +195,7 @@ class CallListenerService : Service() {
             }
             tokenManager.setServiceBlockReason(reason)
             ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "Service start blocked: $reason")
+            unregisterBroadcastReceivers()
             stopSelf()
             // Возвращаем START_STICKY чтобы ОС перезапустила сервис после убийства процесса
             // (если токены появятся позже, сервис сможет запуститься)
@@ -238,6 +241,7 @@ class CallListenerService : Service() {
             tokenManager.setServiceBlockReason(ru.groupprofi.crmprofi.dialer.domain.ServiceBlockReason.FOREGROUND_START_FAILED)
             ru.groupprofi.crmprofi.dialer.logs.AppLogger.e("CallListenerService", "startForeground failed, stopping service", t)
             foregroundStarted = false
+            unregisterBroadcastReceivers()
             stopSelf()
             // Возвращаем START_STICKY чтобы ОС перезапустила сервис после убийства процесса
             // (если проблема с foreground решится, сервис сможет запуститься)
@@ -529,6 +533,7 @@ class CallListenerService : Service() {
                 if (!tokenManager.hasTokens()) {
                     tokenManager.clearAll()
                 }
+                unregisterBroadcastReceivers()
                 stopSelf()
             }
             0 -> {
@@ -881,8 +886,10 @@ class CallListenerService : Service() {
     
     /**
      * Зарегистрировать broadcast receivers для внешних событий.
+     * Идемпотентно: при повторном вызове старый приёмник снимается, чтобы не было утечки (IntentReceiverLeaked).
      */
     private fun registerBroadcastReceivers() {
+        unregisterBroadcastReceivers()
         broadcastReceiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
                 when (intent?.action) {
@@ -908,13 +915,14 @@ class CallListenerService : Service() {
      * Отменить регистрацию broadcast receivers.
      */
     private fun unregisterBroadcastReceivers() {
-        broadcastReceiver?.let { receiver ->
+        val receiver = broadcastReceiver
+        broadcastReceiver = null
+        receiver?.let { r ->
             try {
-                unregisterReceiver(receiver)
+                unregisterReceiver(r)
             } catch (e: Exception) {
                 ru.groupprofi.crmprofi.dialer.logs.AppLogger.w("CallListenerService", "Failed to unregister broadcast receiver: ${e.message}")
             }
-            broadcastReceiver = null
         }
     }
     
