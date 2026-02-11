@@ -2094,8 +2094,7 @@
         (function() {
           function initNoteMenu() {
             const menuModal = document.getElementById('noteMenuModal');
-            const modernRoot = document.getElementById('companyDetailModern');
-            if (!modernRoot || !menuModal) return;
+            if (!menuModal) return;
 
             let currentId = null;
             let currentPinned = false;
@@ -2121,8 +2120,8 @@
               menuModal.classList.add('hidden');
             }
 
-            // Делегирование кликов по кнопкам «⋯» только в modern-режиме
-            modernRoot.addEventListener('click', (e) => {
+            // Делегирование кликов по кнопкам «⋯»
+            document.addEventListener('click', (e) => {
               const btn = e.target.closest('[data-note-menu-btn]');
               if (!btn) return;
               const id = btn.getAttribute('data-note-id');
