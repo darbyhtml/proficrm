@@ -2420,11 +2420,19 @@
   </div>
 
   <div id="noteMenuModern" class="hidden fixed z-[210]">
-    <div class="card card-pad space-y-1 shadow-xl border border-brand-soft/80 bg-white rounded-xl min-w-[180px]">
-      <button type="button" class="btn btn-outline btn-sm w-full justify-start" data-note-menu-modern-action="edit">Изменить</button>
-      <button type="button" class="btn btn-outline btn-sm w-full justify-start" data-note-menu-modern-action="pin">Закрепить</button>
-      <button type="button" class="btn btn-outline btn-sm w-full justify-start" data-note-menu-modern-action="unpin">Открепить</button>
-      <button type="button" class="btn btn-outline btn-sm w-full justify-start text-red-600" data-note-menu-modern-action="delete">Удалить</button>
+    <div class="card overflow-hidden shadow-xl border border-brand-soft/80 bg-white rounded-xl min-w-[180px]">
+      <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-note-menu-modern-action="edit">
+        Изменить
+      </button>
+      <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-note-menu-modern-action="pin">
+        Закрепить
+      </button>
+      <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-note-menu-modern-action="unpin">
+        Открепить
+      </button>
+      <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 text-red-600" data-note-menu-modern-action="delete">
+        Удалить
+      </button>
     </div>
   </div>
 
@@ -2726,10 +2734,12 @@
                   {% if can_edit_company %}
                     <button
                       type="button"
-                      class="absolute right-2 top-2 text-brand-dark/40 hover:text-brand-dark/80 rounded-full px-1 py-0.5 bg-white/70 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
+                      class="absolute right-2 top-2 inline-flex items-center justify-center w-8 h-8 rounded-full bg-white/90 border border-brand-soft/80 text-brand-dark/70 text-lg font-semibold shadow-sm hover:bg-brand-soft/40 hover:text-brand-dark transition-colors"
                       data-note-menu-btn-modern
                       data-note-id="{{ display_note.id }}"
                       data-note-pinned="{% if display_note.is_pinned %}1{% else %}0{% endif %}"
+                      aria-label="Действия с заметкой"
+                      title="Действия с заметкой"
                     >
                       ⋯
                     </button>
