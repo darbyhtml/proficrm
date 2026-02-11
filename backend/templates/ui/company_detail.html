@@ -2125,7 +2125,7 @@
   <!-- Современный режим (новый layout) -->
   <div id="companyDetailModern" class="{% if detail_view_mode != 'modern' %}hidden{% endif %}">
     <!-- Sticky header (компактный) -->
-    <div class="sticky top-0 z-30 bg-white border-b border-brand-soft/50 shadow-sm mb-4" style="padding: 0.75rem 0;">
+    <div class="sticky top-0 z-30 bg-white border-b border-brand-soft/50 shadow-sm mb-4 px-4 md:px-6" style="padding: 0.75rem 0;">
       <div class="flex items-center justify-between gap-4">
         <div class="flex-1 min-w-0">
           <div class="text-xs text-brand-dark/60 mb-1"><a class="underline hover:text-brand-teal" href="/companies/">Компании</a> /</div>
@@ -2341,7 +2341,7 @@
     </div>
 
     <!-- Вкладки Modern (как в новом дизайне) -->
-    <div class="mb-3 border-b border-brand-soft/60">
+    <div class="mb-3">
       <div class="flex items-center gap-1 overflow-x-auto no-scrollbar py-1">
         <button type="button" class="modern-tab-btn px-4 py-2 rounded-full text-sm font-medium transition-colors bg-brand-soft/40 text-brand-dark hover:bg-brand-soft/60 whitespace-nowrap" data-modern-tab-btn="overview">
           Обзор
