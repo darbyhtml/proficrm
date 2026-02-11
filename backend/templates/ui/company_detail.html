@@ -2427,14 +2427,12 @@
               </div>
 
               {% if display_note %}
-                <div class="rounded-xl border border-brand-orange/40 px-4 py-3 shadow-sm" style="border-left-width:0.375rem;background-color:#fffdf4;">
+                <div class="rounded-xl px-4 py-3 shadow-sm {% if display_note.is_pinned %}border border-brand-orange/40{% else %}border border-brand-soft/60{% endif %}" {% if display_note.is_pinned %}style="border-left-width:0.375rem;background-color:#fffdf4;"{% endif %}>
                   <div class="flex items-start justify-between gap-3">
                     <div class="min-w-0">
                       <div class="flex items-center gap-2 mb-1">
                         {% if display_note.is_pinned %}
                           <span class="badge badge-warn badge-sm">Закреплено</span>
-                        {% else %}
-                          <span class="badge badge-sm">Заметка</span>
                         {% endif %}
                         <div class="text-xs text-brand-dark/60 truncate">
                           {{ display_note.author|default:"—" }} · {{ display_note.created_at|date:"d.m.Y H:i" }}
