@@ -1987,6 +1987,40 @@
         const noteEditFileSelected = document.getElementById('noteEditFileSelected');
         const noteEditRemoveFile = document.getElementById('noteEditRemoveFile');
         const noteEditRemoveHidden = document.getElementById('noteEditRemoveHidden');
+
+        // Обновление блока заметок на вкладке "Обзор" без полной перезагрузки страницы
+        async function refreshOverviewNotes() {
+          const modernRoot = document.getElementById('companyDetailModern');
+          if (!modernRoot) return;
+
+          const url = new URL(window.location.href);
+          url.searchParams.set('view', 'modern');
+
+          const resp = await fetch(url.toString(), {
+            method: 'GET',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+          });
+          if (!resp.ok) {
+            throw new Error('Failed to reload overview');
+          }
+
+          const html = await resp.text();
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, 'text/html');
+          const newModernRoot = doc.getElementById('companyDetailModern');
+          if (!newModernRoot) {
+            throw new Error('No modern root in response');
+          }
+          const newOverview = newModernRoot.querySelector('[data-modern-tab-panel=\"overview\"]');
+          const currentModernRoot = document.getElementById('companyDetailModern');
+          const currentOverview = currentModernRoot && currentModernRoot.querySelector('[data-modern-tab-panel=\"overview\"]');
+          if (newOverview && currentOverview && currentOverview.parentNode) {
+            currentOverview.parentNode.replaceChild(newOverview, currentOverview);
+          } else {
+            throw new Error('Overview panel not found');
+          }
+        }
+
         if (noteEditModal && noteEditForm && noteEditText) {
           const closeBtns = noteEditModal.querySelectorAll('[data-close-noteedit]');
           function openNoteEdit(noteId, noteText, fileName) {
@@ -2031,12 +2065,35 @@
               }
             });
           }
+
+          // Сохранение заметки из модалки без полной перезагрузки страницы
+          if (typeof window.fetch === 'function') {
+            noteEditForm.addEventListener('submit', async (e) => {
+              e.preventDefault();
+              const formData = new FormData(noteEditForm);
+              try {
+                await fetch(noteEditForm.action, {
+                  method: 'POST',
+                  body: formData,
+                  headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                closeNoteEdit();
+                try {
+                  await refreshOverviewNotes();
+                } catch (_e) {
+                  // Если не удалось обновить только блок «Обзор» — данные уже сохранены, остаёмся на текущей странице.
+                }
+              } catch (e) {
+                window.location.reload();
+              }
+            });
+          }
         }
 
         // Контекстное меню заметки на вкладке "Обзор"
         (function() {
-          const modernRoot = document.getElementById('companyDetailModern');
           const menuModal = document.getElementById('noteMenuModal');
+          const modernRoot = document.getElementById('companyDetailModern');
           if (!modernRoot || !menuModal) return;
 
           let currentId = null;
@@ -2063,12 +2120,13 @@
             menuModal.classList.add('hidden');
           }
 
-          modernRoot.querySelectorAll('[data-note-menu-btn]').forEach(btn => {
-            btn.addEventListener('click', () => {
-              const id = btn.getAttribute('data-note-id');
-              const pinned = btn.getAttribute('data-note-pinned') === '1';
-              if (id) openMenu(id, pinned);
-            });
+          // Делегирование кликов по кнопкам «⋯» только в modern-режиме
+          modernRoot.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-note-menu-btn]');
+            if (!btn) return;
+            const id = btn.getAttribute('data-note-id');
+            const pinned = btn.getAttribute('data-note-pinned') === '1';
+            if (id) openMenu(id, pinned);
           });
 
           menuModal.querySelectorAll('[data-note-menu-close]').forEach(el => {
@@ -2112,7 +2170,12 @@
                   body: formData,
                   headers: {'X-Requested-With': 'XMLHttpRequest'}
                 });
-                window.location.reload();
+                try {
+                  await refreshOverviewNotes();
+                  closeMenu();
+                } catch (_e) {
+                  window.location.reload();
+                }
               } catch (e) {
                 window.location.reload();
               }
@@ -2917,17 +2980,6 @@
           <div id="notes-modern-content" class="space-y-3">
             {% for n in notes %}
               <div class="relative group rounded-lg border p-3 bg-white/80 hover:bg-white transition-colors" data-note-item>
-                {% if can_edit_company %}
-                  <button
-                    type="button"
-                    class="absolute right-2 top-2 text-brand-dark/40 hover:text-brand-dark/80 rounded-full px-1 py-0.5 bg-white/70 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                    data-note-menu-btn
-                    data-note-id="{{ n.id }}"
-                    data-note-pinned="{% if n.is_pinned %}1{% else %}0{% endif %}"
-                  >
-                    ⋯
-                  </button>
-                {% endif %}
                 <div class="flex items-start justify-between gap-3">
                   <div class="text-xs text-brand-dark/70 mb-1">
                     {{ n.created_at }} · {{ n.author|default:"—" }}
