@@ -2637,9 +2637,9 @@
                 {% endif %}
               {% endif %}
 
-              {% if notes %}
+              {% if notes_overview_preview %}
                 <div class="mt-4 space-y-2">
-                  {% for n in notes|slice:":3" %}
+                  {% for n in notes_overview_preview %}
                     <button type="button" class="w-full text-left rounded-lg border p-3 hover:bg-brand-soft/20 transition-colors" onclick="window.switchModernCompanyTab?.('notes');">
                       <div class="text-xs text-brand-dark/60 mb-1">
                         {{ n.created_at }} · {{ n.author|default:"—" }}
@@ -5828,24 +5828,8 @@
       });
     })();
   </script>
-
   <script>
-    // Обработчик формы заметок в modern режиме (в details)
-    (function(){
-      const btn = document.getElementById('noteAttachBtnModern');
-      const input = document.getElementById('noteFileModern');
-      const name = document.getElementById('noteFileNameModern');
-      if (!btn || !input) return;
-      btn.addEventListener('click', () => input.click());
-      input.addEventListener('change', () => {
-        const f = input.files && input.files.length ? input.files[0] : null;
-        if (name) name.textContent = f ? f.name : '';
-      });
-    })();
-  </script>
-
-  <script>
-    // Черновик заметки в modern режиме (для обеих форм)
+    // Черновик заметки в modern режиме (inline-форма)
     (function(){
       function initDraft(formId) {
         const form = document.getElementById(formId);
@@ -5902,8 +5886,7 @@
         });
       }
 
-      // Инициализируем для обеих форм
-      initDraft('noteFormModern');
+      // Инициализируем для inline-формы
       initDraft('noteFormModernInline');
     })();
   </script>

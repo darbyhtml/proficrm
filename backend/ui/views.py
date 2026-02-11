@@ -3496,7 +3496,15 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     display_note = pinned_note
     if not display_note and notes:
         display_note = notes[0]  # Первая заметка из отсортированного списка (latest)
-    
+
+    # Дополнительный список заметок для превью на вкладке "Обзор" (без дублирования display_note)
+    notes_overview_preview: list[CompanyNote] = []
+    if notes:
+        if display_note:
+            notes_overview_preview = [n for n in notes if n.id != display_note.id][:3]
+        else:
+            notes_overview_preview = list(notes[:3])
+
     # Ближайшие задачи для modern layout (2-3 по дедлайну, исключая выполненные)
     upcoming_tasks = list(tasks[:3])  # Уже отсортированы: просроченные -> ближайшие
     
@@ -3545,6 +3553,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "detail_view_mode": detail_view_mode,
             "display_note": display_note,  # Для modern layout: pinned или latest
             "upcoming_tasks": upcoming_tasks,  # Ближайшие 2-3 задачи для modern layout
+            "notes_overview_preview": notes_overview_preview,  # Заметки для превью на вкладке «Обзор» (без текущей display_note)
             "statuses": CompanyStatus.objects.order_by("name"),  # Для быстрого изменения статуса в Modern
             "contacts_rest": list(contacts)[5:],  # Контакты с 6-го для кнопки «Показать всех» в Modern
         },
