@@ -6,12 +6,14 @@
   <style>
     .modern-tab-panel {
       opacity: 0;
-      transform: translateY(4px);
-      transition: opacity 0.18s ease, transform 0.18s ease;
+      transform: translateY(10px);
+      pointer-events: none;
+      transition: opacity 0.25s ease-out, transform 0.25s ease-out;
     }
     .modern-tab-panel.modern-tab-panel-active {
       opacity: 1;
       transform: translateY(0);
+      pointer-events: auto;
     }
   </style>
   <!-- Классический режим (текущий layout) -->
