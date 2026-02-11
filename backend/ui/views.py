@@ -25,6 +25,7 @@ from audit.service import log_event
 from companies.models import (
     ContractType,
     Company,
+    CompanyDeal,
     CompanyNote,
     CompanySphere,
     CompanyStatus,
@@ -3380,6 +3381,11 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         .select_related("author", "pinned_by")
         .order_by("-is_pinned", "-pinned_at", "-created_at")[:60]
     )
+    deals = (
+        CompanyDeal.objects.filter(company=company)
+        .select_related("created_by")
+        .order_by("-created_at")[:50]
+    )
     # Сортируем задачи: сначала просроченные (по дедлайну, старые сначала), потом по дедлайну (ближайшие сначала), потом по дате создания (новые сначала)
     # Исключаем выполненные задачи из списка "Последние задачи"
     now = timezone.now()
@@ -3518,6 +3524,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "is_admin": is_admin,
             "is_group_manager": is_group_manager,
             "notes": notes,
+            "deals": deals,
             "pinned_note": pinned_note,
             "note_form": note_form,
             "tasks": tasks,
@@ -5724,6 +5731,89 @@ def company_note_delete(request: HttpRequest, company_id, note_id: int) -> HttpR
         entity_id=str(note_id),
         company_id=company.id,
         message="Удалена заметка",
+    )
+    return redirect("company_detail", company_id=company.id)
+
+
+@login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
+@require_can_view_company
+def company_deal_add(request: HttpRequest, company_id) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_edit_company(user, company):
+        messages.error(request, "Нет прав на добавление сделок по этой компании.")
+        return redirect("company_detail", company_id=company.id)
+
+    program = (request.POST.get("program") or "").strip()[:1000]
+
+    price_raw = (request.POST.get("price_per_person") or "").strip()
+    price_per_person = None
+    if price_raw:
+        try:
+            price_per_person = Decimal(price_raw.replace(",", "."))
+            if price_per_person < 0:
+                price_per_person = None
+        except Exception:
+            price_per_person = None
+
+    listeners_raw = (request.POST.get("listeners_count") or "").strip()
+    listeners_count = None
+    if listeners_raw:
+        try:
+            listeners_count = int(listeners_raw)
+            if listeners_count < 0:
+                listeners_count = None
+        except Exception:
+            listeners_count = None
+
+    deal = CompanyDeal.objects.create(
+        company=company,
+        created_by=user,
+        program=program,
+        price_per_person=price_per_person,
+        listeners_count=listeners_count,
+    )
+
+    messages.success(request, "Сделка добавлена.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.CREATE,
+        entity_type="deal",
+        entity_id=str(deal.id),
+        company_id=company.id,
+        message="Добавлена сделка",
+    )
+    return redirect("company_detail", company_id=company.id)
+
+
+@login_required
+@policy_required(resource_type="action", resource="ui:companies:update")
+@require_can_view_company
+def company_deal_delete(request: HttpRequest, company_id, deal_id: int) -> HttpResponse:
+    if request.method != "POST":
+        return redirect("company_detail", company_id=company_id)
+
+    user: User = request.user
+    company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
+    if not _can_edit_company(user, company):
+        messages.error(request, "Нет прав на удаление сделок по этой компании.")
+        return redirect("company_detail", company_id=company.id)
+
+    deal = get_object_or_404(CompanyDeal.objects.select_related("company"), id=deal_id, company_id=company.id)
+    deal.delete()
+
+    messages.success(request, "Сделка удалена.")
+    log_event(
+        actor=user,
+        verb=ActivityEvent.Verb.DELETE,
+        entity_type="deal",
+        entity_id=str(deal_id),
+        company_id=company.id,
+        message="Удалена сделка",
     )
     return redirect("company_detail", company_id=company.id)
 

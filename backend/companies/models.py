@@ -304,6 +304,53 @@ class CompanyNote(models.Model):
         super().save(*args, **kwargs)
 
 
+class CompanyDeal(models.Model):
+    """
+    Простая фиксация "сделок" по компании для менеджеров.
+
+    Текущая задача: минимальный набор полей (программа/стоимость/кол-во слушателей),
+    чтобы не «шерстить 1С» ради базовой информации.
+    """
+
+    company = models.ForeignKey(Company, verbose_name="Компания", on_delete=models.CASCADE, related_name="deals")
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Автор",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="company_deals",
+    )
+    program = models.TextField("Программа обучения", blank=True, default="")
+    price_per_person = models.DecimalField(
+        "Стоимость за человека",
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    listeners_count = models.PositiveIntegerField("Количество слушателей", null=True, blank=True)
+    created_at = models.DateTimeField("Создано", auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["company", "created_at"]),
+        ]
+
+    @property
+    def total_amount(self):
+        if self.price_per_person is None or self.listeners_count is None:
+            return None
+        try:
+            return self.price_per_person * self.listeners_count
+        except Exception:
+            return None
+
+    def __str__(self) -> str:
+        return f"Deal({self.company_id})"
+
+
 class Contact(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company = models.ForeignKey(Company, verbose_name="Компания", null=True, blank=True, on_delete=models.SET_NULL, related_name="contacts")
