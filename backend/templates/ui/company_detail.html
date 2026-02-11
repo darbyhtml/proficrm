@@ -2092,95 +2092,103 @@
 
         // Контекстное меню заметки на вкладке "Обзор"
         (function() {
-          const menuModal = document.getElementById('noteMenuModal');
-          const modernRoot = document.getElementById('companyDetailModern');
-          if (!modernRoot || !menuModal) return;
+          function initNoteMenu() {
+            const menuModal = document.getElementById('noteMenuModal');
+            const modernRoot = document.getElementById('companyDetailModern');
+            if (!modernRoot || !menuModal) return;
 
-          let currentId = null;
-          let currentPinned = false;
+            let currentId = null;
+            let currentPinned = false;
 
-          function openMenu(id, isPinned) {
-            currentId = id;
-            currentPinned = !!isPinned;
-            menuModal.classList.remove('hidden');
-            const pinBtn = menuModal.querySelector('[data-note-menu-action="pin"]');
-            const unpinBtn = menuModal.querySelector('[data-note-menu-action="unpin"]');
-            if (pinBtn && unpinBtn) {
-              if (currentPinned) {
-                pinBtn.classList.add('hidden');
-                unpinBtn.classList.remove('hidden');
-              } else {
-                pinBtn.classList.remove('hidden');
-                unpinBtn.classList.add('hidden');
+            function openMenu(id, isPinned) {
+              currentId = id;
+              currentPinned = !!isPinned;
+              menuModal.classList.remove('hidden');
+              const pinBtn = menuModal.querySelector('[data-note-menu-action="pin"]');
+              const unpinBtn = menuModal.querySelector('[data-note-menu-action="unpin"]');
+              if (pinBtn && unpinBtn) {
+                if (currentPinned) {
+                  pinBtn.classList.add('hidden');
+                  unpinBtn.classList.remove('hidden');
+                } else {
+                  pinBtn.classList.remove('hidden');
+                  unpinBtn.classList.add('hidden');
+                }
               }
             }
-          }
 
-          function closeMenu() {
-            menuModal.classList.add('hidden');
-          }
+            function closeMenu() {
+              menuModal.classList.add('hidden');
+            }
 
-          // Делегирование кликов по кнопкам «⋯» только в modern-режиме
-          modernRoot.addEventListener('click', (e) => {
-            const btn = e.target.closest('[data-note-menu-btn]');
-            if (!btn) return;
-            const id = btn.getAttribute('data-note-id');
-            const pinned = btn.getAttribute('data-note-pinned') === '1';
-            if (id) openMenu(id, pinned);
-          });
+            // Делегирование кликов по кнопкам «⋯» только в modern-режиме
+            modernRoot.addEventListener('click', (e) => {
+              const btn = e.target.closest('[data-note-menu-btn]');
+              if (!btn) return;
+              const id = btn.getAttribute('data-note-id');
+              const pinned = btn.getAttribute('data-note-pinned') === '1';
+              if (id) openMenu(id, pinned);
+            });
 
-          menuModal.querySelectorAll('[data-note-menu-close]').forEach(el => {
-            el.addEventListener('click', closeMenu);
-          });
+            menuModal.querySelectorAll('[data-note-menu-close]').forEach(el => {
+              el.addEventListener('click', closeMenu);
+            });
 
-          menuModal.querySelectorAll('[data-note-menu-action]').forEach(el => {
-            el.addEventListener('click', async () => {
-              const action = el.getAttribute('data-note-menu-action');
-              if (!currentId || !action) return;
+            menuModal.querySelectorAll('[data-note-menu-action]').forEach(el => {
+              el.addEventListener('click', async () => {
+                const action = el.getAttribute('data-note-menu-action');
+                if (!currentId || !action) return;
 
-              if (action === 'edit') {
-                const btn = document.querySelector(`[data-note-edit][data-note-id="${currentId}"]`);
-                if (btn) btn.click();
-                closeMenu();
-                return;
-              }
-
-              let selector = null;
-              if (action === 'pin' || action === 'unpin') {
-                selector = `form[action$="/notes/${currentId}/pin/"]`;
-              } else if (action === 'delete') {
-                selector = `form[action$="/notes/${currentId}/delete/"]`;
-              }
-              const form = selector ? document.querySelector(selector) : null;
-              if (!form) return;
-
-              if (action === 'delete') {
-                if (!confirm('Удалить заметку?')) return;
-              }
-
-              if (typeof window.fetch !== 'function') {
-                form.submit();
-                return;
-              }
-
-              try {
-                const formData = new FormData(form);
-                await fetch(form.action, {
-                  method: 'POST',
-                  body: formData,
-                  headers: {'X-Requested-With': 'XMLHttpRequest'}
-                });
-                try {
-                  await refreshOverviewNotes();
+                if (action === 'edit') {
+                  const btn = document.querySelector(`[data-note-edit][data-note-id="${currentId}"]`);
+                  if (btn) btn.click();
                   closeMenu();
-                } catch (_e) {
+                  return;
+                }
+
+                let selector = null;
+                if (action === 'pin' || action === 'unpin') {
+                  selector = `form[action$="/notes/${currentId}/pin/"]`;
+                } else if (action === 'delete') {
+                  selector = `form[action$="/notes/${currentId}/delete/"]`;
+                }
+                const form = selector ? document.querySelector(selector) : null;
+                if (!form) return;
+
+                if (action === 'delete') {
+                  if (!confirm('Удалить заметку?')) return;
+                }
+
+                if (typeof window.fetch !== 'function') {
+                  form.submit();
+                  return;
+                }
+
+                try {
+                  const formData = new FormData(form);
+                  await fetch(form.action, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {'X-Requested-With': 'XMLHttpRequest'}
+                  });
+                  try {
+                    await refreshOverviewNotes();
+                    closeMenu();
+                  } catch (_e) {
+                    window.location.reload();
+                  }
+                } catch (e) {
                   window.location.reload();
                 }
-              } catch (e) {
-                window.location.reload();
-              }
+              });
             });
-          });
+          }
+
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initNoteMenu);
+          } else {
+            initNoteMenu();
+          }
         })();
       })();
     </script>
