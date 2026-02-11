@@ -1447,17 +1447,6 @@
           <div class="max-h-96 overflow-y-auto pr-1 space-y-3">
             {% for n in notes %}
             <div class="relative group rounded-lg border p-3 bg-white/80 hover:bg-white transition-colors" data-note-item>
-              {% if can_edit_company %}
-                <button
-                  type="button"
-                  class="absolute right-2 top-2 text-brand-dark/40 hover:text-brand-dark/80 rounded-full px-1 py-0.5 bg-white/70 shadow-sm opacity-0 group-hover:opacity-100 transition-opacity"
-                  data-note-menu-btn
-                  data-note-id="{{ n.id }}"
-                  data-note-pinned="{% if n.is_pinned %}1{% else %}0{% endif %}"
-                >
-                  ⋯
-                </button>
-              {% endif %}
               <div class="flex items-start justify-between gap-3">
                 <div class="text-xs text-brand-dark/70 mb-1">
                   {{ n.created_at }} · {{ n.author|default:"—" }}
@@ -2176,22 +2165,22 @@
           });
         })();
 
-        // Контекстное меню заметки на вкладке "Обзор" (modern, отдельная модалка)
+        // Контекстное меню заметки на вкладке "Обзор" (modern, компактный поповер)
         (function() {
           function initModernNoteMenu() {
             const modernRoot = document.getElementById('companyDetailModern');
-            const menuModal = document.getElementById('noteMenuModalModern');
-            if (!modernRoot || !menuModal) return;
+            const menu = document.getElementById('noteMenuModern');
+            if (!modernRoot || !menu) return;
 
             let currentId = null;
             let currentPinned = false;
+            let anchorBtn = null;
 
             function openMenu(id, isPinned) {
               currentId = id;
               currentPinned = !!isPinned;
-              menuModal.classList.remove('hidden');
-              const pinBtn = menuModal.querySelector('[data-note-menu-modern-action="pin"]');
-              const unpinBtn = menuModal.querySelector('[data-note-menu-modern-action="unpin"]');
+              const pinBtn = menu.querySelector('[data-note-menu-modern-action="pin"]');
+              const unpinBtn = menu.querySelector('[data-note-menu-modern-action="unpin"]');
               if (pinBtn && unpinBtn) {
                 if (currentPinned) {
                   pinBtn.classList.add('hidden');
@@ -2201,25 +2190,52 @@
                   unpinBtn.classList.add('hidden');
                 }
               }
+
+              // Позиционируем поповер рядом с кнопкой
+              if (anchorBtn) {
+                const rect = anchorBtn.getBoundingClientRect();
+                const menuRect = menu.firstElementChild.getBoundingClientRect();
+                const top = rect.bottom + window.scrollY + 4;
+                let left = rect.right + window.scrollX - menuRect.width;
+                const maxLeft = window.scrollX + document.documentElement.clientWidth - menuRect.width - 8;
+                if (left > maxLeft) left = maxLeft;
+                if (left < window.scrollX + 8) left = window.scrollX + 8;
+                menu.style.top = top + 'px';
+                menu.style.left = left + 'px';
+              }
+
+              menu.classList.remove('hidden');
             }
 
             function closeMenu() {
-              menuModal.classList.add('hidden');
+              menu.classList.add('hidden');
+              anchorBtn = null;
             }
 
             modernRoot.addEventListener('click', (e) => {
               const btn = e.target.closest('[data-note-menu-btn-modern]');
               if (!btn) return;
+              e.preventDefault();
+              e.stopPropagation();
               const id = btn.getAttribute('data-note-id');
               const pinned = btn.getAttribute('data-note-pinned') === '1';
+              anchorBtn = btn;
               if (id) openMenu(id, pinned);
             });
 
-            menuModal.querySelectorAll('[data-note-menu-modern-close]').forEach(el => {
-              el.addEventListener('click', closeMenu);
+            // Закрытие по клику вне меню
+            document.addEventListener('click', (e) => {
+              if (menu.classList.contains('hidden')) return;
+              if (e.target.closest('#noteMenuModern')) return;
+              if (e.target.closest('[data-note-menu-btn-modern]')) return;
+              closeMenu();
             });
 
-            menuModal.querySelectorAll('[data-note-menu-modern-action]').forEach(el => {
+            document.addEventListener('keydown', (e) => {
+              if (e.key === 'Escape') closeMenu();
+            });
+
+            menu.querySelectorAll('[data-note-menu-modern-action]').forEach(el => {
               el.addEventListener('click', async () => {
                 const action = el.getAttribute('data-note-menu-modern-action');
                 if (!currentId || !action) return;
@@ -2248,7 +2264,7 @@
                   form.submit();
                   return;
                 }
-
+                
                 try {
                   const formData = new FormData(form);
                   await fetch(form.action, {
@@ -2403,18 +2419,12 @@
     </div>
   </div>
 
-  <div id="noteMenuModalModern" class="fixed inset-0 z-[210] hidden">
-    <div class="fixed inset-0 bg-black/35" data-note-menu-modern-close></div>
-    <div class="absolute inset-x-4 top-28 mx-auto max-w-xs">
-      <div class="card card-pad space-y-2">
-        <div class="font-medium text-sm">Действия с заметкой</div>
-        <div class="space-y-1 text-sm">
-          <button type="button" class="btn btn-outline btn-sm w-full justify-start" data-note-menu-modern-action="edit">Изменить</button>
-          <button type="button" class="btn btn-outline btn-sm w-full justify-start" data-note-menu-modern-action="pin">Закрепить</button>
-          <button type="button" class="btn btn-outline btn-sm w-full justify-start" data-note-menu-modern-action="unpin">Открепить</button>
-          <button type="button" class="btn btn-outline btn-sm w-full justify-start text-red-600" data-note-menu-modern-action="delete">Удалить</button>
-        </div>
-      </div>
+  <div id="noteMenuModern" class="hidden fixed z-[210]">
+    <div class="card card-pad space-y-1 shadow-xl border border-brand-soft/80 bg-white rounded-xl min-w-[180px]">
+      <button type="button" class="btn btn-outline btn-sm w-full justify-start" data-note-menu-modern-action="edit">Изменить</button>
+      <button type="button" class="btn btn-outline btn-sm w-full justify-start" data-note-menu-modern-action="pin">Закрепить</button>
+      <button type="button" class="btn btn-outline btn-sm w-full justify-start" data-note-menu-modern-action="unpin">Открепить</button>
+      <button type="button" class="btn btn-outline btn-sm w-full justify-start text-red-600" data-note-menu-modern-action="delete">Удалить</button>
     </div>
   </div>
 
