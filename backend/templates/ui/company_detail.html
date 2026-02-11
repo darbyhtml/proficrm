@@ -3,6 +3,17 @@
 {% block title %}{{ company.name }} — CRM ПРОФИ{% endblock %}
 
 {% block content %}
+  <style>
+    .modern-tab-panel {
+      opacity: 0;
+      transform: translateY(4px);
+      transition: opacity 0.18s ease, transform 0.18s ease;
+    }
+    .modern-tab-panel.modern-tab-panel-active {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
   <!-- Классический режим (текущий layout) -->
   <div id="companyDetailClassic" class="{% if detail_view_mode != 'classic' %}hidden{% endif %}">
   <div class="space-y-6">
@@ -2387,7 +2398,7 @@
     <!-- Контент вкладок -->
     <div id="companyModernTabPanels">
       <!-- Обзор -->
-      <div data-modern-tab-panel="overview">
+      <div class="modern-tab-panel modern-tab-panel-active" data-modern-tab-panel="overview">
         <div class="bg-white rounded-2xl border border-brand-soft/60 shadow-sm py-5 px-6 md:px-8">
           <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <!-- Колонка: Заметки -->
@@ -2737,7 +2748,7 @@
       </div>
 
       <!-- Заметки -->
-      <div class="hidden" data-modern-tab-panel="notes">
+      <div class="modern-tab-panel hidden" data-modern-tab-panel="notes">
         <div class="card card-pad">
           <div class="flex items-center justify-between mb-3">
             <div class="font-medium text-lg">Заметки</div>
@@ -2886,7 +2897,7 @@
       </div>
 
       <!-- Задачи -->
-      <div class="hidden" data-modern-tab-panel="tasks">
+      <div class="modern-tab-panel hidden" data-modern-tab-panel="tasks">
         <div class="card card-pad">
           <div class="flex items-center justify-between mb-3">
             <div class="font-medium text-lg">Задачи</div>
@@ -2921,7 +2932,7 @@
       </div>
 
       <!-- Контакты -->
-      <div class="hidden" data-modern-tab-panel="contacts">
+      <div class="modern-tab-panel hidden" data-modern-tab-panel="contacts">
         <div class="card card-pad">
           <div class="flex items-end justify-between gap-3 mb-3">
             <div class="font-medium text-lg">Контакты</div>
@@ -3010,7 +3021,7 @@
       </div>
 
       <!-- Сделки -->
-      <div class="hidden" data-modern-tab-panel="deals">
+      <div class="modern-tab-panel hidden" data-modern-tab-panel="deals">
         <div class="card card-pad">
           <div class="flex items-center justify-between mb-3">
             <div class="font-medium">Сделки</div>
@@ -3077,7 +3088,7 @@
       </div>
 
       <!-- Данные -->
-      <div class="hidden" data-modern-tab-panel="data">
+      <div class="modern-tab-panel hidden" data-modern-tab-panel="data">
         <div class="card card-pad" id="all-data-section-modern">
           <div class="flex items-center justify-between mb-3">
             <div class="font-medium">Данные компании</div>
@@ -5787,7 +5798,9 @@
 
         panels.forEach(p => {
           const t = p.getAttribute('data-modern-tab-panel');
-          p.classList.toggle('hidden', t !== target);
+          const on = t === target;
+          p.classList.toggle('hidden', !on);
+          p.classList.toggle('modern-tab-panel-active', on);
         });
 
         tabBtns.forEach(b => {
