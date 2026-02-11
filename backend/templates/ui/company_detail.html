@@ -2435,29 +2435,84 @@
               </div>
 
               {% if display_note %}
-                <div class="bg-brand-soft/30 rounded-lg px-4 py-3 border border-brand-soft/50">
-                  <div class="flex items-center gap-2 mb-2">
-                    {% if display_note.is_pinned %}
-                      <span class="badge badge-warn badge-sm">Закреплено</span>
-                    {% endif %}
-                    {% if display_note.attachment %}
-                      <svg class="w-4 h-4 text-brand-dark/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.414a2 2 0 00-2.828-2.828L9 10.172 7.172 8.343a4 4 0 115.656 5.656L15.172 7z"/>
-                      </svg>
-                    {% endif %}
-                    <div class="text-xs text-brand-dark/60 ml-auto">
-                      {{ display_note.author|default:"—" }} · {{ display_note.created_at|date:"d.m.Y H:i" }}
+                <div class="rounded-xl border border-brand-orange/35 bg-white px-3 py-3 shadow-sm" style="border-left-width:0.375rem;">
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="min-w-0">
+                      <div class="flex items-center gap-2 mb-1">
+                        {% if display_note.is_pinned %}
+                          <span class="badge badge-warn badge-sm">Закреплено</span>
+                        {% else %}
+                          <span class="badge badge-sm">Заметка</span>
+                        {% endif %}
+                        <div class="text-xs text-brand-dark/60 truncate">
+                          {{ display_note.author|default:"—" }} · {{ display_note.created_at|date:"d.m.Y H:i" }}
+                        </div>
+                      </div>
+                      {% if display_note.text %}
+                        <div class="text-sm text-brand-dark/90 whitespace-pre-line line-clamp-6" id="displayNoteText">
+                          {{ display_note.text }}
+                        </div>
+                        {% if display_note.text|length > 300 %}
+                          <button type="button" class="btn btn-outline btn-sm mt-2" onclick="document.getElementById('displayNoteText').classList.toggle('line-clamp-6')">
+                            <span class="expand-text">Развернуть</span>
+                            <span class="collapse-text hidden">Свернуть</span>
+                          </button>
+                        {% endif %}
+                      {% endif %}
+                      {% if display_note.attachment %}
+                        {% with ext=display_note.attachment_ext|upper %}
+                          <div class="mt-3 flex items-center justify-between gap-2">
+                            <div class="min-w-0">
+                              <div class="flex items-center gap-2">
+                                {% if ext == "PDF" %}
+                                  <span class="badge badge-warn">PDF</span>
+                                {% elif ext == "DOC" or ext == "DOCX" %}
+                                  <span class="badge">DOC</span>
+                                {% elif ext == "XLS" or ext == "XLSX" %}
+                                  <span class="badge">XLS</span>
+                                {% elif ext == "PPT" or ext == "PPTX" %}
+                                  <span class="badge">PPT</span>
+                                {% elif ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
+                                  <span class="badge">IMG</span>
+                                {% elif ext %}
+                                  <span class="badge">{{ ext }}</span>
+                                {% else %}
+                                  <span class="badge">FILE</span>
+                                {% endif %}
+                                <div class="text-xs font-medium truncate">{{ display_note.attachment_name|default:"Файл" }}</div>
+                                {% if display_note.attachment_size %}<div class="text-xs muted-2">{{ display_note.attachment_size|filesizeformat }}</div>{% endif %}
+                              </div>
+                            </div>
+                            <div class="flex gap-2 shrink-0">
+                              {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
+                                <button
+                                  type="button"
+                                  class="btn btn-outline btn-sm js-image-open"
+                                  data-img-url="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/open/"
+                                  data-img-download="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/download/"
+                                  data-img-title="{{ display_note.attachment_name|default:'Изображение' }}"
+                                >Открыть</button>
+                              {% else %}
+                                <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/open/">Открыть</a>
+                              {% endif %}
+                              <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/download/">Скачать</a>
+                            </div>
+                          </div>
+                        {% endwith %}
+                      {% endif %}
                     </div>
+                    {% if can_edit_company and display_note.is_pinned %}
+                      <form method="post" action="/companies/{{ company.id }}/notes/{{ display_note.id }}/pin/">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-outline btn-sm" title="Открепить" aria-label="Открепить">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path d="M9 3h6l1 7 2 2v2H6v-2l2-2 1-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M12 17v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                          </svg>
+                        </button>
+                      </form>
+                    {% endif %}
                   </div>
-                  <div class="text-sm text-brand-dark/90 whitespace-pre-line line-clamp-6" id="displayNoteText">
-                    {{ display_note.text }}
-                  </div>
-                  {% if display_note.text|length > 300 %}
-                    <button type="button" class="btn btn-outline btn-sm mt-2" onclick="document.getElementById('displayNoteText').classList.toggle('line-clamp-6')">
-                      <span class="expand-text">Развернуть</span>
-                      <span class="collapse-text hidden">Свернуть</span>
-                    </button>
-                  {% endif %}
                 </div>
               {% else %}
                 <div class="text-sm text-brand-dark/50 italic py-4 text-center">Нет заметок</div>
@@ -2554,29 +2609,84 @@
                 {% if main_contact %}
                   <div class="border rounded-lg p-3">
                     <div class="flex items-start justify-between gap-3">
-                      <div class="min-w-0">
-                        <div class="font-medium text-sm truncate">{{ main_contact.first_name }} {{ main_contact.last_name }}</div>
-                        {% if main_contact.position %}
-                          <div class="text-xs text-brand-dark/70 mt-1 truncate">{{ main_contact.position }}</div>
-                        {% endif %}
-                        {% if main_contact.emails.all %}
-                          {% for email in main_contact.emails.all|slice:":1" %}
-                            <div class="text-xs mt-1">
-                              <a href="mailto:{{ email.value }}" class="text-brand-teal hover:underline" title="Написать">{{ email.value }}</a>
-                            </div>
-                          {% endfor %}
-                        {% endif %}
+                      <div class="flex items-start gap-3 min-w-0">
+                        <div class="w-10 h-10 rounded-full bg-brand-soft/50 flex items-center justify-center text-sm font-medium text-brand-dark/80">
+                          {{ main_contact.first_name|default:""|slice:":1" }}{{ main_contact.last_name|default:""|slice:":1" }}
+                        </div>
+                        <div class="min-w-0">
+                          <div class="flex items-center gap-1">
+                            <div class="font-medium text-sm truncate">{{ main_contact.first_name }} {{ main_contact.last_name }}</div>
+                            <span class="text-xs text-brand-orange" title="Основной контакт">★</span>
+                          </div>
+                          {% if main_contact.position %}
+                            <div class="text-xs text-brand-dark/70 mt-0.5 truncate">{{ main_contact.position }}</div>
+                          {% endif %}
+                          {% if main_contact.phones.all %}
+                            {% for phone in main_contact.phones.all|slice:":1" %}
+                              <div class="text-xs text-brand-dark/70 mt-1 truncate">{{ phone.value }}</div>
+                            {% endfor %}
+                          {% elif company.phone %}
+                            <div class="text-xs text-brand-dark/70 mt-1 truncate">{{ company.phone }}</div>
+                          {% endif %}
+                          {% if main_contact.emails.all %}
+                            {% for email in main_contact.emails.all|slice:":1" %}
+                              <div class="text-xs mt-1 truncate">
+                                <a href="mailto:{{ email.value }}" class="text-brand-teal hover:underline" title="Написать">{{ email.value }}</a>
+                              </div>
+                            {% endfor %}
+                          {% endif %}
+                        </div>
                       </div>
-                      <div class="flex items-center gap-1 shrink-0">
-                        {% if main_contact.phones.all %}
-                          {% for phone in main_contact.phones.all|slice:":1" %}
-                            <button type="button" class="btn btn-outline btn-xs js-call-phone" data-phone="{{ phone.value }}" data-company="{{ company.id }}" data-contact="{{ main_contact.id }}" title="Позвонить">Позвонить</button>
-                          {% endfor %}
-                        {% elif company.phone %}
-                          <button type="button" class="btn btn-outline btn-xs js-call-phone" data-phone="{{ company.phone }}" data-company="{{ company.id }}" data-contact="" title="Позвонить">Позвонить</button>
-                        {% endif %}
+                      <div class="flex flex-col items-end gap-2 shrink-0">
+                        <div class="flex gap-1">
+                          {% if main_contact.phones.all %}
+                            {% for phone in main_contact.phones.all|slice:":1" %}
+                              <button
+                                type="button"
+                                class="btn btn-outline btn-xs js-call-phone"
+                                data-phone="{{ phone.value }}"
+                                data-company="{{ company.id }}"
+                                data-contact="{{ main_contact.id }}"
+                                title="Позвонить"
+                              >
+                                <span>📞</span>
+                                <span class="ml-1">Позвонить</span>
+                              </button>
+                            {% endfor %}
+                          {% elif company.phone %}
+                            <button
+                              type="button"
+                              class="btn btn-outline btn-xs js-call-phone"
+                              data-phone="{{ company.phone }}"
+                              data-company="{{ company.id }}"
+                              data-contact=""
+                              title="Позвонить"
+                            >
+                              <span>📞</span>
+                              <span class="ml-1">Позвонить</span>
+                            </button>
+                          {% endif %}
+                          {% if main_contact.emails.all %}
+                            {% for email in main_contact.emails.all|slice:":1" %}
+                              <a
+                                class="btn btn-outline btn-xs"
+                                href="mailto:{{ email.value }}"
+                                title="Письмо"
+                              >
+                                <span>✉️</span>
+                                <span class="ml-1">Письмо</span>
+                              </a>
+                            {% endfor %}
+                          {% endif %}
+                        </div>
                         {% if can_edit_company %}
-                          <a class="btn btn-outline btn-xs" href="/contacts/{{ main_contact.id }}/edit/?modal=1" data-contact-panel-open title="Редактировать">✎</a>
+                          <a
+                            class="text-xs text-brand-dark/60 hover:text-brand-teal"
+                            href="/contacts/{{ main_contact.id }}/edit/?modal=1"
+                            data-contact-panel-open
+                          >
+                            Редактировать контакт
+                          </a>
                         {% endif %}
                       </div>
                     </div>
