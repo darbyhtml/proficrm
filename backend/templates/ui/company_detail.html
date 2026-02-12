@@ -2027,6 +2027,10 @@
           const currentOverview = currentModernRoot && currentModernRoot.querySelector('[data-modern-tab-panel=\"overview\"]');
           if (newOverview && currentOverview && currentOverview.parentNode) {
             currentOverview.parentNode.replaceChild(newOverview, currentOverview);
+            // После замены контента пересчитываем необходимость кнопок "Развернуть"
+            if (window.updateOverviewNoteExpand) {
+              try { window.updateOverviewNoteExpand(); } catch (_e) {}
+            }
           } else {
             throw new Error('Overview panel not found');
           }
@@ -4452,6 +4456,9 @@
         window.openNoteEditModern = openEdit;
         window.openNoteCreateModern = openCreate;
       }
+
+      // Экспортируем, чтобы можно было вызвать после ajax-обновления обзора
+      window.updateOverviewNoteExpand = updateExpandVisibility;
 
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initModernNoteModal);
