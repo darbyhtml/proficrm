@@ -2744,150 +2744,115 @@
       <div class="modern-tab-panel modern-tab-panel-active" data-modern-tab-panel="overview">
         <div class="bg-white rounded-2xl border border-brand-soft/60 shadow-sm py-5 px-6 md:px-8">
           <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <!-- Колонка: Заметки -->
+          <!-- Колонка: Заметки (оформление 1 в 1 как на макете) -->
           <div class="space-y-4">
-            <div class="card card-pad bg-transparent shadow-none border-none p-0">
+            <div class="bg-transparent">
+              <!-- Шапка: иконка + заголовок слева, "Все (N)" справа -->
               <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center gap-2 text-brand-dark">
-                  <div class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-brand-soft/40 text-brand-orange">
+                  <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-brand-soft/40 text-brand-orange">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                       <path d="M7 3h7.5L19 7.5V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
                       <path d="M14.5 3.5V8H19" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
                     </svg>
-                  </div>
-                  <div class="font-medium text-base">Заметки</div>
+                  </span>
+                  <span class="font-semibold text-base">Заметки</span>
                 </div>
-                <div class="flex items-center gap-3 text-xs text-brand-dark/60">
-                  <button type="button" class="hover:text-brand-teal" onclick="window.switchModernCompanyTab?.('notes');">
+                <div class="flex items-center gap-2 text-sm text-brand-dark/60">
+                  <button type="button" class="hover:text-brand-teal transition-colors" onclick="window.switchModernCompanyTab?.('notes');">
                     Все{% if notes %} ({{ notes|length }}){% endif %}
                   </button>
                   {% if can_edit_company %}
-                    <button type="button" class="btn btn-primary btn-xs" onclick="window.switchModernCompanyTab?.('notes'); setTimeout(() => document.querySelector('#noteFormModernInline textarea[name=&quot;text&quot;]')?.focus(), 50);">
-                      + Добавить
-                    </button>
+                    <button type="button" class="text-brand-teal hover:underline text-sm" onclick="window.switchModernCompanyTab?.('notes'); setTimeout(() => document.querySelector('#noteFormModernInline textarea[name=&quot;text&quot;]')?.focus(), 50);">+ Добавить</button>
                   {% endif %}
                 </div>
               </div>
 
               {% if display_note %}
-                <div class="relative group rounded-xl px-4 py-3 shadow-sm {% if display_note.is_pinned %}border border-brand-orange/40{% else %}border border-brand-soft/60{% endif %}" {% if display_note.is_pinned %}style="border-left-width:0.375rem;background-color:#fffdf4;"{% endif %}>
-                  {% if can_edit_company %}
-                    <button
-                      type="button"
-                      class="absolute right-2 top-2 text-brand-dark/70 hover:text-brand-dark text-lg leading-none"
-                      data-note-menu-btn-modern
-                      data-note-id="{{ display_note.id }}"
-                      data-note-pinned="{% if display_note.is_pinned %}1{% else %}0{% endif %}"
-                      aria-label="Действия с заметкой"
-                      title="Действия с заметкой"
-                    >
-                      ⋯
-                    </button>
-                  {% endif %}
-                  <div class="flex items-start justify-between gap-3">
-                    <div class="min-w-0">
-                      <div class="flex items-center gap-2 mb-1">
-                      {% if display_note.is_pinned %}
-                          <span class="inline-flex items-center gap-1 badge badge-warn badge-sm">
-                            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <!-- Карточка основной заметки: фон и левая полоса для закреплённой -->
+                <div class="relative rounded-lg overflow-hidden {% if display_note.is_pinned %}bg-[#FFF8F1] border-l-4 border-brand-orange{% else %}bg-white border border-brand-soft/60{% endif %}">
+                  <div class="p-4">
+                    <!-- Верхняя строка: слева тег "Закреплено" (если закреплена), справа три точки -->
+                    <div class="flex items-start justify-between gap-2 mb-2">
+                      <div class="flex items-center gap-2 min-w-0">
+                        {% if display_note.is_pinned %}
+                          <span class="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium bg-amber-100/80 text-amber-900 border border-amber-200/80 shrink-0">
+                            <svg class="w-3.5 h-3.5 text-amber-700" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                               <path d="M9 3h6l1 7 2 2v2H6v-2l2-2 1-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                               <path d="M12 17v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                             </svg>
                             <span>Закреплено</span>
                           </span>
                         {% endif %}
-                        <div class="text-xs text-brand-dark/60 truncate">
-                          {{ display_note.author|default:"—" }} · {{ display_note.created_at|date:"d.m.Y H:i" }}
-                        </div>
                       </div>
-                      {% if display_note.text %}
-                        <div class="text-sm text-brand-dark/90 whitespace-pre-line line-clamp-6" id="displayNoteText">
-                          {{ display_note.text }}
-                        </div>
-                        {% if display_note.text|length > 300 %}
-                          <button type="button" class="btn btn-outline btn-sm mt-2" onclick="document.getElementById('displayNoteText').classList.toggle('line-clamp-6')">
-                            <span class="expand-text">Развернуть</span>
-                            <span class="collapse-text hidden">Свернуть</span>
-                          </button>
-                        {% endif %}
-                      {% endif %}
-                      {% if display_note.attachment %}
-                        {% with ext=display_note.attachment_ext|upper %}
-                          <div class="mt-3 flex items-center justify-between gap-2">
-                            <div class="min-w-0">
-                              <div class="flex items-center gap-2">
-                                {% if ext == "PDF" %}
-                                  <span class="badge badge-warn">PDF</span>
-                                {% elif ext == "DOC" or ext == "DOCX" %}
-                                  <span class="badge">DOC</span>
-                                {% elif ext == "XLS" or ext == "XLSX" %}
-                                  <span class="badge">XLS</span>
-                                {% elif ext == "PPT" or ext == "PPTX" %}
-                                  <span class="badge">PPT</span>
-                                {% elif ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
-                                  <span class="badge">IMG</span>
-                                {% elif ext %}
-                                  <span class="badge">{{ ext }}</span>
-                                {% else %}
-                                  <span class="badge">FILE</span>
-                                {% endif %}
-                                <div class="text-xs font-medium truncate">{{ display_note.attachment_name|default:"Файл" }}</div>
-                                {% if display_note.attachment_size %}<div class="text-xs muted-2">{{ display_note.attachment_size|filesizeformat }}</div>{% endif %}
-                              </div>
-                            </div>
-                            <div class="flex gap-2 shrink-0">
-                              {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
-                                <button
-                                  type="button"
-                                  class="btn btn-outline btn-sm js-image-open"
-                                  data-img-url="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/open/"
-                                  data-img-download="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/download/"
-                                  data-img-title="{{ display_note.attachment_name|default:'Изображение' }}"
-                                >Открыть</button>
-                              {% else %}
-                                <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/open/">Открыть</a>
-                              {% endif %}
-                              <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/download/">Скачать</a>
-                            </div>
-                          </div>
-                        {% endwith %}
+                      {% if can_edit_company %}
+                        <button type="button" class="shrink-0 text-brand-dark/60 hover:text-brand-dark text-lg leading-none p-0.5" data-note-menu-btn-modern data-note-id="{{ display_note.id }}" data-note-pinned="{% if display_note.is_pinned %}1{% else %}0{% endif %}" aria-label="Действия с заметкой" title="Действия с заметкой">⋯</button>
                       {% endif %}
                     </div>
-                    {% if can_edit_company and display_note.is_pinned %}
-                      <form method="post" action="/companies/{{ company.id }}/notes/{{ display_note.id }}/pin/" style="display:none">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-outline btn-sm" title="Открепить" aria-label="Открепить">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M9 3h6l1 7 2 2v2H6v-2l2-2 1-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            <path d="M12 17v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                          </svg>
+                    <!-- Автор и дата -->
+                    <div class="text-sm mb-2">
+                      <span class="font-semibold text-brand-dark">{{ display_note.author|default:"—" }}</span>
+                      <span class="text-brand-dark/50"> · </span>
+                      <span class="text-brand-dark/60">{{ display_note.created_at|date:"d.m.Y, H:i" }}</span>
+                    </div>
+                    <!-- Текст заметки -->
+                    {% if display_note.text %}
+                      <div class="text-sm text-brand-dark/90 whitespace-pre-line line-clamp-6" id="displayNoteText">{{ display_note.text }}</div>
+                      {% if display_note.text|length > 300 %}
+                        <button type="button" class="mt-1.5 text-sm text-brand-orange hover:underline expand-collapse-btn" onclick="document.getElementById('displayNoteText').classList.toggle('line-clamp-6'); this.querySelector('.expand-text').classList.toggle('hidden'); this.querySelector('.collapse-text').classList.toggle('hidden');">
+                          <span class="expand-text">Развернуть</span>
+                          <span class="collapse-text hidden">Свернуть</span>
                         </button>
-                      </form>
+                      {% endif %}
+                    {% endif %}
+                    <!-- Вложение: разделитель + иконка документа, имя, размер, Открыть/Скачать -->
+                    {% if display_note.attachment %}
+                      <div class="mt-3 pt-3 border-t border-brand-soft/60 flex items-center justify-between gap-3">
+                        <div class="flex items-center gap-2 min-w-0">
+                          <span class="shrink-0 inline-flex text-brand-dark/70">
+                            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                              <path d="M7 3h7.5L19 7.5V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                              <path d="M14.5 3.5V8H19" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                            </svg>
+                          </span>
+                          <div class="min-w-0">
+                            <div class="text-sm font-medium text-brand-dark truncate">{{ display_note.attachment_name|default:"Файл" }}</div>
+                            {% if display_note.attachment_size %}<div class="text-xs text-brand-dark/50">{{ display_note.attachment_size|filesizeformat }}</div>{% endif %}
+                          </div>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                          {% with ext=display_note.attachment_ext|upper %}
+                            {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
+                              <button type="button" class="text-sm text-brand-dark/80 hover:text-brand-dark js-image-open" data-img-url="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/open/" data-img-download="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/download/" data-img-title="{{ display_note.attachment_name|default:'Изображение' }}">Открыть</button>
+                            {% else %}
+                              <a class="text-sm text-brand-dark/80 hover:text-brand-dark" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/open/">Открыть</a>
+                            {% endif %}
+                            <a class="text-sm text-brand-dark/80 hover:text-brand-dark" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/download/">Скачать</a>
+                          {% endwith %}
+                        </div>
+                      </div>
                     {% endif %}
                   </div>
+                  {% if can_edit_company and display_note.is_pinned %}
+                    <form method="post" action="/companies/{{ company.id }}/notes/{{ display_note.id }}/pin/" style="display:none">{% csrf_token %}<button type="submit">.</button></form>
+                  {% endif %}
                 </div>
               {% else %}
-                <div class="text-sm text-brand-dark/50 italic py-4 text-center">Нет заметок</div>
+                <div class="text-sm text-brand-dark/50 italic py-6 text-center rounded-lg border border-brand-soft/40 bg-white/50">Нет заметок</div>
                 {% if can_edit_company %}
-                  <div class="mt-3">
-                    <button type="button" class="btn btn-outline btn-sm w-full" onclick="window.switchModernCompanyTab?.('notes'); setTimeout(() => document.querySelector('#noteFormModernInline textarea[name=&quot;text&quot;]')?.focus(), 50);">Добавить первую заметку</button>
-                  </div>
+                  <button type="button" class="mt-3 w-full text-center text-sm text-brand-teal hover:underline py-2" onclick="window.switchModernCompanyTab?.('notes'); setTimeout(() => document.querySelector('#noteFormModernInline textarea[name=&quot;text&quot;]')?.focus(), 50);">Добавить первую заметку</button>
                 {% endif %}
               {% endif %}
 
+              <!-- Список остальных заметок (простые белые карточки) -->
               {% if notes_overview_preview %}
-                <div class="mt-4 space-y-2">
+                <div class="mt-3 space-y-2">
                   {% for n in notes_overview_preview %}
-                    <button type="button" class="w-full text-left rounded-lg border p-3 hover:bg-brand-soft/20 transition-colors" onclick="window.switchModernCompanyTab?.('notes');">
-                      <div class="text-xs text-brand-dark/60 mb-1">
-                        {{ n.created_at }} · {{ n.author|default:"—" }}
-                        {% if n.is_pinned %}· <span class="inline-flex items-center gap-1 badge badge-warn badge-sm">
-                          <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M9 3h6l1 7 2 2v2H6v-2l2-2 1-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            <path d="M12 17v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                          </svg>
-                          <span>Закреплено</span>
-                        </span>{% endif %}
+                    <button type="button" class="w-full text-left rounded-lg bg-white border border-brand-soft/60 p-3 hover:bg-brand-soft/20 transition-colors" onclick="window.switchModernCompanyTab?.('notes');">
+                      <div class="text-sm mb-1">
+                        <span class="font-semibold text-brand-dark">{{ n.author|default:"—" }}</span>
+                        <span class="text-brand-dark/50"> · </span>
+                        <span class="text-brand-dark/60">{{ n.created_at|date:"d.m, H:i" }}</span>
                       </div>
                       <div class="text-sm text-brand-dark/90 line-clamp-2 whitespace-pre-line">{{ n.text }}</div>
                     </button>
