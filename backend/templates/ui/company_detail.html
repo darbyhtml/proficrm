@@ -2031,6 +2031,18 @@
           }
 
           function openNoteCreate() {
+            // Если modern-режим скрыт (сейчас открыта классика) — не используем модалку,
+            // а работаем через классическую форму заметок.
+            const modernRoot = document.getElementById('companyDetailModern');
+            if (!modernRoot || modernRoot.classList.contains('hidden')) {
+              const classicForm = document.getElementById('noteForm');
+              const classicTextarea = classicForm ? classicForm.querySelector('textarea[name=\"text\"]') : null;
+              if (classicTextarea) {
+                setTimeout(() => classicTextarea.focus(), 0);
+                classicForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+              return;
+            }
             noteEditForm.action = `/companies/{{ company.id }}/notes/add/`;
             if (noteEditTitle) noteEditTitle.textContent = 'Новая заметка';
             if (noteEditSubtitle) noteEditSubtitle.classList.add('hidden');
