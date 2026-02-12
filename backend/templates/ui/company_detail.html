@@ -3036,16 +3036,14 @@
                     <!-- Текст заметки -->
                     {% if display_note.text %}
                       <div class="text-sm text-brand-dark/90 whitespace-pre-line line-clamp-4" id="displayNoteText">{{ display_note.text }}</div>
-                      {% if display_note.text|length > 300 %}
-                        <button
-                          type="button"
-                          class="mt-1.5 text-sm text-brand-orange hover:underline expand-collapse-btn"
-                          data-note-expand-toggle="1"
-                        >
-                          <span class="expand-text">Развернуть</span>
-                          <span class="collapse-text hidden">Свернуть</span>
-                        </button>
-                      {% endif %}
+                      <button
+                        type="button"
+                        class="mt-1.5 text-sm text-brand-orange hover:underline expand-collapse-btn hidden"
+                        data-note-expand-toggle="1"
+                      >
+                        <span class="expand-text">Развернуть</span>
+                        <span class="collapse-text hidden">Свернуть</span>
+                      </button>
                     {% endif %}
                     <!-- Вложение: разделитель + иконка документа, имя, размер, Открыть/Скачать -->
                     {% if display_note.attachment %}
@@ -3118,16 +3116,14 @@
                         >
                           {{ n.text }}
                         </div>
-                        {% if n.text|length > 300 %}
-                          <button
-                            type="button"
-                            class="mt-1 text-xs text-brand-orange hover:underline"
-                            data-note-preview-toggle="{{ n.id }}"
-                          >
-                            <span class="expand-text">Развернуть</span>
-                            <span class="collapse-text hidden">Свернуть</span>
-                          </button>
-                        {% endif %}
+                        <button
+                          type="button"
+                          class="mt-1 text-xs text-brand-orange hover:underline hidden"
+                          data-note-preview-toggle="{{ n.id }}"
+                        >
+                          <span class="expand-text">Развернуть</span>
+                          <span class="collapse-text hidden">Свернуть</span>
+                        </button>
                       {% endif %}
                     </div>
                   {% endfor %}
@@ -7032,6 +7028,32 @@
   <script>
     // Обработка кнопок "Развернуть/Свернуть" для заметок в modern режиме (основная + превью)
     (function() {
+      function updateExpandVisibility() {
+        // Основная заметка
+        const mainText = document.getElementById('displayNoteText');
+        const mainBtn = document.querySelector('[data-note-expand-toggle]');
+        if (mainText && mainBtn) {
+          const needExpand = mainText.scrollHeight > mainText.clientHeight + 1;
+          mainBtn.classList.toggle('hidden', !needExpand);
+        }
+
+        // Превью заметок
+        document.querySelectorAll('[data-note-preview-text]').forEach(el => {
+          const id = el.getAttribute('data-note-preview-text');
+          const btn = id ? document.querySelector(`[data-note-preview-toggle="${id}"]`) : null;
+          if (!btn) return;
+          const needExpand = el.scrollHeight > el.clientHeight + 1;
+          btn.classList.toggle('hidden', !needExpand);
+        });
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', updateExpandVisibility);
+      } else {
+        updateExpandVisibility();
+      }
+      window.addEventListener('resize', updateExpandVisibility);
+
       document.addEventListener('click', function(e) {
         const btn = e.target.closest('[data-note-expand-toggle], [data-note-preview-toggle]');
         if (!btn) return;
