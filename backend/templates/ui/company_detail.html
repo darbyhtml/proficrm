@@ -1556,8 +1556,8 @@
         <div class="card card-pad">
           <div class="flex items-start justify-between gap-3">
             <div>
-              <div class="font-medium">Редактировать заметку</div>
-              <div class="text-xs muted-2 mt-1">После сохранения появится метка «ред.»</div>
+              <div class="font-medium" id="noteEditTitle">Редактировать заметку</div>
+              <div class="text-xs muted-2 mt-1" id="noteEditSubtitle">После сохранения появится метка «ред.»</div>
             </div>
             <button type="button" class="btn btn-outline btn-sm" data-close-noteedit aria-label="Закрыть" title="Закрыть">✕</button>
           </div>
@@ -1580,7 +1580,7 @@
                 <div class="muted-2" id="noteEditFileCurrent">Текущий файл: —</div>
                 <div class="muted-2" id="noteEditFileSelected"></div>
               </div>
-              <div class="mt-2 flex items-center justify-between gap-2">
+              <div class="mt-2 flex items-center justify-between gap-2" id="noteEditRemoveRow">
                 <label class="inline-flex items-center gap-2 text-xs">
                   <input type="checkbox" id="noteEditRemoveFile" />
                   <span>Удалить текущий файл</span>
@@ -1976,6 +1976,9 @@
         const noteEditFileSelected = document.getElementById('noteEditFileSelected');
         const noteEditRemoveFile = document.getElementById('noteEditRemoveFile');
         const noteEditRemoveHidden = document.getElementById('noteEditRemoveHidden');
+        const noteEditTitle = document.getElementById('noteEditTitle');
+        const noteEditSubtitle = document.getElementById('noteEditSubtitle');
+        const noteEditRemoveRow = document.getElementById('noteEditRemoveRow');
 
         // Обновление блока заметок на вкладке "Обзор" без полной перезагрузки страницы
         async function refreshOverviewNotes() {
@@ -2020,9 +2023,30 @@
             if (noteEditRemoveFile) noteEditRemoveFile.checked = false;
             if (noteEditRemoveHidden) noteEditRemoveHidden.value = '0';
             if (noteEditFileCurrent) noteEditFileCurrent.textContent = 'Текущий файл: ' + (fileName ? fileName : '—');
+            if (noteEditTitle) noteEditTitle.textContent = 'Редактировать заметку';
+            if (noteEditSubtitle) noteEditSubtitle.classList.remove('hidden');
+            if (noteEditRemoveRow) noteEditRemoveRow.style.display = 'flex';
             noteEditModal.classList.remove('hidden');
             setTimeout(() => { try{ noteEditText.focus(); }catch(_e){} }, 0);
           }
+
+          function openNoteCreate() {
+            noteEditForm.action = `/companies/{{ company.id }}/notes/add/`;
+            if (noteEditTitle) noteEditTitle.textContent = 'Новая заметка';
+            if (noteEditSubtitle) noteEditSubtitle.classList.add('hidden');
+            if (noteEditText) noteEditText.value = '';
+            if (noteEditFile) noteEditFile.value = '';
+            if (noteEditFileSelected) noteEditFileSelected.textContent = '';
+            if (noteEditRemoveFile) noteEditRemoveFile.checked = false;
+            if (noteEditRemoveHidden) noteEditRemoveHidden.value = '0';
+            if (noteEditFileCurrent) noteEditFileCurrent.textContent = 'Текущий файл: —';
+            if (noteEditRemoveRow) noteEditRemoveRow.style.display = 'none';
+            noteEditModal.classList.remove('hidden');
+            setTimeout(() => { try{ noteEditText.focus(); }catch(_e){} }, 0);
+          }
+
+          // Экспортируем функцию создания заметки для других скриптов (кнопки/шорткаты)
+          window.openNoteCreate = openNoteCreate;
           function closeNoteEdit() { noteEditModal.classList.add('hidden'); }
           document.querySelectorAll('[data-note-edit]').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -2031,6 +2055,14 @@
               const txt = btn.getAttribute('data-note-text') || '';
               const fn = btn.getAttribute('data-note-file') || '';
               if (id) openNoteEdit(id, txt, fn);
+            });
+          });
+
+          // Кнопки добавления заметки в modern-режиме (включая Обзор)
+          document.querySelectorAll('[data-note-add-modern]').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+              e.preventDefault();
+              openNoteCreate();
             });
           });
           closeBtns.forEach(b => b.addEventListener('click', closeNoteEdit));
@@ -2763,7 +2795,7 @@
                     Все{% if notes %} ({{ notes|length }}){% endif %}
                   </button>
                   {% if can_edit_company %}
-                    <button type="button" class="text-brand-teal hover:underline text-sm" onclick="window.switchModernCompanyTab?.('notes'); setTimeout(() => document.querySelector('#noteFormModernInline textarea[name=&quot;text&quot;]')?.focus(), 50);">+ Добавить</button>
+                    <button type="button" class="text-brand-teal hover:underline text-sm" data-note-add-modern>+ Добавить</button>
                   {% endif %}
                 </div>
               </div>
@@ -2840,7 +2872,7 @@
               {% else %}
                 <div class="text-sm text-brand-dark/50 italic py-6 text-center rounded-lg border border-brand-soft/40 bg-white/50">Нет заметок</div>
                 {% if can_edit_company %}
-                  <button type="button" class="mt-3 w-full text-center text-sm text-brand-teal hover:underline py-2" onclick="window.switchModernCompanyTab?.('notes'); setTimeout(() => document.querySelector('#noteFormModernInline textarea[name=&quot;text&quot;]')?.focus(), 50);">Добавить первую заметку</button>
+                  <button type="button" class="mt-3 w-full text-center text-sm text-brand-teal hover:underline py-2" data-note-add-modern>Добавить первую заметку</button>
                 {% endif %}
               {% endif %}
 
@@ -6203,12 +6235,16 @@
         // N - новая заметка
         if (e.key === 'n' || e.key === 'N') {
           e.preventDefault();
-          window.switchModernCompanyTab?.('notes');
-          const noteForm = document.getElementById('noteFormModernInline');
-          const textarea = noteForm ? noteForm.querySelector('textarea[name="text"]') : null;
-          if (textarea) {
-            setTimeout(() => textarea.focus(), 50);
-            noteForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          if (window.openNoteCreate) {
+            window.openNoteCreate();
+          } else {
+            window.switchModernCompanyTab?.('notes');
+            const noteForm = document.getElementById('noteFormModernInline');
+            const textarea = noteForm ? noteForm.querySelector('textarea[name="text"]') : null;
+            if (textarea) {
+              setTimeout(() => textarea.focus(), 50);
+              noteForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
           }
         }
 
@@ -6430,17 +6466,25 @@
     // Быстрые действия в Modern режиме
     (function() {
       // Добавить заметку
-      document.querySelector('[data-quick-action="note"]')?.addEventListener('click', function() {
-        window.switchModernCompanyTab?.('notes');
-        const form = document.getElementById('noteFormModernInline');
-        if (form) {
-          const textarea = form.querySelector('textarea[name="text"]');
-          if (textarea) {
-            setTimeout(() => textarea.focus(), 50);
-            form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const quickNoteBtn = document.querySelector('[data-quick-action="note"]');
+      if (quickNoteBtn) {
+        quickNoteBtn.addEventListener('click', function() {
+          if (window.openNoteCreate) {
+            window.openNoteCreate();
+          } else {
+            // Фоллбек на старое поведение
+            window.switchModernCompanyTab?.('notes');
+            const form = document.getElementById('noteFormModernInline');
+            if (form) {
+              const textarea = form.querySelector('textarea[name="text"]');
+              if (textarea) {
+                setTimeout(() => textarea.focus(), 50);
+                form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+            }
           }
-        }
-      });
+        });
+      }
 
       // Создать задачу
       document.querySelector('[data-quick-action="task"]')?.addEventListener('click', function() {
