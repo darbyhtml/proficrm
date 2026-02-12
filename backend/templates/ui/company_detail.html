@@ -2032,6 +2032,9 @@
           }
         }
 
+        // Делаем функцию доступной глобально, чтобы к ней могли обращаться другие скрипты
+        window.refreshOverviewNotes = refreshOverviewNotes;
+
         // Открытие/закрытие classic-модалки редактирования (не используем в modern)
         let openNoteEditClassic = null;
         let closeNoteEditClassic = null;
