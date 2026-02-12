@@ -2058,12 +2058,13 @@
             });
           });
 
-          // Кнопки добавления заметки в modern-режиме (включая Обзор)
-          document.querySelectorAll('[data-note-add-modern]').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-              e.preventDefault();
-              openNoteCreate();
-            });
+          // Кнопки добавления заметки в modern-режиме (включая Обзор) — через делегирование,
+          // чтобы работало независимо от порядка загрузки скрипта и разметки
+          document.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-note-add-modern]');
+            if (!btn) return;
+            e.preventDefault();
+            openNoteCreate();
           });
           closeBtns.forEach(b => b.addEventListener('click', closeNoteEdit));
           document.addEventListener('keydown', (e) => {
