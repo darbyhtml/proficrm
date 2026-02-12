@@ -1967,7 +1967,13 @@
           setTimeout(initCallPhone, 100);
         }
 
-        // Note edit modal
+        // Note edit modal (classic + modern)
+        function isModernActive() {
+          const modernRoot = document.getElementById('companyDetailModern');
+          return !!(modernRoot && !modernRoot.classList.contains('hidden'));
+        }
+
+        // Classic modal (только для classic-режима)
         const noteEditModal = document.getElementById('noteEditModal');
         const noteEditForm = document.getElementById('noteEditForm');
         const noteEditText = document.getElementById('noteEditText');
@@ -1979,6 +1985,19 @@
         const noteEditTitle = document.getElementById('noteEditTitle');
         const noteEditSubtitle = document.getElementById('noteEditSubtitle');
         const noteEditRemoveRow = document.getElementById('noteEditRemoveRow');
+
+        // Modern modal (используется ТОЛЬКО в modern-режиме)
+        const noteEditModalModern = document.getElementById('noteEditModalModern');
+        const noteEditFormModern = document.getElementById('noteEditFormModern');
+        const noteEditTextModern = document.getElementById('noteEditTextModern');
+        const noteEditFileModern = document.getElementById('noteEditFileModern');
+        const noteEditFileCurrentModern = document.getElementById('noteEditFileCurrentModern');
+        const noteEditFileSelectedModern = document.getElementById('noteEditFileSelectedModern');
+        const noteEditRemoveFileModern = document.getElementById('noteEditRemoveFileModern');
+        const noteEditRemoveHiddenModern = document.getElementById('noteEditRemoveHiddenModern');
+        const noteEditTitleModern = document.getElementById('noteEditTitleModern');
+        const noteEditSubtitleModern = document.getElementById('noteEditSubtitleModern');
+        const noteEditRemoveRowModern = document.getElementById('noteEditRemoveRowModern');
 
         // Обновление блока заметок на вкладке "Обзор" без полной перезагрузки страницы
         async function refreshOverviewNotes() {
@@ -2013,9 +2032,12 @@
           }
         }
 
+        // Открытие/закрытие classic-модалки редактирования (не используем в modern)
+        let openNoteEditClassic = null;
+        let closeNoteEditClassic = null;
         if (noteEditModal && noteEditForm && noteEditText) {
           const closeBtns = noteEditModal.querySelectorAll('[data-close-noteedit]');
-          function openNoteEdit(noteId, noteText, fileName) {
+          openNoteEditClassic = function(noteId, noteText, fileName) {
             noteEditForm.action = `/companies/{{ company.id }}/notes/${noteId}/edit/`;
             noteEditText.value = noteText || '';
             if (noteEditFile) noteEditFile.value = '';
@@ -2028,59 +2050,13 @@
             if (noteEditRemoveRow) noteEditRemoveRow.style.display = 'flex';
             noteEditModal.classList.remove('hidden');
             setTimeout(() => { try{ noteEditText.focus(); }catch(_e){} }, 0);
-          }
+          };
 
-          function openNoteCreate() {
-            // Если modern-режим скрыт (сейчас открыта классика) — не используем модалку,
-            // а работаем через классическую форму заметок.
-            const modernRoot = document.getElementById('companyDetailModern');
-            if (!modernRoot || modernRoot.classList.contains('hidden')) {
-              const classicForm = document.getElementById('noteForm');
-              const classicTextarea = classicForm ? classicForm.querySelector('textarea[name=\"text\"]') : null;
-              if (classicTextarea) {
-                setTimeout(() => classicTextarea.focus(), 0);
-                classicForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }
-              return;
-            }
-            noteEditForm.action = `/companies/{{ company.id }}/notes/add/`;
-            if (noteEditTitle) noteEditTitle.textContent = 'Новая заметка';
-            if (noteEditSubtitle) noteEditSubtitle.classList.add('hidden');
-            if (noteEditText) noteEditText.value = '';
-            if (noteEditFile) noteEditFile.value = '';
-            if (noteEditFileSelected) noteEditFileSelected.textContent = '';
-            if (noteEditRemoveFile) noteEditRemoveFile.checked = false;
-            if (noteEditRemoveHidden) noteEditRemoveHidden.value = '0';
-            if (noteEditFileCurrent) noteEditFileCurrent.textContent = 'Текущий файл: —';
-            if (noteEditRemoveRow) noteEditRemoveRow.style.display = 'none';
-            noteEditModal.classList.remove('hidden');
-            setTimeout(() => { try{ noteEditText.focus(); }catch(_e){} }, 0);
-          }
+          closeNoteEditClassic = function() { noteEditModal.classList.add('hidden'); };
 
-          // Экспортируем функцию создания заметки для других скриптов (кнопки/шорткаты)
-          window.openNoteCreate = openNoteCreate;
-          function closeNoteEdit() { noteEditModal.classList.add('hidden'); }
-          document.querySelectorAll('[data-note-edit]').forEach(btn => {
-            btn.addEventListener('click', () => {
-              const id = btn.getAttribute('data-note-id');
-              // Получаем текст напрямую из атрибута (без escapejs, чтобы избежать двойного экранирования)
-              const txt = btn.getAttribute('data-note-text') || '';
-              const fn = btn.getAttribute('data-note-file') || '';
-              if (id) openNoteEdit(id, txt, fn);
-            });
-          });
-
-          // Кнопки добавления заметки в modern-режиме (включая Обзор) — через делегирование,
-          // чтобы работало независимо от порядка загрузки скрипта и разметки
-          document.addEventListener('click', (e) => {
-            const btn = e.target.closest('[data-note-add-modern]');
-            if (!btn) return;
-            e.preventDefault();
-            openNoteCreate();
-          });
-          closeBtns.forEach(b => b.addEventListener('click', closeNoteEdit));
+          closeBtns.forEach(b => b.addEventListener('click', closeNoteEditClassic));
           document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeNoteEdit();
+            if (e.key === 'Escape') closeNoteEditClassic();
           });
           if (noteEditFile && noteEditFileSelected) {
             noteEditFile.addEventListener('change', () => {
@@ -2100,7 +2076,7 @@
             });
           }
 
-          // Сохранение заметки из модалки без полной перезагрузки страницы
+          // Сохранение заметки из classic-модалки без полной перезагрузки страницы
           if (typeof window.fetch === 'function') {
             noteEditForm.addEventListener('submit', async (e) => {
               e.preventDefault();
@@ -2111,7 +2087,7 @@
                   body: formData,
                   headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 });
-                closeNoteEdit();
+                closeNoteEditClassic();
                 try {
                   await refreshOverviewNotes();
                 } catch (_e) {
@@ -2123,6 +2099,132 @@
             });
           }
         }
+
+        // Открытие/закрытие modern-модалки (используется только в modern)
+        let openNoteEditModern = null;
+        let openNoteCreateModern = null;
+        let closeNoteEditModern = null;
+        if (noteEditModalModern && noteEditFormModern && noteEditTextModern) {
+          const closeBtnsModern = noteEditModalModern.querySelectorAll('[data-close-noteedit-modern]');
+
+          closeNoteEditModern = function() { noteEditModalModern.classList.add('hidden'); };
+
+          openNoteEditModern = function(noteId, noteText, fileName) {
+            noteEditFormModern.action = `/companies/{{ company.id }}/notes/${noteId}/edit/`;
+            noteEditTextModern.value = noteText || '';
+            if (noteEditFileModern) noteEditFileModern.value = '';
+            if (noteEditFileSelectedModern) noteEditFileSelectedModern.textContent = '';
+            if (noteEditRemoveFileModern) noteEditRemoveFileModern.checked = false;
+            if (noteEditRemoveHiddenModern) noteEditRemoveHiddenModern.value = '0';
+            if (noteEditFileCurrentModern) noteEditFileCurrentModern.textContent = 'Текущий файл: ' + (fileName ? fileName : '—');
+            if (noteEditTitleModern) noteEditTitleModern.textContent = 'Редактировать заметку';
+            if (noteEditSubtitleModern) noteEditSubtitleModern.classList.remove('hidden');
+            if (noteEditRemoveRowModern) noteEditRemoveRowModern.style.display = 'flex';
+            noteEditModalModern.classList.remove('hidden');
+            setTimeout(() => { try{ noteEditTextModern.focus(); }catch(_e){} }, 0);
+          };
+
+          openNoteCreateModern = function() {
+            noteEditFormModern.action = `/companies/{{ company.id }}/notes/add/`;
+            if (noteEditTitleModern) noteEditTitleModern.textContent = 'Новая заметка';
+            if (noteEditSubtitleModern) noteEditSubtitleModern.classList.add('hidden');
+            if (noteEditTextModern) noteEditTextModern.value = '';
+            if (noteEditFileModern) noteEditFileModern.value = '';
+            if (noteEditFileSelectedModern) noteEditFileSelectedModern.textContent = '';
+            if (noteEditRemoveFileModern) noteEditRemoveFileModern.checked = false;
+            if (noteEditRemoveHiddenModern) noteEditRemoveHiddenModern.value = '0';
+            if (noteEditFileCurrentModern) noteEditFileCurrentModern.textContent = 'Текущий файл: —';
+            if (noteEditRemoveRowModern) noteEditRemoveRowModern.style.display = 'none';
+            noteEditModalModern.classList.remove('hidden');
+            setTimeout(() => { try{ noteEditTextModern.focus(); }catch(_e){} }, 0);
+          };
+
+          closeBtnsModern.forEach(b => b.addEventListener('click', closeNoteEditModern));
+          document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeNoteEditModern();
+          });
+
+          if (noteEditFileModern && noteEditFileSelectedModern) {
+            noteEditFileModern.addEventListener('change', () => {
+              const f = noteEditFileModern.files && noteEditFileModern.files.length ? noteEditFileModern.files[0] : null;
+              noteEditFileSelectedModern.textContent = f ? ('Выбран: ' + f.name) : '';
+              if (noteEditRemoveFileModern) noteEditRemoveFileModern.checked = false;
+              if (noteEditRemoveHiddenModern) noteEditRemoveHiddenModern.value = '0';
+            });
+          }
+          if (noteEditRemoveFileModern) {
+            noteEditRemoveFileModern.addEventListener('change', () => {
+              if (noteEditRemoveHiddenModern) noteEditRemoveHiddenModern.value = noteEditRemoveFileModern.checked ? '1' : '0';
+              if (noteEditRemoveFileModern.checked && noteEditFileModern) {
+                noteEditFileModern.value = '';
+                if (noteEditFileSelectedModern) noteEditFileSelectedModern.textContent = '';
+              }
+            });
+          }
+
+          if (typeof window.fetch === 'function') {
+            noteEditFormModern.addEventListener('submit', async (e) => {
+              e.preventDefault();
+              const formData = new FormData(noteEditFormModern);
+              try {
+                await fetch(noteEditFormModern.action, {
+                  method: 'POST',
+                  body: formData,
+                  headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
+                closeNoteEditModern();
+                try { await refreshOverviewNotes(); } catch (_e) {}
+              } catch (e) {
+                window.location.reload();
+              }
+            });
+          }
+        }
+
+        // Единая точка входа: создание заметки (только modern-модалка в modern, иначе — фокус на classic-форму)
+        window.openNoteCreate = function() {
+          if (isModernActive() && typeof openNoteCreateModern === 'function') {
+            openNoteCreateModern();
+            return;
+          }
+          const classicForm = document.getElementById('noteForm');
+          const classicTextarea = classicForm ? classicForm.querySelector('textarea[name="text"]') : null;
+          if (classicTextarea) {
+            setTimeout(() => classicTextarea.focus(), 0);
+            classicForm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        };
+
+        // Единая точка входа: редактирование заметки (modern → modern-модалка, classic → classic-модалка)
+        window.openNoteEditSmart = function(noteId, noteText, fileName, sourceEl) {
+          const fromModern = !!(sourceEl && sourceEl.closest && sourceEl.closest('#companyDetailModern'));
+          if ((isModernActive() || fromModern) && typeof openNoteEditModern === 'function') {
+            openNoteEditModern(noteId, noteText, fileName);
+            return;
+          }
+          if (typeof openNoteEditClassic === 'function') {
+            openNoteEditClassic(noteId, noteText, fileName);
+          }
+        };
+
+        // Делегирование клика по кнопкам редактирования (и в classic, и в modern)
+        document.addEventListener('click', (e) => {
+          const btn = e.target.closest('[data-note-edit]');
+          if (!btn) return;
+          e.preventDefault();
+          const id = btn.getAttribute('data-note-id');
+          const txt = btn.getAttribute('data-note-text') || '';
+          const fn = btn.getAttribute('data-note-file') || '';
+          if (id && window.openNoteEditSmart) window.openNoteEditSmart(id, txt, fn, btn);
+        });
+
+        // Делегирование клика по кнопкам добавления заметки (modern)
+        document.addEventListener('click', (e) => {
+          const btn = e.target.closest('[data-note-add-modern]');
+          if (!btn) return;
+          e.preventDefault();
+          if (window.openNoteCreate) window.openNoteCreate();
+        });
 
         // Контекстное меню заметки (классический режим — оставляем без изменений, использует noteMenuModal)
         (function() {
@@ -2220,6 +2322,8 @@
             let currentId = null;
             let currentPinned = false;
             let anchorBtn = null;
+            let currentText = '';
+            let currentFile = '';
 
             function openMenu(id, isPinned) {
               currentId = id;
@@ -2255,6 +2359,8 @@
             function closeMenu() {
               menu.classList.add('hidden');
               anchorBtn = null;
+              currentText = '';
+              currentFile = '';
             }
 
             modernRoot.addEventListener('click', (e) => {
@@ -2265,6 +2371,8 @@
               const id = btn.getAttribute('data-note-id');
               const pinned = btn.getAttribute('data-note-pinned') === '1';
               anchorBtn = btn;
+              currentText = btn.getAttribute('data-note-text') || '';
+              currentFile = btn.getAttribute('data-note-file') || '';
               if (id) openMenu(id, pinned);
             });
 
@@ -2286,8 +2394,12 @@
                 if (!currentId || !action) return;
 
                 if (action === 'edit') {
-                  const btn = document.querySelector(`[data-note-edit][data-note-id="${currentId}"]`);
-                  if (btn) btn.click();
+                  if (typeof window.openNoteEditSmart === 'function') {
+                    window.openNoteEditSmart(currentId, currentText, currentFile, anchorBtn);
+                  } else {
+                    const btn = document.querySelector(`[data-note-edit][data-note-id="${currentId}"]`);
+                    if (btn) btn.click();
+                  }
                   closeMenu();
                   return;
                 }
@@ -2483,6 +2595,55 @@
 
   <!-- Современный режим (новый layout) -->
   <div id="companyDetailModern" class="{% if detail_view_mode != 'modern' %}hidden{% endif %}">
+    {# Модалка заметки для Modern (создание/редактирование) #}
+    <div id="noteEditModalModern" class="fixed inset-0 z-[230] hidden">
+      <div class="fixed inset-0 bg-black/35" data-close-noteedit-modern></div>
+      <div class="absolute inset-x-4 top-24 mx-auto max-w-lg">
+        <div class="card card-pad">
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <div class="font-medium" id="noteEditTitleModern">Редактировать заметку</div>
+              <div class="text-xs muted-2 mt-1" id="noteEditSubtitleModern">После сохранения появится метка «ред.»</div>
+            </div>
+            <button type="button" class="btn btn-outline btn-sm" data-close-noteedit-modern aria-label="Закрыть" title="Закрыть">✕</button>
+          </div>
+          <form method="post" id="noteEditFormModern" class="mt-3 space-y-2" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div>
+              <label class="block text-xs text-brand-dark/70 mb-1">Текст</label>
+              <textarea name="text" id="noteEditTextModern" class="textarea" rows="5" placeholder="Текст заметки..."></textarea>
+              <div class="text-xs muted-2 mt-1">Можно заменить/добавить файл или удалить текущий.</div>
+            </div>
+            <div class="rounded-xl border border-brand-soft bg-brand-soft/10 p-3">
+              <div class="flex items-center justify-between gap-2">
+                <div class="text-xs text-brand-dark/70">Файл</div>
+                <label class="btn btn-outline btn-sm" style="cursor:pointer">
+                  Выбрать файл
+                  <input type="file" name="attachment" id="noteEditFileModern" class="hidden" />
+                </label>
+              </div>
+              <div class="mt-2 text-xs">
+                <div class="muted-2" id="noteEditFileCurrentModern">Текущий файл: —</div>
+                <div class="muted-2" id="noteEditFileSelectedModern"></div>
+              </div>
+              <div class="mt-2 flex items-center justify-between gap-2" id="noteEditRemoveRowModern">
+                <label class="inline-flex items-center gap-2 text-xs">
+                  <input type="checkbox" id="noteEditRemoveFileModern" />
+                  <span>Удалить текущий файл</span>
+                </label>
+                <input type="hidden" name="remove_attachment" id="noteEditRemoveHiddenModern" value="0" />
+              </div>
+              <div class="muted-2 mt-2" style="font-size:0.6875rem;">Если выбрать новый файл — старый будет удалён с сервера.</div>
+            </div>
+            <div class="flex gap-2">
+              <button class="btn btn-primary" type="submit">Сохранить</button>
+              <button class="btn btn-outline" type="button" data-close-noteedit-modern>Отмена</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
     <!-- Sticky header (компактный) -->
     <div class="sticky top-0 z-30 mb-4" style="padding: 0.25rem 0;">
       <div class="bg-white border-b border-brand-soft/50 shadow-sm px-6 md:px-8 py-3 md:py-4 rounded-2xl flex items-center justify-between gap-4">
@@ -2831,7 +2992,17 @@
                         {% endif %}
                       </div>
                       {% if can_edit_company %}
-                        <button type="button" class="shrink-0 text-brand-dark/60 hover:text-brand-dark text-lg leading-none p-0.5" data-note-menu-btn-modern data-note-id="{{ display_note.id }}" data-note-pinned="{% if display_note.is_pinned %}1{% else %}0{% endif %}" aria-label="Действия с заметкой" title="Действия с заметкой">⋯</button>
+                        <button
+                          type="button"
+                          class="shrink-0 text-brand-dark/60 hover:text-brand-dark text-lg leading-none p-0.5"
+                          data-note-menu-btn-modern
+                          data-note-id="{{ display_note.id }}"
+                          data-note-pinned="{% if display_note.is_pinned %}1{% else %}0{% endif %}"
+                          data-note-text="{{ display_note.text|default:'' }}"
+                          data-note-file="{{ display_note.attachment_name|default:'' }}"
+                          aria-label="Действия с заметкой"
+                          title="Действия с заметкой"
+                        >⋯</button>
                       {% endif %}
                     </div>
                     <!-- Автор и дата -->
