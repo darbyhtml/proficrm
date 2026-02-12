@@ -99,9 +99,34 @@
                 <span class="text-xs text-red-600 ml-2 hidden" data-inline-error></span>
               </span>
             </span>
+
+            <span class="mx-1">·</span>
+            <span>Область:</span>
+            {% if can_edit_company %}
+              <span class="inline-field-wrapper inline-block ml-1" data-inline-field="region" data-company-id="{{ company.id }}">
+                <span class="relative inline-block" data-dd-root>
+                  <span class="inline-field-trigger inline-field-trigger-inline group" data-dd-toggle title="Клик: скопировать или изменить">
+                    <span class="inline-field-display min-w-0 hover:text-brand-dark/80 transition-colors">{{ company.region.name|default:"—" }}</span>
+                    <svg class="inline-field-pencil" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
+                  </span>
+                  <div class="hidden absolute left-0 mt-1 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
+                    <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-copy>Скопировать</button>
+                    <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-edit>Изменить</button>
+                  </div>
+                </span>
+                <span class="inline-field-edit hidden ml-2 align-middle">
+                  {{ quick_form.region }}
+                  <button type="button" class="btn btn-primary btn-sm hidden" data-inline-save>Сохранить</button>
+                  <span class="text-xs text-red-600 ml-2 hidden" data-inline-error></span>
+                </span>
+              </span>
+            {% else %}
+              <span class="font-mono">{{ company.region.name|default:"—" }}</span>
+            {% endif %}
           {% else %}
             {% if company.inn %}ИНН: <span class="font-mono">{{ company.inn }}</span>{% endif %}
             {% if company.kpp %} · КПП: <span class="font-mono">{{ company.kpp }}</span>{% endif %}
+            {% if company.region %} · Область: <span class="font-mono">{{ company.region.name }}</span>{% endif %}
           {% endif %}
         </div>
 
@@ -273,30 +298,6 @@
               </div>
             {% else %}
               <div>{{ company.legal_name|default:"—" }}</div>
-            {% endif %}
-          </div>
-          <div>
-            <div class="text-brand-dark/50">Область</div>
-            {% if can_edit_company %}
-              <div class="inline-field-wrapper mt-1" data-inline-field="region" data-company-id="{{ company.id }}">
-                <div class="relative" data-dd-root>
-                  <div class="inline-field-trigger group" data-dd-toggle title="Клик: скопировать или изменить">
-                    <div class="inline-field-display min-w-0 hover:text-brand-dark/80 transition-colors">{{ company.region.name|default:"—" }}</div>
-                    <svg class="inline-field-pencil" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
-                  </div>
-                  <div class="hidden absolute left-0 mt-1 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
-                    <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-copy>Скопировать</button>
-                    <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-edit>Изменить</button>
-                  </div>
-                </div>
-                <div class="inline-field-edit hidden mt-1">
-                  {{ quick_form.region }}
-                  <button type="button" class="btn btn-primary btn-sm hidden" data-inline-save>Сохранить</button>
-                  <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
-                </div>
-              </div>
-            {% else %}
-              <div>{{ company.region|default:"—" }}</div>
             {% endif %}
           </div>
           <div>
