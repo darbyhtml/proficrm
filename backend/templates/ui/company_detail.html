@@ -3035,9 +3035,9 @@
                     </div>
                     <!-- Текст заметки -->
                     {% if display_note.text %}
-                      <div class="text-sm text-brand-dark/90 whitespace-pre-line line-clamp-6" id="displayNoteText">{{ display_note.text }}</div>
+                      <div class="text-sm text-brand-dark/90 whitespace-pre-line line-clamp-4" id="displayNoteText">{{ display_note.text }}</div>
                       {% if display_note.text|length > 300 %}
-                        <button type="button" class="mt-1.5 text-sm text-brand-orange hover:underline expand-collapse-btn" onclick="document.getElementById('displayNoteText').classList.toggle('line-clamp-6'); this.querySelector('.expand-text').classList.toggle('hidden'); this.querySelector('.collapse-text').classList.toggle('hidden');">
+                        <button type="button" class="mt-1.5 text-sm text-brand-orange hover:underline expand-collapse-btn" onclick="document.getElementById('displayNoteText').classList.toggle('line-clamp-4'); this.querySelector('.expand-text').classList.toggle('hidden'); this.querySelector('.collapse-text').classList.toggle('hidden');">
                           <span class="expand-text">Развернуть</span>
                           <span class="collapse-text hidden">Свернуть</span>
                         </button>
@@ -3086,7 +3086,7 @@
               {% if notes_overview_preview %}
                 <div class="mt-3 space-y-2">
                   {% for n in notes_overview_preview %}
-                    <div class="w-full rounded-lg bg-white border border-brand-soft/60 p-3 hover:bg-brand-soft/20 transition-colors">
+                    <div class="w-full rounded-lg bg-white border border-brand-soft/60 p-3">
                       <div class="flex items-start justify-between gap-2 mb-1">
                         <div class="text-sm">
                           <span class="font-semibold text-brand-dark">{{ n.author|default:"—" }}</span>
@@ -3107,15 +3107,9 @@
                           >⋯</button>
                         {% endif %}
                       </div>
-                      <button
-                        type="button"
-                        class="mt-0.5 w-full text-left"
-                        onclick="window.switchModernCompanyTab?.('notes');"
-                      >
-                        <div class="text-sm text-brand-dark/90 line-clamp-2 whitespace-pre-line">
-                          {{ n.text }}
-                        </div>
-                      </button>
+                      <div class="mt-0.5 text-sm text-brand-dark/90 line-clamp-2 whitespace-pre-line">
+                        {{ n.text }}
+                      </div>
                     </div>
                   {% endfor %}
                 </div>
@@ -7027,13 +7021,13 @@
           const collapseText = this.querySelector('.collapse-text');
           
           if (textEl) {
-            const isExpanded = !textEl.classList.contains('line-clamp-6');
+            const isExpanded = !textEl.classList.contains('line-clamp-4');
             if (isExpanded) {
-              textEl.classList.add('line-clamp-6');
+              textEl.classList.add('line-clamp-4');
               if (expandText) expandText.classList.remove('hidden');
               if (collapseText) collapseText.classList.add('hidden');
             } else {
-              textEl.classList.remove('line-clamp-6');
+              textEl.classList.remove('line-clamp-4');
               if (expandText) expandText.classList.add('hidden');
               if (collapseText) collapseText.classList.remove('hidden');
             }
