@@ -4339,6 +4339,117 @@
   </div>
 
   <script>
+    // Гарантированная инициализация modern-модалки заметок после загрузки DOM.
+    // Нужна, потому что основной скрипт может выполниться до вставки разметки modern-блока.
+    (function() {
+      function initModernNoteModal() {
+        const modal = document.getElementById('noteEditModalModern');
+        const form = document.getElementById('noteEditFormModern');
+        const textarea = document.getElementById('noteEditTextModern');
+        if (!modal || !form || !textarea) return;
+
+        const fileInput = document.getElementById('noteEditFileModern');
+        const fileCurrent = document.getElementById('noteEditFileCurrentModern');
+        const fileSelected = document.getElementById('noteEditFileSelectedModern');
+        const removeFile = document.getElementById('noteEditRemoveFileModern');
+        const removeHidden = document.getElementById('noteEditRemoveHiddenModern');
+        const titleEl = document.getElementById('noteEditTitleModern');
+        const subtitleEl = document.getElementById('noteEditSubtitleModern');
+        const removeRow = document.getElementById('noteEditRemoveRowModern');
+
+        function closeModal() {
+          modal.classList.add('hidden');
+        }
+
+        function openEdit(id, text, fileName) {
+          form.action = `/companies/{{ company.id }}/notes/${id}/edit/`;
+          textarea.value = text || '';
+          if (fileInput) fileInput.value = '';
+          if (fileSelected) fileSelected.textContent = '';
+          if (removeFile) removeFile.checked = false;
+          if (removeHidden) removeHidden.value = '0';
+          if (fileCurrent) fileCurrent.textContent = 'Текущий файл: ' + (fileName ? fileName : '—');
+          if (titleEl) titleEl.textContent = 'Редактировать заметку';
+          if (subtitleEl) subtitleEl.classList.remove('hidden');
+          if (removeRow) removeRow.style.display = 'flex';
+          modal.classList.remove('hidden');
+          setTimeout(() => { try { textarea.focus(); } catch (_e) {} }, 0);
+        }
+
+        function openCreate() {
+          form.action = `/companies/{{ company.id }}/notes/add/`;
+          if (titleEl) titleEl.textContent = 'Новая заметка';
+          if (subtitleEl) subtitleEl.classList.add('hidden');
+          textarea.value = '';
+          if (fileInput) fileInput.value = '';
+          if (fileSelected) fileSelected.textContent = '';
+          if (removeFile) removeFile.checked = false;
+          if (removeHidden) removeHidden.value = '0';
+          if (fileCurrent) fileCurrent.textContent = 'Текущий файл: —';
+          if (removeRow) removeRow.style.display = 'none';
+          modal.classList.remove('hidden');
+          setTimeout(() => { try { textarea.focus(); } catch (_e) {} }, 0);
+        }
+
+        // Обновление заголовка/состояния файла при выборе
+        if (fileInput && fileSelected) {
+          fileInput.addEventListener('change', () => {
+            const f = fileInput.files && fileInput.files.length ? fileInput.files[0] : null;
+            fileSelected.textContent = f ? ('Выбран: ' + f.name) : '';
+            if (removeFile) removeFile.checked = false;
+            if (removeHidden) removeHidden.value = '0';
+          });
+        }
+        if (removeFile) {
+          removeFile.addEventListener('change', () => {
+            if (removeHidden) removeHidden.value = removeFile.checked ? '1' : '0';
+            if (removeFile.checked && fileInput) {
+              fileInput.value = '';
+              if (fileSelected) fileSelected.textContent = '';
+            }
+          });
+        }
+
+        // Отправка формы через AJAX с обновлением блока «Обзор»
+        if (typeof window.fetch === 'function') {
+          form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(form);
+            try {
+              await fetch(form.action, {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+              });
+              closeModal();
+              try { await window.refreshOverviewNotes?.(); } catch (_e) {}
+            } catch (err) {
+              window.location.reload();
+            }
+          });
+        }
+
+        modal.querySelectorAll('[data-close-noteedit-modern]').forEach(btn => {
+          btn.addEventListener('click', closeModal);
+        });
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') closeModal();
+        });
+
+        // Публикуем функции глобально для использования в других обработчиках
+        window.openNoteEditModern = openEdit;
+        window.openNoteCreateModern = openCreate;
+      }
+
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initModernNoteModal);
+      } else {
+        initModernNoteModal();
+      }
+    })();
+  </script>
+
+  <script>
     // История выполненных задач по компании (модалка)
     (function() {
       const btn = document.getElementById('taskHistoryButton');
