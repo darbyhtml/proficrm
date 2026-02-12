@@ -2715,12 +2715,21 @@
       </div>
     </div>
 
-    <!-- Sticky header (компактный) -->
-    <div class="sticky top-0 z-30 mb-4" style="padding: 0.25rem 0;">
-      <div class="bg-white border-b border-brand-soft/50 shadow-sm px-6 md:px-8 py-3 md:py-4 rounded-2xl flex items-center justify-between gap-4">
+    <!-- Sticky header (обновлённый компактный бар) -->
+    <div class="sticky top-0 z-30 mb-4">
+      <div class="bg-white/95 backdrop-blur border-b border-brand-soft/60 px-4 sm:px-6 md:px-8 py-2.5 md:py-3.5 flex items-start justify-between gap-4">
         <div class="flex-1 min-w-0">
-          <div class="text-xs text-brand-dark/60 mb-1"><a class="underline hover:text-brand-teal" href="/companies/">Компании</a> /</div>
-          <div class="flex items-center gap-3 flex-wrap">
+          <!-- Крошки + некликабельное название компании -->
+          <div class="flex items-center justify-between gap-3 mb-1.5">
+            <div class="text-[11px] sm:text-xs text-brand-dark/60 truncate">
+              <a class="underline hover:text-brand-teal" href="/companies/">Компании</a>
+              <span class="mx-1">/</span>
+              <span class="font-medium text-brand-dark/80 truncate">{{ company.name }}</span>
+            </div>
+          </div>
+
+          <!-- Иконка компании + редактируемое название + реквизиты -->
+          <div class="flex items-start gap-3">
             <div class="hidden sm:flex w-11 h-11 rounded-2xl bg-brand-soft/60 items-center justify-center text-brand-dark/70 shrink-0">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -2728,32 +2737,31 @@
               </svg>
             </div>
             <div class="min-w-0">
-              <div class="flex items-center gap-2 flex-wrap">
-            {% if can_edit_company %}
-              <div class="inline-field-wrapper w-full min-w-0" data-inline-field="name" data-company-id="{{ company.id }}">
-                <div class="relative" data-dd-root>
-                  <div class="inline-field-trigger group" data-dd-toggle title="Клик: скопировать или изменить">
-                    <h1 class="text-xl font-semibold inline-field-display min-w-0 hover:text-brand-teal transition-colors">{{ company.name }}</h1>
-                    <svg class="inline-field-pencil" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
+              {% if can_edit_company %}
+                <div class="inline-field-wrapper w-full min-w-0" data-inline-field="name" data-company-id="{{ company.id }}">
+                  <div class="relative" data-dd-root>
+                    <div class="inline-field-trigger group" data-dd-toggle title="Клик: скопировать или изменить">
+                      <h1 class="text-xl md:text-2xl font-semibold inline-field-display min-w-0 hover:text-brand-teal transition-colors">{{ company.name }}</h1>
+                      <svg class="inline-field-pencil" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
+                    </div>
+                    <div class="hidden absolute left-0 mt-1 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
+                      <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-copy>Скопировать</button>
+                      <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-edit>Изменить</button>
+                    </div>
                   </div>
-                  <div class="hidden absolute left-0 mt-1 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
-                    <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-copy>Скопировать</button>
-                    <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-edit>Изменить</button>
+                  <div class="inline-field-edit hidden mt-1 w-full">
+                    <input class="input w-full text-lg py-2 min-h-[2.5rem]" data-inline-input maxlength="255" value="{{ company.name|default:'' }}" placeholder="Название компании" />
+                    <div class="flex gap-1 mt-1">
+                      <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
+                      <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
+                    </div>
+                    <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
                   </div>
                 </div>
-                <div class="inline-field-edit hidden mt-1 w-full">
-                  <input class="input w-full text-lg py-2 min-h-[2.5rem]" data-inline-input maxlength="255" value="{{ company.name|default:'' }}" placeholder="Название компании" />
-                  <div class="flex gap-1 mt-1">
-                    <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
-                    <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
-                  </div>
-                  <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
-                </div>
-              </div>
-            {% else %}
-              <h1 class="text-xl font-semibold">{{ company.name }}</h1>
-            {% endif %}
-              </div>
+              {% else %}
+                <h1 class="text-xl md:text-2xl font-semibold truncate">{{ company.name }}</h1>
+              {% endif %}
+
               <div class="text-xs text-brand-dark/60 mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
                 {% if can_edit_company %}
                   <span>ИНН:</span>
@@ -2775,7 +2783,7 @@
                       <span class="text-xs text-red-600 ml-1 hidden" data-inline-error></span>
                     </span>
                   </span>
-                  <span class="mx-1">·</span>
+                  <span class="mx-1 text-brand-soft/80">·</span>
                   <span>КПП:</span>
                   <span class="inline-field-wrapper" data-inline-field="kpp" data-company-id="{{ company.id }}">
                     <span class="relative inline-block" data-dd-root>
@@ -2795,7 +2803,7 @@
                       <span class="text-xs text-red-600 ml-1 hidden" data-inline-error></span>
                     </span>
                   </span>
-                  <span class="mx-1">·</span>
+                  <span class="mx-1 text-brand-soft/80">·</span>
                   <span>Область/регион:</span>
                   {% if can_edit_company %}
                     <span class="inline-field-wrapper inline-block ml-1" data-inline-field="region" data-company-id="{{ company.id }}">
@@ -2840,74 +2848,91 @@
                   {% endwith %}
                 {% endif %}
               </div>
+
+              <!-- Индикатор несохранённых изменений -->
+              <div id="unsavedChangesIndicatorModern" class="hidden mt-2 text-xs text-brand-orange flex items-center gap-2">
+                <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <span>Есть несохранённые изменения</span>
+                <button type="button" class="btn btn-outline btn-xxs ml-auto" id="saveAllChangesModern">Сохранить всё</button>
+                <button type="button" class="btn btn-outline btn-xxs" id="cancelAllChangesModern">Отменить</button>
+              </div>
             </div>
           </div>
-          <!-- Индикатор несохранённых изменений -->
-          <div id="unsavedChangesIndicatorModern" class="hidden mt-2 text-xs text-brand-orange flex items-center gap-2">
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-            </svg>
-            <span>Есть несохранённые изменения</span>
-            <button type="button" class="btn btn-outline btn-xxs ml-auto" id="saveAllChangesModern">Сохранить всё</button>
-            <button type="button" class="btn btn-outline btn-xxs" id="cancelAllChangesModern">Отменить</button>
-          </div>
         </div>
-        <div class="flex items-center gap-2 shrink-0">
-          <!-- Быстрые действия: поиск и копирование ссылки (Modern) -->
-          <div class="flex items-center gap-1 bg-brand-soft/20 rounded-lg p-1" id="quickActionsModern">
-            <button type="button" class="quick-action-btn p-1.5 rounded hover:bg-white transition-colors" data-copy-text="{{ request.build_absolute_uri }}" title="Копировать ссылку" aria-label="Копировать ссылку">
-              <svg class="w-4 h-4 text-brand-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
-              </svg>
-            </button>
-            <button type="button" class="quick-action-btn p-1.5 rounded hover:bg-white transition-colors" id="quickSearchBtnModern" title="Поиск по карточке (/) (Ctrl+K)" aria-label="Поиск">
-              <svg class="w-4 h-4 text-brand-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-              </svg>
-            </button>
-          </div>
-          <!-- Переключатель режимов просмотра (иконки) -->
-          <div class="flex items-center gap-1 bg-brand-soft/30 rounded-lg p-1" role="group" aria-label="Режим просмотра карточки">
-            <button type="button" id="viewModeClassicDetailModern" class="view-mode-detail-btn p-1.5 rounded-md transition-colors {% if detail_view_mode == 'classic' %}bg-white text-brand-teal shadow-sm{% else %}text-brand-dark/70 hover:text-brand-dark{% endif %}" data-mode="classic" title="Классический вид" aria-label="Классический вид">
+
+        <!-- Правая колонка: переключатель вида + ключевые действия -->
+        <div class="flex flex-col items-end gap-2 shrink-0">
+          <!-- Переключатель Classic / Modern -->
+          <div class="flex items-center gap-1 bg-brand-soft/30 rounded-full p-1" role="group" aria-label="Режим просмотра карточки">
+            <button type="button" id="viewModeClassicDetailModern" class="view-mode-detail-btn px-2.5 py-1.5 rounded-full text-xs md:text-[13px] transition-colors {% if detail_view_mode == 'classic' %}bg-white text-brand-teal shadow-sm{% else %}text-brand-dark/70 hover:text-brand-dark{% endif %}" data-mode="classic" title="Классический вид" aria-label="Классический вид">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
               </svg>
             </button>
-            <button type="button" id="viewModeModernDetailModern" class="view-mode-detail-btn p-1.5 rounded-md transition-colors {% if detail_view_mode == 'modern' %}bg-white text-brand-teal shadow-sm{% else %}text-brand-dark/70 hover:text-brand-dark{% endif %}" data-mode="modern" title="Современный вид" aria-label="Современный вид">
+            <button type="button" id="viewModeModernDetailModern" class="view-mode-detail-btn px-2.5 py-1.5 rounded-full text-xs md:text-[13px] transition-colors {% if detail_view_mode == 'modern' %}bg-white text-brand-teal shadow-sm{% else %}text-brand-dark/70 hover:text-brand-dark{% endif %}" data-mode="modern" title="Современный вид" aria-label="Современный вид">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
               </svg>
             </button>
           </div>
-          <!-- Dropdown с действиями -->
-          <div class="relative" id="companyActionsDropdownModern">
-            <button type="button" class="btn btn-outline btn-sm p-1.5" id="companyActionsBtnModern" title="Действия (.)" aria-label="Действия">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/>
-              </svg>
-            </button>
-            <div class="hidden absolute right-0 top-full mt-1 bg-white border border-brand-soft rounded-lg shadow-lg z-50 min-w-[180px]" id="companyActionsMenuModern">
-              {% if statuses %}
-                <div class="px-3 py-2 border-b border-brand-soft/50">
-                  <div class="text-xs text-brand-dark/60 mb-1">Статус</div>
-                  <select class="select w-full text-sm" id="quickStatusChangeModern" data-company-id="{{ company.id }}">
-                    <option value="">—</option>
-                    {% for status in statuses %}
-                      <option value="{{ status.id }}" {% if company.status_id == status.id %}selected{% endif %}>{{ status.name }}</option>
-                    {% endfor %}
-                  </select>
-                </div>
-              {% endif %}
-              {% if can_edit_company %}
-                <a class="block px-3 py-2 text-sm hover:bg-brand-soft/25" href="/companies/{{ company.id }}/edit/">Редактировать данные</a>
-              {% endif %}
-              {% if can_delete_company %}
-                <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 text-red-600" onclick="document.getElementById('openDeleteCompanyModal')?.click(); document.getElementById('companyActionsMenuModern').classList.add('hidden');">Удалить компанию</button>
-              {% elif can_request_delete %}
-                <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 {% if delete_req %}text-brand-orange{% else %}text-red-600{% endif %}" onclick="document.getElementById('openDeleteRequestModal')?.click(); document.getElementById('companyActionsMenuModern').classList.add('hidden');">
-                  {% if delete_req %}Отменить запрос{% else %}Запросить удаление{% endif %}
-                </button>
-              {% endif %}
+
+          <!-- Ключевые действия по компании -->
+          <div class="flex flex-wrap justify-end gap-1.5 text-[11px] sm:text-xs">
+            {% if can_edit_company %}
+              <a class="btn btn-outline btn-xs md:btn-sm" href="/companies/{{ company.id }}/edit/">Редактировать</a>
+            {% endif %}
+
+            {% if can_delete_company %}
+              <button type="button" class="btn btn-outline btn-xs md:btn-sm btn-danger" id="openDeleteCompanyModal">Удалить</button>
+            {% elif can_request_delete %}
+              <button type="button" class="btn btn-outline btn-xs md:btn-sm btn-danger" id="openDeleteRequestModal">
+                {% if delete_req %}Отменить запрос{% else %}Запросить удаление{% endif %}
+              </button>
+            {% endif %}
+
+            <!-- Копирование ссылки и поиск по карточке -->
+            <div class="flex items-center gap-1 bg-brand-soft/20 rounded-full p-1" id="quickActionsModern">
+              <button type="button" class="quick-action-btn p-1.5 rounded hover:bg-white transition-colors" data-copy-text="{{ request.build_absolute_uri }}" title="Копировать ссылку" aria-label="Копировать ссылку">
+                <svg class="w-4 h-4 text-brand-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+                </svg>
+              </button>
+              <button type="button" class="quick-action-btn p-1.5 rounded hover:bg-white transition-colors" id="quickSearchBtnModern" title="Поиск по карточке (/) (Ctrl+K)" aria-label="Поиск">
+                <svg class="w-4 h-4 text-brand-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Статус + ответственный/филиал в компактном виде -->
+          <div class="flex items-center gap-2 text-[11px] text-brand-dark/60 justify-end">
+            <div class="hidden sm:block text-right space-y-0.5">
+              <div><span class="text-brand-dark/50">Ответственный:</span> {{ company.responsible }}</div>
+              <div><span class="text-brand-dark/50">Филиал:</span> {{ company.branch }}</div>
+            </div>
+            <!-- Dropdown только для смены статуса -->
+            <div class="relative" id="companyActionsDropdownModern">
+              <button type="button" class="btn btn-outline btn-xs p-1.5" id="companyActionsBtnModern" title="Статус и доп. действия (.)" aria-label="Статус и доп. действия">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/>
+                </svg>
+              </button>
+              <div class="hidden absolute right-0 top-full mt-1 bg-white border border-brand-soft rounded-lg shadow-lg z-50 min-w-[180px]" id="companyActionsMenuModern">
+                {% if statuses %}
+                  <div class="px-3 py-2">
+                    <div class="text-xs text-brand-dark/60 mb-1">Статус компании</div>
+                    <select class="select w-full text-sm" id="quickStatusChangeModern" data-company-id="{{ company.id }}">
+                      <option value="">—</option>
+                      {% for status in statuses %}
+                        <option value="{{ status.id }}" {% if company.status_id == status.id %}selected{% endif %}>{{ status.name }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                {% endif %}
+              </div>
             </div>
           </div>
         </div>
