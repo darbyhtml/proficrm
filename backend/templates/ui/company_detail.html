@@ -2181,10 +2181,20 @@
           }
         }
 
-        // Единая точка входа: создание заметки (только modern-модалка в modern, иначе — фокус на classic-форму)
+        // Экспорт modern-функций в глобальную область, чтобы использовать их из любых обработчиков
+        if (openNoteEditModern) {
+          window.openNoteEditModern = openNoteEditModern;
+        }
+        if (openNoteCreateModern) {
+          window.openNoteCreateModern = openNoteCreateModern;
+        }
+
+        // Единая точка входа: создание заметки
+        // В modern-режиме всегда открываем modern-модалку,
+        // в classic — фокусируем классическую форму.
         window.openNoteCreate = function() {
-          if (isModernActive() && typeof openNoteCreateModern === 'function') {
-            openNoteCreateModern();
+          if (typeof window.openNoteCreateModern === 'function' && (isModernActive())) {
+            window.openNoteCreateModern();
             return;
           }
           const classicForm = document.getElementById('noteForm');
@@ -2223,7 +2233,13 @@
           const btn = e.target.closest('[data-note-add-modern]');
           if (!btn) return;
           e.preventDefault();
-          if (window.openNoteCreate) window.openNoteCreate();
+          // В modern-виде принудительно используем modern-модалку,
+          // чтобы не открывался классический режим.
+          if (typeof window.openNoteCreateModern === 'function') {
+            window.openNoteCreateModern();
+          } else if (typeof window.openNoteCreate === 'function') {
+            window.openNoteCreate();
+          }
         });
 
         // Контекстное меню заметки (классический режим — оставляем без изменений, использует noteMenuModal)
@@ -2394,7 +2410,10 @@
                 if (!currentId || !action) return;
 
                 if (action === 'edit') {
-                  if (typeof window.openNoteEditSmart === 'function') {
+                  // В modern-режиме всегда в приоритете modern-модалка
+                  if (typeof window.openNoteEditModern === 'function') {
+                    window.openNoteEditModern(currentId, currentText, currentFile);
+                  } else if (typeof window.openNoteEditSmart === 'function') {
                     window.openNoteEditSmart(currentId, currentText, currentFile, anchorBtn);
                   } else {
                     const btn = document.querySelector(`[data-note-edit][data-note-id="${currentId}"]`);
@@ -3064,14 +3083,37 @@
               {% if notes_overview_preview %}
                 <div class="mt-3 space-y-2">
                   {% for n in notes_overview_preview %}
-                    <button type="button" class="w-full text-left rounded-lg bg-white border border-brand-soft/60 p-3 hover:bg-brand-soft/20 transition-colors" onclick="window.switchModernCompanyTab?.('notes');">
-                      <div class="text-sm mb-1">
-                        <span class="font-semibold text-brand-dark">{{ n.author|default:"—" }}</span>
-                        <span class="text-brand-dark/50"> · </span>
-                        <span class="text-brand-dark/60">{{ n.created_at|date:"d.m, H:i" }}</span>
+                    <div class="w-full rounded-lg bg-white border border-brand-soft/60 p-3 hover:bg-brand-soft/20 transition-colors">
+                      <div class="flex items-start justify-between gap-2 mb-1">
+                        <div class="text-sm">
+                          <span class="font-semibold text-brand-dark">{{ n.author|default:"—" }}</span>
+                          <span class="text-brand-dark/50"> · </span>
+                          <span class="text-brand-dark/60">{{ n.created_at|date:"d.m, H:i" }}</span>
+                        </div>
+                        {% if can_edit_company %}
+                          <button
+                            type="button"
+                            class="shrink-0 text-brand-dark/60 hover:text-brand-dark text-lg leading-none p-0.5"
+                            data-note-menu-btn-modern
+                            data-note-id="{{ n.id }}"
+                            data-note-pinned="{% if n.is_pinned %}1{% else %}0{% endif %}"
+                            data-note-text="{{ n.text|default:'' }}"
+                            data-note-file="{{ n.attachment_name|default:'' }}"
+                            aria-label="Действия с заметкой"
+                            title="Действия с заметкой"
+                          >⋯</button>
+                        {% endif %}
                       </div>
-                      <div class="text-sm text-brand-dark/90 line-clamp-2 whitespace-pre-line">{{ n.text }}</div>
-                    </button>
+                      <button
+                        type="button"
+                        class="mt-0.5 w-full text-left"
+                        onclick="window.switchModernCompanyTab?.('notes');"
+                      >
+                        <div class="text-sm text-brand-dark/90 line-clamp-2 whitespace-pre-line">
+                          {{ n.text }}
+                        </div>
+                      </button>
+                    </div>
                   {% endfor %}
                 </div>
               {% endif %}
@@ -6419,7 +6461,10 @@
         // N - новая заметка
         if (e.key === 'n' || e.key === 'N') {
           e.preventDefault();
-          if (window.openNoteCreate) {
+          // В modern-режиме приоритет за modern-модалкой
+          if (!modernView.classList.contains('hidden') && typeof window.openNoteCreateModern === 'function') {
+            window.openNoteCreateModern();
+          } else if (window.openNoteCreate) {
             window.openNoteCreate();
           } else {
             window.switchModernCompanyTab?.('notes');
@@ -6653,7 +6698,10 @@
       const quickNoteBtn = document.querySelector('[data-quick-action="note"]');
       if (quickNoteBtn) {
         quickNoteBtn.addEventListener('click', function() {
-          if (window.openNoteCreate) {
+          // В modern-режиме стараемся сразу открыть modern-модалку
+          if (typeof window.openNoteCreateModern === 'function') {
+            window.openNoteCreateModern();
+          } else if (window.openNoteCreate) {
             window.openNoteCreate();
           } else {
             // Фоллбек на старое поведение
