@@ -17,117 +17,128 @@
   <!-- Классический режим (текущий layout) -->
   <div id="companyDetailClassic" class="{% if detail_view_mode != 'classic' %}hidden{% endif %}">
   <div class="space-y-6">
-    <div class="flex items-start justify-between gap-4">
-      <div class="flex-1">
-        <div class="text-sm text-brand-dark/70"><a class="underline" href="/companies/">Компании</a> /</div>
-        <div class="flex items-start justify-between gap-3">
-          {% if can_edit_company %}
-            <div class="inline-field-wrapper flex-1 min-w-0" data-inline-field="name" data-company-id="{{ company.id }}">
-              <div class="relative" data-dd-root>
-                <div class="inline-field-trigger group" data-dd-toggle title="Клик: скопировать или изменить">
-                  <h1 class="text-2xl font-semibold inline-field-display hover:text-brand-dark/80 transition-colors">{{ company.name }}</h1>
-                  <svg class="inline-field-pencil" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
-                </div>
-                <div class="hidden absolute left-0 mt-1 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
-                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-copy>Скопировать</button>
-                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-edit>Изменить</button>
-                </div>
-              </div>
-              <div class="inline-field-edit hidden mt-2 w-full">
-                <input class="input w-full text-xl py-2 min-h-[2.75rem]" data-inline-input maxlength="255" value="{{ company.name|default:'' }}" placeholder="Название компании" />
-                <div class="flex gap-1 mt-2">
-                  <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
-                  <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
-                </div>
-                <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
-              </div>
-            </div>
-          {% else %}
-            <h1 class="text-2xl font-semibold">
-              {{ company.name }}
-            </h1>
-          {% endif %}
-          <div class="flex items-center gap-2 shrink-0">
-            {% if can_delete_company %}
-              <button type="button" class="btn btn-outline btn-sm btn-danger" id="openDeleteCompanyModal">Удалить</button>
-            {% elif can_request_delete %}
-              <button type="button" class="btn btn-outline btn-sm btn-danger" id="openDeleteRequestModal">
-                {% if delete_req %}Запрос отправлен{% else %}Запросить удаление{% endif %}
-              </button>
-            {% endif %}
+    <!-- Первый блок: заголовок карточки в классическом режиме -->
+    <div class="bg-white border-b border-brand-soft/50 rounded-2xl px-6 md:px-8 py-3 md:py-4 flex items-start justify-between gap-4">
+      <div class="flex-1 min-w-0">
+        <!-- Крошки + некликабельное название компании -->
+        <div class="flex items-center justify-between gap-3 mb-2">
+          <div class="text-xs text-brand-dark/60 truncate">
+            <a class="underline hover:text-brand-teal" href="/companies/">Компании</a>
+            <span class="mx-1">/</span>
+            <span class="font-medium text-brand-dark/80 truncate">{{ company.name }}</span>
           </div>
         </div>
-        <div class="text-sm text-brand-dark/80">
-          {% if can_edit_company %}
-            <span>ИНН:</span>
-            <span class="inline-field-wrapper" data-inline-field="inn" data-company-id="{{ company.id }}">
-              <span class="relative inline-block" data-dd-root>
-                <span class="inline-field-trigger inline-field-trigger-inline group" data-dd-toggle title="Клик: скопировать или изменить">
-                  <span class="font-mono inline-field-display">{{ company.inn|default:"—" }}</span>
-                  <svg class="inline-field-pencil" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
-                </span>
-                <div class="hidden absolute left-0 mt-1 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
-                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-copy>Скопировать</button>
-                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-edit>Изменить</button>
-                </div>
-              </span>
-              <span class="inline-field-edit hidden ml-2 align-middle">
-                <input class="input" data-inline-input maxlength="255" value="{{ company.inn|default:'' }}" style="width:20rem" placeholder="Можно несколько: через /, запятую, пробел" />
-                <button type="button" class="btn btn-primary btn-xs ml-1" data-inline-save>Сохранить</button>
-                <button type="button" class="btn btn-outline btn-xs ml-1" data-inline-cancel>Отмена</button>
-                <span class="text-xs text-red-600 ml-2 hidden" data-inline-error></span>
-              </span>
-            </span>
 
-            <span class="mx-1">·</span>
-            <span>КПП:</span>
-            <span class="inline-field-wrapper" data-inline-field="kpp" data-company-id="{{ company.id }}">
-              <span class="relative inline-block" data-dd-root>
-                <span class="inline-field-trigger inline-field-trigger-inline group" data-dd-toggle title="Клик: скопировать или изменить">
-                  <span class="font-mono inline-field-display">{{ company.kpp|default:"—" }}</span>
-                  <svg class="inline-field-pencil" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
-                </span>
-                <div class="hidden absolute left-0 mt-1 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
-                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-copy>Скопировать</button>
-                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-edit>Изменить</button>
-                </div>
-              </span>
-              <span class="inline-field-edit hidden ml-2 align-middle">
-                <input class="input" data-inline-input maxlength="20" value="{{ company.kpp|default:'' }}" style="width:13.75rem" />
-                <button type="button" class="btn btn-primary btn-xs ml-1" data-inline-save>Сохранить</button>
-                <button type="button" class="btn btn-outline btn-xs ml-1" data-inline-cancel>Отмена</button>
-                <span class="text-xs text-red-600 ml-2 hidden" data-inline-error></span>
-              </span>
-            </span>
-
-            <span class="mx-1">·</span>
-            <span>Область:</span>
+        <!-- Иконка компании + редактируемое название -->
+        <div class="flex items-start gap-3">
+          <div class="hidden sm:flex w-11 h-11 rounded-2xl bg-brand-soft/60 items-center justify-center text-brand-dark/70 shrink-0">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <rect x="4" y="3" width="16" height="18" rx="2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M8 8h8M8 12h5M8 16h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="min-w-0 space-y-1">
             {% if can_edit_company %}
-              <span class="inline-field-wrapper inline-block ml-1" data-inline-field="region" data-company-id="{{ company.id }}">
-                <span class="relative inline-block" data-dd-root>
-                  <span class="inline-field-trigger inline-field-trigger-inline group" data-dd-toggle title="Клик: скопировать или изменить">
-                    <span class="inline-field-display min-w-0 hover:text-brand-dark/80 transition-colors">{{ company.region.name|default:"—" }}</span>
+              <div class="inline-field-wrapper w-full min-w-0" data-inline-field="name" data-company-id="{{ company.id }}">
+                <div class="relative" data-dd-root>
+                  <div class="inline-field-trigger group" data-dd-toggle title="Клик: скопировать или изменить">
+                    <h1 class="text-2xl font-semibold inline-field-display min-w-0 hover:text-brand-dark/80 transition-colors">{{ company.name }}</h1>
                     <svg class="inline-field-pencil" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
-                  </span>
+                  </div>
                   <div class="hidden absolute left-0 mt-1 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
                     <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-copy>Скопировать</button>
                     <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-edit>Изменить</button>
                   </div>
-                </span>
-                <span class="inline-field-edit hidden ml-2 align-middle">
-                  {{ quick_form.region }}
-                  <button type="button" class="btn btn-primary btn-sm hidden" data-inline-save>Сохранить</button>
-                  <span class="text-xs text-red-600 ml-2 hidden" data-inline-error></span>
-                </span>
-              </span>
+                </div>
+                <div class="inline-field-edit hidden mt-2 w-full">
+                  <input class="input w-full text-xl py-2 min-h-[2.75rem]" data-inline-input maxlength="255" value="{{ company.name|default:'' }}" placeholder="Название компании" />
+                  <div class="flex gap-1 mt-2">
+                    <button type="button" class="btn btn-primary btn-sm" data-inline-save>Сохранить</button>
+                    <button type="button" class="btn btn-outline btn-sm" data-inline-cancel>Отмена</button>
+                  </div>
+                  <div class="text-xs text-red-600 mt-1 hidden" data-inline-error></div>
+                </div>
+              </div>
             {% else %}
-              <span class="font-mono">{{ company.region.name|default:"—" }}</span>
+              <h1 class="text-2xl font-semibold truncate">
+                {{ company.name }}
+              </h1>
             {% endif %}
-          {% else %}
-            {% if company.inn %}ИНН: <span class="font-mono">{{ company.inn }}</span>{% endif %}
-            {% if company.kpp %} · КПП: <span class="font-mono">{{ company.kpp }}</span>{% endif %}
-            {% if company.region %} · Область: <span class="font-mono">{{ company.region.name }}</span>{% endif %}
-          {% endif %}
+
+            <!-- Реквизиты: ИНН / КПП / Область/регион -->
+            <div class="text-xs text-brand-dark/70 mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+              {% if can_edit_company %}
+                <span>ИНН:</span>
+                <span class="inline-field-wrapper" data-inline-field="inn" data-company-id="{{ company.id }}">
+                  <span class="relative inline-block" data-dd-root>
+                    <span class="inline-field-trigger inline-field-trigger-inline group" data-dd-toggle title="Клик: скопировать или изменить">
+                      <span class="font-mono inline-field-display">{{ company.inn|default:"—" }}</span>
+                      <svg class="inline-field-pencil" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
+                    </span>
+                    <div class="hidden absolute left-0 mt-1 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
+                      <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-copy>Скопировать</button>
+                      <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-edit>Изменить</button>
+                    </div>
+                  </span>
+                  <span class="inline-field-edit hidden ml-2 align-middle">
+                    <input class="input" data-inline-input maxlength="255" value="{{ company.inn|default:'' }}" style="width:20rem" placeholder="Можно несколько: через /, запятую, пробел" />
+                    <button type="button" class="btn btn-primary btn-xs ml-1" data-inline-save>Сохранить</button>
+                    <button type="button" class="btn btn-outline btn-xs ml-1" data-inline-cancel>Отмена</button>
+                    <span class="text-xs text-red-600 ml-2 hidden" data-inline-error></span>
+                  </span>
+                </span>
+
+                <span class="mx-1 text-brand-soft/80">·</span>
+                <span>КПП:</span>
+                <span class="inline-field-wrapper" data-inline-field="kpp" data-company-id="{{ company.id }}">
+                  <span class="relative inline-block" data-dd-root>
+                    <span class="inline-field-trigger inline-field-trigger-inline group" data-dd-toggle title="Клик: скопировать или изменить">
+                      <span class="font-mono inline-field-display">{{ company.kpp|default:"—" }}</span>
+                      <svg class="inline-field-pencil" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
+                    </span>
+                    <div class="hidden absolute left-0 mt-1 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
+                      <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-copy>Скопировать</button>
+                      <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-edit>Изменить</button>
+                    </div>
+                  </span>
+                  <span class="inline-field-edit hidden ml-2 align-middle">
+                    <input class="input" data-inline-input maxlength="20" value="{{ company.kpp|default:'' }}" style="width:13.75rem" />
+                    <button type="button" class="btn btn-primary btn-xs ml-1" data-inline-save>Сохранить</button>
+                    <button type="button" class="btn btn-outline btn-xs ml-1" data-inline-cancel>Отмена</button>
+                    <span class="text-xs text-red-600 ml-2 hidden" data-inline-error></span>
+                  </span>
+                </span>
+
+                <span class="mx-1 text-brand-soft/80">·</span>
+                <span>Область/регион:</span>
+                {% if can_edit_company %}
+                  <span class="inline-field-wrapper inline-block ml-1" data-inline-field="region" data-company-id="{{ company.id }}">
+                    <span class="relative inline-block" data-dd-root>
+                      <span class="inline-field-trigger inline-field-trigger-inline group" data-dd-toggle title="Клик: скопировать или изменить">
+                        <span class="inline-field-display min-w-0 hover:text-brand-dark/80 transition-colors">{{ company.region.name|default:"—" }}</span>
+                        <svg class="inline-field-pencil" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
+                      </span>
+                      <div class="hidden absolute left-0 mt-1 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
+                        <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-copy>Скопировать</button>
+                        <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-edit>Изменить</button>
+                      </div>
+                    </span>
+                    <span class="inline-field-edit hidden ml-2 align-middle">
+                      {{ quick_form.region }}
+                      <button type="button" class="btn btn-primary btn-sm hidden" data-inline-save>Сохранить</button>
+                      <span class="text-xs text-red-600 ml-2 hidden" data-inline-error></span>
+                    </span>
+                  </span>
+                {% else %}
+                  <span class="font-mono">{{ company.region.name|default:"—" }}</span>
+                {% endif %}
+              {% else %}
+                {% if company.inn %}ИНН: <span class="font-mono">{{ company.inn }}</span>{% endif %}
+                {% if company.kpp %} <span class="mx-1">·</span> КПП: <span class="font-mono">{{ company.kpp }}</span>{% endif %}
+                {% if company.region %} <span class="mx-1">·</span> Область/регион: <span class="font-mono">{{ company.region.name }}</span>{% endif %}
+              {% endif %}
+            </div>
+          </div>
         </div>
 
         {% if delete_req %}
@@ -225,15 +236,13 @@
         {% endif %}
         {% if can_edit_company %}
           <div class="mt-2">
-            <a class="btn btn-outline" href="/companies/{{ company.id }}/edit/">Редактировать данные</a>
+            <!-- Дополнительный отступ под закреплённой заметкой и предупреждением об удалении -->
           </div>
         {% endif %}
       </div>
-      <div class="flex items-start gap-3">
-        <div class="text-sm text-brand-dark/80">
-          <div><span class="text-brand-dark/50">Ответственный:</span> {{ company.responsible }}</div>
-          <div><span class="text-brand-dark/50">Филиал:</span> {{ company.branch }}</div>
-        </div>
+
+      <!-- Правая колонка: переключатель вида + действия -->
+      <div class="flex flex-col items-end gap-3 shrink-0">
         <!-- Переключатель режимов просмотра (иконки) -->
         <div class="flex items-center gap-1 bg-brand-soft/30 rounded-lg p-1" role="group" aria-label="Режим просмотра карточки">
           <button type="button" id="viewModeClassicDetail" class="view-mode-detail-btn p-2 rounded-md transition-colors {% if detail_view_mode == 'classic' %}bg-white text-brand-teal shadow-sm{% else %}text-brand-dark/70 hover:text-brand-dark{% endif %}" data-mode="classic" title="Классический вид" aria-label="Классический вид">
@@ -247,10 +256,45 @@
             </svg>
           </button>
         </div>
+
+        <!-- Ключевые действия с компанией -->
+        <div class="flex flex-wrap justify-end gap-2 text-xs">
+          {% if can_edit_company %}
+            <a class="btn btn-outline btn-sm" href="/companies/{{ company.id }}/edit/">Редактировать данные</a>
+          {% endif %}
+
+          {% if can_delete_company %}
+            <button type="button" class="btn btn-outline btn-sm btn-danger" id="openDeleteCompanyModal">Удалить компанию</button>
+          {% elif can_request_delete %}
+            <button type="button" class="btn btn-outline btn-sm btn-danger" id="openDeleteRequestModal">
+              {% if delete_req %}Отменить запрос на удаление{% else %}Запросить удаление{% endif %}
+            </button>
+          {% endif %}
+
+          <!-- Копирование ссылки на карточку -->
+          <button type="button" class="btn btn-outline btn-sm" data-copy-text="{{ request.build_absolute_uri }}" title="Копировать ссылку" aria-label="Копировать ссылку">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+            </svg>
+          </button>
+
+          <!-- Поиск по карточке: переключаемся в современный вид и открываем поиск -->
+          <button type="button" class="btn btn-outline btn-sm" id="quickSearchBtnClassic" title="Поиск по карточке" aria-label="Поиск по карточке">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Служебная информация -->
+        <div class="text-[11px] text-brand-dark/60 text-right mt-1 space-y-0.5">
+          <div><span class="text-brand-dark/50">Ответственный:</span> {{ company.responsible }}</div>
+          <div><span class="text-brand-dark/50">Филиал:</span> {{ company.branch }}</div>
+        </div>
       </div>
     </div>
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-2">
       <section class="card card-pad lg:col-span-2">
         <div class="font-medium mb-3">Данные</div>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
@@ -2752,19 +2796,28 @@
                     </span>
                   </span>
                   <span class="mx-1">·</span>
-                  {% with guessed=company.address|guess_ru_tz %}
-                  {% with tz=company.work_timezone|default:guessed %}
-                    <span>Часовой пояс:</span>
-                    {% if tz %}
-                      <span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}" data-live-worktime="1">
-                        <span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span>
-                        · {{ tz|tz_label }}
+                  <span>Область/регион:</span>
+                  {% if can_edit_company %}
+                    <span class="inline-field-wrapper inline-block ml-1" data-inline-field="region" data-company-id="{{ company.id }}">
+                      <span class="relative inline-block" data-dd-root>
+                        <span class="inline-field-trigger inline-field-trigger-inline group" data-dd-toggle title="Клик: скопировать или изменить">
+                          <span class="inline-field-display min-w-0 hover:text-brand-teal transition-colors">{{ company.region.name|default:"—" }}</span>
+                          <svg class="inline-field-pencil" aria-hidden="true" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
+                        </span>
+                        <div class="hidden absolute left-0 mt-1 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
+                          <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-copy>Скопировать</button>
+                          <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-inline-edit>Изменить</button>
+                        </div>
                       </span>
-                    {% else %}
-                      <span>—</span>
-                    {% endif %}
-                  {% endwith %}
-                  {% endwith %}
+                      <span class="inline-field-edit hidden ml-2 align-middle">
+                        {{ quick_form.region }}
+                        <button type="button" class="btn btn-primary btn-sm hidden" data-inline-save>Сохранить</button>
+                        <span class="text-xs text-red-600 ml-2 hidden" data-inline-error></span>
+                      </span>
+                    </span>
+                  {% else %}
+                    <span class="font-mono">{{ company.region.name|default:"—" }}</span>
+                  {% endif %}
                 {% else %}
                   <span>ИНН: {{ company.inn|default:"—" }}</span>
                   {% if company.kpp %}
@@ -2800,34 +2853,8 @@
           </div>
         </div>
         <div class="flex items-center gap-2 shrink-0">
-          <!-- Быстрые действия (только в Modern) -->
+          <!-- Быстрые действия: поиск и копирование ссылки (Modern) -->
           <div class="flex items-center gap-1 bg-brand-soft/20 rounded-lg p-1" id="quickActionsModern">
-            {% if can_edit_company %}
-              <button type="button" class="quick-action-btn p-1.5 rounded hover:bg-white transition-colors" data-quick-action="note" title="Добавить заметку (N)" aria-label="Добавить заметку">
-                <svg class="w-4 h-4 text-brand-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                </svg>
-              </button>
-              <button type="button" class="quick-action-btn p-1.5 rounded hover:bg-white transition-colors" data-quick-action="task" data-company-id="{{ company.id }}" title="Создать задачу (T)" aria-label="Создать задачу">
-                <svg class="w-4 h-4 text-brand-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
-                </svg>
-              </button>
-            {% endif %}
-            {% if company.phone %}
-              <button type="button" class="quick-action-btn p-1.5 rounded hover:bg-white transition-colors js-call-phone" data-quick-action="call" data-phone="{{ company.phone }}" data-company="{{ company.id }}" data-contact="" title="Позвонить (C)" aria-label="Позвонить">
-                <svg class="w-4 h-4 text-brand-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"/>
-                </svg>
-              </button>
-            {% endif %}
-            {% if company.inn %}
-              <button type="button" class="quick-action-btn p-1.5 rounded hover:bg-white transition-colors" data-copy-text="{{ company.inn }}" title="Копировать ИНН" aria-label="Копировать ИНН">
-                <svg class="w-4 h-4 text-brand-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                </svg>
-              </button>
-            {% endif %}
             <button type="button" class="quick-action-btn p-1.5 rounded hover:bg-white transition-colors" data-copy-text="{{ request.build_absolute_uri }}" title="Копировать ссылку" aria-label="Копировать ссылку">
               <svg class="w-4 h-4 text-brand-teal" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
@@ -4318,6 +4345,27 @@
             alert('Ошибка загрузки формы: ' + err.message);
           }
         });
+      });
+    })();
+  </script>
+
+  <script>
+    // Кнопка поиска из классического режима: плавный переход в Modern + открытие поиска
+    (function() {
+      const classicSearchBtn = document.getElementById('quickSearchBtnClassic');
+      if (!classicSearchBtn) return;
+
+      classicSearchBtn.addEventListener('click', function() {
+        const viewModernBtn = document.getElementById('viewModeModernDetail');
+        if (viewModernBtn) {
+          viewModernBtn.click();
+        }
+        setTimeout(function() {
+          const modernSearchBtn = document.getElementById('quickSearchBtnModern');
+          if (modernSearchBtn) {
+            modernSearchBtn.click();
+          }
+        }, 120);
       });
     })();
   </script>
