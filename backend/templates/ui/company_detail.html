@@ -2939,8 +2939,8 @@
       </div>
     </div>
 
-    <!-- Вкладки Modern (как в новом дизайне) -->
-    <div class="mb-3">
+    <!-- Вкладки Modern (как в новом дизайне) — визуально скрываем переключатели, но оставляем логику -->
+    <div class="mb-3 hidden">
           <div class="flex items-center gap-1 overflow-x-auto no-scrollbar py-1 rounded-full bg-white/80 border border-brand-soft/60 px-1 w-full">
         <button type="button" class="modern-tab-btn px-4 py-2 rounded-full text-sm font-medium transition-colors bg-brand-soft/40 text-brand-dark hover:bg-brand-soft/60 whitespace-nowrap" data-modern-tab-btn="overview">
           <span class="inline-flex items-center gap-1">
@@ -3023,7 +3023,7 @@
       </div>
     </div>
 
-    <!-- Контент вкладок -->
+    <!-- Контент вкладок: используем только «Обзор» как основной современный layout -->
     <div id="companyModernTabPanels">
       <!-- Обзор -->
       <div class="modern-tab-panel modern-tab-panel-active" data-modern-tab-panel="overview">
@@ -3041,11 +3041,11 @@
                       <path d="M14.5 3.5V8H19" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
                     </svg>
                   </span>
-                  <span class="font-semibold text-base">Заметки</span>
+                  <span class="font-semibold text-base">Закрепленная заметка</span>
                 </div>
                 <div class="flex items-center gap-2 text-sm text-brand-dark/60">
                   <button type="button" class="hover:text-brand-teal transition-colors" onclick="window.switchModernCompanyTab?.('notes');">
-                    Все{% if notes %} ({{ notes|length }}){% endif %}
+                    Все заметки{% if notes %} ({{ notes|length }}){% endif %}
                   </button>
                   {% if can_edit_company %}
                     <button type="button" class="text-brand-teal hover:underline text-sm" data-note-add-modern>+ Добавить</button>
@@ -3401,6 +3401,288 @@
               </div>
             </div>
           </div>
+
+          <!-- Нижний блок: Все заметки / Все задачи + ключевые сведения, контакты и реквизиты -->
+          <div class="mt-6 grid grid-cols-1 xl:grid-cols-[minmax(0,_2.1fr)_minmax(0,_1fr)] gap-6 items-start">
+            <div class="space-y-3">
+              <details id="modernNotesDetails" class="group rounded-2xl border border-brand-soft/70 bg-white/80 overflow-hidden">
+                <summary class="flex items-center justify-between px-4 py-2.5 md:px-5 cursor-pointer select-none text-sm font-medium text-brand-dark">
+                  <span class="flex items-center gap-2">
+                    <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-brand-soft/40 text-brand-dark/70">
+                      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M7 3h7.5L19 7.5V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                        <path d="M14.5 3.5V8H19" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+                      </svg>
+                    </span>
+                    <span>Все заметки{% if notes %} ({{ notes|length }}){% endif %}</span>
+                  </span>
+                  <span class="ml-4 inline-flex items-center text-brand-dark/40 transition-transform group-open:rotate-180">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </span>
+                </summary>
+                <div class="border-t border-brand-soft/60 px-4 pt-3 pb-4 md:px-5">
+                  {% include "ui/partials/company_detail_notes_panel_modern.html" %}
+                </div>
+              </details>
+
+              <details id="modernTasksDetails" class="group rounded-2xl border border-brand-soft/70 bg-white/80 overflow-hidden">
+                <summary class="flex items-center justify-between px-4 py-2.5 md:px-5 cursor-pointer select-none text-sm font-medium text-brand-dark">
+                  <span class="flex items-center gap-2">
+                    <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-brand-soft/40 text-brand-dark/70">
+                      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M5 7h6M5 12h4M5 17h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        <path d="m15 7 2 2 3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </span>
+                    <span>Все задачи{% if tasks %} ({{ tasks|length }}){% endif %}</span>
+                  </span>
+                  <span class="ml-4 inline-flex items-center text-brand-dark/40 transition-transform group-open:rotate-180">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </span>
+                </summary>
+                <div class="border-t border-brand-soft/60 px-4 pt-3 pb-4 md:px-5">
+                  {% include "ui/partials/company_detail_tasks_panel_modern.html" %}
+                </div>
+              </details>
+            </div>
+
+            <div class="space-y-4">
+              <!-- Ключевые сведения -->
+              <div class="card card-pad">
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex items-center gap-2 text-brand-dark">
+                    <div class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-brand-soft/40 text-brand-dark/80">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M4 21V10.5L12 3l8 7.5V21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M9 21v-6h6v6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </div>
+                    <div class="font-medium text-base">Ключевые сведения</div>
+                  </div>
+                </div>
+                <div class="space-y-2 text-sm">
+                  <div><span class="text-brand-dark/50">Ответственный:</span> {{ company.responsible|default:"—" }}</div>
+                  <div><span class="text-brand-dark/50">Филиал:</span> {{ company.branch|default:"—" }}</div>
+                  {% if company.activity_kind %}
+                    <div><span class="text-brand-dark/50">Сфера:</span> <span class="whitespace-pre-line">{{ company.activity_kind }}</span></div>
+                  {% endif %}
+                  <div>
+                    <span class="text-brand-dark/50">Вид договора:</span>
+                    {% if company.contract_type %}
+                      <span>{{ company.contract_type.name }}</span>
+                    {% else %}
+                      <span>—</span>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+
+              <!-- Контактная информация -->
+              <div class="card card-pad">
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex items-center gap-2 text-brand-dark">
+                    <div class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-brand-soft/40 text-brand-dark/80">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </div>
+                    <div class="font-medium text-base">Контактная информация</div>
+                  </div>
+                </div>
+                <div class="space-y-2 text-sm">
+                  <div>
+                    <span class="text-brand-dark/50">Телефон:</span>
+                    <span class="font-mono">{{ company.phone|format_phone|default:"—" }}</span>
+                  </div>
+                  <div>
+                    <span class="text-brand-dark/50">Email:</span>
+                    {% if company.email %}
+                      <a href="mailto:{{ company.email }}" class="text-brand-teal hover:underline">{{ company.email }}</a>
+                    {% elif company.emails.all %}
+                      {% for email in company.emails.all|slice:":1" %}
+                        <a href="mailto:{{ email.value }}" class="text-brand-teal hover:underline">{{ email.value }}</a>
+                      {% endfor %}
+                    {% else %}
+                      <span>—</span>
+                    {% endif %}
+                  </div>
+                  <div>
+                    <div class="text-brand-dark/50 mb-0.5">Адрес</div>
+                    <div class="text-sm whitespace-pre-line">{{ company.address|default:"—" }}</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Контакты (N) -->
+              <div class="card card-pad">
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex items-center gap-2 text-brand-dark">
+                    <div class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-brand-soft/40 text-brand-dark/80">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <circle cx="12" cy="7" r="3" stroke="currentColor" stroke-width="2"/>
+                        <path d="M5 20c.8-3 3.1-5 7-5s6.2 2 7 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                      </svg>
+                    </div>
+                    <div class="font-medium text-base">Контакты{% if contacts %} ({{ contacts|length }}){% endif %}</div>
+                  </div>
+                  <button type="button" class="text-xs text-brand-dark/60 hover:text-brand-teal" onclick="window.switchModernCompanyTab?.('contacts');">
+                    Все контакты
+                  </button>
+                </div>
+                {% with main_contact=contacts|first %}
+                  {% if main_contact %}
+                    <div class="border rounded-lg p-3">
+                      <div class="flex items-start justify-between gap-3">
+                        <div class="flex items-start gap-3 min-w-0">
+                          <div class="w-10 h-10 rounded-full bg-brand-soft/50 flex items-center justify-center text-sm font-medium text-brand-dark/80">
+                            {{ main_contact.first_name|default:""|slice:":1" }}{{ main_contact.last_name|default:""|slice:":1" }}
+                          </div>
+                          <div class="min-w-0">
+                            <div class="flex items-center gap-2">
+                              <div class="font-medium text-sm truncate">{{ main_contact.first_name }} {{ main_contact.last_name }}</div>
+                              <span class="inline-flex items-center gap-1 rounded-full bg-brand-soft/60 text-brand-orange px-2 py-0.5 text-[11px]">
+                                <span class="w-1.5 h-1.5 rounded-full bg-brand-orange/80"></span>
+                                <span>Основной</span>
+                              </span>
+                            </div>
+                            {% if main_contact.position %}
+                              <div class="text-xs text-brand-dark/70 mt-0.5 truncate">{{ main_contact.position }}</div>
+                            {% endif %}
+                            {% if main_contact.phones.all %}
+                              {% for phone in main_contact.phones.all|slice:":1" %}
+                                <div class="text-xs text-brand-dark/70 mt-1 truncate">{{ phone.value }}</div>
+                              {% endfor %}
+                            {% elif company.phone %}
+                              <div class="text-xs text-brand-dark/70 mt-1 truncate">{{ company.phone }}</div>
+                            {% endif %}
+                            {% if main_contact.emails.all %}
+                              {% for email in main_contact.emails.all|slice:":1" %}
+                                <div class="text-xs mt-1 truncate">
+                                  <a href="mailto:{{ email.value }}" class="text-brand-teal hover:underline" title="Написать">{{ email.value }}</a>
+                                </div>
+                              {% endfor %}
+                            {% endif %}
+                          </div>
+                        </div>
+                        <div class="flex flex-col items-end gap-2 shrink-0">
+                          <div class="flex flex-wrap gap-2 justify-end">
+                            {% if main_contact.phones.all %}
+                              {% for phone in main_contact.phones.all|slice:":1" %}
+                                <button
+                                  type="button"
+                                  class="btn btn-outline btn-xs js-call-phone"
+                                  data-phone="{{ phone.value }}"
+                                  data-company="{{ company.id }}"
+                                  data-contact="{{ main_contact.id }}"
+                                  title="Позвонить"
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" class="mr-1">
+                                    <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                  </svg>
+                                  <span>Позвонить</span>
+                                </button>
+                              {% endfor %}
+                            {% elif company.phone %}
+                              <button
+                                type="button"
+                                class="btn btn-outline btn-xs js-call-phone"
+                                data-phone="{{ company.phone }}"
+                                data-company="{{ company.id }}"
+                                data-contact=""
+                                title="Позвонить"
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" class="mr-1">
+                                  <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                <span>Позвонить</span>
+                              </button>
+                            {% endif %}
+                            {% if main_contact.emails.all %}
+                              {% for email in main_contact.emails.all|slice:":1" %}
+                                <a
+                                  class="btn btn-outline btn-xs"
+                                  href="mailto:{{ email.value }}"
+                                  title="Письмо"
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true" class="mr-1">
+                                    <path d="M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="m22 8-10 7L2 8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                  </svg>
+                                  <span>Письмо</span>
+                                </a>
+                              {% endfor %}
+                            {% endif %}
+                          </div>
+                          {% if can_edit_company %}
+                            <a
+                              class="text-xs text-brand-dark/60 hover:text-brand-teal"
+                              href="/contacts/{{ main_contact.id }}/edit/?modal=1"
+                              data-contact-panel-open
+                            >
+                              Редактировать контакт
+                            </a>
+                          {% endif %}
+                        </div>
+                      </div>
+
+                      {% if contacts|length > 1 %}
+                        <div class="mt-3 pt-3 border-t border-brand-soft/60 space-y-2">
+                          {% for contact in contacts|slice:"1:4" %}
+                            <div class="flex items-start justify-between gap-2 text-xs text-brand-dark/80">
+                              <div class="min-w-0">
+                                <div class="font-medium truncate">{{ contact.first_name }} {{ contact.last_name }}</div>
+                                {% if contact.position %}
+                                  <div class="text-[11px] text-brand-dark/60 truncate">{{ contact.position }}</div>
+                                {% endif %}
+                              </div>
+                              {% with phones=contact.phones.all %}
+                                {% if phones %}
+                                  {% for phone in phones|slice:":1" %}
+                                    <div class="ml-2 text-[11px] text-brand-dark/70 truncate">{{ phone.value }}</div>
+                                  {% endfor %}
+                                {% endif %}
+                              {% endwith %}
+                            </div>
+                          {% endfor %}
+                        </div>
+                      {% endif %}
+                    </div>
+                  {% else %}
+                    <div class="text-sm text-brand-dark/50 italic py-4 text-center">Нет контактов</div>
+                    {% if can_edit_company %}
+                      <div class="mt-2">
+                        <a class="btn btn-primary btn-sm w-full" href="/companies/{{ company.id }}/contacts/new/?modal=1" data-contact-panel-open>+ Добавить контакт</a>
+                      </div>
+                    {% endif %}
+                  {% endif %}
+                {% endwith %}
+              </div>
+
+              <!-- Реквизиты -->
+              <div class="card card-pad">
+                <div class="flex items-center justify-between mb-3">
+                  <div class="flex items-center gap-2 text-brand-dark">
+                    <div class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-brand-soft/40 text-brand-dark/80">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="M4 4h16v16H4z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M8 8h8M8 12h5M8 16h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                      </svg>
+                    </div>
+                    <div class="font-medium text-base">Реквизиты</div>
+                  </div>
+                </div>
+                <div class="space-y-1 text-sm">
+                  <div><span class="text-brand-dark/50">ИНН:</span> <span class="font-mono">{{ company.inn|default:"—" }}</span></div>
+                  <div><span class="text-brand-dark/50">КПП:</span> <span class="font-mono">{{ company.kpp|default:"—" }}</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           </div>
         </div>
       </div>
@@ -3408,154 +3690,8 @@
       <!-- Заметки -->
       <div class="modern-tab-panel hidden" data-modern-tab-panel="notes">
         <div class="card card-pad">
-          <div class="flex items-center justify-between mb-3">
-            <div class="font-medium text-lg">Заметки</div>
-            {% if can_edit_company %}
-              <button type="button" class="btn btn-primary btn-sm" onclick="document.querySelector('#noteFormModernInline textarea[name=&quot;text&quot;]')?.focus();">
-                + Добавить заметку
-              </button>
-            {% endif %}
-          </div>
-
-          {% if can_edit_company %}
-            <div class="mb-4">
-              <!-- Шаблоны заметок -->
-              <div class="flex flex-wrap gap-2 mb-2" id="noteTemplatesModern">
-                <button type="button" class="btn btn-outline btn-xs note-template-btn" data-template="important">⭐ Важно</button>
-                <button type="button" class="btn btn-outline btn-xs note-template-btn" data-template="callback">📞 Перезвон</button>
-                <button type="button" class="btn btn-outline btn-xs note-template-btn" data-template="quote">💰 КП/счёт</button>
-                <button type="button" class="btn btn-outline btn-xs note-template-btn" data-template="reject">❌ Отказ/причина</button>
-              </div>
-              <form class="space-y-2" method="post" action="/companies/{{ company.id }}/notes/add/" enctype="multipart/form-data" id="noteFormModernInline" data-company-id="{{ company.id }}" data-user-id="{{ request.user.id }}">
-                {% csrf_token %}
-                <div class="space-y-2">
-                  {{ note_form.text }}
-                  <div class="flex items-center justify-between gap-2">
-                    <input id="noteFileModernInline" type="file" name="attachment" class="hidden" />
-                    <button type="button" class="btn btn-outline btn-sm" id="noteAttachBtnModernInline" title="Прикрепить файл">
-                      <span class="inline-flex items-center gap-1">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                          <path d="M8 12.5l7.1-7.1a3 3 0 014.2 4.2l-8.5 8.5a5 5 0 01-7.1-7.1l8.2-8.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                        <span>Файл</span>
-                      </span>
-                    </button>
-                    <div class="text-xs muted-2 truncate flex-1" id="noteFileNameModernInline"></div>
-                    <button class="btn btn-primary btn-sm" type="submit">Добавить</button>
-                  </div>
-                  <div class="text-xs muted-2">Файл опционально. До 15 МБ. PDF/DOC/XLS/картинки и др.</div>
-                </div>
-              </form>
-            </div>
-          {% endif %}
-
-          <!-- Список заметок -->
-          <div id="notes-modern-content" class="space-y-3">
-            {% for n in notes %}
-              <div class="relative group rounded-lg border p-3 bg-white/80 hover:bg-white transition-colors" data-note-item>
-                <div class="flex items-start justify-between gap-3">
-                  <div class="text-xs text-brand-dark/70 mb-1">
-                    {{ n.created_at }} · {{ n.author|default:"—" }}
-                    {% if n.is_pinned %}· <span class="inline-flex items-center gap-1 badge badge-warn badge-sm">
-                      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                        <path d="M9 3h6l1 7 2 2v2H6v-2l2-2 1-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        <path d="M12 17v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                      </svg>
-                      <span>Закреплено</span>
-                    </span>{% endif %}
-                    {% if n.edited_at %}· <span class="muted-2">ред. {{ n.edited_at|date:"d.m.Y" }}</span>{% endif %}
-                  </div>
-                  <div class="flex items-center gap-2 shrink-0">
-                    {% if can_edit_company %}
-                      <form method="post" action="/companies/{{ company.id }}/notes/{{ n.id }}/pin/" style="display:none">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-outline btn-sm" title="{% if n.is_pinned %}Открепить{% else %}Закрепить{% endif %}" aria-label="{% if n.is_pinned %}Открепить{% else %}Закрепить{% endif %}">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M9 3h6l1 7 2 2v2H6v-2l2-2 1-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            <path d="M12 17v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                          </svg>
-                        </button>
-                      </form>
-                    {% endif %}
-                    {% if n.author_id == request.user.id or is_admin or is_group_manager or not n.author_id and company.responsible_id == request.user.id %}
-                      <button
-                        type="button"
-                        class="btn btn-outline btn-sm"
-                        title="Редактировать"
-                        aria-label="Редактировать"
-                        data-note-edit
-                        data-note-id="{{ n.id }}"
-                        data-note-text="{{ n.text|default:'' }}"
-                        data-note-file="{{ n.attachment_name|default:'' }}"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                          <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                          <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                        </svg>
-                      </button>
-                      <form method="post" action="/companies/{{ company.id }}/notes/{{ n.id }}/delete/" onsubmit="return confirm('Удалить заметку?');" style="display:inline">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-outline btn-sm btn-danger" title="Удалить" aria-label="Удалить">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                            <path d="M3 6h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                            <path d="M8 6V4h8v2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            <path d="M19 6l-1 14H6L5 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            <path d="M10 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                            <path d="M14 11v6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                          </svg>
-                        </button>
-                      </form>
-                    {% endif %}
-                  </div>
-                </div>
-                <div class="text-sm whitespace-pre-line wrap-anywhere" data-note-body>{{ n.text }}</div>
-                {% if n.attachment %}
-                  <div class="mt-2 rounded-lg border border-brand-soft bg-brand-soft/15 px-3 py-2">
-                    <div class="flex items-center justify-between gap-2">
-                      <div class="min-w-0">
-                        <div class="flex items-center gap-2">
-                          {% with ext=n.attachment_ext|upper %}
-                            {% if ext == "PDF" %}
-                              <span class="badge badge-warn">PDF</span>
-                            {% elif ext == "DOC" or ext == "DOCX" %}
-                              <span class="badge">DOC</span>
-                            {% elif ext == "XLS" or ext == "XLSX" %}
-                              <span class="badge">XLS</span>
-                            {% elif ext == "PPT" or ext == "PPTX" %}
-                              <span class="badge">PPT</span>
-                            {% elif ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
-                              <span class="badge">IMG</span>
-                            {% elif ext %}
-                              <span class="badge">{{ ext }}</span>
-                            {% else %}
-                              <span class="badge">FILE</span>
-                            {% endif %}
-                          <div class="text-sm font-medium truncate">{{ n.attachment_name|default:"Файл" }}</div>
-                          {% if n.attachment_size %}<div class="text-xs muted-2">{{ n.attachment_size|filesizeformat }}</div>{% endif %}
-                        </div>
-                      </div>
-                      <div class="flex flex-wrap gap-2 shrink-0">
-                        {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
-                          <button
-                            type="button"
-                            class="btn btn-outline btn-sm js-image-open"
-                            data-img-url="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/"
-                            data-img-download="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/"
-                            data-img-title="{{ n.attachment_name|default:'Изображение' }}"
-                          >Открыть</button>
-                        {% else %}
-                          <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/">Открыть</a>
-                        {% endif %}
-                        <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/">Скачать</a>
-                      </div>
-                      {% endwith %}
-                    </div>
-                  </div>
-                {% endif %}
-              </div>
-            {% empty %}
-              <div class="text-sm text-brand-dark/50 italic py-4 text-center">Нет заметок</div>
-            {% endfor %}
+          <div class="text-sm text-brand-dark/60">
+            Полный список заметок находится в блоке «Все заметки» на обзоре.
           </div>
         </div>
       </div>
@@ -3563,34 +3699,8 @@
       <!-- Задачи -->
       <div class="modern-tab-panel hidden" data-modern-tab-panel="tasks">
         <div class="card card-pad">
-          <div class="flex items-center justify-between mb-3">
-            <div class="font-medium text-lg">Задачи</div>
-            {% if can_edit_company %}
-              <button type="button" class="btn btn-primary btn-sm" data-create-task data-company-id="{{ company.id }}">
-                + Создать задачу
-              </button>
-            {% endif %}
-          </div>
-          <div id="tasks-modern-content">
-            {% for task in tasks %}
-              <div class="rounded-lg border p-3 {% if task.due_at and task.due_at < local_now and task.status != 'done' and task.status != 'cancelled' %}task-overdue{% endif %} hover:bg-brand-soft/20 transition-colors cursor-pointer mb-3" onclick="window.location='/tasks/{{ task.id }}/'">
-                <div class="flex items-start justify-between gap-2">
-                  <div class="flex-1 min-w-0">
-                    {% if task.type %}
-                      {% include "ui/partials/task_type_badge.html" with task_type=task.type only %}
-                    {% elif task.title %}
-                      <span class="badge badge-sm">{{ task.title }}</span>
-                    {% endif %}
-                    {% if task.description %}
-                      <div class="text-sm text-brand-dark/80 mt-1">{{ task.description|truncatewords:20 }}</div>
-                    {% endif %}
-                    {% include "ui/partials/_task_meta.html" with task=task only %}
-                  </div>
-                </div>
-              </div>
-            {% empty %}
-              <div class="text-sm text-brand-dark/50 italic py-4 text-center">Нет задач</div>
-            {% endfor %}
+          <div class="text-sm text-brand-dark/60">
+            Все задачи отображаются в блоке «Все задачи» на обзоре.
           </div>
         </div>
       </div>
@@ -6637,7 +6747,8 @@
 
       function setActive(tab, opts) {
         const options = Object.assign({ save: true, updateHash: true, scrollToTop: true }, opts || {});
-        const target = isKnownTab(tab) ? tab : 'overview';
+        const inlineSection = tab === 'notes' || tab === 'tasks';
+        const target = inlineSection ? 'overview' : (isKnownTab(tab) ? tab : 'overview');
 
         panels.forEach(p => {
           const t = p.getAttribute('data-modern-tab-panel');
@@ -6657,12 +6768,21 @@
         });
 
         if (options.save) {
-          try { sessionStorage.setItem('company_modern_tab', target); } catch (_e) {}
+          try { sessionStorage.setItem('company_modern_tab', inlineSection ? 'overview' : target); } catch (_e) {}
         }
         if (options.updateHash) {
-          try { history.replaceState(null, '', '#' + target); } catch (_e) {}
+          const hash = inlineSection ? tab : target;
+          try { history.replaceState(null, '', '#' + hash); } catch (_e) {}
         }
-        if (options.scrollToTop) {
+
+        if (inlineSection) {
+          const detailsId = tab === 'notes' ? 'modernNotesDetails' : 'modernTasksDetails';
+          const details = modernRoot.querySelector('#' + detailsId);
+          if (details) {
+            details.open = true;
+            details.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        } else if (options.scrollToTop) {
           modernRoot.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
       }

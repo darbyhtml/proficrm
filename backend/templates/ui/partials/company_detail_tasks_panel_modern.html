@@ -1,0 +1,31 @@
+<div class="card card-pad">
+  <div class="flex items-center justify-between mb-3">
+    <div class="font-medium text-lg">Задачи</div>
+    {% if can_edit_company %}
+      <button type="button" class="btn btn-primary btn-sm" data-create-task data-company-id="{{ company.id }}">
+        + Создать задачу
+      </button>
+    {% endif %}
+  </div>
+  <div id="tasks-modern-content">
+    {% for task in tasks %}
+      <div class="rounded-lg border p-3 {% if task.due_at and task.due_at < local_now and task.status != 'done' and task.status != 'cancelled' %}task-overdue{% endif %} hover:bg-brand-soft/20 transition-colors cursor-pointer mb-3" onclick="window.location='/tasks/{{ task.id }}/'">
+        <div class="flex items-start justify-between gap-2">
+          <div class="flex-1 min-w-0">
+            {% if task.type %}
+              {% include "ui/partials/task_type_badge.html" with task_type=task.type only %}
+            {% elif task.title %}
+              <span class="badge badge-sm">{{ task.title }}</span>
+            {% endif %}
+            {% if task.description %}
+              <div class="text-sm text-brand-dark/80 mt-1">{{ task.description|truncatewords:20 }}</div>
+            {% endif %}
+            {% include "ui/partials/_task_meta.html" with task=task only %}
+          </div>
+        </div>
+      </div>
+    {% empty %}
+      <div class="text-sm text-brand-dark/50 italic py-4 text-center">Нет задач</div>
+    {% endfor %}
+  </div>
+</div>
