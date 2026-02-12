@@ -3037,7 +3037,11 @@
                     {% if display_note.text %}
                       <div class="text-sm text-brand-dark/90 whitespace-pre-line line-clamp-4" id="displayNoteText">{{ display_note.text }}</div>
                       {% if display_note.text|length > 300 %}
-                        <button type="button" class="mt-1.5 text-sm text-brand-orange hover:underline expand-collapse-btn" onclick="document.getElementById('displayNoteText').classList.toggle('line-clamp-4'); this.querySelector('.expand-text').classList.toggle('hidden'); this.querySelector('.collapse-text').classList.toggle('hidden');">
+                        <button
+                          type="button"
+                          class="mt-1.5 text-sm text-brand-orange hover:underline expand-collapse-btn"
+                          data-note-expand-toggle="1"
+                        >
                           <span class="expand-text">Развернуть</span>
                           <span class="collapse-text hidden">Свернуть</span>
                         </button>
@@ -3107,9 +3111,24 @@
                           >⋯</button>
                         {% endif %}
                       </div>
-                      <div class="mt-0.5 text-sm text-brand-dark/90 line-clamp-2 whitespace-pre-line">
-                        {{ n.text }}
-                      </div>
+                      {% if n.text %}
+                        <div
+                          class="mt-0.5 text-sm text-brand-dark/90 whitespace-pre-line line-clamp-4"
+                          data-note-preview-text="{{ n.id }}"
+                        >
+                          {{ n.text }}
+                        </div>
+                        {% if n.text|length > 300 %}
+                          <button
+                            type="button"
+                            class="mt-1 text-xs text-brand-orange hover:underline"
+                            data-note-preview-toggle="{{ n.id }}"
+                          >
+                            <span class="expand-text">Развернуть</span>
+                            <span class="collapse-text hidden">Свернуть</span>
+                          </button>
+                        {% endif %}
+                      {% endif %}
                     </div>
                   {% endfor %}
                 </div>
@@ -7011,29 +7030,39 @@
   </script>
 
   <script>
-    // Обработка кнопки "Развернуть/Свернуть" для заметки в modern режиме
+    // Обработка кнопок "Развернуть/Свернуть" для заметок в modern режиме (основная + превью)
     (function() {
-      const expandBtn = document.querySelector('#displayNoteText')?.nextElementSibling;
-      if (expandBtn) {
-        expandBtn.addEventListener('click', function() {
-          const textEl = document.getElementById('displayNoteText');
-          const expandText = this.querySelector('.expand-text');
-          const collapseText = this.querySelector('.collapse-text');
-          
-          if (textEl) {
-            const isExpanded = !textEl.classList.contains('line-clamp-4');
-            if (isExpanded) {
-              textEl.classList.add('line-clamp-4');
-              if (expandText) expandText.classList.remove('hidden');
-              if (collapseText) collapseText.classList.add('hidden');
-            } else {
-              textEl.classList.remove('line-clamp-4');
-              if (expandText) expandText.classList.add('hidden');
-              if (collapseText) collapseText.classList.remove('hidden');
-            }
+      document.addEventListener('click', function(e) {
+        const btn = e.target.closest('[data-note-expand-toggle], [data-note-preview-toggle]');
+        if (!btn) return;
+
+        let textEl = null;
+        // Основная заметка на обзоре
+        if (btn.hasAttribute('data-note-expand-toggle')) {
+          textEl = document.getElementById('displayNoteText');
+        } else {
+          // Превью заметка: ищем по data-атрибуту
+          const id = btn.getAttribute('data-note-preview-toggle');
+          if (id) {
+            textEl = document.querySelector(`[data-note-preview-text="${id}"]`);
           }
-        });
-      }
+        }
+        if (!textEl) return;
+
+        const expandText = btn.querySelector('.expand-text');
+        const collapseText = btn.querySelector('.collapse-text');
+        const isExpanded = !textEl.classList.contains('line-clamp-4');
+
+        if (isExpanded) {
+          textEl.classList.add('line-clamp-4');
+          if (expandText) expandText.classList.remove('hidden');
+          if (collapseText) collapseText.classList.add('hidden');
+        } else {
+          textEl.classList.remove('line-clamp-4');
+          if (expandText) expandText.classList.add('hidden');
+          if (collapseText) collapseText.classList.remove('hidden');
+        }
+      });
     })();
   </script>
 {% endblock %}
