@@ -6412,12 +6412,73 @@
       const btn = document.getElementById('noteAttachBtnModernInline');
       const input = document.getElementById('noteFileModernInline');
       const name = document.getElementById('noteFileNameModernInline');
-      if (!btn || !input) return;
+      if (btn && input) {
       btn.addEventListener('click', () => input.click());
       input.addEventListener('change', () => {
         const f = input.files && input.files.length ? input.files[0] : null;
         if (name) name.textContent = f ? f.name : '';
       });
+      }
+
+      // AJAX-сохранение inline-заметки без смены вкладки / перезагрузки
+      const form = document.getElementById('noteFormModernInline');
+      if (form && typeof window.fetch === 'function') {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const formData = new FormData(form);
+          try {
+            const resp = await fetch(form.action, {
+              method: 'POST',
+              body: formData,
+              headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            if (!resp.ok) throw new Error('Failed to submit note');
+
+            // Очищаем форму
+            const textarea = form.querySelector('textarea[name="text"]');
+            if (textarea) textarea.value = '';
+            if (input) input.value = '';
+            if (name) name.textContent = '';
+
+            // Обновляем Обзор (и заметки на нём/кнопки "Развернуть") и панель заметок
+            if (window.refreshOverviewNotes) {
+              try { await window.refreshOverviewNotes(); } catch (_e) {}
+            }
+
+            // Обновляем вкладку "Заметки" целиком, но сохраняя активность вкладки
+            try {
+              const url = new URL(window.location.href);
+              url.searchParams.set('view', 'modern');
+              const resp2 = await fetch(url.toString(), {
+                method: 'GET',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+              });
+              if (resp2.ok) {
+                const html = await resp2.text();
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const newModernRoot = doc.getElementById('companyDetailModern');
+                const newNotes = newModernRoot && newModernRoot.querySelector('[data-modern-tab-panel="notes"]');
+                const currentModernRoot = document.getElementById('companyDetailModern');
+                const currentNotes = currentModernRoot && currentModernRoot.querySelector('[data-modern-tab-panel="notes"]');
+                if (newNotes && currentNotes && currentNotes.parentNode) {
+                  // Сохраняем активность вкладки "Заметки"
+                  const wasActive = currentNotes.classList.contains('modern-tab-panel-active');
+                  if (wasActive) {
+                    newNotes.classList.add('modern-tab-panel-active');
+                    newNotes.classList.remove('hidden');
+                  }
+                  currentNotes.parentNode.replaceChild(newNotes, currentNotes);
+                }
+              }
+            } catch (_e) {
+              // В случае ошибки тихо игнорируем — данные уже сохранены
+            }
+          } catch (err) {
+            window.location.reload();
+          }
+        });
+      }
     })();
   </script>
   <script>
