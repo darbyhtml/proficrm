@@ -299,20 +299,24 @@
               {% if pinned_note.attachment or pinned_note.note_attachments.all %}
                 <div class="mt-3 pt-3 border-t border-brand-soft/50 note-attachment-cards">
                   {% if pinned_note.attachment %}
+                    {% url 'company_note_attachment_open' company.id pinned_note.id as pinned_main_open_url %}
+                    {% url 'company_note_attachment_download' company.id pinned_note.id as pinned_main_download_url %}
                     {% with ext=pinned_note.attachment_ext|upper %}
                       {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
-                        {% include "ui/partials/company_note_attachment_card.html" with open_url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/open/" download_url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/download/" filename=pinned_note.attachment_name|default:"Файл" size=pinned_note.attachment_size|filesizeformat ext=ext is_image=True editable=False %}
+                        {% include "ui/partials/company_note_attachment_card.html" with open_url=pinned_main_open_url download_url=pinned_main_download_url filename=pinned_note.attachment_name|default:"Файл" size=pinned_note.attachment_size|filesizeformat ext=ext is_image=True editable=False %}
                       {% else %}
-                        {% include "ui/partials/company_note_attachment_card.html" with open_url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/open/" download_url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/download/" filename=pinned_note.attachment_name|default:"Файл" size=pinned_note.attachment_size|filesizeformat ext=ext is_image=False editable=False %}
+                        {% include "ui/partials/company_note_attachment_card.html" with open_url=pinned_main_open_url download_url=pinned_main_download_url filename=pinned_note.attachment_name|default:"Файл" size=pinned_note.attachment_size|filesizeformat ext=ext is_image=False editable=False %}
                       {% endif %}
                     {% endwith %}
                   {% endif %}
                   {% for att in pinned_note.note_attachments.all %}
+                    {% url 'company_note_attachment_by_id_open' company.id pinned_note.id att.id as pinned_extra_open_url %}
+                    {% url 'company_note_attachment_by_id_download' company.id pinned_note.id att.id as pinned_extra_download_url %}
                     {% with ext=att.file_ext|upper %}
                       {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
-                        {% include "ui/partials/company_note_attachment_card.html" with open_url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/attachments/{{ att.id }}/open/" download_url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/attachments/{{ att.id }}/download/" filename=att.file_name size=att.file_size|filesizeformat ext=ext is_image=True editable=False %}
+                        {% include "ui/partials/company_note_attachment_card.html" with open_url=pinned_extra_open_url download_url=pinned_extra_download_url filename=att.file_name size=att.file_size|filesizeformat ext=ext is_image=True editable=False %}
                       {% else %}
-                        {% include "ui/partials/company_note_attachment_card.html" with open_url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/attachments/{{ att.id }}/open/" download_url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/attachments/{{ att.id }}/download/" filename=att.file_name size=att.file_size|filesizeformat ext=ext is_image=False editable=False %}
+                        {% include "ui/partials/company_note_attachment_card.html" with open_url=pinned_extra_open_url download_url=pinned_extra_download_url filename=att.file_name size=att.file_size|filesizeformat ext=ext is_image=False editable=False %}
                       {% endif %}
                     {% endwith %}
                   {% endfor %}
@@ -1668,20 +1672,24 @@
               {% if n.attachment or n.note_attachments.all %}
                 <div class="mt-2 note-attachment-cards">
                   {% if n.attachment %}
+                    {% url 'company_note_attachment_open' company.id n.id as note_main_open_url %}
+                    {% url 'company_note_attachment_download' company.id n.id as note_main_download_url %}
                     {% with ext=n.attachment_ext|upper %}
                       {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
-                        {% include "ui/partials/company_note_attachment_card.html" with open_url="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/" download_url="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/" filename=n.attachment_name|default:"Файл" size=n.attachment_size|filesizeformat ext=ext is_image=True editable=False %}
+                        {% include "ui/partials/company_note_attachment_card.html" with open_url=note_main_open_url download_url=note_main_download_url filename=n.attachment_name|default:"Файл" size=n.attachment_size|filesizeformat ext=ext is_image=True editable=False %}
                       {% else %}
-                        {% include "ui/partials/company_note_attachment_card.html" with open_url="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/" download_url="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/" filename=n.attachment_name|default:"Файл" size=n.attachment_size|filesizeformat ext=ext is_image=False editable=False %}
+                        {% include "ui/partials/company_note_attachment_card.html" with open_url=note_main_open_url download_url=note_main_download_url filename=n.attachment_name|default:"Файл" size=n.attachment_size|filesizeformat ext=ext is_image=False editable=False %}
                       {% endif %}
                     {% endwith %}
                   {% endif %}
                   {% for att in n.note_attachments.all %}
+                    {% url 'company_note_attachment_by_id_open' company.id n.id att.id as note_extra_open_url %}
+                    {% url 'company_note_attachment_by_id_download' company.id n.id att.id as note_extra_download_url %}
                     {% with ext=att.file_ext|upper %}
                       {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
-                        {% include "ui/partials/company_note_attachment_card.html" with open_url="/companies/{{ company.id }}/notes/{{ n.id }}/attachments/{{ att.id }}/open/" download_url="/companies/{{ company.id }}/notes/{{ n.id }}/attachments/{{ att.id }}/download/" filename=att.file_name size=att.file_size|filesizeformat ext=ext is_image=True editable=False %}
+                        {% include "ui/partials/company_note_attachment_card.html" with open_url=note_extra_open_url download_url=note_extra_download_url filename=att.file_name size=att.file_size|filesizeformat ext=ext is_image=True editable=False %}
                       {% else %}
-                        {% include "ui/partials/company_note_attachment_card.html" with open_url="/companies/{{ company.id }}/notes/{{ n.id }}/attachments/{{ att.id }}/open/" download_url="/companies/{{ company.id }}/notes/{{ n.id }}/attachments/{{ att.id }}/download/" filename=att.file_name size=att.file_size|filesizeformat ext=ext is_image=False editable=False %}
+                        {% include "ui/partials/company_note_attachment_card.html" with open_url=note_extra_open_url download_url=note_extra_download_url filename=att.file_name size=att.file_size|filesizeformat ext=ext is_image=False editable=False %}
                       {% endif %}
                     {% endwith %}
                   {% endfor %}
