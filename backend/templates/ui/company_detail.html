@@ -2134,17 +2134,26 @@
               e.preventDefault();
               const formData = new FormData(noteEditForm);
               try {
-                await fetch(noteEditForm.action, {
+                const resp = await fetch(noteEditForm.action, {
                   method: 'POST',
                   body: formData,
                   headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 });
                 closeNoteEditClassic();
+                if (!resp.ok) {
+                  window.location.reload();
+                  return;
+                }
+                const companyDetailClassic = document.getElementById('companyDetailClassic');
+                const isClassicView = companyDetailClassic && !companyDetailClassic.classList.contains('hidden');
+                if (isClassicView) {
+                  window.location.href = noteEditForm.action.replace(/\/notes\/\d+\/edit\/?$/, '/');
+                  return;
+                }
+                if (window.uiToast) window.uiToast('Заметка обновлена.', 'success');
                 try {
                   await refreshOverviewNotes();
-                } catch (_e) {
-                  // Если не удалось обновить только блок «Обзор» — данные уже сохранены, остаёмся на текущей странице.
-                }
+                } catch (_e) {}
               } catch (e) {
                 window.location.reload();
               }
@@ -2219,12 +2228,17 @@
               e.preventDefault();
               const formData = new FormData(noteEditFormModern);
               try {
-                await fetch(noteEditFormModern.action, {
+                const resp = await fetch(noteEditFormModern.action, {
                   method: 'POST',
                   body: formData,
                   headers: { 'X-Requested-With': 'XMLHttpRequest' }
                 });
                 closeNoteEditModern();
+                if (!resp.ok) {
+                  window.location.reload();
+                  return;
+                }
+                if (window.uiToast) window.uiToast('Заметка обновлена.', 'success');
                 try { await refreshOverviewNotes(); } catch (_e) {}
               } catch (e) {
                 window.location.reload();
@@ -4513,12 +4527,17 @@
             e.preventDefault();
             const formData = new FormData(form);
             try {
-              await fetch(form.action, {
+              const resp = await fetch(form.action, {
                 method: 'POST',
                 body: formData,
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
               });
               closeModal();
+              if (!resp.ok) {
+                window.location.reload();
+                return;
+              }
+              if (window.uiToast) window.uiToast('Заметка обновлена.', 'success');
               try { await window.refreshOverviewNotes?.(); } catch (_e) {}
             } catch (err) {
               window.location.reload();
