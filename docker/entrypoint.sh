@@ -18,4 +18,12 @@ if [ "$FAIL" -eq 1 ]; then
     exit 1
 fi
 
-exec "$@"
+# Права на volume media/static: при первом создании тома владелец root — crmuser не может писать (вложения в заметки и т.д.)
+if [ -d /app/backend/media ]; then
+    chown -R crmuser:crmuser /app/backend/media
+fi
+if [ -d /app/backend/staticfiles ]; then
+    chown -R crmuser:crmuser /app/backend/staticfiles
+fi
+
+exec gosu crmuser "$@"

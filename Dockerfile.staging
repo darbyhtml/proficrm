@@ -2,11 +2,12 @@
 # Для прода оставляем slim; полный python:3.13 нужен только если требуются доп. системные пакеты.
 FROM python:3.13-slim
 
-# Установка системных зависимостей
+# Установка системных зависимостей (gosu — для смены пользователя в entrypoint после прав на volume)
 RUN apt-get update && apt-get install -y \
     gcc \
     postgresql-client \
     curl \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # Рабочая директория
@@ -26,11 +27,11 @@ ENTRYPOINT ["/app/docker/entrypoint.sh"]
 
 WORKDIR /app/backend
 
-# Создание пользователя для безопасности
+# Пользователь для запуска приложения (переключаемся в entrypoint после прав на media/static)
 RUN useradd -m -u 1000 crmuser && \
     chown -R crmuser:crmuser /app
-USER crmuser
 
+# Запуск от root: entrypoint выставляет права на volume media/static и переключается на crmuser
 # Expose порт
 EXPOSE 8000
 
