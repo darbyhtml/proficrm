@@ -27,6 +27,7 @@ from companies.models import (
     Company,
     CompanyDeal,
     CompanyNote,
+    CompanyNoteAttachment,
     CompanySphere,
     CompanyStatus,
     Region,
@@ -3373,12 +3374,14 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     pinned_note = (
         CompanyNote.objects.filter(company=company, is_pinned=True)
         .select_related("author", "pinned_by")
+        .prefetch_related("note_attachments")
         .order_by("-pinned_at", "-created_at")
         .first()
     )
     notes = (
         CompanyNote.objects.filter(company=company)
         .select_related("author", "pinned_by")
+        .prefetch_related("note_attachments")
         .order_by("-is_pinned", "-pinned_at", "-created_at")[:60]
     )
     deals = (
@@ -5041,6 +5044,50 @@ def company_note_attachment_open(request: HttpRequest, company_id, note_id: int)
 @login_required
 @policy_required(resource_type="page", resource="ui:companies:detail")
 @require_can_view_note_company
+def company_note_attachment_by_id_open(request: HttpRequest, company_id, note_id: int, attachment_id: int) -> HttpResponse:
+    """Открыть одно из вложений заметки (CompanyNoteAttachment) по id."""
+    company = get_object_or_404(Company.objects.all(), id=company_id)
+    note = get_object_or_404(CompanyNote.objects.select_related("company"), id=note_id, company_id=company.id)
+    att = get_object_or_404(CompanyNoteAttachment.objects.filter(note=note), id=attachment_id)
+    if not att.file:
+        raise Http404("Файл не найден")
+    ctype = (att.content_type or "").strip() or mimetypes.guess_type(att.file_name or att.file.name)[0] or "application/octet-stream"
+    try:
+        return FileResponse(
+            open(att.file.path, "rb"),
+            as_attachment=False,
+            filename=(att.file_name or "file"),
+            content_type=ctype,
+        )
+    except FileNotFoundError:
+        return HttpResponseNotFound("Файл вложения не найден.")
+
+
+@login_required
+@policy_required(resource_type="page", resource="ui:companies:detail")
+@require_can_view_note_company
+def company_note_attachment_by_id_download(request: HttpRequest, company_id, note_id: int, attachment_id: int) -> HttpResponse:
+    """Скачать одно из вложений заметки (CompanyNoteAttachment) по id."""
+    company = get_object_or_404(Company.objects.all(), id=company_id)
+    note = get_object_or_404(CompanyNote.objects.select_related("company"), id=note_id, company_id=company.id)
+    att = get_object_or_404(CompanyNoteAttachment.objects.filter(note=note), id=attachment_id)
+    if not att.file:
+        raise Http404("Файл не найден")
+    ctype = (att.content_type or "").strip() or mimetypes.guess_type(att.file_name or att.file.name)[0] or "application/octet-stream"
+    try:
+        return FileResponse(
+            open(att.file.path, "rb"),
+            as_attachment=True,
+            filename=(att.file_name or "file"),
+            content_type=ctype,
+        )
+    except FileNotFoundError:
+        return HttpResponseNotFound("Файл вложения не найден.")
+
+
+@login_required
+@policy_required(resource_type="page", resource="ui:companies:detail")
+@require_can_view_note_company
 def company_note_attachment_download(request: HttpRequest, company_id, note_id: int) -> HttpResponse:
     """
     Скачать вложение заметки (attachment). Доступ: всем пользователям (как просмотр компании).
@@ -5569,6 +5616,7 @@ def company_note_add(request: HttpRequest, company_id) -> HttpResponse:
 
     # Заметки по карточке: доступно всем, кто имеет доступ к просмотру карточки (в проекте это все пользователи).
     form = CompanyNoteForm(request.POST, request.FILES)
+    extra_files = request.FILES.getlist("attachments") or []
     if form.is_valid():
         note: CompanyNote = form.save(commit=False)
         note.company = company
@@ -5586,6 +5634,21 @@ def company_note_add(request: HttpRequest, company_id) -> HttpResponse:
                     extra={"company_id": str(company.id), "note_id": note.id if hasattr(note, "id") else None},
                 )
         note.save()
+        # Дополнительные вложения (несколько файлов)
+        for order, f in enumerate(extra_files, start=0):
+            try:
+                att = CompanyNoteAttachment(
+                    note=note,
+                    file=f,
+                    order=order,
+                )
+                att.save()
+            except Exception as e:
+                logger.warning(
+                    f"Ошибка при сохранении доп. вложения заметки: {e}",
+                    exc_info=True,
+                    extra={"company_id": str(company.id), "note_id": note.id},
+                )
         log_event(
             actor=user,
             verb=ActivityEvent.Verb.COMMENT,
@@ -5601,6 +5664,36 @@ def company_note_add(request: HttpRequest, company_id) -> HttpResponse:
                 kind=Notification.Kind.COMPANY,
                 title="Новая заметка по компании",
                 body=f"{company.name}: {(note.text or '').strip()[:180] or 'Вложение'}",
+                url=f"/companies/{company.id}/",
+            )
+    elif extra_files and not (request.POST.get("text") or "").strip() and not request.FILES.get("attachment"):
+        # Только несколько файлов без текста и без одного attachment — создаём заметку вручную
+        note = CompanyNote(company=company, author=user, text="")
+        note.save()
+        for order, f in enumerate(extra_files, start=0):
+            try:
+                att = CompanyNoteAttachment(note=note, file=f, order=order)
+                att.save()
+            except Exception as e:
+                logger.warning(
+                    f"Ошибка при сохранении доп. вложения заметки: {e}",
+                    exc_info=True,
+                    extra={"company_id": str(company.id), "note_id": note.id},
+                )
+        log_event(
+            actor=user,
+            verb=ActivityEvent.Verb.COMMENT,
+            entity_type="note",
+            entity_id=note.id,
+            company_id=company.id,
+            message="Добавлена заметка",
+        )
+        if company.responsible_id and company.responsible_id != user.id:
+            notify(
+                user=company.responsible,
+                kind=Notification.Kind.COMPANY,
+                title="Новая заметка по компании",
+                body=f"{company.name}: Вложение",
                 url=f"/companies/{company.id}/",
             )
 
@@ -5662,8 +5755,42 @@ def company_note_edit(request: HttpRequest, company_id, note_id: int) -> HttpRes
                 extra={"company_id": str(company.id), "note_id": note.id if hasattr(note, "id") else None},
             )
 
-    # Не даём превратить заметку в пустую (без текста и без файла)
-    if not text and not note.attachment:
+    # Доп. вложения: удалить отмеченные
+    remove_ids = (request.POST.get("remove_attachment_ids") or "").strip()
+    if remove_ids:
+        for att_id in remove_ids.split(","):
+            try:
+                aid = int(att_id.strip())
+                att = CompanyNoteAttachment.objects.filter(id=aid, note=note).first()
+                if att:
+                    try:
+                        if att.file:
+                            att.file.delete(save=False)
+                    except Exception:
+                        pass
+                    att.delete()
+            except ValueError:
+                pass
+
+    # Новые доп. вложения
+    next_order = (note.note_attachments.aggregate(m=Max("order"))["m"] or -1) + 1
+    for i, f in enumerate(request.FILES.getlist("attachments") or []):
+        try:
+            att = CompanyNoteAttachment(note=note, file=f, order=next_order + i)
+            att.save()
+        except Exception as e:
+            logger.warning(
+                f"Ошибка при сохранении доп. вложения заметки: {e}",
+                exc_info=True,
+                extra={"company_id": str(company.id), "note_id": note.id},
+            )
+
+    has_attachments = (
+        note.attachment
+        or note.note_attachments.exists()
+        or request.FILES.getlist("attachments")
+    )
+    if not text and not has_attachments:
         messages.error(request, "Заметка не может быть пустой (нужен текст или файл).")
         return redirect("company_detail", company_id=company.id)
 

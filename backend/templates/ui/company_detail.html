@@ -13,6 +13,29 @@
       opacity: 1;
       transform: translateY(0);
     }
+    /* Современные чипы вложений и зона прикрепления файлов */
+    .note-file-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.75rem;
+      border-radius: 0.5rem;
+      font-size: 0.8125rem;
+      background: rgba(194, 226, 222, 0.25);
+      border: 1px solid rgba(194, 226, 222, 0.7);
+      color: var(--brand-dark);
+    }
+    .note-file-chip a, .note-file-chip .note-file-link { color: #01948E; text-decoration: none; }
+    .note-file-chip a:hover, .note-file-chip .note-file-link:hover { text-decoration: underline; }
+    .note-files-zone {
+      border: 1px dashed rgba(1, 148, 142, 0.4);
+      border-radius: 0.75rem;
+      padding: 1rem;
+      background: rgba(1, 148, 142, 0.04);
+      transition: background 0.2s, border-color 0.2s;
+    }
+    .note-files-zone:hover { background: rgba(1, 148, 142, 0.08); border-color: rgba(1, 148, 142, 0.5); }
+    .note-files-zone.has-files { border-style: solid; background: rgba(194, 226, 222, 0.15); }
   </style>
   <!-- Классический режим (текущий layout) -->
   <div id="companyDetailClassic" class="{% if detail_view_mode != 'classic' %}hidden{% endif %}">
@@ -168,71 +191,82 @@
           {% endif %}
         {% endif %}
         {% if pinned_note %}
-          <div class="mt-3 rounded-xl border border-brand-orange/35 bg-white px-3 py-2 shadow-sm" style="border-left-width:0.375rem;">
-            <div class="flex items-start justify-between gap-3">
-              <div class="min-w-0">
-                <div class="flex items-center gap-2">
-                  <span class="badge badge-warn badge-sm">Закреплено</span>
-                  <div class="text-xs muted-2 truncate">{{ pinned_note.author|default:"—" }} · {{ pinned_note.created_at }}</div>
-                </div>
-                {% if pinned_note.text %}
-                  <div class="mt-1 text-sm whitespace-pre-line">{{ pinned_note.text|truncatechars:220 }}</div>
-                {% endif %}
-                {% if pinned_note.attachment %}
-                  <div class="mt-2 flex items-center justify-between gap-2">
-                    <div class="min-w-0">
-                      <div class="flex items-center gap-2">
-                        {% with ext=pinned_note.attachment_ext|upper %}
-                          {% if ext == "PDF" %}
-                            <span class="badge badge-warn">PDF</span>
-                          {% elif ext == "DOC" or ext == "DOCX" %}
-                            <span class="badge">DOC</span>
-                          {% elif ext == "XLS" or ext == "XLSX" %}
-                            <span class="badge">XLS</span>
-                          {% elif ext == "PPT" or ext == "PPTX" %}
-                            <span class="badge">PPT</span>
-                          {% elif ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
-                            <span class="badge">IMG</span>
-                          {% elif ext %}
-                            <span class="badge">{{ ext }}</span>
-                          {% else %}
-                            <span class="badge">FILE</span>
-                          {% endif %}
-                        <div class="text-xs font-medium truncate">{{ pinned_note.attachment_name|default:"Файл" }}</div>
-                        {% if pinned_note.attachment_size %}<div class="text-xs muted-2">{{ pinned_note.attachment_size|filesizeformat }}</div>{% endif %}
-                      </div>
-                    </div>
-                    <div class="flex gap-2 shrink-0">
-                      {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
-                        <button
-                          type="button"
-                          class="btn btn-outline btn-sm js-image-open"
-                          data-img-url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/open/"
-                          data-img-download="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/download/"
-                          data-img-title="{{ pinned_note.attachment_name|default:'Изображение' }}"
-                        >Открыть</button>
-                      {% else %}
-                        <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/open/">Открыть</a>
-                      {% endif %}
-                      <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/download/">Скачать</a>
-                    </div>
-                    {% endwith %}
+          <div class="mt-3 rounded-xl border border-brand-orange/30 bg-white/95 shadow-sm overflow-hidden" style="border-left:4px solid var(--brand-orange);">
+            <div class="px-4 py-3">
+              <div class="flex items-start justify-between gap-3">
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <span class="badge badge-warn badge-sm">Закреплено</span>
+                    <span class="text-xs text-brand-dark/60">{{ pinned_note.author|default:"—" }} · {{ pinned_note.created_at }}</span>
                   </div>
+                  {% if pinned_note.text %}
+                    <div id="pinnedNotePreview" class="mt-2 text-sm text-brand-dark/90 whitespace-pre-line">{{ pinned_note.text|truncatechars:220 }}</div>
+                    <div id="pinnedNoteFull" class="mt-2 text-sm text-brand-dark/90 whitespace-pre-line hidden">{{ pinned_note.text }}</div>
+                    <button type="button" id="pinnedNoteExpandBtn" class="mt-1.5 text-xs text-brand-teal hover:underline font-medium" data-expanded="0">Развернуть</button>
+                  {% endif %}
+                </div>
+                {% if can_edit_company %}
+                  <form method="post" action="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/pin/" class="shrink-0">
+                    {% csrf_token %}
+                    <button type="submit" class="p-2 rounded-lg text-brand-dark/50 hover:text-brand-dark hover:bg-brand-soft/30 transition-colors" title="Открепить" aria-label="Открепить">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6l1 7 2 2v2H6v-2l2-2 1-7z"/><path d="M12 17v5"/></svg>
+                    </button>
+                  </form>
                 {% endif %}
               </div>
-              {% if can_edit_company %}
-                <form method="post" action="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/pin/">
-                  {% csrf_token %}
-                  <button type="submit" class="btn btn-outline btn-sm" title="Открепить" aria-label="Открепить">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M9 3h6l1 7 2 2v2H6v-2l2-2 1-7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                      <path d="M12 17v5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                    </svg>
-                  </button>
-                </form>
+              {% if pinned_note.attachment or pinned_note.note_attachments.all %}
+                <div class="mt-3 pt-3 border-t border-brand-soft/50 flex flex-wrap gap-2">
+                  {% if pinned_note.attachment %}
+                    <div class="inline-flex items-center gap-2 rounded-lg bg-brand-soft/20 border border-brand-soft/60 px-3 py-2 text-sm">
+                      <span class="text-brand-dark/70 font-medium truncate max-w-[140px]">{{ pinned_note.attachment_name|default:"Файл" }}</span>
+                      <span class="text-xs text-brand-dark/50">{{ pinned_note.attachment_size|filesizeformat }}</span>
+                      <span class="flex gap-1 shrink-0">
+                        {% with ext=pinned_note.attachment_ext|upper %}
+                          {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
+                            <button type="button" class="text-brand-teal hover:underline text-xs js-image-open" data-img-url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/open/" data-img-download="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/download/" data-img-title="{{ pinned_note.attachment_name|default:'Изображение' }}">Открыть</button>
+                          {% else %}
+                            <a class="text-brand-teal hover:underline text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/open/">Открыть</a>
+                          {% endif %}
+                        {% endwith %}
+                        <a class="text-brand-teal hover:underline text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/download/">Скачать</a>
+                      </span>
+                    </div>
+                  {% endif %}
+                  {% for att in pinned_note.note_attachments.all %}
+                    <div class="inline-flex items-center gap-2 rounded-lg bg-brand-soft/20 border border-brand-soft/60 px-3 py-2 text-sm">
+                      <span class="text-brand-dark/70 font-medium truncate max-w-[140px]">{{ att.file_name|default:"Файл" }}</span>
+                      <span class="text-xs text-brand-dark/50">{{ att.file_size|filesizeformat }}</span>
+                      <a class="text-brand-teal hover:underline text-xs shrink-0" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/attachments/{{ att.id }}/open/">Открыть</a>
+                      <a class="text-brand-teal hover:underline text-xs shrink-0" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/attachments/{{ att.id }}/download/">Скачать</a>
+                    </div>
+                  {% endfor %}
+                </div>
               {% endif %}
             </div>
           </div>
+          <script>
+            (function(){
+              var btn = document.getElementById('pinnedNoteExpandBtn');
+              var preview = document.getElementById('pinnedNotePreview');
+              var full = document.getElementById('pinnedNoteFull');
+              if (!btn || !full || !preview) return;
+              if ((full.textContent || '').length <= 220) { btn.style.display = 'none'; return; }
+              btn.addEventListener('click', function(){
+                var exp = btn.getAttribute('data-expanded') === '1';
+                if (exp) {
+                  full.classList.add('hidden');
+                  preview.classList.remove('hidden');
+                  btn.textContent = 'Развернуть';
+                  btn.setAttribute('data-expanded', '0');
+                } else {
+                  preview.classList.add('hidden');
+                  full.classList.remove('hidden');
+                  btn.textContent = 'Свернуть';
+                  btn.setAttribute('data-expanded', '1');
+                }
+              });
+            })();
+          </script>
         {% endif %}
         {% if can_edit_company %}
           <div class="mt-2">
@@ -1464,24 +1498,28 @@
       <section class="card card-pad">
         <div class="font-medium mb-3">Заметки</div>
         {% if can_edit_company %}
-          <form class="space-y-2" method="post" action="/companies/{{ company.id }}/notes/add/" enctype="multipart/form-data" id="noteForm" data-company-id="{{ company.id }}" data-user-id="{{ request.user.id }}">
+          <form class="space-y-3" method="post" action="/companies/{{ company.id }}/notes/add/" enctype="multipart/form-data" id="noteForm" data-company-id="{{ company.id }}" data-user-id="{{ request.user.id }}">
             {% csrf_token %}
-            <div class="space-y-2">
+            <div>
+              <label class="block text-xs font-medium text-brand-dark/70 mb-1">Текст заметки</label>
               {{ note_form.text }}
-              <div class="flex items-center justify-between gap-2">
-                <input id="noteFile" type="file" name="attachment" class="hidden" />
-                <button type="button" class="btn btn-outline btn-sm" id="noteAttachBtn" title="Прикрепить файл">
-                  <span class="inline-flex items-center gap-1">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path d="M8 12.5l7.1-7.1a3 3 0 014.2 4.2l-8.5 8.5a5 5 0 01-7.1-7.1l8.2-8.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                    <span>Файл</span>
-                  </span>
-                </button>
-                <div class="text-xs muted-2 truncate" id="noteFileName"></div>
-                <button class="btn btn-primary" type="submit">Добавить</button>
+            </div>
+            <div class="note-files-zone rounded-xl p-4" id="noteAddFilesZone">
+              <input id="noteFile" type="file" name="attachment" class="hidden" />
+              <input id="noteFilesMultiple" type="file" name="attachments" multiple class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv" />
+              <div class="flex flex-wrap items-center gap-2">
+                <label class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-brand-soft/80 text-brand-dark/80 hover:bg-brand-soft/30 cursor-pointer transition-colors text-sm font-medium" for="noteFilesMultiple" id="noteAttachMultipleLabel">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  Прикрепить файлы
+                </label>
+                <button type="button" class="hidden p-2 rounded-lg hover:bg-brand-soft/30 text-brand-dark/60" id="noteAttachBtn" title="Один файл (альт.)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></button>
+                <span class="text-xs text-brand-dark/50" id="noteFilesMultipleNames"></span>
               </div>
-              <div class="text-xs muted-2">Файл опционально. До 15 МБ. PDF/DOC/XLS/картинки и др.</div>
+              <div id="noteAddFileChips" class="flex flex-wrap gap-2 mt-3"></div>
+              <p class="text-xs text-brand-dark/50 mt-2">PDF, DOC, XLS, изображения и др. До 15 МБ. Можно выбрать несколько.</p>
+            </div>
+            <div class="flex gap-2">
+              <button class="btn btn-primary" type="submit">Добавить заметку</button>
             </div>
           </form>
         {% else %}
@@ -1521,6 +1559,8 @@
                       data-note-id="{{ n.id }}"
                       data-note-text="{{ n.text|default:'' }}"
                       data-note-file="{{ n.attachment_name|default:'' }}"
+                      data-note-attachment-ids="{% for att in n.note_attachments.all %}{{ att.id }}{% if not forloop.last %},{% endif %}{% endfor %}"
+                      data-note-attachment-names="{% for att in n.note_attachments.all %}{{ att.file_name|default:'Файл' }}{% if not forloop.last %}|||{% endif %}{% endfor %}"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                         <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -1543,47 +1583,30 @@
                 </div>
               </div>
               <div class="text-sm whitespace-pre-line wrap-anywhere" data-note-body>{{ n.text }}</div>
-              {% if n.attachment %}
-                <div class="mt-2 rounded-lg border border-brand-soft bg-brand-soft/15 px-3 py-2">
-                  <div class="flex items-center justify-between gap-2">
-                    <div class="min-w-0">
-                      <div class="flex items-center gap-2">
-                        {% with ext=n.attachment_ext|upper %}
-                          {% if ext == "PDF" %}
-                            <span class="badge badge-warn">PDF</span>
-                          {% elif ext == "DOC" or ext == "DOCX" %}
-                            <span class="badge">DOC</span>
-                          {% elif ext == "XLS" or ext == "XLSX" %}
-                            <span class="badge">XLS</span>
-                          {% elif ext == "PPT" or ext == "PPTX" %}
-                            <span class="badge">PPT</span>
-                          {% elif ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
-                            <span class="badge">IMG</span>
-                          {% elif ext %}
-                            <span class="badge">{{ ext }}</span>
-                          {% else %}
-                            <span class="badge">FILE</span>
-                          {% endif %}
-                        <div class="text-sm font-medium truncate">{{ n.attachment_name|default:"Файл" }}</div>
-                        {% if n.attachment_size %}<div class="text-xs muted-2">{{ n.attachment_size|filesizeformat }}</div>{% endif %}
-                      </div>
+              {% if n.attachment or n.note_attachments.all %}
+                <div class="mt-2 flex flex-wrap gap-2">
+                  {% if n.attachment %}
+                    <div class="note-file-chip">
+                      <span class="truncate max-w-[140px]" title="{{ n.attachment_name|default:'Файл' }}">{{ n.attachment_name|default:"Файл" }}</span>
+                      <span class="text-brand-dark/50 text-xs">{{ n.attachment_size|filesizeformat }}</span>
+                      {% with ext=n.attachment_ext|upper %}
+                        {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
+                          <button type="button" class="note-file-link text-xs js-image-open" data-img-url="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/" data-img-download="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/" data-img-title="{{ n.attachment_name|default:'Изображение' }}">Открыть</button>
+                        {% else %}
+                          <a class="note-file-link text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/">Открыть</a>
+                        {% endif %}
+                      {% endwith %}
+                      <a class="note-file-link text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/">Скачать</a>
                     </div>
-                    <div class="flex flex-wrap gap-2 shrink-0">
-                      {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
-                        <button
-                          type="button"
-                          class="btn btn-outline btn-sm js-image-open"
-                          data-img-url="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/"
-                          data-img-download="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/"
-                          data-img-title="{{ n.attachment_name|default:'Изображение' }}"
-                        >Открыть</button>
-                      {% else %}
-                        <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/">Открыть</a>
-                      {% endif %}
-                      <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/">Скачать</a>
+                  {% endif %}
+                  {% for att in n.note_attachments.all %}
+                    <div class="note-file-chip">
+                      <span class="truncate max-w-[140px]" title="{{ att.file_name|default:'Файл' }}">{{ att.file_name|default:"Файл" }}</span>
+                      <span class="text-brand-dark/50 text-xs">{{ att.file_size|filesizeformat }}</span>
+                      <a class="note-file-link text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/attachments/{{ att.id }}/open/">Открыть</a>
+                      <a class="note-file-link text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/attachments/{{ att.id }}/download/">Скачать</a>
                     </div>
-                    {% endwith %}
-                  </div>
+                  {% endfor %}
                 </div>
               {% endif %}
             </div>
@@ -1606,33 +1629,38 @@
             </div>
             <button type="button" class="btn btn-outline btn-sm" data-close-noteedit aria-label="Закрыть" title="Закрыть">✕</button>
           </div>
-          <form method="post" id="noteEditForm" class="mt-3 space-y-2" enctype="multipart/form-data">
+          <form method="post" id="noteEditForm" class="mt-3 space-y-4" enctype="multipart/form-data">
             {% csrf_token %}
             <div>
-              <label class="block text-xs text-brand-dark/70 mb-1">Текст</label>
+              <label class="block text-xs font-medium text-brand-dark/70 mb-1">Текст</label>
               <textarea name="text" id="noteEditText" class="textarea" rows="5" placeholder="Текст заметки..."></textarea>
-              <div class="text-xs muted-2 mt-1">Можно заменить/добавить файл или удалить текущий.</div>
             </div>
-            <div class="rounded-xl border border-brand-soft bg-brand-soft/10 p-3">
-              <div class="flex items-center justify-between gap-2">
-                <div class="text-xs text-brand-dark/70">Файл</div>
-                <label class="btn btn-outline btn-sm" style="cursor:pointer">
-                  Выбрать файл
-                  <input type="file" name="attachment" id="noteEditFile" class="hidden" />
+            <div class="note-files-zone rounded-xl p-4">
+              <div class="text-xs font-medium text-brand-dark/70 mb-2">Вложения</div>
+              <div id="noteEditFileCurrent" class="text-sm text-brand-dark/80 mb-2">Основной файл: не выбран</div>
+              <div id="noteEditFileSelected" class="text-xs text-brand-teal mb-2 hidden"></div>
+              <div class="flex flex-wrap items-center gap-2">
+                <label class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-brand-soft/80 text-brand-dark/80 hover:bg-brand-soft/30 cursor-pointer transition-colors text-sm font-medium" for="noteEditFile">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  Заменить основной файл
                 </label>
+                <input type="file" name="attachment" id="noteEditFile" class="hidden" />
+                <label class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-brand-soft/80 text-brand-dark/80 hover:bg-brand-soft/30 cursor-pointer transition-colors text-sm font-medium" for="noteEditFilesMultiple">
+                  Добавить файлы
+                </label>
+                <input type="file" name="attachments" multiple id="noteEditFilesMultiple" class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv" />
               </div>
-              <div class="mt-2 text-xs">
-                <div class="muted-2" id="noteEditFileCurrent">Текущий файл: —</div>
-                <div class="muted-2" id="noteEditFileSelected"></div>
-              </div>
-              <div class="mt-2 flex items-center justify-between gap-2" id="noteEditRemoveRow">
-                <label class="inline-flex items-center gap-2 text-xs">
+              <div class="mt-2 flex items-center gap-2" id="noteEditRemoveRow">
+                <label class="inline-flex items-center gap-2 text-xs cursor-pointer">
                   <input type="checkbox" id="noteEditRemoveFile" />
-                  <span>Удалить текущий файл</span>
+                  <span class="text-brand-dark/70">Удалить основной файл при сохранении</span>
                 </label>
                 <input type="hidden" name="remove_attachment" id="noteEditRemoveHidden" value="0" />
               </div>
-              <div class="muted-2 mt-2" style="font-size:0.6875rem;">Если выбрать новый файл — старый будет удалён с сервера.</div>
+              <div id="noteEditExtraAttachmentsList" class="flex flex-wrap gap-2 mt-3"></div>
+              <input type="hidden" name="remove_attachment_ids" id="noteEditRemoveAttachmentIds" value="" />
+              <div id="noteEditNewFilesChips" class="flex flex-wrap gap-2 mt-2"></div>
+              <div id="noteEditFilesMultipleNames" class="text-xs text-brand-dark/50 mt-1"></div>
             </div>
             <div class="flex gap-2">
               <button class="btn btn-primary" type="submit">Сохранить</button>
@@ -2089,17 +2117,52 @@
         let closeNoteEditClassic = null;
         if (noteEditModal && noteEditForm && noteEditText) {
           const closeBtns = noteEditModal.querySelectorAll('[data-close-noteedit]');
-          openNoteEditClassic = function(noteId, noteText, fileName) {
+          const noteEditExtraList = document.getElementById('noteEditExtraAttachmentsList');
+          const noteEditRemoveIds = document.getElementById('noteEditRemoveAttachmentIds');
+          const noteEditFilesMulti = document.getElementById('noteEditFilesMultiple');
+          const noteEditFilesMultiNames = document.getElementById('noteEditFilesMultipleNames');
+          openNoteEditClassic = function(noteId, noteText, fileName, attachmentIdsStr, attachmentNamesStr) {
             noteEditForm.action = `/companies/{{ company.id }}/notes/${noteId}/edit/`;
             noteEditText.value = noteText || '';
             if (noteEditFile) noteEditFile.value = '';
             if (noteEditFileSelected) noteEditFileSelected.textContent = '';
             if (noteEditRemoveFile) noteEditRemoveFile.checked = false;
             if (noteEditRemoveHidden) noteEditRemoveHidden.value = '0';
-            if (noteEditFileCurrent) noteEditFileCurrent.textContent = 'Текущий файл: ' + (fileName ? fileName : '—');
+            if (noteEditFileCurrent) noteEditFileCurrent.innerHTML = fileName ? '<span class="note-file-chip inline-flex"><span class="truncate max-w-[180px]">' + (fileName.replace(/</g,'&lt;').replace(/"/g,'&quot;')) + '</span> (основной)</span>' : 'Основной файл: не выбран';
             if (noteEditTitle) noteEditTitle.textContent = 'Редактировать заметку';
             if (noteEditSubtitle) noteEditSubtitle.classList.remove('hidden');
             if (noteEditRemoveRow) noteEditRemoveRow.style.display = 'flex';
+            if (noteEditRemoveIds) noteEditRemoveIds.value = '';
+            if (noteEditFilesMulti) noteEditFilesMulti.value = '';
+            if (noteEditFilesMultiNames) noteEditFilesMultiNames.textContent = '';
+            const ids = (attachmentIdsStr || '').split(',').map(s => s.trim()).filter(Boolean);
+            const names = (attachmentNamesStr || '').split('|||').map(s => s.trim());
+            if (noteEditExtraList) {
+              noteEditExtraList.innerHTML = '';
+              ids.forEach((id, i) => {
+                const name = names[i] || 'Файл';
+                const label = document.createElement('label');
+                label.className = 'note-file-chip inline-flex items-center gap-2 cursor-pointer';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.className = 'note-edit-remove-attachment';
+                cb.dataset.attachmentId = id;
+                cb.addEventListener('change', () => {
+                  if (!noteEditRemoveIds) return;
+                  const checked = noteEditExtraList.querySelectorAll('.note-edit-remove-attachment:checked');
+                  noteEditRemoveIds.value = Array.from(checked).map(c => c.dataset.attachmentId).join(',');
+                });
+                label.appendChild(cb);
+                var sp = document.createElement('span');
+                sp.textContent = name;
+                label.appendChild(sp);
+                var sp2 = document.createElement('span');
+                sp2.className = 'text-brand-dark/50 text-xs';
+                sp2.textContent = ' (удалить)';
+                label.appendChild(sp2);
+                noteEditExtraList.appendChild(label);
+              });
+            }
             noteEditModal.classList.remove('hidden');
             setTimeout(() => { try{ noteEditText.focus(); }catch(_e){} }, 0);
           };
@@ -2170,17 +2233,52 @@
 
           closeNoteEditModern = function() { noteEditModalModern.classList.add('hidden'); };
 
-          openNoteEditModern = function(noteId, noteText, fileName) {
+          const noteEditExtraListModern = document.getElementById('noteEditExtraAttachmentsListModern');
+          const noteEditRemoveIdsModern = document.getElementById('noteEditRemoveAttachmentIdsModern');
+          const noteEditFilesMultiModern = document.getElementById('noteEditFilesMultipleModern');
+          const noteEditFilesMultiNamesModern = document.getElementById('noteEditFilesMultipleNamesModern');
+          openNoteEditModern = function(noteId, noteText, fileName, attachmentIdsStr, attachmentNamesStr) {
             noteEditFormModern.action = `/companies/{{ company.id }}/notes/${noteId}/edit/`;
             noteEditTextModern.value = noteText || '';
             if (noteEditFileModern) noteEditFileModern.value = '';
             if (noteEditFileSelectedModern) noteEditFileSelectedModern.textContent = '';
             if (noteEditRemoveFileModern) noteEditRemoveFileModern.checked = false;
             if (noteEditRemoveHiddenModern) noteEditRemoveHiddenModern.value = '0';
-            if (noteEditFileCurrentModern) noteEditFileCurrentModern.textContent = 'Текущий файл: ' + (fileName ? fileName : '—');
+            if (noteEditFileCurrentModern) noteEditFileCurrentModern.innerHTML = fileName ? '<span class="note-file-chip inline-flex"><span class="truncate max-w-[180px]">' + (fileName.replace(/</g,'&lt;').replace(/"/g,'&quot;')) + '</span> (основной)</span>' : 'Основной файл: не выбран';
             if (noteEditTitleModern) noteEditTitleModern.textContent = 'Редактировать заметку';
             if (noteEditSubtitleModern) noteEditSubtitleModern.classList.remove('hidden');
             if (noteEditRemoveRowModern) noteEditRemoveRowModern.style.display = 'flex';
+            if (noteEditRemoveIdsModern) noteEditRemoveIdsModern.value = '';
+            if (noteEditFilesMultiModern) noteEditFilesMultiModern.value = '';
+            if (noteEditFilesMultiNamesModern) noteEditFilesMultiNamesModern.textContent = '';
+            const ids = (attachmentIdsStr || '').split(',').map(s => s.trim()).filter(Boolean);
+            const names = (attachmentNamesStr || '').split('|||').map(s => s.trim());
+            if (noteEditExtraListModern) {
+              noteEditExtraListModern.innerHTML = '';
+              ids.forEach((id, i) => {
+                const name = names[i] || 'Файл';
+                const label = document.createElement('label');
+                label.className = 'note-file-chip inline-flex items-center gap-2 cursor-pointer';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.className = 'note-edit-remove-attachment-modern';
+                cb.dataset.attachmentId = id;
+                cb.addEventListener('change', () => {
+                  if (!noteEditRemoveIdsModern) return;
+                  const checked = noteEditExtraListModern.querySelectorAll('.note-edit-remove-attachment-modern:checked');
+                  noteEditRemoveIdsModern.value = Array.from(checked).map(c => c.dataset.attachmentId).join(',');
+                });
+                label.appendChild(cb);
+                var sp = document.createElement('span');
+                sp.textContent = name;
+                label.appendChild(sp);
+                var sp2 = document.createElement('span');
+                sp2.className = 'text-brand-dark/50 text-xs';
+                sp2.textContent = ' (удалить)';
+                label.appendChild(sp2);
+                noteEditExtraListModern.appendChild(label);
+              });
+            }
             noteEditModalModern.classList.remove('hidden');
             setTimeout(() => { try{ noteEditTextModern.focus(); }catch(_e){} }, 0);
           };
@@ -2194,7 +2292,7 @@
             if (noteEditFileSelectedModern) noteEditFileSelectedModern.textContent = '';
             if (noteEditRemoveFileModern) noteEditRemoveFileModern.checked = false;
             if (noteEditRemoveHiddenModern) noteEditRemoveHiddenModern.value = '0';
-            if (noteEditFileCurrentModern) noteEditFileCurrentModern.textContent = 'Текущий файл: —';
+            if (noteEditFileCurrentModern) noteEditFileCurrentModern.textContent = 'Основной файл: не выбран';
             if (noteEditRemoveRowModern) noteEditRemoveRowModern.style.display = 'none';
             noteEditModalModern.classList.remove('hidden');
             setTimeout(() => { try{ noteEditTextModern.focus(); }catch(_e){} }, 0);
@@ -2272,14 +2370,14 @@
         };
 
         // Единая точка входа: редактирование заметки (modern → modern-модалка, classic → classic-модалка)
-        window.openNoteEditSmart = function(noteId, noteText, fileName, sourceEl) {
+        window.openNoteEditSmart = function(noteId, noteText, fileName, sourceEl, attachmentIdsStr, attachmentNamesStr) {
           const fromModern = !!(sourceEl && sourceEl.closest && sourceEl.closest('#companyDetailModern'));
           if ((isModernActive() || fromModern) && typeof openNoteEditModern === 'function') {
-            openNoteEditModern(noteId, noteText, fileName);
+            openNoteEditModern(noteId, noteText, fileName, attachmentIdsStr, attachmentNamesStr);
             return;
           }
           if (typeof openNoteEditClassic === 'function') {
-            openNoteEditClassic(noteId, noteText, fileName);
+            openNoteEditClassic(noteId, noteText, fileName, attachmentIdsStr, attachmentNamesStr);
           }
         };
 
@@ -2291,7 +2389,9 @@
           const id = btn.getAttribute('data-note-id');
           const txt = btn.getAttribute('data-note-text') || '';
           const fn = btn.getAttribute('data-note-file') || '';
-          if (id && window.openNoteEditSmart) window.openNoteEditSmart(id, txt, fn, btn);
+          const attIds = btn.getAttribute('data-note-attachment-ids') || '';
+          const attNames = btn.getAttribute('data-note-attachment-names') || '';
+          if (id && window.openNoteEditSmart) window.openNoteEditSmart(id, txt, fn, btn, attIds, attNames);
         });
 
         // Делегирование клика по кнопкам добавления заметки (modern)
@@ -2406,6 +2506,8 @@
             let anchorBtn = null;
             let currentText = '';
             let currentFile = '';
+            let currentAttIds = '';
+            let currentAttNames = '';
 
             function openMenu(id, isPinned) {
               currentId = id;
@@ -2443,6 +2545,8 @@
               anchorBtn = null;
               currentText = '';
               currentFile = '';
+              currentAttIds = '';
+              currentAttNames = '';
             }
 
             modernRoot.addEventListener('click', (e) => {
@@ -2455,6 +2559,8 @@
               anchorBtn = btn;
               currentText = btn.getAttribute('data-note-text') || '';
               currentFile = btn.getAttribute('data-note-file') || '';
+              currentAttIds = btn.getAttribute('data-note-attachment-ids') || '';
+              currentAttNames = btn.getAttribute('data-note-attachment-names') || '';
               if (id) openMenu(id, pinned);
             });
 
@@ -2478,9 +2584,9 @@
                 if (action === 'edit') {
                   // В modern-режиме всегда в приоритете modern-модалка
                   if (typeof window.openNoteEditModern === 'function') {
-                    window.openNoteEditModern(currentId, currentText, currentFile);
+                    window.openNoteEditModern(currentId, currentText, currentFile, currentAttIds, currentAttNames);
                   } else if (typeof window.openNoteEditSmart === 'function') {
-                    window.openNoteEditSmart(currentId, currentText, currentFile, anchorBtn);
+                    window.openNoteEditSmart(currentId, currentText, currentFile, anchorBtn, currentAttIds, currentAttNames);
                   } else {
                     const btn = document.querySelector(`[data-note-edit][data-note-id="${currentId}"]`);
                     if (btn) btn.click();
@@ -2538,15 +2644,32 @@
 
     <script>
       (function(){
-        const btn = document.getElementById('noteAttachBtn');
         const input = document.getElementById('noteFile');
-        const name = document.getElementById('noteFileName');
-        if (!btn || !input) return;
-        btn.addEventListener('click', () => input.click());
-        input.addEventListener('change', () => {
-          const f = input.files && input.files.length ? input.files[0] : null;
-          if (name) name.textContent = f ? f.name : '';
-        });
+        const inputMulti = document.getElementById('noteFilesMultiple');
+        const nameMulti = document.getElementById('noteFilesMultipleNames');
+        const zone = document.getElementById('noteAddFilesZone');
+        const chipsWrap = document.getElementById('noteAddFileChips');
+        if (inputMulti) {
+          inputMulti.addEventListener('change', function() {
+            const files = inputMulti.files || [];
+            if (nameMulti) nameMulti.textContent = files.length ? 'Выбрано: ' + files.length + ' файл(ов)' : '';
+            if (zone) zone.classList.toggle('has-files', files.length > 0);
+            if (chipsWrap) {
+              chipsWrap.innerHTML = '';
+              for (var i = 0; i < files.length; i++) {
+                var f = files[i];
+                var size = f.size ? (f.size < 1024 ? f.size + ' Б' : (f.size < 1024*1024 ? (f.size/1024).toFixed(1) + ' КБ' : (f.size/1024/1024).toFixed(1) + ' МБ')) : '';
+                var chip = document.createElement('span');
+                chip.className = 'note-file-chip';
+                chip.innerHTML = '<span class="truncate max-w-[160px]" title="' + (f.name || '').replace(/"/g, '&quot;') + '">' + (f.name || 'Файл') + '</span>' + (size ? ' <span class="text-brand-dark/50 text-xs">' + size + '</span>' : '');
+                chipsWrap.appendChild(chip);
+              }
+            }
+          });
+        }
+        if (document.getElementById('noteAttachBtn') && input) {
+          document.getElementById('noteAttachBtn').addEventListener('click', function() { input.click(); });
+        }
       })();
     </script>
 
@@ -2692,33 +2815,37 @@
             </div>
             <button type="button" class="btn btn-outline btn-sm" data-close-noteedit-modern aria-label="Закрыть" title="Закрыть">✕</button>
           </div>
-          <form method="post" id="noteEditFormModern" class="mt-3 space-y-2" enctype="multipart/form-data">
+          <form method="post" id="noteEditFormModern" class="mt-3 space-y-4" enctype="multipart/form-data">
             {% csrf_token %}
             <div>
-              <label class="block text-xs text-brand-dark/70 mb-1">Текст</label>
+              <label class="block text-xs font-medium text-brand-dark/70 mb-1">Текст</label>
               <textarea name="text" id="noteEditTextModern" class="textarea" rows="5" placeholder="Текст заметки..."></textarea>
-              <div class="text-xs muted-2 mt-1">Можно заменить/добавить файл или удалить текущий.</div>
             </div>
-            <div class="rounded-xl border border-brand-soft bg-brand-soft/10 p-3">
-              <div class="flex items-center justify-between gap-2">
-                <div class="text-xs text-brand-dark/70">Файл</div>
-                <label class="btn btn-outline btn-sm" style="cursor:pointer">
-                  Выбрать файл
-                  <input type="file" name="attachment" id="noteEditFileModern" class="hidden" />
+            <div class="note-files-zone rounded-xl p-4">
+              <div class="text-xs font-medium text-brand-dark/70 mb-2">Вложения</div>
+              <div id="noteEditFileCurrentModern" class="text-sm text-brand-dark/80 mb-2">Основной файл: не выбран</div>
+              <div id="noteEditFileSelectedModern" class="text-xs text-brand-teal mb-2 hidden"></div>
+              <div class="flex flex-wrap items-center gap-2">
+                <label class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-brand-soft/80 text-brand-dark/80 hover:bg-brand-soft/30 cursor-pointer transition-colors text-sm font-medium" for="noteEditFileModern">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  Заменить основной файл
                 </label>
+                <input type="file" name="attachment" id="noteEditFileModern" class="hidden" />
+                <label class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-brand-soft/80 text-brand-dark/80 hover:bg-brand-soft/30 cursor-pointer transition-colors text-sm font-medium" for="noteEditFilesMultipleModern">
+                  Добавить файлы
+                </label>
+                <input type="file" name="attachments" multiple id="noteEditFilesMultipleModern" class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv" />
               </div>
-              <div class="mt-2 text-xs">
-                <div class="muted-2" id="noteEditFileCurrentModern">Текущий файл: —</div>
-                <div class="muted-2" id="noteEditFileSelectedModern"></div>
-              </div>
-              <div class="mt-2 flex items-center justify-between gap-2" id="noteEditRemoveRowModern">
-                <label class="inline-flex items-center gap-2 text-xs">
+              <div class="mt-2 flex items-center gap-2" id="noteEditRemoveRowModern">
+                <label class="inline-flex items-center gap-2 text-xs cursor-pointer">
                   <input type="checkbox" id="noteEditRemoveFileModern" />
-                  <span>Удалить текущий файл</span>
+                  <span class="text-brand-dark/70">Удалить основной файл при сохранении</span>
                 </label>
                 <input type="hidden" name="remove_attachment" id="noteEditRemoveHiddenModern" value="0" />
               </div>
-              <div class="muted-2 mt-2" style="font-size:0.6875rem;">Если выбрать новый файл — старый будет удалён с сервера.</div>
+              <div id="noteEditExtraAttachmentsListModern" class="flex flex-wrap gap-2 mt-3"></div>
+              <input type="hidden" name="remove_attachment_ids" id="noteEditRemoveAttachmentIdsModern" value="" />
+              <div id="noteEditFilesMultipleNamesModern" class="text-xs text-brand-dark/50 mt-2"></div>
             </div>
             <div class="flex gap-2">
               <button class="btn btn-primary" type="submit">Сохранить</button>
@@ -3143,6 +3270,8 @@
                             data-note-pinned="{% if display_note.is_pinned %}1{% else %}0{% endif %}"
                             data-note-text="{{ display_note.text|default:'' }}"
                             data-note-file="{{ display_note.attachment_name|default:'' }}"
+                            data-note-attachment-ids="{% for att in display_note.note_attachments.all %}{{ att.id }}{% if not forloop.last %},{% endif %}{% endfor %}"
+                            data-note-attachment-names="{% for att in display_note.note_attachments.all %}{{ att.file_name|default:'Файл' }}{% if not forloop.last %}|||{% endif %}{% endfor %}"
                             aria-label="Действия с заметкой"
                             title="Действия с заметкой"
                           >⋯</button>
@@ -3169,30 +3298,30 @@
                         </div>
                       {% endif %}
 
-                      {% if display_note.attachment %}
-                        <div class="mt-3 pt-3 border-t border-brand-soft/60 flex items-center justify-between gap-3">
-                          <div class="flex items-center gap-2 min-w-0">
-                            <span class="shrink-0 inline-flex text-brand-dark/70">
-                              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                <path d="M7 3h7.5L19 7.5V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                                <path d="M14.5 3.5V8H19" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-                              </svg>
-                            </span>
-                            <div class="min-w-0">
-                              <div class="text-sm font-medium text-brand-dark truncate">{{ display_note.attachment_name|default:"Файл" }}</div>
-                              {% if display_note.attachment_size %}<div class="text-xs text-brand-dark/50">{{ display_note.attachment_size|filesizeformat }}</div>{% endif %}
+                      {% if display_note.attachment or display_note.note_attachments.all %}
+                        <div class="mt-3 pt-3 border-t border-brand-soft/50 flex flex-wrap gap-2">
+                          {% if display_note.attachment %}
+                            <div class="note-file-chip">
+                              <span class="truncate max-w-[140px]">{{ display_note.attachment_name|default:"Файл" }}</span>
+                              <span class="text-brand-dark/50 text-xs">{{ display_note.attachment_size|filesizeformat }}</span>
+                              {% with ext=display_note.attachment_ext|upper %}
+                                {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
+                                  <button type="button" class="note-file-link text-xs js-image-open" data-img-url="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/open/" data-img-download="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/download/" data-img-title="{{ display_note.attachment_name|default:'Изображение' }}">Открыть</button>
+                                {% else %}
+                                  <a class="note-file-link text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/open/">Открыть</a>
+                                {% endif %}
+                              {% endwith %}
+                              <a class="note-file-link text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/download/">Скачать</a>
                             </div>
-                          </div>
-                          <div class="flex items-center gap-2 shrink-0">
-                            {% with ext=display_note.attachment_ext|upper %}
-                              {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
-                                <button type="button" class="text-sm text-brand-dark/80 hover:text-brand-dark js-image-open" data-img-url="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/open/" data-img-download="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/download/" data-img-title="{{ display_note.attachment_name|default:'Изображение' }}">Открыть</button>
-                              {% else %}
-                                <a class="text-sm text-brand-dark/80 hover:text-brand-dark" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/open/">Открыть</a>
-                              {% endif %}
-                              <a class="text-sm text-brand-dark/80 hover:text-brand-dark" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ display_note.id }}/file/download/">Скачать</a>
-                            {% endwith %}
-                          </div>
+                          {% endif %}
+                          {% for att in display_note.note_attachments.all %}
+                            <div class="note-file-chip">
+                              <span class="truncate max-w-[140px]">{{ att.file_name|default:"Файл" }}</span>
+                              <span class="text-brand-dark/50 text-xs">{{ att.file_size|filesizeformat }}</span>
+                              <a class="note-file-link text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ display_note.id }}/attachments/{{ att.id }}/open/">Открыть</a>
+                              <a class="note-file-link text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ display_note.id }}/attachments/{{ att.id }}/download/">Скачать</a>
+                            </div>
+                          {% endfor %}
                         </div>
                       {% endif %}
                     </div>
@@ -3226,6 +3355,8 @@
                               data-note-pinned="{% if n.is_pinned %}1{% else %}0{% endif %}"
                               data-note-text="{{ n.text|default:'' }}"
                               data-note-file="{{ n.attachment_name|default:'' }}"
+                              data-note-attachment-ids="{% for att in n.note_attachments.all %}{{ att.id }}{% if not forloop.last %},{% endif %}{% endfor %}"
+                              data-note-attachment-names="{% for att in n.note_attachments.all %}{{ att.file_name|default:'Файл' }}{% if not forloop.last %}|||{% endif %}{% endfor %}"
                               aria-label="Действия с заметкой"
                               title="Действия с заметкой"
                             >⋯</button>
@@ -4467,22 +4598,57 @@
         const titleEl = document.getElementById('noteEditTitleModern');
         const subtitleEl = document.getElementById('noteEditSubtitleModern');
         const removeRow = document.getElementById('noteEditRemoveRowModern');
+        const extraList = document.getElementById('noteEditExtraAttachmentsListModern');
+        const removeIds = document.getElementById('noteEditRemoveAttachmentIdsModern');
+        const filesMulti = document.getElementById('noteEditFilesMultipleModern');
+        const filesMultiNames = document.getElementById('noteEditFilesMultipleNamesModern');
 
         function closeModal() {
           modal.classList.add('hidden');
         }
 
-        function openEdit(id, text, fileName) {
+        function openEdit(id, text, fileName, attachmentIdsStr, attachmentNamesStr) {
           form.action = `/companies/{{ company.id }}/notes/${id}/edit/`;
           textarea.value = text || '';
           if (fileInput) fileInput.value = '';
           if (fileSelected) fileSelected.textContent = '';
           if (removeFile) removeFile.checked = false;
           if (removeHidden) removeHidden.value = '0';
-          if (fileCurrent) fileCurrent.textContent = 'Текущий файл: ' + (fileName ? fileName : '—');
+          if (fileCurrent) fileCurrent.innerHTML = fileName ? '<span class="note-file-chip inline-flex"><span class="truncate max-w-[180px]">' + (fileName.replace(/</g,'&lt;').replace(/"/g,'&quot;')) + '</span> (основной)</span>' : 'Основной файл: не выбран';
           if (titleEl) titleEl.textContent = 'Редактировать заметку';
           if (subtitleEl) subtitleEl.classList.remove('hidden');
           if (removeRow) removeRow.style.display = 'flex';
+          if (removeIds) removeIds.value = '';
+          if (filesMulti) filesMulti.value = '';
+          if (filesMultiNames) filesMultiNames.textContent = '';
+          const ids = (attachmentIdsStr || '').split(',').map(s => s.trim()).filter(Boolean);
+          const names = (attachmentNamesStr || '').split('|||').map(s => s.trim());
+          if (extraList) {
+            extraList.innerHTML = '';
+            ids.forEach((attId, i) => {
+              const name = names[i] || 'Файл';
+              const label = document.createElement('label');
+              label.className = 'note-file-chip inline-flex items-center gap-2 cursor-pointer';
+              const cb = document.createElement('input');
+              cb.type = 'checkbox';
+              cb.className = 'note-edit-remove-attachment-modern';
+              cb.dataset.attachmentId = attId;
+              cb.addEventListener('change', () => {
+                if (!removeIds) return;
+                const checked = extraList.querySelectorAll('.note-edit-remove-attachment-modern:checked');
+                removeIds.value = Array.from(checked).map(c => c.dataset.attachmentId).join(',');
+              });
+              label.appendChild(cb);
+              var sp = document.createElement('span');
+              sp.textContent = name;
+              label.appendChild(sp);
+              var sp2 = document.createElement('span');
+              sp2.className = 'text-brand-dark/50 text-xs';
+              sp2.textContent = ' (удалить)';
+              label.appendChild(sp2);
+              extraList.appendChild(label);
+            });
+          }
           modal.classList.remove('hidden');
           setTimeout(() => { try { textarea.focus(); } catch (_e) {} }, 0);
         }
@@ -4496,7 +4662,7 @@
           if (fileSelected) fileSelected.textContent = '';
           if (removeFile) removeFile.checked = false;
           if (removeHidden) removeHidden.value = '0';
-          if (fileCurrent) fileCurrent.textContent = 'Текущий файл: —';
+          if (fileCurrent) fileCurrent.textContent = 'Основной файл: не выбран';
           if (removeRow) removeRow.style.display = 'none';
           modal.classList.remove('hidden');
           setTimeout(() => { try { textarea.focus(); } catch (_e) {} }, 0);
@@ -6509,16 +6675,32 @@
   <script>
     // Обработчик формы заметок в modern режиме (inline)
     (function(){
-      const btn = document.getElementById('noteAttachBtnModernInline');
       const input = document.getElementById('noteFileModernInline');
+      const inputMulti = document.getElementById('noteFilesMultipleModernInline');
       const name = document.getElementById('noteFileNameModernInline');
-      if (btn && input) {
-      btn.addEventListener('click', () => input.click());
-      input.addEventListener('change', () => {
-        const f = input.files && input.files.length ? input.files[0] : null;
-        if (name) name.textContent = f ? f.name : '';
-      });
+      const chipsWrap = document.getElementById('noteAddFileChipsModernInline');
+      const zone = document.getElementById('noteFormModernInline') && document.getElementById('noteFormModernInline').querySelector('.note-files-zone');
+      if (inputMulti) {
+        inputMulti.addEventListener('change', function() {
+          var files = inputMulti.files || [];
+          if (name) name.textContent = files.length ? 'Выбрано: ' + files.length + ' файл(ов)' : '';
+          if (zone) zone.classList.toggle('has-files', files.length > 0);
+          if (chipsWrap) {
+            chipsWrap.innerHTML = '';
+            for (var i = 0; i < files.length; i++) {
+              var f = files[i];
+              var size = f.size ? (f.size < 1024 ? f.size + ' Б' : (f.size < 1024*1024 ? (f.size/1024).toFixed(1) + ' КБ' : (f.size/1024/1024).toFixed(1) + ' МБ')) : '';
+              var chip = document.createElement('span');
+              chip.className = 'note-file-chip';
+              chip.innerHTML = '<span class="truncate max-w-[160px]" title="' + (f.name || '').replace(/"/g, '&quot;') + '">' + (f.name || 'Файл') + '</span>' + (size ? ' <span class="text-brand-dark/50 text-xs">' + size + '</span>' : '');
+              chipsWrap.appendChild(chip);
+            }
+          }
+        });
       }
+      var btn = document.getElementById('noteAttachBtnModernInline');
+      if (btn && input) { btn.addEventListener('click', function() { input.click(); }); }
+      if (input) input.addEventListener('change', function() { if (name) name.textContent = (input.files && input.files[0]) ? input.files[0].name : ''; });
 
       // AJAX-сохранение inline-заметки без смены вкладки / перезагрузки
       const form = document.getElementById('noteFormModernInline');
@@ -6538,7 +6720,10 @@
             const textarea = form.querySelector('textarea[name="text"]');
             if (textarea) textarea.value = '';
             if (input) input.value = '';
+            if (inputMulti) inputMulti.value = '';
             if (name) name.textContent = '';
+            if (chipsWrap) chipsWrap.innerHTML = '';
+            if (zone) zone.classList.remove('has-files');
 
             // Обновляем Обзор (и заметки на нём/кнопки "Развернуть") и панель заметок
             if (window.refreshOverviewNotes) {

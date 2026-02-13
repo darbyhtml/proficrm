@@ -17,24 +17,27 @@
         <button type="button" class="btn btn-outline btn-xs note-template-btn" data-template="quote">💰 КП/счёт</button>
         <button type="button" class="btn btn-outline btn-xs note-template-btn" data-template="reject">❌ Отказ/причина</button>
       </div>
-      <form class="space-y-2" method="post" action="/companies/{{ company.id }}/notes/add/" enctype="multipart/form-data" id="noteFormModernInline" data-company-id="{{ company.id }}" data-user-id="{{ request.user.id }}">
+      <form class="space-y-3" method="post" action="/companies/{{ company.id }}/notes/add/" enctype="multipart/form-data" id="noteFormModernInline" data-company-id="{{ company.id }}" data-user-id="{{ request.user.id }}">
         {% csrf_token %}
-        <div class="space-y-2">
+        <div>
+          <label class="block text-xs font-medium text-brand-dark/70 mb-1">Текст заметки</label>
           {{ note_form.text }}
-          <div class="flex items-center justify-between gap-2">
-            <input id="noteFileModernInline" type="file" name="attachment" class="hidden" />
-            <button type="button" class="btn btn-outline btn-sm" id="noteAttachBtnModernInline" title="Прикрепить файл">
-              <span class="inline-flex items-center gap-1">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path d="M8 12.5l7.1-7.1a3 3 0 014.2 4.2l-8.5 8.5a5 5 0 01-7.1-7.1l8.2-8.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                <span>Файл</span>
-              </span>
-            </button>
-            <div class="text-xs muted-2 truncate flex-1" id="noteFileNameModernInline"></div>
-            <button class="btn btn-primary btn-sm" type="submit">Добавить</button>
+        </div>
+        <div class="note-files-zone rounded-xl p-4">
+          <input id="noteFileModernInline" type="file" name="attachment" class="hidden" />
+          <input id="noteFilesMultipleModernInline" type="file" name="attachments" multiple class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv" />
+          <div class="flex flex-wrap items-center gap-2">
+            <label class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-brand-soft/80 text-brand-dark/80 hover:bg-brand-soft/30 cursor-pointer transition-colors text-sm font-medium" for="noteFilesMultipleModernInline">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Прикрепить файлы
+            </label>
+            <span class="text-xs text-brand-dark/50" id="noteFileNameModernInline"></span>
           </div>
-          <div class="text-xs muted-2">Файл опционально. До 15 МБ. PDF/DOC/XLS/картинки и др.</div>
+          <div id="noteAddFileChipsModernInline" class="flex flex-wrap gap-2 mt-3"></div>
+          <p class="text-xs text-brand-dark/50 mt-2">PDF, DOC, XLS, изображения. До 15 МБ.</p>
+        </div>
+        <div class="flex gap-2">
+          <button class="btn btn-primary btn-sm" type="submit">Добавить заметку</button>
         </div>
       </form>
     </div>
@@ -100,49 +103,30 @@
           </div>
         </div>
         <div class="text-sm whitespace-pre-line wrap-anywhere" data-note-body>{{ n.text }}</div>
-        {% if n.attachment %}
-          <div class="mt-2 rounded-lg border border-brand-soft bg-brand-soft/15 px-3 py-2">
-            <div class="flex items-center justify-between gap-2">
-              <div class="min-w-0">
-                <div class="flex items-center gap-2">
-                  {% with ext=n.attachment_ext|upper %}
-                    {% if ext == "PDF" %}
-                      <span class="badge badge-warn">PDF</span>
-                    {% elif ext == "DOC" or ext == "DOCX" %}
-                      <span class="badge">DOC</span>
-                    {% elif ext == "XLS" or ext == "XLSX" %}
-                      <span class="badge">XLS</span>
-                    {% elif ext == "PPT" or ext == "PPTX" %}
-                      <span class="badge">PPT</span>
-                    {% elif ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
-                      <span class="badge">IMG</span>
-                    {% elif ext %}
-                      <span class="badge">{{ ext }}</span>
-                    {% else %}
-                      <span class="badge">FILE</span>
-                    {% endif %}
-                    <div class="text-sm font-medium truncate">{{ n.attachment_name|default:"Файл" }}</div>
-                    {% if n.attachment_size %}<div class="text-xs muted-2">{{ n.attachment_size|filesizeformat }}</div>{% endif %}
-                  {% endwith %}
-                </div>
-              </div>
-              {% with ext=n.attachment_ext|upper %}
-                <div class="flex flex-wrap gap-2 shrink-0">
+        {% if n.attachment or n.note_attachments.all %}
+          <div class="mt-2 flex flex-wrap gap-2">
+            {% if n.attachment %}
+              <div class="note-file-chip">
+                <span class="truncate max-w-[140px]">{{ n.attachment_name|default:"Файл" }}</span>
+                <span class="text-brand-dark/50 text-xs">{{ n.attachment_size|filesizeformat }}</span>
+                {% with ext=n.attachment_ext|upper %}
                   {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
-                    <button
-                      type="button"
-                      class="btn btn-outline btn-sm js-image-open"
-                      data-img-url="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/"
-                      data-img-download="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/"
-                      data-img-title="{{ n.attachment_name|default:'Изображение' }}"
-                    >Открыть</button>
+                    <button type="button" class="note-file-link text-xs js-image-open" data-img-url="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/" data-img-download="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/" data-img-title="{{ n.attachment_name|default:'Изображение' }}">Открыть</button>
                   {% else %}
-                    <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/">Открыть</a>
+                    <a class="note-file-link text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/">Открыть</a>
                   {% endif %}
-                  <a class="btn btn-outline btn-sm" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/">Скачать</a>
-                </div>
-              {% endwith %}
-            </div>
+                {% endwith %}
+                <a class="note-file-link text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/">Скачать</a>
+              </div>
+            {% endif %}
+            {% for att in n.note_attachments.all %}
+              <div class="note-file-chip">
+                <span class="truncate max-w-[140px]">{{ att.file_name|default:"Файл" }}</span>
+                <span class="text-brand-dark/50 text-xs">{{ att.file_size|filesizeformat }}</span>
+                <a class="note-file-link text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/attachments/{{ att.id }}/open/">Открыть</a>
+                <a class="note-file-link text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/attachments/{{ att.id }}/download/">Скачать</a>
+              </div>
+            {% endfor %}
           </div>
         {% endif %}
       </div>

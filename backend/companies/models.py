@@ -304,6 +304,38 @@ class CompanyNote(models.Model):
         super().save(*args, **kwargs)
 
 
+class CompanyNoteAttachment(models.Model):
+    """Дополнительные вложения к заметке (несколько файлов)."""
+    note = models.ForeignKey(
+        CompanyNote,
+        verbose_name="Заметка",
+        on_delete=models.CASCADE,
+        related_name="note_attachments",
+    )
+    file = models.FileField("Файл", upload_to="company_notes/%Y/%m/%d/")
+    file_name = models.CharField("Имя файла", max_length=255, blank=True, default="")
+    file_ext = models.CharField("Расширение", max_length=16, blank=True, default="", db_index=True)
+    file_size = models.BigIntegerField("Размер (байт)", default=0)
+    content_type = models.CharField("MIME тип", max_length=120, blank=True, default="")
+    order = models.PositiveSmallIntegerField("Порядок", default=0, db_index=True)
+
+    class Meta:
+        ordering = ["order", "id"]
+        verbose_name = "Вложение заметки"
+        verbose_name_plural = "Вложения заметок"
+
+    def save(self, *args, **kwargs):
+        if self.file and not self.file_name:
+            self.file_name = (getattr(self.file, "name", "") or "").split("/")[-1].split("\\")[-1]
+        if self.file and not self.file_ext:
+            self.file_ext = _safe_ext(self.file_name or getattr(self.file, "name", ""))
+        if self.file and not self.file_size:
+            self.file_size = int(getattr(self.file, "size", 0) or 0)
+        if self.file and not self.content_type:
+            self.content_type = (getattr(self.file, "content_type", "") or "").strip()[:120]
+        super().save(*args, **kwargs)
+
+
 class CompanyDeal(models.Model):
     """
     Простая фиксация "сделок" по компании для менеджеров.
