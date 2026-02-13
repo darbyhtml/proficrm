@@ -1,0 +1,36 @@
+{% comment %}
+  Параметры: open_url, download_url, filename, size, ext (верхний регистр: PDF, DOC, IMG...), is_image, editable (bool).
+  Для режима просмотра: editable=False, клик открывает (картинка — модалка, PDF — новая вкладка, остальные — скачать).
+  Для режима редактирования/создания: editable=True, показывается крестик при наведении, data-remove или data-index для удаления.
+{% endcomment %}
+<div class="note-attachment-card {% if editable %}note-attachment-card--editable{% endif %}"
+     data-open="{{ open_url|default:'' }}"
+     data-download="{{ download_url|default:'' }}"
+     data-is-image="{% if is_image %}1{% else %}0{% endif %}"
+     data-is-pdf="{% if ext == 'PDF' %}1{% else %}0{% endif %}"
+     title="{{ filename|default:'Файл' }}{% if size %} · {{ size }}{% endif %}"
+     {% if not editable %}role="button" tabindex="0"{% endif %}>
+  {% if editable %}
+    <button type="button" class="note-attachment-card__delete" aria-label="Удалить вложение" data-note-attachment-remove>&times;</button>
+  {% endif %}
+  <div class="note-attachment-card__preview">
+    {% if is_image %}
+      <img src="{{ open_url }}" alt="" loading="lazy" />
+    {% else %}
+      <div class="note-attachment-card__icon note-attachment-card__icon--{% if ext == 'PDF' %}pdf{% elif ext == 'DOC' or ext == 'DOCX' %}doc{% elif ext == 'XLS' or ext == 'XLSX' %}xls{% elif ext == 'PPT' or ext == 'PPTX' %}ppt{% else %}file{% endif %}">
+        {% if ext == 'PDF' %}
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2 5 5h-5V4zm-2 8v4H9v-4H7v6h10v-6h-2zm-2-2h2v2H9v-2z"/></svg>
+        {% elif ext == 'DOC' or ext == 'DOCX' %}
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 16H6V4h7v5h5v9zm-3-5H9v2h2v2H9v2h2v-2h2v-2h-2v-2z"/></svg>
+        {% elif ext == 'XLS' or ext == 'XLSX' %}
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1 11h-4v2h4v2h-4v2h2v-1h2v-4h-2v1h-2v-2zm-2-5V4h5l-5 5z"/></svg>
+        {% elif ext == 'PPT' or ext == 'PPTX' %}
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1 9h-2v4h2v-1h1c.55 0 1-.45 1-1v-1c0-.55-.45-1-1-1h-2v-1zm0-5V4h5l-5 5z"/></svg>
+        {% else %}
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><path d="M14 2v6h6"/></svg>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+  <div class="note-attachment-card__name">{{ filename|default:"Файл" }}</div>
+</div>

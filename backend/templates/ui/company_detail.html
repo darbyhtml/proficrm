@@ -36,6 +36,88 @@
     }
     .note-files-zone:hover { background: rgba(1, 148, 142, 0.08); border-color: rgba(1, 148, 142, 0.5); }
     .note-files-zone.has-files { border-style: solid; background: rgba(194, 226, 222, 0.15); }
+
+    /* Карточки вложений (компактные, по макету) */
+    .note-attachment-cards { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+    .note-attachment-card {
+      position: relative;
+      width: 5.5rem;
+      flex-shrink: 0;
+      background: #fff;
+      border: 1px solid rgba(194, 226, 222, 0.8);
+      border-radius: 0.5rem;
+      overflow: hidden;
+      cursor: pointer;
+      transition: box-shadow 0.2s, border-color 0.2s;
+    }
+    .note-attachment-card:hover { border-color: rgba(1, 148, 142, 0.5); box-shadow: 0 2px 8px rgba(0, 61, 56, 0.08); }
+    .note-attachment-card__preview {
+      width: 100%;
+      height: 4rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(194, 226, 222, 0.15);
+      overflow: hidden;
+    }
+    .note-attachment-card__preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .note-attachment-card__icon {
+      width: 100%;
+      height: 4rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(194, 226, 222, 0.2);
+      color: var(--brand-dark);
+    }
+    .note-attachment-card__icon svg { width: 2rem; height: 2rem; }
+    .note-attachment-card__icon--pdf { color: #b91c1c; }
+    .note-attachment-card__icon--doc { color: #1d4ed8; }
+    .note-attachment-card__icon--xls { color: #15803d; }
+    .note-attachment-card__icon--ppt { color: #c2410c; }
+    .note-attachment-card__icon--img { color: #01948E; }
+    .note-attachment-card__icon--file { color: #475569; }
+    .note-attachment-card__name {
+      padding: 0.35rem 0.4rem;
+      font-size: 0.6875rem;
+      line-height: 1.2;
+      color: var(--brand-dark);
+      text-align: center;
+      word-break: break-all;
+      max-height: 2.4em;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .note-attachment-card--editable .note-attachment-card__delete {
+      position: absolute;
+      top: 0.15rem;
+      right: 0.15rem;
+      width: 1.25rem;
+      height: 1.25rem;
+      border-radius: 50%;
+      background: rgba(0, 61, 56, 0.75);
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      line-height: 1;
+      opacity: 0;
+      transition: opacity 0.15s;
+      z-index: 2;
+    }
+    .note-attachment-card--editable:hover .note-attachment-card__delete { opacity: 1; }
+    .note-attachment-card__delete:hover { background: #b91c1c; }
+    .note-attachments-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem; }
+    .note-attachments-header .note-attachment-card { cursor: default; }
   </style>
   <!-- Классический режим (текущий layout) -->
   <div id="companyDetailClassic" class="{% if detail_view_mode != 'classic' %}hidden{% endif %}">
@@ -215,30 +297,24 @@
                 {% endif %}
               </div>
               {% if pinned_note.attachment or pinned_note.note_attachments.all %}
-                <div class="mt-3 pt-3 border-t border-brand-soft/50 flex flex-wrap gap-2">
+                <div class="mt-3 pt-3 border-t border-brand-soft/50 note-attachment-cards">
                   {% if pinned_note.attachment %}
-                    <div class="inline-flex items-center gap-2 rounded-lg bg-brand-soft/20 border border-brand-soft/60 px-3 py-2 text-sm">
-                      <span class="text-brand-dark/70 font-medium truncate max-w-[140px]">{{ pinned_note.attachment_name|default:"Файл" }}</span>
-                      <span class="text-xs text-brand-dark/50">{{ pinned_note.attachment_size|filesizeformat }}</span>
-                      <span class="flex gap-1 shrink-0">
-                        {% with ext=pinned_note.attachment_ext|upper %}
-                          {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
-                            <button type="button" class="text-brand-teal hover:underline text-xs js-image-open" data-img-url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/open/" data-img-download="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/download/" data-img-title="{{ pinned_note.attachment_name|default:'Изображение' }}">Открыть</button>
-                          {% else %}
-                            <a class="text-brand-teal hover:underline text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/open/">Открыть</a>
-                          {% endif %}
-                        {% endwith %}
-                        <a class="text-brand-teal hover:underline text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/download/">Скачать</a>
-                      </span>
-                    </div>
+                    {% with ext=pinned_note.attachment_ext|upper %}
+                      {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
+                        {% include "ui/partials/company_note_attachment_card.html" with open_url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/open/" download_url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/download/" filename=pinned_note.attachment_name|default:"Файл" size=pinned_note.attachment_size|filesizeformat ext=ext is_image=True editable=False %}
+                      {% else %}
+                        {% include "ui/partials/company_note_attachment_card.html" with open_url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/open/" download_url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/file/download/" filename=pinned_note.attachment_name|default:"Файл" size=pinned_note.attachment_size|filesizeformat ext=ext is_image=False editable=False %}
+                      {% endif %}
+                    {% endwith %}
                   {% endif %}
                   {% for att in pinned_note.note_attachments.all %}
-                    <div class="inline-flex items-center gap-2 rounded-lg bg-brand-soft/20 border border-brand-soft/60 px-3 py-2 text-sm">
-                      <span class="text-brand-dark/70 font-medium truncate max-w-[140px]">{{ att.file_name|default:"Файл" }}</span>
-                      <span class="text-xs text-brand-dark/50">{{ att.file_size|filesizeformat }}</span>
-                      <a class="text-brand-teal hover:underline text-xs shrink-0" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/attachments/{{ att.id }}/open/">Открыть</a>
-                      <a class="text-brand-teal hover:underline text-xs shrink-0" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/attachments/{{ att.id }}/download/">Скачать</a>
-                    </div>
+                    {% with ext=att.file_ext|upper %}
+                      {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
+                        {% include "ui/partials/company_note_attachment_card.html" with open_url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/attachments/{{ att.id }}/open/" download_url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/attachments/{{ att.id }}/download/" filename=att.file_name size=att.file_size|filesizeformat ext=ext is_image=True editable=False %}
+                      {% else %}
+                        {% include "ui/partials/company_note_attachment_card.html" with open_url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/attachments/{{ att.id }}/open/" download_url="/companies/{{ company.id }}/notes/{{ pinned_note.id }}/attachments/{{ att.id }}/download/" filename=att.file_name size=att.file_size|filesizeformat ext=ext is_image=False editable=False %}
+                      {% endif %}
+                    {% endwith %}
                   {% endfor %}
                 </div>
               {% endif %}
@@ -1507,15 +1583,19 @@
             <div class="note-files-zone rounded-xl p-4" id="noteAddFilesZone">
               <input id="noteFile" type="file" name="attachment" class="hidden" />
               <input id="noteFilesMultiple" type="file" name="attachments" multiple class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv" />
+              <div class="note-attachments-header">
+                <span class="text-xs font-medium text-brand-dark/70">Вложения</span>
+                <span class="text-xs text-brand-dark/50" id="noteAddFilesSummary"></span>
+                <button type="button" class="text-xs text-brand-teal hover:underline hidden" id="noteAddFilesRemoveAll" title="Удалить все">Удалить все</button>
+              </div>
               <div class="flex flex-wrap items-center gap-2">
                 <label class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-brand-soft/80 text-brand-dark/80 hover:bg-brand-soft/30 cursor-pointer transition-colors text-sm font-medium" for="noteFilesMultiple" id="noteAttachMultipleLabel">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                   Прикрепить файлы
                 </label>
                 <button type="button" class="hidden p-2 rounded-lg hover:bg-brand-soft/30 text-brand-dark/60" id="noteAttachBtn" title="Один файл (альт.)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></button>
-                <span class="text-xs text-brand-dark/50" id="noteFilesMultipleNames"></span>
               </div>
-              <div id="noteAddFileChips" class="flex flex-wrap gap-2 mt-3"></div>
+              <div id="noteAddFileChips" class="note-attachment-cards mt-3"></div>
               <p class="text-xs text-brand-dark/50 mt-2">PDF, DOC, XLS, изображения и др. До 15 МБ. Можно выбрать несколько.</p>
             </div>
             <div class="flex gap-2">
@@ -1559,8 +1639,10 @@
                       data-note-id="{{ n.id }}"
                       data-note-text="{{ n.text|default:'' }}"
                       data-note-file="{{ n.attachment_name|default:'' }}"
+                      data-note-main-ext="{{ n.attachment_ext|upper }}"
                       data-note-attachment-ids="{% for att in n.note_attachments.all %}{{ att.id }}{% if not forloop.last %},{% endif %}{% endfor %}"
                       data-note-attachment-names="{% for att in n.note_attachments.all %}{{ att.file_name|default:'Файл' }}{% if not forloop.last %}|||{% endif %}{% endfor %}"
+                      data-note-attachment-exts="{% for att in n.note_attachments.all %}{{ att.file_ext|upper }}{% if not forloop.last %}|||{% endif %}{% endfor %}"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                         <path d="M12 20h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -1584,28 +1666,24 @@
               </div>
               <div class="text-sm whitespace-pre-line wrap-anywhere" data-note-body>{{ n.text }}</div>
               {% if n.attachment or n.note_attachments.all %}
-                <div class="mt-2 flex flex-wrap gap-2">
+                <div class="mt-2 note-attachment-cards">
                   {% if n.attachment %}
-                    <div class="note-file-chip">
-                      <span class="truncate max-w-[140px]" title="{{ n.attachment_name|default:'Файл' }}">{{ n.attachment_name|default:"Файл" }}</span>
-                      <span class="text-brand-dark/50 text-xs">{{ n.attachment_size|filesizeformat }}</span>
-                      {% with ext=n.attachment_ext|upper %}
-                        {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
-                          <button type="button" class="note-file-link text-xs js-image-open" data-img-url="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/" data-img-download="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/" data-img-title="{{ n.attachment_name|default:'Изображение' }}">Открыть</button>
-                        {% else %}
-                          <a class="note-file-link text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/">Открыть</a>
-                        {% endif %}
-                      {% endwith %}
-                      <a class="note-file-link text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/">Скачать</a>
-                    </div>
+                    {% with ext=n.attachment_ext|upper %}
+                      {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
+                        {% include "ui/partials/company_note_attachment_card.html" with open_url="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/" download_url="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/" filename=n.attachment_name|default:"Файл" size=n.attachment_size|filesizeformat ext=ext is_image=True editable=False %}
+                      {% else %}
+                        {% include "ui/partials/company_note_attachment_card.html" with open_url="/companies/{{ company.id }}/notes/{{ n.id }}/file/open/" download_url="/companies/{{ company.id }}/notes/{{ n.id }}/file/download/" filename=n.attachment_name|default:"Файл" size=n.attachment_size|filesizeformat ext=ext is_image=False editable=False %}
+                      {% endif %}
+                    {% endwith %}
                   {% endif %}
                   {% for att in n.note_attachments.all %}
-                    <div class="note-file-chip">
-                      <span class="truncate max-w-[140px]" title="{{ att.file_name|default:'Файл' }}">{{ att.file_name|default:"Файл" }}</span>
-                      <span class="text-brand-dark/50 text-xs">{{ att.file_size|filesizeformat }}</span>
-                      <a class="note-file-link text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/attachments/{{ att.id }}/open/">Открыть</a>
-                      <a class="note-file-link text-xs" target="_blank" rel="noopener" href="/companies/{{ company.id }}/notes/{{ n.id }}/attachments/{{ att.id }}/download/">Скачать</a>
-                    </div>
+                    {% with ext=att.file_ext|upper %}
+                      {% if ext == "PNG" or ext == "JPG" or ext == "JPEG" or ext == "GIF" or ext == "WEBP" %}
+                        {% include "ui/partials/company_note_attachment_card.html" with open_url="/companies/{{ company.id }}/notes/{{ n.id }}/attachments/{{ att.id }}/open/" download_url="/companies/{{ company.id }}/notes/{{ n.id }}/attachments/{{ att.id }}/download/" filename=att.file_name size=att.file_size|filesizeformat ext=ext is_image=True editable=False %}
+                      {% else %}
+                        {% include "ui/partials/company_note_attachment_card.html" with open_url="/companies/{{ company.id }}/notes/{{ n.id }}/attachments/{{ att.id }}/open/" download_url="/companies/{{ company.id }}/notes/{{ n.id }}/attachments/{{ att.id }}/download/" filename=att.file_name size=att.file_size|filesizeformat ext=ext is_image=False editable=False %}
+                      {% endif %}
+                    {% endwith %}
                   {% endfor %}
                 </div>
               {% endif %}
@@ -1629,17 +1707,21 @@
             </div>
             <button type="button" class="btn btn-outline btn-sm" data-close-noteedit aria-label="Закрыть" title="Закрыть">✕</button>
           </div>
-          <form method="post" id="noteEditForm" class="mt-3 space-y-4" enctype="multipart/form-data">
+          <form method="post" id="noteEditForm" class="mt-3 space-y-4" enctype="multipart/form-data" data-company-id="{{ company.id }}">
             {% csrf_token %}
             <div>
               <label class="block text-xs font-medium text-brand-dark/70 mb-1">Текст</label>
               <textarea name="text" id="noteEditText" class="textarea" rows="5" placeholder="Текст заметки..."></textarea>
             </div>
             <div class="note-files-zone rounded-xl p-4">
-              <div class="text-xs font-medium text-brand-dark/70 mb-2">Вложения</div>
-              <div id="noteEditFileCurrent" class="text-sm text-brand-dark/80 mb-2">Основной файл: не выбран</div>
+              <div class="note-attachments-header">
+                <span class="text-xs font-medium text-brand-dark/70">Вложения</span>
+                <button type="button" class="text-xs text-brand-teal hover:underline hidden" id="noteEditRemoveAllBtn" title="Удалить все">Удалить все</button>
+              </div>
+              <div id="noteEditExistingCards" class="note-attachment-cards mt-2"></div>
+              <div id="noteEditFileCurrent" class="text-sm text-brand-dark/80 mt-2 hidden">Основной файл: не выбран</div>
               <div id="noteEditFileSelected" class="text-xs text-brand-teal mb-2 hidden"></div>
-              <div class="flex flex-wrap items-center gap-2">
+              <div class="flex flex-wrap items-center gap-2 mt-2">
                 <label class="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-brand-soft/80 text-brand-dark/80 hover:bg-brand-soft/30 cursor-pointer transition-colors text-sm font-medium" for="noteEditFile">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                   Заменить основной файл
@@ -1650,17 +1732,15 @@
                 </label>
                 <input type="file" name="attachments" multiple id="noteEditFilesMultiple" class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv" />
               </div>
-              <div class="mt-2 flex items-center gap-2" id="noteEditRemoveRow">
+              <div class="mt-2 flex items-center gap-2 hidden" id="noteEditRemoveRow">
                 <label class="inline-flex items-center gap-2 text-xs cursor-pointer">
                   <input type="checkbox" id="noteEditRemoveFile" />
                   <span class="text-brand-dark/70">Удалить основной файл при сохранении</span>
                 </label>
                 <input type="hidden" name="remove_attachment" id="noteEditRemoveHidden" value="0" />
               </div>
-              <div id="noteEditExtraAttachmentsList" class="flex flex-wrap gap-2 mt-3"></div>
               <input type="hidden" name="remove_attachment_ids" id="noteEditRemoveAttachmentIds" value="" />
-              <div id="noteEditNewFilesChips" class="flex flex-wrap gap-2 mt-2"></div>
-              <div id="noteEditFilesMultipleNames" class="text-xs text-brand-dark/50 mt-1"></div>
+              <div id="noteEditNewFilesChips" class="note-attachment-cards mt-2"></div>
             </div>
             <div class="flex gap-2">
               <button class="btn btn-primary" type="submit">Сохранить</button>
@@ -2117,55 +2197,125 @@
         let closeNoteEditClassic = null;
         if (noteEditModal && noteEditForm && noteEditText) {
           const closeBtns = noteEditModal.querySelectorAll('[data-close-noteedit]');
-          const noteEditExtraList = document.getElementById('noteEditExtraAttachmentsList');
+          const noteEditExistingCards = document.getElementById('noteEditExistingCards');
           const noteEditRemoveIds = document.getElementById('noteEditRemoveAttachmentIds');
           const noteEditFilesMulti = document.getElementById('noteEditFilesMultiple');
-          const noteEditFilesMultiNames = document.getElementById('noteEditFilesMultipleNames');
-          openNoteEditClassic = function(noteId, noteText, fileName, attachmentIdsStr, attachmentNamesStr) {
+          const noteEditRemoveAllBtn = document.getElementById('noteEditRemoveAllBtn');
+          const companyId = noteEditForm.getAttribute('data-company-id') || '{{ company.id }}';
+          var editIconSvg = { pdf: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2 5 5h-5V4zm-2 8v4H9v-4H7v6h10v-6h-2zm-2-2h2v2H9v-2z"/></svg>', doc: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 16H6V4h7v5h5v9zm-3-5H9v2h2v2H9v2h2v-2h2v-2h-2v-2z"/></svg>', xls: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1 11h-4v2h4v2h-4v2h2v-1h2v-4h-2v1h-2v-2zm-2-5V4h5l-5 5z"/></svg>', ppt: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1 9h-2v4h2v-1h1c.55 0 1-.45 1-1v-1c0-.55-.45-1-1-1h-2v-1zm0-5V4h5l-5 5z"/></svg>', file: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><path d="M14 2v6h6"/></svg>' };
+          function editIconClass(ext) { return ext === 'PDF' ? 'pdf' : (ext === 'DOC' || ext === 'DOCX') ? 'doc' : (ext === 'XLS' || ext === 'XLSX') ? 'xls' : (ext === 'PPT' || ext === 'PPTX') ? 'ppt' : 'file'; }
+          function editIsImage(ext) { return ['PNG','JPG','JPEG','GIF','WEBP'].indexOf(ext) >= 0; }
+          function updateEditRemoveAllVisibility() {
+            var hasExisting = noteEditExistingCards && noteEditExistingCards.children.length > 0;
+            var hasNew = noteEditFilesMulti && noteEditFilesMulti.files && noteEditFilesMulti.files.length > 0;
+            if (noteEditRemoveAllBtn) noteEditRemoveAllBtn.classList.toggle('hidden', !hasExisting && !hasNew);
+          }
+          openNoteEditClassic = function(noteId, noteText, fileName, attachmentIdsStr, attachmentNamesStr, mainExtStr, attachmentExtsStr) {
             noteEditForm.action = `/companies/{{ company.id }}/notes/${noteId}/edit/`;
             noteEditText.value = noteText || '';
             if (noteEditFile) noteEditFile.value = '';
             if (noteEditFileSelected) noteEditFileSelected.textContent = '';
             if (noteEditRemoveFile) noteEditRemoveFile.checked = false;
             if (noteEditRemoveHidden) noteEditRemoveHidden.value = '0';
-            if (noteEditFileCurrent) noteEditFileCurrent.innerHTML = fileName ? '<span class="note-file-chip inline-flex"><span class="truncate max-w-[180px]">' + (fileName.replace(/</g,'&lt;').replace(/"/g,'&quot;')) + '</span> (основной)</span>' : 'Основной файл: не выбран';
-            if (noteEditTitle) noteEditTitle.textContent = 'Редактировать заметку';
-            if (noteEditSubtitle) noteEditSubtitle.classList.remove('hidden');
-            if (noteEditRemoveRow) noteEditRemoveRow.style.display = 'flex';
+            if (noteEditFileCurrent) { noteEditFileCurrent.classList.add('hidden'); noteEditFileCurrent.innerHTML = 'Основной файл: не выбран'; }
+            if (noteEditRemoveRow) noteEditRemoveRow.classList.add('hidden');
             if (noteEditRemoveIds) noteEditRemoveIds.value = '';
             if (noteEditFilesMulti) noteEditFilesMulti.value = '';
-            if (noteEditFilesMultiNames) noteEditFilesMultiNames.textContent = '';
             const ids = (attachmentIdsStr || '').split(',').map(s => s.trim()).filter(Boolean);
             const names = (attachmentNamesStr || '').split('|||').map(s => s.trim());
-            if (noteEditExtraList) {
-              noteEditExtraList.innerHTML = '';
-              ids.forEach((id, i) => {
-                const name = names[i] || 'Файл';
-                const label = document.createElement('label');
-                label.className = 'note-file-chip inline-flex items-center gap-2 cursor-pointer';
-                const cb = document.createElement('input');
-                cb.type = 'checkbox';
-                cb.className = 'note-edit-remove-attachment';
-                cb.dataset.attachmentId = id;
-                cb.addEventListener('change', () => {
-                  if (!noteEditRemoveIds) return;
-                  const checked = noteEditExtraList.querySelectorAll('.note-edit-remove-attachment:checked');
-                  noteEditRemoveIds.value = Array.from(checked).map(c => c.dataset.attachmentId).join(',');
-                });
-                label.appendChild(cb);
-                var sp = document.createElement('span');
-                sp.textContent = name;
-                label.appendChild(sp);
-                var sp2 = document.createElement('span');
-                sp2.className = 'text-brand-dark/50 text-xs';
-                sp2.textContent = ' (удалить)';
-                label.appendChild(sp2);
-                noteEditExtraList.appendChild(label);
+            const exts = (attachmentExtsStr || '').split('|||').map(s => s.trim().toUpperCase());
+            const mainExt = (mainExtStr || '').toUpperCase();
+            if (noteEditExistingCards) {
+              noteEditExistingCards.innerHTML = '';
+              noteEditExistingCards.dataset.extraIds = ids.join(',');
+              noteEditExistingCards.dataset.noteId = noteId;
+              if (fileName) {
+                var openUrl = '/companies/' + companyId + '/notes/' + noteId + '/file/open/';
+                var downloadUrl = '/companies/' + companyId + '/notes/' + noteId + '/file/download/';
+                var isImg = editIsImage(mainExt);
+                var ic = editIconClass(mainExt);
+                var prev = isImg ? '<div class="note-attachment-card__preview"><img src="' + openUrl + '" alt="" /></div>' : '<div class="note-attachment-card__preview"><div class="note-attachment-card__icon note-attachment-card__icon--' + ic + '">' + (editIconSvg[ic] || editIconSvg.file) + '</div></div>';
+                var mainCard = document.createElement('div');
+                mainCard.className = 'note-attachment-card note-attachment-card--editable';
+                mainCard.dataset.main = '1';
+                mainCard.innerHTML = '<button type="button" class="note-attachment-card__delete" aria-label="Удалить вложение" data-note-attachment-remove></button>' + prev + '<div class="note-attachment-card__name">' + (fileName.replace(/</g,'&lt;').replace(/"/g,'&quot;')) + '</div>';
+                mainCard.querySelector('[data-note-attachment-remove]').textContent = '\u00D7';
+                mainCard.querySelector('[data-note-attachment-remove]').addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); if (noteEditRemoveFile) noteEditRemoveFile.checked = true; if (noteEditRemoveHidden) noteEditRemoveHidden.value = '1'; mainCard.remove(); updateEditRemoveAllVisibility(); });
+                noteEditExistingCards.appendChild(mainCard);
+              }
+              ids.forEach(function(id, i) {
+                var name = names[i] || 'Файл';
+                var ext = exts[i] || '';
+                var openUrl = '/companies/' + companyId + '/notes/' + noteId + '/attachments/' + id + '/open/';
+                var downloadUrl = '/companies/' + companyId + '/notes/' + noteId + '/attachments/' + id + '/download/';
+                var isImg = editIsImage(ext);
+                var ic = editIconClass(ext);
+                var prev = isImg ? '<div class="note-attachment-card__preview"><img src="' + openUrl + '" alt="" /></div>' : '<div class="note-attachment-card__preview"><div class="note-attachment-card__icon note-attachment-card__icon--' + ic + '">' + (editIconSvg[ic] || editIconSvg.file) + '</div></div>';
+                var card = document.createElement('div');
+                card.className = 'note-attachment-card note-attachment-card--editable';
+                card.dataset.attachmentId = id;
+                card.innerHTML = '<button type="button" class="note-attachment-card__delete" aria-label="Удалить вложение" data-note-attachment-remove></button>' + prev + '<div class="note-attachment-card__name">' + (name.replace(/</g,'&lt;').replace(/"/g,'&quot;')) + '</div>';
+                card.querySelector('[data-note-attachment-remove]').textContent = '\u00D7';
+                card.querySelector('[data-note-attachment-remove]').addEventListener('click', function(e) { e.preventDefault(); e.stopPropagation(); var cur = (noteEditRemoveIds.value || '').split(',').filter(Boolean); cur.push(id); noteEditRemoveIds.value = cur.join(','); card.remove(); updateEditRemoveAllVisibility(); });
+                noteEditExistingCards.appendChild(card);
               });
+            }
+            renderEditNewFilesCards();
+            updateEditRemoveAllVisibility();
+            if (noteEditRemoveAllBtn) {
+              noteEditRemoveAllBtn.onclick = function() {
+                if (noteEditRemoveFile) noteEditRemoveFile.checked = true;
+                if (noteEditRemoveHidden) noteEditRemoveHidden.value = '1';
+                if (noteEditRemoveIds && noteEditExistingCards && noteEditExistingCards.dataset.extraIds) noteEditRemoveIds.value = noteEditExistingCards.dataset.extraIds;
+                if (noteEditFilesMulti) noteEditFilesMulti.value = '';
+                if (noteEditExistingCards) noteEditExistingCards.innerHTML = '';
+                var newWrap = document.getElementById('noteEditNewFilesChips');
+                if (newWrap) newWrap.innerHTML = '';
+                updateEditRemoveAllVisibility();
+              };
             }
             noteEditModal.classList.remove('hidden');
             setTimeout(() => { try{ noteEditText.focus(); }catch(_e){} }, 0);
           };
+          function renderEditNewFilesCards() {
+            var newWrap = document.getElementById('noteEditNewFilesChips');
+            if (!newWrap || !noteEditFilesMulti) return;
+            var files = noteEditFilesMulti.files ? Array.prototype.slice.call(noteEditFilesMulti.files) : [];
+            newWrap.innerHTML = '';
+            var extFromName = function(n){ var m=(n||'').match(/\.([^.]+)$/); return (m?m[1]:'').toUpperCase(); };
+            var formatSize = function(b){ if(!b) return ''; if(b<1024) return b+' Б'; if(b<1024*1024) return (b/1024).toFixed(1)+' КБ'; return (b/1024/1024).toFixed(1)+' МБ'; };
+            files.forEach(function(f, idx) {
+              var name = f.name || 'Файл';
+              var ext = extFromName(name);
+              var isImg = editIsImage(ext) || (f.type && f.type.indexOf('image/') === 0);
+              var card = document.createElement('div');
+              card.className = 'note-attachment-card note-attachment-card--editable';
+              card.setAttribute('data-edit-new-index', idx);
+              var prev;
+              if (isImg && typeof URL !== 'undefined' && URL.createObjectURL) {
+                var u = URL.createObjectURL(f);
+                prev = '<div class="note-attachment-card__preview"><img src="' + u + '" alt="" /></div>';
+                card._objUrl = u;
+              } else {
+                var ic = editIconClass(ext);
+                prev = '<div class="note-attachment-card__preview"><div class="note-attachment-card__icon note-attachment-card__icon--' + ic + '">' + (editIconSvg[ic] || editIconSvg.file) + '</div></div>';
+              }
+              card.innerHTML = '<button type="button" class="note-attachment-card__delete" aria-label="Удалить вложение" data-note-attachment-remove></button>' + prev + '<div class="note-attachment-card__name">' + (name.replace(/</g,'&lt;').replace(/"/g,'&quot;')) + '</div>';
+              card.querySelector('[data-note-attachment-remove]').textContent = '\u00D7';
+              card.querySelector('[data-note-attachment-remove]').addEventListener('click', function(e) {
+                e.preventDefault(); e.stopPropagation();
+                if (card._objUrl && URL.revokeObjectURL) URL.revokeObjectURL(card._objUrl);
+                var list = Array.prototype.slice.call(noteEditFilesMulti.files);
+                var i = parseInt(card.getAttribute('data-edit-new-index'), 10);
+                if (i >= 0 && i < list.length) { list.splice(i, 1); var dt = new DataTransfer(); list.forEach(function(x){ dt.items.add(x); }); noteEditFilesMulti.files = dt.files; }
+                renderEditNewFilesCards();
+                updateEditRemoveAllVisibility();
+              });
+              newWrap.appendChild(card);
+            });
+            updateEditRemoveAllVisibility();
+          }
+          if (noteEditFilesMulti) noteEditFilesMulti.addEventListener('change', renderEditNewFilesCards);
 
           closeNoteEditClassic = function() { noteEditModal.classList.add('hidden'); };
 
@@ -2370,14 +2520,14 @@
         };
 
         // Единая точка входа: редактирование заметки (modern → modern-модалка, classic → classic-модалка)
-        window.openNoteEditSmart = function(noteId, noteText, fileName, sourceEl, attachmentIdsStr, attachmentNamesStr) {
+        window.openNoteEditSmart = function(noteId, noteText, fileName, sourceEl, attachmentIdsStr, attachmentNamesStr, mainExtStr, attachmentExtsStr) {
           const fromModern = !!(sourceEl && sourceEl.closest && sourceEl.closest('#companyDetailModern'));
           if ((isModernActive() || fromModern) && typeof openNoteEditModern === 'function') {
             openNoteEditModern(noteId, noteText, fileName, attachmentIdsStr, attachmentNamesStr);
             return;
           }
           if (typeof openNoteEditClassic === 'function') {
-            openNoteEditClassic(noteId, noteText, fileName, attachmentIdsStr, attachmentNamesStr);
+            openNoteEditClassic(noteId, noteText, fileName, attachmentIdsStr, attachmentNamesStr, mainExtStr, attachmentExtsStr);
           }
         };
 
@@ -2391,7 +2541,9 @@
           const fn = btn.getAttribute('data-note-file') || '';
           const attIds = btn.getAttribute('data-note-attachment-ids') || '';
           const attNames = btn.getAttribute('data-note-attachment-names') || '';
-          if (id && window.openNoteEditSmart) window.openNoteEditSmart(id, txt, fn, btn, attIds, attNames);
+          const mainExt = btn.getAttribute('data-note-main-ext') || '';
+          const attExts = btn.getAttribute('data-note-attachment-exts') || '';
+          if (id && window.openNoteEditSmart) window.openNoteEditSmart(id, txt, fn, btn, attIds, attNames, mainExt, attExts);
         });
 
         // Делегирование клика по кнопкам добавления заметки (modern)
@@ -2646,25 +2798,101 @@
       (function(){
         const input = document.getElementById('noteFile');
         const inputMulti = document.getElementById('noteFilesMultiple');
-        const nameMulti = document.getElementById('noteFilesMultipleNames');
         const zone = document.getElementById('noteAddFilesZone');
-        const chipsWrap = document.getElementById('noteAddFileChips');
-        if (inputMulti) {
-          inputMulti.addEventListener('change', function() {
-            const files = inputMulti.files || [];
-            if (nameMulti) nameMulti.textContent = files.length ? 'Выбрано: ' + files.length + ' файл(ов)' : '';
-            if (zone) zone.classList.toggle('has-files', files.length > 0);
-            if (chipsWrap) {
-              chipsWrap.innerHTML = '';
-              for (var i = 0; i < files.length; i++) {
-                var f = files[i];
-                var size = f.size ? (f.size < 1024 ? f.size + ' Б' : (f.size < 1024*1024 ? (f.size/1024).toFixed(1) + ' КБ' : (f.size/1024/1024).toFixed(1) + ' МБ')) : '';
-                var chip = document.createElement('span');
-                chip.className = 'note-file-chip';
-                chip.innerHTML = '<span class="truncate max-w-[160px]" title="' + (f.name || '').replace(/"/g, '&quot;') + '">' + (f.name || 'Файл') + '</span>' + (size ? ' <span class="text-brand-dark/50 text-xs">' + size + '</span>' : '');
-                chipsWrap.appendChild(chip);
-              }
+        const cardsWrap = document.getElementById('noteAddFileChips');
+        const summaryEl = document.getElementById('noteAddFilesSummary');
+        const removeAllBtn = document.getElementById('noteAddFilesRemoveAll');
+
+        function extFromName(name) {
+          var m = (name || '').match(/\.([^.]+)$/);
+          return (m ? m[1] : '').toUpperCase();
+        }
+        function isImageExt(ext) {
+          return ['PNG','JPG','JPEG','GIF','WEBP'].indexOf(ext) >= 0;
+        }
+        function formatSize(bytes) {
+          if (!bytes) return '';
+          if (bytes < 1024) return bytes + ' Б';
+          if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' КБ';
+          return (bytes/1024/1024).toFixed(1) + ' МБ';
+        }
+        function iconClass(ext) {
+          if (ext === 'PDF') return 'pdf';
+          if (ext === 'DOC' || ext === 'DOCX') return 'doc';
+          if (ext === 'XLS' || ext === 'XLSX') return 'xls';
+          if (ext === 'PPT' || ext === 'PPTX') return 'ppt';
+          return 'file';
+        }
+        var iconSvg = {
+          pdf: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2 5 5h-5V4zm-2 8v4H9v-4H7v6h10v-6h-2zm-2-2h2v2H9v-2z"/></svg>',
+          doc: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 16H6V4h7v5h5v9zm-3-5H9v2h2v2H9v2h2v-2h2v-2h-2v-2z"/></svg>',
+          xls: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1 11h-4v2h4v2h-4v2h2v-1h2v-4h-2v1h-2v-2zm-2-5V4h5l-5 5z"/></svg>',
+          ppt: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1 9h-2v4h2v-1h1c.55 0 1-.45 1-1v-1c0-.55-.45-1-1-1h-2v-1zm0-5V4h5l-5 5z"/></svg>',
+          file: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><path d="M14 2v6h6"/></svg>'
+        };
+
+        function renderAddCards() {
+          if (!cardsWrap) return;
+          var files = inputMulti && inputMulti.files ? Array.prototype.slice.call(inputMulti.files) : [];
+          cardsWrap.innerHTML = '';
+          if (summaryEl) summaryEl.textContent = files.length ? files.length + ' файл(ов)' : '';
+          if (removeAllBtn) { removeAllBtn.classList.toggle('hidden', files.length === 0); }
+          if (zone) zone.classList.toggle('has-files', files.length > 0);
+          files.forEach(function(f, idx) {
+            var name = f.name || 'Файл';
+            var ext = extFromName(name);
+            var size = formatSize(f.size);
+            var isImg = isImageExt(ext) || (f.type && f.type.indexOf('image/') === 0);
+            var card = document.createElement('div');
+            card.className = 'note-attachment-card note-attachment-card--editable';
+            card.setAttribute('data-index', idx);
+            var previewHtml;
+            if (isImg && typeof URL !== 'undefined' && URL.createObjectURL) {
+              var objUrl = URL.createObjectURL(f);
+              previewHtml = '<div class="note-attachment-card__preview"><img src="' + objUrl + '" alt="" /></div>';
+              card._objUrl = objUrl;
+            } else {
+              var ic = iconClass(ext);
+              previewHtml = '<div class="note-attachment-card__preview"><div class="note-attachment-card__icon note-attachment-card__icon--' + ic + '">' + (iconSvg[ic] || iconSvg.file) + '</div></div>';
             }
+            card.innerHTML = '<button type="button" class="note-attachment-card__delete" aria-label="Удалить вложение" data-note-attachment-remove>&times;</button>' +
+              previewHtml +
+              '<div class="note-attachment-card__name" title="' + name.replace(/"/g, '&quot;') + '">' + (name.replace(/</g,'&lt;').replace(/"/g,'&quot;')) + '</div>';
+            cardsWrap.appendChild(card);
+          });
+        }
+
+        function removeFileAt(index) {
+          if (!inputMulti || !inputMulti.files) return;
+          var files = Array.prototype.slice.call(inputMulti.files);
+          if (index < 0 || index >= files.length) return;
+          files.splice(index, 1);
+          var dt = new DataTransfer();
+          files.forEach(function(f) { dt.items.add(f); });
+          inputMulti.files = dt.files;
+          renderAddCards();
+        }
+
+        if (inputMulti) {
+          inputMulti.addEventListener('change', renderAddCards);
+        }
+        if (cardsWrap) {
+          cardsWrap.addEventListener('click', function(e) {
+            var btn = e.target.closest('[data-note-attachment-remove]');
+            if (!btn) return;
+            var card = btn.closest('.note-attachment-card');
+            if (!card) return;
+            e.preventDefault();
+            e.stopPropagation();
+            var idx = parseInt(card.getAttribute('data-index'), 10);
+            if (card._objUrl && typeof URL !== 'undefined' && URL.revokeObjectURL) URL.revokeObjectURL(card._objUrl);
+            removeFileAt(idx);
+          });
+        }
+        if (removeAllBtn) {
+          removeAllBtn.addEventListener('click', function() {
+            if (inputMulti) inputMulti.value = '';
+            renderAddCards();
           });
         }
         if (document.getElementById('noteAttachBtn') && input) {
@@ -4249,6 +4477,40 @@
           btn.getAttribute('data-img-download') || '',
           btn.getAttribute('data-img-title') || 'Изображение'
         );
+      });
+
+      // Клик по карточке вложения (режим просмотра): картинка — модалка, PDF — новая вкладка, остальные — скачать
+      document.addEventListener('click', function(e) {
+        if (e.target.closest('[data-note-attachment-remove]')) return;
+        const card = e.target.closest('.note-attachment-card:not(.note-attachment-card--editable)');
+        if (!card) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const openUrl = card.getAttribute('data-open') || '';
+        const downloadUrl = card.getAttribute('data-download') || openUrl;
+        const isImage = card.getAttribute('data-is-image') === '1';
+        const isPdf = card.getAttribute('data-is-pdf') === '1';
+        const title = card.querySelector('.note-attachment-card__name')?.textContent?.trim() || 'Файл';
+        if (isImage && openUrl) {
+          openImgModal(openUrl, downloadUrl, title);
+        } else if (isPdf && openUrl) {
+          window.open(openUrl, '_blank', 'noopener');
+        } else if (downloadUrl) {
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.setAttribute('download', '');
+          a.target = '_blank';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        }
+      });
+      document.addEventListener('keydown', function(e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const card = e.target.closest('.note-attachment-card:not(.note-attachment-card--editable)');
+        if (!card) return;
+        e.preventDefault();
+        card.click();
       });
 
       // Закрытие модалки
