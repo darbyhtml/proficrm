@@ -24,9 +24,16 @@ if [ ! -f ".env" ]; then
     exit 1
 fi
 
-# 2. Каталоги для static/media
+# 2. Каталоги для static/media (владелец 1000:1000 = crmuser в контейнере, иначе collectstatic/запись в media падают)
 mkdir -p data/staticfiles data/media
-chown 1000:1000 data/staticfiles data/media 2>/dev/null || true
+if ! chown -R 1000:1000 data/staticfiles data/media 2>/dev/null; then
+    if command -v sudo >/dev/null 2>&1; then
+        sudo chown -R 1000:1000 data/staticfiles data/media
+    else
+        echo "❌ Нет прав на data/staticfiles и data/media. От root выполните: chown -R 1000:1000 data/staticfiles data/media"
+        exit 1
+    fi
+fi
 
 # 3. Обновление кода
 echo "📥 Обновление кода..."
