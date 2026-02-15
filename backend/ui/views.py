@@ -6113,8 +6113,10 @@ def task_list(request: HttpRequest) -> HttpResponse:
         else:
             qs = qs.filter(status=status)
     else:
-        # По умолчанию не показываем выполненные задачи, чтобы они не мешали в списке.
-        if show_done != "1":
+        # Без выбранного статуса: галочка "Выполн." — только выполненные; иначе скрываем выполненные.
+        if show_done == "1":
+            qs = qs.filter(status=Task.Status.DONE)
+        else:
             qs = qs.exclude(status=Task.Status.DONE)
 
     mine = (request.GET.get("mine") or "").strip()
@@ -6156,11 +6158,15 @@ def task_list(request: HttpRequest) -> HttpResponse:
 
     overdue = (request.GET.get("overdue") or "").strip()
     if overdue == "1":
-        qs = qs.filter(due_at__lt=now).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+        qs = qs.filter(due_at__lt=now)
+        if show_done != "1":
+            qs = qs.exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
 
     today = (request.GET.get("today") or "").strip()
     if today == "1":
-        qs = qs.filter(due_at__gte=today_start, due_at__lt=tomorrow_start).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+        qs = qs.filter(due_at__gte=today_start, due_at__lt=tomorrow_start)
+        if show_done != "1":
+            qs = qs.exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
 
     # Фильтр по датам (date_from и date_to)
     date_from = (request.GET.get("date_from") or "").strip()
@@ -7220,13 +7226,14 @@ def _apply_task_filters_for_bulk_ui(qs, user: User, data):
             filters_summary.append("Статус: " + ", ".join(status_labels))
         has_restricting_filters = True
     else:
-        if show_done != "1":
-            qs = qs.exclude(status=Task.Status.DONE)
-            # Скрытие выполненных задач — это дефолтное поведение списка,
-            # считаем его не «сужающим фильтром» для предупреждения про широкую выборку.
-            filters_summary.append("Без выполненных задач")
+        # Без выбранного статуса: show_done=1 — только выполненные; иначе скрываем выполненные.
+        if show_done == "1":
+            qs = qs.filter(status=Task.Status.DONE)
+            filters_summary.append("Только выполненные задачи")
+            has_restricting_filters = True
         else:
-            filters_summary.append("Включая выполненные задачи")
+            qs = qs.exclude(status=Task.Status.DONE)
+            filters_summary.append("Без выполненных задач")
 
     # Флаг "Мои" (mine)
     mine = (data.get("mine") or "").strip()
@@ -7255,12 +7262,12 @@ def _apply_task_filters_for_bulk_ui(qs, user: User, data):
                 filters_summary.append(f"Исполнитель: {assignee}")
             has_restricting_filters = True
 
-    # Просрочено / сегодня
+    # Просрочено / сегодня (при show_done=1 не исключаем DONE, чтобы видеть выполненные по периоду)
     overdue = (data.get("overdue") or "").strip()
     if overdue == "1":
-        qs = qs.filter(due_at__lt=now).exclude(
-            status__in=[Task.Status.DONE, Task.Status.CANCELLED]
-        )
+        qs = qs.filter(due_at__lt=now)
+        if show_done != "1":
+            qs = qs.exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
         filters_summary.append("Только просроченные")
         has_restricting_filters = True
 
@@ -7269,7 +7276,9 @@ def _apply_task_filters_for_bulk_ui(qs, user: User, data):
         qs = qs.filter(
             due_at__gte=today_start,
             due_at__lt=tomorrow_start,
-        ).exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+        )
+        if show_done != "1":
+            qs = qs.exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
         filters_summary.append("Только на сегодня")
         has_restricting_filters = True
 

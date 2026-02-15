@@ -388,8 +388,8 @@ class TaskBulkFilterSummaryUnitTestCase(TestCase):
         self.assertIn("Период дедлайна:", summary_text)
         self.assertIn("Без выполненных задач", summary_text)
 
-    def test_apply_task_filters_for_bulk_ui_show_done_included(self):
-        """При show_done=1 выполненные задачи не отфильтровываются и summary отражает это."""
+    def test_apply_task_filters_for_bulk_ui_show_done_only(self):
+        """При show_done=1 без выбранного статуса показываются только выполненные задачи."""
         qs = Task.objects.all()
         params = {
             "status": "",
@@ -405,13 +405,12 @@ class TaskBulkFilterSummaryUnitTestCase(TestCase):
         qs_filtered, summary = ui_views._apply_task_filters_for_bulk_ui(qs, self.user, params)
         ids = set(qs_filtered.values_list("id", flat=True))
         self.assertIn(self.t_done.id, ids)
+        self.assertNotIn(self.t1.id, ids)
+        self.assertNotIn(self.t2.id, ids)
+        self.assertNotIn(self.t3.id, ids)
 
         summary_text = " | ".join(summary)
-        self.assertIn("Включая выполненные задачи", summary_text)
-        self.assertIn(
-            "Фильтры не ограничивают выборку (все доступные задачи).",
-            summary_text,
-        )
+        self.assertIn("Только выполненные задачи", summary_text)
 
     def test_empty_filters_summary_warns_unrestricted(self):
         """Пустые фильтры должны явно предупреждать, что выборка не ограничена."""
