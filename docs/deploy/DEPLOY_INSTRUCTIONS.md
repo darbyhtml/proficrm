@@ -40,7 +40,7 @@ Staging — в **отдельной папке** (`/opt/proficrm-staging`), чт
 |--|----------------------------------|----------------------------------------|
 | **Образ web** | python:3.13-slim, код монтируется с хоста | Сборка из Dockerfile, код внутри образа |
 | **Запуск** | runserver + pip install при старте | **gunicorn**, без монтирования кода |
-| **Статика/медиа** | volume `media`, static при старте | `./data/staticfiles`, `./data/media` (каталоги на хосте) |
+| **Статика/медиа** | volume `media`, static при старте | `./data/staticfiles`, `./data/media` (каталоги на хосте). Подробно: [PROD_FILES_PATHS.md](PROD_FILES_PATHS.md) — где хранятся файлы и картинки на проде. |
 | **Безопасность** | нет | healthcheck, cap_drop, no-new-privileges, лимиты памяти |
 | **Typesense** | есть | есть (добавлен в prod.yml) |
 | **Тома БД** | pgdata, redisdata, typesense_data | те же — при переходе **данные не теряются** |

@@ -56,8 +56,8 @@ if ! chmod -R u+rwX,g+rwX,o+rwX data/staticfiles data/media 2>/dev/null; then
     command -v sudo >/dev/null 2>&1 && sudo chmod -R u+rwX,g+rwX,o+rwX data/staticfiles data/media
 fi
 $COMPOSE run --rm web python manage.py collectstatic --noinput
-# Вернуть владельца 1000:1000 (crmuser в контейнере), чтобы web/celery могли писать в media/static при работе.
-$COMPOSE run --rm -u root --entrypoint "" web chown -R 1000:1000 /app/backend/staticfiles /app/backend/media 2>/dev/null || true
+# Вернуть владельца 1000:1000 (crmuser в контейнере). На bind-mount часто не выходит (Operation not permitted) — не падаем, лог не засоряем.
+$COMPOSE run --rm -u root --entrypoint "" web chown -R 1000:1000 /app/backend/staticfiles /app/backend/media >/dev/null 2>&1 || true
 
 # 5.1. Перестроение поискового индекса компаний (Postgres FTS)
 # Обязательно при первом деплое; при последующих деплоях сигналы обновляют индекс.
