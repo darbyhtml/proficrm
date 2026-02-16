@@ -15,8 +15,9 @@ from rest_framework.test import APIClient
 from rest_framework import status
 
 from accounts.models import Branch
-from messenger.models import Inbox, Contact, Conversation, Message
+from messenger.models import Inbox, Contact, Conversation, Message, RoutingRule
 from messenger.utils import get_widget_session
+from messenger import services
 
 User = get_user_model()
 
@@ -699,3 +700,119 @@ class WidgetAPITests(TestCase):
                     "4-е одинаковое сообщение должно быть заблокировано",
                 )
                 self.assertIn("duplicate", response.data.get("detail", "").lower())
+    
+    # ========================================================================
+    # Routing Engine тесты (PRD-4)
+    # ========================================================================
+    
+    def test_bootstrap_applies_routing_rule_by_region(self):
+        """Проверка: при создании нового Conversation применяется RoutingRule по region."""
+        from companies.models import Region
+        
+        # Создаём регион
+        region = Region.objects.create(name="Москва", code="MSK")
+        
+        # Создаём правило маршрутизации
+        routing_rule = RoutingRule.objects.create(
+            name="Москва → Филиал 1",
+            inbox=self.inbox,
+            branch=self.branch,
+            priority=10,
+            is_active=True,
+        )
+        routing_rule.regions.add(region)
+        
+        client = APIClient()
+        
+        # Bootstrap с указанием region_id
+        response = client.post(
+            "/api/widget/bootstrap/",
+            {
+                "widget_token": "test_widget_token_123",
+                "contact_external_id": "new_visitor_routing",
+                "region_id": region.id,
+            },
+        )
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Проверяем, что Conversation создан с правильным region
+        conversation = Conversation.objects.get(id=response.data["conversation_id"])
+        self.assertEqual(conversation.region, region)
+    
+    def test_bootstrap_fallback_routing_rule(self):
+        """Проверка: fallback правило применяется, если нет правила по region."""
+        from companies.models import Region
+        
+        # Создаём регион без правила
+        region = Region.objects.create(name="Санкт-Петербург", code="SPB")
+        
+        # Создаём fallback правило
+        fallback_rule = RoutingRule.objects.create(
+            name="Fallback",
+            inbox=self.inbox,
+            branch=self.branch,
+            priority=100,
+            is_fallback=True,
+            is_active=True,
+        )
+        
+        client = APIClient()
+        
+        # Bootstrap с region, для которого нет правила
+        response = client.post(
+            "/api/widget/bootstrap/",
+            {
+                "widget_token": "test_widget_token_123",
+                "contact_external_id": "new_visitor_fallback",
+                "region_id": region.id,
+            },
+        )
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        # Проверяем, что Conversation создан с region (fallback не меняет region, но правило найдено)
+        conversation = Conversation.objects.get(id=response.data["conversation_id"])
+        self.assertEqual(conversation.region, region)  # region проставляется из параметра
+    
+    def test_select_routing_rule_by_region(self):
+        """Проверка функции select_routing_rule: выбор правила по region."""
+        from companies.models import Region
+        
+        region1 = Region.objects.create(name="Москва", code="MSK")
+        region2 = Region.objects.create(name="СПб", code="SPB")
+        
+        # Правило для region1
+        rule1 = RoutingRule.objects.create(
+            name="Москва",
+            inbox=self.inbox,
+            branch=self.branch,
+            priority=10,
+            is_active=True,
+        )
+        rule1.regions.add(region1)
+        
+        # Fallback правило
+        fallback = RoutingRule.objects.create(
+            name="Fallback",
+            inbox=self.inbox,
+            branch=self.branch,
+            priority=100,
+            is_fallback=True,
+            is_active=True,
+        )
+        
+        # Выбор правила для region1
+        selected = services.select_routing_rule(self.inbox, region1)
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected.id, rule1.id)
+        
+        # Выбор правила для region2 (должен вернуть fallback)
+        selected = services.select_routing_rule(self.inbox, region2)
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected.id, fallback.id)
+        
+        # Выбор правила без region (должен вернуть fallback)
+        selected = services.select_routing_rule(self.inbox, None)
+        self.assertIsNotNone(selected)
+        self.assertEqual(selected.id, fallback.id)

@@ -131,12 +131,56 @@ def record_message(
     return msg
 
 
-def assign_conversation(conversation: Conversation) -> Conversation:
+def assign_conversation(conversation: Conversation, user) -> None:
     """
-    Заглушка для логики автоприсвоения диалогов.
+    Назначить диалог оператору.
+    """
+    conversation.assignee = user
+    conversation.save(update_fields=["assignee"])
 
-    Полная реализация (round-robin по операторам филиала, учёт online-статуса)
-    будет добавлена на последующих этапах. На Этапе 1 ничего не делает.
+
+def select_routing_rule(
+    inbox: "models.Inbox",
+    region: Optional["models.Region"] = None,
+) -> Optional["models.RoutingRule"]:
     """
-    return conversation
+    Выбрать правило маршрутизации для inbox и region.
+    
+    Логика:
+    1. Если region задан - ищем активное правило с этим region и inbox, сортируем по priority
+    2. Если не найдено - ищем fallback правило для inbox
+    3. Если ничего не найдено - возвращаем None
+    
+    Args:
+        inbox: Inbox для маршрутизации
+        region: Регион (может быть None)
+    
+    Returns:
+        RoutingRule или None
+    """
+    from . import models
+    
+    # Ищем активные правила для этого inbox
+    rules_qs = models.RoutingRule.objects.filter(
+        inbox=inbox,
+        is_active=True,
+    ).select_related("branch").prefetch_related("regions")
+    
+    # Если region задан - ищем правило с этим region
+    if region:
+        matching_rules = [
+            rule for rule in rules_qs
+            if rule.regions.filter(id=region.id).exists()
+        ]
+        if matching_rules:
+            # Сортируем по priority (меньше = выше приоритет)
+            matching_rules.sort(key=lambda r: (r.priority, r.id))
+            return matching_rules[0]
+    
+    # Если не найдено правило по region - ищем fallback
+    fallback_rule = rules_qs.filter(is_fallback=True).first()
+    if fallback_rule:
+        return fallback_rule
+    
+    return None
 

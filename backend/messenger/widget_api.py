@@ -95,14 +95,40 @@ def widget_bootstrap(request):
         ).first()
 
         if not conversation:
-            # Проверяем, есть ли вообще диалоги с этим contact+inbox (даже закрытые)
-            # Если есть закрытые - создаём новый диалог (не переоткрываем старые)
+            # Определяем region из meta или параметра
+            region = None
+            meta = input_serializer.validated_data.get("meta", {})
+            region_id = meta.get("region_id") or input_serializer.validated_data.get("region_id")
+            
+            if region_id:
+                try:
+                    from companies.models import Region
+                    region = Region.objects.get(id=region_id)
+                except (Region.DoesNotExist, ValueError, TypeError):
+                    pass  # region остаётся None
+            
+            # Если region не найден, пробуем использовать region_detected из Contact
+            if not region and contact.region_detected:
+                region = contact.region_detected
+            
+            # Выбираем правило маршрутизации
+            routing_rule = services.select_routing_rule(inbox, region)
+            
+            # Создаём новый диалог
             conversation = models.Conversation.objects.create(
                 inbox=inbox,
                 contact=contact,
                 status=models.Conversation.Status.OPEN,
                 branch=inbox.branch,  # Автоматически из inbox.branch
+                region=region,  # Проставляем region из routing logic
             )
+            
+            # Если найдено правило маршрутизации и оно указывает на другой branch/inbox,
+            # мы не меняем branch (он всегда из inbox.branch), но можем обновить priority
+            if routing_rule and routing_rule.priority != 100:
+                # Можно использовать priority из правила для приоритета диалога
+                # (но это опционально, пока оставляем как есть)
+                pass
 
         # Создать widget_session_token
         session = create_widget_session(

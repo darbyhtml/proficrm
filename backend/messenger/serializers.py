@@ -91,6 +91,7 @@ class WidgetBootstrapSerializer(serializers.Serializer):
     email = serializers.EmailField(required=False, allow_blank=True)
     phone = serializers.CharField(required=False, allow_blank=True, max_length=50)
     meta = serializers.JSONField(required=False, default=dict, help_text="Дополнительные метаданные посетителя")
+    region_id = serializers.IntegerField(required=False, allow_null=True, help_text="ID региона для маршрутизации")
 
 
 class WidgetBootstrapResponseSerializer(serializers.Serializer):
