@@ -93,6 +93,28 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+      // Защита от повторной отправки формы создания задачи (полная страница)
+      const taskFormEl = document.querySelector('form[action="/tasks/create/"]') || document.querySelector('form[method="post"]');
+      if (taskFormEl) {
+        taskFormEl.addEventListener('submit', function(e) {
+          const submitBtn = taskFormEl.querySelector('button[type="submit"]');
+          if (!submitBtn) {
+            return;
+          }
+
+          // Если уже отправляем форму — блокируем повторный submit
+          if (submitBtn.disabled) {
+            e.preventDefault();
+            return;
+          }
+
+          const originalText = submitBtn.dataset.originalText || submitBtn.textContent || '';
+          submitBtn.dataset.originalText = originalText;
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Создание...';
+        });
+      }
+
       const searchInput = document.getElementById('task-company-search');
       const companySelect = document.getElementById('id_company');
       const applyBox = document.getElementById('applyToOrgBranchesBox');

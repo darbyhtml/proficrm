@@ -558,7 +558,22 @@
 
         formEl.addEventListener('input', saveDraftSoon, {capture: true});
         formEl.addEventListener('change', saveDraftSoon, {capture: true});
-        formEl.addEventListener('submit', function() {
+        formEl.addEventListener('submit', function(e) {
+          const submitBtn = formEl.querySelector('button[type="submit"]');
+
+          // Если уже идёт отправка формы — блокируем повторный submit
+          if (submitBtn && submitBtn.disabled) {
+            e.preventDefault();
+            return;
+          }
+
+          if (submitBtn) {
+            const originalText = submitBtn.dataset.originalText || submitBtn.textContent || '';
+            submitBtn.dataset.originalText = originalText;
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Создание...';
+          }
+
           formEl.dataset.submitted = '1';
           formEl.dataset.allowNavigate = '1';
           formDirty = false;

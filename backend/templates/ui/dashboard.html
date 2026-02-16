@@ -1171,6 +1171,22 @@
 
               form.addEventListener('submit', async function(e) {
                 e.preventDefault();
+
+                // Защита от повторной отправки формы при медленном интернете / двойном клике
+                if (form.dataset.submitting === '1') {
+                  return;
+                }
+                form.dataset.submitting = '1';
+
+                const submitBtn = form.querySelector('button[type="submit"]');
+                let originalBtnText = '';
+                if (submitBtn) {
+                  originalBtnText = submitBtn.dataset.originalText || submitBtn.textContent || '';
+                  submitBtn.dataset.originalText = originalBtnText;
+                  submitBtn.disabled = true;
+                  submitBtn.textContent = 'Создание...';
+                }
+
                 const formData = new FormData(form);
                 try {
                   const res = await fetch(form.action, {
@@ -1208,6 +1224,12 @@
                     window.uiToast('Ошибка при создании задачи: ' + err.message, 'error');
                   } else {
                     console.error('Ошибка при создании задачи:', err);
+                  }
+                } finally {
+                  form.dataset.submitting = '0';
+                  if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = originalBtnText || submitBtn.dataset.originalText || submitBtn.textContent;
                   }
                 }
               }, { once: true });

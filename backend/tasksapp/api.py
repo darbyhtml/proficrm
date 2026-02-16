@@ -111,12 +111,32 @@ class TaskViewSet(viewsets.ModelViewSet):
                 if not can_edit_company(user, c):
                     continue
 
+                # Защита от случайного дублирования задач при повторном запросе:
+                # если за последние несколько секунд уже есть такая же задача по этой компании,
+                # просто возвращаемся к существующей.
+                title_value = data.get("title") or (data.get("type").name if data.get("type") else "")
+                recent_cutoff = timezone.now() - timedelta(seconds=10)
+                duplicate_qs = Task.objects.filter(
+                    created_by=user,
+                    assigned_to=assigned_to,
+                    company=c,
+                    type=data.get("type"),
+                    title=title_value,
+                    due_at=data.get("due_at"),
+                    recurrence_rrule=data.get("recurrence_rrule") or "",
+                    created_at__gte=recent_cutoff,
+                ).order_by("-created_at")
+                existing_task = duplicate_qs.first()
+                if existing_task:
+                    created_tasks.append(existing_task)
+                    continue
+
                 task = Task.objects.create(
                     created_by=user,
                     assigned_to=assigned_to,
                     company=c,
                     type=data.get("type"),
-                    title=data.get("title") or (data.get("type").name if data.get("type") else ""),
+                    title=title_value,
                     description=data.get("description", ""),
                     status=data.get("status") or Task.Status.NEW,
                     due_at=data.get("due_at"),
@@ -132,6 +152,25 @@ class TaskViewSet(viewsets.ModelViewSet):
             return
 
         # Обычное создание одной задачи
+        # Защита от дублирования: если за последние несколько секунд уже есть такая же задача,
+        # считаем запрос идемпотентным и возвращаем существующую.
+        title_value = data.get("title") or (data.get("type").name if data.get("type") else "")
+        recent_cutoff = timezone.now() - timedelta(seconds=10)
+        duplicate_qs = Task.objects.filter(
+            created_by=user,
+            assigned_to=assigned_to,
+            company=company,
+            type=data.get("type"),
+            title=title_value,
+            due_at=data.get("due_at"),
+            recurrence_rrule=data.get("recurrence_rrule") or "",
+            created_at__gte=recent_cutoff,
+        ).order_by("-created_at")
+        existing_task = duplicate_qs.first()
+        if existing_task:
+            serializer.instance = existing_task
+            return
+
         serializer.save(created_by=user, assigned_to=assigned_to)
 
     def perform_update(self, serializer):

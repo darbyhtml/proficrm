@@ -3,6 +3,8 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.filters import BaseFilterBackend, OrderingFilter, SearchFilter
 from django_filters.rest_framework import DjangoFilterBackend
+from django.utils import timezone
+from datetime import timedelta
 
 from accounts.models import User
 from .permissions import can_edit_company
@@ -140,6 +142,22 @@ class CompanyViewSet(viewsets.ModelViewSet):
         # Автовывод филиала, если не задан
         if branch is None:
             branch = responsible.branch
+
+        # Защита от дублирования компаний при повторных запросах:
+        # если за последние несколько секунд уже есть компания с тем же именем и ИНН
+        # от этого пользователя и в том же филиале, считаем запрос идемпотентным.
+        recent_cutoff = timezone.now() - timedelta(seconds=10)
+        duplicate_qs = Company.objects.filter(
+            created_by=user,
+            name=data.get("name"),
+            inn=data.get("inn"),
+            branch=branch,
+            created_at__gte=recent_cutoff,
+        ).order_by("-created_at")
+        existing_company = duplicate_qs.first()
+        if existing_company:
+            serializer.instance = existing_company
+            return
 
         serializer.save(responsible=responsible, branch=branch, created_by=user)
 

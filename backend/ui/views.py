@@ -3029,6 +3029,21 @@ def company_create(request: HttpRequest) -> HttpResponse:
             company.created_by = user
             company.responsible = user
             company.branch = user.branch
+            # Защита от случайного дублирования компаний при повторной отправке формы:
+            # если за последние несколько секунд уже есть очень похожая компания, не создаём новую.
+            recent_cutoff = timezone.now() - timedelta(seconds=10)
+            duplicate_qs = Company.objects.filter(
+                created_by=user,
+                name=company.name,
+                inn=company.inn,
+                branch=company.branch,
+                created_at__gte=recent_cutoff,
+            ).order_by("-created_at")
+            existing_company = duplicate_qs.first()
+            if existing_company:
+                messages.info(request, "Похожая компания уже была создана недавно.")
+                return redirect("company_detail", company_id=existing_company.id)
+
             company.save()
             form.save_m2m()
             
@@ -6496,6 +6511,24 @@ def task_create(request: HttpRequest) -> HttpResponse:
                     # Определяем статус: если создатель назначает задачу себе, то "В работе", иначе "Новая"
                     initial_status = Task.Status.IN_PROGRESS if task.assigned_to_id == user.id else Task.Status.NEW
 
+                    # Защита от случайного дублирования задач при повторной отправке формы:
+                    # если за последние несколько секунд уже есть такая же задача по этой компании,
+                    # просто пропускаем создание.
+                    recent_cutoff = timezone.now() - timedelta(seconds=10)
+                    has_duplicate = Task.objects.filter(
+                        created_by=user,
+                        assigned_to=task.assigned_to,
+                        company=c,
+                        type=task.type,
+                        title=task.title,
+                        due_at=task.due_at,
+                        recurrence_rrule=task.recurrence_rrule or "",
+                        created_at__gte=recent_cutoff,
+                    ).exists()
+                    if has_duplicate:
+                        skipped += 1
+                        continue
+
                     t = Task(
                         created_by=user,
                         assigned_to=task.assigned_to,
@@ -6551,7 +6584,32 @@ def task_create(request: HttpRequest) -> HttpResponse:
             else:
                 # Создатель назначает задачу кому-то другому - статус "Новая"
                 task.status = Task.Status.NEW
-            
+
+            # Защита от случайного дублирования задач при повторной отправке формы:
+            # если за последние несколько секунд уже есть такая же задача, не создаём новую.
+            recent_cutoff = timezone.now() - timedelta(seconds=10)
+            duplicate_qs = Task.objects.filter(
+                created_by=user,
+                company_id=task.company_id,
+                type_id=task.type_id,
+                assigned_to_id=task.assigned_to_id,
+                title=task.title,
+                due_at=task.due_at,
+                recurrence_rrule=task.recurrence_rrule or "",
+                created_at__gte=recent_cutoff,
+            ).order_by("-created_at")
+            existing_task = duplicate_qs.first()
+            if existing_task:
+                if is_ajax:
+                    return JsonResponse({
+                        "ok": True,
+                        "task_id": str(existing_task.id),
+                        "message": "Похожая задача уже была создана недавно.",
+                        "duplicate": True,
+                    })
+                messages.info(request, "Похожая задача уже была создана недавно.")
+                return redirect("task_list")
+
             task.save()
             form.save_m2m()
             # уведомление назначенному (если это не создатель)
