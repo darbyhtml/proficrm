@@ -55,9 +55,10 @@ from tasksapp.policy import visible_tasks_qs, can_manage_task_status
 from notifications.models import Notification
 from notifications.service import notify
 from phonebridge.models import CallRequest, PhoneDevice, MobileAppBuild, MobileAppQrToken
-from messenger.models import Conversation, Message
+from messenger.models import Conversation, Message, Inbox, RoutingRule
 from messenger.selectors import visible_conversations_qs
 from messenger.utils import ensure_messenger_enabled_view
+import secrets
 import json
 import logging
 import mimetypes
@@ -11232,3 +11233,275 @@ def messenger_conversation_detail(request: HttpRequest, conversation_id: int) ->
             "assignees": assignees,
         },
     )
+
+
+# ============================================================================
+# Messenger Settings UI (админские настройки виджета)
+# ============================================================================
+
+
+@login_required
+def settings_messenger_overview(request: HttpRequest) -> HttpResponse:
+    """
+    Обзор Inbox'ов и быстрые действия.
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+    
+    ensure_messenger_enabled_view()
+
+    # Получаем все Inbox'ы (для админа можно показывать всё)
+    inboxes = Inbox.objects.select_related("branch").annotate(
+        open_conversations_count=Count(
+            "conversations",
+            filter=Q(conversations__status__in=[Conversation.Status.OPEN, Conversation.Status.PENDING]),
+        )
+    ).order_by("name")
+
+    # Получаем базовый URL для виджета
+    from django.conf import settings
+    base_url = getattr(settings, "PUBLIC_BASE_URL", request.build_absolute_uri("/").rstrip("/"))
+
+    return render(
+        request,
+        "ui/settings/messenger_overview.html",
+        {
+            "inboxes": inboxes,
+            "base_url": base_url,
+        },
+    )
+
+
+@login_required
+def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) -> HttpResponse:
+    """
+    Создание/редактирование Inbox.
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+    
+    ensure_messenger_enabled_view()
+
+    inbox = None
+    if inbox_id:
+        inbox = get_object_or_404(Inbox, id=inbox_id)
+
+    if request.method == "POST":
+        action = request.POST.get("action", "").strip()
+        
+        if action == "regenerate_token" and inbox:
+            # Регенерация widget_token
+            old_token = inbox.widget_token
+            inbox.widget_token = secrets.token_urlsafe(32)
+            inbox.save()
+            messages.warning(
+                request,
+                f"Токен виджета обновлён. Старый токен ({old_token[:20]}...) больше не работает. "
+                "Обновите код вставки на всех сайтах."
+            )
+            return redirect("settings_messenger_inbox_edit", inbox_id=inbox.id)
+        
+        # Обработка формы редактирования
+        name = request.POST.get("name", "").strip()
+        is_active = request.POST.get("is_active") == "on"
+        
+        # Настройки виджета из JSON
+        widget_title = request.POST.get("widget_title", "").strip()
+        widget_greeting = request.POST.get("widget_greeting", "").strip()
+        widget_color = request.POST.get("widget_color", "").strip()
+        widget_show_email = request.POST.get("widget_show_email") == "on"
+        widget_show_phone = request.POST.get("widget_show_phone") == "on"
+        
+        settings_dict = {}
+        if widget_title:
+            settings_dict["title"] = widget_title
+        if widget_greeting:
+            settings_dict["greeting"] = widget_greeting
+        if widget_color:
+            settings_dict["color"] = widget_color
+        settings_dict["show_email"] = widget_show_email
+        settings_dict["show_phone"] = widget_show_phone
+
+        if inbox:
+            # Редактирование существующего
+            inbox.name = name
+            inbox.is_active = is_active
+            inbox.settings = settings_dict
+            inbox.save()
+            messages.success(request, "Inbox обновлён.")
+        else:
+            # Создание нового
+            branch_id = request.POST.get("branch")
+            if not branch_id:
+                messages.error(request, "Необходимо выбрать филиал.")
+                return redirect("settings_messenger_overview")
+            
+            try:
+                from accounts.models import Branch
+                branch = Branch.objects.get(id=int(branch_id))
+            except (Branch.DoesNotExist, ValueError, TypeError):
+                messages.error(request, "Неверный филиал.")
+                return redirect("settings_messenger_overview")
+            
+            inbox = Inbox.objects.create(
+                name=name,
+                branch=branch,
+                is_active=is_active,
+                settings=settings_dict,
+            )
+            messages.success(request, "Inbox создан.")
+        
+        return redirect("settings_messenger_overview")
+
+    # GET запрос - показать форму
+    from accounts.models import Branch
+    branches = Branch.objects.order_by("name")
+    
+    from django.conf import settings
+    base_url = getattr(settings, "PUBLIC_BASE_URL", request.build_absolute_uri("/").rstrip("/"))
+
+    return render(
+        request,
+        "ui/settings/messenger_inbox_form.html",
+        {
+            "inbox": inbox,
+            "branches": branches,
+            "base_url": base_url,
+        },
+    )
+
+
+@login_required
+def settings_messenger_routing_list(request: HttpRequest) -> HttpResponse:
+    """
+    Список правил маршрутизации.
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+    
+    ensure_messenger_enabled_view()
+
+    rules = RoutingRule.objects.select_related("branch", "inbox").prefetch_related("regions").order_by("priority", "id")
+
+    return render(
+        request,
+        "ui/settings/messenger_routing_list.html",
+        {
+            "rules": rules,
+        },
+    )
+
+
+@login_required
+def settings_messenger_routing_edit(request: HttpRequest, rule_id: int = None) -> HttpResponse:
+    """
+    Создание/редактирование правила маршрутизации.
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+    
+    ensure_messenger_enabled_view()
+
+    rule = None
+    if rule_id:
+        rule = get_object_or_404(RoutingRule.objects.prefetch_related("regions"), id=rule_id)
+
+    if request.method == "POST":
+        name = request.POST.get("name", "").strip()
+        inbox_id = request.POST.get("inbox")
+        branch_id = request.POST.get("branch")
+        priority = request.POST.get("priority", "100").strip()
+        is_fallback = request.POST.get("is_fallback") == "on"
+        is_active = request.POST.get("is_active") == "on"
+        region_ids = request.POST.getlist("regions")
+
+        if not name or not inbox_id or not branch_id:
+            messages.error(request, "Заполните все обязательные поля.")
+        else:
+            try:
+                from accounts.models import Branch
+                from companies.models import Region
+                
+                inbox = Inbox.objects.get(id=int(inbox_id))
+                branch = Branch.objects.get(id=int(branch_id))
+                priority_int = int(priority)
+                
+                if rule:
+                    # Редактирование
+                    rule.name = name
+                    rule.inbox = inbox
+                    rule.branch = branch
+                    rule.priority = priority_int
+                    rule.is_fallback = is_fallback
+                    rule.is_active = is_active
+                    rule.save()
+                    rule.regions.clear()
+                else:
+                    # Создание
+                    rule = RoutingRule.objects.create(
+                        name=name,
+                        inbox=inbox,
+                        branch=branch,
+                        priority=priority_int,
+                        is_fallback=is_fallback,
+                        is_active=is_active,
+                    )
+                
+                # Добавить регионы
+                if region_ids:
+                    regions = Region.objects.filter(id__in=[int(rid) for rid in region_ids])
+                    rule.regions.set(regions)
+                
+                messages.success(request, "Правило маршрутизации сохранено.")
+                return redirect("settings_messenger_routing_list")
+            except (Inbox.DoesNotExist, Branch.DoesNotExist, ValueError, TypeError) as e:
+                messages.error(request, f"Ошибка: {str(e)}")
+
+    # GET запрос - показать форму
+    from accounts.models import Branch
+    from companies.models import Region
+    
+    inboxes = Inbox.objects.filter(is_active=True).select_related("branch").order_by("name")
+    branches = Branch.objects.order_by("name")
+    regions = Region.objects.order_by("name")
+    
+    selected_region_ids = []
+    if rule:
+        selected_region_ids = list(rule.regions.values_list("id", flat=True))
+
+    return render(
+        request,
+        "ui/settings/messenger_routing_form.html",
+        {
+            "rule": rule,
+            "inboxes": inboxes,
+            "branches": branches,
+            "regions": regions,
+            "selected_region_ids": selected_region_ids,
+        },
+    )
+
+
+@login_required
+def settings_messenger_routing_delete(request: HttpRequest, rule_id: int) -> HttpResponse:
+    """
+    Удаление правила маршрутизации.
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+    
+    ensure_messenger_enabled_view()
+
+    rule = get_object_or_404(RoutingRule, id=rule_id)
+    
+    if request.method == "POST":
+        rule.delete()
+        messages.success(request, "Правило маршрутизации удалено.")
+        return redirect("settings_messenger_routing_list")
+    
+    return redirect("settings_messenger_routing_list")

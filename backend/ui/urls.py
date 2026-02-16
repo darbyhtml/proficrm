@@ -132,6 +132,15 @@ urlpatterns = [
     path("settings/calls/stats/", views.settings_calls_stats, name="settings_calls_stats"),
     path("settings/calls/stats/<int:user_id>/", views.settings_calls_manager_detail, name="settings_calls_manager_detail"),
     
+    # Messenger settings (admin only)
+    path("settings/messenger/", views.settings_messenger_overview, name="settings_messenger_overview"),
+    path("settings/messenger/inboxes/new/", views.settings_messenger_inbox_edit, name="settings_messenger_inbox_create"),
+    path("settings/messenger/inboxes/<int:inbox_id>/", views.settings_messenger_inbox_edit, name="settings_messenger_inbox_edit"),
+    path("settings/messenger/routing/", views.settings_messenger_routing_list, name="settings_messenger_routing_list"),
+    path("settings/messenger/routing/new/", views.settings_messenger_routing_edit, name="settings_messenger_routing_create"),
+    path("settings/messenger/routing/<int:rule_id>/", views.settings_messenger_routing_edit, name="settings_messenger_routing_edit"),
+    path("settings/messenger/routing/<int:rule_id>/delete/", views.settings_messenger_routing_delete, name="settings_messenger_routing_delete"),
+    
     # Мобильное приложение
     path("mobile-app/", views.mobile_app_page, name="mobile_app_page"),
     path("mobile-app/download/<uuid:build_id>/", views.mobile_app_download, name="mobile_app_download"),
