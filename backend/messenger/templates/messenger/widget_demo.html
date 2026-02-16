@@ -1,0 +1,100 @@
+{% extends "ui/base.html" %}
+{% load static %}
+{% block title %}Widget Demo — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <div class="max-w-4xl mx-auto px-4 py-8">
+    <h1 class="text-2xl font-semibold mb-4">Messenger Widget — Demo</h1>
+
+    {% if inbox %}
+      <div class="card mb-6">
+        <div class="card-pad">
+          <h2 class="text-lg font-semibold mb-3">Активный Inbox</h2>
+          <dl class="space-y-2 text-sm">
+            <div>
+              <dt class="text-brand-dark/60">Название:</dt>
+              <dd class="font-medium">{{ inbox.name }}</dd>
+            </div>
+            <div>
+              <dt class="text-brand-dark/60">Филиал:</dt>
+              <dd class="font-medium">{{ inbox.branch.name }}</dd>
+            </div>
+            <div>
+              <dt class="text-brand-dark/60">Widget Token:</dt>
+              <dd class="font-mono text-xs break-all bg-brand-soft/30 p-2 rounded">{{ widget_token }}</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+
+      <div class="card mb-6">
+        <div class="card-pad">
+          <h2 class="text-lg font-semibold mb-3">Код подключения виджета</h2>
+          <p class="text-sm text-brand-dark/70 mb-3">
+            Скопируйте этот код и вставьте перед закрывающим тегом <code>&lt;/body&gt;</code> на вашем сайте:
+          </p>
+          <pre class="bg-brand-dark text-white p-4 rounded-lg overflow-x-auto text-sm"><code>&lt;link rel="stylesheet" href="{% static 'messenger/widget.css' %}"&gt;
+&lt;script src="{% static 'messenger/widget.js' %}" data-widget-token="{{ widget_token }}"&gt;&lt;/script&gt;</code></pre>
+        </div>
+      </div>
+
+      <div class="card mb-6">
+        <div class="card-pad">
+          <h2 class="text-lg font-semibold mb-3">Тестирование</h2>
+          <p class="text-sm text-brand-dark/70 mb-3">
+            Виджет должен появиться в правом нижнем углу страницы. Попробуйте:
+          </p>
+          <ol class="list-decimal list-inside space-y-2 text-sm text-brand-dark/80">
+            <li>Нажмите на кнопку чата в правом нижнем углу</li>
+            <li>Отправьте тестовое сообщение</li>
+            <li>Откройте <a href="{% url 'messenger_conversation_list' %}" class="text-brand-teal hover:underline">список диалогов</a> в операторской панели</li>
+            <li>Найдите диалог и ответьте оператором</li>
+            <li>Вернитесь на эту страницу — ответ должен появиться в виджете через несколько секунд</li>
+          </ol>
+        </div>
+      </div>
+
+      <!-- Виджет подключён на этой странице -->
+      <link rel="stylesheet" href="{% static 'messenger/widget.css' %}">
+      <script src="{% static 'messenger/widget.js' %}" data-widget-token="{{ widget_token }}"></script>
+
+    {% else %}
+      <div class="card mb-6">
+        <div class="card-pad">
+          <h2 class="text-lg font-semibold mb-3">Нет активных Inbox</h2>
+          <p class="text-sm text-brand-dark/70 mb-3">
+            Для тестирования виджета необходимо создать активный Inbox:
+          </p>
+          <ol class="list-decimal list-inside space-y-2 text-sm text-brand-dark/80">
+            <li>Откройте <a href="/admin/messenger/inbox/" class="text-brand-teal hover:underline">админку Messenger → Inboxes</a></li>
+            <li>Создайте новый Inbox или активируйте существующий (is_active = True)</li>
+            <li>Скопируйте widget_token из созданного Inbox</li>
+            <li>Обновите эту страницу</li>
+          </ol>
+        </div>
+      </div>
+    {% endif %}
+
+    <div class="card">
+      <div class="card-pad">
+        <h2 class="text-lg font-semibold mb-3">Документация</h2>
+        <div class="text-sm text-brand-dark/70 space-y-2">
+          <p><strong>Widget API Endpoints:</strong></p>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li><code>POST /api/widget/bootstrap/</code> — создание/получение сессии</li>
+            <li><code>POST /api/widget/send/</code> — отправка сообщения</li>
+            <li><code>GET /api/widget/poll/</code> — получение новых сообщений</li>
+          </ul>
+          <p class="mt-4"><strong>Особенности:</strong></p>
+          <ul class="list-disc list-inside space-y-1 ml-4">
+            <li>Виджет автоматически создаёт сессию при первом открытии</li>
+            <li>Polling каждые 3 секунды для получения новых сообщений</li>
+            <li>Автоматический re-bootstrap при истечении сессии (401)</li>
+            <li>localStorage используется для сохранения session_token и since_id</li>
+            <li>contact_external_id генерируется один раз и остаётся стабильным</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

@@ -89,6 +89,7 @@ urlpatterns = [
     path("", include("ui.urls")),
     path("", include("mailer.urls")),
     path("", include("notifications.urls")),
+    path("", include("messenger.urls")),
     # Session auth for UI (without weird /login/login/ prefixes) - с защитой от брутфорса
     path("login/", SecureLoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
