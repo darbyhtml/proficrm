@@ -58,7 +58,9 @@ from phonebridge.models import CallRequest, PhoneDevice, MobileAppBuild, MobileA
 from messenger.models import Conversation, Message, Inbox, RoutingRule
 from messenger.selectors import visible_conversations_qs
 from messenger.utils import ensure_messenger_enabled_view
+from messenger.logging_utils import ui_logger, safe_log_widget_error
 import secrets
+import logging
 import json
 import logging
 import mimetypes
@@ -11286,74 +11288,118 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
 
     inbox = None
     if inbox_id:
-        inbox = get_object_or_404(Inbox, id=inbox_id)
+        try:
+            inbox = Inbox.objects.get(id=inbox_id)
+        except Inbox.DoesNotExist:
+            messages.error(request, "Inbox не найден.")
+            return redirect("settings_messenger_overview")
 
     if request.method == "POST":
         action = request.POST.get("action", "").strip()
         
         if action == "regenerate_token" and inbox:
             # Регенерация widget_token
-            old_token = inbox.widget_token
-            inbox.widget_token = secrets.token_urlsafe(32)
-            inbox.save()
-            messages.warning(
-                request,
-                f"Токен виджета обновлён. Старый токен ({old_token[:20]}...) больше не работает. "
-                "Обновите код вставки на всех сайтах."
-            )
-            return redirect("settings_messenger_inbox_edit", inbox_id=inbox.id)
+            try:
+                old_token = inbox.widget_token
+                inbox.widget_token = secrets.token_urlsafe(32)
+                inbox.save()
+                ui_logger.info(
+                    "Widget token regenerated",
+                    extra={"inbox_id": inbox.id, "old_token": old_token[:4] + "..."},
+                )
+                messages.warning(
+                    request,
+                    f"Токен виджета обновлён. Старый токен больше не работает. "
+                    "Обновите код вставки на всех сайтах."
+                )
+                return redirect("settings_messenger_inbox_edit", inbox_id=inbox.id)
+            except Exception as e:
+                ui_logger.error(
+                    "Failed to regenerate widget token",
+                    extra={"inbox_id": inbox.id if inbox else None},
+                    exc_info=True,
+                )
+                messages.error(request, "Ошибка при обновлении токена. Попробуйте ещё раз.")
+                return redirect("settings_messenger_inbox_edit", inbox_id=inbox.id)
         
         # Обработка формы редактирования
-        name = request.POST.get("name", "").strip()
-        is_active = request.POST.get("is_active") == "on"
-        
-        # Настройки виджета из JSON
-        widget_title = request.POST.get("widget_title", "").strip()
-        widget_greeting = request.POST.get("widget_greeting", "").strip()
-        widget_color = request.POST.get("widget_color", "").strip()
-        widget_show_email = request.POST.get("widget_show_email") == "on"
-        widget_show_phone = request.POST.get("widget_show_phone") == "on"
-        
-        settings_dict = {}
-        if widget_title:
-            settings_dict["title"] = widget_title
-        if widget_greeting:
-            settings_dict["greeting"] = widget_greeting
-        if widget_color:
-            settings_dict["color"] = widget_color
-        settings_dict["show_email"] = widget_show_email
-        settings_dict["show_phone"] = widget_show_phone
+        try:
+            name = request.POST.get("name", "").strip()
+            if not name:
+                messages.error(request, "Название Inbox обязательно.")
+                return redirect("settings_messenger_inbox_edit", inbox_id=inbox.id if inbox else None)
+            
+            is_active = request.POST.get("is_active") == "on"
+            
+            # Настройки виджета из JSON
+            widget_title = request.POST.get("widget_title", "").strip()
+            widget_greeting = request.POST.get("widget_greeting", "").strip()
+            widget_color = request.POST.get("widget_color", "").strip()
+            widget_show_email = request.POST.get("widget_show_email") == "on"
+            widget_show_phone = request.POST.get("widget_show_phone") == "on"
+            
+            settings_dict = {}
+            if widget_title:
+                settings_dict["title"] = widget_title
+            if widget_greeting:
+                settings_dict["greeting"] = widget_greeting
+            if widget_color:
+                settings_dict["color"] = widget_color
+            settings_dict["show_email"] = widget_show_email
+            settings_dict["show_phone"] = widget_show_phone
 
-        if inbox:
-            # Редактирование существующего
-            inbox.name = name
-            inbox.is_active = is_active
-            inbox.settings = settings_dict
-            inbox.save()
-            messages.success(request, "Inbox обновлён.")
-        else:
-            # Создание нового
-            branch_id = request.POST.get("branch")
-            if not branch_id:
-                messages.error(request, "Необходимо выбрать филиал.")
-                return redirect("settings_messenger_overview")
+            if inbox:
+                # Редактирование существующего
+                inbox.name = name
+                inbox.is_active = is_active
+                inbox.settings = settings_dict
+                inbox.save()
+                ui_logger.info(
+                    "Inbox updated",
+                    extra={"inbox_id": inbox.id, "name": name},
+                )
+                messages.success(request, "Inbox обновлён.")
+            else:
+                # Создание нового
+                branch_id = request.POST.get("branch")
+                if not branch_id:
+                    messages.error(request, "Необходимо выбрать филиал.")
+                    return redirect("settings_messenger_overview")
+                
+                try:
+                    from accounts.models import Branch
+                    branch = Branch.objects.get(id=int(branch_id))
+                except (Branch.DoesNotExist, ValueError, TypeError) as e:
+                    ui_logger.warning(
+                        "Failed to create inbox: invalid branch",
+                        extra={"branch_id": branch_id},
+                        exc_info=True,
+                    )
+                    messages.error(request, "Неверный филиал.")
+                    return redirect("settings_messenger_overview")
+                
+                inbox = Inbox.objects.create(
+                    name=name,
+                    branch=branch,
+                    is_active=is_active,
+                    settings=settings_dict,
+                )
+                ui_logger.info(
+                    "Inbox created",
+                    extra={"inbox_id": inbox.id, "name": name, "branch_id": branch.id},
+                )
+                messages.success(request, "Inbox создан.")
             
-            try:
-                from accounts.models import Branch
-                branch = Branch.objects.get(id=int(branch_id))
-            except (Branch.DoesNotExist, ValueError, TypeError):
-                messages.error(request, "Неверный филиал.")
-                return redirect("settings_messenger_overview")
-            
-            inbox = Inbox.objects.create(
-                name=name,
-                branch=branch,
-                is_active=is_active,
-                settings=settings_dict,
-            )
-            messages.success(request, "Inbox создан.")
+            return redirect("settings_messenger_overview")
         
-        return redirect("settings_messenger_overview")
+        except Exception as e:
+            ui_logger.error(
+                "Failed to save inbox",
+                extra={"inbox_id": inbox.id if inbox else None},
+                exc_info=True,
+            )
+            messages.error(request, "Ошибка при сохранении. Попробуйте ещё раз.")
+            return redirect("settings_messenger_inbox_edit", inbox_id=inbox.id if inbox else None)
 
     # GET запрос - показать форму
     from accounts.models import Branch

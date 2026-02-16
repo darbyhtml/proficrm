@@ -573,6 +573,16 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        "messenger.widget": {
+            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "messenger.ui": {
+            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
     },
 }
 
