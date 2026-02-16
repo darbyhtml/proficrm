@@ -63,12 +63,14 @@
         </span>
       </div>
       <div class="flex items-center gap-2 flex-shrink-0 ml-auto">
+        <a class="btn btn-outline btn-sm py-1.5 px-2.5 text-sm {% if mine %}btn-primary{% endif %}" href="?{{ url_mine }}">Мои</a>
         <select name="per_page" class="select text-sm py-1.5" style="min-width: 6rem">
           <option value="25" {% if per_page == 25 %}selected{% endif %}>25 на стр.</option>
           <option value="50" {% if per_page == 50 %}selected{% endif %}>50 на стр.</option>
           <option value="100" {% if per_page == 100 %}selected{% endif %}>100 на стр.</option>
           <option value="200" {% if per_page == 200 %}selected{% endif %}>200 на стр.</option>
         </select>
+        <a class="btn btn-outline btn-sm py-1.5 px-2.5 text-sm" href="#" id="refreshBtn" title="Обновить список">Обновить</a>
         <a class="btn btn-outline btn-sm py-1.5 px-2.5 text-sm" href="/messenger/conversations/">Сброс</a>
       </div>
     </form>
@@ -213,6 +215,8 @@
           form.submit();
         });
       });
+      const refreshBtn = document.getElementById('refreshBtn');
+      if (refreshBtn) refreshBtn.addEventListener('click', function(e) { e.preventDefault(); window.location.reload(); });
     })();
   </script>
 {% endblock %}

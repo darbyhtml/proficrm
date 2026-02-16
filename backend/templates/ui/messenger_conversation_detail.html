@@ -142,6 +142,18 @@
         <div class="card">
           <div class="card-pad">
             <h3 class="text-sm font-semibold mb-3">Действия</h3>
+            <div class="flex flex-wrap gap-2 mb-3">
+              <form method="post" action="{% url 'messenger_conversation_detail' conversation.id %}" class="inline">
+                {% csrf_token %}
+                <button type="submit" name="action" value="assign_me" class="btn btn-outline btn-sm">Назначить меня</button>
+              </form>
+              {% if conversation.status == 'open' or conversation.status == 'pending' %}
+              <form method="post" action="{% url 'messenger_conversation_detail' conversation.id %}" class="inline">
+                {% csrf_token %}
+                <button type="submit" name="action" value="close" class="btn btn-outline btn-sm">Закрыть</button>
+              </form>
+              {% endif %}
+            </div>
             <form method="post" action="{% url 'messenger_conversation_detail' conversation.id %}" class="space-y-3">
               {% csrf_token %}
               

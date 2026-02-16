@@ -11054,7 +11054,12 @@ def messenger_conversation_list(request: HttpRequest) -> HttpResponse:
             pass
 
     assignee_id = request.GET.get("assignee")
-    if assignee_id:
+    mine = request.GET.get("mine", "").strip().lower() in ("1", "true", "yes")
+    if mine:
+        qs = qs.filter(assignee_id=user.id)
+        if assignee_id is None:
+            assignee_id = str(user.id)
+    elif assignee_id:
         try:
             qs = qs.filter(assignee_id=int(assignee_id))
         except (ValueError, TypeError):
@@ -11110,6 +11115,12 @@ def messenger_conversation_list(request: HttpRequest) -> HttpResponse:
         assignees_qs = assignees_qs.filter(branch_id=user.branch_id)
     assignees = list(assignees_qs)
 
+    # URL для кнопки "Мои" (сохраняем остальные параметры)
+    from django.http import QueryDict
+    get_mine = request.GET.copy()
+    get_mine["mine"] = "1"
+    url_mine = get_mine.urlencode()
+
     return render(
         request,
         "ui/messenger_conversation_list.html",
@@ -11125,6 +11136,8 @@ def messenger_conversation_list(request: HttpRequest) -> HttpResponse:
             "regions": regions,
             "assignees": assignees,
             "per_page": per_page,
+            "mine": mine,
+            "url_mine": url_mine,
         },
     )
 
@@ -11181,6 +11194,20 @@ def messenger_conversation_detail(request: HttpRequest, conversation_id: int) ->
                 )
                 messages.success(request, "Внутреннее сообщение добавлено")
                 return redirect("messenger_conversation_detail", conversation_id=conversation_id)
+
+        elif action == "assign_me":
+            # Назначить диалог себе
+            from messenger.services import assign_conversation
+            assign_conversation(conversation, user)
+            messages.success(request, "Диалог назначен вам")
+            return redirect("messenger_conversation_detail", conversation_id=conversation_id)
+
+        elif action == "close":
+            # Закрыть диалог (status=resolved)
+            conversation.status = Conversation.Status.RESOLVED
+            conversation.save(update_fields=["status"])
+            messages.success(request, "Диалог закрыт")
+            return redirect("messenger_conversation_detail", conversation_id=conversation_id)
 
         elif action == "update":
             # Обновление статуса, оператора, приоритета
