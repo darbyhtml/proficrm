@@ -22,9 +22,7 @@ class Inbox(models.Model):
         "Токен виджета",
         max_length=64,
         unique=True,
-        blank=True,
-        default="",
-        help_text="Секретный токен для подключения виджета с сайта. Генерируется автоматически при создании.",
+        help_text="Секретный токен для подключения виджета с сайта. Генерируется автоматически при создании, если не указан.",
     )
     settings = models.JSONField("Настройки", default=dict, blank=True)
     created_at = models.DateTimeField("Создано", auto_now_add=True, db_index=True)
