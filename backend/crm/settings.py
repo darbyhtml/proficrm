@@ -164,6 +164,7 @@ INSTALLED_APPS = [
     'phonebridge',
     'amocrm',  # AmoCRM integration (migration tools and management commands)
     'policy',
+    'messenger',
 ]
 
 MIDDLEWARE = [
@@ -299,6 +300,9 @@ PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
 SECURITY_CONTACT_EMAIL = os.getenv("SECURITY_CONTACT_EMAIL", "")
 
 AUTH_USER_MODEL = "accounts.User"
+
+# Messenger feature flag: позволяет быстро отключить функциональность без отката миграций.
+MESSENGER_ENABLED = os.getenv("MESSENGER_ENABLED", "0") == "1"
 
 # DRF / JWT
 REST_FRAMEWORK = {

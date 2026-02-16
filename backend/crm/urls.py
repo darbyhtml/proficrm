@@ -41,6 +41,7 @@ from phonebridge.api import (
     UserInfoView,
     QrTokenStatusView,
 )
+from messenger.api import ConversationViewSet, CannedResponseViewSet
 from crm.views import robots_txt, security_txt, health_check
 
 handler404 = "crm.views.handler404"
@@ -67,6 +68,16 @@ router.register(r"contacts", ContactViewSet, basename="contact")
 router.register(r"company-notes", CompanyNoteViewSet, basename="company-note")
 router.register(r"task-types", TaskTypeViewSet, basename="task-type")
 router.register(r"tasks", TaskViewSet, basename="task")
+router.register(
+    r"messenger/conversations",
+    ConversationViewSet,
+    basename="messenger-conversations",
+)
+router.register(
+    r"messenger/canned-responses",
+    CannedResponseViewSet,
+    basename="messenger-canned-responses",
+)
 
 urlpatterns = [
     path("robots.txt", robots_txt, name="robots_txt"),
