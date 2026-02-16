@@ -111,9 +111,9 @@ def widget_bootstrap(request):
             contact_id=str(contact.id),
         )
 
-        # Опционально: вернуть последние сообщения (последние 10)
+        # Опционально: вернуть последние сообщения (только OUT, без INTERNAL)
         initial_messages = []
-        messages = conversation.messages.filter(direction__in=[models.Message.Direction.OUT, models.Message.Direction.INTERNAL]).order_by("-created_at")[:10]
+        messages = conversation.messages.filter(direction=models.Message.Direction.OUT).order_by("-created_at")[:10]
         for msg in reversed(messages):  # В хронологическом порядке
             initial_messages.append({
                 "id": msg.id,
@@ -430,9 +430,9 @@ def widget_poll(request):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Получить новые сообщения (только OUT и INTERNAL)
+        # Получить новые сообщения (только OUT, без INTERNAL)
         messages_qs = conversation.messages.filter(
-            direction__in=[models.Message.Direction.OUT, models.Message.Direction.INTERNAL]
+            direction=models.Message.Direction.OUT
         ).order_by("created_at", "id")
 
         if since_id:
