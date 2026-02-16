@@ -11303,6 +11303,45 @@ def settings_messenger_overview(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+def settings_messenger_health(request: HttpRequest) -> HttpResponse:
+    """
+    Страница диагностики Messenger: флаг, Redis, кол-во inbox.
+    Доступна только админу. Не требует MESSENGER_ENABLED (чтобы проверить состояние при выключенном модуле).
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    from django.conf import settings
+    from django.core.cache import cache
+
+    messenger_enabled = getattr(settings, "MESSENGER_ENABLED", False)
+    redis_ok = False
+    try:
+        cache.set("messenger:health:ping", "1", timeout=10)
+        redis_ok = cache.get("messenger:health:ping") == "1"
+    except Exception:
+        pass
+
+    active_inboxes_count = 0
+    if messenger_enabled:
+        try:
+            active_inboxes_count = Inbox.objects.filter(is_active=True).count()
+        except Exception:
+            pass
+
+    return render(
+        request,
+        "ui/settings/messenger_health.html",
+        {
+            "messenger_enabled": messenger_enabled,
+            "redis_ok": redis_ok,
+            "active_inboxes_count": active_inboxes_count,
+        },
+    )
+
+
+@login_required
 def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) -> HttpResponse:
     """
     Создание/редактирование Inbox.

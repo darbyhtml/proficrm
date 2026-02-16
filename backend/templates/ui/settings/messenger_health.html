@@ -1,0 +1,43 @@
+{% extends "ui/base.html" %}
+{% load static %}
+{% block title %}Messenger — Диагностика — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <div class="space-y-4 max-w-2xl">
+    <div>
+      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> / <a class="underline" href="/settings/messenger/">Чат-виджет</a> /</div>
+      <h1 class="text-2xl font-semibold">Диагностика Messenger</h1>
+      <p class="text-sm text-brand-dark/70 mt-1">Проверка доступности модуля и зависимостей</p>
+    </div>
+
+    <div class="card">
+      <div class="card-pad space-y-4">
+        <div class="flex items-center justify-between">
+          <span class="font-medium">MESSENGER_ENABLED</span>
+          {% if messenger_enabled %}
+            <span class="badge badge-new">Включён</span>
+          {% else %}
+            <span class="badge badge-cancel">Выключен</span>
+          {% endif %}
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="font-medium">Redis (cache)</span>
+          {% if redis_ok %}
+            <span class="badge badge-new">Доступен</span>
+          {% else %}
+            <span class="badge badge-cancel">Ошибка или недоступен</span>
+          {% endif %}
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="font-medium">Активных Inbox</span>
+          <span class="font-semibold">{{ active_inboxes_count }}</span>
+        </div>
+      </div>
+    </div>
+
+    <p class="text-sm text-brand-dark/60">
+      Сессии виджета и throttling используют кэш (Redis в production). Если Redis недоступен, виджет может работать нестабильно.
+    </p>
+    <a href="/settings/messenger/" class="btn btn-outline">← Назад к настройкам виджета</a>
+  </div>
+{% endblock %}

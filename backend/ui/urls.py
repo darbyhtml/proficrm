@@ -140,6 +140,7 @@ urlpatterns = [
     path("settings/messenger/routing/new/", views.settings_messenger_routing_edit, name="settings_messenger_routing_create"),
     path("settings/messenger/routing/<int:rule_id>/", views.settings_messenger_routing_edit, name="settings_messenger_routing_edit"),
     path("settings/messenger/routing/<int:rule_id>/delete/", views.settings_messenger_routing_delete, name="settings_messenger_routing_delete"),
+    path("settings/messenger/health/", views.settings_messenger_health, name="settings_messenger_health"),
     
     # Мобильное приложение
     path("mobile-app/", views.mobile_app_page, name="mobile_app_page"),
