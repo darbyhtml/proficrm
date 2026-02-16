@@ -110,6 +110,10 @@ class WidgetBootstrapResponseSerializer(serializers.Serializer):
 class WidgetSendSerializer(serializers.Serializer):
     """
     Input для POST /api/widget/send/
+    
+    Валидация:
+    - body обязателен, не пустой после strip(), max_length=2000
+    - hp (honeypot) должен быть пустым (если заполнен - это бот)
     """
 
     widget_token = serializers.CharField(required=True)
@@ -119,6 +123,38 @@ class WidgetSendSerializer(serializers.Serializer):
         max_length=2000,
         help_text="Текст сообщения (макс. 2000 символов)",
     )
+    hp = serializers.CharField(required=False, allow_blank=True, help_text="Honeypot поле (должно быть пустым)")
+    
+    def validate_hp(self, value):
+        """
+        Honeypot валидация: если поле заполнено - это бот.
+        """
+        if value and value.strip():
+            raise serializers.ValidationError("Invalid request.")
+        return value
+    
+    def validate(self, attrs):
+        """
+        Дополнительная валидация: проверка на спам через cache.
+        """
+        attrs = super().validate(attrs)
+        
+        # Проверка honeypot
+        hp = attrs.get("hp", "")
+        if hp and hp.strip():
+            raise serializers.ValidationError({"hp": "Invalid request."})
+        
+        # Проверка на слишком много ссылок в сообщении
+        body = attrs.get("body", "")
+        if body:
+            # Подсчёт ссылок (http://, https://, www.)
+            import re
+            url_pattern = r'(https?://|www\.)[^\s]+'
+            urls = re.findall(url_pattern, body, re.IGNORECASE)
+            if len(urls) > 3:  # Максимум 3 ссылки
+                raise serializers.ValidationError({"body": "Message contains too many links."})
+        
+        return attrs
 
 
 class WidgetSendResponseSerializer(serializers.Serializer):

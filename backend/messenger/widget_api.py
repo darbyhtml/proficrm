@@ -189,6 +189,26 @@ def widget_send(request):
         widget_token = input_serializer.validated_data["widget_token"]
         widget_session_token = input_serializer.validated_data["widget_session_token"]
         body = input_serializer.validated_data["body"].strip()
+        
+        # Дополнительная проверка на одинаковые сообщения (через cache)
+        from django.core.cache import cache
+        message_hash_key = f"messenger:spam:send:{widget_session_token[:16]}:{hash(body)}"
+        duplicate_count = cache.get(message_hash_key, 0)
+        if duplicate_count >= 3:  # Максимум 3 одинаковых сообщения подряд
+            safe_log_widget_error(
+                widget_logger,
+                logging.WARNING,
+                "Send blocked: duplicate message spam",
+                widget_token=widget_token,
+                session_token=widget_session_token,
+            )
+            return Response(
+                {"detail": "Duplicate messages are not allowed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        # Увеличиваем счётчик одинаковых сообщений (TTL 5 минут)
+        cache.set(message_hash_key, duplicate_count + 1, timeout=300)
 
         if not body:
             return Response(

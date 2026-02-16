@@ -589,7 +589,113 @@ class WidgetAPITests(TestCase):
             },
         )
         self.assertEqual(
-            response2.status_code,
-            status.HTTP_429_TOO_MANY_REQUESTS,
-            "Второй запрос должен быть заблокирован из-за минимального интервала",
+                response2.status_code,
+                status.HTTP_429_TOO_MANY_REQUESTS,
+                "Второй запрос должен быть заблокирован из-за минимального интервала",
+            )
+    
+    # ========================================================================
+    # Honeypot и антибот-валидация тесты (PRD-2)
+    # ========================================================================
+    
+    def test_send_honeypot_blocks_bot(self):
+        """Проверка honeypot: заполненное поле hp блокирует запрос."""
+        from messenger.utils import create_widget_session
+        
+        session = create_widget_session(
+            inbox_id=self.inbox.id,
+            conversation_id=self.conversation.id,
+            contact_id=str(self.contact.id),
         )
+        
+        client = APIClient()
+        
+        # Запрос с заполненным honeypot полем
+        response = client.post(
+            "/api/widget/send/",
+            {
+                "widget_token": "test_widget_token_123",
+                "widget_session_token": session.token,
+                "body": "Test message",
+                "hp": "filled",  # Бот заполнил honeypot
+            },
+        )
+        
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+            "Запрос с заполненным honeypot должен быть заблокирован",
+        )
+        self.assertIn("hp", response.data or {})
+    
+    def test_send_too_many_links_blocked(self):
+        """Проверка: сообщение с слишком большим количеством ссылок блокируется."""
+        from messenger.utils import create_widget_session
+        
+        session = create_widget_session(
+            inbox_id=self.inbox.id,
+            conversation_id=self.conversation.id,
+            contact_id=str(self.contact.id),
+        )
+        
+        client = APIClient()
+        
+        # Сообщение с 4+ ссылками
+        response = client.post(
+            "/api/widget/send/",
+            {
+                "widget_token": "test_widget_token_123",
+                "widget_session_token": session.token,
+                "body": "Check http://link1.com and https://link2.com and www.link3.com and http://link4.com",
+            },
+        )
+        
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+            "Сообщение с слишком большим количеством ссылок должно быть заблокировано",
+        )
+    
+    def test_send_duplicate_messages_blocked(self):
+        """Проверка: одинаковые сообщения подряд блокируются."""
+        from django.core.cache import cache
+        from messenger.utils import create_widget_session
+        
+        cache.clear()
+        
+        session = create_widget_session(
+            inbox_id=self.inbox.id,
+            conversation_id=self.conversation.id,
+            contact_id=str(self.contact.id),
+        )
+        
+        client = APIClient()
+        
+        message_body = "Spam message"
+        
+        # Отправляем одинаковое сообщение несколько раз
+        for i in range(4):
+            response = client.post(
+                "/api/widget/send/",
+                {
+                    "widget_token": "test_widget_token_123",
+                    "widget_session_token": session.token,
+                    "body": message_body,
+                },
+            )
+            
+            if i < 3:
+                # Первые 3 сообщения должны проходить
+                self.assertIn(
+                    response.status_code,
+                    [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST],
+                    f"Сообщение {i} должно проходить",
+                )
+            else:
+                # 4-е сообщение должно быть заблокировано
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_400_BAD_REQUEST,
+                    "4-е одинаковое сообщение должно быть заблокировано",
+                )
+                self.assertIn("duplicate", response.data.get("detail", "").lower())
