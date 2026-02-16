@@ -385,3 +385,23 @@ class MessengerAPISecurityTests(TestCase):
                 status.HTTP_404_NOT_FOUND,
                 f"Endpoint {endpoint} должен возвращать 404 при отключённом messenger",
             )
+
+    def test_inbox_auto_generates_widget_token(self):
+        """При создании Inbox без widget_token токен генерируется автоматически."""
+        inbox = Inbox.objects.create(
+            name="Test Inbox",
+            branch=self.branch_a,
+            widget_token="",  # Пустой токен
+        )
+        self.assertIsNotNone(inbox.widget_token)
+        self.assertNotEqual(inbox.widget_token, "")
+        self.assertGreater(len(inbox.widget_token), 0)
+
+        # Проверяем, что токен уникальный при повторном создании
+        inbox2 = Inbox.objects.create(
+            name="Test Inbox 2",
+            branch=self.branch_a,
+            # widget_token не передаём вообще
+        )
+        self.assertIsNotNone(inbox2.widget_token)
+        self.assertNotEqual(inbox.widget_token, inbox2.widget_token)

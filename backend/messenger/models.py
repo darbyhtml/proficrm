@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import secrets
 import uuid
 
 from django.conf import settings
@@ -21,7 +22,9 @@ class Inbox(models.Model):
         "Токен виджета",
         max_length=64,
         unique=True,
-        help_text="Секретный токен для подключения виджета с сайта.",
+        blank=True,
+        default="",
+        help_text="Секретный токен для подключения виджета с сайта. Генерируется автоматически при создании.",
     )
     settings = models.JSONField("Настройки", default=dict, blank=True)
     created_at = models.DateTimeField("Создано", auto_now_add=True, db_index=True)
@@ -45,6 +48,9 @@ class Inbox(models.Model):
                 raise ValidationError("Нельзя изменить филиал Inbox после создания.")
 
     def save(self, *args, **kwargs):
+        # Генерируем widget_token автоматически, если он не задан.
+        if not self.widget_token:
+            self.widget_token = secrets.token_urlsafe(32)
         # Гарантируем инвариант через clean() и логику выше.
         self.full_clean()
         super().save(*args, **kwargs)
