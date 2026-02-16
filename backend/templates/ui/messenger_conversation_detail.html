@@ -1,0 +1,184 @@
+{% extends "ui/base.html" %}
+{% load ui_extras %}
+{% block title %}Диалог #{{ conversation.id }} — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <div class="messenger-conversation-detail">
+    <div class="flex items-center justify-between gap-4 mb-4">
+      <div>
+        <a href="{% url 'messenger_conversation_list' %}" class="text-sm text-brand-dark/70 hover:text-brand-teal mb-2 inline-block">← Назад к списку диалогов</a>
+        <h1 class="text-2xl font-semibold">Диалог #{{ conversation.id }}</h1>
+        <div class="text-sm text-brand-dark/70 mt-1">
+          Контакт: <strong>{{ conversation.contact.name|default:conversation.contact.email|default:conversation.contact.phone|default:"Без имени" }}</strong>
+          {% if conversation.contact.email %}
+            · {{ conversation.contact.email }}
+          {% endif %}
+          {% if conversation.contact.phone %}
+            · {{ conversation.contact.phone }}
+          {% endif %}
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        {% if conversation.status == 'open' %}
+          <span class="badge badge-new">Открыт</span>
+        {% elif conversation.status == 'pending' %}
+          <span class="badge badge-progress">В ожидании</span>
+        {% elif conversation.status == 'resolved' %}
+          <span class="badge badge-done">Решён</span>
+        {% elif conversation.status == 'closed' %}
+          <span class="badge badge-cancel">Закрыт</span>
+        {% endif %}
+        {% if conversation.priority == 10 %}
+          <span class="badge badge-xs">Низкий</span>
+        {% elif conversation.priority == 20 %}
+          <span class="badge badge-xs">Обычный</span>
+        {% elif conversation.priority == 30 %}
+          <span class="badge badge-warn badge-xs">Высокий</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <!-- Основная лента сообщений -->
+      <div class="lg:col-span-2">
+        <div class="card">
+          <div class="card-pad">
+            <h2 class="text-lg font-semibold mb-4">Сообщения</h2>
+            
+            <div class="space-y-4 mb-6" id="messagesList">
+              {% for message in messages %}
+                <div class="flex gap-3 {% if message.direction == 'IN' %}flex-row{% else %}flex-row-reverse{% endif %}">
+                  <div class="flex-shrink-0">
+                    {% if message.direction == 'IN' %}
+                      <div class="w-8 h-8 rounded-full bg-brand-teal/20 flex items-center justify-center text-brand-teal font-semibold text-sm">
+                        {{ message.sender_contact.name|first|default:"К"|upper }}
+                      </div>
+                    {% else %}
+                      <div class="w-8 h-8 rounded-full bg-brand-orange/20 flex items-center justify-center text-brand-orange font-semibold text-sm">
+                        {{ message.sender_user.first_name|first|default:message.sender_user.username|first|upper }}
+                      </div>
+                    {% endif %}
+                  </div>
+                  <div class="flex-1 {% if message.direction == 'IN' %}text-left{% else %}text-right{% endif %}">
+                    <div class="inline-block max-w-[80%] {% if message.direction == 'IN' %}bg-brand-soft/40{% else %}bg-brand-teal/10{% endif %} rounded-lg px-4 py-2">
+                      <div class="text-sm font-medium mb-1">
+                        {% if message.direction == 'IN' %}
+                          {{ message.sender_contact.name|default:"Клиент" }}
+                        {% elif message.direction == 'OUT' %}
+                          {{ message.sender_user.get_full_name|default:message.sender_user.username }}
+                        {% else %}
+                          {{ message.sender_user.get_full_name|default:message.sender_user.username }} (внутреннее)
+                        {% endif %}
+                      </div>
+                      <div class="text-sm text-brand-dark whitespace-pre-wrap wrap-anywhere">{{ message.body }}</div>
+                      {% if message.attachments.exists %}
+                        <div class="mt-2 space-y-1">
+                          {% for attachment in message.attachments.all %}
+                            <a href="{{ attachment.file.url }}" target="_blank" class="text-xs text-brand-teal hover:underline inline-flex items-center gap-1">
+                              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                              {{ attachment.file.name|slice:"-30:" }}
+                            </a>
+                          {% endfor %}
+                        </div>
+                      {% endif %}
+                      <div class="text-xs text-brand-dark/50 mt-1">
+                        {{ message.created_at|date:"d.m.Y H:i" }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              {% empty %}
+                <div class="text-center py-8 text-brand-dark/60">
+                  <p>Сообщений пока нет</p>
+                </div>
+              {% endfor %}
+            </div>
+
+            <!-- Форма отправки сообщения -->
+            <form method="post" action="{% url 'messenger_conversation_detail' conversation.id %}" id="messageForm" class="border-t border-brand-soft/60 pt-4">
+              {% csrf_token %}
+              <div class="flex gap-2">
+                <textarea name="body" id="messageBody" class="textarea flex-1" rows="3" placeholder="Введите сообщение..." required></textarea>
+                <div class="flex flex-col gap-2">
+                  <button type="submit" name="action" value="send_out" class="btn btn-primary">Отправить</button>
+                  <button type="submit" name="action" value="send_internal" class="btn btn-outline btn-sm">Внутреннее</button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Боковая панель с информацией и действиями -->
+      <div class="lg:col-span-1">
+        <div class="card mb-4">
+          <div class="card-pad">
+            <h3 class="text-sm font-semibold mb-3">Информация</h3>
+            <dl class="space-y-2 text-sm">
+              <div>
+                <dt class="text-brand-dark/60">Филиал</dt>
+                <dd class="font-medium">{{ conversation.branch.name }}</dd>
+              </div>
+              {% if conversation.region %}
+                <div>
+                  <dt class="text-brand-dark/60">Регион</dt>
+                  <dd class="font-medium">{{ conversation.region.name }}</dd>
+                </div>
+              {% endif %}
+              <div>
+                <dt class="text-brand-dark/60">Создан</dt>
+                <dd class="font-medium">{{ conversation.created_at|date:"d.m.Y H:i" }}</dd>
+              </div>
+              {% if conversation.last_message_at %}
+                <div>
+                  <dt class="text-brand-dark/60">Последнее сообщение</dt>
+                  <dd class="font-medium">{{ conversation.last_message_at|date:"d.m.Y H:i" }}</dd>
+                </div>
+              {% endif %}
+            </dl>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-pad">
+            <h3 class="text-sm font-semibold mb-3">Действия</h3>
+            <form method="post" action="{% url 'messenger_conversation_detail' conversation.id %}" class="space-y-3">
+              {% csrf_token %}
+              
+              <div>
+                <label class="block text-xs text-brand-dark/70 mb-1">Статус</label>
+                <select name="status" class="select text-sm w-full">
+                  <option value="open" {% if conversation.status == 'open' %}selected{% endif %}>Открыт</option>
+                  <option value="pending" {% if conversation.status == 'pending' %}selected{% endif %}>В ожидании</option>
+                  <option value="resolved" {% if conversation.status == 'resolved' %}selected{% endif %}>Решён</option>
+                  <option value="closed" {% if conversation.status == 'closed' %}selected{% endif %}>Закрыт</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs text-brand-dark/70 mb-1">Оператор</label>
+                <select name="assignee" class="select text-sm w-full">
+                  <option value="">Не назначен</option>
+                  {% for assignee in assignees %}
+                    <option value="{{ assignee.id }}" {% if conversation.assignee_id == assignee.id %}selected{% endif %}>{{ assignee }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs text-brand-dark/70 mb-1">Приоритет</label>
+                <select name="priority" class="select text-sm w-full">
+                  <option value="10" {% if conversation.priority == 10 %}selected{% endif %}>Низкий</option>
+                  <option value="20" {% if conversation.priority == 20 %}selected{% endif %}>Обычный</option>
+                  <option value="30" {% if conversation.priority == 30 %}selected{% endif %}>Высокий</option>
+                </select>
+              </div>
+
+              <button type="submit" name="action" value="update" class="btn btn-primary w-full">Сохранить изменения</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{% endblock %}

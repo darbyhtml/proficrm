@@ -76,6 +76,10 @@ urlpatterns = [
     path("tasks/<uuid:task_id>/status/", views.task_set_status, name="task_set_status"),
     path("tasks/<uuid:task_id>/delete/", views.task_delete, name="task_delete"),
 
+    # Messenger (операторская панель диалогов)
+    path("messenger/conversations/", views.messenger_conversation_list, name="messenger_conversation_list"),
+    path("messenger/conversations/<int:conversation_id>/", views.messenger_conversation_detail, name="messenger_conversation_detail"),
+
     # Settings (admin only)
     path("settings/", views.settings_dashboard, name="settings_dashboard"),
     path("settings/access/", views.settings_access, name="settings_access"),

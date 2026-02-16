@@ -55,6 +55,9 @@ from tasksapp.policy import visible_tasks_qs, can_manage_task_status
 from notifications.models import Notification
 from notifications.service import notify
 from phonebridge.models import CallRequest, PhoneDevice, MobileAppBuild, MobileAppQrToken
+from messenger.models import Conversation, Message
+from messenger.selectors import visible_conversations_qs
+from messenger.utils import ensure_messenger_enabled_view
 import json
 import logging
 import mimetypes
@@ -11001,3 +11004,231 @@ def mobile_app_qr_image(request: HttpRequest) -> HttpResponse:
     response = HttpResponse(buffer.read(), content_type="image/png")
     response["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return response
+
+
+# ============================================================================
+# Messenger UI (Этап 4: операторская панель диалогов)
+# ============================================================================
+
+
+@login_required
+@policy_required(resource_type="page", resource="ui:messenger:conversations:list")
+def messenger_conversation_list(request: HttpRequest) -> HttpResponse:
+    """
+    Список диалогов (conversations) для операторов.
+
+    Фильтры:
+    - status (open/pending/resolved/closed)
+    - branch (филиал)
+    - assignee (назначенный оператор)
+    - region (регион контакта)
+
+    Сортировка: по last_message_at (по умолчанию новые сверху).
+    """
+    # Проверка feature flag
+    ensure_messenger_enabled_view()
+
+    # Эффективный пользователь для отображения (режим «просмотр как»)
+    user: User = get_effective_user(request)
+
+    # Базовую видимость берём из domain policy слоя (messenger.selectors)
+    qs = visible_conversations_qs(user).select_related("inbox", "contact", "assignee", "branch", "region")
+
+    # Фильтры
+    status_filter = (request.GET.get("status") or "").strip()
+    if status_filter:
+        if "," in status_filter:
+            statuses = [s.strip() for s in status_filter.split(",")]
+            qs = qs.filter(status__in=statuses)
+        else:
+            qs = qs.filter(status=status_filter)
+
+    branch_id = request.GET.get("branch")
+    if branch_id:
+        try:
+            qs = qs.filter(branch_id=int(branch_id))
+        except (ValueError, TypeError):
+            pass
+
+    assignee_id = request.GET.get("assignee")
+    if assignee_id:
+        try:
+            qs = qs.filter(assignee_id=int(assignee_id))
+        except (ValueError, TypeError):
+            pass
+
+    region_id = request.GET.get("region")
+    if region_id:
+        try:
+            qs = qs.filter(region_id=int(region_id))
+        except (ValueError, TypeError):
+            pass
+
+    # Сортировка
+    sort_raw = (request.GET.get("sort") or "").strip()
+    sort = sort_raw or "last_message_at"
+    direction = (request.GET.get("dir") or "").strip().lower() or "desc"
+    direction = "asc" if direction == "asc" else "desc"
+
+    sort_map = {
+        "last_message_at": "last_message_at",
+        "created_at": "created_at",
+        "status": "status",
+        "priority": "priority",
+    }
+    sort_field = sort_map.get(sort, "last_message_at")
+    order = [sort_field, "id"]
+    if direction == "desc":
+        order = [f"-{f}" for f in order]
+    qs = qs.order_by(*order)
+
+    # Пагинация
+    per_page_param = request.GET.get("per_page", "").strip()
+    if per_page_param:
+        try:
+            per_page = int(per_page_param)
+            if per_page in [25, 50, 100, 200]:
+                request.session["messenger_conversation_list_per_page"] = per_page
+            else:
+                per_page = request.session.get("messenger_conversation_list_per_page", 25)
+        except (ValueError, TypeError):
+            per_page = request.session.get("messenger_conversation_list_per_page", 25)
+    else:
+        per_page = request.session.get("messenger_conversation_list_per_page", 25)
+
+    paginator = Paginator(qs, per_page)
+    page = paginator.get_page(request.GET.get("page"))
+
+    # Справочники для фильтров
+    branches = Branch.objects.order_by("name")
+    regions = Region.objects.order_by("name")
+    assignees_qs = get_users_for_lists(user)
+    if user.branch_id and user.role != User.Role.ADMIN:
+        assignees_qs = assignees_qs.filter(branch_id=user.branch_id)
+    assignees = list(assignees_qs)
+
+    return render(
+        request,
+        "ui/messenger_conversation_list.html",
+        {
+            "page": page,
+            "status_filter": status_filter,
+            "branch_id": branch_id,
+            "assignee_id": assignee_id,
+            "region_id": region_id,
+            "sort": sort,
+            "dir": direction,
+            "branches": branches,
+            "regions": regions,
+            "assignees": assignees,
+            "per_page": per_page,
+        },
+    )
+
+
+@login_required
+@policy_required(resource_type="page", resource="ui:messenger:conversations:detail")
+def messenger_conversation_detail(request: HttpRequest, conversation_id: int) -> HttpResponse:
+    """
+    Детальный просмотр диалога: лента сообщений, форма ответа, действия.
+
+    Поддерживаемые действия:
+    - Отправка сообщения (OUT или INTERNAL)
+    - Смена статуса
+    - Назначение/снятие оператора
+    - Изменение приоритета
+    """
+    # Проверка feature flag
+    ensure_messenger_enabled_view()
+
+    user: User = request.user
+
+    # Получаем диалог только из видимых для пользователя
+    qs = visible_conversations_qs(user)
+    conversation = get_object_or_404(qs, id=conversation_id)
+
+    # Обработка POST-запросов
+    if request.method == "POST":
+        action = request.POST.get("action", "").strip()
+
+        if action == "send_out":
+            # Отправка исходящего сообщения
+            body = (request.POST.get("body") or "").strip()
+            if body:
+                from messenger.services import record_message
+                record_message(
+                    conversation=conversation,
+                    direction=Message.Direction.OUT,
+                    body=body,
+                    sender_user=user,
+                )
+                messages.success(request, "Сообщение отправлено")
+                return redirect("messenger_conversation_detail", conversation_id=conversation_id)
+
+        elif action == "send_internal":
+            # Отправка внутреннего сообщения
+            body = (request.POST.get("body") or "").strip()
+            if body:
+                from messenger.services import record_message
+                record_message(
+                    conversation=conversation,
+                    direction=Message.Direction.INTERNAL,
+                    body=body,
+                    sender_user=user,
+                )
+                messages.success(request, "Внутреннее сообщение добавлено")
+                return redirect("messenger_conversation_detail", conversation_id=conversation_id)
+
+        elif action == "update":
+            # Обновление статуса, оператора, приоритета
+            status = request.POST.get("status", "").strip()
+            assignee_id = request.POST.get("assignee", "").strip()
+            priority = request.POST.get("priority", "").strip()
+
+            update_data = {}
+            if status and status in ["open", "pending", "resolved", "closed"]:
+                update_data["status"] = status
+            if assignee_id:
+                try:
+                    assignee_id_int = int(assignee_id)
+                    if assignee_id_int:
+                        update_data["assignee_id"] = assignee_id_int
+                    else:
+                        update_data["assignee_id"] = None
+                except (ValueError, TypeError):
+                    pass
+            elif assignee_id == "":
+                update_data["assignee_id"] = None
+            if priority:
+                try:
+                    priority_int = int(priority)
+                    if priority_int in [10, 20, 30]:
+                        update_data["priority"] = priority_int
+                except (ValueError, TypeError):
+                    pass
+
+            if update_data:
+                for key, value in update_data.items():
+                    setattr(conversation, key, value)
+                conversation.save()
+                messages.success(request, "Изменения сохранены")
+                return redirect("messenger_conversation_detail", conversation_id=conversation_id)
+
+    # Получаем сообщения диалога
+    messages_list = conversation.messages.all().order_by("created_at", "id")
+
+    # Справочники для действий
+    assignees_qs = get_users_for_lists(user)
+    if user.branch_id and user.role != User.Role.ADMIN:
+        assignees_qs = assignees_qs.filter(branch_id=user.branch_id)
+    assignees = list(assignees_qs)
+
+    return render(
+        request,
+        "ui/messenger_conversation_detail.html",
+        {
+            "conversation": conversation,
+            "messages": messages_list,
+            "assignees": assignees,
+        },
+    )
