@@ -13,10 +13,10 @@ import logging
 
 from django.utils import timezone as django_timezone
 from rest_framework import status
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework.exceptions import ValidationError as DRFValidationError
+from rest_framework.exceptions import ValidationError as DRFValidationError, Throttled
 
 from . import models, serializers, services
 from .utils import (
@@ -25,6 +25,7 @@ from .utils import (
     ensure_messenger_enabled_api,
 )
 from .logging_utils import widget_logger, safe_log_widget_error
+from .throttles import WidgetBootstrapThrottle, WidgetSendThrottle, WidgetPollThrottle
 
 
 class WidgetApiMixin:
@@ -39,6 +40,7 @@ class WidgetApiMixin:
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@throttle_classes([WidgetBootstrapThrottle])
 def widget_bootstrap(request):
     """
     POST /api/widget/bootstrap/
@@ -51,6 +53,9 @@ def widget_bootstrap(request):
     contact_external_id = None
     
     try:
+        # Проверка throttling (выполняется автоматически через декоратор)
+        # Если превышен лимит - DRF выбросит Throttled исключение
+        
         input_serializer = serializers.WidgetBootstrapSerializer(data=request.data)
         input_serializer.is_valid(raise_exception=True)
 
@@ -125,6 +130,17 @@ def widget_bootstrap(request):
 
         return Response(response_serializer.data, status=status.HTTP_200_OK)
     
+    except Throttled as e:
+        # Превышен лимит запросов
+        safe_log_widget_error(
+            widget_logger,
+            logging.WARNING,
+            "Bootstrap throttled",
+            widget_token=widget_token,
+        )
+        # DRF автоматически вернёт 429 с деталями
+        raise
+    
     except DRFValidationError as e:
         # Ошибки валидации сериализатора
         safe_log_widget_error(
@@ -154,6 +170,7 @@ def widget_bootstrap(request):
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
+@throttle_classes([WidgetSendThrottle])
 def widget_send(request):
     """
     POST /api/widget/send/
@@ -267,6 +284,17 @@ def widget_send(request):
 
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
     
+    except Throttled as e:
+        # Превышен лимит запросов
+        safe_log_widget_error(
+            widget_logger,
+            logging.WARNING,
+            "Send throttled",
+            widget_token=widget_token,
+            session_token=widget_session_token,
+        )
+        raise
+    
     except DRFValidationError as e:
         # Ошибки валидации сериализатора
         safe_log_widget_error(
@@ -297,6 +325,7 @@ def widget_send(request):
 
 @api_view(["GET"])
 @permission_classes([AllowAny])
+@throttle_classes([WidgetPollThrottle])
 def widget_poll(request):
     """
     GET /api/widget/poll/
@@ -408,6 +437,17 @@ def widget_poll(request):
             })
 
         return Response({"messages": result}, status=status.HTTP_200_OK)
+    
+    except Throttled as e:
+        # Превышен лимит запросов
+        safe_log_widget_error(
+            widget_logger,
+            logging.WARNING,
+            "Poll throttled",
+            widget_token=widget_token,
+            session_token=widget_session_token,
+        )
+        raise
     
     except Exception as e:
         # Неожиданные ошибки

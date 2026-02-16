@@ -466,3 +466,130 @@ class WidgetAPITests(TestCase):
                 status.HTTP_404_NOT_FOUND,
                 f"Endpoint {endpoint} должен возвращать 404 при отключённом messenger",
             )
+    
+    # ========================================================================
+    # Throttling тесты (PRD-1)
+    # ========================================================================
+    
+    def test_bootstrap_throttling(self):
+        """Проверка throttling для bootstrap: превышение лимита возвращает 429."""
+        from django.core.cache import cache
+        from messenger.throttles import WidgetBootstrapThrottle
+        
+        # Очистить кэш перед тестом
+        cache.clear()
+        
+        client = APIClient()
+        
+        # Отправить больше лимита запросов с одного IP
+        for i in range(WidgetBootstrapThrottle.RATE_PER_IP + 1):
+            response = client.post(
+                "/api/widget/bootstrap/",
+                {
+                    "widget_token": "test_widget_token_123",
+                    "contact_external_id": f"test-contact-{i}",
+                },
+            )
+            
+            if i < WidgetBootstrapThrottle.RATE_PER_IP:
+                # Первые запросы должны проходить
+                self.assertIn(
+                    response.status_code,
+                    [status.HTTP_200_OK, status.HTTP_404_NOT_FOUND],  # 404 если inbox не найден, но не 429
+                    f"Запрос {i} не должен быть throttled",
+                )
+            else:
+                # Последний запрос должен быть заблокирован
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_429_TOO_MANY_REQUESTS,
+                    f"Запрос {i} должен быть throttled (429)",
+                )
+    
+    def test_send_throttling(self):
+        """Проверка throttling для send: превышение лимита возвращает 429."""
+        from django.core.cache import cache
+        from messenger.throttles import WidgetSendThrottle
+        from messenger.utils import create_widget_session
+        
+        cache.clear()
+        
+        # Создать сессию
+        session = create_widget_session(
+            inbox_id=self.inbox.id,
+            conversation_id=self.conversation.id,
+            contact_id=str(self.contact.id),
+        )
+        
+        client = APIClient()
+        
+        # Отправить больше лимита запросов
+        for i in range(WidgetSendThrottle.RATE_PER_SESSION + 1):
+            response = client.post(
+                "/api/widget/send/",
+                {
+                    "widget_token": "test_widget_token_123",
+                    "widget_session_token": session.token,
+                    "body": f"Test message {i}",
+                },
+            )
+            
+            if i < WidgetSendThrottle.RATE_PER_SESSION:
+                # Первые запросы должны проходить
+                self.assertIn(
+                    response.status_code,
+                    [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST],  # 400 если валидация не прошла
+                    f"Запрос {i} не должен быть throttled",
+                )
+            else:
+                # Последний запрос должен быть заблокирован
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_429_TOO_MANY_REQUESTS,
+                    f"Запрос {i} должен быть throttled (429)",
+                )
+    
+    def test_poll_throttling(self):
+        """Проверка throttling для poll: минимальный интервал и лимит запросов."""
+        from django.core.cache import cache
+        from messenger.throttles import WidgetPollThrottle
+        from messenger.utils import create_widget_session
+        
+        cache.clear()
+        
+        # Создать сессию
+        session = create_widget_session(
+            inbox_id=self.inbox.id,
+            conversation_id=self.conversation.id,
+            contact_id=str(self.contact.id),
+        )
+        
+        client = APIClient()
+        
+        # Первый запрос должен пройти
+        response1 = client.get(
+            "/api/widget/poll/",
+            {
+                "widget_token": "test_widget_token_123",
+                "widget_session_token": session.token,
+            },
+        )
+        self.assertIn(
+            response1.status_code,
+            [status.HTTP_200_OK, status.HTTP_400_BAD_REQUEST],
+            "Первый запрос должен пройти",
+        )
+        
+        # Второй запрос сразу после первого должен быть заблокирован (min interval)
+        response2 = client.get(
+            "/api/widget/poll/",
+            {
+                "widget_token": "test_widget_token_123",
+                "widget_session_token": session.token,
+            },
+        )
+        self.assertEqual(
+            response2.status_code,
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Второй запрос должен быть заблокирован из-за минимального интервала",
+        )
