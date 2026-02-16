@@ -22,26 +22,84 @@ def create_or_get_contact(
     email: str | None = None,
     phone: str | None = None,
     name: str | None = None,
+    update_if_exists: bool = True,
 ) -> Contact:
     """
-    Базовая реализация create_or_get_contact.
+    Создаёт или получает Contact, при необходимости обновляя поля.
 
-    В v1 держим логику простой: ищем по external_id, затем по email/phone.
+    Args:
+        external_id: Внешний идентификатор (visitor_id)
+        email: Email контакта
+        phone: Телефон контакта
+        name: Имя контакта
+        update_if_exists: Если True, обновляет поля существующего контакта новыми значениями (не перетирает на None)
+
+    Returns:
+        Contact instance
     """
     qs = Contact.objects.all()
+    contact = None
+
+    # Ищем по external_id в первую очередь
     if external_id:
         contact = qs.filter(external_id=external_id).first()
         if contact:
+            if update_if_exists:
+                # Обновляем поля только если переданы новые значения (не перетираем на None)
+                update_fields = []
+                if name and name != contact.name:
+                    contact.name = name
+                    update_fields.append("name")
+                if email and email != contact.email:
+                    contact.email = email
+                    update_fields.append("email")
+                if phone and phone != contact.phone:
+                    contact.phone = phone
+                    update_fields.append("phone")
+                if update_fields:
+                    contact.save(update_fields=update_fields)
             return contact
+
+    # Если не нашли по external_id, ищем по email
     if email:
         contact = qs.filter(email=email).first()
         if contact:
+            if update_if_exists:
+                # Обновляем external_id и другие поля, если переданы
+                update_fields = []
+                if external_id and external_id != contact.external_id:
+                    contact.external_id = external_id
+                    update_fields.append("external_id")
+                if name and name != contact.name:
+                    contact.name = name
+                    update_fields.append("name")
+                if phone and phone != contact.phone:
+                    contact.phone = phone
+                    update_fields.append("phone")
+                if update_fields:
+                    contact.save(update_fields=update_fields)
             return contact
+
+    # Если не нашли по email, ищем по phone
     if phone:
         contact = qs.filter(phone=phone).first()
         if contact:
+            if update_if_exists:
+                update_fields = []
+                if external_id and external_id != contact.external_id:
+                    contact.external_id = external_id
+                    update_fields.append("external_id")
+                if name and name != contact.name:
+                    contact.name = name
+                    update_fields.append("name")
+                if email and email != contact.email:
+                    contact.email = email
+                    update_fields.append("email")
+                if update_fields:
+                    contact.save(update_fields=update_fields)
             return contact
 
+    # Контакт не найден - создаём новый
     contact = Contact.objects.create(
         external_id=external_id or "",
         email=email or "",

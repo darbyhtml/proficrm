@@ -42,6 +42,7 @@ from phonebridge.api import (
     QrTokenStatusView,
 )
 from messenger.api import ConversationViewSet, CannedResponseViewSet
+from messenger.widget_api import widget_bootstrap, widget_send, widget_poll
 from crm.views import robots_txt, security_txt, health_check
 
 handler404 = "crm.views.handler404"
@@ -107,5 +108,9 @@ urlpatterns = [
     path("api/phone/qr/status/", QrTokenStatusView.as_view(), name="phone_qr_status"),
     path("api/phone/logout/", LogoutView.as_view(), name="phone_logout"),
     path("api/phone/logout/all/", LogoutAllView.as_view(), name="phone_logout_all"),
+    # Widget API (публичный, без аутентификации)
+    path("api/widget/bootstrap/", widget_bootstrap, name="widget-bootstrap"),
+    path("api/widget/send/", widget_send, name="widget-send"),
+    path("api/widget/poll/", widget_poll, name="widget-poll"),
     path("api/", include(router.urls)),
 ]

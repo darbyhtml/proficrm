@@ -70,3 +70,62 @@ class CannedResponseSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ("created_by", "created_at")
 
+
+# ============================================================================
+# Widget API serializers (публичный API для виджета)
+# ============================================================================
+
+
+class WidgetBootstrapSerializer(serializers.Serializer):
+    """
+    Input для POST /api/widget/bootstrap/
+    """
+
+    widget_token = serializers.CharField(required=True, help_text="Токен виджета из Inbox")
+    contact_external_id = serializers.CharField(
+        required=True,
+        max_length=255,
+        help_text="Внешний идентификатор посетителя (visitor_id)",
+    )
+    name = serializers.CharField(required=False, allow_blank=True, max_length=255)
+    email = serializers.EmailField(required=False, allow_blank=True)
+    phone = serializers.CharField(required=False, allow_blank=True, max_length=50)
+    meta = serializers.JSONField(required=False, default=dict, help_text="Дополнительные метаданные посетителя")
+
+
+class WidgetBootstrapResponseSerializer(serializers.Serializer):
+    """
+    Output для POST /api/widget/bootstrap/
+    """
+
+    widget_session_token = serializers.CharField(help_text="Токен сессии виджета для последующих запросов")
+    conversation_id = serializers.IntegerField(help_text="ID диалога")
+    initial_messages = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        help_text="Последние сообщения диалога (опционально)",
+    )
+
+
+class WidgetSendSerializer(serializers.Serializer):
+    """
+    Input для POST /api/widget/send/
+    """
+
+    widget_token = serializers.CharField(required=True)
+    widget_session_token = serializers.CharField(required=True)
+    body = serializers.CharField(
+        required=True,
+        max_length=2000,
+        help_text="Текст сообщения (макс. 2000 символов)",
+    )
+
+
+class WidgetSendResponseSerializer(serializers.Serializer):
+    """
+    Output для POST /api/widget/send/
+    """
+
+    id = serializers.IntegerField(help_text="ID созданного сообщения")
+    created_at = serializers.DateTimeField(help_text="Время создания сообщения")
+
