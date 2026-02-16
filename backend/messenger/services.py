@@ -139,6 +139,58 @@ def assign_conversation(conversation: Conversation, user) -> None:
     conversation.save(update_fields=["assignee"])
 
 
+RR_CACHE_KEY_PREFIX = "messenger:rr"
+RR_CACHE_TTL = 60 * 60 * 24 * 7  # 7 дней (индекс не критичен к сбросу)
+
+
+def auto_assign_conversation(conversation: Conversation) -> Optional[User]:
+    """
+    Автоназначение диалога оператору филиала по round-robin.
+
+    Кандидаты: активные пользователи того же branch (ADMIN по умолчанию исключаем).
+    Указатель round-robin хранится в Redis: messenger:rr:<branch_id>:<inbox_id>.
+
+    Returns:
+        Назначенный User или None, если кандидатов нет.
+    """
+    from django.core.cache import cache
+
+    branch_id = conversation.branch_id
+    inbox_id = conversation.inbox_id
+
+    # Кандидаты: активные пользователи филиала, кроме ADMIN (операторы)
+    candidates = list(
+        User.objects.filter(
+            branch_id=branch_id,
+            is_active=True,
+        )
+        .exclude(role=User.Role.ADMIN)
+        .order_by("id")
+        .values_list("id", flat=True)
+    )
+
+    if not candidates:
+        return None
+
+    cache_key = f"{RR_CACHE_KEY_PREFIX}:{branch_id}:{inbox_id}"
+    try:
+        idx = cache.get(cache_key, 0)
+    except Exception:
+        idx = 0
+
+    idx = idx % len(candidates)
+    next_idx = (idx + 1) % len(candidates)
+    try:
+        cache.set(cache_key, next_idx, timeout=RR_CACHE_TTL)
+    except Exception:
+        pass
+
+    assignee_id = candidates[idx]
+    conversation.assignee_id = assignee_id
+    conversation.save(update_fields=["assignee_id"])
+    return User.objects.get(id=assignee_id)
+
+
 def select_routing_rule(
     inbox: "models.Inbox",
     region: Optional["models.Region"] = None,

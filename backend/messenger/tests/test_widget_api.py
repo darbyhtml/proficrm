@@ -816,3 +816,87 @@ class WidgetAPITests(TestCase):
         selected = services.select_routing_rule(self.inbox, None)
         self.assertIsNotNone(selected)
         self.assertEqual(selected.id, fallback.id)
+
+    # ========================================================================
+    # Auto-assign тесты (PRD-5)
+    # ========================================================================
+
+    def test_auto_assign_only_within_branch(self):
+        """Автоназначение только внутри branch: оператор другого филиала не назначается."""
+        from django.core.cache import cache
+
+        cache.clear()
+
+        # Оператор нашего филиала (не ADMIN)
+        operator = User.objects.create_user(
+            username="operator1",
+            email="op1@test.com",
+            password="testpass",
+            branch=self.branch,
+            role=User.Role.MANAGER,
+        )
+
+        # Другой филиал и оператор
+        other_branch = Branch.objects.create(code="other_br", name="Other Branch")
+        other_operator = User.objects.create_user(
+            username="operator_other",
+            email="op_other@test.com",
+            password="testpass",
+            branch=other_branch,
+            role=User.Role.MANAGER,
+        )
+
+        client = APIClient()
+        response = client.post(
+            "/api/widget/bootstrap/",
+            {
+                "widget_token": "test_widget_token_123",
+                "contact_external_id": "visitor_auto_assign",
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        conversation = Conversation.objects.get(id=response.data["conversation_id"])
+        self.assertIsNotNone(conversation.assignee_id)
+        self.assertEqual(conversation.assignee_id, operator.id)
+        self.assertNotEqual(conversation.assignee_id, other_operator.id)
+
+    def test_auto_assign_round_robin_two_operators(self):
+        """Round-robin: при двух операторах новые диалоги назначаются по очереди."""
+        from django.core.cache import cache
+
+        cache.clear()
+
+        op1 = User.objects.create_user(
+            username="rr_op1",
+            email="rr1@test.com",
+            password="testpass",
+            branch=self.branch,
+            role=User.Role.MANAGER,
+        )
+        op2 = User.objects.create_user(
+            username="rr_op2",
+            email="rr2@test.com",
+            password="testpass",
+            branch=self.branch,
+            role=User.Role.MANAGER,
+        )
+
+        client = APIClient()
+        ids = []
+        for i in range(2):
+            r = client.post(
+                "/api/widget/bootstrap/",
+                {
+                    "widget_token": "test_widget_token_123",
+                    "contact_external_id": f"visitor_rr_{i}",
+                },
+            )
+            self.assertEqual(r.status_code, status.HTTP_200_OK)
+            conv = Conversation.objects.get(id=r.data["conversation_id"])
+            ids.append(conv.assignee_id)
+
+        self.assertIsNotNone(ids[0])
+        self.assertIsNotNone(ids[1])
+        self.assertNotEqual(ids[0], ids[1])
+        self.assertEqual(set(ids), {op1.id, op2.id})

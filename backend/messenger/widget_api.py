@@ -122,13 +122,9 @@ def widget_bootstrap(request):
                 branch=inbox.branch,  # Автоматически из inbox.branch
                 region=region,  # Проставляем region из routing logic
             )
-            
-            # Если найдено правило маршрутизации и оно указывает на другой branch/inbox,
-            # мы не меняем branch (он всегда из inbox.branch), но можем обновить priority
-            if routing_rule and routing_rule.priority != 100:
-                # Можно использовать priority из правила для приоритета диалога
-                # (но это опционально, пока оставляем как есть)
-                pass
+
+            # Auto-assign: round-robin по операторам филиала
+            services.auto_assign_conversation(conversation)
 
         # Создать widget_session_token
         session = create_widget_session(
