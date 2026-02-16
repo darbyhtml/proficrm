@@ -17,11 +17,11 @@
       <table class="min-w-full text-sm">
         <thead class="bg-brand-soft/40 text-brand-dark/80">
           <tr>
-            <th class="text-left px-4 py-3">Название</th>
-            <th class="text-left px-4 py-3">Филиал</th>
-            <th class="text-left px-4 py-3">Активен</th>
-            <th class="text-left px-4 py-3">Открытых диалогов</th>
-            <th class="text-left px-4 py-3">Действия</th>
+            <th class="text-left px-4 py-3" title="Название inbox для отображения в админке">Название</th>
+            <th class="text-left px-4 py-3" title="Филиал, к которому привязан виджет">Филиал</th>
+            <th class="text-left px-4 py-3" title="Активные виджеты принимают новые диалоги">Активен</th>
+            <th class="text-left px-4 py-3" title="Количество диалогов со статусом Открыт или В ожидании">Открытых диалогов</th>
+            <th class="text-left px-4 py-3" title="Быстрые действия с inbox">Действия</th>
           </tr>
         </thead>
         <tbody>
@@ -38,10 +38,12 @@
               </td>
               <td class="px-4 py-3">{{ inbox.open_conversations_count|default:0 }}</td>
               <td class="px-4 py-3">
-                <div class="flex items-center gap-2">
-                  <a class="underline text-brand-teal" href="/settings/messenger/inboxes/{{ inbox.id }}/">Редактировать</a>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <a class="underline text-brand-teal" href="/settings/messenger/inboxes/{{ inbox.id }}/" title="Редактировать настройки и токен">Редактировать</a>
                   <span class="text-brand-dark/40">|</span>
-                  <a class="underline text-brand-teal" href="/widget-demo/?token={{ inbox.widget_token }}">Демо</a>
+                  <button type="button" class="copy-token-btn underline text-brand-teal bg-transparent border-none cursor-pointer p-0 text-sm" data-token="{{ inbox.widget_token }}" title="Скопировать токен виджета">Токен</button>
+                  <span class="text-brand-dark/40">|</span>
+                  <a class="underline text-brand-teal" href="/widget-demo/?token={{ inbox.widget_token }}" target="_blank" rel="noopener" title="Открыть страницу с виджетом для проверки">Демо</a>
                 </div>
               </td>
             </tr>
@@ -53,7 +55,17 @@
     </div>
 
     <div class="flex gap-4">
-      <a href="/settings/messenger/routing/" class="btn btn-outline">Правила маршрутизации</a>
+      <a href="/settings/messenger/routing/" class="btn btn-outline" title="Настроить распределение диалогов по регионам и филиалам">Правила маршрутизации</a>
     </div>
   </div>
+  <script>
+    document.querySelectorAll('.copy-token-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var token = this.getAttribute('data-token');
+        if (token && navigator.clipboard) {
+          navigator.clipboard.writeText(token).then(function() { alert('Токен скопирован'); });
+        }
+      });
+    });
+  </script>
 {% endblock %}

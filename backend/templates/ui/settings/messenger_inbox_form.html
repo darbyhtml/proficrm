@@ -58,18 +58,21 @@
             
             <div class="space-y-3">
               <div>
-                <label class="block text-sm font-medium text-brand-dark/80 mb-1">Токен виджета</label>
-                <div class="flex items-center gap-2">
-                  <code class="flex-1 bg-brand-soft/30 p-2 rounded text-xs break-all">{{ inbox.widget_token }}</code>
-                  <button type="button" onclick="copyToken()" class="btn btn-outline btn-sm">Скопировать</button>
+                <label class="block text-sm font-medium text-brand-dark/80 mb-1">Токен виджета <span class="text-brand-dark/50 font-normal" title="Секретный ключ для подключения виджета на сайте">(?)</span></label>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <code class="flex-1 min-w-0 bg-brand-soft/30 p-2 rounded text-xs break-all">{{ inbox.widget_token }}</code>
+                  <button type="button" onclick="copyToken()" class="btn btn-outline btn-sm" title="Скопировать токен">Скопировать токен</button>
+                  <a href="/widget-demo/?token={{ inbox.widget_token }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm" title="Открыть страницу с виджетом для проверки">Открыть демо</a>
                 </div>
               </div>
 
               <div>
-                <label class="block text-sm font-medium text-brand-dark/80 mb-1">Код вставки на сайт</label>
+                <label class="block text-sm font-medium text-brand-dark/80 mb-1">Код вставки на сайт <span class="text-brand-dark/50 font-normal" title="Вставьте этот код перед &lt;/body&gt; на вашем сайте">(?)</span></label>
                 <pre class="bg-brand-dark text-white p-3 rounded text-xs overflow-x-auto"><code>&lt;link rel="stylesheet" href="{{ base_url }}/static/messenger/widget.css"&gt;
 &lt;script src="{{ base_url }}/static/messenger/widget.js" data-widget-token="{{ inbox.widget_token }}"&gt;&lt;/script&gt;</code></pre>
-                <button type="button" onclick="copyCode()" class="btn btn-outline btn-sm mt-2">Скопировать код</button>
+                <div class="flex items-center gap-2 mt-2">
+                  <button type="button" onclick="copyCode()" class="btn btn-outline btn-sm">Скопировать код вставки</button>
+                </div>
               </div>
 
               <div class="border-t border-brand-soft/60 pt-3">
