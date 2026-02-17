@@ -6158,8 +6158,9 @@ def task_list(request: HttpRequest) -> HttpResponse:
             qs = qs.filter(assigned_to=user)
 
     # Фильтр: кому поставлена задача (assigned_to)
+    # Если включена галочка "Мои", игнорируем assigned_to_param (приоритет у фильтра "мои")
     assigned_to_param = (request.GET.get("assigned_to") or "").strip()
-    if assigned_to_param:
+    if assigned_to_param and mine != "1":
         try:
             assigned_to_id = int(assigned_to_param)
             # Менеджер не должен смотреть задачи других сотрудников
@@ -6170,6 +6171,9 @@ def task_list(request: HttpRequest) -> HttpResponse:
                 qs = qs.filter(assigned_to_id=assigned_to_id)
         except (ValueError, TypeError):
             assigned_to_param = ""
+    elif mine == "1":
+        # Если включена галочка "Мои", игнорируем assigned_to_param
+        assigned_to_param = ""
 
     overdue = (request.GET.get("overdue") or "").strip()
     if overdue == "1":
@@ -7308,9 +7312,9 @@ def _apply_task_filters_for_bulk_ui(qs, user: User, data):
         filters_summary.append("Только мои задачи")
         has_restricting_filters = True
 
-    # Фильтр по конкретному исполнителю
+    # Фильтр по конкретному исполнителю (игнорируется, если включена галочка "Мои")
     assigned_to_param = (data.get("assigned_to") or "").strip()
-    if assigned_to_param:
+    if assigned_to_param and mine != "1":
         try:
             assigned_to_id = int(assigned_to_param)
         except (ValueError, TypeError):
