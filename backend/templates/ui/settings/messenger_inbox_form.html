@@ -26,18 +26,19 @@
               <div>
                 <label class="block text-sm font-medium text-brand-dark/80 mb-1">Филиал</label>
                 <div class="text-sm text-brand-dark/60 bg-brand-soft/20 p-2 rounded">
-                  {{ inbox.branch.name }} (нельзя изменить после создания)
+                  {% if inbox.branch %}{{ inbox.branch.name }} (нельзя изменить после создания){% else %}Глобальный inbox — филиал определяется по GeoIP и правилам маршрутизации{% endif %}
                 </div>
               </div>
             {% else %}
               <div>
-                <label class="block text-sm font-medium text-brand-dark/80 mb-1">Филиал *</label>
-                <select name="branch" class="select" required>
-                  <option value="">Выберите филиал</option>
+                <label class="block text-sm font-medium text-brand-dark/80 mb-1">Филиал</label>
+                <select name="branch" class="select">
+                  <option value="">Глобальный (общий) inbox — по GeoIP и правилам</option>
                   {% for branch in branches %}
                     <option value="{{ branch.id }}">{{ branch.name }}</option>
                   {% endfor %}
                 </select>
+                <p class="text-xs text-brand-dark/50 mt-1">Оставьте «Глобальный», чтобы филиал диалога определялся по региону клиента (IP) и правилам маршрутизации.</p>
               </div>
             {% endif %}
 

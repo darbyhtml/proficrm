@@ -16,6 +16,9 @@ class Inbox(models.Model):
         verbose_name="Филиал",
         on_delete=models.CASCADE,
         related_name="inboxes",
+        null=True,
+        blank=True,
+        help_text="Пусто = общий (глобальный) inbox: филиал диалога определяется по GeoIP и правилам маршрутизации.",
     )
     is_active = models.BooleanField("Активен", default=True, db_index=True)
     widget_token = models.CharField(
@@ -205,7 +208,8 @@ class Conversation(models.Model):
     def clean(self):
         """
         Инварианты безопасности:
-        - branch всегда совпадает с inbox.branch;
+        - для inbox с филиалом: branch диалога совпадает с inbox.branch;
+        - для глобального inbox (inbox.branch_id is None): branch задаётся маршрутизацией при создании;
         - после создания диалога нельзя менять inbox (а значит, и branch).
         """
         if not self.inbox_id:
@@ -215,26 +219,31 @@ class Conversation(models.Model):
             old = type(self).objects.only("inbox_id", "branch_id").get(pk=self.pk)
             if old.inbox_id != self.inbox_id:
                 raise ValidationError("Нельзя изменить inbox существующего диалога.")
-        # branch должен соответствовать inbox.branch (либо будет выставлен автоматически в save()).
-        if self.branch_id and self.branch_id != self.inbox.branch_id:
-            raise ValidationError("Филиал диалога должен совпадать с филиалом inbox.")
+        inbox_branch_id = self.inbox.branch_id
+        if inbox_branch_id is not None:
+            # Inbox с филиалом: branch диалога должен совпадать с inbox.
+            if self.branch_id != inbox_branch_id:
+                raise ValidationError("Филиал диалога должен совпадать с филиалом inbox.")
+        else:
+            # Глобальный inbox: branch задаётся при создании из маршрутизации; должен быть заполнен.
+            if not self.branch_id:
+                raise ValidationError("Для глобального inbox филиал диалога должен быть задан из правил маршрутизации.")
 
     def save(self, *args, **kwargs):
         """
-        Автоматически проставляет branch из inbox.branch и запрещает его изменение.
-        Также запрещает изменение inbox после создания диалога.
+        Проставляет branch из inbox.branch для не-глобального inbox.
+        Для глобального inbox (inbox.branch_id is None) branch не перезаписывается (устанавливается при создании).
         """
         if self.inbox_id:
             inbox_branch_id = self.inbox.branch_id
             if self.pk:
                 old = type(self).objects.only("inbox_id", "branch_id").get(pk=self.pk)
                 if old.inbox_id != self.inbox_id:
-                    # Жёстко запрещаем смену inbox для уже существующего диалога.
                     raise ValidationError("Нельзя изменить inbox существующего диалога.")
-                if old.branch_id != inbox_branch_id:
-                    # Защита от ручного изменения филиала inbox в БД.
+                if inbox_branch_id is not None and old.branch_id != inbox_branch_id:
                     raise ValidationError("Нельзя изменить филиал существующего диалога.")
-            self.branch_id = inbox_branch_id
+            if inbox_branch_id is not None:
+                self.branch_id = inbox_branch_id
         super().save(*args, **kwargs)
 
 

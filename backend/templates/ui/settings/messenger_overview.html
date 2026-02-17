@@ -28,7 +28,7 @@
           {% for inbox in inboxes %}
             <tr class="border-t">
               <td class="px-4 py-3 font-medium">{{ inbox.name }}</td>
-              <td class="px-4 py-3">{{ inbox.branch.name }}</td>
+              <td class="px-4 py-3">{% if inbox.branch %}{{ inbox.branch.name }}{% else %}<span class="text-brand-dark/70">Глобальный</span>{% endif %}</td>
               <td class="px-4 py-3">
                 {% if inbox.is_active %}
                   <span class="badge badge-new">Да</span>

@@ -11427,22 +11427,21 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
                 messages.success(request, "Inbox обновлён.")
             else:
                 # Создание нового
-                branch_id = request.POST.get("branch")
-                if not branch_id:
-                    messages.error(request, "Необходимо выбрать филиал.")
-                    return redirect("settings_messenger_overview")
-                
-                try:
-                    from accounts.models import Branch
-                    branch = Branch.objects.get(id=int(branch_id))
-                except (Branch.DoesNotExist, ValueError, TypeError) as e:
-                    ui_logger.warning(
-                        "Failed to create inbox: invalid branch",
-                        extra={"branch_id": branch_id},
-                        exc_info=True,
-                    )
-                    messages.error(request, "Неверный филиал.")
-                    return redirect("settings_messenger_overview")
+                branch_id = request.POST.get("branch", "").strip()
+                branch = None
+                if branch_id:
+                    try:
+                        from accounts.models import Branch
+                        branch = Branch.objects.get(id=int(branch_id))
+                    except (Branch.DoesNotExist, ValueError, TypeError) as e:
+                        ui_logger.warning(
+                            "Failed to create inbox: invalid branch",
+                            extra={"branch_id": branch_id},
+                            exc_info=True,
+                        )
+                        messages.error(request, "Неверный филиал.")
+                        return redirect("settings_messenger_overview")
+                # branch=None — глобальный inbox (маршрутизация по GeoIP и правилам)
                 
                 inbox = Inbox.objects.create(
                     name=name,

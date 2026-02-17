@@ -233,6 +233,24 @@ def select_routing_rule(
     fallback_rule = rules_qs.filter(is_fallback=True).first()
     if fallback_rule:
         return fallback_rule
-    
+
     return None
+
+
+def get_default_branch_for_messenger():
+    """
+    Возвращает филиал по умолчанию для глобального inbox,
+    когда ни одно правило маршрутизации не сработало.
+
+    Берётся из настроек MESSENGER_DEFAULT_BRANCH_ID (ID филиала).
+    """
+    from django.conf import settings
+    branch_id = getattr(settings, "MESSENGER_DEFAULT_BRANCH_ID", None)
+    if not branch_id:
+        return None
+    from accounts.models import Branch
+    try:
+        return Branch.objects.get(pk=branch_id)
+    except (Branch.DoesNotExist, ValueError, TypeError):
+        return None
 

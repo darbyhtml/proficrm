@@ -95,33 +95,63 @@ def widget_bootstrap(request):
         ).first()
 
         if not conversation:
-            # Определяем region из meta или параметра
+            # Определяем region: из meta/параметра, иначе по GeoIP с клиентского IP
             region = None
             meta = input_serializer.validated_data.get("meta", {})
             region_id = meta.get("region_id") or input_serializer.validated_data.get("region_id")
-            
+
             if region_id:
                 try:
                     from companies.models import Region
                     region = Region.objects.get(id=region_id)
                 except (Region.DoesNotExist, ValueError, TypeError):
-                    pass  # region остаётся None
-            
-            # Если region не найден, пробуем использовать region_detected из Contact
+                    pass
+
+            if not region:
+                # GeoIP: определяем регион по IP клиента
+                client_ip = (
+                    (request.META.get("HTTP_X_FORWARDED_FOR") or "").split(",")[0].strip()
+                    or request.META.get("REMOTE_ADDR")
+                )
+                if client_ip:
+                    from .geoip import get_region_from_ip
+                    region = get_region_from_ip(client_ip)
+                    if region and not contact.region_detected_id:
+                        contact.region_detected = region
+                        contact.save(update_fields=["region_detected"])
+
             if not region and contact.region_detected:
                 region = contact.region_detected
-            
-            # Выбираем правило маршрутизации
+
+            # Правило маршрутизации и филиал для диалога
             routing_rule = services.select_routing_rule(inbox, region)
-            
-            # Создаём новый диалог
-            conversation = models.Conversation.objects.create(
+            if inbox.branch_id is not None:
+                branch = inbox.branch
+            else:
+                # Глобальный inbox: филиал из правила или дефолтный
+                branch = (routing_rule.branch if routing_rule else None) or services.get_default_branch_for_messenger()
+                if not branch:
+                    safe_log_widget_error(
+                        widget_logger,
+                        logging.ERROR,
+                        "Bootstrap: global inbox but no routing rule and no MESSENGER_DEFAULT_BRANCH_ID",
+                        widget_token=widget_token,
+                        inbox_id=inbox.id,
+                    )
+                    return Response(
+                        {"detail": "Service temporarily unavailable. Please try again later."},
+                        status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    )
+
+            # Создаём новый диалог (branch задаётся явно для глобального inbox)
+            conversation = models.Conversation(
                 inbox=inbox,
                 contact=contact,
                 status=models.Conversation.Status.OPEN,
-                branch=inbox.branch,  # Автоматически из inbox.branch
-                region=region,  # Проставляем region из routing logic
+                branch=branch,
+                region=region,
             )
+            conversation.save()
 
             # Auto-assign: round-robin по операторам филиала
             services.auto_assign_conversation(conversation)

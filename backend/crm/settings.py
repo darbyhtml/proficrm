@@ -303,6 +303,17 @@ AUTH_USER_MODEL = "accounts.User"
 
 # Messenger feature flag: позволяет быстро отключить функциональность без отката миграций.
 MESSENGER_ENABLED = os.getenv("MESSENGER_ENABLED", "0") == "1"
+# Филиал по умолчанию для глобального inbox, когда ни одно правило маршрутизации не сработало (ID филиала).
+MESSENGER_DEFAULT_BRANCH_ID = os.getenv("MESSENGER_DEFAULT_BRANCH_ID", "")
+if MESSENGER_DEFAULT_BRANCH_ID:
+    try:
+        MESSENGER_DEFAULT_BRANCH_ID = int(MESSENGER_DEFAULT_BRANCH_ID)
+    except (ValueError, TypeError):
+        MESSENGER_DEFAULT_BRANCH_ID = None
+else:
+    MESSENGER_DEFAULT_BRANCH_ID = None
+# Включить определение региона по IP (GeoIP) при bootstrap виджета. 0 = выключено.
+MESSENGER_GEOIP_ENABLED = os.getenv("MESSENGER_GEOIP_ENABLED", "1") == "1"
 
 # DRF / JWT
 REST_FRAMEWORK = {
