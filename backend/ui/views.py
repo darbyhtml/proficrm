@@ -6183,23 +6183,29 @@ def task_list(request: HttpRequest) -> HttpResponse:
         if show_done != "1":
             qs = qs.exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
 
-    # Фильтр по датам (date_from и date_to)
+    # Фильтр по датам (date_from и date_to).
+    # При show_done=1 (только выполненные) период — по дате выполнения (completed_at).
+    # Иначе период — по дедлайну (due_at).
     date_from = (request.GET.get("date_from") or "").strip()
     date_to = (request.GET.get("date_to") or "").strip()
+    date_field = "completed_at" if show_done == "1" else "due_at"
     if date_from:
         try:
             date_from_dt = datetime.strptime(date_from, "%Y-%m-%d")
             date_from_start = timezone.make_aware(date_from_dt.replace(hour=0, minute=0, second=0, microsecond=0))
-            qs = qs.filter(due_at__gte=date_from_start)
+            qs = qs.filter(**{f"{date_field}__gte": date_from_start})
         except (ValueError, TypeError):
             pass
     if date_to:
         try:
             date_to_dt = datetime.strptime(date_to, "%Y-%m-%d")
             date_to_end = timezone.make_aware(date_to_dt.replace(hour=23, minute=59, second=59, microsecond=999999))
-            qs = qs.filter(due_at__lte=date_to_end)
+            qs = qs.filter(**{f"{date_field}__lte": date_to_end})
         except (ValueError, TypeError):
             pass
+    # Для выполненных по периоду: показываем только задачи с заполненной датой завершения
+    if show_done == "1" and (date_from or date_to):
+        qs = qs.filter(completed_at__isnull=False)
 
     # Сортировка: читаем из GET или из cookies
     sort_field = (request.GET.get("sort") or "").strip()
@@ -7340,9 +7346,10 @@ def _apply_task_filters_for_bulk_ui(qs, user: User, data):
         filters_summary.append("Только на сегодня")
         has_restricting_filters = True
 
-    # Период по due_at (date_from / date_to)
+    # Период: при show_done=1 — по дате выполнения (completed_at), иначе по дедлайну (due_at)
     date_from = (data.get("date_from") or "").strip()
     date_to = (data.get("date_to") or "").strip()
+    date_field = "completed_at" if show_done == "1" else "due_at"
 
     period_start_label: str | None = None
     period_end_label: str | None = None
@@ -7353,7 +7360,7 @@ def _apply_task_filters_for_bulk_ui(qs, user: User, data):
             date_from_start = timezone.make_aware(
                 date_from_dt.replace(hour=0, minute=0, second=0, microsecond=0)
             )
-            qs = qs.filter(due_at__gte=date_from_start)
+            qs = qs.filter(**{f"{date_field}__gte": date_from_start})
             period_start_label = date_from_dt.strftime("%d.%m.%Y")
         except (ValueError, TypeError):
             pass
@@ -7364,21 +7371,25 @@ def _apply_task_filters_for_bulk_ui(qs, user: User, data):
             date_to_end = timezone.make_aware(
                 date_to_dt.replace(hour=23, minute=59, second=59, microsecond=999999)
             )
-            qs = qs.filter(due_at__lte=date_to_end)
+            qs = qs.filter(**{f"{date_field}__lte": date_to_end})
             period_end_label = date_to_dt.strftime("%d.%m.%Y")
         except (ValueError, TypeError):
             pass
 
+    if show_done == "1" and (date_from or date_to):
+        qs = qs.filter(completed_at__isnull=False)
+
+    period_name = "выполнения" if show_done == "1" else "дедлайна"
     if period_start_label or period_end_label:
         has_restricting_filters = True
         if period_start_label and period_end_label:
             filters_summary.append(
-                f"Период дедлайна: {period_start_label} – {period_end_label}"
+                f"Период {period_name}: {period_start_label} – {period_end_label}"
             )
         elif period_start_label:
-            filters_summary.append(f"Дедлайн не раньше: {period_start_label}")
+            filters_summary.append(f"Дата {period_name} не раньше: {period_start_label}")
         elif period_end_label:
-            filters_summary.append(f"Дедлайн не позже: {period_end_label}")
+            filters_summary.append(f"Дата {period_name} не позже: {period_end_label}")
 
     # Если не было ни одного «явного» фильтра (кроме базового поведения show_done),
     # подсвечиваем, что выборка по сути не ограничена.
