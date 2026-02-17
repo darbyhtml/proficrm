@@ -1562,24 +1562,47 @@
         b.addEventListener('click', function() {
           const period = this.dataset.period;
           const today = new Date();
+          // Проверяем, включена ли галочка "Выполнено"
+          const showDoneCheckbox = document.querySelector('input[name="show_done"]');
+          const isShowDone = showDoneCheckbox && showDoneCheckbox.checked;
           let fromDate, toDate;
           
           if (period === 'today') {
             fromDate = toDate = new Date(today);
           } else if (period === 'week') {
-            // Вычисляем понедельник текущей недели
-            const dayOfWeek = today.getDay();
-            const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Понедельник (0 = воскресенье)
-            fromDate = new Date(today.getFullYear(), today.getMonth(), diff);
-            // Воскресенье той же недели
-            toDate = new Date(fromDate);
-            toDate.setDate(toDate.getDate() + 6);
+            if (isShowDone) {
+              // Для выполненных: последние 7 дней до сегодня включительно
+              toDate = new Date(today);
+              fromDate = new Date(today);
+              fromDate.setDate(fromDate.getDate() - 6); // 7 дней назад (включая сегодня)
+            } else {
+              // Для невыполненных: текущая неделя (понедельник-воскресенье)
+              const dayOfWeek = today.getDay();
+              const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Понедельник (0 = воскресенье)
+              fromDate = new Date(today.getFullYear(), today.getMonth(), diff);
+              toDate = new Date(fromDate);
+              toDate.setDate(toDate.getDate() + 6);
+            }
           } else if (period === 'month') {
-            fromDate = new Date(today.getFullYear(), today.getMonth(), 1);
-            toDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            if (isShowDone) {
+              // Для выполненных: с начала текущего месяца до сегодня
+              fromDate = new Date(today.getFullYear(), today.getMonth(), 1);
+              toDate = new Date(today);
+            } else {
+              // Для невыполненных: текущий месяц
+              fromDate = new Date(today.getFullYear(), today.getMonth(), 1);
+              toDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+            }
           } else if (period === 'year') {
-            fromDate = new Date(today.getFullYear(), 0, 1);
-            toDate = new Date(today.getFullYear(), 11, 31);
+            if (isShowDone) {
+              // Для выполненных: с начала текущего года до сегодня
+              fromDate = new Date(today.getFullYear(), 0, 1);
+              toDate = new Date(today);
+            } else {
+              // Для невыполненных: текущий год
+              fromDate = new Date(today.getFullYear(), 0, 1);
+              toDate = new Date(today.getFullYear(), 11, 31);
+            }
           }
           
           if (fromDate && toDate) {
