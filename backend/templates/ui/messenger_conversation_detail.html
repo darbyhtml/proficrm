@@ -46,7 +46,7 @@
             <h2 class="text-lg font-semibold mb-4">Сообщения</h2>
             
             <div id="contactTypingIndicator" class="hidden text-sm text-brand-dark/60 italic mb-2">Клиент печатает...</div>
-            <div class="space-y-4 mb-4 overflow-y-auto pr-1" id="messagesList" style="max-height: calc(100vh - 320px);">
+            <div class="space-y-4 mb-4 overflow-y-auto pr-1" id="messagesList" style="max-height: calc(100vh - 380px);">
               {% for message in conversation_messages %}
                 {% ifchanged message.created_at|date:"d.m.Y" %}
                   <div class="text-center my-2">
