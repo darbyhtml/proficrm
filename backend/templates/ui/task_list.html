@@ -512,7 +512,21 @@
                 <td class="px-2 py-2 min-w-0 break-words"><span style="line-height:1.4">{{ t.assigned_to|default:"—" }}</span></td>
                 <td class="px-2 py-2 min-w-0 break-words"><span style="line-height:1.4">{{ t.created_by|default:"—" }}</span></td>
                 <td class="muted px-2 py-2 min-w-0 break-words" style="width:12rem;min-width:12rem;max-width:12rem;">
-                  <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}" style="line-height:1.4">{{ t.due_at|default:"—" }}</span>
+                  {% if t.status == 'done' and t.completed_at %}
+                    <div class="flex flex-col gap-0.5" style="line-height:1.4">
+                      <div class="flex items-center gap-1.5 text-green-700">
+                        <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+                          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span class="font-medium">{{ t.completed_at|date:"d.m.Y H:i" }}</span>
+                      </div>
+                      {% if t.due_at %}
+                        <div class="text-xs text-brand-dark/50">Дедлайн: {{ t.due_at|date:"d.m.Y" }}</div>
+                      {% endif %}
+                    </div>
+                  {% else %}
+                    <span class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}text-red-700{% endif %}" style="line-height:1.4">{{ t.due_at|default:"—" }}</span>
+                  {% endif %}
                 </td>
                 <td class="px-2 py-2" style="width:5.5rem;min-width:5.5rem;max-width:5.5rem;"><span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span></td>
                 <td class="px-2 py-2 w-24 shrink-0">
