@@ -47,7 +47,7 @@
             
             <div id="contactTypingIndicator" class="hidden text-sm text-brand-dark/60 italic mb-2">Клиент печатает...</div>
             <div class="space-y-4 mb-6" id="messagesList">
-              {% for message in messages %}
+              {% for message in conversation_messages %}
                 {% ifchanged message.created_at|date:"d.m.Y" %}
                   <div class="text-center my-2">
                     <span class="inline-block px-3 py-1 rounded-full bg-brand-soft/40 text-xs text-brand-dark/70">

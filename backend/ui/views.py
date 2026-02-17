@@ -11439,7 +11439,7 @@ def messenger_conversation_detail(request: HttpRequest, conversation_id: int) ->
                 return redirect("messenger_conversation_detail", conversation_id=conversation_id)
 
     # Получаем сообщения диалога
-    messages_list = conversation.messages.all().order_by("created_at", "id")
+    conversation_messages = conversation.messages.all().order_by("created_at", "id")
 
     # Справочники для действий
     assignees_qs = get_users_for_lists(user)
@@ -11452,7 +11452,7 @@ def messenger_conversation_detail(request: HttpRequest, conversation_id: int) ->
         "ui/messenger_conversation_detail.html",
         {
             "conversation": conversation,
-            "messages": messages_list,
+            "conversation_messages": conversation_messages,
             "assignees": assignees,
             "is_supervisor": is_supervisor,
             "can_reply": can_reply,

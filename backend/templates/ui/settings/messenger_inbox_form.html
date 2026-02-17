@@ -3,7 +3,7 @@
 {% block title %}{% if inbox %}Редактирование Inbox{% else %}Создание Inbox{% endif %} — CRM ПРОФИ{% endblock %}
 
 {% block content %}
-  <div class="space-y-4 max-w-3xl">
+  <div class="space-y-4 max-w-6xl">
     <div>
       <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> / <a class="underline" href="/settings/messenger/">Messenger</a> /</div>
       <h1 class="text-2xl font-semibold">{% if inbox %}Редактирование Inbox{% else %}Создание Inbox{% endif %}</h1>
@@ -96,6 +96,8 @@
           </div>
         </div>
       {% endif %}
+
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
 
       <div class="card">
         <div class="card-pad">
@@ -292,7 +294,7 @@
         </div>
       </div>
 
-      <div class="card">
+      <div class="card xl:col-span-2">
         <div class="card-pad">
           <h2 class="text-lg font-semibold mb-4">Настройки виджета</h2>
           
@@ -326,6 +328,8 @@
         </div>
       </div>
 
+      </div> <!-- /grid -->
+
       <div class="flex items-center gap-3">
         <button type="submit" class="btn btn-primary">Сохранить</button>
         <a href="/settings/messenger/" class="btn btn-outline">Отмена</a>
@@ -341,14 +345,14 @@
       });
     }
     function copyCode() {
-      const code = `<link rel="stylesheet" href="{{ base_url }}/static/messenger/widget.css">
-<script src="{{ base_url }}/static/messenger/widget.js" data-widget-token="{{ inbox.widget_token }}"></script>`;
+      const code = '<link rel="stylesheet" href="{{ base_url }}/static/messenger/widget.css">\n'
+        + '<script src="{{ base_url }}/static/messenger/widget.js" data-widget-token="{{ inbox.widget_token }}"></' + 'script>';
       navigator.clipboard.writeText(code).then(() => {
         alert('Код скопирован в буфер обмена');
       });
     }
     function copyLazyCode() {
-      const code = `<script src="{{ base_url }}/static/messenger/widget-loader.js" data-widget-token="{{ inbox.widget_token }}" data-load-on-scroll="1" data-load-after="5"></script>`;
+      const code = '<script src="{{ base_url }}/static/messenger/widget-loader.js" data-widget-token="{{ inbox.widget_token }}" data-load-on-scroll="1" data-load-after="5"></' + 'script>';
       navigator.clipboard.writeText(code).then(() => {
         alert('Код (ленивая загрузка) скопирован в буфер обмена');
       });
