@@ -56,7 +56,7 @@ from tasksapp.policy import visible_tasks_qs, can_manage_task_status
 from notifications.models import Notification
 from notifications.service import notify
 from phonebridge.models import CallRequest, PhoneDevice, MobileAppBuild, MobileAppQrToken
-from messenger.models import Conversation, Message, Inbox, RoutingRule
+from messenger.models import Conversation, Message, Inbox, RoutingRule, AgentProfile
 from messenger.selectors import visible_conversations_qs
 from messenger.utils import ensure_messenger_enabled_view
 from messenger.logging_utils import ui_logger, safe_log_widget_error
@@ -11014,6 +11014,35 @@ def mobile_app_qr_image(request: HttpRequest) -> HttpResponse:
 # ============================================================================
 # Messenger UI (Этап 4: операторская панель диалогов)
 # ============================================================================
+
+
+@login_required
+@policy_required(resource_type="page", resource="ui:messenger:conversations:list")
+def messenger_agent_status(request: HttpRequest) -> HttpResponse:
+    """
+    Обновление статуса оператора (online/away/busy/offline) из списка диалогов.
+
+    POST /messenger/me/status/ с полем status и опциональным next для редиректа.
+    """
+    ensure_messenger_enabled_view()
+
+    if request.method != "POST":
+        return redirect("messenger_conversation_list")
+
+    user: User = get_effective_user(request)
+    status = (request.POST.get("status") or "").strip()
+    allowed = {s.value for s in AgentProfile.Status}
+    if status not in allowed:
+        messages.error(request, "Неверный статус оператора.")
+        next_url = request.POST.get("next") or reverse("messenger_conversation_list")
+        return redirect(next_url)
+
+    profile, _ = AgentProfile.objects.get_or_create(user=user)
+    profile.status = status
+    profile.save(update_fields=["status", "updated_at"])
+
+    next_url = request.POST.get("next") or reverse("messenger_conversation_list")
+    return redirect(next_url)
 
 
 @login_required
