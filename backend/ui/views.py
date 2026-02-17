@@ -6183,9 +6183,14 @@ def task_list(request: HttpRequest) -> HttpResponse:
 
     today = (request.GET.get("today") or "").strip()
     if today == "1":
-        qs = qs.filter(due_at__gte=today_start, due_at__lt=tomorrow_start)
+        # При show_done=1 фильтруем по дате выполнения, иначе по дедлайну
+        today_field = "completed_at" if show_done == "1" else "due_at"
+        qs = qs.filter(**{f"{today_field}__gte": today_start, f"{today_field}__lt": tomorrow_start})
         if show_done != "1":
             qs = qs.exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+        # Для выполненных по "Сегодня": показываем только задачи с заполненной датой завершения
+        if show_done == "1":
+            qs = qs.filter(completed_at__isnull=False)
 
     # Фильтр по датам (date_from и date_to).
     # При show_done=1 (только выполненные) период — по дате выполнения (completed_at).
@@ -7341,12 +7346,14 @@ def _apply_task_filters_for_bulk_ui(qs, user: User, data):
 
     today = (data.get("today") or "").strip()
     if today == "1":
-        qs = qs.filter(
-            due_at__gte=today_start,
-            due_at__lt=tomorrow_start,
-        )
+        # При show_done=1 фильтруем по дате выполнения, иначе по дедлайну
+        today_field = "completed_at" if show_done == "1" else "due_at"
+        qs = qs.filter(**{f"{today_field}__gte": today_start, f"{today_field}__lt": tomorrow_start})
         if show_done != "1":
             qs = qs.exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+        # Для выполненных по "Сегодня": показываем только задачи с заполненной датой завершения
+        if show_done == "1":
+            qs = qs.filter(completed_at__isnull=False)
         filters_summary.append("Только на сегодня")
         has_restricting_filters = True
 

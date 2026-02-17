@@ -1549,6 +1549,11 @@
       function applyPeriodAndSubmit() {
         dateFromInput.value = dateFromPicker.value || '';
         dateToInput.value = dateToPicker.value || '';
+        // Сбрасываем галочку "Сегодня" при использовании периода, чтобы избежать конфликта фильтров
+        const todayCheckbox = document.querySelector('input[name="today"]');
+        if (todayCheckbox) {
+          todayCheckbox.checked = false;
+        }
         document.getElementById('taskFilterForm').submit();
       }
 
@@ -1562,10 +1567,11 @@
           if (period === 'today') {
             fromDate = toDate = new Date(today);
           } else if (period === 'week') {
+            // Вычисляем понедельник текущей недели
             const dayOfWeek = today.getDay();
-            const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Понедельник
-            fromDate = new Date(today);
-            fromDate.setDate(diff);
+            const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1); // Понедельник (0 = воскресенье)
+            fromDate = new Date(today.getFullYear(), today.getMonth(), diff);
+            // Воскресенье той же недели
             toDate = new Date(fromDate);
             toDate.setDate(toDate.getDate() + 6);
           } else if (period === 'month') {
@@ -1577,8 +1583,15 @@
           }
           
           if (fromDate && toDate) {
-            dateFromPicker.value = fromDate.toISOString().split('T')[0];
-            dateToPicker.value = toDate.toISOString().split('T')[0];
+            // Форматируем даты в локальном времени (YYYY-MM-DD) для избежания проблем с часовыми поясами
+            const formatDate = (date) => {
+              const year = date.getFullYear();
+              const month = String(date.getMonth() + 1).padStart(2, '0');
+              const day = String(date.getDate()).padStart(2, '0');
+              return `${year}-${month}-${day}`;
+            };
+            dateFromPicker.value = formatDate(fromDate);
+            dateToPicker.value = formatDate(toDate);
             applyPeriodAndSubmit();
           }
         });
