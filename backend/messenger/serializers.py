@@ -106,6 +106,40 @@ class WidgetBootstrapResponseSerializer(serializers.Serializer):
         required=False,
         help_text="Последние сообщения диалога (опционально)",
     )
+    outside_working_hours = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text="True, если сейчас вне рабочих часов и автоназначение не выполнено",
+    )
+    working_hours_message = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Сообщение для виджета при вне рабочих часов (например: «Мы ответим в рабочее время»)",
+    )
+    offline_mode = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text="True, если показывать офлайн-сообщение (нет операторов или вне рабочих часов)",
+    )
+    offline_message = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        help_text="Текст офлайн-сообщения для виджета (настраивается в Inbox)",
+    )
+    attachments_enabled = serializers.BooleanField(required=False, default=True)
+    max_file_size_bytes = serializers.IntegerField(required=False, default=5242880)
+    allowed_content_types = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+    )
+    captcha_required = serializers.BooleanField(required=False, default=False)
+    captcha_token = serializers.CharField(required=False, allow_blank=True, default="")
+    captcha_question = serializers.CharField(required=False, allow_blank=True, default="")
+    sse_enabled = serializers.BooleanField(required=False, default=True)
+    title = serializers.CharField(required=False, allow_blank=True)
+    greeting = serializers.CharField(required=False, allow_blank=True)
+    color = serializers.CharField(required=False, allow_blank=True)
 
 
 class WidgetSendSerializer(serializers.Serializer):

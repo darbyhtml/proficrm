@@ -14,6 +14,7 @@ from django.utils import timezone
 
 from accounts.models import User
 from .models import Conversation, Message, Contact
+from .integrations import notify_message
 
 
 def create_or_get_contact(
@@ -128,15 +129,30 @@ def record_message(
         sender_contact=sender_contact,
     )
     Conversation.objects.filter(pk=conversation.pk).update(last_message_at=timezone.now())
+    try:
+        notify_message(msg)
+    except Exception:
+        import logging as _logging
+
+        _logger = _logging.getLogger("messenger.integrations")
+        _logger.warning(
+            "Webhook notify_message failed from record_message",
+            exc_info=True,
+            extra={"conversation_id": conversation.id, "message_id": msg.id, "direction": direction},
+        )
     return msg
 
 
 def assign_conversation(conversation: Conversation, user) -> None:
     """
     Назначить диалог оператору.
+    Обновляет assignee_assigned_at и сбрасывает assignee_opened_at (для эскалации).
     """
+    now = timezone.now()
     conversation.assignee = user
-    conversation.save(update_fields=["assignee"])
+    conversation.assignee_assigned_at = now
+    conversation.assignee_opened_at = None
+    conversation.save(update_fields=["assignee", "assignee_assigned_at", "assignee_opened_at"])
 
 
 RR_CACHE_KEY_PREFIX = "messenger:rr"
@@ -145,29 +161,47 @@ RR_CACHE_TTL = 60 * 60 * 24 * 7  # 7 дней (индекс не критиче�
 
 def auto_assign_conversation(conversation: Conversation) -> Optional[User]:
     """
-    Автоназначение диалога оператору филиала по round-robin.
+    Автоназначение диалога оператору филиала: равномерное распределение с учётом нагрузки.
 
-    Кандидаты: активные пользователи того же branch (ADMIN по умолчанию исключаем).
+    Кандидаты: активные пользователи того же branch (ADMIN исключаем),
+    только со статусом «онлайн». Список сортируется по нагрузке (число открытых/ожидающих
+    диалогов у оператора — меньше сначала), затем round-robin по этому списку.
     Указатель round-robin хранится в Redis: messenger:rr:<branch_id>:<inbox_id>.
 
     Returns:
         Назначенный User или None, если кандидатов нет.
     """
     from django.core.cache import cache
+    from django.db.models import Q, Count
+    from .models import AgentProfile
 
     branch_id = conversation.branch_id
     inbox_id = conversation.inbox_id
+    open_statuses = [Conversation.Status.OPEN, Conversation.Status.PENDING]
 
-    # Кандидаты: активные пользователи филиала, кроме ADMIN (операторы)
-    candidates = list(
+    # Кандидаты: активные пользователи филиала, кроме ADMIN, только «онлайн»
+    # + число назначенных открытых/ожидающих диалогов (нагрузка)
+    candidates_qs = (
         User.objects.filter(
             branch_id=branch_id,
             is_active=True,
         )
         .exclude(role=User.Role.ADMIN)
-        .order_by("id")
-        .values_list("id", flat=True)
+        .exclude(
+            Q(agent_profile__status=AgentProfile.Status.AWAY)
+            | Q(agent_profile__status=AgentProfile.Status.BUSY)
+            | Q(agent_profile__status=AgentProfile.Status.OFFLINE)
+        )
+        .annotate(
+            open_count=Count(
+                "assigned_conversations",
+                filter=Q(assigned_conversations__status__in=open_statuses),
+                distinct=True,
+            )
+        )
+        .order_by("open_count", "id")
     )
+    candidates = list(candidates_qs.values_list("id", flat=True))
 
     if not candidates:
         return None
@@ -178,7 +212,7 @@ def auto_assign_conversation(conversation: Conversation) -> Optional[User]:
     except Exception:
         idx = 0
 
-    idx = idx % len(candidates)
+    idx = int(idx) % len(candidates)
     next_idx = (idx + 1) % len(candidates)
     try:
         cache.set(cache_key, next_idx, timeout=RR_CACHE_TTL)
@@ -186,9 +220,34 @@ def auto_assign_conversation(conversation: Conversation) -> Optional[User]:
         pass
 
     assignee_id = candidates[idx]
+    now = timezone.now()
     conversation.assignee_id = assignee_id
-    conversation.save(update_fields=["assignee_id"])
+    conversation.assignee_assigned_at = now
+    conversation.assignee_opened_at = None
+    conversation.save(update_fields=["assignee_id", "assignee_assigned_at", "assignee_opened_at"])
     return User.objects.get(id=assignee_id)
+
+
+def has_online_operators_for_branch(branch_id: int, inbox_id: int) -> bool:
+    """
+    Есть ли в филиале хотя бы один «онлайн» оператор (кандидат для автоназначения).
+    """
+    from django.db.models import Q
+    from .models import AgentProfile
+
+    return (
+        User.objects.filter(
+            branch_id=branch_id,
+            is_active=True,
+        )
+        .exclude(role=User.Role.ADMIN)
+        .exclude(
+            Q(agent_profile__status=AgentProfile.Status.AWAY)
+            | Q(agent_profile__status=AgentProfile.Status.BUSY)
+            | Q(agent_profile__status=AgentProfile.Status.OFFLINE)
+        )
+        .exists()
+    )
 
 
 def select_routing_rule(
@@ -253,4 +312,120 @@ def get_default_branch_for_messenger():
         return Branch.objects.get(pk=branch_id)
     except (Branch.DoesNotExist, ValueError, TypeError):
         return None
+
+
+# ---------------------------------------------------------------------------
+# Эскалация по таймауту (п.3 дорожной карты)
+# ---------------------------------------------------------------------------
+
+def get_conversations_eligible_for_escalation(timeout_seconds: int = 240):
+    """
+    Диалоги, которые можно эскалировать: назначен оператор, он ещё не открыл диалог,
+    статус open/pending, с момента назначения прошло не менее timeout_seconds (по умолчанию 4 мин).
+
+    Используется assignee_assigned_at, при его отсутствии — created_at.
+    """
+    from django.utils import timezone
+    from datetime import timedelta
+    threshold = timezone.now() - timedelta(seconds=timeout_seconds)
+    qs = Conversation.objects.filter(
+        assignee_id__isnull=False,
+        assignee_opened_at__isnull=True,
+        status__in=[Conversation.Status.OPEN, Conversation.Status.PENDING],
+    )
+    # assignee_assigned_at может быть пустым у старых записей
+    from django.db.models import Q
+    qs = qs.filter(
+        Q(assignee_assigned_at__lte=threshold) | Q(assignee_assigned_at__isnull=True, created_at__lte=threshold)
+    )
+    return qs
+
+
+def escalate_conversation(conversation: Conversation) -> Optional[User]:
+    """
+    Переназначить диалог следующему оператору (round-robin по тому же филиалу,
+    исключая текущего назначенного). Используется та же логика кандидатов, что и в auto_assign,
+    но без текущего assignee.
+
+    Returns:
+        Новый назначенный User или None, если кандидатов нет (например, один оператор в филиале).
+    """
+    from django.core.cache import cache
+    from django.db.models import Q, Count
+    from .models import AgentProfile
+
+    branch_id = conversation.branch_id
+    inbox_id = conversation.inbox_id
+    current_assignee_id = conversation.assignee_id
+    open_statuses = [Conversation.Status.OPEN, Conversation.Status.PENDING]
+
+    candidates_qs = (
+        User.objects.filter(
+            branch_id=branch_id,
+            is_active=True,
+        )
+        .exclude(role=User.Role.ADMIN)
+        .exclude(id=current_assignee_id)
+        .exclude(
+            Q(agent_profile__status=AgentProfile.Status.AWAY)
+            | Q(agent_profile__status=AgentProfile.Status.BUSY)
+            | Q(agent_profile__status=AgentProfile.Status.OFFLINE)
+        )
+        .annotate(
+            open_count=Count(
+                "assigned_conversations",
+                filter=Q(assigned_conversations__status__in=open_statuses),
+                distinct=True,
+            )
+        )
+        .order_by("open_count", "id")
+    )
+    candidates = list(candidates_qs.values_list("id", flat=True))
+
+    if not candidates:
+        return None
+
+    cache_key = f"{RR_CACHE_KEY_PREFIX}:{branch_id}:{inbox_id}"
+    try:
+        idx = cache.get(cache_key, 0)
+    except Exception:
+        idx = 0
+    idx = int(idx) % len(candidates)
+    next_idx = (idx + 1) % len(candidates)
+    try:
+        cache.set(cache_key, next_idx, timeout=RR_CACHE_TTL)
+    except Exception:
+        pass
+
+    assignee_id = candidates[idx]
+    now = timezone.now()
+    conversation.assignee_id = assignee_id
+    conversation.assignee_assigned_at = now
+    conversation.assignee_opened_at = None
+    conversation.save(update_fields=["assignee_id", "assignee_assigned_at", "assignee_opened_at"])
+    return User.objects.get(id=assignee_id)
+
+
+def transfer_conversation_to_branch(conversation: Conversation, branch: "Branch") -> Optional[User]:
+    """
+    Передать диалог в другой филиал и назначить первому свободному оператору там.
+
+    Допустимо только для глобального inbox (inbox.branch_id is None).
+    Меняет conversation.branch на переданный филиал, сбрасывает назначение,
+    затем вызывает автоназначение в новом филиале.
+
+    Returns:
+        Назначенный User или None, если в филиале нет подходящих операторов.
+    """
+    from accounts.models import Branch
+    if conversation.inbox.branch_id is not None:
+        return None
+    if not isinstance(branch, Branch) or not branch.id:
+        return None
+    conversation.branch_id = branch.id
+    conversation.assignee_id = None
+    conversation.assignee_assigned_at = None
+    conversation.assignee_opened_at = None
+    conversation.save(update_fields=["branch_id", "assignee_id", "assignee_assigned_at", "assignee_opened_at"])
+    return auto_assign_conversation(conversation)
 

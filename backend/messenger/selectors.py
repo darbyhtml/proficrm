@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from django.db import models
-from django.db.models import QuerySet
+from django.db.models import F, Q, QuerySet
 
 from accounts.models import User
-from .models import Inbox, Conversation, CannedResponse
+from .models import Inbox, Conversation, CannedResponse, Message
 
 
 def visible_inboxes_qs(user: User) -> QuerySet[Inbox]:
@@ -82,4 +82,27 @@ def visible_canned_responses_qs(user: User) -> QuerySet[CannedResponse]:
         return qs.filter(models.Q(branch__isnull=True) | models.Q(branch_id=user.branch_id))
 
     return qs.filter(branch__isnull=True)
+
+
+def get_messenger_unread_count(user: User) -> int:
+    """
+    Суммарное число непрочитанных входящих сообщений по всем диалогам,
+    где текущий пользователь назначен оператором.
+
+    Непрочитанное = входящее (IN) сообщение с created_at > assignee_last_read_at
+    (или все входящие, если assignee_last_read_at не задан).
+    """
+    if not user or not user.is_authenticated or not user.is_active:
+        return 0
+    return (
+        Message.objects.filter(
+            conversation__assignee_id=user.id,
+            direction=Message.Direction.IN,
+        )
+        .filter(
+            Q(conversation__assignee_last_read_at__isnull=True)
+            | Q(created_at__gt=F("conversation__assignee_last_read_at"))
+        )
+        .count()
+    )
 

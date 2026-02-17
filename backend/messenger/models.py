@@ -169,6 +169,26 @@ class Conversation(models.Model):
         on_delete=models.SET_NULL,
         related_name="assigned_conversations",
     )
+    assignee_assigned_at = models.DateTimeField(
+        "Когда назначен оператор",
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Время последнего назначения; используется для эскалации по таймауту.",
+    )
+    assignee_opened_at = models.DateTimeField(
+        "Когда оператор впервые открыл диалог",
+        null=True,
+        blank=True,
+        help_text="После открытия эскалация по таймауту не выполняется.",
+    )
+    assignee_last_read_at = models.DateTimeField(
+        "Когда оператор последний раз просматривал диалог",
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Для подсчёта непрочитанных входящих сообщений.",
+    )
     # ВАЖНО: branch определяется строго из inbox.branch и не редактируется вручную.
     branch = models.ForeignKey(
         "accounts.Branch",
@@ -192,6 +212,15 @@ class Conversation(models.Model):
         db_index=True,
     )
     created_at = models.DateTimeField("Создано", auto_now_add=True, db_index=True)
+    rating_score = models.PositiveSmallIntegerField(
+        "Оценка (1–5 или 0–10 NPS)",
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Оценка от контакта после закрытия диалога.",
+    )
+    rating_comment = models.TextField("Комментарий к оценке", blank=True, default="")
+    rated_at = models.DateTimeField("Когда оценено", null=True, blank=True)
 
     class Meta:
         verbose_name = "Диалог"
@@ -285,6 +314,12 @@ class Message(models.Model):
     )
     created_at = models.DateTimeField("Создано", auto_now_add=True, db_index=True)
     delivered_at = models.DateTimeField("Доставлено", null=True, blank=True)
+    read_at = models.DateTimeField(
+        "Прочитано (контакт)",
+        null=True,
+        blank=True,
+        help_text="Для исходящих: когда контакт увидел сообщение (виджет).",
+    )
 
     class Meta:
         verbose_name = "Сообщение"
@@ -418,6 +453,8 @@ class CannedResponse(models.Model):
 class AgentProfile(models.Model):
     class Status(models.TextChoices):
         ONLINE = "online", "Онлайн"
+        AWAY = "away", "Отошёл"
+        BUSY = "busy", "Занят"
         OFFLINE = "offline", "Офлайн"
 
     user = models.OneToOneField(

@@ -22,9 +22,21 @@
       }
     </style>
 
-    <form class="bg-white border border-brand-soft/60 rounded-2xl px-3 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 messenger-conversations-layout-block" method="get" id="conversationFilterForm">
+    <div class="bg-white border border-brand-soft/60 rounded-2xl px-3 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 messenger-conversations-layout-block">
+      <form method="post" action="{% url 'messenger_agent_status' %}" class="flex items-center gap-2 flex-shrink-0" id="agentStatusForm">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <span class="text-sm text-brand-dark/60">Мой статус:</span>
+        <select name="status" class="select text-sm py-1.5" style="min-width: 8rem" title="Статус оператора (влияет на автоназначение диалогов)">
+          <option value="online" {% if agent_status == 'online' %}selected{% endif %}>Онлайн</option>
+          <option value="away" {% if agent_status == 'away' %}selected{% endif %}>Отошёл</option>
+          <option value="busy" {% if agent_status == 'busy' %}selected{% endif %}>Занят</option>
+          <option value="offline" {% if agent_status == 'offline' %}selected{% endif %}>Офлайн</option>
+        </select>
+      </form>
+      <form class="flex flex-wrap items-center gap-x-4 gap-y-2 flex-1 min-w-0" method="get" id="conversationFilterForm">
       <div class="flex items-center gap-2 flex-shrink-0">
-        <span class="flex items-center gap-1.5 text-brand-dark/50" title="Статус">
+        <span class="flex items-center gap-1.5 text-brand-dark/50" title="Статус диалога">
           <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
           <select name="status" class="select text-sm py-1.5" style="min-width: 8rem">
             <option value="">Любой статус</option>
@@ -73,7 +85,8 @@
         <a class="btn btn-outline btn-sm py-1.5 px-2.5 text-sm" href="#" id="refreshBtn" title="Обновить список">Обновить</a>
         <a class="btn btn-outline btn-sm py-1.5 px-2.5 text-sm" href="/messenger/conversations/">Сброс</a>
       </div>
-    </form>
+      </form>
+    </div>
 
     <div class="card messenger-conversations-layout-block">
       <div class="card-pad">
@@ -116,7 +129,9 @@
               {% for conversation in page.object_list %}
                 <tr class="cursor-pointer hover:bg-brand-soft/20" onclick="window.location.href='{% url 'messenger_conversation_detail' conversation.id %}'">
                   <td>
-                    {% if conversation.status == 'open' %}
+                    {% if conversation.assignee_id == user.id and conversation.unread_count|default:0 > 0 %}
+                      <span class="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-red-500 text-white text-xs font-medium" title="Непрочитанных: {{ conversation.unread_count }}">{{ conversation.unread_count }}</span>
+                    {% elif conversation.status == 'open' %}
                       <span class="badge badge-new badge-xs">Новый</span>
                     {% elif conversation.status == 'pending' %}
                       <span class="badge badge-progress badge-xs">Ожидание</span>
@@ -209,12 +224,14 @@
     (function() {
       const form = document.getElementById('conversationFilterForm');
       if (!form) return;
-      const selects = form.querySelectorAll('select');
-      selects.forEach(select => {
-        select.addEventListener('change', () => {
-          form.submit();
-        });
+      form.querySelectorAll('select').forEach(select => {
+        select.addEventListener('change', () => { form.submit(); });
       });
+      const statusForm = document.getElementById('agentStatusForm');
+      if (statusForm) {
+        const statusSelect = statusForm.querySelector('select[name="status"]');
+        if (statusSelect) statusSelect.addEventListener('change', () => { statusForm.submit(); });
+      }
       const refreshBtn = document.getElementById('refreshBtn');
       if (refreshBtn) refreshBtn.addEventListener('click', function(e) { e.preventDefault(); window.location.reload(); });
     })();

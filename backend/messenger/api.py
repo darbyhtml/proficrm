@@ -113,6 +113,20 @@ class ConversationViewSet(MessengerEnabledApiMixin, viewsets.ReadOnlyModelViewSe
 
             return Response(serializers.MessageSerializer(message).data, status=status.HTTP_201_CREATED)
 
+    @action(detail=True, methods=["get", "post"], url_path="typing")
+    def typing(self, request, pk=None):
+        """
+        GET: { operator_typing, contact_typing } для отображения «печатает» в панели оператора.
+        POST: отметить, что оператор печатает (TTL 8 с в Redis).
+        """
+        conversation = self.get_object()
+        from .typing import get_typing_status, set_operator_typing
+
+        if request.method == "POST":
+            set_operator_typing(conversation.id)
+            return Response({"status": "ok"}, status=status.HTTP_200_OK)
+        return Response(get_typing_status(conversation.id), status=status.HTTP_200_OK)
+
 
 class CannedResponseViewSet(MessengerEnabledApiMixin, viewsets.ModelViewSet):
     """

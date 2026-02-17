@@ -42,7 +42,16 @@ from phonebridge.api import (
     QrTokenStatusView,
 )
 from messenger.api import ConversationViewSet, CannedResponseViewSet
-from messenger.widget_api import widget_bootstrap, widget_send, widget_poll
+from messenger.widget_api import (
+    widget_attachment_download,
+    widget_bootstrap,
+    widget_mark_read,
+    widget_poll,
+    widget_rate,
+    widget_send,
+    widget_stream,
+    widget_typing,
+)
 from crm.views import robots_txt, security_txt, health_check
 
 handler404 = "crm.views.handler404"
@@ -113,5 +122,10 @@ urlpatterns = [
     path("api/widget/bootstrap/", widget_bootstrap, name="widget-bootstrap"),
     path("api/widget/send/", widget_send, name="widget-send"),
     path("api/widget/poll/", widget_poll, name="widget-poll"),
+    path("api/widget/stream/", widget_stream, name="widget-stream"),
+    path("api/widget/typing/", widget_typing, name="widget-typing"),
+    path("api/widget/mark_read/", widget_mark_read, name="widget-mark-read"),
+    path("api/widget/rate/", widget_rate, name="widget-rate"),
+    path("api/widget/attachment/<int:attachment_id>/", widget_attachment_download, name="widget-attachment"),
     path("api/", include(router.urls)),
 ]

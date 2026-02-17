@@ -8,7 +8,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Exists, OuterRef, Q, F
-from django.db.models import Count, Max, Prefetch, Avg
+from django.db.models import Count, Max, Prefetch, Avg, Min, DurationField, ExpressionWrapper
+from django.db.models.functions import TruncDate
 from django.db import models, transaction, IntegrityError
 from django.http import HttpRequest, HttpResponse
 from django.http import StreamingHttpResponse
@@ -59,6 +60,7 @@ from messenger.models import Conversation, Message, Inbox, RoutingRule
 from messenger.selectors import visible_conversations_qs
 from messenger.utils import ensure_messenger_enabled_view
 from messenger.logging_utils import ui_logger, safe_log_widget_error
+from messenger.integrations import notify_conversation_closed
 import secrets
 import logging
 import json
@@ -11158,54 +11160,194 @@ def messenger_conversation_detail(request: HttpRequest, conversation_id: int) ->
     ensure_messenger_enabled_view()
 
     user: User = request.user
+    is_supervisor = bool(user.is_superuser or user.role == User.Role.ADMIN)
 
     # Получаем диалог только из видимых для пользователя
     qs = visible_conversations_qs(user)
     conversation = get_object_or_404(qs, id=conversation_id)
+    can_reply = (not is_supervisor) or (conversation.assignee_id == user.id)
+
+    # Невидимка: если супервизор смотрит чужой диалог, не трогаем read/opened метки оператора,
+    # но пишем событие в аудит.
+    if request.method == "GET":
+        if conversation.assignee_id == user.id:
+            now = timezone.now()
+            update_fields = {"assignee_last_read_at": now}
+            if conversation.assignee_opened_at is None:
+                update_fields["assignee_opened_at"] = now
+                conversation.assignee_opened_at = now
+            Conversation.objects.filter(pk=conversation.pk).update(**update_fields)
+            conversation.assignee_last_read_at = now
+        elif is_supervisor:
+            try:
+                log_event(
+                    actor=user,
+                    verb=ActivityEvent.Verb.COMMENT,
+                    entity_type="messenger_conversation",
+                    entity_id=str(conversation.id),
+                    message="Supervisor viewed conversation (invisible)",
+                    meta={
+                        "conversation_id": conversation.id,
+                        "assignee_id": conversation.assignee_id,
+                        "status": conversation.status,
+                        "path": request.path,
+                    },
+                )
+            except Exception:
+                pass
 
     # Обработка POST-запросов
     if request.method == "POST":
         action = request.POST.get("action", "").strip()
 
         if action == "send_out":
-            # Отправка исходящего сообщения
+            # Супервизор по умолчанию в режиме "только просмотр" для чужих диалогов
+            if is_supervisor and conversation.assignee_id != user.id:
+                messages.error(request, "Режим просмотра: возьмите диалог себе, чтобы отвечать.")
+                return redirect("messenger_conversation_detail", conversation_id=conversation_id)
+
+            # Отправка исходящего сообщения (текст и/или вложения)
             body = (request.POST.get("body") or "").strip()
-            if body:
+            files = list(request.FILES.getlist("attachments")) + list(request.FILES.getlist("files"))
+            if body or files:
                 from messenger.services import record_message
-                record_message(
+                from messenger.models import MessageAttachment
+
+                msg = record_message(
                     conversation=conversation,
                     direction=Message.Direction.OUT,
-                    body=body,
+                    body=body or "",
                     sender_user=user,
                 )
+                for f in files:
+                    MessageAttachment.objects.create(
+                        message=msg,
+                        file=f,
+                        original_name=getattr(f, "name", "") or "",
+                        content_type=(getattr(f, "content_type", "") or "")[:120],
+                        size=getattr(f, "size", 0) or 0,
+                    )
+                try:
+                    log_event(
+                        actor=user,
+                        verb=ActivityEvent.Verb.COMMENT,
+                        entity_type="messenger_conversation",
+                        entity_id=str(conversation.id),
+                        message="Sent outbound message",
+                        meta={
+                            "conversation_id": conversation.id,
+                            "message_id": msg.id,
+                            "direction": "out",
+                            "has_attachments": bool(files),
+                        },
+                    )
+                except Exception:
+                    pass
                 messages.success(request, "Сообщение отправлено")
                 return redirect("messenger_conversation_detail", conversation_id=conversation_id)
 
         elif action == "send_internal":
-            # Отправка внутреннего сообщения
+            if is_supervisor and conversation.assignee_id != user.id:
+                messages.error(request, "Режим просмотра: возьмите диалог себе, чтобы отвечать.")
+                return redirect("messenger_conversation_detail", conversation_id=conversation_id)
+
+            # Отправка внутреннего сообщения (текст и/или вложения)
             body = (request.POST.get("body") or "").strip()
-            if body:
+            files = list(request.FILES.getlist("attachments")) + list(request.FILES.getlist("files"))
+            if body or files:
                 from messenger.services import record_message
-                record_message(
+                from messenger.models import MessageAttachment
+
+                msg = record_message(
                     conversation=conversation,
                     direction=Message.Direction.INTERNAL,
-                    body=body,
+                    body=body or "",
                     sender_user=user,
                 )
+                for f in files:
+                    MessageAttachment.objects.create(
+                        message=msg,
+                        file=f,
+                        original_name=getattr(f, "name", "") or "",
+                        content_type=(getattr(f, "content_type", "") or "")[:120],
+                        size=getattr(f, "size", 0) or 0,
+                    )
+                try:
+                    log_event(
+                        actor=user,
+                        verb=ActivityEvent.Verb.COMMENT,
+                        entity_type="messenger_conversation",
+                        entity_id=str(conversation.id),
+                        message="Sent internal message",
+                        meta={
+                            "conversation_id": conversation.id,
+                            "message_id": msg.id,
+                            "direction": "internal",
+                            "has_attachments": bool(files),
+                        },
+                    )
+                except Exception:
+                    pass
                 messages.success(request, "Внутреннее сообщение добавлено")
                 return redirect("messenger_conversation_detail", conversation_id=conversation_id)
 
         elif action == "assign_me":
             # Назначить диалог себе
+            old_assignee_id = conversation.assignee_id
             from messenger.services import assign_conversation
             assign_conversation(conversation, user)
-            messages.success(request, "Диалог назначен вам")
+            try:
+                log_event(
+                    actor=user,
+                    verb=ActivityEvent.Verb.UPDATE,
+                    entity_type="messenger_conversation",
+                    entity_id=str(conversation.id),
+                    message="Assigned conversation to self",
+                    meta={
+                        "conversation_id": conversation.id,
+                        "old_assignee_id": old_assignee_id,
+                        "new_assignee_id": user.id,
+                    },
+                )
+            except Exception:
+                pass
+            if is_supervisor:
+                messages.success(request, "Диалог взят в работу (назначен вам)")
+            else:
+                messages.success(request, "Диалог назначен вам")
             return redirect("messenger_conversation_detail", conversation_id=conversation_id)
 
         elif action == "close":
             # Закрыть диалог (status=resolved)
+            old_status = conversation.status
             conversation.status = Conversation.Status.RESOLVED
             conversation.save(update_fields=["status"])
+            try:
+                log_event(
+                    actor=user,
+                    verb=ActivityEvent.Verb.STATUS,
+                    entity_type="messenger_conversation",
+                    entity_id=str(conversation.id),
+                    message="Closed conversation",
+                    meta={
+                        "conversation_id": conversation.id,
+                        "old_status": old_status,
+                        "new_status": conversation.status,
+                    },
+                )
+            except Exception:
+                pass
+
+            # Webhook: диалог закрыт пользователем (conversation.closed)
+            try:
+                notify_conversation_closed(conversation)
+            except Exception:
+                ui_logger.warning(
+                    "Webhook notify_conversation_closed failed",
+                    exc_info=True,
+                    extra={"conversation_id": conversation.id, "user_id": user.id},
+                )
+
             messages.success(request, "Диалог закрыт")
             return redirect("messenger_conversation_detail", conversation_id=conversation_id)
 
@@ -11215,6 +11357,11 @@ def messenger_conversation_detail(request: HttpRequest, conversation_id: int) ->
             assignee_id = request.POST.get("assignee", "").strip()
             priority = request.POST.get("priority", "").strip()
 
+            old_values = {
+                "status": conversation.status,
+                "assignee_id": conversation.assignee_id,
+                "priority": conversation.priority,
+            }
             update_data = {}
             if status and status in ["open", "pending", "resolved", "closed"]:
                 update_data["status"] = status
@@ -11241,6 +11388,24 @@ def messenger_conversation_detail(request: HttpRequest, conversation_id: int) ->
                 for key, value in update_data.items():
                     setattr(conversation, key, value)
                 conversation.save()
+                changed = {}
+                for k, old in old_values.items():
+                    new = getattr(conversation, k)
+                    if new != old:
+                        changed[k] = {"from": old, "to": new}
+                if changed:
+                    try:
+                        verb = ActivityEvent.Verb.STATUS if "status" in changed and len(changed) == 1 else ActivityEvent.Verb.UPDATE
+                        log_event(
+                            actor=user,
+                            verb=verb,
+                            entity_type="messenger_conversation",
+                            entity_id=str(conversation.id),
+                            message="Updated conversation",
+                            meta={"conversation_id": conversation.id, "changed": changed},
+                        )
+                    except Exception:
+                        pass
                 messages.success(request, "Изменения сохранены")
                 return redirect("messenger_conversation_detail", conversation_id=conversation_id)
 
@@ -11260,6 +11425,8 @@ def messenger_conversation_detail(request: HttpRequest, conversation_id: int) ->
             "conversation": conversation,
             "messages": messages_list,
             "assignees": assignees,
+            "is_supervisor": is_supervisor,
+            "can_reply": can_reply,
         },
     )
 
@@ -11316,6 +11483,18 @@ def settings_messenger_health(request: HttpRequest) -> HttpResponse:
     from django.core.cache import cache
 
     messenger_enabled = getattr(settings, "MESSENGER_ENABLED", False)
+    cache_backend = ""
+    cache_location = ""
+    try:
+        caches = getattr(settings, "CACHES", {}) or {}
+        default_cache = caches.get("default") or {}
+        cache_backend = str(default_cache.get("BACKEND") or "")
+        cache_location = str(default_cache.get("LOCATION") or "")
+    except Exception:
+        pass
+    cache_is_redis = "redis" in cache_backend.lower()
+    redis_url = getattr(settings, "REDIS_URL", "")
+
     redis_ok = False
     try:
         cache.set("messenger:health:ping", "1", timeout=10)
@@ -11337,6 +11516,106 @@ def settings_messenger_health(request: HttpRequest) -> HttpResponse:
             "messenger_enabled": messenger_enabled,
             "redis_ok": redis_ok,
             "active_inboxes_count": active_inboxes_count,
+            "cache_backend": cache_backend,
+            "cache_location": cache_location,
+            "cache_is_redis": cache_is_redis,
+            "redis_url": redis_url,
+        },
+    )
+
+
+@login_required
+def settings_messenger_analytics(request: HttpRequest) -> HttpResponse:
+    """
+    Аналитика Messenger (admin only): простые метрики по диалогам.
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    ensure_messenger_enabled_view()
+
+    try:
+        days = int(request.GET.get("days", "7"))
+    except (TypeError, ValueError):
+        days = 7
+    if days not in (7, 30, 90):
+        days = 7
+
+    since_dt = timezone.now() - timedelta(days=days)
+
+    qs = Conversation.objects.select_related("assignee", "branch").filter(created_at__gte=since_dt)
+
+    first_out_at = Min("messages__created_at", filter=Q(messages__direction=Message.Direction.OUT))
+    qs_annotated = qs.annotate(first_out_at=first_out_at).annotate(
+        first_response_delta=ExpressionWrapper(
+            F("first_out_at") - F("created_at"),
+            output_field=DurationField(),
+        )
+    )
+
+    totals = {
+        "total": qs.count(),
+        "open_pending": qs.filter(status__in=[Conversation.Status.OPEN, Conversation.Status.PENDING]).count(),
+    }
+
+    avg_delta = qs_annotated.filter(first_out_at__isnull=False).aggregate(avg=Avg("first_response_delta")).get("avg")
+    avg_first_response = None
+    if avg_delta is not None:
+        total_seconds = int(avg_delta.total_seconds())
+        mins = total_seconds // 60
+        secs = total_seconds % 60
+        avg_first_response = f"{mins}м {secs:02d}с"
+
+    by_day = list(
+        qs.annotate(day=TruncDate("created_at"))
+        .values("day")
+        .annotate(count=Count("id"))
+        .order_by("day")
+    )
+
+    def _fmt_avg(td):
+        if td is None:
+            return None
+        s = int(td.total_seconds())
+        m = s // 60
+        return f"{m}м"
+
+    by_operator = []
+    for r in (
+        qs_annotated.filter(assignee__isnull=False)
+        .values("assignee__id", "assignee__first_name", "assignee__last_name", "assignee__username")
+        .annotate(count=Count("id"), avg=Avg("first_response_delta"))
+        .order_by("-count")[:20]
+    ):
+        name = ((f"{r.get('assignee__first_name') or ''} {r.get('assignee__last_name') or ''}").strip()
+                or r.get("assignee__username")
+                or f"#{r.get('assignee__id')}")
+        by_operator.append({"name": name, "count": r["count"], "avg_first_response": _fmt_avg(r.get("avg"))})
+
+    by_branch = [
+        {
+            "name": r.get("branch__name") or f"#{r.get('branch__id')}",
+            "count": r["count"],
+            "avg_first_response": _fmt_avg(r.get("avg")),
+        }
+        for r in (
+            qs_annotated.values("branch__id", "branch__name")
+            .annotate(count=Count("id"), avg=Avg("first_response_delta"))
+            .order_by("-count")
+        )
+    ]
+
+    return render(
+        request,
+        "ui/settings/messenger_analytics.html",
+        {
+            "days": days,
+            "totals": totals,
+            "avg_first_response": avg_first_response,
+            "by_day": by_day,
+            "by_operator": by_operator,
+            "by_branch": by_branch,
         },
     )
 
@@ -11397,14 +11676,17 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
             
             is_active = request.POST.get("is_active") == "on"
             
-            # Настройки виджета из JSON
+            # Настройки виджета из JSON (при редактировании сохраняем существующие ключи)
             widget_title = request.POST.get("widget_title", "").strip()
             widget_greeting = request.POST.get("widget_greeting", "").strip()
             widget_color = request.POST.get("widget_color", "").strip()
             widget_show_email = request.POST.get("widget_show_email") == "on"
             widget_show_phone = request.POST.get("widget_show_phone") == "on"
             
-            settings_dict = {}
+            if inbox and isinstance(inbox.settings, dict):
+                settings_dict = dict(inbox.settings)
+            else:
+                settings_dict = {}
             if widget_title:
                 settings_dict["title"] = widget_title
             if widget_greeting:
@@ -11413,6 +11695,116 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
                 settings_dict["color"] = widget_color
             settings_dict["show_email"] = widget_show_email
             settings_dict["show_phone"] = widget_show_phone
+
+            # Рабочие часы
+            working_hours_enabled = request.POST.get("working_hours_enabled") == "on"
+            working_hours_tz = request.POST.get("working_hours_tz", "").strip() or "Europe/Moscow"
+            schedule = {}
+            for day in range(1, 8):
+                start_val = request.POST.get(f"working_hours_{day}_start", "").strip()
+                end_val = request.POST.get(f"working_hours_{day}_end", "").strip()
+                if start_val and end_val:
+                    schedule[str(day)] = [start_val, end_val]
+            settings_dict["working_hours"] = {
+                "enabled": working_hours_enabled,
+                "tz": working_hours_tz,
+                "schedule": schedule,
+            }
+
+            # Офлайн-режим
+            offline_enabled = request.POST.get("offline_enabled") == "on"
+            offline_message = (request.POST.get("offline_message") or "").strip()
+            settings_dict["offline"] = {
+                "enabled": offline_enabled,
+                "message": offline_message or "Сейчас никого нет. Оставьте заявку — мы ответим в рабочее время.",
+            }
+
+            # Оценка диалога
+            rating_enabled = request.POST.get("rating_enabled") == "on"
+            rating_type = (request.POST.get("rating_type") or "stars").strip() or "stars"
+            rating_max_score = 5
+            if rating_type == "nps":
+                rating_max_score = 10
+            else:
+                try:
+                    rating_max_score = int(request.POST.get("rating_max_score", 5))
+                    if rating_max_score < 1 or rating_max_score > 5:
+                        rating_max_score = 5
+                except (ValueError, TypeError):
+                    rating_max_score = 5
+            settings_dict["rating"] = {
+                "enabled": rating_enabled,
+                "type": rating_type,
+                "max_score": rating_max_score,
+            }
+
+            # Вложения
+            attachments_enabled = request.POST.get("attachments_enabled") == "on"
+            try:
+                attachments_max_mb = int(request.POST.get("attachments_max_mb", 5))
+                if attachments_max_mb < 1:
+                    attachments_max_mb = 5
+                elif attachments_max_mb > 50:
+                    attachments_max_mb = 50
+            except (ValueError, TypeError):
+                attachments_max_mb = 5
+            settings_dict["attachments"] = {
+                "enabled": attachments_enabled,
+                "max_file_size_mb": attachments_max_mb,
+                "allowed_content_types": [
+                    "image/jpeg",
+                    "image/png",
+                    "image/gif",
+                    "image/webp",
+                    "application/pdf",
+                ],
+            }
+
+            # Безопасность: allowlist доменов
+            raw_domains = (request.POST.get("security_allowed_domains") or "").strip()
+            domains = []
+            for line in raw_domains.replace(",", "\n").splitlines():
+                d = line.strip().lower()
+                if d:
+                    domains.append(d)
+            settings_dict["security"] = {"allowed_domains": domains}
+
+            # Интеграции: webhook
+            integrations_cfg = settings_dict.get("integrations") if isinstance(settings_dict.get("integrations"), dict) else {}
+            webhook_url = (request.POST.get("webhook_url") or "").strip()
+            webhook_enabled = request.POST.get("webhook_enabled") == "on"
+            webhook_secret = (request.POST.get("webhook_secret") or "").strip()
+            webhook_events: list[str] = []
+            if request.POST.get("webhook_event_conversation_created") == "on":
+                webhook_events.append("conversation.created")
+            if request.POST.get("webhook_event_conversation_closed") == "on":
+                webhook_events.append("conversation.closed")
+            if request.POST.get("webhook_event_message_in") == "on":
+                webhook_events.append("message.in")
+            if request.POST.get("webhook_event_message_out") == "on":
+                webhook_events.append("message.out")
+            integrations_cfg["webhook"] = {
+                "enabled": bool(webhook_enabled and webhook_url),
+                "url": webhook_url,
+                "secret": webhook_secret,
+                "events": webhook_events,
+            }
+            settings_dict["integrations"] = integrations_cfg
+
+            # Автоматизация: автоответ на первый входящий месседж
+            automation_cfg = settings_dict.get("automation") if isinstance(settings_dict.get("automation"), dict) else {}
+            auto_reply_enabled = request.POST.get("auto_reply_enabled") == "on"
+            auto_reply_body = (request.POST.get("auto_reply_body") or "").strip()
+            automation_cfg["auto_reply"] = {
+                "enabled": auto_reply_enabled,
+                "body": auto_reply_body,
+            }
+            settings_dict["automation"] = automation_cfg
+
+            # Feature flags (по inbox)
+            features_cfg = settings_dict.get("features") if isinstance(settings_dict.get("features"), dict) else {}
+            features_cfg["sse"] = request.POST.get("features_sse_enabled") == "on"
+            settings_dict["features"] = features_cfg
 
             if inbox:
                 # Редактирование существующего
@@ -11451,7 +11843,7 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
                 )
                 ui_logger.info(
                     "Inbox created",
-                    extra={"inbox_id": inbox.id, "name": name, "branch_id": branch.id},
+                    extra={"inbox_id": inbox.id, "name": name, "branch_id": branch.id if branch else None},
                 )
                 messages.success(request, "Inbox создан.")
             
@@ -11473,6 +11865,66 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
     from django.conf import settings
     base_url = getattr(settings, "PUBLIC_BASE_URL", request.build_absolute_uri("/").rstrip("/"))
 
+    # Рабочие часы / офлайн / оценка / вложения для формы
+    wh = (getattr(inbox, "settings", None) or {}).get("working_hours") or {}
+    schedule = wh.get("schedule") or {}
+    day_labels = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+    working_hours_days = []
+    for i in range(1, 8):
+        slot = schedule.get(str(i), [])
+        working_hours_days.append({
+            "num": i,
+            "label": day_labels[i - 1],
+            "start": (slot[0] if len(slot) > 0 else "09:00"),
+            "end": (slot[1] if len(slot) > 1 else "18:00"),
+        })
+    working_hours = {
+        "enabled": wh.get("enabled", False),
+        "tz": wh.get("tz", "Europe/Moscow"),
+    }
+
+    offline_cfg = (getattr(inbox, "settings", None) or {}).get("offline") or {}
+    offline_settings = {
+        "enabled": offline_cfg.get("enabled", False),
+        "message": offline_cfg.get("message", "Сейчас никого нет. Оставьте заявку — мы ответим в рабочее время."),
+    }
+
+    rating_cfg = (getattr(inbox, "settings", None) or {}).get("rating") or {}
+    rating_settings = {
+        "enabled": rating_cfg.get("enabled", False),
+        "type": rating_cfg.get("type", "stars"),
+        "max_score": rating_cfg.get("max_score", 5),
+    }
+
+    att_cfg = (getattr(inbox, "settings", None) or {}).get("attachments") or {}
+    attachment_settings = {
+        "enabled": att_cfg.get("enabled", True),
+        "max_file_size_mb": att_cfg.get("max_file_size_mb", 5),
+    }
+
+    sec_cfg = (getattr(inbox, "settings", None) or {}).get("security") or {}
+    security_settings = {
+        "allowed_domains": sec_cfg.get("allowed_domains") or [],
+    }
+    integrations_cfg = (getattr(inbox, "settings", None) or {}).get("integrations") or {}
+    webhook_cfg = integrations_cfg.get("webhook") or {}
+    integration_settings = {
+        "webhook_enabled": webhook_cfg.get("enabled", False),
+        "webhook_url": webhook_cfg.get("url", ""),
+        "webhook_secret": webhook_cfg.get("secret", ""),
+        "webhook_events": webhook_cfg.get("events") or [],
+    }
+    automation_cfg = (getattr(inbox, "settings", None) or {}).get("automation") or {}
+    auto_reply_cfg = automation_cfg.get("auto_reply") or {}
+    automation_settings = {
+        "auto_reply_enabled": auto_reply_cfg.get("enabled", False),
+        "auto_reply_body": auto_reply_cfg.get("body", ""),
+    }
+    features_cfg = (getattr(inbox, "settings", None) or {}).get("features") or {}
+    feature_settings = {
+        "sse": features_cfg.get("sse", True),
+    }
+
     return render(
         request,
         "ui/settings/messenger_inbox_form.html",
@@ -11480,6 +11932,15 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
             "inbox": inbox,
             "branches": branches,
             "base_url": base_url,
+            "working_hours_days": working_hours_days,
+            "working_hours": working_hours,
+            "offline_settings": offline_settings,
+            "rating_settings": rating_settings,
+            "attachment_settings": attachment_settings,
+            "security_settings": security_settings,
+            "integration_settings": integration_settings,
+            "automation_settings": automation_settings,
+            "feature_settings": feature_settings,
         },
     )
 

@@ -199,6 +199,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'ui.context_processors.ui_globals',
                 'notifications.context_processors.notifications_panel',
+                'messenger.context_processors.messenger_globals',
             ],
         },
     },
@@ -314,6 +315,16 @@ else:
     MESSENGER_DEFAULT_BRANCH_ID = None
 # Включить определение региона по IP (GeoIP) при bootstrap виджета. 0 = выключено.
 MESSENGER_GEOIP_ENABLED = os.getenv("MESSENGER_GEOIP_ENABLED", "1") == "1"
+# Сообщение в ответе bootstrap виджета, когда запрос вне рабочих часов (виджет может показать его посетителю).
+MESSENGER_OUTSIDE_WORKING_HOURS_MESSAGE = os.getenv(
+    "MESSENGER_OUTSIDE_WORKING_HOURS_MESSAGE",
+    "Мы ответим в рабочее время.",
+)
+# Таймаут эскалации (секунды): если оператор не открыл диалог за это время — переназначение следующему. По умолчанию 4 мин.
+MESSENGER_ESCALATION_TIMEOUT_SECONDS = int(os.getenv("MESSENGER_ESCALATION_TIMEOUT_SECONDS", "240"))
+
+# Политика хранения: через сколько дней переводить RESOLVED → CLOSED (архивировать). По умолчанию 90 дней.
+MESSENGER_RETENTION_RESOLVED_TO_CLOSED_DAYS = int(os.getenv("MESSENGER_RETENTION_RESOLVED_TO_CLOSED_DAYS", "90"))
 
 # DRF / JWT
 REST_FRAMEWORK = {

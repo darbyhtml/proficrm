@@ -78,6 +78,7 @@ urlpatterns = [
 
     # Messenger (операторская панель диалогов)
     path("messenger/conversations/", views.messenger_conversation_list, name="messenger_conversation_list"),
+    path("messenger/me/status/", views.messenger_agent_status, name="messenger_agent_status"),
     path("messenger/conversations/<int:conversation_id>/", views.messenger_conversation_detail, name="messenger_conversation_detail"),
 
     # Settings (admin only)
@@ -141,6 +142,7 @@ urlpatterns = [
     path("settings/messenger/routing/<int:rule_id>/", views.settings_messenger_routing_edit, name="settings_messenger_routing_edit"),
     path("settings/messenger/routing/<int:rule_id>/delete/", views.settings_messenger_routing_delete, name="settings_messenger_routing_delete"),
     path("settings/messenger/health/", views.settings_messenger_health, name="settings_messenger_health"),
+    path("settings/messenger/analytics/", views.settings_messenger_analytics, name="settings_messenger_analytics"),
     
     # Мобильное приложение
     path("mobile-app/", views.mobile_app_page, name="mobile_app_page"),
