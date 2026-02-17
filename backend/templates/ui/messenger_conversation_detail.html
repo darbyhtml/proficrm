@@ -14,12 +14,12 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
       <!-- Основная лента сообщений -->
       <div class="lg:col-span-2">
-        <div class="card" style="height: calc(100vh - 210px); display: flex; flex-direction: column;">
-          <div class="card-pad flex flex-col h-full">
+        <div class="card">
+          <div class="card-pad">
             <h2 class="text-lg font-semibold mb-4">Сообщения</h2>
             
             <div id="contactTypingIndicator" class="hidden text-sm text-brand-dark/60 italic mb-2">Клиент печатает...</div>
-            <div class="space-y-4 mb-4 overflow-y-auto pr-1 flex-1" id="messagesList">
+            <div class="space-y-4 mb-4 overflow-y-auto pr-1" id="messagesList" style="max-height: calc(100vh - 340px);">
               {% for message in conversation_messages %}
                 {% ifchanged message.created_at|date:"d.m.Y" %}
                   <div class="text-center my-2">
@@ -342,47 +342,6 @@
 
     // Автоскролл к последнему сообщению при загрузке
     scrollMessagesToBottom();
-
-    // Отправка формы без перезагрузки страницы
-    const messageForm = document.getElementById('messageForm');
-    if (messageForm && window.fetch && window.DOMParser) {
-      messageForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        const formData = new FormData(messageForm);
-        fetch(messageForm.action, {
-          method: 'POST',
-          body: formData,
-          credentials: 'same-origin',
-        })
-          .then(function(r) { return r.text(); })
-          .then(function(html) {
-            try {
-              const parser = new DOMParser();
-              const doc = parser.parseFromString(html, 'text/html');
-              const newList = doc.getElementById('messagesList');
-              if (newList && messagesList) {
-                messagesList.innerHTML = newList.innerHTML;
-                scrollMessagesToBottom();
-                if (messageBody) {
-                  messageBody.value = '';
-                }
-                const attachments = document.getElementById('messageAttachments');
-                if (attachments) attachments.value = '';
-                const names = document.getElementById('messageAttachmentsNames');
-                if (names) names.textContent = '';
-                return;
-              }
-            } catch (err) {
-              console.error('Failed to update messagesList from response:', err);
-            }
-            // fallback — полное обновление
-            window.location.reload();
-          })
-          .catch(function() {
-            window.location.reload();
-          });
-      });
-    }
 
     // Загрузка шаблонов ответов (canned responses)
     if (cannedSelect && cannedApply) {
