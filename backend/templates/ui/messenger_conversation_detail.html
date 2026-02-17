@@ -3,7 +3,7 @@
 {% block title %}Диалог #{{ conversation.id }} — CRM ПРОФИ{% endblock %}
 
 {% block content %}
-  <div class="messenger-conversation-detail">
+    <div class="messenger-conversation-detail">
     <div class="flex items-center justify-between gap-4 mb-4">
       <div>
         <a href="{% url 'messenger_conversation_list' %}" class="text-sm text-brand-dark/70 hover:text-brand-teal mb-2 inline-block">← Назад к списку диалогов</a>
@@ -14,12 +14,12 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
       <!-- Основная лента сообщений -->
       <div class="lg:col-span-2">
-        <div class="card">
-          <div class="card-pad">
+        <div class="card flex flex-col overflow-hidden" style="max-height: calc(100vh - 220px);">
+          <div class="card-pad flex flex-col h-full">
             <h2 class="text-lg font-semibold mb-4">Сообщения</h2>
             
             <div id="contactTypingIndicator" class="hidden text-sm text-brand-dark/60 italic mb-2">Клиент печатает...</div>
-            <div class="space-y-4 mb-4 overflow-y-auto pr-1 max-h-[50vh] min-h-[220px]" id="messagesList">
+            <div class="space-y-4 mb-4 overflow-y-auto pr-1 flex-1" id="messagesList">
               {% for message in conversation_messages %}
                 {% ifchanged message.created_at|date:"d.m.Y" %}
                   <div class="text-center my-2">
