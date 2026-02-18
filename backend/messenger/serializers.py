@@ -159,6 +159,8 @@ class WidgetBootstrapResponseSerializer(serializers.Serializer):
     title = serializers.CharField(required=False, allow_blank=True)
     greeting = serializers.CharField(required=False, allow_blank=True)
     color = serializers.CharField(required=False, allow_blank=True)
+    privacy_url = serializers.CharField(required=False, allow_blank=True)
+    privacy_text = serializers.CharField(required=False, allow_blank=True)
 
 
 class WidgetSendSerializer(serializers.Serializer):

@@ -302,7 +302,7 @@ SECURITY_CONTACT_EMAIL = os.getenv("SECURITY_CONTACT_EMAIL", "")
 
 AUTH_USER_MODEL = "accounts.User"
 
-# Messenger feature flag: позволяет быстро отключить функциональность без отката миграций.
+# Messenger feature flag и настройки live-chat / widget
 MESSENGER_ENABLED = os.getenv("MESSENGER_ENABLED", "0") == "1"
 # Филиал по умолчанию для глобального inbox, когда ни одно правило маршрутизации не сработало (ID филиала).
 MESSENGER_DEFAULT_BRANCH_ID = os.getenv("MESSENGER_DEFAULT_BRANCH_ID", "")
@@ -325,6 +325,23 @@ MESSENGER_ESCALATION_TIMEOUT_SECONDS = int(os.getenv("MESSENGER_ESCALATION_TIMEO
 
 # Политика хранения: через сколько дней переводить RESOLVED → CLOSED (архивировать). По умолчанию 90 дней.
 MESSENGER_RETENTION_RESOLVED_TO_CLOSED_DAYS = int(os.getenv("MESSENGER_RETENTION_RESOLVED_TO_CLOSED_DAYS", "90"))
+
+# Throttling / abuse‑защита публичного Widget API (переопределяются через env на проде)
+MESSENGER_WIDGET_BOOTSTRAP_RATE_PER_IP = int(os.getenv("MESSENGER_WIDGET_BOOTSTRAP_RATE_PER_IP", "10"))
+MESSENGER_WIDGET_BOOTSTRAP_RATE_PER_TOKEN = int(os.getenv("MESSENGER_WIDGET_BOOTSTRAP_RATE_PER_TOKEN", "20"))
+MESSENGER_WIDGET_SEND_RATE_PER_SESSION = int(os.getenv("MESSENGER_WIDGET_SEND_RATE_PER_SESSION", "30"))
+MESSENGER_WIDGET_SEND_RATE_PER_IP = int(os.getenv("MESSENGER_WIDGET_SEND_RATE_PER_IP", "60"))
+MESSENGER_WIDGET_POLL_RATE_PER_SESSION = int(os.getenv("MESSENGER_WIDGET_POLL_RATE_PER_SESSION", "20"))
+MESSENGER_WIDGET_POLL_MIN_INTERVAL_SECONDS = int(
+    os.getenv("MESSENGER_WIDGET_POLL_MIN_INTERVAL_SECONDS", "2")
+)
+
+# Privacy‑настройки для публичного виджета (минимальное уведомление о данных)
+MESSENGER_PRIVACY_URL = os.getenv("MESSENGER_PRIVACY_URL", "")
+MESSENGER_PRIVACY_TEXT = os.getenv(
+    "MESSENGER_PRIVACY_TEXT",
+    "Отправляя сообщение, вы соглашаетесь с обработкой персональных данных.",
+)
 
 # DRF / JWT
 REST_FRAMEWORK = {

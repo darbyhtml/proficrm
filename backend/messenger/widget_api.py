@@ -251,6 +251,15 @@ def widget_bootstrap(request):
             "title": settings_cfg.get("title") or "",
             "greeting": settings_cfg.get("greeting") or "",
             "color": settings_cfg.get("color") or "",
+            # privacy: можно задать в настройках inbox, иначе берём глобальные значения
+            "privacy_url": (settings_cfg.get("privacy") or {}).get("url")
+            or getattr(settings, "MESSENGER_PRIVACY_URL", ""),
+            "privacy_text": (settings_cfg.get("privacy") or {}).get("text")
+            or getattr(
+                settings,
+                "MESSENGER_PRIVACY_TEXT",
+                "Отправляя сообщение, вы соглашаетесь с обработкой персональных данных.",
+            ),
         }
         features_cfg = (inbox.settings or {}).get("features") or {}
         response_data["sse_enabled"] = bool(features_cfg.get("sse", True))

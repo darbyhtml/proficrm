@@ -56,6 +56,8 @@
       this.greeting = '';
       this.color = '#01948E';
       this.unreadCount = 0;
+      this.privacyUrl = '';
+      this.privacyText = '';
       this.captchaRequired = false;
       this.captchaToken = '';
       this.captchaQuestion = '';
@@ -235,6 +237,8 @@
         this.title = data.title || 'Чат с поддержкой';
         this.greeting = data.greeting || '';
         this.color = data.color || '#01948E';
+        this.privacyUrl = data.privacy_url || '';
+        this.privacyText = data.privacy_text || '';
         this.captchaRequired = data.captcha_required === true;
         this.captchaToken = data.captcha_token || '';
         this.captchaQuestion = data.captcha_question || '';
@@ -640,6 +644,26 @@
       }
       this.isOpen = false;
       this.popup.classList.remove('messenger-widget-popup-open');
+    }
+
+    /**
+     * Показать/скрыть кнопку запуска виджета (launcher)
+     */
+    showLauncher() {
+      if (this.button) {
+        this.button.style.display = '';
+      }
+    }
+
+    hideLauncher() {
+      if (this.button) {
+        this.button.style.display = 'none';
+      }
+    }
+
+    toggle() {
+      if (this.isOpen) this.close();
+      else this.open();
     }
 
     /**
@@ -1053,6 +1077,26 @@
       this.ratingBlock.innerHTML = '<div class="messenger-widget-rating-title">Оцените, пожалуйста, диалог</div><div class="messenger-widget-rating-buttons"></div><textarea class="messenger-widget-rating-comment" placeholder="Комментарий (необязательно)" rows="2"></textarea>';
       this.popup.appendChild(this.ratingBlock);
 
+      // Privacy notice
+      if (this.privacyText) {
+        const privacy = document.createElement('div');
+        privacy.className = 'messenger-widget-privacy';
+        const textSpan = document.createElement('span');
+        textSpan.textContent = this.privacyText;
+        privacy.appendChild(textSpan);
+        if (this.privacyUrl) {
+          const link = document.createElement('a');
+          link.href = this.privacyUrl;
+          link.target = '_blank';
+          link.rel = 'noopener';
+          link.className = 'messenger-widget-privacy-link';
+          link.textContent = 'Политика конфиденциальности';
+          privacy.appendChild(document.createTextNode(' '));
+          privacy.appendChild(link);
+        }
+        this.popup.appendChild(privacy);
+      }
+
       container.appendChild(this.button);
       container.appendChild(this.popup);
       document.body.appendChild(container);
@@ -1062,15 +1106,41 @@
     }
   }
 
-  // Автоинициализация при загрузке скрипта
+  // Автоинициализация при загрузке скрипта + публичный JS API
+  let widgetInstance = null;
+
   const scriptTag = document.currentScript;
   if (scriptTag) {
     const widgetToken = scriptTag.getAttribute('data-widget-token');
     if (widgetToken) {
       const widget = new MessengerWidget(widgetToken);
+      widgetInstance = widget;
       widget.init();
     } else {
       console.warn('[MessengerWidget] data-widget-token attribute is required');
     }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.ProfiMessenger = {
+      open() {
+        if (widgetInstance) widgetInstance.open();
+      },
+      close() {
+        if (widgetInstance) widgetInstance.close();
+      },
+      toggle() {
+        if (widgetInstance) widgetInstance.toggle();
+      },
+      showLauncher() {
+        if (widgetInstance) widgetInstance.showLauncher();
+      },
+      hideLauncher() {
+        if (widgetInstance) widgetInstance.hideLauncher();
+      },
+      isOpen() {
+        return !!(widgetInstance && widgetInstance.isOpen);
+      },
+    };
   }
 })();

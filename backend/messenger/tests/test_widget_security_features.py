@@ -47,6 +47,73 @@ class WidgetSecurityFeatureTests(TestCase):
         )
         self.assertEqual(r.status_code, status.HTTP_403_FORBIDDEN)
 
+    def test_domain_allowlist_allows_exact_origin_and_subdomain_patterns(self):
+        """allowed_domains поддерживает точные домены и поддомены через *.example.com."""
+        self.inbox.settings = {
+            "security": {
+                "allowed_domains": [
+                    "allowed.com",
+                    "*.subdomain.com",
+                    "https://proto.example.org",
+                ]
+            }
+        }
+        self.inbox.save(update_fields=["settings"])
+
+        client = APIClient()
+
+        # Точный домен без схемы
+        r1 = client.post(
+            "/api/widget/bootstrap/",
+            {"widget_token": "token_1", "contact_external_id": "v2"},
+            format="json",
+            HTTP_ORIGIN="https://allowed.com",
+        )
+        self.assertNotEqual(
+            r1.status_code,
+            status.HTTP_403_FORBIDDEN,
+            "Точный домен из allowlist не должен блокироваться",
+        )
+
+        # Поддомен, разрешённый через *.subdomain.com
+        r2 = client.post(
+            "/api/widget/bootstrap/",
+            {"widget_token": "token_1", "contact_external_id": "v3"},
+            format="json",
+            HTTP_ORIGIN="https://api.subdomain.com",
+        )
+        self.assertNotEqual(
+            r2.status_code,
+            status.HTTP_403_FORBIDDEN,
+            "Поддомен, подпадающий под *.subdomain.com, не должен блокироваться",
+        )
+
+        # Origin, совпадающий с базовым доменом subdomain.com, не считается поддоменом
+        r3 = client.post(
+            "/api/widget/bootstrap/",
+            {"widget_token": "token_1", "contact_external_id": "v4"},
+            format="json",
+            HTTP_ORIGIN="https://subdomain.com",
+        )
+        self.assertEqual(
+            r3.status_code,
+            status.HTTP_403_FORBIDDEN,
+            "Базовый домен не должен проходить по маске *.subdomain.com",
+        )
+
+        # allowed_domains может содержать origin с протоколом — hostname всё равно должен совпасть
+        r4 = client.post(
+            "/api/widget/bootstrap/",
+            {"widget_token": "token_1", "contact_external_id": "v5"},
+            format="json",
+            HTTP_ORIGIN="https://proto.example.org",
+        )
+        self.assertNotEqual(
+            r4.status_code,
+            status.HTTP_403_FORBIDDEN,
+            "Домен, указанный с протоколом в allowed_domains, должен корректно сопоставляться",
+        )
+
     def test_captcha_required_then_passed_allows_send(self):
         ip = "1.2.3.4"
         cache.set(f"messenger:captcha:ip:{ip}", 999, timeout=600)
