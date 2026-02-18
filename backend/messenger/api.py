@@ -61,12 +61,88 @@ class ConversationViewSet(MessengerEnabledApiMixin, viewsets.ReadOnlyModelViewSe
         Никаких .objects.all() для не-админов.
         """
         user = self.request.user
-        return selectors.visible_conversations_qs(user)
+        qs = selectors.visible_conversations_qs(user).select_related("contact", "branch", "region", "assignee", "inbox")
+
+        # Аннотации: превью последнего сообщения + unread_count (для текущего пользователя)
+        from django.db.models import OuterRef, Subquery, Q, F, Count
+        from .models import Message
+
+        last_message = (
+            Message.objects.filter(conversation=OuterRef("pk"))
+            .order_by("-created_at", "-id")
+            .values("body")[:1]
+        )
+        qs = qs.annotate(last_message_body=Subquery(last_message))
+
+        if user and user.is_authenticated:
+            qs = qs.annotate(
+                unread_count=Count(
+                    "messages__id",
+                    filter=Q(
+                        messages__direction=Message.Direction.IN,
+                        assignee_id=user.id,
+                    )
+                    & (
+                        Q(assignee_last_read_at__isnull=True)
+                        | Q(messages__created_at__gt=F("assignee_last_read_at"))
+                    ),
+                    distinct=True,
+                )
+            )
+
+        # Фильтры для UI (q/status/mine/assignee)
+        qp = self.request.query_params
+        q = (qp.get("q") or "").strip()
+        if q:
+            q_digits = "".join([c for c in q if c.isdigit()])
+            q_obj = Q(contact__name__icontains=q) | Q(contact__email__icontains=q) | Q(contact__phone__icontains=q)
+            if q_digits:
+                try:
+                    q_obj = q_obj | Q(id=int(q_digits))
+                except (ValueError, TypeError):
+                    pass
+            qs = qs.filter(q_obj)
+
+        status_filter = (qp.get("status") or "").strip()
+        if status_filter:
+            if "," in status_filter:
+                statuses = [s.strip() for s in status_filter.split(",") if s.strip()]
+                qs = qs.filter(status__in=statuses)
+            else:
+                qs = qs.filter(status=status_filter)
+
+        mine = (qp.get("mine") or "").strip().lower() in ("1", "true", "yes")
+        if mine and user and user.is_authenticated:
+            qs = qs.filter(assignee_id=user.id)
+
+        assignee_id = (qp.get("assignee") or "").strip()
+        if assignee_id:
+            try:
+                qs = qs.filter(assignee_id=int(assignee_id))
+            except (ValueError, TypeError):
+                pass
+
+        # Сортировка: новые сверху
+        return qs.order_by("-last_message_at", "-id")
 
     def get_serializer_class(self):
         if self.action == "messages":
             return serializers.MessageSerializer
         return serializers.ConversationSerializer
+
+    @action(detail=True, methods=["post"], url_path="read")
+    def read(self, request, pk=None):
+        """
+        POST: отметить диалог прочитанным текущим оператором (если он назначен).
+        """
+        conversation = self.get_object()
+        if conversation.assignee_id != request.user.id:
+            return Response({"status": "ignored"}, status=status.HTTP_200_OK)
+        from django.utils import timezone
+
+        now = timezone.now()
+        models.Conversation.objects.filter(pk=conversation.pk).update(assignee_last_read_at=now)
+        return Response({"status": "ok", "assignee_last_read_at": now.isoformat()}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["get", "post"], url_path="messages")
     def messages(self, request, pk=None):

@@ -17,6 +17,8 @@ class ConversationSerializer(serializers.ModelSerializer):
     branch_name = serializers.CharField(source="branch.name", read_only=True)
     region_name = serializers.CharField(source="region.name", read_only=True)
     assignee_name = serializers.CharField(source="assignee.get_full_name", read_only=True)
+    last_message_body = serializers.CharField(read_only=True)
+    unread_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = models.Conversation

@@ -178,6 +178,7 @@
           <input
             type="search"
             name="q"
+            id="conversationSearchInput"
             value="{{ q|default:'' }}"
             class="input text-xs w-full py-2 pr-8"
             placeholder="Поиск (имя, email, телефон, #id)"
@@ -190,16 +191,17 @@
             </svg>
           </div>
         </div>
-        <select name="status" class="select text-xs w-full py-1.5">
+        <select name="status" id="conversationStatusSelect" class="select text-xs w-full py-1.5">
           <option value="">Все статусы</option>
           <option value="open" {% if status_filter == 'open' %}selected{% endif %}>Открыт</option>
           <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>В ожидании</option>
           <option value="resolved" {% if status_filter == 'resolved' %}selected{% endif %}>Решён</option>
           <option value="closed" {% if status_filter == 'closed' %}selected{% endif %}>Закрыт</option>
         </select>
+        <input type="hidden" name="mine" id="mineInput" value="{% if mine %}1{% endif %}">
         <div class="flex gap-2">
-          <a class="btn btn-outline btn-sm text-xs flex-1 {% if mine %}btn-primary{% endif %}" href="?{{ url_mine }}">Мои</a>
-          <a class="btn btn-outline btn-sm text-xs" href="{% url 'messenger_conversations_unified' %}">Сброс</a>
+          <button type="button" id="mineToggleBtn" class="btn btn-outline btn-sm text-xs flex-1 {% if mine %}btn-primary{% endif %}">Мои</button>
+          <button type="button" id="resetFiltersBtn" class="btn btn-outline btn-sm text-xs">Сброс</button>
         </div>
       </form>
     </div>
@@ -319,16 +321,19 @@
 <script>
   // Инициализация панели при загрузке страницы
   document.addEventListener('DOMContentLoaded', function() {
-    {% if selected_conversation %}
-      MessengerPanel.openConversation({{ selected_conversation.id }});
-    {% endif %}
-    
-    // Автоматическое применение фильтров
-    const filterForm = document.getElementById('conversationFilterForm');
-    if (filterForm) {
-      filterForm.querySelectorAll('select').forEach(select => {
-        select.addEventListener('change', () => { filterForm.submit(); });
-      });
+    if (window.MessengerPanel && window.MessengerPanel.init) {
+      window.MessengerPanel.init();
+    }
+
+    // Открытие диалога по hash, иначе — по выбранному с сервера
+    const hashMatch = window.location.hash.match(/conversation\/(\d+)/);
+    if (hashMatch) {
+      const conversationId = parseInt(hashMatch[1]);
+      if (window.MessengerPanel) window.MessengerPanel.openConversation(conversationId);
+    } else {
+      {% if selected_conversation %}
+        if (window.MessengerPanel) window.MessengerPanel.openConversation({{ selected_conversation.id }});
+      {% endif %}
     }
     
     // Обновление статуса оператора

@@ -10,6 +10,156 @@ class MessengerOperatorPanel {
     this.lastMessageTimestamp = null;
     this.selectedConversationId = null;
     this.composeMode = 'OUT'; // OUT | INTERNAL
+    this.listPollingTimer = null;
+  }
+
+  init() {
+    this.initSidebarControls();
+    this.startListPolling();
+  }
+
+  initSidebarControls() {
+    const searchInput = document.getElementById('conversationSearchInput');
+    const statusSelect = document.getElementById('conversationStatusSelect');
+    const mineInput = document.getElementById('mineInput');
+    const mineBtn = document.getElementById('mineToggleBtn');
+    const resetBtn = document.getElementById('resetFiltersBtn');
+
+    let searchTimer = null;
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+          this.refreshConversationList();
+        }, 300);
+      });
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          clearTimeout(searchTimer);
+          this.refreshConversationList();
+        }
+      });
+    }
+    if (statusSelect) statusSelect.addEventListener('change', () => this.refreshConversationList());
+
+    if (mineBtn && mineInput) {
+      mineBtn.addEventListener('click', () => {
+        const nowMine = !mineInput.value;
+        mineInput.value = nowMine ? '1' : '';
+        mineBtn.classList.toggle('btn-primary', nowMine);
+        this.refreshConversationList();
+      });
+    }
+    if (resetBtn) {
+      resetBtn.addEventListener('click', () => {
+        if (searchInput) searchInput.value = '';
+        if (statusSelect) statusSelect.value = '';
+        if (mineInput) mineInput.value = '';
+        if (mineBtn) mineBtn.classList.remove('btn-primary');
+        this.refreshConversationList();
+      });
+    }
+  }
+
+  getListQueryParams() {
+    const searchInput = document.getElementById('conversationSearchInput');
+    const statusSelect = document.getElementById('conversationStatusSelect');
+    const mineInput = document.getElementById('mineInput');
+    const params = new URLSearchParams();
+    if (searchInput && searchInput.value.trim()) params.set('q', searchInput.value.trim());
+    if (statusSelect && statusSelect.value) params.set('status', statusSelect.value);
+    if (mineInput && mineInput.value) params.set('mine', '1');
+    // пагинация/лимит — пусть DRF отдает дефолт; если есть page_size — попробуем
+    params.set('page_size', '50');
+    return params;
+  }
+
+  async refreshConversationList() {
+    const listEl = document.getElementById('conversationsList');
+    if (!listEl) return;
+
+    const params = this.getListQueryParams();
+    try {
+      const response = await fetch(`/api/messenger/conversations/?${params.toString()}`, {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      const items = Array.isArray(data) ? data : (Array.isArray(data.results) ? data.results : []);
+      listEl.innerHTML = items.length ? items.map(c => this.renderConversationCardHtml(c)).join('') : `
+        <div class="empty-state">
+          <p>Диалоги не найдены</p>
+          <p class="text-xs mt-1">Попробуйте изменить фильтры</p>
+        </div>
+      `;
+    } catch (e) {
+      console.error('refreshConversationList failed:', e);
+    }
+  }
+
+  startListPolling() {
+    if (this.listPollingTimer) return;
+    this.listPollingTimer = setInterval(() => {
+      this.refreshConversationList();
+    }, 10000);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        if (this.listPollingTimer) { clearInterval(this.listPollingTimer); this.listPollingTimer = null; }
+      } else {
+        this.startListPolling();
+        this.refreshConversationList();
+      }
+    });
+  }
+
+  renderConversationCardHtml(conversation) {
+    const id = conversation.id;
+    const status = conversation.status || '';
+    let bg = '#94a3b8';
+    if (status === 'open') bg = '#01948E';
+    else if (status === 'pending') bg = '#FDAD3A';
+    else if (status === 'resolved') bg = '#22c55e';
+    const name = conversation.contact_name || conversation.contact_email || conversation.contact_phone || 'Без имени';
+    const initial = (name[0] || 'К').toUpperCase();
+
+    const lastBody = (conversation.last_message_body || '').trim();
+    const preview = lastBody ? this.escapeHtml(lastBody).slice(0, 140) : 'Нет сообщений';
+
+    const lastAt = conversation.last_message_at ? new Date(conversation.last_message_at) : null;
+    const now = new Date();
+    const timeStr = lastAt
+      ? (lastAt.toDateString() === now.toDateString()
+          ? lastAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+          : lastAt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }))
+      : '';
+
+    const unread = Number(conversation.unread_count || 0);
+    const isActive = this.currentConversationId === id;
+
+    let statusBadge = '';
+    if (status === 'open') statusBadge = '<span class="badge badge-new badge-xs">Открыт</span>';
+    else if (status === 'pending') statusBadge = '<span class="badge badge-progress badge-xs">Ожидание</span>';
+    else if (status === 'resolved') statusBadge = '<span class="badge badge-done badge-xs">Решён</span>';
+    else if (status === 'closed') statusBadge = '<span class="badge badge-cancel badge-xs">Закрыт</span>';
+
+    return `
+      <div class="conversation-card ${isActive ? 'active' : ''}" data-conversation-id="${id}" onclick="window.MessengerPanel.openConversation(${id})">
+        <div class="conversation-avatar" style="background: ${bg};">${this.escapeHtml(initial)}</div>
+        <div class="conversation-content">
+          <div class="conversation-header">
+            <div class="conversation-name">${this.escapeHtml(name)}</div>
+            <div class="conversation-time">${this.escapeHtml(timeStr)}</div>
+          </div>
+          <div class="conversation-preview">${preview}</div>
+          <div class="conversation-meta">
+            ${unread > 0 ? `<span class="conversation-badge">${unread}</span>` : ''}
+            ${statusBadge}
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   /**
@@ -81,6 +231,9 @@ class MessengerOperatorPanel {
       // Рендерить диалог (пока простой вариант, потом можно улучшить)
       this.renderConversation(conversation, messages);
       this.renderConversationInfo(conversation);
+
+      // Пометить прочитанным (если текущий пользователь — assignee)
+      this.markConversationRead(conversationId).catch(() => {});
       
       // Начать polling для новых сообщений
       this.startPolling(conversationId);
@@ -101,6 +254,18 @@ class MessengerOperatorPanel {
         `;
       }
     }
+  }
+
+  async markConversationRead(conversationId) {
+    await fetch(`/api/messenger/conversations/${conversationId}/read/`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'X-CSRFToken': this.getCsrfToken(),
+      },
+    });
+    // обновим список (сбросит бейдж непрочитанных, если был)
+    this.refreshConversationList();
   }
 
   /**
@@ -520,8 +685,9 @@ class MessengerOperatorPanel {
         if (response.ok) {
           const messages = await response.json();
           if (messages.length > 0) {
-            // Есть новые сообщения - перезагрузить диалог
+            // Есть новые сообщения - перезагрузить диалог и обновить список
             await this.openConversation(conversationId, { force: true });
+            this.refreshConversationList();
           }
         }
       } catch (error) {
