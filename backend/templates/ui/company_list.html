@@ -1166,10 +1166,10 @@
 
         // Поле общего поиска: при вводе — сортировка по релевантности; при очистке — восстанавливаем сохранённую сортировку
         if (input.id === 'company-search-input') {
-          let searchDebounceTimer = null;
           const clearBtn = document.getElementById('company-search-clear');
-          const loadingIndicator = document.getElementById('company-search-loading');
-          input.addEventListener('input', () => {
+          const searchLoading = document.getElementById('company-search-loading');
+
+          function updateSearchUi() {
             const query = input.value.trim();
             if (query) {
               sortBeforeSearch = { sort: currentSort, dir: currentDir };
@@ -1180,22 +1180,35 @@
               updateSortHeaderUI();
               if (clearBtn) clearBtn.classList.add('hidden');
             }
-            if (loadingIndicator) loadingIndicator.classList.remove('hidden');
-            if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
-            searchDebounceTimer = setTimeout(async () => {
-              try {
-                await loadCompanies(true);
-              } finally {
-                if (loadingIndicator) loadingIndicator.classList.add('hidden');
-              }
-            }, 300);
+          }
+
+          input.addEventListener('input', () => {
+            updateSearchUi();
+            // При полном очищении строки поиска сразу обновляем список
+            if (!input.value.trim()) {
+              loadCompanies(true);
+            }
+          });
+
+          // Явный запуск поиска только по Enter
+          input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              if (searchLoading) searchLoading.classList.remove('hidden');
+              loadCompanies(true).finally(() => {
+                if (searchLoading) searchLoading.classList.add('hidden');
+              });
+            }
           });
           if (clearBtn) {
             clearBtn.addEventListener('click', (e) => {
               e.preventDefault();
               clearSearchAndRestoreSort();
+              if (searchLoading) searchLoading.classList.add('hidden');
             });
           }
+          // Инициализируем состояние поиска при загрузке
+          updateSearchUi();
           return;
         }
         
