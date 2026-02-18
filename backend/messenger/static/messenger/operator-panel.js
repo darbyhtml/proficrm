@@ -11,6 +11,8 @@ class MessengerOperatorPanel {
     this.selectedConversationId = null;
     this.composeMode = 'OUT'; // OUT | INTERNAL
     this.listPollingTimer = null;
+    this.lastMessageIds = new Set(); // ID уже отображённых сообщений
+    this.lastRenderedDate = null; // Последняя дата, для которой был сепаратор
   }
 
   init() {
@@ -88,14 +90,132 @@ class MessengerOperatorPanel {
       if (!response.ok) return;
       const data = await response.json();
       const items = Array.isArray(data) ? data : (Array.isArray(data.results) ? data.results : []);
-      listEl.innerHTML = items.length ? items.map(c => this.renderConversationCardHtml(c)).join('') : `
-        <div class="empty-state">
-          <p>Диалоги не найдены</p>
-          <p class="text-xs mt-1">Попробуйте изменить фильтры</p>
-        </div>
-      `;
+      
+      if (items.length === 0) {
+        listEl.innerHTML = `
+          <div class="empty-state">
+            <p>Диалоги не найдены</p>
+            <p class="text-xs mt-1">Попробуйте изменить фильтры</p>
+          </div>
+        `;
+        return;
+      }
+      
+      // Умное обновление: обновляем только изменённые карточки, добавляем новые
+      const existingCards = new Map();
+      Array.from(listEl.querySelectorAll('.conversation-card')).forEach(card => {
+        const id = card.getAttribute('data-conversation-id');
+        if (id) existingCards.set(parseInt(id), card);
+      });
+      
+      const newItemsMap = new Map();
+      items.forEach(c => newItemsMap.set(c.id, c));
+      
+      // Обновляем существующие карточки точечно
+      existingCards.forEach((card, id) => {
+        const newData = newItemsMap.get(id);
+        if (newData) {
+          this.updateConversationCardInPlace(card, newData);
+          newItemsMap.delete(id); // Уже обработали
+        } else {
+          // Карточка больше не в списке (фильтры изменились) - удаляем
+          card.remove();
+        }
+      });
+      
+      // Добавляем новые карточки
+      const fragment = document.createDocumentFragment();
+      newItemsMap.forEach(conversation => {
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = this.renderConversationCardHtml(conversation);
+        fragment.appendChild(tempDiv.firstElementChild);
+      });
+      
+      if (fragment.children.length > 0) {
+        // Вставляем новые карточки в начало (самые свежие сверху)
+        listEl.insertBefore(fragment, listEl.firstChild);
+      }
+      
+      // Если список пуст после обновления, показываем empty state
+      if (listEl.children.length === 0) {
+        listEl.innerHTML = `
+          <div class="empty-state">
+            <p>Диалоги не найдены</p>
+            <p class="text-xs mt-1">Попробуйте изменить фильтры</p>
+          </div>
+        `;
+      }
+      
     } catch (e) {
       console.error('refreshConversationList failed:', e);
+    }
+  }
+
+  /**
+   * Обновить карточку диалога на месте (без перерендера всей карточки)
+   */
+  updateConversationCardInPlace(cardEl, conversation) {
+    if (!cardEl || !conversation) return;
+    
+    const id = conversation.id;
+    const status = conversation.status || '';
+    let bg = '#94a3b8';
+    if (status === 'open') bg = '#01948E';
+    else if (status === 'pending') bg = '#FDAD3A';
+    else if (status === 'resolved') bg = '#22c55e';
+    
+    // Обновить аватар
+    const avatar = cardEl.querySelector('.conversation-avatar');
+    if (avatar) {
+      avatar.style.background = bg;
+      const name = conversation.contact_name || conversation.contact_email || conversation.contact_phone || 'Без имени';
+      avatar.textContent = (name[0] || 'К').toUpperCase();
+    }
+    
+    // Обновить имя
+    const nameEl = cardEl.querySelector('.conversation-name');
+    if (nameEl) {
+      const name = conversation.contact_name || conversation.contact_email || conversation.contact_phone || 'Без имени';
+      nameEl.textContent = name;
+    }
+    
+    // Обновить время
+    const timeEl = cardEl.querySelector('.conversation-time');
+    if (timeEl && conversation.last_message_at) {
+      const lastAt = new Date(conversation.last_message_at);
+      const now = new Date();
+      const timeStr = lastAt.toDateString() === now.toDateString()
+        ? lastAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+        : lastAt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+      timeEl.textContent = timeStr;
+    }
+    
+    // Обновить превью
+    const previewEl = cardEl.querySelector('.conversation-preview');
+    if (previewEl) {
+      const lastBody = (conversation.last_message_body || '').trim();
+      previewEl.textContent = lastBody ? this.escapeHtml(lastBody).slice(0, 140) : 'Нет сообщений';
+    }
+    
+    // Обновить мета (бейдж непрочитанных и статус)
+    const metaEl = cardEl.querySelector('.conversation-meta');
+    if (metaEl) {
+      const unread = Number(conversation.unread_count || 0);
+      let statusBadge = '';
+      if (status === 'open') statusBadge = '<span class="badge badge-new badge-xs">Открыт</span>';
+      else if (status === 'pending') statusBadge = '<span class="badge badge-progress badge-xs">Ожидание</span>';
+      else if (status === 'resolved') statusBadge = '<span class="badge badge-done badge-xs">Решён</span>';
+      else if (status === 'closed') statusBadge = '<span class="badge badge-cancel badge-xs">Закрыт</span>';
+      
+      metaEl.innerHTML = (unread > 0 ? `<span class="conversation-badge">${unread}</span>` : '') + statusBadge;
+    }
+    
+    // Обновить активное состояние
+    const isActive = this.currentConversationId === id;
+    if (isActive) {
+      cardEl.classList.add('active');
+    } else {
+      cardEl.classList.remove('active');
     }
   }
 
@@ -228,20 +348,23 @@ class MessengerOperatorPanel {
 
       const messages = await messagesResponse.json();
       
-      // Рендерить диалог (пока простой вариант, потом можно улучшить)
+      // Рендерить диалог
       this.renderConversation(conversation, messages);
       this.renderConversationInfo(conversation);
 
       // Пометить прочитанным (если текущий пользователь — assignee)
       this.markConversationRead(conversationId).catch(() => {});
       
+      // Сохранить ID и timestamp последних сообщений
+      this.lastMessageIds.clear();
+      if (messages.length > 0) {
+        messages.forEach(m => this.lastMessageIds.add(m.id));
+        this.lastMessageTimestamp = messages[messages.length - 1].created_at;
+        this.lastRenderedDate = new Date(messages[messages.length - 1].created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      }
+      
       // Начать polling для новых сообщений
       this.startPolling(conversationId);
-      
-      // Сохранить timestamp последнего сообщения
-      if (messages.length > 0) {
-        this.lastMessageTimestamp = messages[messages.length - 1].created_at;
-      }
       
     } catch (error) {
       console.error('Failed to load conversation:', error);
@@ -308,7 +431,7 @@ class MessengerOperatorPanel {
         if (currentDate !== messageDate) {
           currentDate = messageDate;
           html += `
-            <div class="text-center my-4">
+            <div class="text-center my-4" data-date-separator="${messageDate}">
               <span class="inline-block px-3 py-1 rounded-full bg-brand-soft/40 text-xs text-brand-dark/70">
                 ${messageDate}
               </span>
@@ -316,37 +439,7 @@ class MessengerOperatorPanel {
           `;
         }
 
-        const dir = (message.direction || '').toLowerCase();
-        const isOutgoing = dir === 'out' || dir === 'internal';
-        const senderName = isOutgoing
-          ? (message.sender_user_name || message.sender_user_username || 'Оператор')
-          : (message.sender_contact_name || 'Клиент');
-        const avatarInitial = isOutgoing
-          ? (senderName[0] || 'О').toUpperCase()
-          : (senderName[0] || 'К').toUpperCase();
-        
-        html += `
-          <div class="flex gap-3 mb-4 ${isOutgoing ? 'flex-row-reverse' : 'flex-row'}">
-            <div class="flex-shrink-0">
-              <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
-                isOutgoing ? 'bg-brand-orange/20 text-brand-orange' : 'bg-brand-teal/20 text-brand-teal'
-              }">
-                ${avatarInitial}
-              </div>
-            </div>
-            <div class="flex-1 ${isOutgoing ? 'text-right' : 'text-left'}">
-              <div class="inline-block max-w-[80%] rounded-lg px-4 py-2 ${
-                isOutgoing ? 'bg-brand-teal/10' : 'bg-brand-soft/40'
-              }">
-                <div class="text-sm font-medium mb-1">${this.escapeHtml(senderName)}</div>
-                <div class="text-sm text-brand-dark whitespace-pre-wrap">${this.escapeHtml(message.body || '')}</div>
-                <div class="text-xs text-brand-dark/50 mt-1">
-                  ${new Date(message.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-                </div>
-              </div>
-            </div>
-          </div>
-        `;
+        html += this.renderMessageHtml(message);
       });
     }
 
@@ -392,12 +485,7 @@ class MessengerOperatorPanel {
     contentArea.innerHTML = html;
     
     // Автоскролл к последнему сообщению
-    setTimeout(() => {
-      const messagesList = document.getElementById('messagesList');
-      if (messagesList) {
-        messagesList.scrollTop = messagesList.scrollHeight;
-      }
-    }, 100);
+    this.scrollToBottom();
 
     // Обработчик файлов
     const fileInput = document.getElementById('messageAttachments');
@@ -579,6 +667,8 @@ class MessengerOperatorPanel {
   updateConversationCard(conversation) {
     const card = document.querySelector(`.conversation-card[data-conversation-id="${conversation.id}"]`);
     if (!card) return;
+    
+    // Обновить цвет аватара по статусу
     const avatar = card.querySelector('.conversation-avatar');
     if (avatar) {
       let bg = '#94a3b8';
@@ -586,6 +676,25 @@ class MessengerOperatorPanel {
       else if (conversation.status === 'pending') bg = '#FDAD3A';
       else if (conversation.status === 'resolved') bg = '#22c55e';
       avatar.style.background = bg;
+    }
+    
+    // Обновить бейдж статуса
+    const metaEl = card.querySelector('.conversation-meta');
+    if (metaEl) {
+      const existingBadge = metaEl.querySelector('.badge');
+      if (existingBadge) {
+        let statusBadge = '';
+        if (conversation.status === 'open') statusBadge = '<span class="badge badge-new badge-xs">Открыт</span>';
+        else if (conversation.status === 'pending') statusBadge = '<span class="badge badge-progress badge-xs">Ожидание</span>';
+        else if (conversation.status === 'resolved') statusBadge = '<span class="badge badge-done badge-xs">Решён</span>';
+        else if (conversation.status === 'closed') statusBadge = '<span class="badge badge-cancel badge-xs">Закрыт</span>';
+        
+        const unreadBadge = metaEl.querySelector('.conversation-badge');
+        const unreadHtml = Number(conversation.unread_count || 0) > 0 
+          ? `<span class="conversation-badge">${conversation.unread_count}</span>` 
+          : '';
+        metaEl.innerHTML = unreadHtml + statusBadge;
+      }
     }
   }
 
@@ -634,7 +743,7 @@ class MessengerOperatorPanel {
         throw new Error(error.detail || 'Ошибка отправки сообщения');
       }
 
-      await response.json();
+      const newMessage = await response.json();
       
       // Очистить форму
       form.querySelector('[name="body"]').value = '';
@@ -644,8 +753,11 @@ class MessengerOperatorPanel {
         if (namesEl) namesEl.textContent = '';
       }
       
-      // Перезагрузить диалог для обновления сообщений
-      await this.openConversation(parseInt(conversationId), { force: true });
+      // Добавить новое сообщение в диалог (без полного перерендера)
+      this.appendNewMessages([newMessage]);
+      
+      // Обновить список диалогов (обновит превью/время)
+      this.refreshConversationList();
       
     } catch (error) {
       console.error('Failed to send message:', error);
@@ -655,6 +767,172 @@ class MessengerOperatorPanel {
         submitButton.disabled = false;
         submitButton.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
       }
+    }
+  }
+
+  /**
+   * Рендерить HTML одного сообщения
+   */
+  renderMessageHtml(message) {
+    const dir = (message.direction || '').toLowerCase();
+    const isOutgoing = dir === 'out' || dir === 'internal';
+    const senderName = isOutgoing
+      ? (message.sender_user_name || message.sender_user_username || 'Оператор')
+      : (message.sender_contact_name || 'Клиент');
+    const avatarInitial = isOutgoing
+      ? (senderName[0] || 'О').toUpperCase()
+      : (senderName[0] || 'К').toUpperCase();
+    
+    let attachmentsHtml = '';
+    if (message.attachments && message.attachments.length > 0) {
+      attachmentsHtml = '<div class="mt-2 space-y-1">';
+      message.attachments.forEach(att => {
+        attachmentsHtml += `
+          <a href="${this.escapeHtml(att.file)}" target="_blank" class="text-xs text-brand-teal hover:underline inline-flex items-center gap-1">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
+            </svg>
+            ${this.escapeHtml(att.original_name || att.file.split('/').pop() || 'Файл')}
+          </a>
+        `;
+      });
+      attachmentsHtml += '</div>';
+    }
+    
+    return `
+      <div class="flex gap-3 mb-4 ${isOutgoing ? 'flex-row-reverse' : 'flex-row'}" data-message-id="${message.id}">
+        <div class="flex-shrink-0">
+          <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
+            isOutgoing ? 'bg-brand-orange/20 text-brand-orange' : 'bg-brand-teal/20 text-brand-teal'
+          }">
+            ${avatarInitial}
+          </div>
+        </div>
+        <div class="flex-1 ${isOutgoing ? 'text-right' : 'text-left'}">
+          <div class="inline-block max-w-[80%] rounded-lg px-4 py-2 ${
+            isOutgoing ? 'bg-brand-teal/10' : 'bg-brand-soft/40'
+          }">
+            <div class="text-sm font-medium mb-1">${this.escapeHtml(senderName)}</div>
+            <div class="text-sm text-brand-dark whitespace-pre-wrap">${this.escapeHtml(message.body || '')}</div>
+            ${attachmentsHtml}
+            <div class="text-xs text-brand-dark/50 mt-1">
+              ${new Date(message.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * Проверить, находится ли пользователь внизу списка сообщений
+   */
+  isScrolledToBottom(threshold = 100) {
+    const messagesList = document.getElementById('messagesList');
+    if (!messagesList) return false;
+    return messagesList.scrollHeight - messagesList.scrollTop - messagesList.clientHeight < threshold;
+  }
+
+  /**
+   * Автоскролл к последнему сообщению (только если пользователь внизу)
+   */
+  scrollToBottom(force = false) {
+    const messagesList = document.getElementById('messagesList');
+    if (!messagesList) return;
+    
+    if (force || this.isScrolledToBottom()) {
+      setTimeout(() => {
+        messagesList.scrollTop = messagesList.scrollHeight;
+      }, 50);
+    }
+  }
+
+  /**
+   * Добавить новые сообщения в диалог (без полного перерендера)
+   */
+  appendNewMessages(messages) {
+    if (!messages || messages.length === 0) return;
+    
+    const messagesList = document.getElementById('messagesList');
+    if (!messagesList) return;
+    
+    const wasAtBottom = this.isScrolledToBottom();
+    let currentDate = this.lastRenderedDate;
+    
+    messages.forEach(message => {
+      // Пропускаем уже отображённые сообщения
+      if (this.lastMessageIds.has(message.id)) return;
+      
+      const messageDate = new Date(message.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      
+      // Добавляем сепаратор даты, если дата изменилась
+      if (currentDate !== messageDate) {
+        currentDate = messageDate;
+        this.lastRenderedDate = messageDate;
+        
+        // Проверяем, нет ли уже такого сепаратора
+        const existingSeparator = messagesList.querySelector(`[data-date-separator="${messageDate}"]`);
+        if (!existingSeparator) {
+          const separatorDiv = document.createElement('div');
+          separatorDiv.className = 'text-center my-4';
+          separatorDiv.setAttribute('data-date-separator', messageDate);
+          separatorDiv.innerHTML = `
+            <span class="inline-block px-3 py-1 rounded-full bg-brand-soft/40 text-xs text-brand-dark/70">
+              ${messageDate}
+            </span>
+          `;
+          messagesList.appendChild(separatorDiv);
+        }
+      }
+      
+      // Добавляем сообщение
+      const messageDiv = document.createElement('div');
+      messageDiv.innerHTML = this.renderMessageHtml(message);
+      const messageEl = messageDiv.firstElementChild;
+      messagesList.appendChild(messageEl);
+      
+      this.lastMessageIds.add(message.id);
+    });
+    
+    // Обновляем timestamp последнего сообщения
+    if (messages.length > 0) {
+      this.lastMessageTimestamp = messages[messages.length - 1].created_at;
+    }
+    
+    // Автоскролл только если пользователь был внизу
+    if (wasAtBottom) {
+      this.scrollToBottom(true);
+    }
+    
+    // Обновляем карточку диалога в списке (превью/время)
+    this.updateConversationCardPreview(this.currentConversationId, messages[messages.length - 1]);
+  }
+
+  /**
+   * Обновить превью/время в карточке диалога (точечно, без перерендера всего списка)
+   */
+  updateConversationCardPreview(conversationId, lastMessage) {
+    if (!conversationId || !lastMessage) return;
+    
+    const card = document.querySelector(`.conversation-card[data-conversation-id="${conversationId}"]`);
+    if (!card) return;
+    
+    // Обновляем превью
+    const previewEl = card.querySelector('.conversation-preview');
+    if (previewEl && lastMessage.body) {
+      const preview = this.escapeHtml(lastMessage.body.trim()).slice(0, 140);
+      previewEl.textContent = preview || 'Нет сообщений';
+    }
+    
+    // Обновляем время
+    const timeEl = card.querySelector('.conversation-time');
+    if (timeEl && lastMessage.created_at) {
+      const lastAt = new Date(lastMessage.created_at);
+      const now = new Date();
+      const timeStr = lastAt.toDateString() === now.toDateString()
+        ? lastAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+        : lastAt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+      timeEl.textContent = timeStr;
     }
   }
 
@@ -685,8 +963,9 @@ class MessengerOperatorPanel {
         if (response.ok) {
           const messages = await response.json();
           if (messages.length > 0) {
-            // Есть новые сообщения - перезагрузить диалог и обновить список
-            await this.openConversation(conversationId, { force: true });
+            // Есть новые сообщения - добавить их умно, без полного перерендера
+            this.appendNewMessages(messages);
+            // Обновить список диалогов (обновит превью/время)
             this.refreshConversationList();
           }
         }

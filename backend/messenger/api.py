@@ -211,6 +211,9 @@ class ConversationViewSet(MessengerEnabledApiMixin, viewsets.ReadOnlyModelViewSe
             for f in files:
                 models.MessageAttachment.objects.create(message=message, file=f)
 
+            # Перезагрузить сообщение из БД, чтобы получить вложения в сериализаторе
+            message.refresh_from_db()
+            
             return Response(serializers.MessageSerializer(message).data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=["get", "post"], url_path="typing")
