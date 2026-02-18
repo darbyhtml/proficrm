@@ -577,7 +577,8 @@ class MessengerOperatorPanel {
     const contactName = conversation.contact_name || conversation.contact_email || conversation.contact_phone || 'Без имени';
     
     let html = `
-      <div class="flex flex-col h-full overflow-hidden">
+      <div class="h-full">
+      <div class="flex flex-col h-full overflow-hidden bg-white rounded-2xl border border-brand-soft/60">
       <div class="border-b border-brand-soft/60 p-4 bg-white flex-shrink-0">
         <div class="flex items-center justify-between">
           <div>
@@ -688,7 +689,7 @@ class MessengerOperatorPanel {
       </div>
     `;
 
-    html += `</div>`;
+    html += `</div></div>`;
     contentArea.innerHTML = html;
     
     // Автоскролл к последнему сообщению (при открытии всегда в самый низ)
