@@ -1,0 +1,419 @@
+{% extends "ui/base.html" %}
+{% load static ui_extras messenger_extras %}
+{% block title %}Мессенджер — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+<style>
+  .messenger-unified-layout {
+    display: flex;
+    /* Базовая высота по умолчанию; реальная высота подстраивается через JS от верхнего края до низа окна */
+    height: calc(100vh - 140px);
+    min-height: 520px;
+    gap: 0;
+    overflow: hidden;
+    position: relative;
+  }
+  
+  .messenger-unified-sidebar {
+    width: 320px;
+    flex-shrink: 0;
+    border-right: 1px solid rgba(194, 226, 222, 0.6);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #fff;
+  }
+  
+  .messenger-unified-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #fff;
+  }
+  
+  .messenger-unified-info {
+    width: 320px;
+    flex-shrink: 0;
+    border-left: 1px solid rgba(194, 226, 222, 0.6);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  /* Адаптивность как в Chatwoot: панели выезжают поверх */
+  @media (max-width: 1024px) {
+    .messenger-unified-layout.info-open .messenger-unified-overlay {
+      display: block;
+    }
+    .messenger-unified-info {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+      transform: translateX(100%);
+      transition: transform 0.2s ease;
+      z-index: 40;
+      box-shadow: -8px 0 24px rgba(0, 0, 0, 0.08);
+    }
+    .messenger-unified-layout.info-open .messenger-unified-info {
+      transform: translateX(0);
+    }
+  }
+
+  @media (max-width: 768px) {
+    .messenger-unified-layout.chat-open .messenger-unified-overlay {
+      display: none;
+    }
+    .messenger-unified-sidebar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      transform: translateX(0);
+      transition: transform 0.2s ease;
+      z-index: 30;
+      box-shadow: 8px 0 24px rgba(0, 0, 0, 0.06);
+    }
+    .messenger-unified-layout.chat-open .messenger-unified-sidebar {
+      transform: translateX(-100%);
+    }
+  }
+  
+  .messenger-unified-scrollable {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  
+  .conversation-card {
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(194, 226, 222, 0.3);
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .conversation-card:hover {
+    background: rgba(194, 226, 222, 0.15);
+  }
+  
+  .conversation-card.active {
+    background: rgba(1, 148, 142, 0.1);
+    border-left: 3px solid var(--brand-teal);
+  }
+  
+  .conversation-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 14px;
+    color: #fff;
+  }
+  
+  .conversation-content {
+    flex: 1;
+    min-width: 0;
+  }
+  
+  .conversation-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  
+  .conversation-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--brand-dark);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  .conversation-time {
+    font-size: 11px;
+    color: rgba(0, 61, 56, 0.5);
+    flex-shrink: 0;
+  }
+  
+  .conversation-preview {
+    font-size: 13px;
+    color: rgba(0, 61, 56, 0.6);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-bottom: 4px;
+  }
+  
+  .conversation-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  
+  .conversation-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 6px;
+    border-radius: 9px;
+    font-size: 11px;
+    font-weight: 600;
+    background: #ef4444;
+    color: #fff;
+  }
+  
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    padding: 2rem;
+    text-align: center;
+    color: rgba(0, 61, 56, 0.5);
+  }
+  
+  .empty-state-icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 1rem;
+    opacity: 0.3;
+  }
+
+  .messenger-unified-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.25);
+    z-index: 35;
+  }
+</style>
+
+<div class="messenger-unified-layout">
+  <div class="messenger-unified-overlay" id="messengerOverlay"></div>
+  <!-- Левая колонка: Список диалогов -->
+  <div class="messenger-unified-sidebar">
+    <!-- Заголовок и фильтры -->
+    <div class="border-b border-brand-soft/60 p-3 bg-white">
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-lg font-semibold">Диалоги</h2>
+        <form method="post" action="{% url 'messenger_agent_status' %}" class="inline">
+          {% csrf_token %}
+          <select name="status" class="select text-xs py-1" style="min-width: 6rem" title="Статус оператора">
+            <option value="online" {% if agent_status == 'online' %}selected{% endif %}>Онлайн</option>
+            <option value="away" {% if agent_status == 'away' %}selected{% endif %}>Отошёл</option>
+            <option value="busy" {% if agent_status == 'busy' %}selected{% endif %}>Занят</option>
+            <option value="offline" {% if agent_status == 'offline' %}selected{% endif %}>Офлайн</option>
+          </select>
+        </form>
+      </div>
+      
+      <!-- Компактные фильтры -->
+      <form method="get" id="conversationFilterForm" class="space-y-2">
+        <div class="relative">
+          <input
+            type="search"
+            name="q"
+            id="conversationSearchInput"
+            value="{{ q|default:'' }}"
+            class="input text-xs w-full py-2 pr-8"
+            placeholder="Поиск (имя, email, телефон, #id)"
+            autocomplete="off"
+          >
+          <div class="absolute right-2 top-1/2 -translate-y-1/2 text-brand-dark/40 pointer-events-none">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="11" cy="11" r="8"></circle>
+              <path d="M21 21l-4.35-4.35"></path>
+            </svg>
+          </div>
+        </div>
+        <select name="status" id="conversationStatusSelect" class="select text-xs w-full py-1.5">
+          <option value="">Все статусы</option>
+          <option value="open" {% if status_filter == 'open' %}selected{% endif %}>Открыт</option>
+          <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>В ожидании</option>
+          <option value="resolved" {% if status_filter == 'resolved' %}selected{% endif %}>Решён</option>
+          <option value="closed" {% if status_filter == 'closed' %}selected{% endif %}>Закрыт</option>
+        </select>
+        <input type="hidden" name="mine" id="mineInput" value="{% if mine %}1{% endif %}">
+        <div class="flex gap-2">
+          <button type="button" id="mineToggleBtn" class="btn btn-outline btn-sm text-xs flex-1 {% if mine %}btn-primary{% endif %}">Мои</button>
+          <button type="button" id="resetFiltersBtn" class="btn btn-outline btn-sm text-xs">Сброс</button>
+        </div>
+      </form>
+    </div>
+    
+    <!-- Список диалогов (скроллируемый) -->
+    <div class="messenger-unified-scrollable" id="conversationsList">
+      {% for conversation in page.object_list %}
+        <div class="conversation-card {% if selected_conversation and selected_conversation.id == conversation.id %}active{% endif %}" 
+             data-conversation-id="{{ conversation.id }}"
+             onclick="MessengerPanel.openConversation({{ conversation.id }})">
+          <!-- Аватар -->
+          <div class="conversation-avatar" style="background: {% if conversation.status == 'open' %}#01948E{% elif conversation.status == 'pending' %}#FDAD3A{% elif conversation.status == 'resolved' %}#22c55e{% else %}#94a3b8{% endif %};">
+            {{ conversation.contact.name|first|default:conversation.contact.email|first|default:conversation.contact.phone|first|default:"К"|upper }}
+          </div>
+          
+          <!-- Контент -->
+          <div class="conversation-content">
+            <div class="conversation-header">
+              <div class="conversation-name">
+                {{ conversation.contact.name|default:conversation.contact.email|default:conversation.contact.phone|default:"Без имени" }}
+              </div>
+              <div class="conversation-time">
+                {% if conversation.last_message_at %}
+                  {% now "Y-m-d" as today %}
+                  {% if conversation.last_message_at|date:"Y-m-d" == today %}
+                    {{ conversation.last_message_at|date:"H:i" }}
+                  {% else %}
+                    {{ conversation.last_message_at|date:"d.m" }}
+                  {% endif %}
+                {% endif %}
+              </div>
+            </div>
+            
+            <div class="conversation-preview">
+              {% if conversation.last_message_body %}
+                {{ conversation.last_message_body|truncatewords:8 }}
+              {% else %}
+                Нет сообщений
+              {% endif %}
+            </div>
+            
+            <div class="conversation-meta">
+              {% if conversation.assignee_id == user.id and conversation.unread_count|default:0 > 0 %}
+                <span class="conversation-badge">{{ conversation.unread_count }}</span>
+              {% endif %}
+              {% if conversation.status == 'open' %}
+                <span class="badge badge-new badge-xs">Открыт</span>
+              {% elif conversation.status == 'pending' %}
+                <span class="badge badge-progress badge-xs">Ожидание</span>
+              {% elif conversation.status == 'resolved' %}
+                <span class="badge badge-done badge-xs">Решён</span>
+              {% elif conversation.status == 'closed' %}
+                <span class="badge badge-cancel badge-xs">Закрыт</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      {% empty %}
+        <div class="empty-state">
+          <p>Диалоги не найдены</p>
+          <p class="text-xs mt-1">Попробуйте изменить фильтры</p>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+  
+  <!-- Центральная колонка: Диалог -->
+  <div class="messenger-unified-main">
+    <div id="conversationContent" class="flex flex-col h-full overflow-hidden">
+      {% if selected_conversation %}
+        <!-- Диалог будет загружен через AJAX -->
+        <div class="p-4 text-center text-brand-dark/60">
+          <p>Загрузка диалога...</p>
+        </div>
+      {% else %}
+        <!-- Пустое состояние -->
+        <div class="flex items-center justify-center h-full text-brand-dark/40">
+          <div class="text-center">
+            <svg class="w-16 h-16 mx-auto mb-4 text-brand-dark/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+            </svg>
+            <h3 class="text-lg font-semibold mb-2 text-brand-dark/70">Выберите диалог</h3>
+            <p class="text-sm mb-3">Выберите диалог из списка слева, чтобы начать общение</p>
+            <p class="text-xs text-brand-dark/50">Нажмите <kbd class="px-1.5 py-0.5 bg-brand-soft/40 rounded text-xs">Ctrl+K</kbd> для быстрого поиска</p>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+  
+  <!-- Правая колонка: Информация о диалоге -->
+  <div class="messenger-unified-info">
+    <div id="conversationInfo" class="messenger-unified-scrollable p-4">
+      {% if selected_conversation %}
+        <!-- Информация будет загружена через AJAX -->
+        <div class="text-center text-brand-dark/60">
+          <p class="text-sm">Загрузка информации...</p>
+        </div>
+      {% else %}
+        <div class="flex items-center justify-center h-full text-brand-dark/40">
+          <div class="text-center">
+            <p class="text-sm mb-1">Информация о диалоге</p>
+            <p class="text-xs">Выберите диалог для просмотра</p>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+  window.MESSENGER_CONTEXT = {
+    currentUserId: {{ current_user_id|default:'null' }},
+    selectedConversationId: {% if selected_conversation %}{{ selected_conversation.id }}{% else %}null{% endif %},
+    assignees: [
+      {% for a in assignees %}
+        { id: {{ a.id }}, name: "{{ a.get_full_name|default:a.username|escapejs }}" }{% if not forloop.last %},{% endif %}
+      {% endfor %}
+    ],
+  };
+
+  // Адаптивная высота: растягиваем трёхколоночный layout от верхней границы до низа окна,
+  // чтобы каждая колонка занимала всю доступную высоту и имела собственный скролл (как в Chatwoot).
+  function resizeMessengerLayout() {
+    var layout = document.querySelector('.messenger-unified-layout');
+    if (!layout) return;
+    var rect = layout.getBoundingClientRect();
+    var viewportHeight = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 0;
+    // Делаем layout заметно ниже высоты окна, чтобы убрать общий скролл страницы
+    var safeOffset = 32;
+    var targetHeight = viewportHeight - rect.top - safeOffset;
+    var minHeight = 500;
+    if (!isFinite(targetHeight) || targetHeight <= 0) {
+      targetHeight = minHeight;
+    }
+    if (targetHeight < minHeight) {
+      targetHeight = minHeight;
+    }
+    layout.style.height = targetHeight + 'px';
+  }
+
+  window.addEventListener('resize', resizeMessengerLayout);
+  document.addEventListener('DOMContentLoaded', resizeMessengerLayout);
+</script>
+
+<script src="{% static 'messenger/operator-panel.js' %}"></script>
+<script>
+  // Инициализация панели при загрузке страницы
+  document.addEventListener('DOMContentLoaded', function() {
+    if (window.MessengerPanel && window.MessengerPanel.init) {
+      window.MessengerPanel.init();
+    }
+    
+    // Обновление статуса оператора
+    const statusForm = document.querySelector('form[action="{% url 'messenger_agent_status' %}"]');
+    if (statusForm) {
+      const statusSelect = statusForm.querySelector('select[name="status"]');
+      if (statusSelect) {
+        statusSelect.addEventListener('change', () => { statusForm.submit(); });
+      }
+    }
+  });
+</script>
+{% endblock %}

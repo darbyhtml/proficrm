@@ -1,0 +1,361 @@
+{% extends "ui/base.html" %}
+{% load static %}
+{% block title %}{% if inbox %}Редактирование Inbox{% else %}Создание Inbox{% endif %} — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <div class="space-y-4 max-w-6xl">
+    <div>
+      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> / <a class="underline" href="/settings/messenger/">Messenger</a> /</div>
+      <h1 class="text-2xl font-semibold">{% if inbox %}Редактирование Inbox{% else %}Создание Inbox{% endif %}</h1>
+    </div>
+
+    <form method="post" class="space-y-4">
+      {% csrf_token %}
+      
+      <div class="card">
+        <div class="card-pad">
+          <h2 class="text-lg font-semibold mb-4">Основные настройки</h2>
+          
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Название *</label>
+              <input type="text" name="name" value="{{ inbox.name|default:'' }}" class="input" required>
+            </div>
+
+            {% if inbox %}
+              <div>
+                <label class="block text-sm font-medium text-brand-dark/80 mb-1">Филиал</label>
+                <div class="text-sm text-brand-dark/60 bg-brand-soft/20 p-2 rounded">
+                  {% if inbox.branch %}{{ inbox.branch.name }} (нельзя изменить после создания){% else %}Глобальный inbox — филиал определяется по GeoIP и правилам маршрутизации{% endif %}
+                </div>
+              </div>
+            {% else %}
+              <div>
+                <label class="block text-sm font-medium text-brand-dark/80 mb-1">Филиал</label>
+                <select name="branch" class="select">
+                  <option value="">Глобальный (общий) inbox — по GeoIP и правилам</option>
+                  {% for branch in branches %}
+                    <option value="{{ branch.id }}">{{ branch.name }}</option>
+                  {% endfor %}
+                </select>
+                <p class="text-xs text-brand-dark/50 mt-1">Оставьте «Глобальный», чтобы филиал диалога определялся по региону клиента (IP) и правилам маршрутизации.</p>
+              </div>
+            {% endif %}
+
+            <div>
+              <label class="flex items-center gap-2">
+                <input type="checkbox" name="is_active" {% if inbox.is_active or not inbox %}checked{% endif %} class="rounded">
+                <span class="text-sm font-medium text-brand-dark/80">Активен</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {% if inbox %}
+        <div class="card">
+          <div class="card-pad">
+            <h2 class="text-lg font-semibold mb-4">Widget Token</h2>
+            
+            <div class="space-y-3">
+              <div>
+                <label class="block text-sm font-medium text-brand-dark/80 mb-1">Токен виджета <span class="text-brand-dark/50 font-normal" title="Секретный ключ для подключения виджета на сайте">(?)</span></label>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <code class="flex-1 min-w-0 bg-brand-soft/30 p-2 rounded text-xs break-all">{{ inbox.widget_token }}</code>
+                  <button type="button" onclick="copyToken()" class="btn btn-outline btn-sm" title="Скопировать токен">Скопировать токен</button>
+                  <a href="/widget-demo/?token={{ inbox.widget_token }}" target="_blank" rel="noopener" class="btn btn-outline btn-sm" title="Открыть страницу с виджетом для проверки">Открыть демо</a>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-brand-dark/80 mb-1">Код вставки на сайт <span class="text-brand-dark/50 font-normal" title="Вставьте этот код перед &lt;/body&gt; на вашем сайте">(?)</span></label>
+                <pre class="bg-brand-dark text-white p-3 rounded text-xs overflow-x-auto"><code id="embed-code">&lt;link rel="stylesheet" href="{{ base_url }}/static/messenger/widget.css"&gt;
+&lt;script src="{{ base_url }}/static/messenger/widget.js" data-widget-token="{{ inbox.widget_token }}"&gt;&lt;/script&gt;</code></pre>
+                <div class="flex items-center gap-2 mt-2">
+                  <button type="button" onclick="copyCode()" class="btn btn-outline btn-sm">Скопировать код вставки</button>
+                </div>
+              </div>
+
+              <div class="mt-4">
+                <label class="block text-sm font-medium text-brand-dark/80 mb-1">Код с ленивой загрузкой <span class="text-brand-dark/50 font-normal" title="Виджет загрузится после скролла или через N секунд — меньше нагрузка на первую отрисовку">(?)</span></label>
+                <p class="text-xs text-brand-dark/60 mb-2">Один скрипт: виджет подгружается при первом скролле страницы или через 5 секунд (что раньше). Без data-load-after и data-load-on-scroll виджет загрузится сразу.</p>
+                <pre class="bg-brand-dark text-white p-3 rounded text-xs overflow-x-auto"><code id="embed-code-lazy">&lt;script src="{{ base_url }}/static/messenger/widget-loader.js" data-widget-token="{{ inbox.widget_token }}" data-load-on-scroll="1" data-load-after="5"&gt;&lt;/script&gt;</code></pre>
+                <div class="flex items-center gap-2 mt-2">
+                  <button type="button" onclick="copyLazyCode()" class="btn btn-outline btn-sm">Скопировать код (ленивая загрузка)</button>
+                </div>
+              </div>
+
+              <div class="border-t border-brand-soft/60 pt-3">
+                <form method="post" onsubmit="return confirm('Внимание! Старый токен перестанет работать. Все виджеты на сайтах нужно будет обновить. Продолжить?');">
+                  {% csrf_token %}
+                  <input type="hidden" name="action" value="regenerate_token">
+                  <button type="submit" class="btn btn-danger btn-sm">Сгенерировать новый токен</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+
+      <div class="card">
+        <div class="card-pad">
+          <h2 class="text-lg font-semibold mb-4">Рабочие часы</h2>
+          <p class="text-sm text-brand-dark/60 mb-3">Если включено, автоназначение диалога оператору выполняется только в указанные часы. Вне расписания виджет может показать сообщение «Мы ответим в рабочее время».</p>
+          <div class="space-y-4">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" name="working_hours_enabled" {% if working_hours.enabled %}checked{% endif %} class="rounded">
+              <span class="text-sm font-medium text-brand-dark/80">Учитывать рабочие часы</span>
+            </label>
+            <div>
+              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Часовой пояс</label>
+              <input type="text" name="working_hours_tz" value="{{ working_hours.tz|default:'Europe/Moscow' }}" class="input" placeholder="Europe/Moscow">
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b border-brand-soft/60">
+                    <th class="text-left py-2 pr-4">День</th>
+                    <th class="text-left py-2 pr-2">Начало</th>
+                    <th class="text-left py-2">Конец</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for day in working_hours_days %}
+                  <tr class="border-b border-brand-soft/40">
+                    <td class="py-1 pr-4">{{ day.label }}</td>
+                    <td class="py-1 pr-2"><input type="time" name="working_hours_{{ day.num }}_start" value="{{ day.start }}" class="input py-1 text-sm"></td>
+                    <td class="py-1"><input type="time" name="working_hours_{{ day.num }}_end" value="{{ day.end }}" class="input py-1 text-sm"></td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-pad">
+          <h2 class="text-lg font-semibold mb-4">Офлайн-режим</h2>
+          <p class="text-sm text-brand-dark/60 mb-3">Когда операторов нет или вне рабочих часов, виджет может показать настраиваемое сообщение. Заявки (сообщения) сохраняются в диалог и будут обработаны при появлении операторов.</p>
+          <div class="space-y-4">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" name="offline_enabled" {% if offline_settings.enabled %}checked{% endif %} class="rounded">
+              <span class="text-sm font-medium text-brand-dark/80">Показывать офлайн-сообщение</span>
+            </label>
+            <div>
+              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Текст сообщения</label>
+              <textarea name="offline_message" class="textarea" rows="3" placeholder="Сейчас никого нет. Оставьте заявку — мы ответим в рабочее время.">{{ offline_settings.message|default:'' }}</textarea>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-pad">
+          <h2 class="text-lg font-semibold mb-4">Вложения</h2>
+          <p class="text-sm text-brand-dark/60 mb-3">Разрешить посетителям и операторам прикреплять файлы к сообщениям (изображения, PDF). Лимит размера задаётся ниже.</p>
+          <div class="space-y-4">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" name="attachments_enabled" {% if attachment_settings.enabled %}checked{% endif %} class="rounded">
+              <span class="text-sm font-medium text-brand-dark/80">Разрешить вложения в виджете</span>
+            </label>
+            <div>
+              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Макс. размер файла (МБ)</label>
+              <input type="number" name="attachments_max_mb" min="1" max="50" step="1" value="{{ attachment_settings.max_file_size_mb|default:5 }}" class="input" style="width: 6rem">
+              <p class="text-xs text-brand-dark/50 mt-1">По умолчанию 5 МБ. Разрешены типы: изображения (JPEG, PNG, GIF, WebP) и PDF.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-pad">
+          <h2 class="text-lg font-semibold mb-4">Безопасность</h2>
+          <p class="text-sm text-brand-dark/60 mb-3">Ограничьте работу виджета списком доменов. Запросы виджета с других доменов будут отклонены (Origin/Referer).</p>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Разрешённые домены</label>
+              <textarea name="security_allowed_domains" class="textarea" rows="3" placeholder="example.com&#10;*.example.com&#10;localhost">{% for d in security_settings.allowed_domains %}{{ d }}{% if not forloop.last %}&#10;{% endif %}{% endfor %}</textarea>
+              <p class="text-xs text-brand-dark/50 mt-1">По одному домену в строке. Поддерживается wildcard: <code>*.example.com</code>.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-pad">
+          <h2 class="text-lg font-semibold mb-4">Интеграции (Webhook)</h2>
+          <p class="text-sm text-brand-dark/60 mb-3">
+            Отправлять события Messenger (новый диалог, сообщения, закрытие) во внешние системы (CRM/ERP, скрипты, n8n и т.п.).
+          </p>
+          <div class="space-y-3">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" name="webhook_enabled" {% if integration_settings.webhook_enabled %}checked{% endif %} class="rounded">
+              <span class="text-sm font-medium text-brand-dark/80">Включить webhook для этого Inbox</span>
+            </label>
+            <div>
+              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Webhook URL</label>
+              <input type="url" name="webhook_url" value="{{ integration_settings.webhook_url|default:'' }}" class="input" placeholder="https://example.com/messenger-webhook">
+              <p class="text-xs text-brand-dark/50 mt-1">POST JSON с событием. Рекомендуется использовать HTTPS.</p>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Секрет для подписи (опционально)</label>
+              <input type="text" name="webhook_secret" value="{{ integration_settings.webhook_secret|default:'' }}" class="input" placeholder="shared-secret">
+              <p class="text-xs text-brand-dark/50 mt-1">
+                Если задан, тело запроса подписывается HMAC-SHA256 в заголовке <code>X-Messenger-Signature</code>.
+              </p>
+            </div>
+            <div>
+              <span class="block text-sm font-medium text-brand-dark/80 mb-1">События</span>
+              <div class="space-y-1">
+                <label class="flex items-center gap-2">
+                  <input type="checkbox" name="webhook_event_conversation_created" {% if 'conversation.created' in integration_settings.webhook_events %}checked{% endif %} class="rounded">
+                  <span class="text-sm text-brand-dark/80">Новый диалог (conversation.created)</span>
+                </label>
+                <label class="flex items-center gap-2">
+                  <input type="checkbox" name="webhook_event_conversation_closed" {% if 'conversation.closed' in integration_settings.webhook_events %}checked{% endif %} class="rounded">
+                  <span class="text-sm text-brand-dark/80">Диалог закрыт (conversation.closed)</span>
+                </label>
+                <label class="flex items-center gap-2">
+                  <input type="checkbox" name="webhook_event_message_in" {% if 'message.in' in integration_settings.webhook_events %}checked{% endif %} class="rounded">
+                  <span class="text-sm text-brand-dark/80">Входящее сообщение (message.in)</span>
+                </label>
+                <label class="flex items-center gap-2">
+                  <input type="checkbox" name="webhook_event_message_out" {% if 'message.out' in integration_settings.webhook_events %}checked{% endif %} class="rounded">
+                  <span class="text-sm text-brand-dark/80">Исходящее сообщение (message.out)</span>
+                </label>
+              </div>
+              <p class="text-xs text-brand-dark/50 mt-2">
+                Если ни одно событие не выбрано, по умолчанию отправляются все поддерживаемые события.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-pad">
+          <h2 class="text-lg font-semibold mb-4">Автоматизация и автоответ</h2>
+          <p class="text-sm text-brand-dark/60 mb-3">
+            Простой автоответ на первый входящий месседж в диалоге (до первого ответа оператора).
+          </p>
+          <div class="space-y-3">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" name="auto_reply_enabled" {% if automation_settings.auto_reply_enabled %}checked{% endif %} class="rounded">
+              <span class="text-sm font-medium text-brand-dark/80">Включить автоответ на первый входящий месседж</span>
+            </label>
+            <div>
+              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Текст автоответа</label>
+              <textarea name="auto_reply_body" class="textarea" rows="3" placeholder="Например: «Спасибо за сообщение! Мы ответим в ближайшее время.»">{{ automation_settings.auto_reply_body|default:'' }}</textarea>
+              <p class="text-xs text-brand-dark/50 mt-1">
+                Автоответ отправляется от назначенного оператора, только один раз за диалог и только если ещё не было исходящих сообщений.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-pad">
+          <h2 class="text-lg font-semibold mb-4">Экспериментальные функции</h2>
+          <p class="text-sm text-brand-dark/60 mb-3">Фичи можно включать/выключать точечно по inbox.</p>
+          <label class="flex items-center gap-2">
+            <input type="checkbox" name="features_sse_enabled" {% if feature_settings.sse %}checked{% endif %} class="rounded">
+            <span class="text-sm font-medium text-brand-dark/80">SSE real-time (EventSource) вместо poll</span>
+          </label>
+          <p class="text-xs text-brand-dark/50 mt-2">Если выключено, виджет будет работать через обычный poll.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-pad">
+          <h2 class="text-lg font-semibold mb-4">Оценка диалога</h2>
+          <p class="text-sm text-brand-dark/60 mb-3">После закрытия диалога виджет может запросить у посетителя оценку (звёзды 1–5 или NPS 0–10).</p>
+          <div class="space-y-4">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" name="rating_enabled" {% if rating_settings.enabled %}checked{% endif %} class="rounded">
+              <span class="text-sm font-medium text-brand-dark/80">Запрашивать оценку после закрытия</span>
+            </label>
+            <div>
+              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Тип оценки</label>
+              <select name="rating_type" class="select">
+                <option value="stars" {% if rating_settings.type == 'stars' %}selected{% endif %}>Звёзды (1–5)</option>
+                <option value="nps" {% if rating_settings.type == 'nps' %}selected{% endif %}>NPS (0–10)</option>
+              </select>
+            </div>
+            <div id="rating-max-score-block">
+              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Макс. балл (звёзды)</label>
+              <input type="number" name="rating_max_score" min="1" max="5" value="{{ rating_settings.max_score|default:5 }}" class="input" style="width: 6rem">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card xl:col-span-2">
+        <div class="card-pad">
+          <h2 class="text-lg font-semibold mb-4">Настройки виджета</h2>
+          
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Название в шапке виджета</label>
+              <input type="text" name="widget_title" value="{{ inbox.settings.title|default:'Чат с поддержкой' }}" class="input" placeholder="Чат с поддержкой">
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Приветствие</label>
+              <textarea name="widget_greeting" class="textarea" rows="2" placeholder="Добро пожаловать! Как мы можем вам помочь?">{{ inbox.settings.greeting|default:'' }}</textarea>
+            </div>
+
+            <div>
+              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Основной цвет</label>
+              <input type="color" name="widget_color" value="{{ inbox.settings.color|default:'#01948E' }}" class="input" style="width: 100px; height: 40px;">
+            </div>
+
+            <div class="space-y-2">
+              <label class="flex items-center gap-2">
+                <input type="checkbox" name="widget_show_email" {% if inbox.settings.show_email|default:False %}checked{% endif %} class="rounded">
+                <span class="text-sm font-medium text-brand-dark/80">Показывать поле email</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="checkbox" name="widget_show_phone" {% if inbox.settings.show_phone|default:False %}checked{% endif %} class="rounded">
+                <span class="text-sm font-medium text-brand-dark/80">Показывать поле телефона</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      </div> <!-- /grid -->
+
+      <div class="flex items-center gap-3">
+        <button type="submit" class="btn btn-primary">Сохранить</button>
+        <a href="/settings/messenger/" class="btn btn-outline">Отмена</a>
+      </div>
+    </form>
+  </div>
+
+  <script>
+    function copyToken() {
+      const token = '{{ inbox.widget_token }}';
+      navigator.clipboard.writeText(token).then(() => {
+        alert('Токен скопирован в буфер обмена');
+      });
+    }
+    function copyCode() {
+      const code = '<link rel="stylesheet" href="{{ base_url }}/static/messenger/widget.css">\n'
+        + '<script src="{{ base_url }}/static/messenger/widget.js" data-widget-token="{{ inbox.widget_token }}"></' + 'script>';
+      navigator.clipboard.writeText(code).then(() => {
+        alert('Код скопирован в буфер обмена');
+      });
+    }
+    function copyLazyCode() {
+      const code = '<script src="{{ base_url }}/static/messenger/widget-loader.js" data-widget-token="{{ inbox.widget_token }}" data-load-on-scroll="1" data-load-after="5"></' + 'script>';
+      navigator.clipboard.writeText(code).then(() => {
+        alert('Код (ленивая загрузка) скопирован в буфер обмена');
+      });
+    }
+  </script>
+{% endblock %}

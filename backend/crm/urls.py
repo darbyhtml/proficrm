@@ -41,6 +41,17 @@ from phonebridge.api import (
     UserInfoView,
     QrTokenStatusView,
 )
+from messenger.api import ConversationViewSet, CannedResponseViewSet
+from messenger.widget_api import (
+    widget_attachment_download,
+    widget_bootstrap,
+    widget_mark_read,
+    widget_poll,
+    widget_rate,
+    widget_send,
+    widget_stream,
+    widget_typing,
+)
 from crm.views import robots_txt, security_txt, health_check
 
 handler404 = "crm.views.handler404"
@@ -67,6 +78,16 @@ router.register(r"contacts", ContactViewSet, basename="contact")
 router.register(r"company-notes", CompanyNoteViewSet, basename="company-note")
 router.register(r"task-types", TaskTypeViewSet, basename="task-type")
 router.register(r"tasks", TaskViewSet, basename="task")
+router.register(
+    r"messenger/conversations",
+    ConversationViewSet,
+    basename="messenger-conversations",
+)
+router.register(
+    r"messenger/canned-responses",
+    CannedResponseViewSet,
+    basename="messenger-canned-responses",
+)
 
 urlpatterns = [
     path("robots.txt", robots_txt, name="robots_txt"),
@@ -77,6 +98,7 @@ urlpatterns = [
     path("", include("ui.urls")),
     path("", include("mailer.urls")),
     path("", include("notifications.urls")),
+    path("", include("messenger.urls")),
     # Session auth for UI (without weird /login/login/ prefixes) - с защитой от брутфорса
     path("login/", SecureLoginView.as_view(), name="login"),
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
@@ -96,5 +118,14 @@ urlpatterns = [
     path("api/phone/qr/status/", QrTokenStatusView.as_view(), name="phone_qr_status"),
     path("api/phone/logout/", LogoutView.as_view(), name="phone_logout"),
     path("api/phone/logout/all/", LogoutAllView.as_view(), name="phone_logout_all"),
+    # Widget API (публичный, без аутентификации)
+    path("api/widget/bootstrap/", widget_bootstrap, name="widget-bootstrap"),
+    path("api/widget/send/", widget_send, name="widget-send"),
+    path("api/widget/poll/", widget_poll, name="widget-poll"),
+    path("api/widget/stream/", widget_stream, name="widget-stream"),
+    path("api/widget/typing/", widget_typing, name="widget-typing"),
+    path("api/widget/mark_read/", widget_mark_read, name="widget-mark-read"),
+    path("api/widget/rate/", widget_rate, name="widget-rate"),
+    path("api/widget/attachment/<int:attachment_id>/", widget_attachment_download, name="widget-attachment"),
     path("api/", include(router.urls)),
 ]

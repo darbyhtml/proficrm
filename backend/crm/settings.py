@@ -164,6 +164,7 @@ INSTALLED_APPS = [
     'phonebridge',
     'amocrm',  # AmoCRM integration (migration tools and management commands)
     'policy',
+    'messenger',
 ]
 
 MIDDLEWARE = [
@@ -198,6 +199,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'ui.context_processors.ui_globals',
                 'notifications.context_processors.notifications_panel',
+                'messenger.context_processors.messenger_globals',
             ],
         },
     },
@@ -299,6 +301,47 @@ PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
 SECURITY_CONTACT_EMAIL = os.getenv("SECURITY_CONTACT_EMAIL", "")
 
 AUTH_USER_MODEL = "accounts.User"
+
+# Messenger feature flag и настройки live-chat / widget
+MESSENGER_ENABLED = os.getenv("MESSENGER_ENABLED", "0") == "1"
+# Филиал по умолчанию для глобального inbox, когда ни одно правило маршрутизации не сработало (ID филиала).
+MESSENGER_DEFAULT_BRANCH_ID = os.getenv("MESSENGER_DEFAULT_BRANCH_ID", "")
+if MESSENGER_DEFAULT_BRANCH_ID:
+    try:
+        MESSENGER_DEFAULT_BRANCH_ID = int(MESSENGER_DEFAULT_BRANCH_ID)
+    except (ValueError, TypeError):
+        MESSENGER_DEFAULT_BRANCH_ID = None
+else:
+    MESSENGER_DEFAULT_BRANCH_ID = None
+# Включить определение региона по IP (GeoIP) при bootstrap виджета. 0 = выключено.
+MESSENGER_GEOIP_ENABLED = os.getenv("MESSENGER_GEOIP_ENABLED", "1") == "1"
+# Сообщение в ответе bootstrap виджета, когда запрос вне рабочих часов (виджет может показать его посетителю).
+MESSENGER_OUTSIDE_WORKING_HOURS_MESSAGE = os.getenv(
+    "MESSENGER_OUTSIDE_WORKING_HOURS_MESSAGE",
+    "Мы ответим в рабочее время.",
+)
+# Таймаут эскалации (секунды): если оператор не открыл диалог за это время — переназначение следующему. По умолчанию 4 мин.
+MESSENGER_ESCALATION_TIMEOUT_SECONDS = int(os.getenv("MESSENGER_ESCALATION_TIMEOUT_SECONDS", "240"))
+
+# Политика хранения: через сколько дней переводить RESOLVED → CLOSED (архивировать). По умолчанию 90 дней.
+MESSENGER_RETENTION_RESOLVED_TO_CLOSED_DAYS = int(os.getenv("MESSENGER_RETENTION_RESOLVED_TO_CLOSED_DAYS", "90"))
+
+# Throttling / abuse‑защита публичного Widget API (переопределяются через env на проде)
+MESSENGER_WIDGET_BOOTSTRAP_RATE_PER_IP = int(os.getenv("MESSENGER_WIDGET_BOOTSTRAP_RATE_PER_IP", "10"))
+MESSENGER_WIDGET_BOOTSTRAP_RATE_PER_TOKEN = int(os.getenv("MESSENGER_WIDGET_BOOTSTRAP_RATE_PER_TOKEN", "20"))
+MESSENGER_WIDGET_SEND_RATE_PER_SESSION = int(os.getenv("MESSENGER_WIDGET_SEND_RATE_PER_SESSION", "30"))
+MESSENGER_WIDGET_SEND_RATE_PER_IP = int(os.getenv("MESSENGER_WIDGET_SEND_RATE_PER_IP", "60"))
+MESSENGER_WIDGET_POLL_RATE_PER_SESSION = int(os.getenv("MESSENGER_WIDGET_POLL_RATE_PER_SESSION", "20"))
+MESSENGER_WIDGET_POLL_MIN_INTERVAL_SECONDS = int(
+    os.getenv("MESSENGER_WIDGET_POLL_MIN_INTERVAL_SECONDS", "2")
+)
+
+# Privacy‑настройки для публичного виджета (минимальное уведомление о данных)
+MESSENGER_PRIVACY_URL = os.getenv("MESSENGER_PRIVACY_URL", "")
+MESSENGER_PRIVACY_TEXT = os.getenv(
+    "MESSENGER_PRIVACY_TEXT",
+    "Отправляя сообщение, вы соглашаетесь с обработкой персональных данных.",
+)
 
 # DRF / JWT
 REST_FRAMEWORK = {
@@ -566,6 +609,16 @@ LOGGING = {
         },
         "celery": {
             "handlers": ["console"],  # Celery логирует только в консоль (Docker logs)
+            "level": "INFO",
+            "propagate": False,
+        },
+        "messenger.widget": {
+            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "messenger.ui": {
+            "handlers": (["console", "file"] if _use_file_logging else ["console"]) if not DEBUG else ["console"],
             "level": "INFO",
             "propagate": False,
         },
