@@ -224,11 +224,30 @@ class MessengerOperatorPanel {
 
     const params = this.getListQueryParams();
     try {
+      // простое состояние загрузки, если список пустой
+      if (!listEl.querySelector('.conversation-card')) {
+        listEl.innerHTML = `
+          <div class="empty-state">
+            <p>Загрузка диалогов…</p>
+          </div>
+        `;
+      }
+
       const response = await fetch(`/api/messenger/conversations/?${params.toString()}`, {
         credentials: 'same-origin',
         headers: { 'Accept': 'application/json' },
       });
-      if (!response.ok) return;
+      if (!response.ok) {
+        if (!listEl.querySelector('.conversation-card')) {
+          listEl.innerHTML = `
+            <div class="empty-state">
+              <p>Не удалось загрузить диалоги</p>
+              <p class="text-xs mt-1">Попробуйте обновить страницу или изменить фильтры</p>
+            </div>
+          `;
+        }
+        return;
+      }
       const data = await response.json();
       const items = Array.isArray(data) ? data : (Array.isArray(data.results) ? data.results : []);
       
@@ -640,8 +659,11 @@ class MessengerOperatorPanel {
           <input type="hidden" name="conversation_id" value="${conversation.id}">
           <div class="flex items-end gap-2">
             <div class="flex-1 min-w-0">
-              <textarea name="body" id="messageBody" class="textarea w-full resize-none" rows="2" placeholder="Введите сообщение..."></textarea>
+              <textarea name="body" id="messageBody" class="textarea w-full resize-none" rows="2" placeholder="Введите сообщение клиенту..."></textarea>
               <div id="messageAttachmentsNames" class="text-xs text-brand-dark/60 mt-1 px-1"></div>
+              <div id="composeModeHint" class="text-[10px] text-brand-dark/40 mt-1 px-1">
+                Сообщение увидит клиент. Внутренние заметки доступны только сотрудникам.
+              </div>
             </div>
             <div class="flex items-end gap-1.5 flex-shrink-0">
               <input type="file" name="attachments" id="messageAttachments" class="hidden" multiple accept="image/*,.pdf">
@@ -744,14 +766,27 @@ class MessengerOperatorPanel {
     // Переключение режима (Ответить/Заметка)
     const btnOut = document.getElementById('composeModeOut');
     const btnInternal = document.getElementById('composeModeInternal');
+    const composeHint = document.getElementById('composeModeHint');
     const applyModeUI = () => {
       if (!btnOut || !btnInternal) return;
       if (this.composeMode === 'OUT') {
         btnOut.className = 'px-3 py-1.5 text-xs font-medium bg-brand-teal text-white';
         btnInternal.className = 'px-3 py-1.5 text-xs font-medium text-brand-dark/70 hover:bg-brand-soft/30';
+        if (messageBody) {
+          messageBody.placeholder = 'Введите сообщение клиенту...';
+        }
+        if (composeHint) {
+          composeHint.textContent = 'Сообщение увидит клиент. Внутренние заметки доступны только сотрудникам.';
+        }
       } else {
         btnOut.className = 'px-3 py-1.5 text-xs font-medium text-brand-dark/70 hover:bg-brand-soft/30';
         btnInternal.className = 'px-3 py-1.5 text-xs font-medium bg-brand-orange text-brand-dark';
+        if (messageBody) {
+          messageBody.placeholder = 'Внутренняя заметка — клиент её не увидит';
+        }
+        if (composeHint) {
+          composeHint.textContent = 'Эта заметка видна только сотрудникам и не отправляется клиенту.';
+        }
       }
     };
     if (btnOut) btnOut.addEventListener('click', () => { this.composeMode = 'OUT'; applyModeUI(); });
@@ -1085,17 +1120,55 @@ class MessengerOperatorPanel {
     const assignMeBtn = document.getElementById('assignMeBtn');
     const closeBtn = document.getElementById('closeConvBtn');
 
-    if (statusSelect) statusSelect.addEventListener('change', () => this.patchConversation(conversation.id, { status: statusSelect.value }));
-    if (prioritySelect) prioritySelect.addEventListener('change', () => this.patchConversation(conversation.id, { priority: parseInt(prioritySelect.value) }));
-    if (assigneeSelect) assigneeSelect.addEventListener('change', () => this.patchConversation(conversation.id, { assignee: assigneeSelect.value ? parseInt(assigneeSelect.value) : null }));
-    if (assignMeBtn) assignMeBtn.addEventListener('click', () => {
-      if (!currentUserId) return;
-      this.patchConversation(conversation.id, { assignee: currentUserId });
-    });
-    if (closeBtn) closeBtn.addEventListener('click', () => this.patchConversation(conversation.id, { status: 'closed' }));
+    if (statusSelect) {
+      statusSelect.addEventListener('change', () => {
+        const prev = conversation.status;
+        const next = statusSelect.value;
+        this.patchConversation(conversation.id, { status: next }, () => {
+          statusSelect.value = prev;
+        });
+      });
+    }
+    if (prioritySelect) {
+      prioritySelect.addEventListener('change', () => {
+        const prev = conversation.priority;
+        const next = parseInt(prioritySelect.value);
+        this.patchConversation(conversation.id, { priority: next }, () => {
+          prioritySelect.value = String(prev);
+        });
+      });
+    }
+    if (assigneeSelect) {
+      assigneeSelect.addEventListener('change', () => {
+        const prev = conversation.assignee || null;
+        const raw = assigneeSelect.value;
+        const next = raw ? parseInt(raw) : null;
+        this.patchConversation(conversation.id, { assignee: next }, () => {
+          assigneeSelect.value = prev ? String(prev) : '';
+        });
+      });
+    }
+    if (assignMeBtn) {
+      assignMeBtn.addEventListener('click', () => {
+        if (!currentUserId) return;
+        const prev = conversation.assignee || null;
+        const next = currentUserId;
+        this.patchConversation(conversation.id, { assignee: next }, () => {
+          assigneeSelect.value = prev ? String(prev) : '';
+        });
+      });
+    }
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        const prev = conversation.status;
+        this.patchConversation(conversation.id, { status: 'closed' }, () => {
+          statusSelect.value = prev;
+        });
+      });
+    }
   }
 
-  async patchConversation(conversationId, payload) {
+  async patchConversation(conversationId, payload, onError) {
     try {
       const response = await fetch(`/api/messenger/conversations/${conversationId}/`, {
         method: 'PATCH',
@@ -1117,6 +1190,13 @@ class MessengerOperatorPanel {
       this.updateConversationCard(updated);
     } catch (e) {
       console.error('patchConversation failed:', e);
+      if (typeof onError === 'function') {
+        try {
+          onError();
+        } catch {
+          // ignore UI rollback errors
+        }
+      }
       alert('Не удалось сохранить: ' + (e.message || e));
     }
   }
@@ -1256,6 +1336,7 @@ class MessengerOperatorPanel {
   renderMessageHtml(message) {
     const dir = (message.direction || '').toLowerCase();
     const isOutgoing = dir === 'out' || dir === 'internal';
+    const isInternal = dir === 'internal';
     const senderName = isOutgoing
       ? (message.sender_user_name || message.sender_user_username || 'Оператор')
       : (message.sender_contact_name || 'Клиент');
@@ -1279,27 +1360,35 @@ class MessengerOperatorPanel {
       attachmentsHtml += '</div>';
     }
     
+    const internalBadge = isInternal
+      ? '<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-brand-orange/10 text-[10px] text-brand-orange font-semibold mr-2">Заметка</span>'
+      : '';
+
     return `
       <div class="flex gap-3 mb-4 ${isOutgoing ? 'flex-row-reverse' : 'flex-row'}" data-message-id="${message.id}">
         <div class="flex-shrink-0">
           <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold ${
-            isOutgoing ? 'bg-brand-orange/20 text-brand-orange' : 'bg-brand-teal/20 text-brand-teal'
+            isInternal
+              ? 'bg-brand-orange/20 text-brand-orange'
+              : (isOutgoing ? 'bg-brand-teal/20 text-brand-teal' : 'bg-brand-teal/20 text-brand-teal')
           }">
             ${avatarInitial}
           </div>
         </div>
         <div class="flex-1 ${isOutgoing ? 'text-right' : 'text-left'}">
           <div class="inline-block max-w-[80%] rounded-lg px-4 py-2 ${
-            isOutgoing ? 'bg-brand-teal/10' : 'bg-brand-soft/40'
+            isInternal
+              ? 'bg-brand-orange/5 border border-dashed border-brand-orange/40'
+              : (isOutgoing ? 'bg-brand-teal/10' : 'bg-brand-soft/40')
           }">
-            <div class="text-sm font-medium mb-1">${this.escapeHtml(senderName)}</div>
+            <div class="text-sm font-medium mb-1">${internalBadge}${this.escapeHtml(senderName)}</div>
             <div class="text-sm text-brand-dark whitespace-pre-wrap">${this.escapeHtml(message.body || '')}</div>
             ${attachmentsHtml}
             <div class="flex items-center justify-between mt-1">
               <div class="text-xs text-brand-dark/50">
                 ${new Date(message.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
               </div>
-              ${isOutgoing ? `
+              ${isOutgoing && !isInternal ? `
                 <div class="flex items-center gap-0.5 ml-2">
                   ${message.read_at ? `
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-brand-teal">

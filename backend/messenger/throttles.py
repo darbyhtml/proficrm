@@ -4,6 +4,7 @@ Throttling классы для Widget API (защита от спама и пе�
 Использует Redis cache для хранения счётчиков запросов.
 """
 
+from django.conf import settings
 from rest_framework.throttling import BaseThrottle
 from django.core.cache import cache
 from django.utils import timezone
@@ -16,9 +17,9 @@ class WidgetBootstrapThrottle(BaseThrottle):
     - N запросов в минуту для одного widget_token
     """
     
-    # Лимиты (можно вынести в settings)
-    RATE_PER_IP = 10  # запросов в минуту с одного IP
-    RATE_PER_TOKEN = 20  # запросов в минуту для одного widget_token
+    # Лимиты (по умолчанию; могут быть переопределены в settings)
+    RATE_PER_IP = getattr(settings, "MESSENGER_WIDGET_BOOTSTRAP_RATE_PER_IP", 10)
+    RATE_PER_TOKEN = getattr(settings, "MESSENGER_WIDGET_BOOTSTRAP_RATE_PER_TOKEN", 20)
     
     def get_cache_key(self, request, view):
         """Генерирует ключ кэша для throttle."""
@@ -74,8 +75,8 @@ class WidgetSendThrottle(BaseThrottle):
     - N запросов в минуту с одного IP
     """
     
-    RATE_PER_SESSION = 30  # запросов в минуту для одной сессии
-    RATE_PER_IP = 60  # запросов в минуту с одного IP
+    RATE_PER_SESSION = getattr(settings, "MESSENGER_WIDGET_SEND_RATE_PER_SESSION", 30)
+    RATE_PER_IP = getattr(settings, "MESSENGER_WIDGET_SEND_RATE_PER_IP", 60)
     
     def get_cache_key(self, request, view):
         """Генерирует ключ кэша для throttle."""
@@ -128,8 +129,12 @@ class WidgetPollThrottle(BaseThrottle):
     - Минимальный интервал между запросами (опционально)
     """
     
-    RATE_PER_SESSION = 20  # запросов в минуту для одной сессии
-    MIN_INTERVAL_SECONDS = 2  # минимальный интервал между запросами (2 секунды)
+    RATE_PER_SESSION = getattr(settings, "MESSENGER_WIDGET_POLL_RATE_PER_SESSION", 20)
+    MIN_INTERVAL_SECONDS = getattr(
+        settings,
+        "MESSENGER_WIDGET_POLL_MIN_INTERVAL_SECONDS",
+        2,
+    )
     
     def get_cache_key(self, request, view):
         """Генерирует ключ кэша для throttle."""
