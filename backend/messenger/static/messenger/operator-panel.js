@@ -643,7 +643,8 @@ class MessengerOperatorPanel {
       });
     }
 
-    html += '</div>';
+    // Закрываем messagesList и контейнер ленты
+    html += '</div></div>';
 
     // Форма отправки сообщения
     html += `
