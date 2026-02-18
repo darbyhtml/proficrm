@@ -42,6 +42,13 @@ class ConversationSerializer(serializers.ModelSerializer):
 
 
 class MessageSerializer(serializers.ModelSerializer):
+    class MessageAttachmentSerializer(serializers.ModelSerializer):
+        class Meta:
+            model = models.MessageAttachment
+            fields = ("id", "file", "original_name", "content_type", "size", "created_at")
+
+    attachments = MessageAttachmentSerializer(many=True, read_only=True)
+
     class Meta:
         model = models.Message
         fields = "__all__"

@@ -3,7 +3,7 @@
  * Управление трёхколоночной панелью мессенджера
  */
 
-class MessengerPanel {
+class MessengerOperatorPanel {
   constructor() {
     this.currentConversationId = null;
     this.pollingIntervals = {};
@@ -14,8 +14,9 @@ class MessengerPanel {
   /**
    * Открыть диалог (загрузить через AJAX)
    */
-  async openConversation(conversationId) {
-    if (this.currentConversationId === conversationId) {
+  async openConversation(conversationId, opts = {}) {
+    const force = Boolean(opts && opts.force);
+    if (!force && this.currentConversationId === conversationId) {
       return; // Уже открыт
     }
 
@@ -112,6 +113,7 @@ class MessengerPanel {
     const contactName = conversation.contact?.name || conversation.contact?.email || conversation.contact?.phone || 'Без имени';
     
     let html = `
+      <div class="flex flex-col h-full overflow-hidden">
       <div class="border-b border-brand-soft/60 p-4 bg-white flex-shrink-0">
         <div class="flex items-center justify-between">
           <div>
@@ -127,7 +129,7 @@ class MessengerPanel {
         </div>
       </div>
       
-      <div class="flex-1 overflow-y-auto p-4" id="messagesList" style="max-height: calc(100vh - 380px);">
+      <div class="flex-1 min-h-0 overflow-y-auto p-4" id="messagesList">
     `;
 
     // Сообщения
@@ -186,7 +188,7 @@ class MessengerPanel {
     // Форма отправки сообщения
     html += `
       <div class="border-t border-brand-soft/60 p-3 bg-white flex-shrink-0">
-        <form id="messageForm" onsubmit="MessengerPanel.sendMessage(event)" enctype="multipart/form-data">
+        <form id="messageForm" onsubmit="window.MessengerPanel.sendMessage(event)" enctype="multipart/form-data">
           <input type="hidden" name="conversation_id" value="${conversation.id}">
           <div class="flex items-end gap-2">
             <div class="flex-1 min-w-0">
@@ -212,6 +214,7 @@ class MessengerPanel {
       </div>
     `;
 
+    html += `</div>`;
     contentArea.innerHTML = html;
     
     // Автоскролл к последнему сообщению
@@ -241,9 +244,7 @@ class MessengerPanel {
         if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
           e.preventDefault();
           const form = document.getElementById('messageForm');
-          if (form) {
-            form.dispatchEvent(new Event('submit'));
-          }
+          if (form) form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit'));
         }
       });
     }
@@ -360,7 +361,7 @@ class MessengerPanel {
       }
       
       // Перезагрузить диалог для обновления сообщений
-      await this.openConversation(conversationId);
+      await this.openConversation(parseInt(conversationId), { force: true });
       
     } catch (error) {
       console.error('Failed to send message:', error);
@@ -401,7 +402,7 @@ class MessengerPanel {
           const messages = await response.json();
           if (messages.length > 0) {
             // Есть новые сообщения - перезагрузить диалог
-            await this.openConversation(conversationId);
+            await this.openConversation(conversationId, { force: true });
           }
         }
       } catch (error) {
@@ -439,7 +440,7 @@ class MessengerPanel {
 }
 
 // Глобальный экземпляр
-const MessengerPanel = new MessengerPanel();
+const panel = new MessengerOperatorPanel();
 
 // Экспорт для использования в других скриптах
-window.MessengerPanel = MessengerPanel;
+window.MessengerPanel = panel;

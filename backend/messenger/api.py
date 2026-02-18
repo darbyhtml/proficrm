@@ -79,18 +79,30 @@ class ConversationViewSet(MessengerEnabledApiMixin, viewsets.ReadOnlyModelViewSe
         conversation = self.get_object()
 
         if request.method == "GET":
-            # GET: список сообщений
-            messages = conversation.messages.all().order_by("created_at", "id")
+            # GET: список сообщений (опционально с фильтром since)
+            messages = conversation.messages.all()
+            since_raw = (request.query_params.get("since") or "").strip()
+            if since_raw:
+                from django.utils.dateparse import parse_datetime
+
+                since_dt = parse_datetime(since_raw)
+                if since_dt:
+                    messages = messages.filter(created_at__gt=since_dt)
+            messages = messages.order_by("created_at", "id")
             serializer = serializers.MessageSerializer(messages, many=True)
             return Response(serializer.data)
 
         elif request.method == "POST":
-            # POST: создание сообщения оператором
-            serializer = serializers.MessageSerializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
+            # POST: создание сообщения оператором (+ вложения)
+            direction = (request.data.get("direction") or models.Message.Direction.OUT).strip().lower()
+            body = (request.data.get("body") or "").strip()
+            files = []
+            try:
+                files = list(request.FILES.getlist("attachments"))
+            except Exception:
+                files = []
 
             # Запрещаем создание входящих сообщений через операторский endpoint
-            direction = serializer.validated_data.get("direction")
             if direction == models.Message.Direction.IN:
                 return Response(
                     {"detail": "Входящие сообщения нельзя создавать через операторский API."},
@@ -104,12 +116,24 @@ class ConversationViewSet(MessengerEnabledApiMixin, viewsets.ReadOnlyModelViewSe
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-            # sender_user всегда = текущий пользователь (не принимаем из клиента)
-            message = serializer.save(
+            if not body and not files:
+                return Response(
+                    {"detail": "Текст сообщения не может быть пустым без вложений."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            from .services import record_message
+
+            message = record_message(
                 conversation=conversation,
+                direction=direction,
+                body=body or "",
                 sender_user=request.user,
-                sender_contact=None,  # Для OUT/INTERNAL sender_contact должен быть None
+                sender_contact=None,
             )
+
+            for f in files:
+                models.MessageAttachment.objects.create(message=message, file=f)
 
             return Response(serializers.MessageSerializer(message).data, status=status.HTTP_201_CREATED)
 
