@@ -78,6 +78,7 @@ urlpatterns = [
 
     # Messenger (операторская панель диалогов)
     path("messenger/conversations/", views.messenger_conversation_list, name="messenger_conversation_list"),
+    path("messenger/", views.messenger_conversations_unified, name="messenger_conversations_unified"),  # Unified Chatwoot-style layout
     path("messenger/me/status/", views.messenger_agent_status, name="messenger_agent_status"),
     path("messenger/conversations/<int:conversation_id>/", views.messenger_conversation_detail, name="messenger_conversation_detail"),
 

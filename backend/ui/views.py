@@ -11174,6 +11174,169 @@ def messenger_conversation_list(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+@policy_required(resource_type="page", resource="ui:messenger:conversations:list")
+def messenger_conversations_unified(request: HttpRequest) -> HttpResponse:
+    """
+    Unified страница мессенджера в стиле Chatwoot: три колонки на одной странице.
+    
+    Левая колонка: список диалогов (компактные карточки)
+    Центральная колонка: выбранный диалог или пустое состояние
+    Правая колонка: информация о диалоге/контакте
+    
+    Диалог может быть выбран через URL hash (#conversation/123) или через клик.
+    """
+    # Проверка feature flag
+    ensure_messenger_enabled_view()
+    
+    # Эффективный пользователь для отображения (режим «просмотр как»)
+    user: User = get_effective_user(request)
+    
+    # Базовую видимость берём из domain policy слоя (messenger.selectors)
+    qs = visible_conversations_qs(user).select_related("inbox", "contact", "assignee", "branch", "region")
+    
+    # Аннотации для последнего сообщения и непрочитанных
+    from messenger.models import Message
+    from django.db.models import OuterRef, Subquery, Q, F
+    
+    # Последнее сообщение для превью
+    last_message = Message.objects.filter(
+        conversation=OuterRef('pk')
+    ).order_by('-created_at', '-id').values('body')[:1]
+    
+    qs = qs.annotate(
+        last_message_body=Subquery(last_message),
+    )
+    
+    # Счётчик непрочитанных (только для назначенных диалогов текущему пользователю)
+    if user.id:
+        qs = qs.annotate(
+            unread_count=Count(
+                'messages__id',
+                filter=Q(
+                    messages__direction=Message.Direction.IN,
+                    assignee_id=user.id,
+                ) & (
+                    Q(assignee_last_read_at__isnull=True) |
+                    Q(messages__created_at__gt=F('assignee_last_read_at'))
+                ),
+                distinct=True
+            )
+        )
+    else:
+        qs = qs.annotate(unread_count=Count('id', filter=Q(id__isnull=True)))  # Всегда 0
+    
+    # Фильтры (аналогично messenger_conversation_list)
+    status_filter = (request.GET.get("status") or "").strip()
+    if status_filter:
+        if "," in status_filter:
+            statuses = [s.strip() for s in status_filter.split(",")]
+            qs = qs.filter(status__in=statuses)
+        else:
+            qs = qs.filter(status=status_filter)
+    
+    branch_id = request.GET.get("branch")
+    if branch_id:
+        try:
+            qs = qs.filter(branch_id=int(branch_id))
+        except (ValueError, TypeError):
+            pass
+    
+    assignee_id = request.GET.get("assignee")
+    mine = request.GET.get("mine", "").strip().lower() in ("1", "true", "yes")
+    if mine:
+        qs = qs.filter(assignee_id=user.id)
+        if assignee_id is None:
+            assignee_id = str(user.id)
+    elif assignee_id:
+        try:
+            qs = qs.filter(assignee_id=int(assignee_id))
+        except (ValueError, TypeError):
+            pass
+    
+    region_id = request.GET.get("region")
+    if region_id:
+        try:
+            qs = qs.filter(region_id=int(region_id))
+        except (ValueError, TypeError):
+            pass
+    
+    # Сортировка
+    sort_raw = (request.GET.get("sort") or "").strip()
+    sort = sort_raw or "last_message_at"
+    direction = (request.GET.get("dir") or "").strip().lower() or "desc"
+    direction = "asc" if direction == "asc" else "desc"
+    
+    sort_map = {
+        "last_message_at": "last_message_at",
+        "created_at": "created_at",
+        "status": "status",
+        "priority": "priority",
+    }
+    sort_field = sort_map.get(sort, "last_message_at")
+    order = [sort_field, "id"]
+    if direction == "desc":
+        order = [f"-{f}" for f in order]
+    qs = qs.order_by(*order)
+    
+    # Пагинация (для списка диалогов - больше элементов на странице)
+    per_page = 50  # Больше диалогов видно без пагинации
+    paginator = Paginator(qs, per_page)
+    page = paginator.get_page(request.GET.get("page"))
+    
+    # Справочники для фильтров
+    branches = Branch.objects.order_by("name")
+    regions = Region.objects.order_by("name")
+    assignees_qs = get_users_for_lists(user)
+    if user.branch_id and user.role != User.Role.ADMIN:
+        assignees_qs = assignees_qs.filter(branch_id=user.branch_id)
+    assignees = list(assignees_qs)
+    
+    # URL для кнопки "Мои"
+    from django.http import QueryDict
+    get_mine = request.GET.copy()
+    get_mine["mine"] = "1"
+    url_mine = get_mine.urlencode()
+    
+    # Проверяем, есть ли выбранный диалог из hash или параметра
+    selected_conversation_id = request.GET.get("conversation")
+    selected_conversation = None
+    if selected_conversation_id:
+        try:
+            selected_conversation = get_object_or_404(qs, id=int(selected_conversation_id))
+        except (ValueError, TypeError):
+            pass
+    
+    # Статус оператора
+    try:
+        agent_profile = AgentProfile.objects.get(user=user)
+        agent_status = agent_profile.status
+    except AgentProfile.DoesNotExist:
+        agent_status = "offline"
+    
+    return render(
+        request,
+        "ui/messenger_conversations_unified.html",
+        {
+            "page": page,
+            "status_filter": status_filter,
+            "branch_id": branch_id,
+            "assignee_id": assignee_id,
+            "region_id": region_id,
+            "sort": sort,
+            "dir": direction,
+            "branches": branches,
+            "regions": regions,
+            "assignees": assignees,
+            "per_page": per_page,
+            "mine": mine,
+            "url_mine": url_mine,
+            "selected_conversation": selected_conversation,
+            "agent_status": agent_status,
+        },
+    )
+
+
+@login_required
 @policy_required(resource_type="page", resource="ui:messenger:conversations:detail")
 def messenger_conversation_detail(request: HttpRequest, conversation_id: int) -> HttpResponse:
     """
