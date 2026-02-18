@@ -83,30 +83,60 @@
             {% endif %}
 
             <!-- Форма отправки сообщения -->
-            <form method="post" action="{% url 'messenger_conversation_detail' conversation.id %}" id="messageForm" class="border-t border-brand-soft/60 pt-4" enctype="multipart/form-data">
+            <form method="post" action="{% url 'messenger_conversation_detail' conversation.id %}" id="messageForm" class="border-t border-brand-soft/60 pt-3" enctype="multipart/form-data">
               {% csrf_token %}
-              <div class="flex gap-2 items-end">
-                <div class="flex-1 min-w-0 space-y-2">
-                  <textarea name="body" id="messageBody" class="textarea w-full" rows="3" placeholder="Введите сообщение..." {% if not can_reply %}disabled{% endif %}></textarea>
-                  <div class="flex items-center gap-2">
-                    <input type="file" name="attachments" id="messageAttachments" class="hidden" multiple accept="image/*,.pdf" {% if not can_reply %}disabled{% endif %}>
-                    <button type="button" onclick="document.getElementById('messageAttachments').click()" class="btn btn-outline btn-sm text-sm" {% if not can_reply %}disabled{% endif %}>📎 Прикрепить файл</button>
-                    <span id="messageAttachmentsNames" class="text-xs text-brand-dark/60 truncate max-w-[200px]"></span>
-                  </div>
-                  <div class="flex items-center gap-2 mt-1">
-                    <select id="cannedResponsesSelect" class="select text-xs w-full">
-                      <option value="">Шаблон ответа...</option>
-                    </select>
-                    <button type="button" id="cannedResponsesApply" class="btn btn-outline btn-sm text-xs">Вставить</button>
-                  </div>
-                  <p class="text-[11px] text-brand-dark/50">Шаблоны управляются в разделе «Настройки → Messenger».</p>
+              <input type="file" name="attachments" id="messageAttachments" class="hidden" multiple accept="image/*,.pdf" {% if not can_reply %}disabled{% endif %}>
+              
+              <!-- Компактная строка ввода -->
+              <div class="flex items-end gap-2">
+                <!-- Поле ввода -->
+                <div class="flex-1 min-w-0">
+                  <textarea name="body" id="messageBody" class="textarea w-full resize-none" rows="2" placeholder="Введите сообщение..." {% if not can_reply %}disabled{% endif %}></textarea>
+                  <!-- Имена прикрепленных файлов -->
+                  <div id="messageAttachmentsNames" class="text-xs text-brand-dark/60 truncate mt-1 px-1"></div>
                 </div>
-                <div class="flex flex-col gap-2 flex-shrink-0">
-                  <button type="submit" name="action" value="send_out" id="sendOutButton" class="btn btn-primary" {% if not can_reply %}disabled{% endif %}>Отправить</button>
-                  <button type="submit" name="action" value="send_internal" class="btn btn-outline btn-sm" {% if not can_reply %}disabled{% endif %}>Внутреннее</button>
+                
+                <!-- Кнопки действий -->
+                <div class="flex items-end gap-1.5 flex-shrink-0">
+                  <!-- Прикрепить файл -->
+                  <button type="button" onclick="document.getElementById('messageAttachments').click()" class="btn btn-outline btn-sm p-2" title="Прикрепить файл" {% if not can_reply %}disabled{% endif %}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+                    </svg>
+                  </button>
+                  
+                  <!-- Шаблоны ответов -->
+                  <div class="flex items-center gap-1">
+                    <select id="cannedResponsesSelect" class="select text-xs w-24" title="Шаблон ответа">
+                      <option value="">Шаблон...</option>
+                    </select>
+                    <button type="button" id="cannedResponsesApply" class="btn btn-outline btn-sm p-1.5 text-brand-dark/60 hover:text-brand-teal transition-colors" title="Вставить шаблон">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/>
+                        <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
+                      </svg>
+                    </button>
+                  </div>
+                  
+                  <!-- Внутреннее сообщение -->
+                  <button type="submit" name="action" value="send_internal" class="btn btn-outline btn-sm p-2" title="Внутреннее сообщение" {% if not can_reply %}disabled{% endif %}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                      <path d="M9 9h6M9 15h6"/>
+                    </svg>
+                  </button>
+                  
+                  <!-- Отправить -->
+                  <button type="submit" name="action" value="send_out" id="sendOutButton" class="btn btn-primary p-2.5" title="Отправить (Ctrl+Enter)" {% if not can_reply %}disabled{% endif %}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                    </svg>
+                  </button>
                 </div>
               </div>
-              <p class="text-xs text-brand-dark/50 mt-2">Можно отправить только вложения без текста. Макс. 5 МБ на файл, изображения и PDF. Горячая клавиша: Ctrl+Enter — отправить.</p>
+              
+              <!-- Компактная подсказка -->
+              <p class="text-[10px] text-brand-dark/40 mt-1.5 px-1">Ctrl+Enter — отправить • Макс. 5 МБ</p>
             </form>
             <script>
               document.getElementById('messageAttachments').addEventListener('change', function() {
