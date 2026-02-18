@@ -315,6 +315,7 @@
 <script>
   window.MESSENGER_CONTEXT = {
     currentUserId: {{ current_user_id|default:'null' }},
+    selectedConversationId: {% if selected_conversation %}{{ selected_conversation.id }}{% else %}null{% endif %},
     assignees: [
       {% for a in assignees %}
         { id: {{ a.id }}, name: "{{ a.get_full_name|default:a.username|escapejs }}" }{% if not forloop.last %},{% endif %}
@@ -329,17 +330,6 @@
   document.addEventListener('DOMContentLoaded', function() {
     if (window.MessengerPanel && window.MessengerPanel.init) {
       window.MessengerPanel.init();
-    }
-
-    // Открытие диалога по hash, иначе — по выбранному с сервера
-    const hashMatch = window.location.hash.match(/conversation\/(\d+)/);
-    if (hashMatch) {
-      const conversationId = parseInt(hashMatch[1]);
-      if (window.MessengerPanel) window.MessengerPanel.openConversation(conversationId);
-    } else {
-      {% if selected_conversation %}
-        if (window.MessengerPanel) window.MessengerPanel.openConversation({{ selected_conversation.id }});
-      {% endif %}
     }
     
     // Обновление статуса оператора

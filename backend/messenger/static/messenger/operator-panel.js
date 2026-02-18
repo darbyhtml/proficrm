@@ -13,6 +13,9 @@ class MessengerOperatorPanel {
     this.listPollingTimer = null;
     this.lastMessageIds = new Set(); // ID уже отображённых сообщений
     this.lastRenderedDate = null; // Последняя дата, для которой был сепаратор
+    this.typingPollTimer = null;
+    this.lastOperatorTypingSentAt = 0;
+    this.pendingNewMessagesCount = 0;
   }
 
   init() {
@@ -26,6 +29,11 @@ class MessengerOperatorPanel {
       const conversationId = parseInt(hash.replace('#conversation/', ''));
       if (conversationId) {
         this.openConversation(conversationId);
+      }
+    } else {
+      const ctx = window.MESSENGER_CONTEXT || {};
+      if (ctx.selectedConversationId) {
+        this.openConversation(parseInt(ctx.selectedConversationId));
       }
     }
   }
@@ -91,6 +99,7 @@ class MessengerOperatorPanel {
       
       // Esc: закрыть диалог (очистить hash)
       if (e.key === 'Escape' && this.currentConversationId) {
+        const prevConversationId = this.currentConversationId;
         const contentArea = document.getElementById('conversationContent');
         const infoArea = document.getElementById('conversationInfo');
         if (contentArea) {
@@ -118,8 +127,9 @@ class MessengerOperatorPanel {
           `;
         }
         this.currentConversationId = null;
-        this.stopPolling(this.currentConversationId);
-        window.history.replaceState(null, '', window.location.pathname);
+        this.stopPolling(prevConversationId);
+        this.stopTypingPolling();
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
         
         // Убрать активное состояние с карточек
         document.querySelectorAll('.conversation-card.active').forEach(card => {
@@ -166,50 +176,29 @@ class MessengerOperatorPanel {
         return;
       }
       
-      // Умное обновление: обновляем только изменённые карточки, добавляем новые
+      // Умное обновление: обновляем карточки и упорядочиваем DOM по ответу API
       const existingCards = new Map();
       Array.from(listEl.querySelectorAll('.conversation-card')).forEach(card => {
         const id = card.getAttribute('data-conversation-id');
         if (id) existingCards.set(parseInt(id), card);
       });
-      
-      const newItemsMap = new Map();
-      items.forEach(c => newItemsMap.set(c.id, c));
-      
-      // Обновляем существующие карточки точечно
-      existingCards.forEach((card, id) => {
-        const newData = newItemsMap.get(id);
-        if (newData) {
-          this.updateConversationCardInPlace(card, newData);
-          newItemsMap.delete(id); // Уже обработали
-        } else {
-          // Карточка больше не в списке (фильтры изменились) - удаляем
-          card.remove();
-        }
-      });
-      
-      // Добавляем новые карточки
+
       const fragment = document.createDocumentFragment();
-      newItemsMap.forEach(conversation => {
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = this.renderConversationCardHtml(conversation);
-        fragment.appendChild(tempDiv.firstElementChild);
+      items.forEach(conversation => {
+        const id = conversation.id;
+        let card = existingCards.get(id);
+        if (!card) {
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = this.renderConversationCardHtml(conversation);
+          card = tempDiv.firstElementChild;
+        } else {
+          this.updateConversationCardInPlace(card, conversation);
+        }
+        fragment.appendChild(card);
       });
-      
-      if (fragment.children.length > 0) {
-        // Вставляем новые карточки в начало (самые свежие сверху)
-        listEl.insertBefore(fragment, listEl.firstChild);
-      }
-      
-      // Если список пуст после обновления, показываем empty state
-      if (listEl.children.length === 0) {
-        listEl.innerHTML = `
-          <div class="empty-state">
-            <p>Диалоги не найдены</p>
-            <p class="text-xs mt-1">Попробуйте изменить фильтры</p>
-          </div>
-        `;
-      }
+
+      listEl.innerHTML = '';
+      listEl.appendChild(fragment);
       
     } catch (e) {
       console.error('refreshConversationList failed:', e);
@@ -356,8 +345,15 @@ class MessengerOperatorPanel {
       return; // Уже открыт
     }
 
+    const prevConversationId = this.currentConversationId;
+    if (prevConversationId && prevConversationId !== conversationId) {
+      this.stopPolling(prevConversationId);
+      this.stopTypingPolling();
+    }
+
     this.currentConversationId = conversationId;
     this.selectedConversationId = conversationId;
+    this.pendingNewMessagesCount = 0;
     
     // Обновить URL hash (без перезагрузки страницы)
     if (window.location.hash !== `#conversation/${conversationId}`) {
@@ -444,6 +440,7 @@ class MessengerOperatorPanel {
       
       // Начать polling для новых сообщений
       this.startPolling(conversationId);
+      this.startTypingPolling(conversationId);
       
     } catch (error) {
       console.error('Failed to load conversation:', error);
@@ -487,6 +484,7 @@ class MessengerOperatorPanel {
           <div>
             <h3 class="text-lg font-semibold">${this.escapeHtml(contactName)}</h3>
             <p class="text-xs text-brand-dark/60">Диалог #${conversation.id}</p>
+            <p class="text-xs text-brand-dark/40 mt-1 hidden" id="contactTypingIndicator">Клиент печатает…</p>
           </div>
           <div class="flex items-center gap-2">
             ${conversation.status === 'open' ? '<span class="badge badge-new">Открыт</span>' : ''}
@@ -532,7 +530,10 @@ class MessengerOperatorPanel {
             <button type="button" id="composeModeOut" class="px-3 py-1.5 text-xs font-medium ${this.composeMode === 'OUT' ? 'bg-brand-teal text-white' : 'text-brand-dark/70 hover:bg-brand-soft/30'}">Ответить</button>
             <button type="button" id="composeModeInternal" class="px-3 py-1.5 text-xs font-medium ${this.composeMode === 'INTERNAL' ? 'bg-brand-orange text-brand-dark' : 'text-brand-dark/70 hover:bg-brand-soft/30'}">Заметка</button>
           </div>
-          <div class="text-[10px] text-brand-dark/40">Ctrl+Enter</div>
+          <div class="flex items-center gap-2">
+            <button type="button" id="newMessagesBtn" class="hidden text-xs px-2 py-1 rounded-full bg-brand-teal text-white hover:bg-brand-teal/90">Новые сообщения</button>
+            <div class="text-[10px] text-brand-dark/40">Ctrl+Enter</div>
+          </div>
         </div>
         <form id="messageForm" onsubmit="window.MessengerPanel.sendMessage(event)" enctype="multipart/form-data">
           <input type="hidden" name="conversation_id" value="${conversation.id}">
@@ -566,6 +567,10 @@ class MessengerOperatorPanel {
     // Автоскролл к последнему сообщению
     this.scrollToBottom();
 
+    // Сбросить кнопку "Новые сообщения"
+    this.pendingNewMessagesCount = 0;
+    this.updateNewMessagesButton();
+
     // Обработчик файлов
     const fileInput = document.getElementById('messageAttachments');
     if (fileInput) {
@@ -588,6 +593,30 @@ class MessengerOperatorPanel {
           if (form) form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit'));
         }
       });
+      messageBody.addEventListener('input', () => {
+        this.sendOperatorTypingPing(conversation.id);
+      });
+    }
+
+    // Кнопка "Новые сообщения"
+    const newMessagesBtn = document.getElementById('newMessagesBtn');
+    if (newMessagesBtn) {
+      newMessagesBtn.addEventListener('click', () => {
+        this.pendingNewMessagesCount = 0;
+        this.updateNewMessagesButton();
+        this.scrollToBottom(true);
+      });
+    }
+
+    // Если пользователь доскроллил вниз — скрываем кнопку
+    const messagesList = document.getElementById('messagesList');
+    if (messagesList) {
+      messagesList.addEventListener('scroll', () => {
+        if (this.isScrolledToBottom()) {
+          this.pendingNewMessagesCount = 0;
+          this.updateNewMessagesButton();
+        }
+      }, { passive: true });
     }
 
     // Переключение режима (Ответить/Заметка)
@@ -605,6 +634,18 @@ class MessengerOperatorPanel {
     };
     if (btnOut) btnOut.addEventListener('click', () => { this.composeMode = 'OUT'; applyModeUI(); });
     if (btnInternal) btnInternal.addEventListener('click', () => { this.composeMode = 'INTERNAL'; applyModeUI(); });
+  }
+
+  updateNewMessagesButton() {
+    const btn = document.getElementById('newMessagesBtn');
+    if (!btn) return;
+    if (this.pendingNewMessagesCount > 0) {
+      btn.classList.remove('hidden');
+      btn.textContent = `Новые сообщения (${this.pendingNewMessagesCount})`;
+    } else {
+      btn.classList.add('hidden');
+      btn.textContent = 'Новые сообщения';
+    }
   }
 
   /**
@@ -1024,6 +1065,7 @@ class MessengerOperatorPanel {
     
     const wasAtBottom = this.isScrolledToBottom();
     let currentDate = this.lastRenderedDate;
+    let appendedCount = 0;
     
     messages.forEach(message => {
       // Пропускаем уже отображённые сообщения
@@ -1058,6 +1100,7 @@ class MessengerOperatorPanel {
       messagesList.appendChild(messageEl);
       
       this.lastMessageIds.add(message.id);
+      appendedCount += 1;
     });
     
     // Обновляем timestamp последнего сообщения
@@ -1068,6 +1111,9 @@ class MessengerOperatorPanel {
     // Автоскролл только если пользователь был внизу
     if (wasAtBottom) {
       this.scrollToBottom(true);
+    } else if (appendedCount > 0) {
+      this.pendingNewMessagesCount += appendedCount;
+      this.updateNewMessagesButton();
     }
     
     // Обновляем карточку диалога в списке (превью/время)
@@ -1102,6 +1148,61 @@ class MessengerOperatorPanel {
     }
   }
 
+  startTypingPolling(conversationId) {
+    this.stopTypingPolling();
+    if (!conversationId) return;
+
+    this.typingPollTimer = setInterval(async () => {
+      if (document.hidden) return;
+      if (this.currentConversationId !== conversationId) return;
+      try {
+        const response = await fetch(`/api/messenger/conversations/${conversationId}/typing/`, {
+          credentials: 'same-origin',
+          headers: { 'Accept': 'application/json' },
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        const contactTyping = Boolean(data && data.contact_typing);
+        this.setContactTypingIndicator(contactTyping);
+      } catch (e) {
+        // typing не критичен
+      }
+    }, 2000);
+  }
+
+  stopTypingPolling() {
+    if (this.typingPollTimer) {
+      clearInterval(this.typingPollTimer);
+      this.typingPollTimer = null;
+    }
+    this.setContactTypingIndicator(false);
+  }
+
+  setContactTypingIndicator(isTyping) {
+    const el = document.getElementById('contactTypingIndicator');
+    if (!el) return;
+    if (isTyping) el.classList.remove('hidden');
+    else el.classList.add('hidden');
+  }
+
+  async sendOperatorTypingPing(conversationId) {
+    const now = Date.now();
+    if (!conversationId) return;
+    if (now - this.lastOperatorTypingSentAt < 2500) return;
+    this.lastOperatorTypingSentAt = now;
+    try {
+      await fetch(`/api/messenger/conversations/${conversationId}/typing/`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          'X-CSRFToken': this.getCsrfToken(),
+        },
+      });
+    } catch (e) {
+      // не критично
+    }
+  }
+
   /**
    * Начать polling для новых сообщений
    */
@@ -1114,6 +1215,8 @@ class MessengerOperatorPanel {
         this.stopPolling(conversationId);
         return;
       }
+
+      if (document.hidden) return;
 
       try {
         const url = `/api/messenger/conversations/${conversationId}/messages/` + 
