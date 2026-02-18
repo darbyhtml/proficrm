@@ -606,16 +606,19 @@ class MessengerOperatorPanel {
         </div>
       </div>
       
-      <div class="flex-1 min-h-0 overflow-y-auto p-4 relative" id="messagesList">
-        <div class="sticky top-2 z-10 flex justify-center pointer-events-none">
-          <div id="stickyDateBadge" class="hidden px-3 py-1 rounded-full bg-brand-soft/60 text-xs text-brand-dark/70 backdrop-blur"> </div>
+      <div class="flex-1 min-h-0 relative">
+        <div class="absolute right-4 bottom-4 z-20">
+          <button type="button" id="scrollToBottomBtn" class="hidden w-10 h-10 rounded-full bg-white border border-brand-soft/80 shadow flex items-center justify-center text-brand-dark/60 hover:text-brand-dark hover:border-brand-soft" title="Вниз">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/>
+            </svg>
+          </button>
         </div>
-        <div id="messagesHistoryLoader" class="hidden text-center text-xs text-brand-dark/50 py-2">Загрузка истории…</div>
-        <button type="button" id="scrollToBottomBtn" class="hidden absolute right-4 bottom-4 z-10 w-10 h-10 rounded-full bg-white border border-brand-soft/80 shadow flex items-center justify-center text-brand-dark/60 hover:text-brand-dark hover:border-brand-soft" title="Вниз">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/>
-          </svg>
-        </button>
+        <div class="h-full overflow-y-auto p-4" id="messagesList">
+          <div class="sticky top-2 z-10 flex justify-center pointer-events-none">
+            <div id="stickyDateBadge" class="hidden px-3 py-1 rounded-full bg-brand-soft/60 text-xs text-brand-dark/70 backdrop-blur"> </div>
+          </div>
+          <div id="messagesHistoryLoader" class="hidden text-center text-xs text-brand-dark/50 py-2">Загрузка истории…</div>
     `;
 
     // Сообщения
@@ -687,8 +690,8 @@ class MessengerOperatorPanel {
     html += `</div>`;
     contentArea.innerHTML = html;
     
-    // Автоскролл к последнему сообщению
-    this.scrollToBottom();
+    // Автоскролл к последнему сообщению (при открытии всегда в самый низ)
+    this.scrollToBottom(true);
 
     // Сбросить кнопку "Новые сообщения"
     this.pendingNewMessagesCount = 0;
