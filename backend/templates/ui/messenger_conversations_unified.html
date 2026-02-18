@@ -9,6 +9,7 @@
     height: calc(100vh - 180px);
     gap: 0;
     overflow: hidden;
+    position: relative;
   }
   
   .messenger-unified-sidebar {
@@ -37,6 +38,45 @@
     flex-direction: column;
     overflow: hidden;
     background: #fff;
+  }
+
+  /* Адаптивность как в Chatwoot: панели выезжают поверх */
+  @media (max-width: 1024px) {
+    .messenger-unified-layout.info-open .messenger-unified-overlay {
+      display: block;
+    }
+    .messenger-unified-info {
+      position: absolute;
+      top: 0;
+      right: 0;
+      height: 100%;
+      transform: translateX(100%);
+      transition: transform 0.2s ease;
+      z-index: 40;
+      box-shadow: -8px 0 24px rgba(0, 0, 0, 0.08);
+    }
+    .messenger-unified-layout.info-open .messenger-unified-info {
+      transform: translateX(0);
+    }
+  }
+
+  @media (max-width: 768px) {
+    .messenger-unified-layout.chat-open .messenger-unified-overlay {
+      display: none;
+    }
+    .messenger-unified-sidebar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      transform: translateX(0);
+      transition: transform 0.2s ease;
+      z-index: 30;
+      box-shadow: 8px 0 24px rgba(0, 0, 0, 0.06);
+    }
+    .messenger-unified-layout.chat-open .messenger-unified-sidebar {
+      transform: translateX(-100%);
+    }
   }
   
   .messenger-unified-scrollable {
@@ -152,9 +192,18 @@
     margin-bottom: 1rem;
     opacity: 0.3;
   }
+
+  .messenger-unified-overlay {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.25);
+    z-index: 35;
+  }
 </style>
 
 <div class="messenger-unified-layout">
+  <div class="messenger-unified-overlay" id="messengerOverlay"></div>
   <!-- Левая колонка: Список диалогов -->
   <div class="messenger-unified-sidebar">
     <!-- Заголовок и фильтры -->

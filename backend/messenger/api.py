@@ -14,6 +14,7 @@ from policy.drf import PolicyPermission
 
 from . import models, selectors, serializers
 from .utils import ensure_messenger_enabled_api
+from django.db.models import Q
 
 
 class MessengerEnabledApiMixin:
@@ -167,6 +168,7 @@ class ConversationViewSet(MessengerEnabledApiMixin, viewsets.ReadOnlyModelViewSe
 
             since_raw = (request.query_params.get("since") or "").strip()
             before_raw = (request.query_params.get("before") or "").strip()
+            before_id_raw = (request.query_params.get("before_id") or "").strip()
             limit_raw = (request.query_params.get("limit") or "").strip()
 
             try:
@@ -177,6 +179,10 @@ class ConversationViewSet(MessengerEnabledApiMixin, viewsets.ReadOnlyModelViewSe
 
             since_dt = parse_datetime(since_raw) if since_raw else None
             before_dt = parse_datetime(before_raw) if before_raw else None
+            try:
+                before_id = int(before_id_raw) if before_id_raw else None
+            except (ValueError, TypeError):
+                before_id = None
 
             if since_dt:
                 messages = messages.filter(created_at__gt=since_dt).order_by("created_at", "id")
@@ -186,7 +192,14 @@ class ConversationViewSet(MessengerEnabledApiMixin, viewsets.ReadOnlyModelViewSe
             if before_dt:
                 # Берём "кусок" истории с конца (до before) и разворачиваем в хронологический порядок
                 chunk = list(
-                    messages.filter(created_at__lt=before_dt).order_by("-created_at", "-id")[:limit]
+                    (
+                        messages.filter(created_at__lt=before_dt)
+                        if not before_id
+                        else messages.filter(
+                            Q(created_at__lt=before_dt) | (Q(created_at=before_dt) & Q(id__lt=before_id))
+                        )
+                    )
+                    .order_by("-created_at", "-id")[:limit]
                 )
                 chunk.reverse()
                 serializer = serializers.MessageSerializer(chunk, many=True)

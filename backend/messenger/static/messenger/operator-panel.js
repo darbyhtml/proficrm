@@ -18,6 +18,7 @@ class MessengerOperatorPanel {
     this.pendingNewMessagesCount = 0;
     this.notificationsEnabled = false;
     this.earliestMessageTimestamp = null;
+    this.earliestMessageId = null;
     this.loadingOlderMessages = false;
     this.hasMoreOlderMessages = true;
     this.initialMessagesLimit = 50;
@@ -28,6 +29,7 @@ class MessengerOperatorPanel {
     this.startListPolling();
     this.initKeyboardShortcuts();
     this.initNotifications();
+    this.initOverlayHandlers();
     
     // Обработка URL hash для открытия диалога
     const hash = window.location.hash;
@@ -136,6 +138,9 @@ class MessengerOperatorPanel {
         this.stopPolling(prevConversationId);
         this.stopTypingPolling();
         window.history.replaceState(null, '', window.location.pathname + window.location.search);
+
+        const layout = document.querySelector('.messenger-unified-layout');
+        if (layout) layout.classList.remove('chat-open', 'info-open');
         
         // Убрать активное состояние с карточек
         document.querySelectorAll('.conversation-card.active').forEach(card => {
@@ -143,6 +148,39 @@ class MessengerOperatorPanel {
         });
       }
     });
+  }
+
+  initOverlayHandlers() {
+    const overlay = document.getElementById('messengerOverlay');
+    if (overlay) {
+      overlay.addEventListener('click', () => this.closeInfoPanel());
+    }
+  }
+
+  openInfoPanel() {
+    const layout = document.querySelector('.messenger-unified-layout');
+    if (layout) layout.classList.add('info-open');
+  }
+
+  closeInfoPanel() {
+    const layout = document.querySelector('.messenger-unified-layout');
+    if (layout) layout.classList.remove('info-open');
+  }
+
+  toggleInfoPanel() {
+    const layout = document.querySelector('.messenger-unified-layout');
+    if (!layout) return;
+    layout.classList.toggle('info-open');
+  }
+
+  hideSidebarOnMobile() {
+    const layout = document.querySelector('.messenger-unified-layout');
+    if (layout) layout.classList.add('chat-open');
+  }
+
+  showSidebarOnMobile() {
+    const layout = document.querySelector('.messenger-unified-layout');
+    if (layout) layout.classList.remove('chat-open');
   }
 
   /**
@@ -455,12 +493,16 @@ class MessengerOperatorPanel {
       this.renderConversation(conversation, messages);
       this.renderConversationInfo(conversation);
 
+      // На мобилке — спрятать список диалогов
+      this.hideSidebarOnMobile();
+
       // Пометить прочитанным (если текущий пользователь — assignee)
       this.markConversationRead(conversationId).catch(() => {});
       
       // Сохранить ID и timestamp последних сообщений
       this.lastMessageIds.clear();
       this.earliestMessageTimestamp = null;
+      this.earliestMessageId = null;
       this.hasMoreOlderMessages = true;
       this.loadingOlderMessages = false;
       if (messages.length > 0) {
@@ -468,6 +510,7 @@ class MessengerOperatorPanel {
         this.lastMessageTimestamp = messages[messages.length - 1].created_at;
         this.lastRenderedDate = new Date(messages[messages.length - 1].created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
         this.earliestMessageTimestamp = messages[0].created_at;
+        this.earliestMessageId = messages[0].id;
         if (messages.length < this.initialMessagesLimit) {
           this.hasMoreOlderMessages = false;
         }
@@ -519,11 +562,23 @@ class MessengerOperatorPanel {
       <div class="border-b border-brand-soft/60 p-4 bg-white flex-shrink-0">
         <div class="flex items-center justify-between">
           <div>
-            <h3 class="text-lg font-semibold">${this.escapeHtml(contactName)}</h3>
+            <div class="flex items-center gap-2">
+              <button type="button" id="mobileBackBtn" class="md:hidden inline-flex items-center justify-center w-8 h-8 rounded-full border border-brand-soft/80 text-brand-dark/60 hover:text-brand-dark hover:border-brand-soft" title="К списку">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M15 18l-6-6 6-6"/>
+                </svg>
+              </button>
+              <h3 class="text-lg font-semibold">${this.escapeHtml(contactName)}</h3>
+            </div>
             <p class="text-xs text-brand-dark/60">Диалог #${conversation.id}</p>
             <p class="text-xs text-brand-dark/40 mt-1 hidden" id="contactTypingIndicator">Клиент печатает…</p>
           </div>
           <div class="flex items-center gap-2">
+            <button type="button" id="mobileInfoBtn" class="lg:hidden inline-flex items-center justify-center w-8 h-8 rounded-full border border-brand-soft/80 text-brand-dark/60 hover:text-brand-dark hover:border-brand-soft" title="Инфо">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><path d="M12 7h.01"/>
+              </svg>
+            </button>
             ${conversation.status === 'open' ? '<span class="badge badge-new">Открыт</span>' : ''}
             ${conversation.status === 'pending' ? '<span class="badge badge-progress">В ожидании</span>' : ''}
             ${conversation.status === 'resolved' ? '<span class="badge badge-done">Решён</span>' : ''}
@@ -532,8 +587,16 @@ class MessengerOperatorPanel {
         </div>
       </div>
       
-      <div class="flex-1 min-h-0 overflow-y-auto p-4" id="messagesList">
+      <div class="flex-1 min-h-0 overflow-y-auto p-4 relative" id="messagesList">
+        <div class="sticky top-2 z-10 flex justify-center pointer-events-none">
+          <div id="stickyDateBadge" class="hidden px-3 py-1 rounded-full bg-brand-soft/60 text-xs text-brand-dark/70 backdrop-blur"> </div>
+        </div>
         <div id="messagesHistoryLoader" class="hidden text-center text-xs text-brand-dark/50 py-2">Загрузка истории…</div>
+        <button type="button" id="scrollToBottomBtn" class="hidden absolute right-4 bottom-4 z-10 w-10 h-10 rounded-full bg-white border border-brand-soft/80 shadow flex items-center justify-center text-brand-dark/60 hover:text-brand-dark hover:border-brand-soft" title="Вниз">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 5v14"/><path d="M19 12l-7 7-7-7"/>
+          </svg>
+        </button>
     `;
 
     // Сообщения
@@ -658,8 +721,25 @@ class MessengerOperatorPanel {
           this.pendingNewMessagesCount = 0;
           this.updateNewMessagesButton();
         }
+        this.updateScrollToBottomButton();
+        this.updateStickyDateBadge();
       }, { passive: true });
     }
+
+    // Кнопка "вниз"
+    const scrollBtn = document.getElementById('scrollToBottomBtn');
+    if (scrollBtn) {
+      scrollBtn.addEventListener('click', () => {
+        this.pendingNewMessagesCount = 0;
+        this.updateNewMessagesButton();
+        this.scrollToBottom(true);
+        this.updateScrollToBottomButton();
+      });
+    }
+
+    // Инициализация UI-элементов в списке
+    this.updateScrollToBottomButton();
+    this.updateStickyDateBadge(true);
 
     // Переключение режима (Ответить/Заметка)
     const btnOut = document.getElementById('composeModeOut');
@@ -676,6 +756,13 @@ class MessengerOperatorPanel {
     };
     if (btnOut) btnOut.addEventListener('click', () => { this.composeMode = 'OUT'; applyModeUI(); });
     if (btnInternal) btnInternal.addEventListener('click', () => { this.composeMode = 'INTERNAL'; applyModeUI(); });
+
+    // Мобильные кнопки
+    const backBtn = document.getElementById('mobileBackBtn');
+    if (backBtn) backBtn.addEventListener('click', () => this.showSidebarOnMobile());
+
+    const infoBtn = document.getElementById('mobileInfoBtn');
+    if (infoBtn) infoBtn.addEventListener('click', () => this.toggleInfoPanel());
   }
 
   updateNewMessagesButton() {
@@ -687,6 +774,49 @@ class MessengerOperatorPanel {
     } else {
       btn.classList.add('hidden');
       btn.textContent = 'Новые сообщения';
+    }
+  }
+
+  updateScrollToBottomButton() {
+    const btn = document.getElementById('scrollToBottomBtn');
+    if (!btn) return;
+    const show = !this.isScrolledToBottom(140);
+    if (show) btn.classList.remove('hidden');
+    else btn.classList.add('hidden');
+  }
+
+  updateStickyDateBadge(forceShow = false) {
+    const badge = document.getElementById('stickyDateBadge');
+    const messagesList = document.getElementById('messagesList');
+    if (!badge || !messagesList) return;
+
+    const seps = Array.from(messagesList.querySelectorAll('[data-date-separator]'));
+    if (seps.length === 0) {
+      badge.classList.add('hidden');
+      return;
+    }
+
+    // Ищем последний разделитель даты, который "выше" текущего скролла
+    const top = messagesList.scrollTop;
+    let current = seps[0].getAttribute('data-date-separator') || '';
+    for (const sep of seps) {
+      const label = sep.getAttribute('data-date-separator') || '';
+      if (sep.offsetTop - 16 <= top) current = label;
+      else break;
+    }
+
+    if (!current) {
+      badge.classList.add('hidden');
+      return;
+    }
+
+    badge.textContent = current;
+    if (forceShow || !badge.classList.contains('hidden')) {
+      badge.classList.remove('hidden');
+    } else {
+      // Появляется только после небольшого скролла
+      if (top > 80) badge.classList.remove('hidden');
+      else badge.classList.add('hidden');
     }
   }
 
@@ -706,7 +836,9 @@ class MessengerOperatorPanel {
     this.loadingOlderMessages = true;
     try {
       const limit = 30;
-      const url = `/api/messenger/conversations/${conversationId}/messages/?before=${encodeURIComponent(this.earliestMessageTimestamp)}&limit=${limit}`;
+      const beforeTs = encodeURIComponent(this.earliestMessageTimestamp);
+      const beforeId = this.earliestMessageId ? `&before_id=${encodeURIComponent(this.earliestMessageId)}` : '';
+      const url = `/api/messenger/conversations/${conversationId}/messages/?before=${beforeTs}${beforeId}&limit=${limit}`;
       const response = await fetch(url, {
         credentials: 'same-origin',
         headers: { 'Accept': 'application/json' },
@@ -730,6 +862,7 @@ class MessengerOperatorPanel {
       messagesList.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
 
       this.earliestMessageTimestamp = olderMessages[0].created_at;
+      this.earliestMessageId = olderMessages[0].id;
       if (olderMessages.length < limit) {
         this.hasMoreOlderMessages = false;
       }
@@ -827,6 +960,12 @@ class MessengerOperatorPanel {
 
     let html = `
       <div class="space-y-3">
+        <div class="lg:hidden flex items-center justify-between bg-white rounded-lg border border-brand-soft/60 p-3">
+          <div class="text-sm font-semibold">Информация</div>
+          <button type="button" id="closeInfoBtn" class="inline-flex items-center justify-center w-8 h-8 rounded-full border border-brand-soft/80 text-brand-dark/60 hover:text-brand-dark hover:border-brand-soft" title="Закрыть">
+            ${iconX}
+          </button>
+        </div>
         <!-- Контакт -->
         <div class="bg-white rounded-lg border border-brand-soft/60 p-3">
           <div class="flex items-center gap-2 mb-2">
@@ -936,6 +1075,9 @@ class MessengerOperatorPanel {
     `;
 
     infoArea.innerHTML = html;
+
+    const closeInfoBtn = document.getElementById('closeInfoBtn');
+    if (closeInfoBtn) closeInfoBtn.addEventListener('click', () => this.closeInfoPanel());
 
     const statusSelect = document.getElementById('convStatusSelect');
     const assigneeSelect = document.getElementById('convAssigneeSelect');
