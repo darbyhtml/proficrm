@@ -959,8 +959,30 @@ class MessengerOperatorPanel {
             <div class="text-sm font-medium mb-1">${this.escapeHtml(senderName)}</div>
             <div class="text-sm text-brand-dark whitespace-pre-wrap">${this.escapeHtml(message.body || '')}</div>
             ${attachmentsHtml}
-            <div class="text-xs text-brand-dark/50 mt-1">
-              ${new Date(message.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+            <div class="flex items-center justify-between mt-1">
+              <div class="text-xs text-brand-dark/50">
+                ${new Date(message.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+              </div>
+              ${isOutgoing ? `
+                <div class="flex items-center gap-0.5 ml-2">
+                  ${message.read_at ? `
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-brand-teal">
+                      <path d="M20 6L9 17l-5-5"/>
+                    </svg>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-brand-teal -ml-2">
+                      <path d="M20 6L9 17l-5-5"/>
+                    </svg>
+                  ` : message.delivered_at ? `
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-brand-dark/40">
+                      <path d="M20 6L9 17l-5-5"/>
+                    </svg>
+                  ` : `
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="text-brand-dark/20">
+                      <circle cx="12" cy="12" r="10"/>
+                    </svg>
+                  `}
+                </div>
+              ` : ''}
             </div>
           </div>
         </div>
