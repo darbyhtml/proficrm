@@ -18,6 +18,16 @@ class MessengerOperatorPanel {
   init() {
     this.initSidebarControls();
     this.startListPolling();
+    this.initKeyboardShortcuts();
+    
+    // Обработка URL hash для открытия диалога
+    const hash = window.location.hash;
+    if (hash && hash.startsWith('#conversation/')) {
+      const conversationId = parseInt(hash.replace('#conversation/', ''));
+      if (conversationId) {
+        this.openConversation(conversationId);
+      }
+    }
   }
 
   initSidebarControls() {
@@ -62,6 +72,61 @@ class MessengerOperatorPanel {
         this.refreshConversationList();
       });
     }
+  }
+
+  /**
+   * Инициализация keyboard shortcuts
+   */
+  initKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+      // Ctrl+K или Cmd+K: фокус на поиск
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        const searchInput = document.getElementById('conversationSearchInput');
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.select();
+        }
+      }
+      
+      // Esc: закрыть диалог (очистить hash)
+      if (e.key === 'Escape' && this.currentConversationId) {
+        const contentArea = document.getElementById('conversationContent');
+        const infoArea = document.getElementById('conversationInfo');
+        if (contentArea) {
+          contentArea.innerHTML = `
+            <div class="flex items-center justify-center h-full text-brand-dark/40">
+              <div class="text-center">
+                <svg class="w-16 h-16 mx-auto mb-4 text-brand-dark/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                </svg>
+                <h3 class="text-lg font-semibold mb-2 text-brand-dark/70">Выберите диалог</h3>
+                <p class="text-sm mb-3">Выберите диалог из списка слева, чтобы начать общение</p>
+                <p class="text-xs text-brand-dark/50">Нажмите <kbd class="px-1.5 py-0.5 bg-brand-soft/40 rounded text-xs">Ctrl+K</kbd> для быстрого поиска</p>
+              </div>
+            </div>
+          `;
+        }
+        if (infoArea) {
+          infoArea.innerHTML = `
+            <div class="flex items-center justify-center h-full text-brand-dark/40">
+              <div class="text-center">
+                <p class="text-sm mb-1">Информация о диалоге</p>
+                <p class="text-xs">Выберите диалог для просмотра</p>
+              </div>
+            </div>
+          `;
+        }
+        this.currentConversationId = null;
+        this.stopPolling(this.currentConversationId);
+        window.history.replaceState(null, '', window.location.pathname);
+        
+        // Убрать активное состояние с карточек
+        document.querySelectorAll('.conversation-card.active').forEach(card => {
+          card.classList.remove('active');
+        });
+      }
+    });
   }
 
   getListQueryParams() {
@@ -313,10 +378,24 @@ class MessengerOperatorPanel {
     const infoArea = document.getElementById('conversationInfo');
     
     if (contentArea) {
-      contentArea.innerHTML = '<div class="p-4 text-center text-brand-dark/60"><p>Загрузка диалога...</p></div>';
+      contentArea.innerHTML = `
+        <div class="flex items-center justify-center h-full">
+          <div class="text-center">
+            <div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-teal mb-2"></div>
+            <p class="text-sm text-brand-dark/60">Загрузка диалога...</p>
+          </div>
+        </div>
+      `;
     }
     if (infoArea) {
-      infoArea.innerHTML = '<div class="text-center text-brand-dark/60 p-4"><p class="text-sm">Загрузка информации...</p></div>';
+      infoArea.innerHTML = `
+        <div class="flex items-center justify-center h-full">
+          <div class="text-center">
+            <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-brand-teal mb-2"></div>
+            <p class="text-xs text-brand-dark/60">Загрузка информации...</p>
+          </div>
+        </div>
+      `;
     }
 
     try {
@@ -543,37 +622,73 @@ class MessengerOperatorPanel {
     const assignees = Array.isArray(ctx.assignees) ? ctx.assignees : [];
     const currentUserId = ctx.currentUserId;
 
+    // SVG иконки
+    const iconUser = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20a8 8 0 0116 0"/></svg>';
+    const iconMail = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M4 7l8 5 8-5"/></svg>';
+    const iconPhone = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z"/></svg>';
+    const iconBuilding = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l8-4v18"/><path d="M19 21V11l-6-4"/></svg>';
+    const iconCalendar = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>';
+    const iconUserPlus = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 11v6M19 14h6"/></svg>';
+    const iconX = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+
     let html = `
-      <div class="space-y-4">
-        <div>
-          <h3 class="text-sm font-semibold mb-3">Информация</h3>
+      <div class="space-y-3">
+        <!-- Контакт -->
+        <div class="bg-white rounded-lg border border-brand-soft/60 p-3">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="text-brand-dark/60">${iconUser}</div>
+            <h3 class="text-sm font-semibold">Контакт</h3>
+          </div>
+          <div class="space-y-1.5 text-sm">
+            <div class="font-medium">${this.escapeHtml(contactName)}</div>
+            ${contactEmail ? `
+              <div class="flex items-center gap-1.5 text-xs text-brand-dark/60">
+                <span class="text-brand-dark/40">${iconMail}</span>
+                <a href="mailto:${this.escapeHtml(contactEmail)}" class="hover:text-brand-teal">${this.escapeHtml(contactEmail)}</a>
+              </div>
+            ` : ''}
+            ${contactPhone ? `
+              <div class="flex items-center gap-1.5 text-xs text-brand-dark/60">
+                <span class="text-brand-dark/40">${iconPhone}</span>
+                <a href="tel:${this.escapeHtml(contactPhone)}" class="hover:text-brand-teal">${this.escapeHtml(contactPhone)}</a>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+
+        <!-- Детали -->
+        <div class="bg-white rounded-lg border border-brand-soft/60 p-3">
+          <div class="flex items-center gap-2 mb-2">
+            <div class="text-brand-dark/60">${iconBuilding}</div>
+            <h3 class="text-sm font-semibold">Детали</h3>
+          </div>
           <dl class="space-y-2 text-sm">
-            <div>
-              <dt class="text-brand-dark/60">Контакт</dt>
-              <dd class="font-medium">${this.escapeHtml(contactName)}</dd>
-              ${contactEmail ? `<dd class="text-xs text-brand-dark/60">${this.escapeHtml(contactEmail)}</dd>` : ''}
-              ${contactPhone ? `<dd class="text-xs text-brand-dark/60">${this.escapeHtml(contactPhone)}</dd>` : ''}
+            <div class="flex items-center justify-between">
+              <dt class="text-brand-dark/60 flex items-center gap-1.5">
+                <span>${iconBuilding}</span>
+                <span>Филиал</span>
+              </dt>
+              <dd class="font-medium text-right">${this.escapeHtml(conversation.branch_name || '—')}</dd>
             </div>
-            <div>
-              <dt class="text-brand-dark/60">Филиал</dt>
-                <dd class="font-medium">${this.escapeHtml(conversation.branch_name || '—')}</dd>
+            <div class="flex items-center justify-between">
+              <dt class="text-brand-dark/60 flex items-center gap-1.5">
+                <span>${iconCalendar}</span>
+                <span>Создан</span>
+              </dt>
+              <dd class="font-medium text-right text-xs">${new Date(conversation.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })}</dd>
             </div>
-            <div>
-              <dt class="text-brand-dark/60">Создан</dt>
-              <dd class="font-medium">${new Date(conversation.created_at).toLocaleString('ru-RU')}</dd>
-            </div>
-            <div>
+            <div class="flex items-center justify-between">
               <dt class="text-brand-dark/60">Статус</dt>
-              <dd class="font-medium">
-                ${conversation.status === 'open' ? '<span class="badge badge-new">Открыт</span>' : ''}
-                ${conversation.status === 'pending' ? '<span class="badge badge-progress">В ожидании</span>' : ''}
-                ${conversation.status === 'resolved' ? '<span class="badge badge-done">Решён</span>' : ''}
-                ${conversation.status === 'closed' ? '<span class="badge badge-cancel">Закрыт</span>' : ''}
+              <dd>
+                ${conversation.status === 'open' ? '<span class="badge badge-new badge-xs">Открыт</span>' : ''}
+                ${conversation.status === 'pending' ? '<span class="badge badge-progress badge-xs">Ожидание</span>' : ''}
+                ${conversation.status === 'resolved' ? '<span class="badge badge-done badge-xs">Решён</span>' : ''}
+                ${conversation.status === 'closed' ? '<span class="badge badge-cancel badge-xs">Закрыт</span>' : ''}
               </dd>
             </div>
-            <div>
+            <div class="flex items-center justify-between">
               <dt class="text-brand-dark/60">Приоритет</dt>
-              <dd class="font-medium">
+              <dd>
                 ${conversation.priority === 10 ? '<span class="badge badge-xs">Низкий</span>' : ''}
                 ${conversation.priority === 20 ? '<span class="badge badge-xs">Обычный</span>' : ''}
                 ${conversation.priority === 30 ? '<span class="badge badge-warn badge-xs">Высокий</span>' : ''}
@@ -582,38 +697,44 @@ class MessengerOperatorPanel {
           </dl>
         </div>
         
-        <div class="card" style="box-shadow:none">
-          <div class="card-pad">
-            <h3 class="text-sm font-semibold mb-3">Действия</h3>
-            <div class="space-y-3">
-              <div class="flex gap-2">
-                <button type="button" class="btn btn-outline btn-sm flex-1" id="assignMeBtn">Назначить меня</button>
-                <button type="button" class="btn btn-outline btn-sm" id="closeConvBtn">Закрыть</button>
-              </div>
-              <div>
-                <label class="block text-xs text-brand-dark/70 mb-1">Статус</label>
-                <select class="select text-sm w-full" id="convStatusSelect">
-                  <option value="open" ${conversation.status === 'open' ? 'selected' : ''}>Открыт</option>
-                  <option value="pending" ${conversation.status === 'pending' ? 'selected' : ''}>В ожидании</option>
-                  <option value="resolved" ${conversation.status === 'resolved' ? 'selected' : ''}>Решён</option>
-                  <option value="closed" ${conversation.status === 'closed' ? 'selected' : ''}>Закрыт</option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-xs text-brand-dark/70 mb-1">Оператор</label>
-                <select class="select text-sm w-full" id="convAssigneeSelect">
-                  <option value="">Не назначен</option>
+        <!-- Действия -->
+        <div class="bg-white rounded-lg border border-brand-soft/60 p-3">
+          <h3 class="text-sm font-semibold mb-3">Действия</h3>
+          <div class="space-y-2.5">
+            <div class="flex gap-2">
+              <button type="button" class="btn btn-outline btn-sm flex-1 text-xs" id="assignMeBtn">
+                <span class="inline-flex items-center gap-1.5">
+                  ${iconUserPlus}
+                  <span>Назначить меня</span>
+                </span>
+              </button>
+              <button type="button" class="btn btn-outline btn-sm text-xs" id="closeConvBtn" title="Закрыть диалог">
+                ${iconX}
+              </button>
+            </div>
+            <div>
+              <label class="block text-xs text-brand-dark/70 mb-1">Статус</label>
+              <select class="select text-sm w-full" id="convStatusSelect">
+                <option value="open" ${conversation.status === 'open' ? 'selected' : ''}>Открыт</option>
+                <option value="pending" ${conversation.status === 'pending' ? 'selected' : ''}>В ожидании</option>
+                <option value="resolved" ${conversation.status === 'resolved' ? 'selected' : ''}>Решён</option>
+                <option value="closed" ${conversation.status === 'closed' ? 'selected' : ''}>Закрыт</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-brand-dark/70 mb-1">Оператор</label>
+              <select class="select text-sm w-full" id="convAssigneeSelect">
+                <option value="">Не назначен</option>
                 ${assignees.map(a => `<option value="${a.id}" ${conversation.assignee === a.id ? 'selected' : ''}>${this.escapeHtml(a.name)}</option>`).join('')}
-                </select>
-              </div>
-              <div>
-                <label class="block text-xs text-brand-dark/70 mb-1">Приоритет</label>
-                <select class="select text-sm w-full" id="convPrioritySelect">
-                  <option value="10" ${conversation.priority === 10 ? 'selected' : ''}>Низкий</option>
-                  <option value="20" ${conversation.priority === 20 ? 'selected' : ''}>Обычный</option>
-                  <option value="30" ${conversation.priority === 30 ? 'selected' : ''}>Высокий</option>
-                </select>
-              </div>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-brand-dark/70 mb-1">Приоритет</label>
+              <select class="select text-sm w-full" id="convPrioritySelect">
+                <option value="10" ${conversation.priority === 10 ? 'selected' : ''}>Низкий</option>
+                <option value="20" ${conversation.priority === 20 ? 'selected' : ''}>Обычный</option>
+                <option value="30" ${conversation.priority === 30 ? 'selected' : ''}>Высокий</option>
+              </select>
             </div>
           </div>
         </div>
@@ -717,7 +838,7 @@ class MessengerOperatorPanel {
     const submitButton = form.querySelector('button[type="submit"]');
     if (submitButton) {
       submitButton.disabled = true;
-      submitButton.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>';
+      submitButton.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/></svg>';
     }
 
     try {
@@ -759,15 +880,38 @@ class MessengerOperatorPanel {
       // Обновить список диалогов (обновит превью/время)
       this.refreshConversationList();
       
+      // Показать уведомление об успешной отправке
+      this.showNotification('Сообщение отправлено', 'success');
+      
     } catch (error) {
       console.error('Failed to send message:', error);
-      alert('Ошибка отправки сообщения: ' + error.message);
+      this.showNotification('Ошибка отправки сообщения: ' + error.message, 'error');
     } finally {
       if (submitButton) {
         submitButton.disabled = false;
         submitButton.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
       }
     }
+  }
+
+  /**
+   * Показать уведомление (toast)
+   */
+  showNotification(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg text-sm ${
+      type === 'success' ? 'bg-green-500 text-white' :
+      type === 'error' ? 'bg-red-500 text-white' :
+      'bg-blue-500 text-white'
+    }`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transition = 'opacity 0.3s';
+      setTimeout(() => toast.remove(), 300);
+    }, 3000);
   }
 
   /**
