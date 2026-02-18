@@ -16,6 +16,7 @@ from django.http import StreamingHttpResponse
 from django.http import JsonResponse
 from django.http import FileResponse, Http404, HttpResponseNotFound
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
@@ -11027,21 +11028,21 @@ def messenger_agent_status(request: HttpRequest) -> HttpResponse:
     ensure_messenger_enabled_view()
 
     if request.method != "POST":
-        return redirect("messenger_conversation_list")
+        return redirect("messenger_conversations_unified")
 
     user: User = get_effective_user(request)
     status = (request.POST.get("status") or "").strip()
     allowed = {s.value for s in AgentProfile.Status}
     if status not in allowed:
         messages.error(request, "Неверный статус оператора.")
-        next_url = request.POST.get("next") or reverse("messenger_conversation_list")
+        next_url = request.POST.get("next") or reverse("messenger_conversations_unified")
         return redirect(next_url)
 
     profile, _ = AgentProfile.objects.get_or_create(user=user)
     profile.status = status
     profile.save(update_fields=["status", "updated_at"])
 
-    next_url = request.POST.get("next") or reverse("messenger_conversation_list")
+    next_url = request.POST.get("next") or reverse("messenger_conversations_unified")
     return redirect(next_url)
 
 
