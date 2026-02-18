@@ -162,7 +162,8 @@ class ConversationViewSet(MessengerEnabledApiMixin, viewsets.ReadOnlyModelViewSe
             # - since: вернуть только новые (created_at > since)
             # - before: для ленивой подгрузки истории (created_at < before)
             # - limit: ограничение (по умолчанию 50)
-            messages = conversation.messages.all()
+            # Важно: префетчим attachments, чтобы избежать N+1 при сериализации.
+            messages = conversation.messages.all().prefetch_related("attachments")
 
             from django.utils.dateparse import parse_datetime
 

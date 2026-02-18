@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from django.conf import settings
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, Client
 from rest_framework import status
 from rest_framework.test import APIClient
 
 from accounts.models import Branch
-from messenger.models import Inbox, Contact, Conversation
+from messenger.models import Inbox, Contact, Conversation, Message
+from messenger.utils import create_widget_session
 
 
 class WidgetSecurityFeatureTests(TestCase):
@@ -191,4 +193,97 @@ class WidgetSecurityFeatureTests(TestCase):
         else:
             first_text = str(first)
         self.assertIn("event: ready", first_text)
+
+
+class WidgetDeliveryAndAttachmentsTests(TestCase):
+    def setUp(self):
+        self.original_messenger_enabled = getattr(settings, "MESSENGER_ENABLED", False)
+        settings.MESSENGER_ENABLED = True
+
+        self.branch = Branch.objects.create(code="b2", name="B2")
+        self.inbox = Inbox.objects.create(
+            name="Inbox2",
+            branch=self.branch,
+            widget_token="token_2",
+            is_active=True,
+            settings={},
+        )
+        self.contact = Contact.objects.create(external_id="v-send", name="Visitor")
+        self.conversation = Conversation.objects.create(
+            inbox=self.inbox,
+            contact=self.contact,
+            branch=self.branch,
+            status=Conversation.Status.OPEN,
+        )
+
+    def tearDown(self):
+        settings.MESSENGER_ENABLED = self.original_messenger_enabled
+
+    def test_widget_send_returns_attachments_payload(self):
+        client = APIClient()
+        boot = client.post(
+            "/api/widget/bootstrap/",
+            {"widget_token": self.inbox.widget_token, "contact_external_id": "v-send-1"},
+            format="json",
+        )
+        self.assertEqual(boot.status_code, status.HTTP_200_OK)
+        session = boot.data["widget_session_token"]
+
+        file_obj = SimpleUploadedFile(
+            "test.pdf",
+            b"dummy content",
+            content_type="application/pdf",
+        )
+        response = client.post(
+            "/api/widget/send/",
+            {
+                "widget_token": self.inbox.widget_token,
+                "widget_session_token": session,
+                "body": "hi",
+                "files": file_obj,
+            },
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        data = response.data
+        self.assertIn("attachments", data)
+        self.assertEqual(len(data["attachments"]), 1)
+        att = data["attachments"][0]
+        self.assertEqual(att["original_name"], "test.pdf")
+        self.assertTrue(att["url"])
+
+        msg = Message.objects.get(id=data["id"])
+        self.assertEqual(msg.direction, Message.Direction.IN)
+        self.assertEqual(msg.attachments.count(), 1)
+
+    def test_outgoing_message_marked_delivered_on_poll(self):
+        # Сообщение OUT без delivered_at
+        msg = Message.objects.create(
+            conversation=self.conversation,
+            direction=Message.Direction.OUT,
+            body="from operator",
+        )
+        self.assertIsNone(msg.delivered_at)
+
+        session = create_widget_session(
+            inbox_id=self.inbox.id,
+            conversation_id=self.conversation.id,
+            contact_id=str(self.contact.id),
+        )
+
+        client = APIClient()
+        response = client.get(
+            "/api/widget/poll/",
+            {
+                "widget_token": self.inbox.widget_token,
+                "widget_session_token": session.token,
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        data = response.data
+        self.assertIsInstance(data.get("messages"), list)
+        self.assertTrue(any(m.get("id") == msg.id for m in data["messages"]))
+
+        msg.refresh_from_db()
+        self.assertIsNotNone(msg.delivered_at)
 

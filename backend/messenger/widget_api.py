@@ -222,11 +222,33 @@ def widget_bootstrap(request):
             contact_id=str(contact.id),
         )
 
-        # Опционально: вернуть последние сообщения (только OUT, без INTERNAL)
+        # Опционально: вернуть последние сообщения (IN и OUT, без INTERNAL)
         att_settings = get_attachment_settings(inbox)
         initial_messages = []
-        messages = conversation.messages.filter(direction=models.Message.Direction.OUT).order_by("-created_at")[:10]
-        for msg in reversed(messages):  # В хронологическом порядке
+
+        messages_qs = conversation.messages.exclude(
+            direction=models.Message.Direction.INTERNAL
+        ).order_by("-created_at", "-id")
+        messages = list(messages_qs[:10])
+
+        # Помечаем исходящие сообщения как доставленные при первой выдаче в виджет
+        if messages:
+            undelivered_out_ids = [
+                msg.id
+                for msg in messages
+                if msg.direction == models.Message.Direction.OUT and msg.delivered_at is None
+            ]
+            if undelivered_out_ids:
+                now = django_timezone.now()
+                models.Message.objects.filter(
+                    id__in=undelivered_out_ids, delivered_at__isnull=True
+                ).update(delivered_at=now)
+                for msg in messages:
+                    if msg.id in undelivered_out_ids:
+                        msg.delivered_at = now
+
+        # Отдаём сообщения в хронологическом порядке
+        for msg in reversed(messages):
             payload = {
                 "id": msg.id,
                 "body": msg.body,
@@ -588,10 +610,17 @@ def widget_send(request):
                 },
             )
 
-        response_serializer = serializers.WidgetSendResponseSerializer({
-            "id": message.id,
-            "created_at": message.created_at,
-        })
+        attachments_payload = build_message_attachments_payload(
+            message, request, widget_token, widget_session_token
+        )
+
+        response_serializer = serializers.WidgetSendResponseSerializer(
+            {
+                "id": message.id,
+                "created_at": message.created_at,
+                "attachments": attachments_payload,
+            }
+        )
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
     
     except Throttled as e:
@@ -737,7 +766,19 @@ def widget_poll(request):
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        messages = messages_qs[:50]  # Лимит 50 сообщений за запрос
+        messages = list(messages_qs[:50])  # Лимит 50 сообщений за запрос
+
+        # Помечаем исходящие сообщения как доставленные при первой выдаче в виджет
+        if messages:
+            undelivered_out_ids = [msg.id for msg in messages if msg.delivered_at is None]
+            if undelivered_out_ids:
+                now = django_timezone.now()
+                models.Message.objects.filter(
+                    id__in=undelivered_out_ids, delivered_at__isnull=True
+                ).update(delivered_at=now)
+                for msg in messages:
+                    if msg.id in undelivered_out_ids:
+                        msg.delivered_at = now
 
         result = []
         for msg in messages:
@@ -891,9 +932,23 @@ def widget_stream(request):
                 id__gt=last_id,
             ).order_by("created_at", "id")[:50]
 
+            msgs = list(msgs_qs)
+
+            # Помечаем исходящие сообщения как доставленные при первой выдаче в виджет
+            if msgs:
+                undelivered_out_ids = [m.id for m in msgs if m.delivered_at is None]
+                if undelivered_out_ids:
+                    now_dt = django_timezone.now()
+                    models.Message.objects.filter(
+                        id__in=undelivered_out_ids, delivered_at__isnull=True
+                    ).update(delivered_at=now_dt)
+                    for m in msgs:
+                        if m.id in undelivered_out_ids:
+                            m.delivered_at = now_dt
+
             messages_payload = []
             max_id = last_id
-            for msg in msgs_qs:
+            for msg in msgs:
                 if msg.id and msg.id > max_id:
                     max_id = msg.id
                 payload = {

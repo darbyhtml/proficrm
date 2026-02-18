@@ -220,4 +220,10 @@ class WidgetSendResponseSerializer(serializers.Serializer):
 
     id = serializers.IntegerField(help_text="ID созданного сообщения")
     created_at = serializers.DateTimeField(help_text="Время создания сообщения")
+    attachments = serializers.ListField(
+        child=serializers.DictField(),
+        required=False,
+        allow_empty=True,
+        help_text="Сериализованные вложения сообщения (как в widget poll/bootstrap).",
+    )
 

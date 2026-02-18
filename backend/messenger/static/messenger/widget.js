@@ -68,6 +68,7 @@
       this.pendingFiles = [];
       this.fileInput = null;
       this.pendingFilesEl = null;
+      this.markReadTimer = null;
 
       // DOM элементы (будут созданы в render)
       this.button = null;
@@ -386,13 +387,7 @@
 
         const data = await response.json();
         if (this.captchaInput) this.captchaInput.value = '';
-        const attachmentsPayload = fileList.map(f => ({
-          id: 0,
-          url: '',
-          original_name: f.name || '',
-          content_type: f.type || '',
-          size: f.size || 0,
-        }));
+        const attachmentsPayload = Array.isArray(data.attachments) ? data.attachments : [];
         this.addMessageToUI({
           id: data.id,
           body: trimmedBody,
@@ -512,6 +507,8 @@
           for (const msg of newMessages) {
             this.addMessageToUI(msg);
           }
+
+          this.scheduleMarkOutgoingRead();
         }
       } catch (error) {
         console.error('[MessengerWidget] Poll error:', error);
@@ -591,6 +588,9 @@
               if (this.sinceId !== null) {
                 localStorage.setItem(this._storageKey('since_id'), String(this.sinceId));
               }
+              if (newMessages.length > 0) {
+                this.scheduleMarkOutgoingRead();
+              }
             }
           } catch (err) {
             // ignore
@@ -633,6 +633,7 @@
       }
       // Автоскролл вниз
       this.scrollToBottom();
+      this.scheduleMarkOutgoingRead();
     }
 
     /**
@@ -712,6 +713,9 @@
       const messageEl = document.createElement('div');
       messageEl.className = 'messenger-widget-message';
       messageEl.classList.add('messenger-widget-message-' + message.direction);
+      if (typeof message.id === 'number') {
+        messageEl.setAttribute('data-message-id', String(message.id));
+      }
 
       const bodyEl = document.createElement('div');
       bodyEl.className = 'messenger-widget-message-body';
@@ -777,6 +781,41 @@
         this.unreadCount = (this.unreadCount || 0) + 1;
         this.updateBadge();
       }
+    }
+
+    markOutgoingMessagesRead() {
+      if (!this.sessionToken || !this.messagesContainer) return;
+      const outNodes = this.messagesContainer.querySelectorAll('.messenger-widget-message-out[data-message-id]');
+      let maxId = null;
+      outNodes.forEach(el => {
+        const raw = el.getAttribute('data-message-id');
+        const id = raw ? parseInt(raw, 10) : NaN;
+        if (!isNaN(id) && (maxId === null || id > maxId)) {
+          maxId = id;
+        }
+      });
+      if (maxId === null) return;
+
+      fetch(CONFIG.API_BASE_URL + '/api/widget/mark_read/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          widget_token: this.widgetToken,
+          widget_session_token: this.sessionToken,
+          last_message_id: maxId,
+        }),
+      }).catch(() => {});
+    }
+
+    scheduleMarkOutgoingRead() {
+      if (!this.sessionToken) return;
+      if (!this.isOpen) return;
+      if (this.markReadTimer) {
+        clearTimeout(this.markReadTimer);
+      }
+      this.markReadTimer = setTimeout(() => {
+        this.markOutgoingMessagesRead();
+      }, 500);
     }
 
     setOperatorTypingVisible(visible) {
@@ -962,6 +1001,7 @@
           this.addMessageToUI(msg);
         }
       }
+      this.scheduleMarkOutgoingRead();
 
       // Индикатор «Оператор печатает»
       this.typingIndicator = document.createElement('div');
