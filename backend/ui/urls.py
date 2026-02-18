@@ -76,12 +76,6 @@ urlpatterns = [
     path("tasks/<uuid:task_id>/status/", views.task_set_status, name="task_set_status"),
     path("tasks/<uuid:task_id>/delete/", views.task_delete, name="task_delete"),
 
-    # Messenger (операторская панель диалогов)
-    path("messenger/conversations/", views.messenger_conversation_list, name="messenger_conversation_list"),
-    path("messenger/", views.messenger_conversations_unified, name="messenger_conversations_unified"),  # Unified Chatwoot-style layout
-    path("messenger/me/status/", views.messenger_agent_status, name="messenger_agent_status"),
-    path("messenger/conversations/<int:conversation_id>/", views.messenger_conversation_detail, name="messenger_conversation_detail"),
-
     # Settings (admin only)
     path("settings/", views.settings_dashboard, name="settings_dashboard"),
     path("settings/access/", views.settings_access, name="settings_access"),
@@ -133,17 +127,6 @@ urlpatterns = [
     path("settings/mobile/devices/<uuid:pk>/", views.settings_mobile_device_detail, name="settings_mobile_device_detail"),
     path("settings/calls/stats/", views.settings_calls_stats, name="settings_calls_stats"),
     path("settings/calls/stats/<int:user_id>/", views.settings_calls_manager_detail, name="settings_calls_manager_detail"),
-    
-    # Messenger settings (admin only)
-    path("settings/messenger/", views.settings_messenger_overview, name="settings_messenger_overview"),
-    path("settings/messenger/inboxes/new/", views.settings_messenger_inbox_edit, name="settings_messenger_inbox_create"),
-    path("settings/messenger/inboxes/<int:inbox_id>/", views.settings_messenger_inbox_edit, name="settings_messenger_inbox_edit"),
-    path("settings/messenger/routing/", views.settings_messenger_routing_list, name="settings_messenger_routing_list"),
-    path("settings/messenger/routing/new/", views.settings_messenger_routing_edit, name="settings_messenger_routing_create"),
-    path("settings/messenger/routing/<int:rule_id>/", views.settings_messenger_routing_edit, name="settings_messenger_routing_edit"),
-    path("settings/messenger/routing/<int:rule_id>/delete/", views.settings_messenger_routing_delete, name="settings_messenger_routing_delete"),
-    path("settings/messenger/health/", views.settings_messenger_health, name="settings_messenger_health"),
-    path("settings/messenger/analytics/", views.settings_messenger_analytics, name="settings_messenger_analytics"),
     
     # Мобильное приложение
     path("mobile-app/", views.mobile_app_page, name="mobile_app_page"),

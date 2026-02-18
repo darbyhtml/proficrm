@@ -6,13 +6,6 @@ from crm.utils import get_view_as_user
 
 def ui_globals(request):
     """
-    Глобальные переменные для всех UI шаблонов.
-    """
-    from django.conf import settings
-    return {
-        "MESSENGER_ENABLED": getattr(settings, "MESSENGER_ENABLED", False),
-    }
-    """
     Глобальные флаги для шаблонов UI, чтобы не дублировать проверки ролей по всему проекту.
     Здесь же добавляем поддержку режима "просмотр как роль/филиал/пользователь" для администратора.
     """
@@ -142,10 +135,6 @@ def ui_globals(request):
         session = getattr(request, "session", {})
         view_as_enabled = session.get("view_as_enabled", False)
 
-    # Messenger feature flag
-    from django.conf import settings
-    messenger_enabled = getattr(settings, "MESSENGER_ENABLED", False)
-
     return {
         # Реальные права пользователя (для бэкенда/безопасности)
         "is_admin": is_admin,
@@ -170,8 +159,6 @@ def ui_globals(request):
         "view_as_users": view_as_users,
         "view_as_roles": User.Role.choices,
         "view_as_role_label": view_as_role_label,
-        # Messenger feature flag
-        "MESSENGER_ENABLED": messenger_enabled,
     }
 
 
