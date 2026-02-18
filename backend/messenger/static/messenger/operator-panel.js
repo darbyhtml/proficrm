@@ -16,12 +16,14 @@ class MessengerOperatorPanel {
     this.typingPollTimer = null;
     this.lastOperatorTypingSentAt = 0;
     this.pendingNewMessagesCount = 0;
+    this.notificationsEnabled = false;
   }
 
   init() {
     this.initSidebarControls();
     this.startListPolling();
     this.initKeyboardShortcuts();
+    this.initNotifications();
     
     // Обработка URL hash для открытия диалога
     const hash = window.location.hash;
@@ -137,6 +139,28 @@ class MessengerOperatorPanel {
         });
       }
     });
+  }
+
+  /**
+   * Инициализация браузерных уведомлений
+   */
+  initNotifications() {
+    if (typeof window === 'undefined' || typeof Notification === 'undefined') {
+      this.notificationsEnabled = false;
+      return;
+    }
+    if (Notification.permission === 'granted') {
+      this.notificationsEnabled = true;
+    } else if (Notification.permission === 'default') {
+      // Попросим разрешение один раз, тихо
+      Notification.requestPermission().then((result) => {
+        this.notificationsEnabled = result === 'granted';
+      }).catch(() => {
+        this.notificationsEnabled = false;
+      });
+    } else {
+      this.notificationsEnabled = false;
+    }
   }
 
   getListQueryParams() {
@@ -1101,6 +1125,16 @@ class MessengerOperatorPanel {
       
       this.lastMessageIds.add(message.id);
       appendedCount += 1;
+
+    // Уведомление для новых входящих сообщений
+    const dir = (message.direction || '').toLowerCase();
+    const isIncoming = dir === 'in';
+    if (isIncoming) {
+      const shouldNotify = document.hidden || !wasAtBottom;
+      if (shouldNotify) {
+        this.notifyNewIncomingMessage(message);
+      }
+    }
     });
     
     // Обновляем timestamp последнего сообщения
@@ -1146,6 +1180,53 @@ class MessengerOperatorPanel {
         : lastAt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
       timeEl.textContent = timeStr;
     }
+  }
+
+  notifyNewIncomingMessage(message) {
+    try {
+      this.playIncomingSound();
+    } catch (e) {
+      // звук не критичен
+    }
+
+    if (!this.notificationsEnabled) return;
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission !== 'granted') return;
+
+    const body = (message.body || '').trim();
+    const preview = body ? body.slice(0, 140) : 'Новое сообщение';
+
+    const n = new Notification('Новое сообщение в чате', {
+      body: preview,
+      tag: `messenger-${message.id}`,
+    });
+
+    // Авто-закрытие через несколько секунд
+    setTimeout(() => n.close(), 5000);
+  }
+
+  playIncomingSound() {
+    if (typeof window === 'undefined' || typeof AudioContext === 'undefined') return;
+
+    // Короткий «ping» через Web Audio API
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    if (!Ctor) return;
+
+    const ctx = new Ctor();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.value = 880; // A5
+    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start();
+    osc.stop(ctx.currentTime + 0.3);
   }
 
   startTypingPolling(conversationId) {
