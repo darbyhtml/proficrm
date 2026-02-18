@@ -381,8 +381,8 @@
     if (!layout) return;
     var rect = layout.getBoundingClientRect();
     var viewportHeight = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 0;
-    // Делаем layout чуть ниже высоты окна, чтобы убрать общий скролл страницы
-    var safeOffset = 16;
+    // Делаем layout заметно ниже высоты окна, чтобы убрать общий скролл страницы
+    var safeOffset = 32;
     var targetHeight = viewportHeight - rect.top - safeOffset;
     var minHeight = 500;
     if (!isFinite(targetHeight) || targetHeight <= 0) {
