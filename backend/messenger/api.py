@@ -155,17 +155,47 @@ class ConversationViewSet(MessengerEnabledApiMixin, viewsets.ReadOnlyModelViewSe
         conversation = self.get_object()
 
         if request.method == "GET":
-            # GET: список сообщений (опционально с фильтром since)
+            # GET: список сообщений
+            #
+            # Поддерживаем параметры:
+            # - since: вернуть только новые (created_at > since)
+            # - before: для ленивой подгрузки истории (created_at < before)
+            # - limit: ограничение (по умолчанию 50)
             messages = conversation.messages.all()
-            since_raw = (request.query_params.get("since") or "").strip()
-            if since_raw:
-                from django.utils.dateparse import parse_datetime
 
-                since_dt = parse_datetime(since_raw)
-                if since_dt:
-                    messages = messages.filter(created_at__gt=since_dt)
-            messages = messages.order_by("created_at", "id")
-            serializer = serializers.MessageSerializer(messages, many=True)
+            from django.utils.dateparse import parse_datetime
+
+            since_raw = (request.query_params.get("since") or "").strip()
+            before_raw = (request.query_params.get("before") or "").strip()
+            limit_raw = (request.query_params.get("limit") or "").strip()
+
+            try:
+                limit = int(limit_raw) if limit_raw else 50
+            except (ValueError, TypeError):
+                limit = 50
+            limit = max(1, min(limit, 200))
+
+            since_dt = parse_datetime(since_raw) if since_raw else None
+            before_dt = parse_datetime(before_raw) if before_raw else None
+
+            if since_dt:
+                messages = messages.filter(created_at__gt=since_dt).order_by("created_at", "id")
+                serializer = serializers.MessageSerializer(messages, many=True)
+                return Response(serializer.data)
+
+            if before_dt:
+                # Берём "кусок" истории с конца (до before) и разворачиваем в хронологический порядок
+                chunk = list(
+                    messages.filter(created_at__lt=before_dt).order_by("-created_at", "-id")[:limit]
+                )
+                chunk.reverse()
+                serializer = serializers.MessageSerializer(chunk, many=True)
+                return Response(serializer.data)
+
+            # По умолчанию: последние N сообщений (чтобы не тащить всю историю)
+            chunk = list(messages.order_by("-created_at", "-id")[:limit])
+            chunk.reverse()
+            serializer = serializers.MessageSerializer(chunk, many=True)
             return Response(serializer.data)
 
         elif request.method == "POST":

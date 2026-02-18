@@ -17,6 +17,10 @@ class MessengerOperatorPanel {
     this.lastOperatorTypingSentAt = 0;
     this.pendingNewMessagesCount = 0;
     this.notificationsEnabled = false;
+    this.earliestMessageTimestamp = null;
+    this.loadingOlderMessages = false;
+    this.hasMoreOlderMessages = true;
+    this.initialMessagesLimit = 50;
   }
 
   init() {
@@ -433,8 +437,8 @@ class MessengerOperatorPanel {
 
       const conversation = await response.json();
       
-      // Загрузить сообщения
-      const messagesResponse = await fetch(`/api/messenger/conversations/${conversationId}/messages/`, {
+      // Загрузить последние сообщения (ленивая история)
+      const messagesResponse = await fetch(`/api/messenger/conversations/${conversationId}/messages/?limit=${this.initialMessagesLimit}`, {
         credentials: 'same-origin',
         headers: {
           'Accept': 'application/json',
@@ -456,10 +460,19 @@ class MessengerOperatorPanel {
       
       // Сохранить ID и timestamp последних сообщений
       this.lastMessageIds.clear();
+      this.earliestMessageTimestamp = null;
+      this.hasMoreOlderMessages = true;
+      this.loadingOlderMessages = false;
       if (messages.length > 0) {
         messages.forEach(m => this.lastMessageIds.add(m.id));
         this.lastMessageTimestamp = messages[messages.length - 1].created_at;
         this.lastRenderedDate = new Date(messages[messages.length - 1].created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+        this.earliestMessageTimestamp = messages[0].created_at;
+        if (messages.length < this.initialMessagesLimit) {
+          this.hasMoreOlderMessages = false;
+        }
+      } else {
+        this.hasMoreOlderMessages = false;
       }
       
       // Начать polling для новых сообщений
@@ -520,6 +533,7 @@ class MessengerOperatorPanel {
       </div>
       
       <div class="flex-1 min-h-0 overflow-y-auto p-4" id="messagesList">
+        <div id="messagesHistoryLoader" class="hidden text-center text-xs text-brand-dark/50 py-2">Загрузка истории…</div>
     `;
 
     // Сообщения
@@ -636,6 +650,10 @@ class MessengerOperatorPanel {
     const messagesList = document.getElementById('messagesList');
     if (messagesList) {
       messagesList.addEventListener('scroll', () => {
+        // Ленивая подгрузка истории при прокрутке вверх
+        if (messagesList.scrollTop < 120) {
+          this.loadOlderMessages(conversation.id);
+        }
         if (this.isScrolledToBottom()) {
           this.pendingNewMessagesCount = 0;
           this.updateNewMessagesButton();
@@ -669,6 +687,117 @@ class MessengerOperatorPanel {
     } else {
       btn.classList.add('hidden');
       btn.textContent = 'Новые сообщения';
+    }
+  }
+
+  async loadOlderMessages(conversationId) {
+    if (!conversationId) return;
+    if (!this.hasMoreOlderMessages) return;
+    if (this.loadingOlderMessages) return;
+    if (!this.earliestMessageTimestamp) return;
+    if (document.hidden) return;
+
+    const messagesList = document.getElementById('messagesList');
+    if (!messagesList) return;
+
+    const loader = document.getElementById('messagesHistoryLoader');
+    if (loader) loader.classList.remove('hidden');
+
+    this.loadingOlderMessages = true;
+    try {
+      const limit = 30;
+      const url = `/api/messenger/conversations/${conversationId}/messages/?before=${encodeURIComponent(this.earliestMessageTimestamp)}&limit=${limit}`;
+      const response = await fetch(url, {
+        credentials: 'same-origin',
+        headers: { 'Accept': 'application/json' },
+      });
+      if (!response.ok) return;
+      const older = await response.json();
+      const olderMessages = Array.isArray(older) ? older : (Array.isArray(older.results) ? older.results : []);
+
+      if (olderMessages.length === 0) {
+        this.hasMoreOlderMessages = false;
+        return;
+      }
+
+      const prevScrollHeight = messagesList.scrollHeight;
+      const prevScrollTop = messagesList.scrollTop;
+
+      this.prependOldMessages(olderMessages);
+
+      // Сохранить позицию вьюпорта (не прыгать)
+      const newScrollHeight = messagesList.scrollHeight;
+      messagesList.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
+
+      this.earliestMessageTimestamp = olderMessages[0].created_at;
+      if (olderMessages.length < limit) {
+        this.hasMoreOlderMessages = false;
+      }
+    } catch (e) {
+      console.error('loadOlderMessages failed:', e);
+    } finally {
+      this.loadingOlderMessages = false;
+      if (loader) loader.classList.add('hidden');
+    }
+  }
+
+  prependOldMessages(messages) {
+    const messagesList = document.getElementById('messagesList');
+    if (!messagesList) return;
+    if (!messages || messages.length === 0) return;
+
+    // Дата первого разделителя (если он стоит самым верхним элементом)
+    const firstEl = messagesList.firstElementChild;
+    const topSeparatorDate = (firstEl && firstEl.getAttribute && firstEl.getAttribute('data-date-separator')) || null;
+
+    const beforeFragment = document.createDocumentFragment();
+    const sameTopDateFragment = document.createDocumentFragment();
+
+    const ensureSeparator = (fragment, dateLabel) => {
+      // для топовой даты разделитель уже есть в DOM
+      if (topSeparatorDate && dateLabel === topSeparatorDate && fragment === sameTopDateFragment) return;
+
+      // не добавляем второй разделитель подряд в одном фрагменте
+      const last = fragment.lastChild;
+      if (last && last.getAttribute && last.getAttribute('data-date-separator') === dateLabel) return;
+
+      const sep = document.createElement('div');
+      sep.className = 'text-center my-4';
+      sep.setAttribute('data-date-separator', dateLabel);
+      sep.innerHTML = `
+        <span class="inline-block px-3 py-1 rounded-full bg-brand-soft/40 text-xs text-brand-dark/70">
+          ${dateLabel}
+        </span>
+      `;
+      fragment.appendChild(sep);
+    };
+
+    messages.forEach(message => {
+      if (this.lastMessageIds.has(message.id)) return;
+
+      const dateLabel = new Date(message.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      const target = (topSeparatorDate && dateLabel === topSeparatorDate) ? sameTopDateFragment : beforeFragment;
+      ensureSeparator(target, dateLabel);
+
+      const wrap = document.createElement('div');
+      wrap.innerHTML = this.renderMessageHtml(message);
+      const el = wrap.firstElementChild;
+      target.appendChild(el);
+      this.lastMessageIds.add(message.id);
+    });
+
+    if (beforeFragment.childNodes.length > 0) {
+      messagesList.insertBefore(beforeFragment, messagesList.firstChild);
+    }
+
+    if (sameTopDateFragment.childNodes.length > 0 && topSeparatorDate) {
+      // вставляем сообщения этой же даты сразу после разделителя, который уже вверху списка
+      const topSep = messagesList.querySelector(`[data-date-separator="${topSeparatorDate}"]`);
+      if (topSep && topSep.parentElement === messagesList) {
+        messagesList.insertBefore(sameTopDateFragment, topSep.nextSibling);
+      } else {
+        messagesList.insertBefore(sameTopDateFragment, messagesList.firstChild);
+      }
     }
   }
 
