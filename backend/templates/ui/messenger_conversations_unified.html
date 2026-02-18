@@ -6,7 +6,9 @@
 <style>
   .messenger-unified-layout {
     display: flex;
-    height: calc(100vh - 180px);
+    /* Базовая высота по умолчанию; реальная высота подстраивается через JS от верхнего края до низа окна */
+    height: calc(100vh - 140px);
+    min-height: 520px;
     gap: 0;
     overflow: hidden;
     position: relative;
@@ -371,6 +373,27 @@
       {% endfor %}
     ],
   };
+
+  // Адаптивная высота: растягиваем трёхколоночный layout от верхней границы до низа окна,
+  // чтобы каждая колонка занимала всю доступную высоту и имела собственный скролл (как в Chatwoot).
+  function resizeMessengerLayout() {
+    var layout = document.querySelector('.messenger-unified-layout');
+    if (!layout) return;
+    var rect = layout.getBoundingClientRect();
+    var viewportHeight = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight || 0;
+    var targetHeight = viewportHeight - rect.top;
+    var minHeight = 520;
+    if (!isFinite(targetHeight) || targetHeight <= 0) {
+      targetHeight = minHeight;
+    }
+    if (targetHeight < minHeight) {
+      targetHeight = minHeight;
+    }
+    layout.style.height = targetHeight + 'px';
+  }
+
+  window.addEventListener('resize', resizeMessengerLayout);
+  document.addEventListener('DOMContentLoaded', resizeMessengerLayout);
 </script>
 
 <script src="{% static 'messenger/operator-panel.js' %}"></script>
