@@ -11,6 +11,13 @@ from . import models
 
 
 class ConversationSerializer(serializers.ModelSerializer):
+    contact_name = serializers.CharField(source="contact.name", read_only=True)
+    contact_email = serializers.CharField(source="contact.email", read_only=True)
+    contact_phone = serializers.CharField(source="contact.phone", read_only=True)
+    branch_name = serializers.CharField(source="branch.name", read_only=True)
+    region_name = serializers.CharField(source="region.name", read_only=True)
+    assignee_name = serializers.CharField(source="assignee.get_full_name", read_only=True)
+
     class Meta:
         model = models.Conversation
         fields = "__all__"
@@ -48,6 +55,9 @@ class MessageSerializer(serializers.ModelSerializer):
             fields = ("id", "file", "original_name", "content_type", "size", "created_at")
 
     attachments = MessageAttachmentSerializer(many=True, read_only=True)
+    sender_user_name = serializers.CharField(source="sender_user.get_full_name", read_only=True)
+    sender_user_username = serializers.CharField(source="sender_user.username", read_only=True)
+    sender_contact_name = serializers.CharField(source="sender_contact.name", read_only=True)
 
     class Meta:
         model = models.Message

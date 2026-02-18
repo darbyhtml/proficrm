@@ -9,6 +9,7 @@ class MessengerOperatorPanel {
     this.pollingIntervals = {};
     this.lastMessageTimestamp = null;
     this.selectedConversationId = null;
+    this.composeMode = 'OUT'; // OUT | INTERNAL
   }
 
   /**
@@ -110,7 +111,7 @@ class MessengerOperatorPanel {
     if (!contentArea) return;
 
     // Заголовок диалога
-    const contactName = conversation.contact?.name || conversation.contact?.email || conversation.contact?.phone || 'Без имени';
+    const contactName = conversation.contact_name || conversation.contact_email || conversation.contact_phone || 'Без имени';
     
     let html = `
       <div class="flex flex-col h-full overflow-hidden">
@@ -150,13 +151,14 @@ class MessengerOperatorPanel {
           `;
         }
 
-        const isOutgoing = message.direction === 'OUT' || message.direction === 'INTERNAL';
-        const senderName = isOutgoing 
-          ? (message.sender_user?.first_name || message.sender_user?.username || 'Оператор')
-          : (message.sender_contact?.name || 'Клиент');
+        const dir = (message.direction || '').toLowerCase();
+        const isOutgoing = dir === 'out' || dir === 'internal';
+        const senderName = isOutgoing
+          ? (message.sender_user_name || message.sender_user_username || 'Оператор')
+          : (message.sender_contact_name || 'Клиент');
         const avatarInitial = isOutgoing
-          ? (message.sender_user?.first_name?.[0] || message.sender_user?.username?.[0] || 'О').toUpperCase()
-          : (message.sender_contact?.name?.[0] || 'К').toUpperCase();
+          ? (senderName[0] || 'О').toUpperCase()
+          : (senderName[0] || 'К').toUpperCase();
         
         html += `
           <div class="flex gap-3 mb-4 ${isOutgoing ? 'flex-row-reverse' : 'flex-row'}">
@@ -188,6 +190,13 @@ class MessengerOperatorPanel {
     // Форма отправки сообщения
     html += `
       <div class="border-t border-brand-soft/60 p-3 bg-white flex-shrink-0">
+        <div class="flex items-center justify-between mb-2">
+          <div class="inline-flex rounded-xl border border-brand-soft/80 bg-white overflow-hidden">
+            <button type="button" id="composeModeOut" class="px-3 py-1.5 text-xs font-medium ${this.composeMode === 'OUT' ? 'bg-brand-teal text-white' : 'text-brand-dark/70 hover:bg-brand-soft/30'}">Ответить</button>
+            <button type="button" id="composeModeInternal" class="px-3 py-1.5 text-xs font-medium ${this.composeMode === 'INTERNAL' ? 'bg-brand-orange text-brand-dark' : 'text-brand-dark/70 hover:bg-brand-soft/30'}">Заметка</button>
+          </div>
+          <div class="text-[10px] text-brand-dark/40">Ctrl+Enter</div>
+        </div>
         <form id="messageForm" onsubmit="window.MessengerPanel.sendMessage(event)" enctype="multipart/form-data">
           <input type="hidden" name="conversation_id" value="${conversation.id}">
           <div class="flex items-end gap-2">
@@ -209,7 +218,7 @@ class MessengerOperatorPanel {
               </button>
             </div>
           </div>
-          <p class="text-[10px] text-brand-dark/40 mt-1.5 px-1">Ctrl+Enter — отправить • Макс. 5 МБ</p>
+          <p class="text-[10px] text-brand-dark/40 mt-1.5 px-1">Макс. 5 МБ на файл • изображения и PDF</p>
         </form>
       </div>
     `;
@@ -248,6 +257,22 @@ class MessengerOperatorPanel {
         }
       });
     }
+
+    // Переключение режима (Ответить/Заметка)
+    const btnOut = document.getElementById('composeModeOut');
+    const btnInternal = document.getElementById('composeModeInternal');
+    const applyModeUI = () => {
+      if (!btnOut || !btnInternal) return;
+      if (this.composeMode === 'OUT') {
+        btnOut.className = 'px-3 py-1.5 text-xs font-medium bg-brand-teal text-white';
+        btnInternal.className = 'px-3 py-1.5 text-xs font-medium text-brand-dark/70 hover:bg-brand-soft/30';
+      } else {
+        btnOut.className = 'px-3 py-1.5 text-xs font-medium text-brand-dark/70 hover:bg-brand-soft/30';
+        btnInternal.className = 'px-3 py-1.5 text-xs font-medium bg-brand-orange text-brand-dark';
+      }
+    };
+    if (btnOut) btnOut.addEventListener('click', () => { this.composeMode = 'OUT'; applyModeUI(); });
+    if (btnInternal) btnInternal.addEventListener('click', () => { this.composeMode = 'INTERNAL'; applyModeUI(); });
   }
 
   /**
@@ -257,10 +282,14 @@ class MessengerOperatorPanel {
     const infoArea = document.getElementById('conversationInfo');
     if (!infoArea) return;
 
-    const contactName = conversation.contact?.name || conversation.contact?.email || conversation.contact?.phone || 'Без имени';
-    const contactEmail = conversation.contact?.email || '';
-    const contactPhone = conversation.contact?.phone || '';
+    const contactName = conversation.contact_name || conversation.contact_email || conversation.contact_phone || 'Без имени';
+    const contactEmail = conversation.contact_email || '';
+    const contactPhone = conversation.contact_phone || '';
     
+    const ctx = window.MESSENGER_CONTEXT || {};
+    const assignees = Array.isArray(ctx.assignees) ? ctx.assignees : [];
+    const currentUserId = ctx.currentUserId;
+
     let html = `
       <div class="space-y-4">
         <div>
@@ -274,7 +303,7 @@ class MessengerOperatorPanel {
             </div>
             <div>
               <dt class="text-brand-dark/60">Филиал</dt>
-              <dd class="font-medium">${this.escapeHtml(conversation.branch?.name || '—')}</dd>
+                <dd class="font-medium">${this.escapeHtml(conversation.branch_name || '—')}</dd>
             </div>
             <div>
               <dt class="text-brand-dark/60">Создан</dt>
@@ -299,10 +328,100 @@ class MessengerOperatorPanel {
             </div>
           </dl>
         </div>
+        
+        <div class="card" style="box-shadow:none">
+          <div class="card-pad">
+            <h3 class="text-sm font-semibold mb-3">Действия</h3>
+            <div class="space-y-3">
+              <div class="flex gap-2">
+                <button type="button" class="btn btn-outline btn-sm flex-1" id="assignMeBtn">Назначить меня</button>
+                <button type="button" class="btn btn-outline btn-sm" id="closeConvBtn">Закрыть</button>
+              </div>
+              <div>
+                <label class="block text-xs text-brand-dark/70 mb-1">Статус</label>
+                <select class="select text-sm w-full" id="convStatusSelect">
+                  <option value="open" ${conversation.status === 'open' ? 'selected' : ''}>Открыт</option>
+                  <option value="pending" ${conversation.status === 'pending' ? 'selected' : ''}>В ожидании</option>
+                  <option value="resolved" ${conversation.status === 'resolved' ? 'selected' : ''}>Решён</option>
+                  <option value="closed" ${conversation.status === 'closed' ? 'selected' : ''}>Закрыт</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs text-brand-dark/70 mb-1">Оператор</label>
+                <select class="select text-sm w-full" id="convAssigneeSelect">
+                  <option value="">Не назначен</option>
+                ${assignees.map(a => `<option value="${a.id}" ${conversation.assignee === a.id ? 'selected' : ''}>${this.escapeHtml(a.name)}</option>`).join('')}
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs text-brand-dark/70 mb-1">Приоритет</label>
+                <select class="select text-sm w-full" id="convPrioritySelect">
+                  <option value="10" ${conversation.priority === 10 ? 'selected' : ''}>Низкий</option>
+                  <option value="20" ${conversation.priority === 20 ? 'selected' : ''}>Обычный</option>
+                  <option value="30" ${conversation.priority === 30 ? 'selected' : ''}>Высокий</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     `;
 
     infoArea.innerHTML = html;
+
+    const statusSelect = document.getElementById('convStatusSelect');
+    const assigneeSelect = document.getElementById('convAssigneeSelect');
+    const prioritySelect = document.getElementById('convPrioritySelect');
+    const assignMeBtn = document.getElementById('assignMeBtn');
+    const closeBtn = document.getElementById('closeConvBtn');
+
+    if (statusSelect) statusSelect.addEventListener('change', () => this.patchConversation(conversation.id, { status: statusSelect.value }));
+    if (prioritySelect) prioritySelect.addEventListener('change', () => this.patchConversation(conversation.id, { priority: parseInt(prioritySelect.value) }));
+    if (assigneeSelect) assigneeSelect.addEventListener('change', () => this.patchConversation(conversation.id, { assignee: assigneeSelect.value ? parseInt(assigneeSelect.value) : null }));
+    if (assignMeBtn) assignMeBtn.addEventListener('click', () => {
+      if (!currentUserId) return;
+      this.patchConversation(conversation.id, { assignee: currentUserId });
+    });
+    if (closeBtn) closeBtn.addEventListener('click', () => this.patchConversation(conversation.id, { status: 'closed' }));
+  }
+
+  async patchConversation(conversationId, payload) {
+    try {
+      const response = await fetch(`/api/messenger/conversations/${conversationId}/`, {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'X-CSRFToken': this.getCsrfToken(),
+        },
+        body: JSON.stringify(payload || {}),
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.detail || 'Ошибка сохранения');
+      }
+      const updated = await response.json();
+      // Перерисовать правую колонку (и заголовок диалога) актуальными значениями
+      await this.openConversation(conversationId, { force: true });
+      this.updateConversationCard(updated);
+    } catch (e) {
+      console.error('patchConversation failed:', e);
+      alert('Не удалось сохранить: ' + (e.message || e));
+    }
+  }
+
+  updateConversationCard(conversation) {
+    const card = document.querySelector(`.conversation-card[data-conversation-id="${conversation.id}"]`);
+    if (!card) return;
+    const avatar = card.querySelector('.conversation-avatar');
+    if (avatar) {
+      let bg = '#94a3b8';
+      if (conversation.status === 'open') bg = '#01948E';
+      else if (conversation.status === 'pending') bg = '#FDAD3A';
+      else if (conversation.status === 'resolved') bg = '#22c55e';
+      avatar.style.background = bg;
+    }
   }
 
   /**
@@ -330,7 +449,7 @@ class MessengerOperatorPanel {
     try {
       const formData = new FormData();
       formData.append('body', body);
-      formData.append('direction', 'OUT');
+      formData.append('direction', this.composeMode === 'INTERNAL' ? 'internal' : 'out');
       
       files.forEach(file => {
         formData.append('attachments', file);
@@ -350,7 +469,7 @@ class MessengerOperatorPanel {
         throw new Error(error.detail || 'Ошибка отправки сообщения');
       }
 
-      const message = await response.json();
+      await response.json();
       
       // Очистить форму
       form.querySelector('[name="body"]').value = '';

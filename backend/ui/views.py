@@ -11226,6 +11226,18 @@ def messenger_conversations_unified(request: HttpRequest) -> HttpResponse:
         qs = qs.annotate(unread_count=Count('id', filter=Q(id__isnull=True)))  # Всегда 0
     
     # Фильтры (аналогично messenger_conversation_list)
+    q = (request.GET.get("q") or "").strip()
+    if q:
+        # Поиск по контакту (имя/email/телефон) и по id диалога
+        q_digits = "".join([c for c in q if c.isdigit()])
+        q_obj = Q(contact__name__icontains=q) | Q(contact__email__icontains=q) | Q(contact__phone__icontains=q)
+        if q_digits:
+            try:
+                q_obj = q_obj | Q(id=int(q_digits))
+            except (ValueError, TypeError):
+                pass
+        qs = qs.filter(q_obj)
+
     status_filter = (request.GET.get("status") or "").strip()
     if status_filter:
         if "," in status_filter:
@@ -11318,6 +11330,7 @@ def messenger_conversations_unified(request: HttpRequest) -> HttpResponse:
         "ui/messenger_conversations_unified.html",
         {
             "page": page,
+            "q": q,
             "status_filter": status_filter,
             "branch_id": branch_id,
             "assignee_id": assignee_id,
@@ -11332,6 +11345,7 @@ def messenger_conversations_unified(request: HttpRequest) -> HttpResponse:
             "url_mine": url_mine,
             "selected_conversation": selected_conversation,
             "agent_status": agent_status,
+            "current_user_id": user.id,
         },
     )
 
