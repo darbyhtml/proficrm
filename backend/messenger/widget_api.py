@@ -47,6 +47,51 @@ from .automation import run_automation_for_incoming_message
 from .throttles import WidgetBootstrapThrottle, WidgetSendThrottle, WidgetPollThrottle
 
 
+def _add_widget_cors_headers(request, response: Response) -> Response:
+    """
+    Добавляет CORS‑заголовки для ответов Widget API.
+    Разрешаем origin, с которого пришёл запрос. Проверка домена выполняется
+    отдельно через enforce_widget_origin_allowed.
+    """
+    origin = (request.META.get("HTTP_ORIGIN") or "").strip()
+    if origin:
+        response["Access-Control-Allow-Origin"] = origin
+        existing_vary = response.get("Vary")
+        if existing_vary:
+            if "Origin" not in existing_vary:
+                response["Vary"] = existing_vary + ", Origin"
+        else:
+            response["Vary"] = "Origin"
+    # Базовые заголовки для fetch() из браузера
+    response["Access-Control-Allow-Credentials"] = "true"
+    response["Access-Control-Allow-Headers"] = "Content-Type"
+    response["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return response
+
+
+def _mark_out_messages_delivered(messages: list[models.Message]) -> None:
+    """
+    Пометить исходящие сообщения (OUT) как доставленные, если у них ещё нет delivered_at.
+    Обновляет и в БД, и в переданном списке messages.
+    """
+    if not messages:
+        return
+    undelivered_out_ids = [
+        msg.id
+        for msg in messages
+        if msg.direction == models.Message.Direction.OUT and msg.delivered_at is None
+    ]
+    if not undelivered_out_ids:
+        return
+    now = django_timezone.now()
+    models.Message.objects.filter(id__in=undelivered_out_ids, delivered_at__isnull=True).update(
+        delivered_at=now
+    )
+    for msg in messages:
+        if msg.id in undelivered_out_ids:
+            msg.delivered_at = now
+
+
 class WidgetApiMixin:
     """
     Миксин для проверки feature-флага в widget API endpoints.
@@ -57,7 +102,7 @@ class WidgetApiMixin:
         return super().dispatch(*args, **kwargs)
 
 
-@api_view(["POST"])
+@api_view(["POST", "OPTIONS"])
 @permission_classes([AllowAny])
 @throttle_classes([WidgetBootstrapThrottle])
 def widget_bootstrap(request):
@@ -66,6 +111,12 @@ def widget_bootstrap(request):
 
     Создаёт или находит диалог для посетителя и возвращает widget_session_token.
     """
+
+    # CORS preflight
+    if request.method == "OPTIONS":
+        preflight_resp = Response(status=status.HTTP_200_OK)
+        return _add_widget_cors_headers(request, preflight_resp)
+
     ensure_messenger_enabled_api()
 
     widget_token = None
@@ -91,10 +142,11 @@ def widget_bootstrap(request):
                 "Bootstrap failed: invalid widget_token or inactive inbox",
                 widget_token=widget_token,
             )
-            return Response(
+            resp = Response(
                 {"detail": "Invalid widget_token or inbox is inactive."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+            return _add_widget_cors_headers(request, resp)
 
         enforce_widget_origin_allowed(request, inbox)
 
@@ -168,10 +220,11 @@ def widget_bootstrap(request):
                         widget_token=widget_token,
                         inbox_id=inbox.id,
                     )
-                    return Response(
+                    resp = Response(
                         {"detail": "Service temporarily unavailable. Please try again later."},
                         status=status.HTTP_503_SERVICE_UNAVAILABLE,
                     )
+                    return _add_widget_cors_headers(request, resp)
 
             # Создаём новый диалог (branch задаётся явно для глобального inbox)
             conversation = models.Conversation(
@@ -232,21 +285,7 @@ def widget_bootstrap(request):
         messages = list(messages_qs[:10])
 
         # Помечаем исходящие сообщения как доставленные при первой выдаче в виджет
-        if messages:
-            undelivered_out_ids = [
-                msg.id
-                for msg in messages
-                if msg.direction == models.Message.Direction.OUT and msg.delivered_at is None
-            ]
-            if undelivered_out_ids:
-                now = django_timezone.now()
-                models.Message.objects.filter(
-                    id__in=undelivered_out_ids, delivered_at__isnull=True
-                ).update(delivered_at=now)
-                for msg in messages:
-                    if msg.id in undelivered_out_ids:
-                        msg.delivered_at = now
-
+        _mark_out_messages_delivered(messages)
         # Отдаём сообщения в хронологическом порядке
         for msg in reversed(messages):
             payload = {
@@ -304,7 +343,8 @@ def widget_bootstrap(request):
 
         response_serializer = serializers.WidgetBootstrapResponseSerializer(response_data)
 
-        return Response(response_serializer.data, status=status.HTTP_200_OK)
+        resp = Response(response_serializer.data, status=status.HTTP_200_OK)
+        return _add_widget_cors_headers(request, resp)
     
     except Throttled as e:
         # Превышен лимит запросов
@@ -338,10 +378,11 @@ def widget_bootstrap(request):
             widget_token=widget_token,
             error=e,
         )
-        return Response(
+        resp = Response(
             {"detail": "Internal server error. Please try again later."},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
+        return _add_widget_cors_headers(request, resp)
 
 
 def _parse_widget_send_input(request):
@@ -769,16 +810,7 @@ def widget_poll(request):
         messages = list(messages_qs[:50])  # Лимит 50 сообщений за запрос
 
         # Помечаем исходящие сообщения как доставленные при первой выдаче в виджет
-        if messages:
-            undelivered_out_ids = [msg.id for msg in messages if msg.delivered_at is None]
-            if undelivered_out_ids:
-                now = django_timezone.now()
-                models.Message.objects.filter(
-                    id__in=undelivered_out_ids, delivered_at__isnull=True
-                ).update(delivered_at=now)
-                for msg in messages:
-                    if msg.id in undelivered_out_ids:
-                        msg.delivered_at = now
+        _mark_out_messages_delivered(messages)
 
         result = []
         for msg in messages:
@@ -935,16 +967,7 @@ def widget_stream(request):
             msgs = list(msgs_qs)
 
             # Помечаем исходящие сообщения как доставленные при первой выдаче в виджет
-            if msgs:
-                undelivered_out_ids = [m.id for m in msgs if m.delivered_at is None]
-                if undelivered_out_ids:
-                    now_dt = django_timezone.now()
-                    models.Message.objects.filter(
-                        id__in=undelivered_out_ids, delivered_at__isnull=True
-                    ).update(delivered_at=now_dt)
-                    for m in msgs:
-                        if m.id in undelivered_out_ids:
-                            m.delivered_at = now_dt
+            _mark_out_messages_delivered(msgs)
 
             messages_payload = []
             max_id = last_id
