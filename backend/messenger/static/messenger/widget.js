@@ -1340,6 +1340,10 @@
   if (scriptTag) {
     const widgetToken = scriptTag.getAttribute('data-widget-token');
     if (widgetToken) {
+      const apiBaseUrl = scriptTag.getAttribute('data-api-base-url') || scriptTag.getAttribute('data-api-base') || '';
+      if (apiBaseUrl) {
+        CONFIG.API_BASE_URL = String(apiBaseUrl).replace(/\/+$/, '');
+      }
       const widget = new MessengerWidget(widgetToken);
       widgetInstance = widget;
       widget.init();

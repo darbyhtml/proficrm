@@ -24,6 +24,7 @@
     console.warn('[MessengerWidgetLoader] data-widget-token is required');
     return;
   }
+  var apiBaseUrl = scriptTag.getAttribute('data-api-base-url') || scriptTag.getAttribute('data-api-base') || '';
   var loadAfter = parseInt(scriptTag.getAttribute('data-load-after'), 10);
   var loadOnScroll = scriptTag.getAttribute('data-load-on-scroll');
   var loadOnScrollEnabled = loadOnScroll === '1' || loadOnScroll === 'true' || loadOnScroll === 'yes';
@@ -44,6 +45,9 @@
     var s = document.createElement('script');
     s.src = baseUrl + '/widget.js';
     s.setAttribute('data-widget-token', token);
+    if (apiBaseUrl) {
+      s.setAttribute('data-api-base-url', apiBaseUrl);
+    }
     s.async = true;
     document.body.appendChild(s);
   }
