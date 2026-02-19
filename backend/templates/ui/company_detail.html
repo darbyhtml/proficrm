@@ -6566,6 +6566,165 @@
       let isDragging = false;
       let dragOffset = { x: 0, y: 0 };
 
+      function enhanceContactForm() {
+        const root = body.querySelector('[data-contact-form-root]');
+        if (!root) return;
+
+        const EMAIL_TYPE_GROUPS = {
+          work: ['work'],
+          personal: ['personal'],
+          other: ['other'],
+        };
+        const PHONE_TYPE_GROUPS = {
+          work: ['work', 'work_direct', 'fax'],
+          personal: ['mobile', 'home'],
+          other: ['other'],
+        };
+
+        function getValueInput(row, prefix) {
+          return row.querySelector(`input[name^="${prefix}-"][name$="-value"]`);
+        }
+
+        function getIdInput(row, prefix) {
+          return row.querySelector(`input[type="hidden"][name^="${prefix}-"][name$="-id"]`);
+        }
+
+        function getDeleteInput(row, prefix) {
+          return row.querySelector(`input[type="checkbox"][name^="${prefix}-"][name$="-DELETE"]`);
+        }
+
+        function isRowEmpty(row, prefix) {
+          const valueInput = getValueInput(row, prefix);
+          const idInput = getIdInput(row, prefix);
+          const hasErrors = !!row.querySelector('.text-brand-orange');
+          const hasValue = valueInput && valueInput.value.trim() !== '';
+          const hasId = idInput && idInput.value;
+          return !hasErrors && !hasValue && !hasId;
+        }
+
+        function setupTypeToggle(row, kind) {
+          const toggleRoot = row.querySelector('[data-type-toggle]');
+          if (!toggleRoot) return;
+          const select = row.querySelector('select');
+          if (!select) return;
+          const cfg = kind === 'email' ? EMAIL_TYPE_GROUPS : PHONE_TYPE_GROUPS;
+          const buttons = Array.from(toggleRoot.querySelectorAll('[data-type-group]'));
+
+          function applyActive() {
+            buttons.forEach(btn => {
+              const group = btn.dataset.typeGroup;
+              const values = cfg[group] || [];
+              if (values.includes(select.value)) {
+                btn.classList.add('bg-brand-soft', 'border-brand-teal', 'text-brand-dark');
+                btn.classList.remove('border-transparent');
+              } else {
+                btn.classList.remove('bg-brand-soft', 'border-brand-teal', 'text-brand-dark');
+                btn.classList.add('border-transparent');
+              }
+            });
+          }
+
+          buttons.forEach(btn => {
+            btn.addEventListener('click', () => {
+              const group = btn.dataset.typeGroup;
+              const values = cfg[group] || [];
+              if (!values.length) return;
+              if (values.includes(select.value)) {
+                applyActive();
+                return;
+              }
+              const optionValues = Array.from(select.options).map(o => o.value);
+              const target = values.find(v => optionValues.includes(v));
+              if (!target) return;
+              select.value = target;
+              applyActive();
+            });
+          });
+
+          applyActive();
+        }
+
+        function initRow(row, prefix, kind) {
+          // Скрываем пустые строки
+          if (isRowEmpty(row, prefix)) {
+            row.classList.add('hidden');
+          } else {
+            row.classList.remove('hidden');
+          }
+
+          const delBtn = row.querySelector('[data-row-delete]');
+          if (delBtn) {
+            delBtn.addEventListener('click', () => {
+              const valueInput = getValueInput(row, prefix);
+              const idInput = getIdInput(row, prefix);
+              const delInput = getDeleteInput(row, prefix);
+              const hasId = idInput && idInput.value;
+              const hasValue = valueInput && valueInput.value.trim() !== '';
+              const msg = hasId || hasValue ? 'Действительно хотите удалить?' : 'Удалить строку?';
+              if (!window.confirm(msg)) return;
+
+              if (hasId && delInput) {
+                delInput.checked = true;
+                row.classList.add('hidden');
+              } else if (valueInput) {
+                valueInput.value = '';
+                row.classList.add('hidden');
+              } else {
+                row.classList.add('hidden');
+              }
+            });
+          }
+
+          if (kind === 'email' || kind === 'phone') {
+            setupTypeToggle(row, kind);
+          }
+        }
+
+        function setupFormset(prefix, kind) {
+          const container = root.querySelector(`[data-${prefix}-container]`);
+          if (!container) return;
+
+          const rows = Array.from(container.querySelectorAll(`[data-form-row="${prefix}"]`));
+          rows.forEach(row => initRow(row, prefix, kind));
+
+          const addBtn = root.querySelector(`[data-${prefix}-add]`);
+          if (addBtn) {
+            addBtn.addEventListener('click', () => {
+              const currentRows = Array.from(container.querySelectorAll(`[data-form-row="${prefix}"]`));
+              const emptyRow = currentRows.find(r => isRowEmpty(r, prefix) || r.classList.contains('hidden'));
+              if (!emptyRow) {
+                if (window.uiToast) {
+                  window.uiToast(prefix === 'emails' ? 'Больше полей для email не осталось' : 'Больше полей для телефонов не осталось', 'info');
+                }
+                return;
+              }
+              emptyRow.classList.remove('hidden');
+              const valueInput = getValueInput(emptyRow, prefix);
+              const delInput = getDeleteInput(emptyRow, prefix);
+              if (valueInput) valueInput.value = '';
+              if (delInput) delInput.checked = false;
+              const select = emptyRow.querySelector('select');
+              if (select && select.options.length) {
+                // Сбрасываем тип к первому варианту, если это новая строка
+                const idInput = getIdInput(emptyRow, prefix);
+                if (!idInput || !idInput.value) {
+                  select.value = select.options[0].value;
+                }
+              }
+              if (kind === 'email' || kind === 'phone') {
+                setupTypeToggle(emptyRow, kind);
+              }
+              if (valueInput) {
+                setTimeout(() => valueInput.focus(), 10);
+              }
+            });
+          }
+        }
+
+        setupFormset('emails', 'email');
+        setupFormset('phones', 'phone');
+      }
+
       function openPanel() {
         panel.classList.remove('hidden');
       }
@@ -6621,6 +6780,7 @@
         const html = await res.text();
         body.innerHTML = html;
         openPanel();
+        enhanceContactForm();
         const firstInput = panel.querySelector("input");
         if (firstInput) {
           setTimeout(() => firstInput.focus(), 50);
@@ -6661,6 +6821,7 @@
             }
             if (data.html) {
               body.innerHTML = data.html;
+              enhanceContactForm();
               return;
             }
             throw new Error(data.error || 'Ошибка сохранения');
@@ -6678,6 +6839,7 @@
           
           // Иначе показываем HTML в панели (ошибка валидации)
           body.innerHTML = html;
+          enhanceContactForm();
           
         } catch (error) {
           console.error('Ошибка при сохранении контакта:', error);

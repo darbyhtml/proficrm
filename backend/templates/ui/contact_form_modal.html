@@ -1,5 +1,5 @@
 {# Немодальная панель для создания/редактирования контакта (без перекрытия страницы) #}
-<div class="space-y-3">
+<div class="space-y-3" data-contact-form-root>
   <div class="flex items-start justify-between gap-3">
     <div>
       <div class="text-xs text-brand-dark/70">
@@ -48,60 +48,129 @@
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {# Email #}
       <section>
-        <div class="font-medium mb-2">Email</div>
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <div class="font-medium">Email</div>
+          <button
+            type="button"
+            class="btn btn-outline btn-xs"
+            data-emails-add
+          >
+            + Добавить email
+          </button>
+        </div>
         {{ email_fs.management_form }}
         {% if email_fs.non_form_errors %}
           <div class="rounded-lg border border-brand-orange/60 bg-brand-orange/20 p-3 text-sm text-brand-dark mb-2">
             {{ email_fs.non_form_errors }}
           </div>
         {% endif %}
-        <div class="space-y-2">
+        <div class="space-y-2" data-emails-container>
           {% for f in email_fs %}
-            <div class="grid grid-cols-12 gap-2 items-end">
+            {# Один логический ряд email. Все управляющие поля оставляем, но чекбокс DELETE прячем и управляем через иконку. #}
+            <div
+              class="rounded-xl border border-brand-soft bg-brand-soft/10 px-3 py-2 space-y-1"
+              data-form-row="emails"
+            >
               {{ f.id }}
-              <div class="col-span-4">
-                <label class="block text-xs text-brand-dark/70 mb-1">Тип</label>
-                {{ f.type }}
-              </div>
-              <div class="col-span-7">
-                <label class="block text-xs text-brand-dark/70 mb-1">Email</label>
-                {{ f.value }}
-                {% if f.errors %}<div class="text-xs text-brand-orange">{{ f.errors }}</div>{% endif %}
-              </div>
-              <div class="col-span-1">
-                <label class="block text-xs text-brand-dark/70 mb-1">Удал.</label>
+              <div class="hidden">
                 {{ f.DELETE }}
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex flex-wrap gap-1 text-[11px]" data-type-toggle="email">
+                  <button type="button" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-transparent text-xs text-brand-dark/70 bg-transparent hover:bg-brand-soft/70" data-type-group="work">
+                    <span>🏢</span><span class="hidden sm:inline">Рабочий</span>
+                  </button>
+                  <button type="button" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-transparent text-xs text-brand-dark/70 bg-transparent hover:bg-brand-soft/70" data-type-group="personal">
+                    <span>👤</span><span class="hidden sm:inline">Личный</span>
+                  </button>
+                  <button type="button" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-transparent text-xs text-brand-dark/70 bg-transparent hover:bg-brand-soft/70" data-type-group="other">
+                    <span>⋯</span><span class="hidden sm:inline">Другое</span>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center w-7 h-7 rounded-full border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+                  title="Удалить email"
+                  aria-label="Удалить email"
+                  data-row-delete
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M6 7h12M10 11v6M14 11v6M9 7l1-3h4l1 3M19 7l-1 12H6L5 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+              <div>
+                <label class="block text-xs text-brand-dark/70 mb-1">Email</label>
+                <div class="hidden">
+                  {{ f.type }}
+                </div>
+                {{ f.value }}
+                {% if f.errors %}<div class="text-xs text-brand-orange mt-0.5">{{ f.errors }}</div>{% endif %}
               </div>
             </div>
           {% endfor %}
         </div>
       </section>
 
+      {# Телефоны #}
       <section>
-        <div class="font-medium mb-2">Телефоны</div>
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <div class="font-medium">Телефоны</div>
+          <button
+            type="button"
+            class="btn btn-outline btn-xs"
+            data-phones-add
+          >
+            + Добавить телефон
+          </button>
+        </div>
         {{ phone_fs.management_form }}
         {% if phone_fs.non_form_errors %}
           <div class="rounded-lg border border-brand-orange/60 bg-brand-orange/20 p-3 text-sm text-brand-dark mb-2">
             {{ phone_fs.non_form_errors }}
           </div>
         {% endif %}
-        <div class="space-y-2">
+        <div class="space-y-2" data-phones-container>
           {% for f in phone_fs %}
-            <div class="grid grid-cols-12 gap-2 items-end">
+            <div
+              class="rounded-xl border border-brand-soft bg-brand-soft/10 px-3 py-2 space-y-1"
+              data-form-row="phones"
+            >
               {{ f.id }}
-              <div class="col-span-4">
-                <label class="block text-xs text-brand-dark/70 mb-1">Тип</label>
-                {{ f.type }}
-              </div>
-              <div class="col-span-7">
-                <label class="block text-xs text-brand-dark/70 mb-1">Телефон</label>
-                {{ f.value }}
-                {% if f.errors %}<div class="text-xs text-brand-orange">{{ f.errors }}</div>{% endif %}
-              </div>
-              <div class="col-span-1">
-                <label class="block text-xs text-brand-dark/70 mb-1">Удал.</label>
+              <div class="hidden">
                 {{ f.DELETE }}
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                <div class="flex flex-wrap gap-1 text-[11px]" data-type-toggle="phone">
+                  <button type="button" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-transparent text-xs text-brand-dark/70 bg-transparent hover:bg-brand-soft/70" data-type-group="work">
+                    <span>🏢</span><span class="hidden sm:inline">Рабочий</span>
+                  </button>
+                  <button type="button" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-transparent text-xs text-brand-dark/70 bg-transparent hover:bg-brand-soft/70" data-type-group="personal">
+                    <span>📱</span><span class="hidden sm:inline">Личный</span>
+                  </button>
+                  <button type="button" class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-transparent text-xs text-brand-dark/70 bg-transparent hover:bg-brand-soft/70" data-type-group="other">
+                    <span>⋯</span><span class="hidden sm:inline">Другое</span>
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  class="inline-flex items-center justify-center w-7 h-7 rounded-full border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+                  title="Удалить телефон"
+                  aria-label="Удалить телефон"
+                  data-row-delete
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M6 7h12M10 11v6M14 11v6M9 7l1-3h4l1 3M19 7l-1 12H6L5 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+              <div>
+                <label class="block text-xs text-brand-dark/70 mb-1">Телефон</label>
+                {{ f.type }}
+                {{ f.value }}
+                {% if f.errors %}<div class="text-xs text-brand-orange mt-0.5">{{ f.errors }}</div>{% endif %}
               </div>
             </div>
           {% endfor %}
