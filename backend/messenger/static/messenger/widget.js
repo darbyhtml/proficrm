@@ -40,7 +40,11 @@
       this.sessionToken = null;
       this.sinceId = null;
       this.contactId = null;
-      this.pollInterval = null;
+      this.pollInterval = null; // legacy name; now we use pollTimer (setTimeout)
+      this.pollTimer = null;
+      this.pollInFlight = false;
+      this.pollBackoffMs = 0;
+      this.lastPoll429LogAt = 0;
       this.eventSource = null;
       this.isOpen = false;
       this.isSending = false;
@@ -424,10 +428,14 @@
      */
     async poll() {
       if (!this.sessionToken) {
-        return;
+        return { ok: false, status: 0 };
+      }
+      if (this.pollInFlight) {
+        return { ok: false, status: 0 };
       }
 
       try {
+        this.pollInFlight = true;
         const params = new URLSearchParams({
           widget_token: this.widgetToken,
           widget_session_token: this.sessionToken,
@@ -452,7 +460,7 @@
             // Повторить poll после re-bootstrap
             setTimeout(() => this.poll(), 100);
           }
-          return;
+          return { ok: false, status: 401 };
         }
 
         if (response.status === 403) {
@@ -462,12 +470,20 @@
           this.stopPolling();
           this.stopRealtime();
           await this.bootstrap();
-          return;
+          return { ok: false, status: 403 };
         }
 
         if (!response.ok) {
+          if (response.status === 429) {
+            const now = Date.now();
+            if (!this.lastPoll429LogAt || now - this.lastPoll429LogAt > 60000) {
+              this.lastPoll429LogAt = now;
+              console.warn('[MessengerWidget] Poll throttled (429). Backing off.');
+            }
+            return { ok: false, status: 429 };
+          }
           console.error('[MessengerWidget] Poll failed:', response.status, response.statusText);
-          return;
+          return { ok: false, status: response.status };
         }
 
         const data = await response.json();
@@ -510,8 +526,12 @@
 
           this.scheduleMarkOutgoingRead();
         }
+        return { ok: true, status: 200 };
       } catch (error) {
         console.error('[MessengerWidget] Poll error:', error);
+        return { ok: false, status: 0 };
+      } finally {
+        this.pollInFlight = false;
       }
     }
 
@@ -519,18 +539,37 @@
      * Начать polling
      */
     startPolling() {
-      if (this.pollInterval) {
+      if (this.pollTimer || this.pollInterval) {
         return; // Уже запущен
       }
       if (!this.sessionToken) {
         return; // Нет сессии
       }
-      // Первый poll сразу
-      this.poll();
-      // Затем каждые 3 секунды
-      this.pollInterval = setInterval(() => {
-        this.poll();
-      }, CONFIG.POLL_INTERVAL);
+      const tick = async () => {
+        if (!this.sessionToken) {
+          this.stopPolling();
+          return;
+        }
+        const res = await this.poll();
+
+        // Backoff при 429/сетевых ошибках, чтобы не спамить запросами и консолью
+        if (res && res.status === 429) {
+          this.pollBackoffMs = Math.min(Math.max(this.pollBackoffMs * 2, 10000), 60000);
+        } else if (!res || res.status === 0) {
+          this.pollBackoffMs = Math.min(Math.max(this.pollBackoffMs * 2, 5000), 30000);
+        } else {
+          this.pollBackoffMs = 0;
+        }
+
+        const delay = this.pollBackoffMs || CONFIG.POLL_INTERVAL;
+        this.pollTimer = setTimeout(() => {
+          this.pollTimer = null;
+          tick();
+        }, delay);
+      };
+
+      // Запустить цикл (первый poll сразу)
+      tick();
     }
 
     /**
@@ -541,6 +580,11 @@
         clearInterval(this.pollInterval);
         this.pollInterval = null;
       }
+      if (this.pollTimer) {
+        clearTimeout(this.pollTimer);
+        this.pollTimer = null;
+      }
+      this.pollBackoffMs = 0;
     }
 
     startRealtime() {
