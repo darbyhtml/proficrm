@@ -46,6 +46,9 @@
       this.pollBackoffMs = 0;
       this.lastPoll429LogAt = 0;
       this.eventSource = null;
+      this.sseReconnectDelayMs = 1000;  // Начальная задержка переподключения SSE
+      this.sseReconnectTimer = null;
+      this.sseReconnectAttempts = 0;
       this.isOpen = false;
       this.isSending = false;
       this.receivedMessageIds = new Set(); // Anti-duplicate: Set для отслеживания полученных сообщений
@@ -591,6 +594,10 @@
       if (this.eventSource) return true;
       if (!this.sessionToken) return false;
       if (typeof EventSource === 'undefined') return false;
+      
+      // Сбросить счётчик попыток при успешном старте
+      this.sseReconnectAttempts = 0;
+      this.sseReconnectDelayMs = 1000;
 
       const params = new URLSearchParams({
         widget_token: this.widgetToken,
@@ -642,9 +649,33 @@
         });
 
         es.onerror = () => {
-          // SSE недоступен/оборван — fallback на poll
+          // SSE ошибка: попробуем переподключиться с экспоненциальным backoff
           this.stopRealtime();
-          this.startPolling();
+          
+          // Если слишком много попыток — fallback на poll
+          if (this.sseReconnectAttempts >= 5) {
+            console.warn('[MessengerWidget] SSE failed after 5 attempts, falling back to poll');
+            this.sseReconnectAttempts = 0;
+            this.sseReconnectDelayMs = 1000;
+            this.startPolling();
+            return;
+          }
+          
+          // Экспоненциальный backoff: 1s, 2s, 4s, 8s, 16s
+          this.sseReconnectAttempts++;
+          const delay = Math.min(this.sseReconnectDelayMs, 16000);
+          this.sseReconnectDelayMs *= 2;
+          
+          this.sseReconnectTimer = setTimeout(() => {
+            this.sseReconnectTimer = null;
+            // Попробовать переподключиться к SSE
+            if (this.sessionToken && !this.eventSource) {
+              this.startRealtime();
+            } else {
+              // Если не получилось — fallback на poll
+              this.startPolling();
+            }
+          }, delay);
         };
         return true;
       } catch (e) {
@@ -657,6 +688,10 @@
       if (this.eventSource) {
         try { this.eventSource.close(); } catch (e) {}
         this.eventSource = null;
+      }
+      if (this.sseReconnectTimer) {
+        clearTimeout(this.sseReconnectTimer);
+        this.sseReconnectTimer = null;
       }
     }
 
