@@ -137,8 +137,16 @@
     .note-attachments-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.5rem; }
     .note-attachments-header .note-attachment-card { cursor: default; }
 
-    /* Более компактное крепление файлов в классическом виде (как в мессенджерах) */
-    #companyDetailClassic #noteAddFilesZone,
+    /* Классический вид: бар заметок с рамкой и фоном (глобальные стили выше сбрасывают их) */
+    #companyDetailClassic .note-input-bar.note-files-zone {
+      border: 1px solid rgba(194, 226, 222, 0.8);
+      padding: 0.5rem 0.75rem;
+      background: #fff;
+    }
+    #companyDetailClassic .note-input-bar.note-files-zone.has-files {
+      background: rgba(194, 226, 222, 0.12);
+    }
+    /* В модалке редактирования заметки — без рамки */
     #companyDetailClassic #noteEditModal .note-files-zone {
       border: none;
       padding: 0.25rem 0 0;
@@ -1609,29 +1617,24 @@
       <section class="card card-pad">
         <div class="font-medium mb-3">Заметки</div>
         {% if can_edit_company %}
-          <form class="space-y-3" method="post" action="/companies/{{ company.id }}/notes/add/" enctype="multipart/form-data" id="noteForm" data-company-id="{{ company.id }}" data-user-id="{{ request.user.id }}">
+          <form class="space-y-2" method="post" action="/companies/{{ company.id }}/notes/add/" enctype="multipart/form-data" id="noteForm" data-company-id="{{ company.id }}" data-user-id="{{ request.user.id }}">
             {% csrf_token %}
-            <div>
-              <label class="block text-xs font-medium text-brand-dark/70 mb-1">Текст заметки</label>
-              {{ note_form.text }}
-            </div>
-            <div class="note-files-zone rounded-xl p-4" id="noteAddFilesZone">
-              <input id="noteFile" type="file" name="attachment" class="hidden" />
-              <input id="noteFilesMultiple" type="file" name="attachments" multiple class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv" />
-              <div class="flex items-center gap-2 text-xs text-brand-dark/70">
-                <label class="inline-flex items-center justify-center p-2 rounded-full bg-white border border-brand-soft/80 text-brand-dark/80 hover:bg-brand-soft/30 cursor-pointer transition-colors" for="noteFilesMultiple" id="noteAttachMultipleLabel" title="Прикрепить файлы">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M7 7l7.5-7.5a3.536 3.536 0 115 5L10 14a2 2 0 11-3-3l6.5-6.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  <span class="sr-only">Прикрепить файлы</span>
-                </label>
-                <span class="text-xs text-brand-dark/60" id="noteAddFilesSummary"></span>
-                <button type="button" class="text-[11px] text-brand-teal hover:underline hidden" id="noteAddFilesRemoveAll" title="Удалить все">Очистить</button>
+            <input id="noteFile" type="file" name="attachment" class="hidden" />
+            <input id="noteFilesMultiple" type="file" name="attachments" multiple class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv" />
+            <span id="noteAddFilesSummary" class="sr-only" aria-hidden="true"></span>
+            <button type="button" class="hidden" id="noteAddFilesRemoveAll" title="Удалить все">Очистить</button>
+            <div class="note-input-bar note-files-zone flex items-end gap-2 rounded-xl border border-brand-soft bg-white px-3 py-2 min-h-[52px]" id="noteAddFilesZone">
+              <label for="noteFilesMultiple" id="noteAttachMultipleLabel" class="flex-shrink-0 p-2 rounded-lg text-[#64748b] hover:text-brand-teal hover:bg-black/5 cursor-pointer transition-colors" title="Прикрепить файлы" aria-label="Прикрепить файлы">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+              </label>
+              <div class="flex-1 min-w-0">
+                {{ note_form.text }}
               </div>
-              <div id="noteAddFileChips" class="note-attachment-cards mt-3"></div>
-              <p class="text-xs text-brand-dark/50 mt-2">PDF, DOC, XLS, изображения и др. До 15 МБ. Можно выбрать несколько.</p>
+              <button type="submit" class="flex-shrink-0 p-2 rounded-lg bg-[#01948E] text-white hover:bg-[#017a75] transition-colors" title="Отправить (Ctrl+Enter)" aria-label="Отправить">
+                <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+              </button>
             </div>
-            <div class="flex gap-2">
-              <button class="btn btn-primary" type="submit">Добавить заметку</button>
-            </div>
+            <div id="noteAddFileChips" class="note-attachment-cards flex flex-wrap gap-2 mt-2"></div>
           </form>
         {% else %}
           <div class="text-sm text-brand-dark/70">Нет прав на добавление заметок по этой компании.</div>
@@ -2997,6 +3000,14 @@
         window.addEventListener('beforeunload', () => {
           const v = textarea.value || '';
           if (normalize(v)) setDraft(v);
+        });
+
+        // Ctrl+Enter / Cmd+Enter — отправить заметку
+        textarea.addEventListener('keydown', function(e) {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            if (typeof form.requestSubmit === 'function') form.requestSubmit(); else form.submit();
+          }
         });
 
         // После успешной отправки заметки очищаем черновик,
