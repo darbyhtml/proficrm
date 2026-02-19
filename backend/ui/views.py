@@ -11874,6 +11874,38 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
                 messages.error(request, "Ошибка при обновлении токена. Попробуйте ещё раз.")
                 return redirect("settings_messenger_inbox_edit", inbox_id=inbox.id)
         
+        if action == "delete_inbox" and inbox:
+            # Безопасное удаление Inbox: не даём удалить, если есть связанные диалоги.
+            from django.db.models import Exists, OuterRef
+
+            has_conversations = Conversation.objects.filter(inbox_id=inbox.id).exists()
+            if has_conversations:
+                messages.error(
+                    request,
+                    "Нельзя удалить Inbox: к нему привязаны диалоги. "
+                    "Сначала закройте или перенесите диалоги в другие Inbox'ы.",
+                )
+                return redirect("settings_messenger_inbox_edit", inbox_id=inbox.id)
+
+            try:
+                inbox_id_for_log = inbox.id
+                inbox_name_for_log = inbox.name
+                inbox.delete()
+                ui_logger.info(
+                    "Inbox deleted",
+                    extra={"inbox_id": inbox_id_for_log, "inbox_name": inbox_name_for_log},
+                )
+                messages.success(request, "Inbox удалён.")
+                return redirect("settings_messenger_overview")
+            except Exception:
+                ui_logger.error(
+                    "Failed to delete inbox",
+                    extra={"inbox_id": inbox.id if inbox else None},
+                    exc_info=True,
+                )
+                messages.error(request, "Ошибка при удалении Inbox. Попробуйте ещё раз.")
+                return redirect("settings_messenger_inbox_edit", inbox_id=inbox.id)
+        
         # Обработка формы редактирования
         try:
             name = request.POST.get("name", "").strip()

@@ -114,6 +114,24 @@
         </div>
       {% endif %}
 
+      {% if inbox %}
+      <div class="mt-8">
+        <div class="card border border-red-200 bg-red-50">
+          <div class="card-pad space-y-3">
+            <h2 class="text-lg font-semibold text-red-700">Опасная зона</h2>
+            <p class="text-sm text-red-800/80">
+              Удаление Inbox необратимо. Нельзя удалить Inbox, к которому уже привязаны диалоги.
+            </p>
+            <form method="post" onsubmit="return confirm('Вы уверены, что хотите удалить этот Inbox? Это действие нельзя будет отменить.');">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="delete_inbox">
+              <button type="submit" class="btn btn-danger">Удалить этот Inbox</button>
+            </form>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+
       <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
 
       <div class="card">
