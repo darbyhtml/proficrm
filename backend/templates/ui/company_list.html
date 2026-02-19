@@ -30,14 +30,20 @@
     <form class="card card-pad space-y-4" method="get" id="companyFilterForm" data-user-id="{{ request.user.id }}">
       <div>
         <label class="block text-sm text-brand-dark/80 mb-1">Поиск</label>
-        <div class="relative">
-          <input name="q" value="{{ q }}" id="company-search-input" class="input w-full pr-10" placeholder="ИНН / название / адрес" autocomplete="off" />
-          <button type="button" id="company-search-clear" class="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-brand-soft/50 text-brand-dark/60 hover:text-brand-dark focus:outline-none {% if not q %}hidden{% endif %}" title="Очистить поиск" aria-label="Очистить поиск">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
-          </button>
-          <div id="company-search-loading" class="hidden absolute right-8 top-1/2 -translate-y-1/2">
-            <div class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-brand-teal border-t-transparent"></div>
+        <div class="relative company-search-wrapper">
+          <input name="q" value="{{ q }}" id="company-search-input" class="input w-full pr-24" placeholder="ИНН / название / адрес" autocomplete="off" />
+          <div id="company-search-actions" class="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
+            <div id="company-search-loading" class="hidden w-8 h-8 flex items-center justify-center" aria-hidden="true">
+              <div class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-brand-teal border-t-transparent"></div>
+            </div>
+            <button type="button" id="company-search-btn" class="p-1.5 rounded hover:bg-brand-soft/50 text-brand-dark/70 hover:text-brand-teal focus:outline-none focus:ring-2 focus:ring-brand-teal/40 transition-opacity duration-200" title="Искать" aria-label="Выполнить поиск">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            </button>
+            <button type="button" id="company-search-clear" class="p-1.5 rounded hover:bg-brand-soft/50 text-brand-dark/60 hover:text-brand-dark focus:outline-none transition-opacity duration-200 {% if not q %}hidden{% endif %}" title="Очистить поиск" aria-label="Очистить поиск">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
           </div>
+          <p id="company-search-hint" class="hidden text-xs text-brand-teal/80 mt-1">Нажмите Enter для поиска</p>
         </div>
         <div class="text-xs text-brand-dark/60 mt-1">Результаты поиска отображаются в таблице ниже</div>
       </div>
@@ -160,7 +166,7 @@
             </div>
           </div>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap gap-2 hidden" id="companyFilterFormButtons">
           <button class="btn btn-primary" type="submit" id="filterSubmitBtn">Поиск</button>
           <a class="btn btn-outline" href="/companies/" id="filterResetBtn">Сброс</a>
         </div>
@@ -208,14 +214,6 @@
         Совет: чтобы переназначить “все компании сотрудника”, отфильтруйте по ответственному → нажмите <b>Выбрать все по фильтру</b> → выберите нового ответственного → Переназначить.
       </div>
     </form>
-
-    <!-- Индикатор загрузки -->
-    <div id="companyListLoading" class="hidden fixed inset-0 z-40 flex items-center justify-center" style="background: rgba(0, 61, 56, 0.15);">
-      <div class="bg-white rounded-2xl shadow-xl p-8 flex flex-col items-center gap-4" style="border: 1px solid rgba(194, 226, 222, 0.9);">
-        <div class="inline-block animate-spin rounded-full h-12 w-12" style="border: 0.1875rem solid rgba(194, 226, 222, 0.3); border-top-color: #01948E;"></div>
-        <div style="color: #003D38; font-weight: 500;">Загрузка компаний...</div>
-      </div>
-    </div>
 
       <div class="card overflow-hidden">
       <div class="overflow-x-auto">
@@ -673,11 +671,10 @@
   </script>
 
   <script>
-    // AJAX-фильтрация и виртуальный скроллинг
+    // AJAX-фильтрация и поиск компаний (поиск только по Enter / лупа; без оверлея)
     (function() {
       const filterForm = document.getElementById('companyFilterForm');
       const companyListBody = document.getElementById('companyListBody');
-      const loadingIndicator = document.getElementById('companyListLoading');
       const paginationContainer = document.getElementById('paginationContainer');
       const perPageSelect = document.getElementById('perPageSelect');
       const sortLinks = document.querySelectorAll('.sort-link');
@@ -685,14 +682,51 @@
       const filterResetBtn = document.getElementById('filterResetBtn');
       const rememberFiltersCb = document.getElementById('rememberCompanyFilters');
       const rememberSearchCb = document.getElementById('rememberCompanySearch');
-      
+      const searchInput = document.getElementById('company-search-input');
+      const searchBtn = document.getElementById('company-search-btn');
+      const searchClearBtn = document.getElementById('company-search-clear');
+      const searchLoadingEl = document.getElementById('company-search-loading');
+      const searchHintEl = document.getElementById('company-search-hint');
+
       let currentSort = '{{ sort_field }}';
       let currentDir = '{{ sort_dir }}';
       let currentPage = 1;
       let isLoading = false;
       let hasMore = true;
+      let abortController = null;
+      let currentRequestId = 0;
+      // В запрос уходим normalized; в поле ввода не подставляем (оставляем как ввёл пользователь)
+      let nextRequestQueryOverride = null;
+      let restoredSearchOnLoad = false;
       // Сортировка до начала поиска: при очистке поиска восстанавливаем её
       let sortBeforeSearch = { sort: currentSort, dir: currentDir };
+
+      // Нормализация ввода: trim, схлопнуть пробелы; проверка на пустоту/пунктуацию/минимальную длину
+      function normalizeSearchQuery(raw) {
+        if (raw == null) raw = '';
+        const s = String(raw).replace(/\s+/g, ' ').trim();
+        if (!s) return { canSearch: false, normalized: '' };
+        const onlyPunctuation = /^[\s.,;:!?\-–—'"()\[\]\/\\+#]+$/.test(s);
+        if (onlyPunctuation) return { canSearch: false, normalized: s };
+        const digits = s.replace(/\D/g, '');
+        const hasLetters = /[A-Za-zА-Яа-яЁё]/.test(s);
+        if (!hasLetters && digits.length >= 4) return { canSearch: true, normalized: digits };
+        if (!hasLetters && digits.length > 0) return { canSearch: false, normalized: s };
+        if (s.includes('@')) {
+          if (s.length < 5) return { canSearch: false, normalized: s };
+          return { canSearch: true, normalized: s };
+        }
+        if (s.length < 3) return { canSearch: false, normalized: s };
+        return { canSearch: true, normalized: s };
+      }
+
+      function getSearchInputValue() {
+        return searchInput ? (searchInput.value || '').trim() : '';
+      }
+
+      function canSearchNow() {
+        return normalizeSearchQuery(getSearchInputValue()).canSearch;
+      }
 
       // Запоминание фильтров/поиска (localStorage, per-user).
       // ВАЖНО: ключи включают userId, чтобы после перелогина не подтягивались "чужие" фильтры.
@@ -826,28 +860,38 @@
         return true;
       }
       
-      function showLoading() {
-        if (loadingIndicator) loadingIndicator.classList.remove('hidden');
+      function showInlineLoading() {
         isLoading = true;
+        if (searchLoadingEl) searchLoadingEl.classList.remove('hidden');
+        if (searchBtn) searchBtn.classList.add('hidden');
+        if (searchClearBtn) searchClearBtn.classList.add('hidden');
       }
-      
-      function hideLoading() {
-        if (loadingIndicator) loadingIndicator.classList.add('hidden');
+
+      function hideInlineLoading() {
         isLoading = false;
+        if (searchLoadingEl) searchLoadingEl.classList.add('hidden');
+        if (searchBtn) searchBtn.classList.remove('hidden');
+        updateSearchBtnState();
+        updateClearButtonVisibility();
       }
       
       function buildQueryParams() {
         const formData = new FormData(filterForm);
         const params = new URLSearchParams();
-        const searchVal = (filterForm && filterForm.querySelector('input[name="q"]')) ? (filterForm.querySelector('input[name="q"]').value || '').trim() : '';
-        
-        // Добавляем все поля формы
+        let qForRequest = nextRequestQueryOverride != null ? nextRequestQueryOverride : (filterForm && filterForm.querySelector('input[name="q"]') ? (filterForm.querySelector('input[name="q"]').value || '') : '');
+        if (nextRequestQueryOverride != null) nextRequestQueryOverride = null;
+        if (typeof qForRequest === 'string') qForRequest = qForRequest.replace(/\s+/g, ' ').trim();
+
         for (const [key, value] of formData.entries()) {
+          if (key === 'q') {
+            if (qForRequest) params.append('q', qForRequest);
+            continue;
+          }
           if (value) params.append(key, value);
         }
-        
+
         // При непустом поиске не передаём sort/dir — бэкенд отдаёт по релевантности; при очистке вернётся сохранённая сортировка
-        if (!searchVal) {
+        if (!qForRequest) {
           params.append('sort', currentSort);
           params.append('dir', currentDir);
         }
@@ -884,36 +928,58 @@
       function getSearchInput() {
         return filterForm ? filterForm.querySelector('input[name="q"]') : null;
       }
-      
+
+      function updateSearchBtnState() {
+        if (!searchBtn) return;
+        const { canSearch } = normalizeSearchQuery(getSearchInputValue());
+        searchBtn.disabled = !canSearch;
+      }
+
+      function updateClearButtonVisibility() {
+        if (!searchClearBtn) return;
+        if (getSearchInputValue()) {
+          searchClearBtn.classList.remove('hidden');
+        } else {
+          searchClearBtn.classList.add('hidden');
+        }
+      }
+
       function clearSearchAndRestoreSort() {
-        const searchInput = getSearchInput();
-        if (!searchInput) return;
-        searchInput.value = '';
+        const inp = getSearchInput();
+        if (!inp) return;
+        inp.value = '';
         currentSort = sortBeforeSearch.sort;
         currentDir = sortBeforeSearch.dir;
         updateSortHeaderUI();
-        const clearBtn = document.getElementById('company-search-clear');
-        if (clearBtn) clearBtn.classList.add('hidden');
-        searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+        updateClearButtonVisibility();
+        updateSearchBtnState();
+        if (searchHintEl) searchHintEl.classList.add('hidden');
+        loadCompanies(true);
       }
-      
+
       async function loadCompanies(resetPage = true) {
-        if (isLoading) return;
-        
         if (resetPage) {
           currentPage = 1;
           hasMore = true;
         }
-        
-        showLoading();
-        
+
+        if (abortController) {
+          abortController.abort();
+        }
+        const controller = new AbortController();
+        abortController = controller;
+        const signal = controller.signal;
+        const requestId = ++currentRequestId;
+
+        showInlineLoading();
+
         try {
           const params = buildQueryParams();
-          const response = await fetch(`/companies/ajax/?${params.toString()}`);
-          const data = await response.json();
-          
+          const response = await fetch(`/companies/ajax/?${params.toString()}`, { signal });
+          let data = null;
+          try { data = await response.json(); } catch (_) {}
           if (!response.ok) {
-            throw new Error(data.error || 'Ошибка загрузки');
+            throw new Error((data && data.error) || 'Ошибка загрузки');
           }
           
           // Обновляем тело таблицы (всегда заменяем, не добавляем)
@@ -981,22 +1047,25 @@
           updateSortHeaderUI();
           
         } catch (error) {
+          if (error && error.name === 'AbortError') {
+            return;
+          }
           console.error('Error loading companies:', error);
           if (companyListBody) {
             companyListBody.innerHTML = '<tr><td class="muted" colspan="20" style="padding:1.25rem 1rem">Ошибка загрузки данных.</td></tr>';
           }
         } finally {
-          hideLoading();
-
-          // После любой загрузки сохраняем текущее состояние (если включено)
-          const prefs = getPrefs();
-          const enabled = !!((rememberFiltersCb && rememberFiltersCb.checked) || (rememberSearchCb && rememberSearchCb.checked));
-          if (enabled) {
-            const s = captureCurrentState();
-            if (s) setSavedState(s);
-          } else {
-            // если отключили обе галочки — не храним состояние, чтобы не путать
-            setSavedState(null);
+          if (abortController === controller) abortController = null;
+          if (requestId === currentRequestId) {
+            hideInlineLoading();
+            const prefs = getPrefs();
+            const enabled = !!((rememberFiltersCb && rememberFiltersCb.checked) || (rememberSearchCb && rememberSearchCb.checked));
+            if (enabled) {
+              const s = captureCurrentState();
+              if (s) setSavedState(s);
+            } else {
+              setSavedState(null);
+            }
           }
         }
       }
@@ -1018,10 +1087,14 @@
         if (rememberSearchCb) rememberSearchCb.addEventListener('change', onPrefChange);
       })();
       
-      // Обработчик формы фильтрации
+      // Обработчик формы: поиск только по Enter/лупе с валидным запросом (в запрос уходит normalized, в поле не подставляем)
       if (filterForm) {
         filterForm.addEventListener('submit', (e) => {
           e.preventDefault();
+          const raw = getSearchInputValue();
+          const { canSearch, normalized } = normalizeSearchQuery(raw);
+          if (!canSearch) return;
+          nextRequestQueryOverride = normalized;
           loadCompanies(true);
         });
       }
@@ -1138,10 +1211,9 @@
       }
       setRegionLabel();
 
-      // Восстановление сохранённых фильтров/поиска на входе в раздел
+      // Восстановление сохранённых фильтров/поиска на входе в раздел (автопоиск не запускаем)
       (function restoreRememberedStateOnLoad() {
         if (!filterForm) return;
-        // Если в URL уже есть параметры (например, пришли по глубокой ссылке) — ничего не перетираем.
         if (window.location.search && window.location.search.length > 1) return;
         const prefs = getPrefs();
         const enabled = !!((rememberFiltersCb && rememberFiltersCb.checked) || (rememberSearchCb && rememberSearchCb.checked));
@@ -1150,8 +1222,19 @@
         if (!saved) return;
         const applied = applySavedState(saved, prefs);
         if (!applied) return;
-        // Обновляем подпись регионов и сразу подгружаем таблицу с восстановленными настройками
         setRegionLabel();
+        const hadSearch = !!(saved.search && String(saved.search).trim());
+        if (hadSearch && prefs.search) {
+          restoredSearchOnLoad = true;
+          if (searchHintEl) searchHintEl.classList.remove('hidden');
+        }
+        updateSearchBtnState();
+        updateClearButtonVisibility();
+        updateSortHeaderUI();
+        if (hadSearch && prefs.search) {
+          // Не запускаем автопоиск и не грузим «гибрид» — таблица остаётся с серверного рендера, ждём Enter/лупу
+          return;
+        }
         loadCompanies(true);
       })();
       
@@ -1166,48 +1249,55 @@
 
         // Поле общего поиска: при вводе — сортировка по релевантности; при очистке — восстанавливаем сохранённую сортировку
         if (input.id === 'company-search-input') {
-          const clearBtn = document.getElementById('company-search-clear');
-          const searchLoading = document.getElementById('company-search-loading');
-
           function updateSearchUi() {
-            const query = input.value.trim();
+            const query = (input.value || '').trim();
             if (query) {
               sortBeforeSearch = { sort: currentSort, dir: currentDir };
-              if (clearBtn) clearBtn.classList.remove('hidden');
             } else {
               currentSort = sortBeforeSearch.sort;
               currentDir = sortBeforeSearch.dir;
               updateSortHeaderUI();
-              if (clearBtn) clearBtn.classList.add('hidden');
             }
+            updateClearButtonVisibility();
+            updateSearchBtnState();
           }
 
           input.addEventListener('input', () => {
+            if (searchHintEl) searchHintEl.classList.add('hidden');
             updateSearchUi();
-            // При полном очищении строки поиска сразу обновляем список
-            if (!input.value.trim()) {
-              loadCompanies(true);
-            }
           });
 
-          // Явный запуск поиска только по Enter
           input.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
-              if (searchLoading) searchLoading.classList.remove('hidden');
-              loadCompanies(true).finally(() => {
-                if (searchLoading) searchLoading.classList.add('hidden');
-              });
-            }
-          });
-          if (clearBtn) {
-            clearBtn.addEventListener('click', (e) => {
+              const raw = getSearchInputValue();
+              const { canSearch, normalized } = normalizeSearchQuery(raw);
+              if (!canSearch) return;
+              nextRequestQueryOverride = normalized;
+              loadCompanies(true);
+            } else if (e.key === 'Escape') {
+              // Только при фокусе в поле — не конфликтует с модалками и глобальными hotkeys
               e.preventDefault();
               clearSearchAndRestoreSort();
-              if (searchLoading) searchLoading.classList.add('hidden');
+            }
+          });
+
+          if (searchBtn) {
+            searchBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              const raw = getSearchInputValue();
+              const { canSearch, normalized } = normalizeSearchQuery(raw);
+              if (!canSearch) return;
+              nextRequestQueryOverride = normalized;
+              loadCompanies(true);
             });
           }
-          // Инициализируем состояние поиска при загрузке
+          if (searchClearBtn) {
+            searchClearBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              clearSearchAndRestoreSort();
+            });
+          }
           updateSearchUi();
           return;
         }
