@@ -84,6 +84,8 @@ docker compose -f docker-compose.staging.yml exec web python manage.py create_ad
 1. **Очистка при каждом деплое**  
    При запуске `./deploy_staging.sh` вызывается `scripts/cleanup_for_staging.sh`: в стагинге `.env` всегда копируется из `.env.staging`, удаляются копии прод-файлов (если были). При запуске `./deploy_security.sh` и `./deploy_production.sh` вызывается `scripts/cleanup_for_prod.sh`: в проде удаляется `.env.staging`, если он случайно скопирован.
 
+   **Важно:** CORS, виджет мессенджера и другие staging-переменные задавайте только в `.env.staging`, не в `.env` — при каждом деплое `.env` перезаписывается из `.env.staging`.
+
 2. **Sparse-checkout (опционально)**  
    Можно один раз настроить так, чтобы при `git pull` в папке стагинга **не появлялись** прод-файлы, а в папке прода — стагинг-файлы.
 

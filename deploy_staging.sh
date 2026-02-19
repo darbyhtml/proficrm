@@ -16,7 +16,7 @@ if [ ! -f ".env.staging" ]; then
 fi
 # Очистка: .env из .env.staging, напоминание не использовать прод-файлы
 [ -x "scripts/cleanup_for_staging.sh" ] && ./scripts/cleanup_for_staging.sh || true
-# Compose подставляет переменные только из .env
+# Compose подставляет переменные только из .env. Все staging-переменные (CORS и т.д.) задавайте в .env.staging.
 cp .env.staging .env
 
 # Проверка обязательных переменных (не пустые и не плейсхолдеры)
