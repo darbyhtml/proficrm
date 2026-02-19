@@ -1319,145 +1319,97 @@
                     </div>
                   {% endif %}
                 </div>
-                <div class="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                <div class="mt-2 space-y-3">
                   <div>
-                    <div class="text-brand-dark/50 text-xs">Email</div>
-                    {% for e in c.emails.all %}
-                      <div class="flex items-center gap-2">
-                        <a href="mailto:{{ e.value }}" class="link font-mono text-xs text-brand-teal hover:underline" title="Написать">{{ e.value }}</a>
-                        <button type="button" class="btn btn-outline btn-xxs js-copy-email" data-email="{{ e.value }}" title="Копировать">📋</button>
-                        <button type="button" class="btn btn-outline btn-xs js-add-email-to-campaign" data-email="{{ e.value }}" data-company-id="{{ company.id }}" title="Добавить в рассылочную кампанию">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-                            <polyline points="22,6 12,13 2,6"/>
-                          </svg>
-                        </button>
-                      </div>
-                    {% empty %}
-                      <div class="text-brand-dark/70">—</div>
-                    {% endfor %}
-                  </div>
-                  <div>
-                    <div class="text-brand-dark/50 text-xs">Телефон</div>
-                    {% for p in c.phones.all %}
-                      <div class="mb-2">
+                    <div class="text-brand-dark/50 text-xs mb-1">Email</div>
+                    <div class="space-y-1">
+                      {% for e in c.emails.all %}
                         <div class="flex items-center justify-between gap-2">
-                          <div class="flex-1">
-                            <div class="font-mono text-xs">{{ p.value|format_phone }}</div>
-                            {% with info=p.value|phone_local_info %}
-                              {% if info %}<div class="mt-1"><span class="badge badge-warn badge-xxxs">{{ info }}</span></div>{% endif %}
-                            {% endwith %}
-                            {% if not p.value|phone_local_info %}
-                              {% with guessed=company.address|guess_ru_tz %}
-                              {% with tz=company.work_timezone|default:guessed %}
-                                {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}" data-live-worktime="1"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
-                              {% endwith %}
-                              {% endwith %}
-                            {% endif %}
-                            <div class="mt-0.5 text-xs text-brand-dark/70 {% if not p.is_cold_call and not p.cold_marked_at %}hidden{% endif %}" data-cold-info="contact_phone:{{ p.id }}">
-                              <span class="font-medium">Холодный звонок:</span>
-                              {% if p.cold_marked_at %}
-                                {{ p.cold_marked_at|date:"d.m.Y H:i" }}
-                              {% endif %}
-                              {% if p.cold_marked_by %}
-                                ({{ p.cold_marked_by.first_name }} {{ p.cold_marked_by.last_name|default:"" }})
-                              {% endif %}
-                              {% if not p.is_cold_call and p.cold_marked_at %}
-                                <span class="opacity-80">(откат)</span>
-                              {% endif %}
-                            </div>
-                            <div class="mt-1">
-                              {% if can_edit_company %}
-                                <div class="phone-comment-wrapper" data-phone-type="contact" data-phone-id="{{ p.id }}">
-                                  <div class="phone-comment-display text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors" data-edit-comment style="white-space: pre-wrap;">{% if p.comment %}{{ p.comment }}{% else %}Комментарий{% endif %}</div>
-                                  <div class="phone-comment-edit hidden mt-1">
-                                    <textarea class="input text-xs" placeholder="Комментарий к номеру" maxlength="255" data-comment-input rows="2" style="padding:.35rem .5rem;font-size:.75rem;min-height:3.25rem;resize:vertical">{{ p.comment|default:'' }}</textarea>
-                                    <div class="flex gap-1 mt-1">
-                                      <button type="button" class="btn btn-primary btn-sm" data-save-comment>Сохранить</button>
-                                      <button type="button" class="btn btn-outline btn-sm" data-cancel-comment>Отмена</button>
-                                    </div>
-                                  </div>
-                                </div>
-                              {% elif p.comment %}
-                                <div class="text-xs text-brand-dark/50 mt-1" style="white-space: pre-wrap;">{{ p.comment }}</div>
-                              {% endif %}
-                            </div>
+                          <div class="min-w-0">
+                            <a href="mailto:{{ e.value }}" class="font-mono text-xs text-brand-teal hover:underline truncate block" title="Написать">{{ e.value }}</a>
                           </div>
-                          <div class="flex items-center gap-1 shrink-0">
-                            {% if can_edit_company %}
-                              <form
-                                method="post"
-                                action="/contact-phones/{{ p.id }}/cold-call/toggle/"
-                                class="js-cold-call-form"
-                                data-confirm="Вы действительно хотите отметить звонок как холодный?"
-                                data-cold-entity="contact_phone"
-                                data-cold-id="{{ p.id }}"
-                                data-cold-kind="toggle"
-                                style="{% if p.is_cold_call or p.cold_marked_at %}display:none{% endif %}"
-                              >
-                                {% csrf_token %}
-                                <input type="hidden" name="confirmed" value="1">
-                                <button
-                                  type="submit"
-                                  class="btn btn-outline btn-xs js-cold-mark"
-                                  style="padding:0.25rem 0.5rem;"
-                                  data-cold-btn="phone-{{ p.id }}"
-                                  title="Отметить холодный звонок"
-                                  aria-label="Отметить холодный звонок"
-                                >
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                    <path d="M12 2v20M4 6l16 12M20 6 4 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                    <path d="M6 4l12 16M18 4 6 20" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".35"/>
-                                  </svg>
-                                </button>
-                              </form>
-                              {% if view_is_admin %}
-                                <form
-                                  method="post"
-                                  action="/contact-phones/{{ p.id }}/cold-call/reset/"
-                                  class="js-cold-call-form"
-                                  data-confirm="Откатить отметку холодного звонка?"
-                                  data-cold-entity="contact_phone"
-                                  data-cold-id="{{ p.id }}"
-                                  data-cold-kind="reset"
-                                  style="display:inline;{% if not p.is_cold_call %}display:none{% endif %}"
-                                >
-                                  {% csrf_token %}
-                                  <button
-                                    type="submit"
-                                    class="btn btn-outline btn-xs"
-                                    style="padding:0.25rem 0.5rem;"
-                                    title="Откатить отметку холодного звонка (только для администраторов)"
-                                    aria-label="Откатить отметку холодного звонка"
-                                  >
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                      <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                    </svg>
-                                  </button>
-                                </form>
-                              {% endif %}
-                            {% endif %}
-                            {# Убрали отдельный квадрат-статус (дублировал смысл). #}
-                            <button
-                              type="button"
-                              class="btn btn-outline btn-xs js-call-phone"
-                              style="padding:0.25rem 0.5rem;"
-                              data-phone="{{ p.value }}"
-                              data-company="{{ company.id }}"
-                              data-contact="{{ c.id }}"
-                              title="Позвонить с телефона"
-                              aria-label="Позвонить с телефона"
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.3 1.8.6 2.6a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.5-1.2a2 2 0 0 1 2.1-.5c.8.3 1.7.5 2.6.6a2 2 0 0 1 1.8 2.1z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                              </svg>
-                            </button>
+                          <div class="relative shrink-0" data-dd-root>
+                            <button type="button" class="btn btn-outline btn-xs" data-dd-toggle title="Действия" aria-label="Действия">⋯</button>
+                            <div class="hidden absolute right-0 mt-2 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
+                              <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 js-copy-email" data-email="{{ e.value }}">Скопировать</button>
+                              <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 js-add-email-to-campaign" data-email="{{ e.value }}" data-company-id="{{ company.id }}">Добавить в рассылку</button>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    {% empty %}
-                      <div class="text-brand-dark/70">—</div>
-                    {% endfor %}
+                      {% empty %}
+                        <div class="text-brand-dark/70 text-sm">—</div>
+                      {% endfor %}
+                    </div>
+                  </div>
+                  <div>
+                    <div class="text-brand-dark/50 text-xs mb-1">Телефон</div>
+                    <div class="space-y-2">
+                      {% for p in c.phones.all %}
+                        <div>
+                          <div class="flex items-center justify-between gap-2">
+                            <div class="min-w-0">
+                              <div class="font-mono text-xs">{{ p.value|format_phone }}</div>
+                              {% with info=p.value|phone_local_info %}
+                                {% if info %}<div class="mt-1"><span class="badge badge-warn badge-xxxs">{{ info }}</span></div>{% endif %}
+                              {% endwith %}
+                              {% if not p.value|phone_local_info %}
+                                {% with guessed=company.address|guess_ru_tz %}
+                                {% with tz=company.work_timezone|default:guessed %}
+                                  {% if tz %}<div class="mt-1"><span class="badge badge-warn badge-xxxs" data-company-tz-badge="1" data-company-id="{{ company.id }}" data-live-worktime="1"><span data-live-time data-live-tz="{{ tz }}">{{ tz|tz_now_hhmm }}</span> · {{ tz|tz_label }}</span></div>{% endif %}
+                                {% endwith %}
+                                {% endwith %}
+                              {% endif %}
+                            </div>
+                            {% if p.value %}
+                              <div class="relative shrink-0" data-dd-root>
+                                <button type="button" class="btn btn-outline btn-xs" data-dd-toggle title="Действия" aria-label="Действия">⋯</button>
+                                <div class="hidden absolute right-0 mt-2 w-56 card overflow-hidden" style="z-index: 60;" data-dd-menu>
+                                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25 js-call-phone" data-phone="{{ p.value }}" data-company="{{ company.id }}" data-contact="{{ c.id }}">Позвонить</button>
+                                  <button type="button" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25" data-copy-phone="{{ p.value }}">Скопировать</button>
+                                  {% if can_edit_company %}
+                                    <form method="post" action="/contact-phones/{{ p.id }}/cold-call/toggle/" class="js-cold-call-form" data-confirm="Вы действительно хотите отметить звонок как холодный?" data-cold-entity="contact_phone" data-cold-id="{{ p.id }}" data-cold-kind="toggle" style="{% if p.is_cold_call or p.cold_marked_at %}display:none{% endif %}">
+                                      {% csrf_token %}
+                                      <input type="hidden" name="confirmed" value="1">
+                                      <button type="submit" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25">Отметить холодным</button>
+                                    </form>
+                                    {% if view_is_admin %}
+                                      <form method="post" action="/contact-phones/{{ p.id }}/cold-call/reset/" class="js-cold-call-form" data-confirm="Откатить отметку холодного звонка?" data-cold-entity="contact_phone" data-cold-id="{{ p.id }}" data-cold-kind="reset" style="{% if not p.is_cold_call %}display:none{% endif %}">
+                                        {% csrf_token %}
+                                        <button type="submit" class="block w-full text-left px-3 py-2 text-sm hover:bg-brand-soft/25">Снять отметку</button>
+                                      </form>
+                                    {% endif %}
+                                  {% endif %}
+                                </div>
+                              </div>
+                            {% endif %}
+                          </div>
+                          <div class="mt-1 text-xs text-brand-dark/70 {% if not p.is_cold_call and not p.cold_marked_at %}hidden{% endif %}" data-cold-info="contact_phone:{{ p.id }}">
+                            <span class="font-medium">Холодный звонок:</span>
+                            {% if p.cold_marked_at %}<span>{{ p.cold_marked_at|date:"d.m.Y H:i" }}</span>{% endif %}
+                            {% if p.cold_marked_by %}<span>({{ p.cold_marked_by.first_name }} {{ p.cold_marked_by.last_name|default:"" }})</span>{% endif %}
+                            {% if not p.is_cold_call and p.cold_marked_at %}<span class="opacity-80">(откат)</span>{% endif %}
+                          </div>
+                          <div class="mt-1">
+                            {% if can_edit_company %}
+                              <div class="phone-comment-wrapper" data-phone-type="contact" data-phone-id="{{ p.id }}">
+                                <div class="phone-comment-display text-xs text-brand-dark/50 cursor-pointer hover:text-brand-dark/70 transition-colors" data-edit-comment style="white-space: pre-wrap;">{% if p.comment %}{{ p.comment }}{% else %}Комментарий{% endif %}</div>
+                                <div class="phone-comment-edit hidden mt-1">
+                                  <textarea class="input text-xs" placeholder="Комментарий к номеру" maxlength="255" data-comment-input rows="2" style="padding:.35rem .5rem;font-size:.75rem;min-height:3.25rem;resize:vertical">{{ p.comment|default:'' }}</textarea>
+                                  <div class="flex gap-1 mt-1">
+                                    <button type="button" class="btn btn-primary btn-sm" data-save-comment>Сохранить</button>
+                                    <button type="button" class="btn btn-outline btn-sm" data-cancel-comment>Отмена</button>
+                                  </div>
+                                </div>
+                              </div>
+                            {% elif p.comment %}
+                              <div class="text-xs text-brand-dark/50" style="white-space: pre-wrap;">{{ p.comment }}</div>
+                            {% endif %}
+                          </div>
+                        </div>
+                      {% empty %}
+                        <div class="text-brand-dark/70 text-sm">—</div>
+                      {% endfor %}
+                    </div>
                   </div>
                 </div>
               </div>
