@@ -771,7 +771,6 @@ class MessengerOperatorPanel {
     this.updateStickyDateBadge(true);
 
     // Обработчик кликов по карточкам вложений
-    const messagesList = document.getElementById('messagesList');
     if (messagesList) {
       messagesList.addEventListener('click', (e) => {
         const card = e.target.closest('.messenger-attachment-card');
