@@ -214,6 +214,74 @@
     overflow-y: auto !important;
     line-height: 1.5;
   }
+
+  /* Карточки вложений сообщений (как в заметках) */
+  .messenger-attachment-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+  .messenger-attachment-card {
+    position: relative;
+    width: 4.5rem;
+    flex-shrink: 0;
+    background: #fff;
+    border: 1px solid rgba(194, 226, 222, 0.8);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    cursor: pointer;
+    transition: box-shadow 0.2s, border-color 0.2s;
+  }
+  .messenger-attachment-card:hover {
+    border-color: rgba(1, 148, 142, 0.5);
+    box-shadow: 0 2px 8px rgba(0, 61, 56, 0.08);
+  }
+  .messenger-attachment-card__preview {
+    width: 100%;
+    height: 3.2rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(194, 226, 222, 0.15);
+    overflow: hidden;
+  }
+  .messenger-attachment-card__preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  .messenger-attachment-card__icon {
+    width: 100%;
+    height: 4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(194, 226, 222, 0.2);
+    color: var(--brand-dark);
+  }
+  .messenger-attachment-card__icon svg {
+    width: 2rem;
+    height: 2rem;
+  }
+  .messenger-attachment-card__icon--pdf { color: #b91c1c; }
+  .messenger-attachment-card__icon--doc { color: #1d4ed8; }
+  .messenger-attachment-card__icon--xls { color: #15803d; }
+  .messenger-attachment-card__icon--ppt { color: #c2410c; }
+  .messenger-attachment-card__icon--file { color: #475569; }
+  .messenger-attachment-card__name {
+    padding: 0.3rem 0.35rem;
+    font-size: 0.625rem;
+    line-height: 1.2;
+    color: var(--brand-dark);
+    text-align: center;
+    word-break: break-all;
+    max-height: 2.4em;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
 </style>
 
 <div class="messenger-unified-layout">
@@ -375,6 +443,30 @@
   </div>
 </div>
 
+{# Модалка для просмотра изображений #}
+<div id="messengerImagePreviewModal" class="fixed inset-0 z-[220] hidden">
+  <div class="fixed inset-0 bg-black/60" data-close-messenger-img></div>
+  <div class="absolute inset-x-4 top-10 mx-auto max-w-5xl">
+    <div class="bg-white rounded-2xl shadow-2xl overflow-hidden">
+      <div class="flex items-center justify-between gap-3 px-4 py-3 border-b">
+        <div class="min-w-0">
+          <div class="text-sm font-medium truncate" id="messengerImagePreviewTitle">Изображение</div>
+          <div class="text-xs muted-2 truncate">Esc — закрыть · колесо/тач — масштаб в браузере</div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <a class="btn btn-outline btn-sm" id="messengerImagePreviewOpenLink" href="#" target="_blank" rel="noopener">В новой вкладке</a>
+          <a class="btn btn-outline btn-sm" id="messengerImagePreviewDownloadLink" href="#" target="_blank" rel="noopener">Скачать</a>
+          <button type="button" class="btn btn-outline btn-sm" data-close-messenger-img aria-label="Закрыть" title="Закрыть">✕</button>
+        </div>
+      </div>
+      <div class="bg-black/5 p-3 flex items-center justify-center" style="max-height:85vh;">
+        <div id="messengerImagePreviewLoader" class="text-sm text-brand-dark/70 py-10">Загрузка…</div>
+        <img id="messengerImagePreviewImg" alt="" class="hidden rounded-xl border border-brand-soft bg-white" style="max-height:80vh; max-width:100%; object-fit:contain;" />
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
   window.MESSENGER_CONTEXT = {
     currentUserId: {{ current_user_id|default:'null' }},
@@ -408,6 +500,68 @@
 
   window.addEventListener('resize', resizeMessengerLayout);
   document.addEventListener('DOMContentLoaded', resizeMessengerLayout);
+
+  // Модалка для просмотра изображений в мессенджере
+  (function() {
+    const imgModal = document.getElementById('messengerImagePreviewModal');
+    const imgEl = document.getElementById('messengerImagePreviewImg');
+    const imgTitle = document.getElementById('messengerImagePreviewTitle');
+    const imgLoader = document.getElementById('messengerImagePreviewLoader');
+    const openLink = document.getElementById('messengerImagePreviewOpenLink');
+    const dlLink = document.getElementById('messengerImagePreviewDownloadLink');
+
+    function closeMessengerImgModal() {
+      if (!imgModal) return;
+      imgModal.classList.add('hidden');
+      if (imgEl) {
+        imgEl.classList.add('hidden');
+        imgEl.removeAttribute('src');
+        imgEl.alt = '';
+      }
+      if (imgLoader) imgLoader.style.display = '';
+      if (imgTitle) imgTitle.textContent = 'Изображение';
+      if (openLink) openLink.setAttribute('href', '#');
+      if (dlLink) dlLink.setAttribute('href', '#');
+    }
+
+    window.openMessengerImgModal = function(url, downloadUrl, title) {
+      if (!imgModal || !imgEl) return;
+      const u = (url || '').toString().trim();
+      if (!u) return;
+      if (imgTitle) imgTitle.textContent = (title || 'Изображение').toString();
+      if (openLink) openLink.setAttribute('href', u);
+      if (dlLink) dlLink.setAttribute('href', (downloadUrl || u).toString());
+      if (imgLoader) imgLoader.style.display = '';
+      imgEl.classList.add('hidden');
+      imgEl.alt = (title || 'Изображение').toString();
+      imgEl.onload = function() {
+        if (imgLoader) imgLoader.style.display = 'none';
+        imgEl.classList.remove('hidden');
+      };
+      imgEl.onerror = function() {
+        if (imgLoader) imgLoader.textContent = 'Не удалось загрузить изображение.';
+      };
+      imgEl.src = u;
+      imgModal.classList.remove('hidden');
+    };
+
+    if (imgModal) {
+      imgModal.querySelectorAll('[data-close-messenger-img]').forEach(b => {
+        b.addEventListener('click', function(e) {
+          e.preventDefault();
+          closeMessengerImgModal();
+        });
+      });
+      imgModal.querySelector('.bg-black\\/60')?.addEventListener('click', function(e) {
+        if (e.target === e.currentTarget) closeMessengerImgModal();
+      });
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && !imgModal.classList.contains('hidden')) {
+          closeMessengerImgModal();
+        }
+      });
+    }
+  })();
 </script>
 
 <script src="{% static 'messenger/operator-panel.js' %}"></script>

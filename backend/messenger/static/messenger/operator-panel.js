@@ -770,6 +770,42 @@ class MessengerOperatorPanel {
     this.updateScrollToBottomButton();
     this.updateStickyDateBadge(true);
 
+    // Обработчик кликов по карточкам вложений
+    const messagesList = document.getElementById('messagesList');
+    if (messagesList) {
+      messagesList.addEventListener('click', (e) => {
+        const card = e.target.closest('.messenger-attachment-card');
+        if (!card) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const openUrl = card.getAttribute('data-open') || '';
+        const downloadUrl = card.getAttribute('data-download') || openUrl;
+        const isImage = card.getAttribute('data-is-image') === '1';
+        const isPdf = card.getAttribute('data-is-pdf') === '1';
+        const title = card.querySelector('.messenger-attachment-card__name')?.textContent?.trim() || 'Файл';
+        if (isImage && openUrl && typeof window.openMessengerImgModal === 'function') {
+          window.openMessengerImgModal(openUrl, downloadUrl, title);
+        } else if ((isImage || isPdf) && openUrl) {
+          window.open(openUrl, '_blank', 'noopener');
+        } else if (downloadUrl) {
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.setAttribute('download', '');
+          a.target = '_blank';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        }
+      });
+      messagesList.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const card = e.target.closest('.messenger-attachment-card');
+        if (!card) return;
+        e.preventDefault();
+        card.click();
+      });
+    }
+
     // Переключение режима (Ответить/Заметка)
     const btnOut = document.getElementById('composeModeOut');
     const btnInternal = document.getElementById('composeModeInternal');
@@ -1353,15 +1389,46 @@ class MessengerOperatorPanel {
     
     let attachmentsHtml = '';
     if (message.attachments && message.attachments.length > 0) {
-      attachmentsHtml = '<div class="mt-2 space-y-1">';
+      attachmentsHtml = '<div class="messenger-attachment-cards">';
       message.attachments.forEach(att => {
+        const fileUrl = att.file || att.url || '';
+        const fileName = att.original_name || fileUrl.split('/').pop() || 'Файл';
+        const contentType = (att.content_type || '').toLowerCase();
+        const fileExt = fileName.split('.').pop()?.toUpperCase() || '';
+        const isImage = contentType.indexOf('image/') === 0 || ['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP'].includes(fileExt);
+        const isPdf = contentType === 'application/pdf' || fileExt === 'PDF';
+        
+        let previewHtml = '';
+        let iconClass = 'file';
+        if (isImage && fileUrl) {
+          previewHtml = `<div class="messenger-attachment-card__preview"><img src="${this.escapeHtml(fileUrl)}" alt="" loading="lazy" /></div>`;
+        } else {
+          if (isPdf) iconClass = 'pdf';
+          else if (['DOC', 'DOCX'].includes(fileExt)) iconClass = 'doc';
+          else if (['XLS', 'XLSX'].includes(fileExt)) iconClass = 'xls';
+          else if (['PPT', 'PPTX'].includes(fileExt)) iconClass = 'ppt';
+          
+          const iconSvg = {
+            pdf: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2 5 5h-5V4zm-2 8v4H9v-4H7v6h10v-6h-2zm-2-2h2v2H9v-2z"/></svg>',
+            doc: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 16H6V4h7v5h5v9zm-3-5H9v2h2v2H9v2h2v-2h2v-2h-2v-2z"/></svg>',
+            xls: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1 11h-4v2h4v2h-4v2h2v-1h2v-4h-2v1h-2v-2zm-2-5V4h5l-5 5z"/></svg>',
+            ppt: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1 9h-2v4h2v-1h1c.55 0 1-.45 1-1v-1c0-.55-.45-1-1-1h-2v-1zm0-5V4h5l-5 5z"/></svg>',
+            file: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><path d="M14 2v6h6"/></svg>'
+          };
+          previewHtml = `<div class="messenger-attachment-card__preview"><div class="messenger-attachment-card__icon messenger-attachment-card__icon--${iconClass}">${iconSvg[iconClass] || iconSvg.file}</div></div>`;
+        }
+        
         attachmentsHtml += `
-          <a href="${this.escapeHtml(att.file)}" target="_blank" class="text-xs text-brand-teal hover:underline inline-flex items-center gap-1">
-            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/>
-            </svg>
-            ${this.escapeHtml(att.original_name || att.file.split('/').pop() || 'Файл')}
-          </a>
+          <div class="messenger-attachment-card" 
+               data-open="${this.escapeHtml(fileUrl)}"
+               data-download="${this.escapeHtml(fileUrl)}"
+               data-is-image="${isImage ? '1' : '0'}"
+               data-is-pdf="${isPdf ? '1' : '0'}"
+               title="${this.escapeHtml(fileName)}"
+               role="button" tabindex="0">
+            ${previewHtml}
+            <div class="messenger-attachment-card__name">${this.escapeHtml(fileName)}</div>
+          </div>
         `;
       });
       attachmentsHtml += '</div>';

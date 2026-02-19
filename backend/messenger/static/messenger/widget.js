@@ -725,24 +725,62 @@
       const attachments = message.attachments || [];
       if (attachments.length > 0) {
         const attWrap = document.createElement('div');
-        attWrap.className = 'messenger-widget-message-attachments';
+        attWrap.className = 'messenger-widget-attachment-cards';
         attachments.forEach(att => {
-          const isImage = (att.content_type || '').indexOf('image/') === 0;
-          const link = document.createElement('a');
-          link.href = att.url || '#';
-          link.target = '_blank';
-          link.rel = 'noopener';
-          link.className = 'messenger-widget-attachment';
-          if (isImage && att.url) {
+          const fileUrl = att.url || att.file || '';
+          const fileName = att.original_name || fileUrl.split('/').pop() || 'Файл';
+          const contentType = (att.content_type || '').toLowerCase();
+          const fileExt = fileName.split('.').pop()?.toUpperCase() || '';
+          const isImage = contentType.indexOf('image/') === 0 || ['PNG', 'JPG', 'JPEG', 'GIF', 'WEBP'].includes(fileExt);
+          const isPdf = contentType === 'application/pdf' || fileExt === 'PDF';
+          
+          const card = document.createElement('div');
+          card.className = 'messenger-widget-attachment-card';
+          card.setAttribute('data-open', fileUrl);
+          card.setAttribute('data-download', fileUrl);
+          card.setAttribute('data-is-image', isImage ? '1' : '0');
+          card.setAttribute('data-is-pdf', isPdf ? '1' : '0');
+          card.setAttribute('title', fileName);
+          card.setAttribute('role', 'button');
+          card.setAttribute('tabindex', '0');
+          
+          const preview = document.createElement('div');
+          preview.className = 'messenger-widget-attachment-card__preview';
+          
+          if (isImage && fileUrl) {
             const img = document.createElement('img');
-            img.src = att.url;
-            img.alt = att.original_name || '';
-            img.className = 'messenger-widget-attachment-img';
-            link.appendChild(img);
+            img.src = fileUrl;
+            img.alt = fileName;
+            img.loading = 'lazy';
+            preview.appendChild(img);
           } else {
-            link.textContent = att.original_name || 'Файл';
+            const icon = document.createElement('div');
+            let iconClass = 'file';
+            if (isPdf) iconClass = 'pdf';
+            else if (['DOC', 'DOCX'].includes(fileExt)) iconClass = 'doc';
+            else if (['XLS', 'XLSX'].includes(fileExt)) iconClass = 'xls';
+            else if (['PPT', 'PPTX'].includes(fileExt)) iconClass = 'ppt';
+            
+            icon.className = `messenger-widget-attachment-card__icon messenger-widget-attachment-card__icon--${iconClass}`;
+            const iconSvg = {
+              pdf: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2 5 5h-5V4zm-2 8v4H9v-4H7v6h10v-6h-2zm-2-2h2v2H9v-2z"/></svg>',
+              doc: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 16H6V4h7v5h5v9zm-3-5H9v2h2v2H9v2h2v-2h2v-2h-2v-2z"/></svg>',
+              xls: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1 11h-4v2h4v2h-4v2h2v-1h2v-4h-2v1h-2v-2zm-2-5V4h5l-5 5z"/></svg>',
+              ppt: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm1 9h-2v4h2v-1h1c.55 0 1-.45 1-1v-1c0-.55-.45-1-1-1h-2v-1zm0-5V4h5l-5 5z"/></svg>',
+              file: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z"/><path d="M14 2v6h6"/></svg>'
+            };
+            icon.innerHTML = iconSvg[iconClass] || iconSvg.file;
+            preview.appendChild(icon);
           }
-          attWrap.appendChild(link);
+          
+          card.appendChild(preview);
+          
+          const name = document.createElement('div');
+          name.className = 'messenger-widget-attachment-card__name';
+          name.textContent = fileName;
+          card.appendChild(name);
+          
+          attWrap.appendChild(card);
         });
         messageEl.appendChild(attWrap);
       }
@@ -852,6 +890,41 @@
       
       this.input.addEventListener('input', autogrow);
       autogrow(); // Инициализация при загрузке
+    }
+
+    openImageModal(url, downloadUrl, title) {
+      if (!this.imageModal || !this.imageModalImg) return;
+      const u = (url || '').toString().trim();
+      if (!u) return;
+      if (this.imageModalTitle) this.imageModalTitle.textContent = (title || 'Изображение').toString();
+      if (this.imageModalOpenLink) this.imageModalOpenLink.setAttribute('href', u);
+      if (this.imageModalDownloadLink) this.imageModalDownloadLink.setAttribute('href', (downloadUrl || u).toString());
+      if (this.imageModalLoader) this.imageModalLoader.style.display = '';
+      this.imageModalImg.classList.add('hidden');
+      this.imageModalImg.alt = (title || 'Изображение').toString();
+      this.imageModalImg.onload = () => {
+        if (this.imageModalLoader) this.imageModalLoader.style.display = 'none';
+        this.imageModalImg.classList.remove('hidden');
+      };
+      this.imageModalImg.onerror = () => {
+        if (this.imageModalLoader) this.imageModalLoader.textContent = 'Не удалось загрузить изображение.';
+      };
+      this.imageModalImg.src = u;
+      this.imageModal.classList.remove('hidden');
+    }
+
+    closeImageModal() {
+      if (!this.imageModal) return;
+      this.imageModal.classList.add('hidden');
+      if (this.imageModalImg) {
+        this.imageModalImg.classList.add('hidden');
+        this.imageModalImg.removeAttribute('src');
+        this.imageModalImg.alt = '';
+      }
+      if (this.imageModalLoader) this.imageModalLoader.style.display = '';
+      if (this.imageModalTitle) this.imageModalTitle.textContent = 'Изображение';
+      if (this.imageModalOpenLink) this.imageModalOpenLink.setAttribute('href', '#');
+      if (this.imageModalDownloadLink) this.imageModalDownloadLink.setAttribute('href', '#');
     }
 
     renderPendingFiles() {
@@ -1149,6 +1222,81 @@
       form.appendChild(inputRow);
       this.ratingForm = form;
       this.popup.appendChild(form);
+
+      // Модалка для просмотра изображений
+      const imgModal = document.createElement('div');
+      imgModal.id = 'messengerWidgetImageModal';
+      imgModal.className = 'messenger-widget-image-modal hidden';
+      imgModal.innerHTML = `
+        <div class="messenger-widget-image-modal-overlay" data-close-widget-img></div>
+        <div class="messenger-widget-image-modal-content">
+          <div class="messenger-widget-image-modal-header">
+            <div class="messenger-widget-image-modal-title" id="messengerWidgetImageTitle">Изображение</div>
+            <div class="messenger-widget-image-modal-actions">
+              <a class="messenger-widget-image-modal-link" id="messengerWidgetImageOpenLink" href="#" target="_blank" rel="noopener">В новой вкладке</a>
+              <a class="messenger-widget-image-modal-link" id="messengerWidgetImageDownloadLink" href="#" target="_blank" rel="noopener">Скачать</a>
+              <button type="button" class="messenger-widget-image-modal-close" data-close-widget-img aria-label="Закрыть">✕</button>
+            </div>
+          </div>
+          <div class="messenger-widget-image-modal-body">
+            <div class="messenger-widget-image-modal-loader" id="messengerWidgetImageLoader">Загрузка…</div>
+            <img id="messengerWidgetImageImg" alt="" class="hidden" />
+          </div>
+        </div>
+      `;
+      document.body.appendChild(imgModal);
+      this.imageModal = imgModal;
+      this.imageModalImg = document.getElementById('messengerWidgetImageImg');
+      this.imageModalTitle = document.getElementById('messengerWidgetImageTitle');
+      this.imageModalLoader = document.getElementById('messengerWidgetImageLoader');
+      this.imageModalOpenLink = document.getElementById('messengerWidgetImageOpenLink');
+      this.imageModalDownloadLink = document.getElementById('messengerWidgetImageDownloadLink');
+
+      // Обработчики закрытия модалки
+      imgModal.querySelectorAll('[data-close-widget-img]').forEach(b => {
+        b.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.closeImageModal();
+        });
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !imgModal.classList.contains('hidden')) {
+          this.closeImageModal();
+        }
+      });
+
+      // Обработчик кликов по карточкам вложений
+      this.messagesContainer.addEventListener('click', (e) => {
+        const card = e.target.closest('.messenger-widget-attachment-card');
+        if (!card) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const openUrl = card.getAttribute('data-open') || '';
+        const downloadUrl = card.getAttribute('data-download') || openUrl;
+        const isImage = card.getAttribute('data-is-image') === '1';
+        const isPdf = card.getAttribute('data-is-pdf') === '1';
+        const title = card.querySelector('.messenger-widget-attachment-card__name')?.textContent?.trim() || 'Файл';
+        if (isImage && openUrl) {
+          this.openImageModal(openUrl, downloadUrl, title);
+        } else if ((isImage || isPdf) && openUrl) {
+          window.open(openUrl, '_blank', 'noopener');
+        } else if (downloadUrl) {
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.setAttribute('download', '');
+          a.target = '_blank';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        }
+      });
+      this.messagesContainer.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const card = e.target.closest('.messenger-widget-attachment-card');
+        if (!card) return;
+        e.preventDefault();
+        card.click();
+      });
 
       // Блок оценки (после закрытия диалога)
       this.ratingBlock = document.createElement('div');
