@@ -2983,26 +2983,45 @@
         // Восстановление черновика (только если поле пустое/не тронуто сервером)
         const current = normalize(textarea.value);
         const draft2 = getDraft();
+        let lastSavedValue = '';
         if (!current && draft2) {
           textarea.value = draft2;
+          lastSavedValue = draft2;
           textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        } else {
+          lastSavedValue = textarea.value || '';
         }
 
         // Автосохранение по мере ввода (debounce)
         let t = null;
         textarea.addEventListener('input', () => {
+          const v = textarea.value || '';
+          const normalized = normalize(v);
+          // Если пользователь вручную очистил поле — сразу убираем черновик, чтобы после перезагрузки не подгружался
+          if (!normalized) {
+            clearDraft();
+            lastSavedValue = '';
+            if (t) window.clearTimeout(t);
+            return;
+          }
           if (t) window.clearTimeout(t);
           t = window.setTimeout(() => {
-            const v = textarea.value || '';
-            if (normalize(v)) setDraft(v);
-            else clearDraft();
+            const v2 = textarea.value || '';
+            const normalized2 = normalize(v2);
+            if (normalized2 !== normalize(lastSavedValue)) {
+              setDraft(v2);
+              lastSavedValue = v2;
+            }
           }, 250);
         });
 
-        // На случай быстрых переходов — сохраняем при уходе со страницы
+        // На случай быстрых переходов — сохраняем при уходе со страницы (только если значение изменилось)
         window.addEventListener('beforeunload', () => {
           const v = textarea.value || '';
-          if (normalize(v)) setDraft(v);
+          const normalized = normalize(v);
+          if (normalized && normalized !== normalize(lastSavedValue)) {
+            setDraft(v);
+          }
         });
 
         // Ctrl+Enter / Cmd+Enter — отправить заметку
@@ -7055,6 +7074,12 @@
             });
             if (!resp.ok) throw new Error('Failed to submit note');
 
+            // Очищаем черновик СРАЗУ после успешной отправки (до обновления панели)
+            const companyId = form.getAttribute('data-company-id') || '';
+            const userId = form.getAttribute('data-user-id') || '';
+            const storageKey = `companyNoteDraft:v1:${userId}:${companyId}`;
+            try { localStorage.removeItem(storageKey); } catch (_e) {}
+
             // Очищаем форму
             const textarea = form.querySelector('textarea[name="text"]');
             if (textarea) textarea.value = '';
@@ -7094,6 +7119,7 @@
                   }
                   currentNotes.parentNode.replaceChild(newNotes, currentNotes);
                   if (window.initNoteInputAutogrow) window.initNoteInputAutogrow();
+                  if (window.initNoteDraft) window.initNoteDraft('noteFormModernInline');
                 }
               }
             } catch (_e) {
@@ -7179,38 +7205,76 @@
           try { localStorage.removeItem(storageKey); } catch (_e) {}
         }
 
-        // Восстановление черновика
-        const current = normalize(textarea.value);
+        // Если последний добавленный note совпадает с черновиком — считаем, что он сохранён, и очищаем.
         const draft = getDraft();
-        if (!current && draft) {
-          textarea.value = draft;
+        if (draft) {
+          const firstNoteBody = document.querySelector('[data-note-item] [data-note-body]');
+          if (firstNoteBody) {
+            const noteText = normalize(firstNoteBody.textContent || '');
+            if (noteText && noteText === normalize(draft)) {
+              clearDraft();
+            }
+          }
+        }
+
+        // Восстановление черновика (только если поле пустое/не тронуто сервером)
+        const current = normalize(textarea.value);
+        const draft2 = getDraft();
+        let lastSavedValue = '';
+        if (!current && draft2) {
+          textarea.value = draft2;
+          lastSavedValue = draft2;
           textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        } else {
+          lastSavedValue = textarea.value || '';
         }
 
         // Автосохранение по мере ввода (debounce)
         let t = null;
         textarea.addEventListener('input', () => {
+          const v = textarea.value || '';
+          const normalized = normalize(v);
+          // Если пользователь вручную очистил поле — сразу убираем черновик, чтобы после перезагрузки не подгружался
+          if (!normalized) {
+            clearDraft();
+            lastSavedValue = '';
+            if (t) window.clearTimeout(t);
+            return;
+          }
           if (t) window.clearTimeout(t);
           t = window.setTimeout(() => {
-            const v = textarea.value || '';
-            if (normalize(v)) setDraft(v);
-            else clearDraft();
+            const v2 = textarea.value || '';
+            const normalized2 = normalize(v2);
+            if (normalized2 !== normalize(lastSavedValue)) {
+              setDraft(v2);
+              lastSavedValue = v2;
+            }
           }, 250);
         });
 
-        // Сохраняем при уходе со страницы
+        // Сохраняем при уходе со страницы (только если значение изменилось)
         window.addEventListener('beforeunload', () => {
           const v = textarea.value || '';
-          if (normalize(v)) setDraft(v);
+          const normalized = normalize(v);
+          if (normalized && normalized !== normalize(lastSavedValue)) {
+            setDraft(v);
+          }
         });
 
         // Очистка черновика после успешной отправки
-        form.addEventListener('submit', () => {
-          setTimeout(() => clearDraft(), 500);
+        // Для AJAX-форм очистка происходит в обработчике submit (до обновления панели)
+        // Для обычных форм (с редиректом) очищаем с задержкой
+        form.addEventListener('submit', function(e) {
+          // Если форма отправляется через AJAX (есть обработчик preventDefault выше), очистка уже произошла
+          // Для обычных форм очищаем с задержкой
+          if (!e.defaultPrevented) {
+            setTimeout(() => clearDraft(), 500);
+          }
         });
       }
 
-      // Инициализируем для inline-формы
+      // Инициализируем для inline-формы и выставляем глобально для повторной инициализации после AJAX-подмены панели
+      window.initNoteDraft = initDraft;
       initDraft('noteFormModernInline');
     })();
   </script>
