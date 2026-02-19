@@ -21,16 +21,16 @@
         {% csrf_token %}
         <input id="noteFileModernInline" type="file" name="attachment" class="hidden" />
         <input id="noteFilesMultipleModernInline" type="file" name="attachments" multiple class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv" />
-        <div class="note-input-bar note-files-zone flex flex-col rounded-2xl overflow-hidden">
-          <div class="flex-1 min-w-0 px-3 pt-3 pb-1">
+        <div class="note-input-bar note-files-zone flex items-end gap-2 rounded-2xl overflow-hidden px-3 py-2 min-h-[52px]">
+          <label for="noteFilesMultipleModernInline" class="flex-shrink-0 p-2 rounded-lg text-[#64748b] hover:text-brand-teal hover:bg-black/5 cursor-pointer transition-colors" title="Прикрепить файлы" aria-label="Прикрепить файлы">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+          </label>
+          <div class="flex-1 min-w-0">
             {{ note_form.text }}
           </div>
-          <div class="note-input-bar-action flex items-center justify-between gap-2 px-2 py-2 border-t border-black/6 bg-[#fafafa]">
-            <label for="noteFilesMultipleModernInline" class="flex-shrink-0 p-2 rounded-lg text-[#64748b] hover:text-brand-teal hover:bg-black/5 cursor-pointer transition-colors" title="Прикрепить файлы (PDF, DOC, XLS, изображения. До 15 МБ)" aria-label="Прикрепить файлы">
-              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.5-8.5l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-            </label>
-            <button type="submit" class="flex-shrink-0 rounded-lg bg-[#01948E] text-white text-sm font-medium py-2 px-4 hover:bg-[#017a75] transition-colors" title="Отправить (Ctrl+Enter)">Отправить</button>
-          </div>
+          <button type="submit" class="flex-shrink-0 p-2 rounded-lg bg-[#01948E] text-white hover:bg-[#017a75] transition-colors" title="Отправить (Ctrl+Enter)" aria-label="Отправить">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2L11 13"/><path d="M22 2L15 22L11 13L2 9L22 2Z"/></svg>
+          </button>
         </div>
         <div id="noteAddFileChipsModernInline" class="flex flex-wrap gap-2 px-3 pb-2 pt-1"></div>
       </form>
