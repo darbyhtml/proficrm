@@ -809,10 +809,11 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
     selected_regions = [str(rid) for rid in region_ids]
 
     overdue = _get_str_param("overdue")
+    task_filter = _get_str_param("task_filter")
+    if task_filter == "no_tasks":
+        overdue = ""
     if overdue == "1":
         qs = qs.filter(has_overdue=True)
-
-    task_filter = _get_str_param("task_filter")
     _VALID_TASK_FILTERS = ("no_tasks", "today", "tomorrow", "week", "month", "quarter")
     if task_filter and task_filter not in _VALID_TASK_FILTERS:
         task_filter = ""

@@ -45,7 +45,13 @@
           </div>
           <p id="company-search-hint" class="hidden text-xs text-brand-teal/80 mt-1">Нажмите Enter для поиска</p>
         </div>
-        <div class="text-xs text-brand-dark/60 mt-1">Результаты поиска отображаются в таблице ниже</div>
+        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
+          <div class="text-xs text-brand-dark/60">Результаты поиска отображаются в таблице ниже</div>
+          <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer" title="Сохранит строку поиска и восстановит при возврате">
+            <input type="checkbox" id="rememberCompanySearch" class="rounded" />
+            <span>Запоминать поиск</span>
+          </label>
+        </div>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-end">
         <div>
@@ -146,9 +152,9 @@
       </div>
       <div class="flex flex-col md:flex-row md:items-center md:flex-wrap gap-2 justify-between">
         <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
-          <div>
-            <label class="block text-sm text-brand-dark/80 mb-1">Задачи</label>
-            <select name="task_filter" class="select" style="min-width:11rem">
+          <div class="flex items-center gap-2">
+            <label class="text-sm text-brand-dark/80 whitespace-nowrap">Задачи</label>
+            <select name="task_filter" id="companyFilterTaskFilter" class="select" style="min-width:11rem">
               <option value="">Любой</option>
               <option value="no_tasks" {% if task_filter == 'no_tasks' %}selected{% endif %}>Нет задач</option>
               <option value="today" {% if task_filter == 'today' %}selected{% endif %}>На сегодня</option>
@@ -158,24 +164,16 @@
               <option value="quarter" {% if task_filter == 'quarter' %}selected{% endif %}>В этом квартале</option>
             </select>
           </div>
-          <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
-            <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %} />
+          <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer" id="companyFilterOverdueLabel">
+            <input type="checkbox" name="overdue" value="1" id="companyFilterOverdue" {% if overdue == '1' and task_filter != 'no_tasks' %}checked{% endif %}{% if task_filter == 'no_tasks' %} disabled{% endif %} />
             Только с просрочками
           </label>
-          <div class="flex flex-col gap-1">
-            <div class="flex flex-wrap items-center gap-4">
-              <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer" title="При возврате в «Компании» фильтры применятся автоматически">
-                <input type="checkbox" id="rememberCompanyFilters" class="rounded" />
-                <span>Запоминать фильтры</span>
-              </label>
-              <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer" title="Сохранит строку поиска и восстановит при возврате">
-                <input type="checkbox" id="rememberCompanySearch" class="rounded" />
-                <span>Запоминать поиск</span>
-              </label>
-            </div>
-            <div class="text-xs text-brand-dark/50">
-              Фильтры и поиск будут автоматически восстановлены при следующем входе в раздел (если галочки включены).
-            </div>
+          <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80 cursor-pointer" title="При возврате в «Компании» фильтры применятся автоматически">
+            <input type="checkbox" id="rememberCompanyFilters" class="rounded" />
+            <span>Запоминать фильтры</span>
+          </label>
+          <div class="text-xs text-brand-dark/50 w-full md:w-auto">
+            Фильтры будут автоматически восстановлены при следующем входе (если галочка «Запоминать фильтры» включена).
           </div>
         </div>
         <div class="flex flex-wrap gap-2 hidden" id="companyFilterFormButtons">
@@ -1100,6 +1098,26 @@
         if (rememberFiltersCb) rememberFiltersCb.addEventListener('change', onPrefChange);
         if (rememberSearchCb) rememberSearchCb.addEventListener('change', onPrefChange);
       })();
+
+      // «Нет задач» и «Только с просрочками» взаимоисключающие: при выборе «Нет задач» снимаем и отключаем просрочки
+      (function initOverdueTaskFilterSync() {
+        const taskFilterEl = document.getElementById('companyFilterTaskFilter');
+        const overdueCb = document.getElementById('companyFilterOverdue');
+        if (!taskFilterEl || !overdueCb) return;
+        const overdueLabel = document.getElementById('companyFilterOverdueLabel');
+        window._syncCompanyOverdueWithTaskFilter = function() {
+          if (taskFilterEl.value === 'no_tasks') {
+            overdueCb.checked = false;
+            overdueCb.disabled = true;
+            if (overdueLabel) { overdueLabel.classList.add('opacity-60', 'cursor-not-allowed'); overdueLabel.title = 'Недоступно при фильтре «Нет задач»'; }
+          } else {
+            overdueCb.disabled = false;
+            if (overdueLabel) { overdueLabel.classList.remove('opacity-60', 'cursor-not-allowed'); overdueLabel.title = ''; }
+          }
+        };
+        taskFilterEl.addEventListener('change', window._syncCompanyOverdueWithTaskFilter);
+        window._syncCompanyOverdueWithTaskFilter();
+      })();
       
       // Обработчик формы: поиск только по Enter/лупе с валидным запросом (в запрос уходит normalized, в поле не подставляем)
       if (filterForm) {
@@ -1237,6 +1255,7 @@
         const applied = applySavedState(saved, prefs);
         if (!applied) return;
         setRegionLabel();
+        if (typeof window._syncCompanyOverdueWithTaskFilter === 'function') window._syncCompanyOverdueWithTaskFilter();
         const hadSearch = !!(saved.search && String(saved.search).trim());
         if (hadSearch && prefs.search) {
           restoredSearchOnLoad = true;
