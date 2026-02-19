@@ -5056,9 +5056,6 @@
         window.openNoteCreateModern = openCreate;
       }
 
-      // Экспортируем, чтобы можно было вызвать после ajax-обновления обзора
-      window.updateOverviewNoteExpand = updateExpandVisibility;
-
       if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', initModernNoteModal);
       } else {
@@ -7805,6 +7802,7 @@
         updateExpandVisibility();
       }
       window.addEventListener('resize', updateExpandVisibility);
+      window.updateOverviewNoteExpand = updateExpandVisibility;
 
       document.addEventListener('click', function(e) {
         const btn = e.target.closest('[data-note-expand-toggle], [data-note-preview-toggle]');

@@ -109,7 +109,7 @@ if not DEBUG:
     CSP_DEFAULT_SRC = os.getenv("CSP_DEFAULT_SRC", "'self'")
     CSP_SCRIPT_SRC = os.getenv("CSP_SCRIPT_SRC", "'self' 'unsafe-inline' https://cdn.tailwindcss.com")
     CSP_STYLE_SRC = os.getenv("CSP_STYLE_SRC", "'self' 'unsafe-inline' https://cdn.tailwindcss.com")
-    CSP_IMG_SRC = os.getenv("CSP_IMG_SRC", "'self' data: https:")
+    CSP_IMG_SRC = os.getenv("CSP_IMG_SRC", "'self' data: https: blob:")
     CSP_FONT_SRC = os.getenv("CSP_FONT_SRC", "'self' data:")
     CSP_CONNECT_SRC = os.getenv("CSP_CONNECT_SRC", "'self'")
     
