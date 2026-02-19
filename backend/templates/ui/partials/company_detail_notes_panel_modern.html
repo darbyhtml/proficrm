@@ -21,7 +21,7 @@
         {% csrf_token %}
         <input id="noteFileModernInline" type="file" name="attachment" class="hidden" />
         <input id="noteFilesMultipleModernInline" type="file" name="attachments" multiple class="hidden" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv" />
-        <div class="note-input-bar note-files-zone flex items-end gap-2 rounded-2xl overflow-hidden px-3 py-2 min-h-[52px]">
+        <div class="note-input-bar note-files-zone flex items-start gap-2 rounded-2xl overflow-hidden px-3 py-2 min-h-[52px]">
           <label for="noteFilesMultipleModernInline" class="flex-shrink-0 p-2 rounded-lg text-[#64748b] hover:text-brand-teal hover:bg-black/5 cursor-pointer transition-colors" title="Прикрепить файлы" aria-label="Прикрепить файлы">
             <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
           </label>
