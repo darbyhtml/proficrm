@@ -1426,8 +1426,9 @@ def analytics(request: HttpRequest) -> HttpResponse:
     )
 
     # Полный QS для вычисления холодных звонков (без среза)
+    # Учитываем все звонки с is_cold_call=True (включая ручные отметки)
     cold_call_ids = set(
-        calls_qs_base.filter(is_cold_call=True).filter(_cold_call_confirm_q()).values_list("id", flat=True)
+        calls_qs_base.filter(is_cold_call=True).values_list("id", flat=True)
     )
 
     # Ограничиваем только отображаемый список
@@ -1441,6 +1442,47 @@ def analytics(request: HttpRequest) -> HttpResponse:
             continue
         stats[uid]["calls_total"] += 1
         if call.id in cold_call_ids:
+            stats[uid]["cold_calls"] += 1
+    
+    # Добавляем ручные отметки в статистику холодных звонков
+    # Ручные отметки на компаниях
+    manual_companies = Company.objects.filter(
+        responsible_id__in=user_ids,
+        primary_cold_marked_at__gte=start,
+        primary_cold_marked_at__lt=end
+    ).values_list("responsible_id", flat=True)
+    for uid in manual_companies:
+        if uid in stats:
+            stats[uid]["cold_calls"] += 1
+    
+    # Ручные отметки на контактах
+    manual_contacts = Contact.objects.filter(
+        company__responsible_id__in=user_ids,
+        cold_marked_at__gte=start,
+        cold_marked_at__lt=end
+    ).values_list("company__responsible_id", flat=True)
+    for uid in manual_contacts:
+        if uid and uid in stats:
+            stats[uid]["cold_calls"] += 1
+    
+    # Ручные отметки на телефонах компаний
+    manual_company_phones = CompanyPhone.objects.filter(
+        company__responsible_id__in=user_ids,
+        cold_marked_at__gte=start,
+        cold_marked_at__lt=end
+    ).values_list("company__responsible_id", flat=True)
+    for uid in manual_company_phones:
+        if uid and uid in stats:
+            stats[uid]["cold_calls"] += 1
+    
+    # Ручные отметки на телефонах контактов
+    manual_contact_phones = ContactPhone.objects.filter(
+        contact__company__responsible_id__in=user_ids,
+        cold_marked_at__gte=start,
+        cold_marked_at__lt=end
+    ).values_list("contact__company__responsible_id", flat=True)
+    for uid in manual_contact_phones:
+        if uid and uid in stats:
             stats[uid]["cold_calls"] += 1
 
     # Группировка по филиалу (для управляющего) + карточки для шаблона
@@ -1623,13 +1665,11 @@ def analytics_user(request: HttpRequest, user_id: int) -> HttpResponse:
         .order_by("-created_at")
     )
 
-    # Холодные звонки (строгая логика, включая отметки на телефонах):
+    # Холодные звонки: все звонки с is_cold_call=True (включая ручные отметки)
     # - звонок инициирован через кнопку (note="UI click")
     # - у звонка is_cold_call=True
-    # - и именно этот звонок был подтверждён отметкой (FK marked_call) на компании, контакте или их телефонах
     cold_calls_qs = (
         calls_qs.filter(is_cold_call=True)
-        .filter(_cold_call_confirm_q())
         .order_by("-created_at")
         .distinct()
     )
@@ -1734,10 +1774,12 @@ def _can_view_cold_call_reports(user: User) -> bool:
 
 def _cold_call_confirm_q() -> Q:
     """
-    Условие "подтвержденный холодный звонок":
+    Условие "подтвержденный холодный звонок" для отчётов по звонкам:
     - is_cold_call=True на CallRequest
     - и этот звонок записан как marked_call либо на компании, либо на контакте,
       либо на их телефонах (CompanyPhone/ContactPhone).
+    Отметки, поставленные без звонка из CRM (cold_marked_call=None), в эти
+    отчёты не попадают; на карточке компании они отображаются.
     """
     return Q(
         Q(company__primary_cold_marked_call_id=F("id"))
@@ -1793,10 +1835,8 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
     day_end = day_start + timedelta(days=1)
     day_label = target_date.strftime("%d.%m.%Y")
 
-    # Строгая логика холодных звонков:
-    # - инициированы через кнопку "Позвонить с телефона" (note="UI click")
-    # - is_cold_call=True
-    # - и подтверждены отметкой (marked_call) в допустимое окно (проверяется в момент отметки)
+    # Холодные звонки: все звонки с is_cold_call=True + ручные отметки без звонка
+    # 1. Все звонки с is_cold_call=True
     qs_base = (
         CallRequest.objects.filter(created_by=user, created_at__gte=day_start, created_at__lt=day_end, note="UI click")
         .exclude(status=CallRequest.Status.CANCELLED)
@@ -1804,10 +1844,37 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
     )
     qs = (
         qs_base.filter(is_cold_call=True)
-        .filter(_cold_call_confirm_q())
         .order_by("created_at")
         .distinct()
     )
+    
+    # 2. Ручные отметки на компаниях (основной контакт)
+    manual_companies = Company.objects.filter(
+        responsible=user,
+        primary_cold_marked_at__gte=day_start,
+        primary_cold_marked_at__lt=day_end
+    ).select_related("primary_cold_marked_by").only("id", "name", "contact_name", "phone", "primary_cold_marked_at", "primary_cold_marked_by")
+    
+    # 3. Ручные отметки на контактах
+    manual_contacts = Contact.objects.filter(
+        company__responsible=user,
+        cold_marked_at__gte=day_start,
+        cold_marked_at__lt=day_end
+    ).select_related("company", "cold_marked_by").only("id", "first_name", "last_name", "company_id", "cold_marked_at", "cold_marked_by", "company__name")
+    
+    # 4. Ручные отметки на телефонах компаний
+    manual_company_phones = CompanyPhone.objects.filter(
+        company__responsible=user,
+        cold_marked_at__gte=day_start,
+        cold_marked_at__lt=day_end
+    ).select_related("company", "cold_marked_by").only("id", "value", "company_id", "cold_marked_at", "cold_marked_by", "company__name")
+    
+    # 5. Ручные отметки на телефонах контактов
+    manual_contact_phones = ContactPhone.objects.filter(
+        contact__company__responsible=user,
+        cold_marked_at__gte=day_start,
+        cold_marked_at__lt=day_end
+    ).select_related("contact", "contact__company", "cold_marked_by").only("id", "value", "contact_id", "cold_marked_at", "cold_marked_by", "contact__first_name", "contact__last_name", "contact__company_id", "contact__company__name")
     
     # Дополнительные метрики для ежедневного отчета менеджеров
     # 1. Общее количество входящих звонков
@@ -1841,7 +1908,7 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
         f"Отчёт: ежедневная статистика за {day_label}",
         "",
         "Холодные звонки:",
-        f"  Всего: {qs.count()}",
+        f"  Всего: {qs.count() + manual_companies.count() + manual_contacts.count() + manual_company_phones.count() + manual_contact_phones.count()}",
         "",
         "Общая статистика:",
         f"  Общее количество звонков (входящие), шт: {incoming_calls_count}",
@@ -1856,6 +1923,8 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
     # скрываем повторы в отчёте.
     dedupe_window_s = 60
     last_seen = {}  # (phone, company_id, contact_id) -> created_at
+    
+    # Звонки с подтверждённой отметкой
     for call in qs:
         key = (call.phone_raw or "", str(call.company_id or ""), str(call.contact_id or ""))
         prev = last_seen.get(key)
@@ -1875,6 +1944,51 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
         phone = call.phone_raw or ""
         items.append({"time": t, "phone": phone, "contact": who, "company": company_name})
         lines.append(f"{i}) {t} — {who2} — {phone}")
+    
+    # Ручные отметки на компаниях
+    for company in manual_companies:
+        i += 1
+        t = timezone.localtime(company.primary_cold_marked_at).strftime("%H:%M")
+        company_name = company.name or ""
+        contact_name = (company.contact_name or "").strip()
+        who = contact_name or "Контакт не указан"
+        who2 = f"{who} ({company_name})" if company_name else who
+        phone = company.phone or ""
+        items.append({"time": t, "phone": phone, "contact": who, "company": company_name})
+        lines.append(f"{i}) {t} — {who2} — {phone} (ручная отметка)")
+    
+    # Ручные отметки на контактах
+    for contact in manual_contacts:
+        i += 1
+        t = timezone.localtime(contact.cold_marked_at).strftime("%H:%M")
+        company_name = contact.company.name if contact.company else ""
+        contact_name = f"{contact.first_name} {contact.last_name}".strip() or "Контакт"
+        who2 = f"{contact_name} ({company_name})" if company_name else contact_name
+        phone = ""
+        items.append({"time": t, "phone": phone, "contact": contact_name, "company": company_name})
+        lines.append(f"{i}) {t} — {who2} — {phone} (ручная отметка)")
+    
+    # Ручные отметки на телефонах компаний
+    for phone_obj in manual_company_phones:
+        i += 1
+        t = timezone.localtime(phone_obj.cold_marked_at).strftime("%H:%M")
+        company_name = phone_obj.company.name if phone_obj.company else ""
+        contact_name = ""
+        who2 = company_name or "Компания"
+        phone = phone_obj.value or ""
+        items.append({"time": t, "phone": phone, "contact": contact_name, "company": company_name})
+        lines.append(f"{i}) {t} — {who2} — {phone} (ручная отметка)")
+    
+    # Ручные отметки на телефонах контактов
+    for phone_obj in manual_contact_phones:
+        i += 1
+        t = timezone.localtime(phone_obj.cold_marked_at).strftime("%H:%M")
+        company_name = phone_obj.contact.company.name if phone_obj.contact and phone_obj.contact.company else ""
+        contact_name = f"{phone_obj.contact.first_name} {phone_obj.contact.last_name}".strip() if phone_obj.contact else ""
+        who2 = f"{contact_name} ({company_name})" if company_name else contact_name or "Контакт"
+        phone = phone_obj.value or ""
+        items.append({"time": t, "phone": phone, "contact": contact_name, "company": company_name})
+        lines.append(f"{i}) {t} — {who2} — {phone} (ручная отметка)")
 
     return JsonResponse({
         "ok": True,
@@ -1884,7 +1998,7 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
         "items": items,
         "text": "\n".join(lines),
         "stats": {
-            "cold_calls": qs.count(),
+            "cold_calls": len(items),
             "incoming_calls": incoming_calls_count,
             "new_companies": new_companies_count,
             "new_contacts": new_contacts_count,
@@ -1928,6 +2042,11 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
             break
 
     month_end = _add_months(selected, 1)
+    month_start_aware = timezone.make_aware(datetime.combine(selected, datetime.min.time()))
+    month_end_aware = timezone.make_aware(datetime.combine(month_end, datetime.min.time()))
+    
+    # Холодные звонки: все звонки с is_cold_call=True + ручные отметки без звонка
+    # 1. Все звонки с is_cold_call=True
     qs_base = (
         CallRequest.objects.filter(created_by=user, created_at__date__gte=selected, created_at__date__lt=month_end, note="UI click")
         .exclude(status=CallRequest.Status.CANCELLED)
@@ -1935,15 +2054,39 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
     )
     qs = (
         qs_base.filter(is_cold_call=True)
-        .filter(_cold_call_confirm_q())
         .order_by("created_at")
         .distinct()
     )
     
-    # Дополнительные метрики для месячного отчета менеджеров
-    month_start_aware = timezone.make_aware(datetime.combine(selected, datetime.min.time()))
-    month_end_aware = timezone.make_aware(datetime.combine(month_end, datetime.min.time()))
+    # 2. Ручные отметки на компаниях (основной контакт)
+    manual_companies = Company.objects.filter(
+        responsible=user,
+        primary_cold_marked_at__gte=month_start_aware,
+        primary_cold_marked_at__lt=month_end_aware
+    ).select_related("primary_cold_marked_by").only("id", "name", "contact_name", "phone", "primary_cold_marked_at", "primary_cold_marked_by")
     
+    # 3. Ручные отметки на контактах
+    manual_contacts = Contact.objects.filter(
+        company__responsible=user,
+        cold_marked_at__gte=month_start_aware,
+        cold_marked_at__lt=month_end_aware
+    ).select_related("company", "cold_marked_by").only("id", "first_name", "last_name", "company_id", "cold_marked_at", "cold_marked_by", "company__name")
+    
+    # 4. Ручные отметки на телефонах компаний
+    manual_company_phones = CompanyPhone.objects.filter(
+        company__responsible=user,
+        cold_marked_at__gte=month_start_aware,
+        cold_marked_at__lt=month_end_aware
+    ).select_related("company", "cold_marked_by").only("id", "value", "company_id", "cold_marked_at", "cold_marked_by", "company__name")
+    
+    # 5. Ручные отметки на телефонах контактов
+    manual_contact_phones = ContactPhone.objects.filter(
+        contact__company__responsible=user,
+        cold_marked_at__gte=month_start_aware,
+        cold_marked_at__lt=month_end_aware
+    ).select_related("contact", "contact__company", "cold_marked_by").only("id", "value", "contact_id", "cold_marked_at", "cold_marked_by", "contact__first_name", "contact__last_name", "contact__company_id", "contact__company__name")
+    
+    # Дополнительные метрики для месячного отчета менеджеров
     # 1. Общее количество входящих звонков
     incoming_calls_count = (
         CallRequest.objects.filter(
@@ -1971,11 +2114,12 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
     ).count()
 
     items = []
+    total_cold = qs.count() + manual_companies.count() + manual_contacts.count() + manual_company_phones.count() + manual_contact_phones.count()
     lines = [
         f"Отчёт: месячная статистика за {_month_label(selected)}",
         "",
         "Холодные звонки:",
-        f"  Всего: {qs.count()}",
+        f"  Всего: {total_cold}",
         "",
         "Общая статистика:",
         f"  Общее количество звонков (входящие), шт: {incoming_calls_count}",
@@ -1988,6 +2132,8 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
     i = 0
     dedupe_window_s = 60
     last_seen = {}  # (phone, company_id, contact_id) -> created_at
+    
+    # Звонки с подтверждённой отметкой
     for call in qs:
         key = (call.phone_raw or "", str(call.company_id or ""), str(call.contact_id or ""))
         prev = last_seen.get(key)
@@ -2008,6 +2154,55 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
         phone = call.phone_raw or ""
         items.append({"time": t, "phone": phone, "contact": who, "company": company_name})
         lines.append(f"{i}) {t} — {who2} — {phone}")
+    
+    # Ручные отметки на компаниях
+    for company in manual_companies:
+        i += 1
+        dt = timezone.localtime(company.primary_cold_marked_at)
+        t = dt.strftime("%d.%m %H:%M")
+        company_name = company.name or ""
+        contact_name = (company.contact_name or "").strip()
+        who = contact_name or "Контакт не указан"
+        who2 = f"{who} ({company_name})" if company_name else who
+        phone = company.phone or ""
+        items.append({"time": t, "phone": phone, "contact": who, "company": company_name})
+        lines.append(f"{i}) {t} — {who2} — {phone} (ручная отметка)")
+    
+    # Ручные отметки на контактах
+    for contact in manual_contacts:
+        i += 1
+        dt = timezone.localtime(contact.cold_marked_at)
+        t = dt.strftime("%d.%m %H:%M")
+        company_name = contact.company.name if contact.company else ""
+        contact_name = f"{contact.first_name} {contact.last_name}".strip() or "Контакт"
+        who2 = f"{contact_name} ({company_name})" if company_name else contact_name
+        phone = ""
+        items.append({"time": t, "phone": phone, "contact": contact_name, "company": company_name})
+        lines.append(f"{i}) {t} — {who2} — {phone} (ручная отметка)")
+    
+    # Ручные отметки на телефонах компаний
+    for phone_obj in manual_company_phones:
+        i += 1
+        dt = timezone.localtime(phone_obj.cold_marked_at)
+        t = dt.strftime("%d.%m %H:%M")
+        company_name = phone_obj.company.name if phone_obj.company else ""
+        contact_name = ""
+        who2 = company_name or "Компания"
+        phone = phone_obj.value or ""
+        items.append({"time": t, "phone": phone, "contact": contact_name, "company": company_name})
+        lines.append(f"{i}) {t} — {who2} — {phone} (ручная отметка)")
+    
+    # Ручные отметки на телефонах контактов
+    for phone_obj in manual_contact_phones:
+        i += 1
+        dt = timezone.localtime(phone_obj.cold_marked_at)
+        t = dt.strftime("%d.%m %H:%M")
+        company_name = phone_obj.contact.company.name if phone_obj.contact and phone_obj.contact.company else ""
+        contact_name = f"{phone_obj.contact.first_name} {phone_obj.contact.last_name}".strip() if phone_obj.contact else ""
+        who2 = f"{contact_name} ({company_name})" if company_name else contact_name or "Контакт"
+        phone = phone_obj.value or ""
+        items.append({"time": t, "phone": phone, "contact": contact_name, "company": company_name})
+        lines.append(f"{i}) {t} — {who2} — {phone} (ручная отметка)")
 
     month_options = [{"key": ms.strftime("%Y-%m"), "label": _month_label(ms)} for ms in available]
     return JsonResponse(
@@ -2021,7 +2216,7 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
             "items": items,
             "text": "\n".join(lines),
             "stats": {
-                "cold_calls": qs.count(),
+                "cold_calls": total_cold,
                 "incoming_calls": incoming_calls_count,
                 "new_companies": new_companies_count,
                 "new_contacts": new_contacts_count,
@@ -2049,16 +2244,24 @@ def cold_calls_report_last_7_days(request: HttpRequest) -> JsonResponse:
         d = start_date + timedelta(days=i)
         day_start = timezone.make_aware(datetime.combine(d, datetime.min.time()))
         day_end = day_start + timedelta(days=1)
+        # Все звонки с is_cold_call=True
         qs_base = (
             CallRequest.objects.filter(created_by=user, created_at__gte=day_start, created_at__lt=day_end, note="UI click")
             .exclude(status=CallRequest.Status.CANCELLED)
         )
-        cnt = (
+        cnt_calls = (
             qs_base.filter(is_cold_call=True)
-            .filter(_cold_call_confirm_q())
             .distinct()
             .count()
         )
+        # Ручные отметки
+        cnt_manual = (
+            Company.objects.filter(responsible=user, primary_cold_marked_at__gte=day_start, primary_cold_marked_at__lt=day_end).count() +
+            Contact.objects.filter(company__responsible=user, cold_marked_at__gte=day_start, cold_marked_at__lt=day_end).count() +
+            CompanyPhone.objects.filter(company__responsible=user, cold_marked_at__gte=day_start, cold_marked_at__lt=day_end).count() +
+            ContactPhone.objects.filter(contact__company__responsible=user, cold_marked_at__gte=day_start, cold_marked_at__lt=day_end).count()
+        )
+        cnt = cnt_calls + cnt_manual
         total += cnt
         days.append(
             {
@@ -4010,7 +4213,7 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
         messages.error(request, "У компании не задан основной телефон.")
         return redirect("company_detail", company_id=company.id)
 
-    # Ищем последний звонок по основному номеру (без ограничения по времени)
+    # Опционально привязываем к последнему звонку из CRM (пока приложение не доработано — можно ставить отметку в любой момент)
     normalized = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
     now = timezone.now()
     last_call = (
@@ -4018,20 +4221,14 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
         .order_by("-created_at")
         .first()
     )
-    if not last_call:
-        if _is_ajax(request):
-            return JsonResponse({"ok": False, "error": "Не найден звонок по основному номеру."}, status=400)
-        messages.error(request, "Не найден звонок по основному номеру.")
-        return redirect("company_detail", company_id=company.id)
 
-    # Отмечаем как холодный
     company.primary_contact_is_cold_call = True
     company.primary_cold_marked_at = now
     company.primary_cold_marked_by = user
     company.primary_cold_marked_call = last_call
     company.save(update_fields=["primary_contact_is_cold_call", "primary_cold_marked_at", "primary_cold_marked_by", "primary_cold_marked_call", "updated_at"])
 
-    if not last_call.is_cold_call:
+    if last_call and not last_call.is_cold_call:
         last_call.is_cold_call = True
         last_call.save(update_fields=["is_cold_call"])
 
@@ -4047,6 +4244,9 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
         )
 
     messages.success(request, "Отмечено: холодный звонок (основной контакт).")
+    meta = {}
+    if last_call:
+        meta["call_id"] = str(last_call.id)
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.UPDATE,
@@ -4054,7 +4254,7 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
         entity_id=company.id,
         company_id=company.id,
         message="Отмечено: холодный звонок (осн. контакт)",
-        meta={"call_id": str(last_call.id)},
+        meta=meta,
     )
     return redirect("company_detail", company_id=company.id)
 
@@ -4103,27 +4303,21 @@ def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
         messages.info(request, "Контакт уже отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
-    # Ищем последний звонок по этому контакту (без ограничения по времени)
+    # Опционально привязываем к последнему звонку из CRM (пока приложение не доработано — можно ставить отметку в любой момент)
     now = timezone.now()
     last_call = (
         CallRequest.objects.filter(created_by=user, contact=contact)
         .order_by("-created_at")
         .first()
     )
-    if not last_call:
-        if _is_ajax(request):
-            return JsonResponse({"ok": False, "error": "Не найден звонок по этому контакту."}, status=400)
-        messages.error(request, "Не найден звонок по этому контакту.")
-        return redirect("company_detail", company_id=company.id)
 
-    # Отмечаем как холодный
     contact.is_cold_call = True
     contact.cold_marked_at = now
     contact.cold_marked_by = user
     contact.cold_marked_call = last_call
     contact.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call", "updated_at"])
 
-    if not last_call.is_cold_call:
+    if last_call and not last_call.is_cold_call:
         last_call.is_cold_call = True
         last_call.save(update_fields=["is_cold_call"])
 
@@ -4139,6 +4333,9 @@ def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
         )
 
     messages.success(request, "Отмечено: холодный звонок (контакт).")
+    meta = {"contact_id": str(contact.id)}
+    if last_call:
+        meta["call_id"] = str(last_call.id)
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.UPDATE,
@@ -4146,7 +4343,7 @@ def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
         entity_id=str(contact.id),
         company_id=company.id,
         message="Отмечено: холодный звонок (контакт)",
-        meta={"contact_id": str(contact.id), "call_id": str(last_call.id)},
+        meta=meta,
     )
     return redirect("company_detail", company_id=company.id)
 
@@ -4360,20 +4557,14 @@ def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> Ht
         .order_by("-created_at")
         .first()
     )
-    if not last_call:
-        if _is_ajax(request):
-            return JsonResponse({"ok": False, "error": "Не найден звонок по этому номеру телефона."}, status=400)
-        messages.error(request, "Не найден звонок по этому номеру телефона.")
-        return redirect("company_detail", company_id=company.id)
 
-    # Отмечаем как холодный
     contact_phone.is_cold_call = True
     contact_phone.cold_marked_at = now
     contact_phone.cold_marked_by = user
     contact_phone.cold_marked_call = last_call
     contact_phone.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
 
-    if not last_call.is_cold_call:
+    if last_call and not last_call.is_cold_call:
         last_call.is_cold_call = True
         last_call.save(update_fields=["is_cold_call"])
 
@@ -4389,6 +4580,9 @@ def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> Ht
         )
 
     messages.success(request, f"Отмечено: холодный звонок (номер {contact_phone.value}).")
+    meta = {"contact_phone_id": str(contact_phone.id)}
+    if last_call:
+        meta["call_id"] = str(last_call.id)
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.UPDATE,
@@ -4396,7 +4590,7 @@ def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> Ht
         entity_id=str(contact_phone.id),
         company_id=company.id,
         message=f"Отмечено: холодный звонок (номер {contact_phone.value})",
-        meta={"contact_phone_id": str(contact_phone.id), "call_id": str(last_call.id)},
+        meta=meta,
     )
     return redirect("company_detail", company_id=company.id)
 
@@ -4543,20 +4737,14 @@ def company_phone_cold_call_toggle(request: HttpRequest, company_phone_id) -> Ht
         .order_by("-created_at")
         .first()
     )
-    if not last_call:
-        if _is_ajax(request):
-            return JsonResponse({"ok": False, "error": "Не найден звонок по этому номеру телефона."}, status=400)
-        messages.error(request, "Не найден звонок по этому номеру телефона.")
-        return redirect("company_detail", company_id=company.id)
 
-    # Отмечаем как холодный
     company_phone.is_cold_call = True
     company_phone.cold_marked_at = now
     company_phone.cold_marked_by = user
     company_phone.cold_marked_call = last_call
     company_phone.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
 
-    if not last_call.is_cold_call:
+    if last_call and not last_call.is_cold_call:
         last_call.is_cold_call = True
         last_call.save(update_fields=["is_cold_call"])
 
@@ -4572,6 +4760,9 @@ def company_phone_cold_call_toggle(request: HttpRequest, company_phone_id) -> Ht
         )
 
     messages.success(request, f"Отмечено: холодный звонок (номер {company_phone.value}).")
+    meta = {"company_phone_id": str(company_phone.id)}
+    if last_call:
+        meta["call_id"] = str(last_call.id)
     log_event(
         actor=user,
         verb=ActivityEvent.Verb.UPDATE,
@@ -4579,7 +4770,7 @@ def company_phone_cold_call_toggle(request: HttpRequest, company_phone_id) -> Ht
         entity_id=str(company_phone.id),
         company_id=company.id,
         message=f"Отмечено: холодный звонок (номер {company_phone.value})",
-        meta={"company_phone_id": str(company_phone.id), "call_id": str(last_call.id)},
+        meta=meta,
     )
     return redirect("company_detail", company_id=company.id)
 
