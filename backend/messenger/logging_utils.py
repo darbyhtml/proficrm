@@ -54,21 +54,11 @@ def safe_log_widget_error(
 ):
     """
     Безопасное логирование ошибок Widget API без утечки токенов.
-    
-    Args:
-        logger: Логгер для записи
-        level: Уровень логирования (logging.ERROR, logging.WARNING и т.д.)
-        message: Сообщение об ошибке
-        widget_token: Токен виджета (будет замаскирован)
-        session_token: Токен сессии (будет замаскирован)
-        inbox_id: ID inbox (можно логировать)
-        conversation_id: ID диалога (можно логировать)
-        contact_id: ID контакта (можно логировать)
-        error: Исключение (если есть)
-        **extra: Дополнительные поля для логирования
     """
+    # Нельзя класть ключи вроде "message" в extra — logging.LogRecord зарезервировал их.
+    # Храним текст сообщения в отдельном поле.
     safe_data = {
-        "message": message,
+        "log_message": message,
     }
     
     if widget_token is not None:
@@ -81,9 +71,12 @@ def safe_log_widget_error(
         safe_data["conversation_id"] = conversation_id
     if contact_id is not None:
         safe_data["contact_id"] = str(contact_id) if contact_id else None
-    
-    # Добавляем дополнительные поля
-    safe_data.update(extra)
+    # Добавляем дополнительные поля, избегая конфликтов с LogRecord
+    if extra:
+        extra = dict(extra)
+        extra.pop("message", None)
+        extra.pop("msg", None)
+        safe_data.update(extra)
     
     if error:
         logger.log(level, message, extra=safe_data, exc_info=True)
