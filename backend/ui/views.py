@@ -57,7 +57,7 @@ from tasksapp.policy import visible_tasks_qs, can_manage_task_status
 from notifications.models import Notification
 from notifications.service import notify
 from phonebridge.models import CallRequest, PhoneDevice, MobileAppBuild, MobileAppQrToken
-from messenger.models import Conversation, Message, Inbox, RoutingRule, AgentProfile
+from messenger.models import Conversation, Message, Inbox, RoutingRule, AgentProfile, Channel
 from messenger.selectors import visible_conversations_qs
 from messenger.utils import ensure_messenger_enabled_view
 from messenger.logging_utils import ui_logger, safe_log_widget_error
@@ -11882,6 +11882,12 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
                 return redirect("settings_messenger_inbox_edit", inbox_id=inbox.id if inbox else None)
             
             is_active = request.POST.get("is_active") == "on"
+            # Тип канала и домен сайта (для website‑канала)
+            channel_type = (request.POST.get("channel_type") or Channel.Type.WEBSITE).strip() or Channel.Type.WEBSITE
+            valid_channel_values = {choice[0] for choice in Channel.Type.choices}
+            if channel_type not in valid_channel_values:
+                channel_type = Channel.Type.WEBSITE
+            website_domain = (request.POST.get("website_domain") or "").strip().lower()
             
             # Настройки виджета из JSON (при редактировании сохраняем существующие ключи)
             widget_title = request.POST.get("widget_title", "").strip()
@@ -11969,12 +11975,27 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
 
             # Безопасность: allowlist доменов
             raw_domains = (request.POST.get("security_allowed_domains") or "").strip()
-            domains = []
+            domains: list[str] = []
             for line in raw_domains.replace(",", "\n").splitlines():
                 d = line.strip().lower()
                 if d:
                     domains.append(d)
+            # Если список доменов пуст, но указан основной домен сайта — добавим его в allowlist
+            if not domains and website_domain:
+                domains.append(website_domain)
             settings_dict["security"] = {"allowed_domains": domains}
+
+            # Конфигурация канала и сайта
+            channel_cfg = settings_dict.get("channel") if isinstance(settings_dict.get("channel"), dict) else {}
+            channel_cfg["type"] = channel_type
+            settings_dict["channel"] = channel_cfg
+
+            website_cfg = settings_dict.get("website") if isinstance(settings_dict.get("website"), dict) else {}
+            if website_domain:
+                website_cfg["primary_domain"] = website_domain
+            # Дублируем список доменов для удобства просмотра в настройках сайта
+            website_cfg["allowed_domains"] = domains
+            settings_dict["website"] = website_cfg
 
             # Интеграции: webhook
             integrations_cfg = settings_dict.get("integrations") if isinstance(settings_dict.get("integrations"), dict) else {}
@@ -12023,6 +12044,15 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
                     "Inbox updated",
                     extra={"inbox_id": inbox.id, "name": name},
                 )
+                # Обновляем/создаём Channel для Inbox
+                Channel.objects.update_or_create(
+                    inbox=inbox,
+                    defaults={
+                        "type": channel_type,
+                        "config": {"primary_domain": website_domain, "allowed_domains": domains},
+                        "is_active": True,
+                    },
+                )
                 messages.success(request, "Inbox обновлён.")
             else:
                 # Создание нового
@@ -12047,6 +12077,14 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
                     branch=branch,
                     is_active=is_active,
                     settings=settings_dict,
+                )
+                Channel.objects.update_or_create(
+                    inbox=inbox,
+                    defaults={
+                        "type": channel_type,
+                        "config": {"primary_domain": website_domain, "allowed_domains": domains},
+                        "is_active": True,
+                    },
                 )
                 ui_logger.info(
                     "Inbox created",
@@ -12109,11 +12147,19 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
         "max_file_size_mb": att_cfg.get("max_file_size_mb", 5),
     }
 
-    sec_cfg = (getattr(inbox, "settings", None) or {}).get("security") or {}
+    settings_obj = getattr(inbox, "settings", None) or {}
+    sec_cfg = settings_obj.get("security") or {}
     security_settings = {
         "allowed_domains": sec_cfg.get("allowed_domains") or [],
     }
-    integrations_cfg = (getattr(inbox, "settings", None) or {}).get("integrations") or {}
+    website_cfg = settings_obj.get("website") or {}
+    channel_cfg = settings_obj.get("channel") or {}
+    channel_type = channel_cfg.get("type", Channel.Type.WEBSITE)
+    website_settings = {
+        "domain": website_cfg.get("primary_domain", ""),
+        "channel_type": channel_type,
+    }
+    integrations_cfg = settings_obj.get("integrations") or {}
     webhook_cfg = integrations_cfg.get("webhook") or {}
     integration_settings = {
         "webhook_enabled": webhook_cfg.get("enabled", False),
@@ -12139,6 +12185,9 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
             "inbox": inbox,
             "branches": branches,
             "base_url": base_url,
+            "channel_type": channel_type,
+            "channel_types": Channel.Type.choices,
+            "website_settings": website_settings,
             "working_hours_days": working_hours_days,
             "working_hours": working_hours,
             "offline_settings": offline_settings,
