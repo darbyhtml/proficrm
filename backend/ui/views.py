@@ -12050,7 +12050,7 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
                 )
                 ui_logger.info(
                     "Inbox created",
-                    extra={"inbox_id": inbox.id, "name": name, "branch_id": branch.id if branch else None},
+                    extra={"inbox_id": inbox.id, "inbox_name": name, "branch_id": branch.id if branch else None},
                 )
                 messages.success(request, "Inbox создан.")
             
