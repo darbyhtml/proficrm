@@ -437,6 +437,14 @@
   line-height: 1.5;
 }
 
+.messenger-widget-input-autogrow {
+  min-height: 2.25rem !important;
+  max-height: 12rem !important;
+  resize: none !important;
+  overflow-y: auto !important;
+  line-height: 1.5;
+}
+
 .messenger-widget-input:focus {
   outline: none;
   border-color: #01948E;

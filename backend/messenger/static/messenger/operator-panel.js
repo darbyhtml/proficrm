@@ -661,15 +661,15 @@ class MessengerOperatorPanel {
         </div>
         <form id="messageForm" onsubmit="window.MessengerPanel.sendMessage(event)" enctype="multipart/form-data">
           <input type="hidden" name="conversation_id" value="${conversation.id}">
-          <div class="flex items-end gap-2">
+          <div class="flex items-start gap-2">
             <div class="flex-1 min-w-0">
-              <textarea name="body" id="messageBody" class="textarea w-full resize-none" rows="2" placeholder="Введите сообщение клиенту..."></textarea>
+              <textarea name="body" id="messageBody" class="textarea messenger-input-autogrow w-full resize-none" rows="1" placeholder="Введите сообщение клиенту..."></textarea>
               <div id="messageAttachmentsNames" class="text-xs text-brand-dark/60 mt-1 px-1"></div>
               <div id="composeModeHint" class="text-[10px] text-brand-dark/40 mt-1 px-1">
                 Сообщение увидит клиент. Внутренние заметки доступны только сотрудникам.
               </div>
             </div>
-            <div class="flex items-end gap-1.5 flex-shrink-0">
+            <div class="flex items-start gap-1.5 flex-shrink-0">
               <input type="file" name="attachments" id="messageAttachments" class="hidden" multiple accept="image/*,.pdf">
               <button type="button" onclick="document.getElementById('messageAttachments').click()" class="btn btn-outline btn-sm p-2" title="Прикрепить файл">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -723,6 +723,9 @@ class MessengerOperatorPanel {
       messageBody.addEventListener('input', () => {
         this.sendOperatorTypingPing(conversation.id);
       });
+      
+      // Инициализация авто-роста поля ввода
+      this.initMessageInputAutogrow(messageBody);
     }
 
     // Кнопка "Новые сообщения"
@@ -1696,6 +1699,70 @@ class MessengerOperatorPanel {
     if (this.pollingIntervals[conversationId]) {
       clearInterval(this.pollingIntervals[conversationId]);
       delete this.pollingIntervals[conversationId];
+    }
+  }
+
+  /**
+   * Инициализация авто-роста поля ввода сообщения и обработка вставки изображений через Ctrl+V
+   */
+  initMessageInputAutogrow(textarea) {
+    if (!textarea || !textarea.classList.contains('messenger-input-autogrow')) return;
+    if (textarea.getAttribute('data-messenger-autogrow-init')) return;
+    textarea.setAttribute('data-messenger-autogrow-init', '1');
+    
+    const form = textarea.closest('form');
+    if (!form) return;
+    const fileInput = form.querySelector('input[name="attachments"]');
+    
+    // Функция авто-роста
+    function autogrow() {
+      textarea.style.height = 'auto';
+      textarea.style.height = textarea.scrollHeight + 'px';
+    }
+    
+    textarea.addEventListener('input', autogrow);
+    autogrow(); // Инициализация при загрузке
+    
+    // Обработка вставки изображений через Ctrl+V
+    if (fileInput) {
+      textarea.addEventListener('paste', function(e) {
+        const items = e.clipboardData && e.clipboardData.items;
+        if (!items) return;
+        
+        const toAdd = [];
+        for (let i = 0; i < items.length; i++) {
+          if (items[i].type && items[i].type.indexOf('image/') === 0) {
+            const f = items[i].getAsFile();
+            if (f) toAdd.push(f);
+          }
+        }
+        
+        if (toAdd.length === 0) return;
+        e.preventDefault();
+        
+        // Убеждаемся, что у файлов есть имена
+        for (let k = 0; k < toAdd.length; k++) {
+          const f = toAdd[k];
+          if (!f.name || !String(f.name).trim()) {
+            toAdd[k] = new File([f], 'image.png', { type: f.type || 'image/png' });
+          }
+        }
+        
+        // Добавляем файлы в file input через DataTransfer
+        if (typeof DataTransfer !== 'undefined') {
+          const dt = new DataTransfer();
+          // Сохраняем существующие файлы
+          for (let j = 0; j < (fileInput.files || []).length; j++) {
+            dt.items.add(fileInput.files[j]);
+          }
+          // Добавляем новые файлы
+          for (let k = 0; k < toAdd.length; k++) {
+            dt.items.add(toAdd[k]);
+          }
+          fileInput.files = dt.files;
+          fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
     }
   }
 

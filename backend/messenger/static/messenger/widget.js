@@ -839,6 +839,21 @@
       }).catch(() => {});
     }
 
+    initInputAutogrow() {
+      if (!this.input || !this.input.classList.contains('messenger-widget-input-autogrow')) return;
+      if (this.input.getAttribute('data-widget-autogrow-init')) return;
+      this.input.setAttribute('data-widget-autogrow-init', '1');
+      
+      // Функция авто-роста
+      const autogrow = () => {
+        this.input.style.height = 'auto';
+        this.input.style.height = this.input.scrollHeight + 'px';
+      };
+      
+      this.input.addEventListener('input', autogrow);
+      autogrow(); // Инициализация при загрузке
+    }
+
     renderPendingFiles() {
       if (!this.pendingFilesEl) return;
       this.pendingFilesEl.innerHTML = '';
@@ -1028,9 +1043,9 @@
       inputRow.className = 'messenger-widget-form-row';
 
       this.input = document.createElement('textarea');
-      this.input.className = 'messenger-widget-input';
+      this.input.className = 'messenger-widget-input messenger-widget-input-autogrow';
       this.input.placeholder = 'Введите сообщение... (Enter — отправить, Shift+Enter — перенос строки)';
-      this.input.rows = 3;
+      this.input.rows = 1;
       this.input.maxLength = CONFIG.MAX_MESSAGE_LENGTH;
       this.input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
@@ -1049,8 +1064,16 @@
         if (!this.attachmentsEnabled) return;
         const items = e.clipboardData && e.clipboardData.items;
         if (!items) return;
+        
+        // Проверяем изображения из буфера обмена (для авто-роста и вставки)
+        const imageItems = [];
         for (let i = 0; i < items.length; i++) {
-          if (items[i].kind === 'file') {
+          if (items[i].type && items[i].type.indexOf('image/') === 0) {
+            const file = items[i].getAsFile();
+            if (file && this.isFileAllowed(file) && this.pendingFiles.length < 5) {
+              imageItems.push(file);
+            }
+          } else if (items[i].kind === 'file') {
             const file = items[i].getAsFile();
             if (file && this.isFileAllowed(file) && this.pendingFiles.length < 5) {
               this.pendingFiles.push(file);
@@ -1060,7 +1083,23 @@
             break;
           }
         }
+        
+        // Обрабатываем изображения из буфера обмена
+        if (imageItems.length > 0) {
+          e.preventDefault();
+          for (let k = 0; k < imageItems.length; k++) {
+            const f = imageItems[k];
+            if (!f.name || !String(f.name).trim()) {
+              imageItems[k] = new File([f], 'image.png', { type: f.type || 'image/png' });
+            }
+            this.pendingFiles.push(imageItems[k]);
+          }
+          this.renderPendingFiles();
+        }
       });
+
+      // Инициализация авто-роста поля ввода
+      this.initInputAutogrow();
 
       if (this.attachmentsEnabled) {
         this.fileInput = document.createElement('input');
