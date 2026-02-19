@@ -21,7 +21,7 @@
         <div class="flex gap-2">
           <a href="/companies/new/" class="btn btn-primary">+ Добавить компанию</a>
           {% if view_is_admin %}
-            <a href="/companies/export/?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}{% for r_id in selected_regions %}&region={{ r_id }}{% endfor %}&overdue={{ overdue }}&sort={{ sort }}&dir={{ dir }}" class="btn btn-outline">Экспорт CSV</a>
+            <a href="/companies/export/?q={{ q }}&responsible={{ responsible }}&status={{ status }}&branch={{ branch }}&sphere={{ sphere }}&contract_type={{ contract_type }}{% for r_id in selected_regions %}&region={{ r_id }}{% endfor %}&overdue={{ overdue }}&task_filter={{ task_filter|default:'' }}&sort={{ sort }}&dir={{ dir }}" class="btn btn-outline">Экспорт CSV</a>
           {% endif %}
         </div>
       </div>
@@ -146,6 +146,18 @@
       </div>
       <div class="flex flex-col md:flex-row md:items-center md:flex-wrap gap-2 justify-between">
         <div class="flex flex-wrap items-center gap-x-6 gap-y-2">
+          <div>
+            <label class="block text-sm text-brand-dark/80 mb-1">Задачи</label>
+            <select name="task_filter" class="select" style="min-width:11rem">
+              <option value="">Любой</option>
+              <option value="no_tasks" {% if task_filter == 'no_tasks' %}selected{% endif %}>Нет задач</option>
+              <option value="today" {% if task_filter == 'today' %}selected{% endif %}>На сегодня</option>
+              <option value="tomorrow" {% if task_filter == 'tomorrow' %}selected{% endif %}>На завтра</option>
+              <option value="week" {% if task_filter == 'week' %}selected{% endif %}>На этой неделе</option>
+              <option value="month" {% if task_filter == 'month' %}selected{% endif %}>В этом месяце</option>
+              <option value="quarter" {% if task_filter == 'quarter' %}selected{% endif %}>В этом квартале</option>
+            </select>
+          </div>
           <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
             <input type="checkbox" name="overdue" value="1" {% if overdue == '1' %}checked{% endif %} />
             Только с просрочками
@@ -187,6 +199,7 @@
       {% endfor %}
       <input type="hidden" name="cold_call" value="{{ cold_call }}" />
       <input type="hidden" name="overdue" value="{{ overdue }}" />
+      <input type="hidden" name="task_filter" value="{{ task_filter|default:'' }}" />
 
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div class="text-sm text-brand-dark/80">
@@ -364,6 +377,7 @@
             <input type="hidden" name="region" value="{{ r_id }}" />
             {% endfor %}
             {% if overdue %}<input type="hidden" name="overdue" value="{{ overdue }}" />{% endif %}
+            {% if task_filter %}<input type="hidden" name="task_filter" value="{{ task_filter }}" />{% endif %}
             {% if sort %}<input type="hidden" name="sort" value="{{ sort }}" />{% endif %}
             {% if dir %}<input type="hidden" name="dir" value="{{ dir }}" />{% endif %}
           </form>
@@ -498,7 +512,7 @@
         if (!filterForm) return;
         
         // Удаляем старые скрытые поля фильтров (кроме apply_mode и csrf_token)
-        const fieldsToUpdate = ['q', 'responsible', 'status', 'branch', 'sphere', 'contract_type', 'region', 'cold_call', 'overdue'];
+        const fieldsToUpdate = ['q', 'responsible', 'status', 'branch', 'sphere', 'contract_type', 'region', 'cold_call', 'overdue', 'task_filter'];
         fieldsToUpdate.forEach(fieldName => {
           form.querySelectorAll(`input[name="${fieldName}"]`).forEach(el => el.remove());
         });

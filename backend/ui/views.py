@@ -307,11 +307,17 @@ def _invalidate_company_count_cache():
 
 def _companies_with_overdue_flag(*, now):
     """
-    Базовый QS компаний с вычисляемым флагом просроченных задач `has_overdue`.
+    Базовый QS компаний с вычисляемым флагом просроченных задач `has_overdue`
+    и наличием активных задач `has_any_active_task`.
     Используется в списке/экспорте/массовых операциях, чтобы фильтры работали одинаково.
     """
     overdue_tasks = (
         Task.objects.filter(company_id=OuterRef("pk"), due_at__lt=now)
+        .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+        .values("id")
+    )
+    active_tasks = (
+        Task.objects.filter(company_id=OuterRef("pk"))
         .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
         .values("id")
     )
@@ -321,6 +327,7 @@ def _companies_with_overdue_flag(*, now):
     )
     return Company.objects.all().annotate(
         has_overdue=Exists(overdue_tasks),
+        has_any_active_task=Exists(active_tasks),
         has_cold_call_contact=Exists(cold_contacts),
     )
 
@@ -805,7 +812,44 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
     if overdue == "1":
         qs = qs.filter(has_overdue=True)
 
-    filter_active = any([q, responsible, status, branch, sphere, contract_type, region_ids, overdue == "1"])
+    task_filter = _get_str_param("task_filter")
+    _VALID_TASK_FILTERS = ("no_tasks", "today", "tomorrow", "week", "month", "quarter")
+    if task_filter and task_filter not in _VALID_TASK_FILTERS:
+        task_filter = ""
+    if task_filter:
+        local_now = timezone.localtime(timezone.now())
+        today = local_now.date()
+        active_task_status_exclude = [Task.Status.DONE, Task.Status.CANCELLED]
+        if task_filter == "no_tasks":
+            qs = qs.filter(has_any_active_task=False)
+        elif task_filter in ("today", "tomorrow", "week", "month", "quarter"):
+            if task_filter == "today":
+                task_due_q = Q(due_at__date=today)
+            elif task_filter == "tomorrow":
+                task_due_q = Q(due_at__date=today + timedelta(days=1))
+            elif task_filter == "week":
+                start_week = today - timedelta(days=today.weekday())
+                end_week = start_week + timedelta(days=7)
+                task_due_q = Q(due_at__date__gte=start_week, due_at__date__lt=end_week)
+            elif task_filter == "month":
+                task_due_q = Q(due_at__year=local_now.year, due_at__month=local_now.month)
+            else:
+                month = local_now.month
+                q_start = (month - 1) // 3 * 3 + 1
+                task_due_q = Q(due_at__year=local_now.year, due_at__month__in=[q_start, q_start + 1, q_start + 2])
+            tasks_in_range = (
+                Task.objects.filter(company_id=OuterRef("pk"))
+                .exclude(status__in=active_task_status_exclude)
+                .filter(due_at__isnull=False)
+                .filter(task_due_q)
+                .values("id")
+            )
+            qs = qs.filter(Exists(tasks_in_range))
+
+    filter_active = any([
+        q, responsible, status, branch, sphere, contract_type, region_ids,
+        overdue == "1", bool(task_filter),
+    ])
     return {
         "qs": qs.distinct(),
         "q": q,
@@ -817,6 +861,7 @@ def _apply_company_filters(*, qs, params: dict, default_responsible_id: int | No
         "region": region,  # Для обратной совместимости
         "selected_regions": selected_regions,  # Список выбранных регионов
         "overdue": overdue,
+        "task_filter": task_filter,
         "filter_active": filter_active,
     }
 
@@ -2238,6 +2283,7 @@ def company_list(request: HttpRequest) -> HttpResponse:
             "region": f["region"],
             "selected_regions": f.get("selected_regions", []),
             "overdue": f["overdue"],
+            "task_filter": f.get("task_filter", ""),
             "companies_total": companies_total,
             "companies_filtered": companies_filtered,
             "filter_active": filter_active,
@@ -2702,6 +2748,7 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
             "contract_type": request.POST.get("contract_type", ""),
             "region": region_str,  # Сохраняем как строку для логирования
             "overdue": request.POST.get("overdue", ""),
+            "task_filter": request.POST.get("task_filter", ""),
         }
     
     updated = qs_to_update.update(responsible=new_resp, branch=new_resp.branch, updated_at=now_ts)
@@ -2791,6 +2838,7 @@ def company_export(request: HttpRequest) -> HttpResponse:
                 "region": ",".join((request.GET.getlist("region") or [])) if hasattr(request.GET, "getlist") else (request.GET.get("region") or "").strip(),
                 "cold_call": (request.GET.get("cold_call") or "").strip(),
                 "overdue": (request.GET.get("overdue") or "").strip(),
+                "task_filter": (request.GET.get("task_filter") or "").strip(),
             },
             },
         )
