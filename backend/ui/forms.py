@@ -554,7 +554,7 @@ class CompanyNoteForm(forms.ModelForm):
         model = CompanyNote
         fields = ["text", "attachment"]
         widgets = {
-            "text": forms.Textarea(attrs={"rows": 4, "placeholder": "Заметка/комментарий...", "class": "w-full rounded-lg border px-3 py-2"}),
+            "text": forms.Textarea(attrs={"rows": 2, "placeholder": "Заметка/комментарий...", "class": "note-input-bar-field w-full rounded-lg border border-brand-soft px-3 py-2"}),
         }
 
     MAX_SIZE = 15 * 1024 * 1024  # 15 MB
