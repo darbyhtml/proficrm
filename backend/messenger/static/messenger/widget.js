@@ -562,13 +562,13 @@
           this.showRatingBlock();
         }
         if (data.messages && Array.isArray(data.messages)) {
-          // Фильтруем дубликаты через Set
+          // Фильтруем дубликаты через Set, но не помечаем их здесь как полученные —
+          // это делает addMessageToUI, чтобы все пути добавления сообщений работали одинаково.
           const newMessages = data.messages.filter(msg => {
             if (!msg.id) return false;
             if (this.receivedMessageIds.has(msg.id)) {
               return false; // Уже получено
             }
-            this.receivedMessageIds.add(msg.id);
             return true;
           });
 
@@ -693,11 +693,11 @@
                 return true;
               });
               for (const msg of newMessages) {
-                if (msg.id && (this.sinceId === null || msg.id > this.sinceId)) {
-                  this.sinceId = msg.id;
-                }
-                this.addMessageToUI(msg);
-              }
+            if (msg.id && (this.sinceId === null || msg.id > this.sinceId)) {
+              this.sinceId = msg.id;
+            }
+            this.addMessageToUI(msg);
+          }
               if (this.sinceId !== null) {
                 localStorage.setItem(this._storageKey('since_id'), String(this.sinceId));
               }

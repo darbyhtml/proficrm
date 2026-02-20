@@ -38,6 +38,7 @@ class ConversationViewSet(MessengerEnabledApiMixin, viewsets.ReadOnlyModelViewSe
     - list: список диалогов (только видимые через visible_conversations_qs)
     - retrieve: детали диалога
     - partial_update: обновление статуса/назначения/приоритета (whitelist через serializer)
+    - destroy: удаление диалога (только для администраторов)
     - messages (nested action): GET список сообщений, POST создание исходящего/внутреннего сообщения
     """
 
@@ -74,6 +75,10 @@ class ConversationViewSet(MessengerEnabledApiMixin, viewsets.ReadOnlyModelViewSe
             .values("body")[:1]
         )
         qs = qs.annotate(last_message_body=Subquery(last_message))
+
+        # Не показываем диалоги без единого сообщения (созданные только bootstrap'ом виджета).
+        # Для оператора «новый чат» появляется в списке только после первого сообщения.
+        qs = qs.filter(last_message_body__isnull=False)
 
         if user and user.is_authenticated:
             qs = qs.annotate(
@@ -144,6 +149,27 @@ class ConversationViewSet(MessengerEnabledApiMixin, viewsets.ReadOnlyModelViewSe
         now = timezone.now()
         models.Conversation.objects.filter(pk=conversation.pk).update(assignee_last_read_at=now)
         return Response({"status": "ok", "assignee_last_read_at": now.isoformat()}, status=status.HTTP_200_OK)
+
+    def destroy(self, request, pk=None):
+        """
+        DELETE: удалить диалог (только для администраторов).
+        """
+        conversation = self.get_object()
+        
+        # Проверка прав доступа: только администраторы могут удалять чаты
+        if not (request.user.is_superuser or request.user.role == User.Role.ADMIN):
+            return Response(
+                {"detail": "У вас нет прав для удаления диалогов."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        
+        conversation_id = conversation.id
+        conversation.delete()
+        
+        return Response(
+            {"status": "ok", "message": "Диалог успешно удалён"},
+            status=status.HTTP_200_OK,
+        )
 
     @action(detail=True, methods=["get", "post"], url_path="messages")
     def messages(self, request, pk=None):

@@ -98,6 +98,7 @@
     display: flex;
     align-items: flex-start;
     gap: 12px;
+    position: relative;
   }
   
   .conversation-card:hover {
@@ -107,6 +108,39 @@
   .conversation-card.active {
     background: rgba(1, 148, 142, 0.1);
     border-left: 3px solid var(--brand-teal);
+  }
+  
+  .conversation-delete-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: #9ca3af;
+    cursor: pointer;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+    z-index: 10;
+  }
+  .conversation-card:hover .conversation-delete-btn {
+    opacity: 1;
+  }
+  .conversation-delete-btn:hover {
+    background-color: #fee2e2;
+    color: #dc2626;
+  }
+  .conversation-delete-btn:active {
+    background-color: #fecaca;
+  }
+  .conversation-delete-btn svg {
+    width: 14px;
+    height: 14px;
   }
   
   .conversation-avatar {
@@ -530,6 +564,17 @@
               {% endif %}
             </div>
           </div>
+          {% if user.is_superuser or user.role == 'admin' %}
+            <button type="button" 
+                    class="conversation-delete-btn" 
+                    onclick="event.stopPropagation(); window.MessengerPanel.deleteConversation({{ conversation.id }});"
+                    title="Удалить диалог"
+                    aria-label="Удалить диалог">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+              </svg>
+            </button>
+          {% endif %}
         </div>
       {% empty %}
         <div class="empty-state">
@@ -612,6 +657,7 @@
   window.MESSENGER_CONTEXT = {
     currentUserId: {{ current_user_id|default:'null' }},
     selectedConversationId: {% if selected_conversation %}{{ selected_conversation.id }}{% else %}null{% endif %},
+    isAdmin: {% if user.is_superuser or user.role == 'admin' %}true{% else %}false{% endif %},
     assignees: [
       {% for a in assignees %}
         { id: {{ a.id }}, name: "{{ a.get_full_name|default:a.username|escapejs }}" }{% if not forloop.last %},{% endif %}

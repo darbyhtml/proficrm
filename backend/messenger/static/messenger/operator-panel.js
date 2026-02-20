@@ -416,6 +416,19 @@ class MessengerOperatorPanel {
     else if (status === 'resolved') statusBadge = '<span class="badge badge-done badge-xs">Решён</span>';
     else if (status === 'closed') statusBadge = '<span class="badge badge-cancel badge-xs">Закрыт</span>';
 
+    const isAdmin = window.MESSENGER_CONTEXT && window.MESSENGER_CONTEXT.isAdmin === true;
+    const deleteBtn = isAdmin ? `
+      <button type="button" 
+              class="conversation-delete-btn" 
+              onclick="event.stopPropagation(); window.MessengerPanel.deleteConversation(${id});"
+              title="Удалить диалог"
+              aria-label="Удалить диалог">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+        </svg>
+      </button>
+    ` : '';
+
     return `
       <div class="conversation-card ${isActive ? 'active' : ''}" data-conversation-id="${id}" onclick="window.MessengerPanel.openConversation(${id})">
         <div class="conversation-avatar" style="background: ${bg};">${this.escapeHtml(initial)}</div>
@@ -430,6 +443,7 @@ class MessengerOperatorPanel {
             ${statusBadge}
           </div>
         </div>
+        ${deleteBtn}
       </div>
     `;
   }
@@ -1270,6 +1284,92 @@ class MessengerOperatorPanel {
         }
       }
       alert('Не удалось сохранить: ' + (e.message || e));
+    }
+  }
+
+  /**
+   * Удалить диалог (только для администраторов)
+   */
+  async deleteConversation(conversationId) {
+    if (!conversationId) return;
+    
+    // Проверка прав доступа
+    const isAdmin = window.MESSENGER_CONTEXT && window.MESSENGER_CONTEXT.isAdmin === true;
+    if (!isAdmin) {
+      alert('У вас нет прав для удаления диалогов.');
+      return;
+    }
+
+    // Подтверждение удаления
+    if (!confirm('Вы уверены, что хотите удалить этот диалог? Это действие нельзя отменить.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/messenger/conversations/${conversationId}/`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+        headers: {
+          'Accept': 'application/json',
+          'X-CSRFToken': this.getCsrfToken(),
+        },
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        alert(errData.detail || 'Не удалось удалить диалог.');
+        return;
+      }
+
+      // Если удаляемый диалог был открыт - закрыть его
+      if (this.currentConversationId === conversationId) {
+        this.currentConversationId = null;
+        this.selectedConversationId = null;
+        this.stopPolling(conversationId);
+        this.stopTypingPolling();
+        
+        // Очистить содержимое
+        const contentArea = document.getElementById('conversationContent');
+        const infoArea = document.getElementById('conversationInfo');
+        if (contentArea) {
+          contentArea.innerHTML = `
+            <div class="flex items-center justify-center h-full text-brand-dark/40">
+              <div class="text-center">
+                <svg class="w-16 h-16 mx-auto mb-4 text-brand-dark/20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                </svg>
+                <h3 class="text-lg font-semibold mb-2 text-brand-dark/70">Выберите диалог</h3>
+                <p class="text-sm mb-3">Выберите диалог из списка слева, чтобы начать общение</p>
+              </div>
+            </div>
+          `;
+        }
+        if (infoArea) {
+          infoArea.innerHTML = `
+            <div class="flex items-center justify-center h-full text-brand-dark/40">
+              <div class="text-center">
+                <p class="text-sm mb-1">Информация о диалоге</p>
+                <p class="text-xs">Выберите диалог для просмотра</p>
+              </div>
+            </div>
+          `;
+        }
+        
+        // Убрать hash из URL
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+
+      // Удалить карточку из списка
+      const card = document.querySelector(`.conversation-card[data-conversation-id="${conversationId}"]`);
+      if (card) {
+        card.remove();
+      }
+
+      // Обновить список диалогов
+      this.refreshConversationList();
+    } catch (e) {
+      console.error('deleteConversation failed:', e);
+      alert('Ошибка при удалении диалога. Попробуйте обновить страницу.');
     }
   }
 
