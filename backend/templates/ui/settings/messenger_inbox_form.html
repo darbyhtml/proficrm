@@ -249,10 +249,12 @@
                   </div>
                   <div class="messenger-widget-form">
                     <div class="messenger-widget-form-row messenger-widget-form-row-telegram">
-                      <button type="button" class="messenger-widget-attach messenger-widget-icon-btn" aria-label="Прикрепить файл" disabled title="Прикрепить"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg></button>
-                      <textarea class="messenger-widget-input messenger-widget-input-autogrow" placeholder="Введите сообщение..." rows="1" disabled style="min-height:40px;max-height:120px;"></textarea>
-                      <button type="button" class="messenger-widget-emoji messenger-widget-icon-btn" aria-label="Эмодзи" disabled title="Эмодзи"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></button>
-                      <button type="button" class="messenger-widget-send messenger-widget-send-icon" aria-label="Отправить" disabled title="Отправить"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
+                      <div class="messenger-widget-input-wrapper">
+                        <button type="button" class="messenger-widget-attach messenger-widget-icon-btn" aria-label="Прикрепить файл" disabled title="Прикрепить"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg></button>
+                        <div class="messenger-widget-input messenger-widget-input-contenteditable" contenteditable="true" data-placeholder="Введите сообщение..." style="min-height:40px;max-height:120px;color:#1f2937;"></div>
+                        <button type="button" class="messenger-widget-emoji messenger-widget-icon-btn" aria-label="Эмодзи" disabled title="Эмодзи"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></button>
+                        <button type="button" class="messenger-widget-send messenger-widget-send-icon" aria-label="Отправить" disabled title="Отправить"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
+                      </div>
                     </div>
                   </div>
                 </div>

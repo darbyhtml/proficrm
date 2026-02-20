@@ -174,8 +174,10 @@
         const savedMessagesStr = localStorage.getItem(this._storageKey('messages'));
         if (savedMessagesStr) {
           try {
-            this.savedMessages = JSON.parse(savedMessagesStr);
+            const parsed = JSON.parse(savedMessagesStr);
+            this.savedMessages = Array.isArray(parsed) ? parsed : [];
           } catch (e) {
+            console.error('[MessengerWidget] Error parsing saved messages:', e);
             this.savedMessages = [];
           }
         } else {
@@ -1499,10 +1501,11 @@
       this.chatBody.appendChild(this.offlineBanner);
 
       // Загрузить сохраненные сообщения из localStorage (если есть)
-      if (this.savedMessages && this.savedMessages.length > 0) {
+      // Важно: загружать ДО initialMessages, чтобы не дублировать
+      if (this.savedMessages && Array.isArray(this.savedMessages) && this.savedMessages.length > 0) {
         for (const msg of this.savedMessages) {
           // Проверяем, что сообщение еще не добавлено (по ID)
-          if (!this.receivedMessageIds.has(msg.id)) {
+          if (msg.id && !this.receivedMessageIds.has(msg.id)) {
             this.receivedMessageIds.add(msg.id);
             this.addMessageToUI(msg);
           }

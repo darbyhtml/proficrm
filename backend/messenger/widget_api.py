@@ -308,7 +308,7 @@ def widget_bootstrap(request):
             payload = {
                 "id": msg.id,
                 "body": msg.body,
-                "direction": msg.direction,
+                "direction": str(msg.direction),  # Явно преобразуем в строку для JSON
                 "created_at": msg.created_at.isoformat(),
                 "read_at": msg.read_at.isoformat() if msg.read_at else None,
             }
@@ -919,7 +919,7 @@ def widget_poll(request):
             payload = {
                 "id": msg.id,
                 "body": msg.body,
-                "direction": msg.direction,
+                "direction": str(msg.direction),  # Явно преобразуем в строку для JSON
                 "created_at": msg.created_at.isoformat(),
                 "read_at": msg.read_at.isoformat() if msg.read_at else None,
             }
@@ -979,7 +979,7 @@ def widget_poll(request):
         )
 
 
-@api_view(["GET"])
+@api_view(["GET", "OPTIONS"])
 @permission_classes([AllowAny])
 def widget_stream(request):
     """
@@ -989,6 +989,11 @@ def widget_stream(request):
     Работает короткими соединениями (≈25 секунд), затем клиент переподключается.
     """
     ensure_messenger_enabled_api()
+    
+    # CORS preflight для EventSource
+    if request.method == "OPTIONS":
+        preflight_resp = Response(status=status.HTTP_200_OK)
+        return _add_widget_cors_headers(request, preflight_resp)
 
     widget_token = request.query_params.get("widget_token")
     widget_session_token = request.query_params.get("widget_session_token")
@@ -1079,7 +1084,7 @@ def widget_stream(request):
                 payload = {
                     "id": msg.id,
                     "body": msg.body,
-                    "direction": msg.direction,
+                    "direction": str(msg.direction),  # Явно преобразуем в строку для JSON
                     "created_at": msg.created_at.isoformat(),
                     "read_at": msg.read_at.isoformat() if msg.read_at else None,
                     "attachments": build_message_attachments_payload(
