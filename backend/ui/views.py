@@ -12135,7 +12135,7 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
                 inbox.save()
                 ui_logger.info(
                     "Inbox updated",
-                    extra={"inbox_id": inbox.id, "name": name},
+                    extra={"inbox_id": inbox.id, "inbox_name": name},
                 )
                 # Обновляем/создаём Channel для Inbox
                 Channel.objects.update_or_create(
