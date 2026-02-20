@@ -721,7 +721,7 @@ def widget_send(request):
                 size=getattr(f, "size", 0) or 0,
             )
 
-        models.Conversation.objects.filter(pk=conversation.id).update(last_message_at=django_timezone.now())
+        models.Conversation.objects.filter(pk=conversation.id).update(last_activity_at=django_timezone.now())
 
         # Webhook: новое входящее сообщение
         try:
@@ -875,6 +875,11 @@ def widget_poll(request):
                 {"detail": "Widget session token does not match widget_token."},
                 status=status.HTTP_403_FORBIDDEN,
             )
+
+        # Обновить last_seen контакта с троттлингом (по образцу Chatwoot)
+        from . import services as messenger_services
+
+        messenger_services.touch_contact_last_seen(conversation, session.contact_id)
 
         # Получить conversation
         try:
@@ -1033,6 +1038,11 @@ def widget_stream(request):
         conversation = models.Conversation.objects.get(id=session.conversation_id, inbox=inbox)
     except models.Conversation.DoesNotExist:
         raise Http404("Conversation not found.")
+
+    # Обновляем last_seen контакта с троттлингом (по образцу Chatwoot)
+    from . import services as messenger_services
+
+    messenger_services.touch_contact_last_seen(conversation, session.contact_id)
 
     try:
         last_id = int(since_id) if since_id is not None else 0

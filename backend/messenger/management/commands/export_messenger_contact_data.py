@@ -69,7 +69,7 @@ class Command(BaseCommand):
                 "assignee_id": conv.assignee_id,
                 "assignee_username": getattr(conv.assignee, "username", None) if conv.assignee_id else None,
                 "created_at": conv.created_at.isoformat() if conv.created_at else None,
-                "last_message_at": conv.last_message_at.isoformat() if conv.last_message_at else None,
+                "last_activity_at": conv.last_activity_at.isoformat() if conv.last_activity_at else None,
                 "rating_score": conv.rating_score,
                 "rating_comment": conv.rating_comment,
                 "rated_at": conv.rated_at.isoformat() if conv.rated_at else None,

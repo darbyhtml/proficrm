@@ -62,10 +62,10 @@ class ChannelAdmin(AdminOnlyMixin, admin.ModelAdmin):
 
 @admin.register(Conversation)
 class ConversationAdmin(AdminOnlyMixin, admin.ModelAdmin):
-    list_display = ("id", "inbox", "branch", "contact", "status", "priority", "assignee", "last_message_at")
+    list_display = ("id", "inbox", "branch", "contact", "status", "priority", "assignee", "last_activity_at")
     list_filter = ("status", "priority", "branch", "inbox")
     search_fields = ("id", "contact__name", "contact__email", "contact__phone")
-    readonly_fields = ("branch", "created_at", "last_message_at")
+    readonly_fields = ("branch", "created_at", "last_activity_at")
 
 
 @admin.register(Message)

@@ -86,15 +86,34 @@ def visible_canned_responses_qs(user: User) -> QuerySet[CannedResponse]:
 
 def get_messenger_unread_count(user: User) -> int:
     """
-    Суммарное число непрочитанных входящих сообщений по всем диалогам,
-    где текущий пользователь назначен оператором.
-
-    Непрочитанное = входящее (IN) сообщение с created_at > assignee_last_read_at
-    (или все входящие, если assignee_last_read_at не задан).
+    Суммарное число непрочитанных входящих сообщений по всем диалогам (по образцу Chatwoot).
+    
+    Args:
+        user: Пользователь для подсчёта непрочитанных сообщений
+    
+    Returns:
+        Количество непрочитанных входящих сообщений
+    
+    Note:
+        Непрочитанное = входящее (IN) сообщение с created_at > assignee_last_read_at
+        (или все входящие, если assignee_last_read_at не задан).
+        Использует кэширование для оптимизации частых запросов.
     """
     if not user or not user.is_authenticated or not user.is_active:
         return 0
-    return (
+    
+    # Кэширование для оптимизации (по образцу Chatwoot)
+    from django.core.cache import cache
+    from django.conf import settings
+    
+    cache_key = f"messenger:unread_count:{user.id}"
+    cache_timeout = getattr(settings, "MESSENGER_UNREAD_COUNT_CACHE_TIMEOUT", 30)  # 30 секунд
+    
+    cached_count = cache.get(cache_key)
+    if cached_count is not None:
+        return cached_count
+    
+    count = (
         Message.objects.filter(
             conversation__assignee_id=user.id,
             direction=Message.Direction.IN,
@@ -105,4 +124,9 @@ def get_messenger_unread_count(user: User) -> int:
         )
         .count()
     )
+    
+    # Кэшируем результат
+    cache.set(cache_key, count, timeout=cache_timeout)
+    
+    return count
 

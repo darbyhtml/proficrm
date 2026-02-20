@@ -1,16 +1,23 @@
 """
 Сериализаторы messenger.
 
-Полноценные API будут реализованы на Этапе 2.
-Сейчас файл создан как заготовка, чтобы структура приложения была завершённой.
+Сериализаторы для операторского API и виджета.
+Оптимизированы для работы с prefetch_related/select_related (по образцу Chatwoot).
 """
 
+from typing import Optional
 from rest_framework import serializers
 
 from . import models
 
 
 class ConversationSerializer(serializers.ModelSerializer):
+    """
+    Сериализатор для диалогов (по образцу Chatwoot).
+    
+    Использует prefetch_related для оптимизации запросов.
+    Все связанные поля (contact_name, branch_name и т.д.) читаются из предзагруженных объектов.
+    """
     contact_name = serializers.CharField(source="contact.name", read_only=True)
     contact_email = serializers.CharField(source="contact.email", read_only=True)
     contact_phone = serializers.CharField(source="contact.phone", read_only=True)
@@ -25,13 +32,32 @@ class ConversationSerializer(serializers.ModelSerializer):
         fields = "__all__"
         # branch выставляется автоматически из inbox.branch и не редактируется вручную.
         # inbox/contact/region для v1 считаем неизменяемыми через API (только status/assignee/priority).
-        read_only_fields = ("branch", "created_at", "last_message_at")
+        read_only_fields = (
+            "branch", "created_at", "last_activity_at", "waiting_since", 
+            "first_reply_created_at", "contact_last_seen_at", "agent_last_seen_at"
+        )
 
-    def update(self, instance, validated_data):
+    def update(self, instance: models.Conversation, validated_data: dict) -> models.Conversation:
         """
-        Жёстко ограничиваем набор обновляемых полей:
-        - разрешаем: status, assignee, priority;
-        - запрещаем: inbox, branch, contact, region и любые другие системные поля.
+        Обновление диалога с жёстким ограничением полей (по образцу Chatwoot).
+        
+        Args:
+            instance: Экземпляр диалога для обновления
+            validated_data: Валидированные данные из запроса
+        
+        Returns:
+            Обновлённый экземпляр диалога
+        
+        Raises:
+            ValidationError: Если попытка изменить запрещённые поля
+        
+        Разрешённые поля:
+        - status: Статус диалога
+        - assignee: Назначенный оператор
+        - priority: Приоритет диалога
+        
+        Запрещённые поля:
+        - inbox, branch, contact, region и любые другие системные поля
         """
         allowed_fields = {"status", "assignee", "priority"}
         forbidden = {field for field in validated_data.keys() if field not in allowed_fields}
@@ -51,7 +77,14 @@ class ConversationSerializer(serializers.ModelSerializer):
 
 
 class MessageSerializer(serializers.ModelSerializer):
+    """
+    Сериализатор для сообщений (по образцу Chatwoot).
+    
+    Использует prefetch_related для attachments и select_related для sender_user/sender_contact.
+    """
+    
     class MessageAttachmentSerializer(serializers.ModelSerializer):
+        """Сериализатор для вложений сообщений."""
         class Meta:
             model = models.MessageAttachment
             fields = ("id", "file", "original_name", "content_type", "size", "created_at")
@@ -66,16 +99,40 @@ class MessageSerializer(serializers.ModelSerializer):
         fields = "__all__"
         read_only_fields = ("created_at", "delivered_at")
 
-    def create(self, validated_data):
+    def create(self, validated_data: dict) -> models.Message:
+        """
+        Создание сообщения с валидацией инвариантов (по образцу Chatwoot).
+        
+        Args:
+            validated_data: Валидированные данные сообщения
+        
+        Returns:
+            Созданный экземпляр сообщения
+        
+        Raises:
+            ValidationError: Если нарушены инварианты (direction/sender)
+        """
         instance = models.Message(**validated_data)
         # Гарантируем вызов model.clean() (инварианты direction/sender).
         instance.full_clean()
         instance.save()
         return instance
 
-    def update(self, instance, validated_data):
-        # Для v1 сообщения считаем практически неизменяемыми. Разрешим, при необходимости,
-        # только обновление delivered_at/body, но при сохранении всё равно валидируем инварианты.
+    def update(self, instance: models.Message, validated_data: dict) -> models.Message:
+        """
+        Обновление сообщения (ограниченное, по образцу Chatwoot).
+        
+        Args:
+            instance: Экземпляр сообщения для обновления
+            validated_data: Валидированные данные
+        
+        Returns:
+            Обновлённый экземпляр сообщения
+        
+        Note:
+            Сообщения считаются практически неизменяемыми. Разрешено только
+            обновление delivered_at/body, но при сохранении валидируются инварианты.
+        """
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.full_clean()

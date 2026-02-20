@@ -5,7 +5,7 @@
   python manage.py close_old_messenger_conversations
 
 По умолчанию закрывает (status=closed) диалоги со статусом RESOLVED,
-у которых last_message_at < now - MESSENGER_RETENTION_RESOLVED_TO_CLOSED_DAYS.
+у которых last_activity_at < now - MESSENGER_RETENTION_RESOLVED_TO_CLOSED_DAYS.
 """
 
 from __future__ import annotations
@@ -59,7 +59,7 @@ class Command(BaseCommand):
         qs = Conversation.objects.filter(
             status=Conversation.Status.RESOLVED
         ).filter(
-            Q(last_message_at__lt=cutoff) | Q(last_message_at__isnull=True, created_at__lt=cutoff)
+            Q(last_activity_at__lt=cutoff) | Q(last_activity_at__isnull=True, created_at__lt=cutoff)
         ).order_by("id")
 
         total = qs.count()

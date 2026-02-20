@@ -11206,6 +11206,10 @@ def messenger_conversations_unified(request: HttpRequest) -> HttpResponse:
     qs = qs.annotate(
         last_message_body=Subquery(last_message),
     )
+
+    # Не показываем в списке диалоги без единого сообщения (созданные только bootstrap'ом виджета).
+    # Как только появляется первое сообщение (от клиента или оператора) — диалог попадает в список.
+    qs = qs.filter(last_message_body__isnull=False)
     
     # Счётчик непрочитанных (только для назначенных диалогов текущему пользователю)
     if user.id:

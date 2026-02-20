@@ -90,3 +90,7 @@ backend/mailer/*.bak.*
 
 # local data files
 sphere_merge.json
+
+# Chatwoot reference code (for study, not to be committed)
+chatwoot/
+chatwoot-reference/

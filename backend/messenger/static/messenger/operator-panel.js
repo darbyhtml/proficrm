@@ -35,6 +35,10 @@ class MessengerOperatorPanel {
     this.loadingOlderMessages = false;
     this.hasMoreOlderMessages = true;
     this.initialMessagesLimit = 50;
+    this.eventSource = null; // SSE соединение
+    this.sseReconnectAttempts = 0;
+    this.sseReconnectDelayMs = 1000;
+    this.maxSseReconnectAttempts = 5;
   }
 
   init() {
@@ -333,8 +337,8 @@ class MessengerOperatorPanel {
     
     // Обновить время
     const timeEl = cardEl.querySelector('.conversation-time');
-    if (timeEl && conversation.last_message_at) {
-      const lastAt = new Date(conversation.last_message_at);
+    if (timeEl && conversation.last_activity_at) {
+      const lastAt = new Date(conversation.last_activity_at);
       const now = new Date();
       const timeStr = lastAt.toDateString() === now.toDateString()
         ? lastAt.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
@@ -362,26 +366,45 @@ class MessengerOperatorPanel {
       metaEl.innerHTML = (unread > 0 ? `<span class="conversation-badge">${unread}</span>` : '') + statusBadge;
     }
     
-    // Обновить активное состояние
+    // Обновить активное состояние и unread
     const isActive = this.currentConversationId === id;
+    const isUnread = unread > 0 && !isActive;
     if (isActive) {
       cardEl.classList.add('active');
+      cardEl.classList.remove('unread');
     } else {
       cardEl.classList.remove('active');
+      if (isUnread) {
+        cardEl.classList.add('unread');
+      } else {
+        cardEl.classList.remove('unread');
+      }
     }
   }
 
   startListPolling() {
     if (this.listPollingTimer) return;
+    // Обновление списка диалогов каждые 10 секунд (для обновления превью/времени)
     this.listPollingTimer = setInterval(() => {
-      this.refreshConversationList();
+      if (!document.hidden) {
+        this.refreshConversationList();
+      }
     }, 10000);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
         if (this.listPollingTimer) { clearInterval(this.listPollingTimer); this.listPollingTimer = null; }
+        // Закрыть SSE при скрытии вкладки
+        if (this.eventSource) {
+          this.eventSource.close();
+          this.eventSource = null;
+        }
       } else {
         this.startListPolling();
         this.refreshConversationList();
+        // Переподключить SSE если диалог открыт
+        if (this.currentConversationId) {
+          this.startPolling(this.currentConversationId);
+        }
       }
     });
   }
@@ -399,7 +422,7 @@ class MessengerOperatorPanel {
     const lastBody = (conversation.last_message_body || '').trim();
     const preview = lastBody ? this.escapeHtml(lastBody).slice(0, 140) : 'Нет сообщений';
 
-    const lastAt = conversation.last_message_at ? new Date(conversation.last_message_at) : null;
+    const lastAt = conversation.last_activity_at ? new Date(conversation.last_activity_at) : null;
     const now = new Date();
     const timeStr = lastAt
       ? (lastAt.toDateString() === now.toDateString()
@@ -409,6 +432,7 @@ class MessengerOperatorPanel {
 
     const unread = Number(conversation.unread_count || 0);
     const isActive = this.currentConversationId === id;
+    const isUnread = unread > 0 && !isActive;
 
     let statusBadge = '';
     if (status === 'open') statusBadge = '<span class="badge badge-new badge-xs">Открыт</span>';
@@ -430,7 +454,7 @@ class MessengerOperatorPanel {
     ` : '';
 
     return `
-      <div class="conversation-card ${isActive ? 'active' : ''}" data-conversation-id="${id}" onclick="window.MessengerPanel.openConversation(${id})">
+      <div class="conversation-card ${isActive ? 'active' : ''} ${isUnread ? 'unread' : ''}" data-conversation-id="${id}" onclick="window.MessengerPanel.openConversation(${id})">
         <div class="conversation-avatar" style="background: ${bg};">${this.escapeHtml(initial)}</div>
         <div class="conversation-content">
           <div class="conversation-header">
@@ -461,6 +485,12 @@ class MessengerOperatorPanel {
     if (prevConversationId && prevConversationId !== conversationId) {
       this.stopPolling(prevConversationId);
       this.stopTypingPolling();
+    }
+    
+    // Обработка visibility change для SSE
+    if (!document.hidden && this.eventSource && this.eventSource.readyState === EventSource.CLOSED) {
+      // Переподключиться если соединение закрыто
+      this.startSSEStream(conversationId);
     }
 
     this.currentConversationId = conversationId;
@@ -564,9 +594,10 @@ class MessengerOperatorPanel {
         this.hasMoreOlderMessages = false;
       }
       
-      // Начать polling для новых сообщений
+      // Начать SSE стрим для real-time обновлений
       this.startPolling(conversationId);
-      this.startTypingPolling(conversationId);
+      // Typing polling больше не нужен (включен в SSE)
+      // this.startTypingPolling(conversationId);
       
     } catch (error) {
       console.error('Failed to load conversation:', error);
@@ -1867,12 +1898,130 @@ class MessengerOperatorPanel {
   }
 
   /**
-   * Начать polling для новых сообщений
+   * Начать SSE стрим для real-time обновлений (по образцу Chatwoot)
    */
   startPolling(conversationId) {
-    // Остановить предыдущий polling
+    // Остановить предыдущий SSE или polling
     this.stopPolling(conversationId);
     
+    // Используем SSE если доступен, иначе fallback на polling
+    if (typeof EventSource !== 'undefined') {
+      this.startSSEStream(conversationId);
+    } else {
+      this.startPollingFallback(conversationId);
+    }
+  }
+
+  /**
+   * SSE стрим для real-time обновлений
+   */
+  startSSEStream(conversationId) {
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
+    }
+
+    if (this.currentConversationId !== conversationId) return;
+    if (document.hidden) return;
+
+    try {
+      const es = new EventSource(`/api/messenger/conversations/${conversationId}/stream/`);
+      this.eventSource = es;
+      this.sseReconnectAttempts = 0;
+
+      es.addEventListener('ready', () => {
+        // Handshake успешен
+        this.sseReconnectAttempts = 0;
+      });
+
+      es.addEventListener('message.created', (e) => {
+        try {
+          const message = JSON.parse(e.data || '{}');
+          if (message && message.id && !this.lastMessageIds.has(message.id)) {
+            this.appendNewMessages([message]);
+            this.refreshConversationList();
+            
+            // Уведомление если не в фокусе
+            if (document.hidden && this.notificationsEnabled) {
+              this.showNotification(`Новое сообщение от ${message.sender_contact_name || 'контакта'}`);
+            }
+          }
+        } catch (err) {
+          console.error('SSE message.created parse error:', err);
+        }
+      });
+
+      es.addEventListener('conversation.updated', (e) => {
+        try {
+          const data = JSON.parse(e.data || '{}');
+          if (data && data.id === conversationId) {
+            // Обновить информацию о диалоге
+            this.refreshConversationList();
+            // Обновить правую панель если открыта
+            if (this.currentConversationId === conversationId) {
+              fetch(`/api/messenger/conversations/${conversationId}/`)
+                .then(r => r.json())
+                .then(conv => this.renderConversationInfo(conv))
+                .catch(() => {});
+            }
+          }
+        } catch (err) {
+          console.error('SSE conversation.updated parse error:', err);
+        }
+      });
+
+      es.addEventListener('conversation.typing_started', () => {
+        this.setContactTypingIndicator(true);
+      });
+
+      es.addEventListener('conversation.typing_stopped', () => {
+        this.setContactTypingIndicator(false);
+      });
+
+      es.onerror = () => {
+        es.close();
+        this.eventSource = null;
+        
+        // Переподключение с экспоненциальной задержкой
+        if (this.sseReconnectAttempts < this.maxSseReconnectAttempts && 
+            this.currentConversationId === conversationId && 
+            !document.hidden) {
+          this.sseReconnectAttempts++;
+          this.sseReconnectDelayMs = Math.min(this.sseReconnectDelayMs * 2, 10000);
+          setTimeout(() => {
+            if (this.currentConversationId === conversationId) {
+              this.startSSEStream(conversationId);
+            }
+          }, this.sseReconnectDelayMs);
+        } else {
+          // Fallback на polling после неудачных попыток
+          this.startPollingFallback(conversationId);
+        }
+      };
+
+      // Закрыть соединение через 25 секунд (как в Chatwoot, сервер закрывает через 30)
+      setTimeout(() => {
+        if (this.eventSource === es && this.currentConversationId === conversationId) {
+          es.close();
+          this.eventSource = null;
+          // Переподключиться
+          if (!document.hidden) {
+            this.startSSEStream(conversationId);
+          }
+        }
+      }, 25000);
+
+    } catch (err) {
+      console.error('SSE start error:', err);
+      // Fallback на polling
+      this.startPollingFallback(conversationId);
+    }
+  }
+
+  /**
+   * Fallback polling (если SSE недоступен)
+   */
+  startPollingFallback(conversationId) {
     this.pollingIntervals[conversationId] = setInterval(async () => {
       if (this.currentConversationId !== conversationId) {
         this.stopPolling(conversationId);
@@ -1895,9 +2044,7 @@ class MessengerOperatorPanel {
         if (response.ok) {
           const messages = await response.json();
           if (messages.length > 0) {
-            // Есть новые сообщения - добавить их умно, без полного перерендера
             this.appendNewMessages(messages);
-            // Обновить список диалогов (обновит превью/время)
             this.refreshConversationList();
           }
         }
@@ -1908,9 +2055,16 @@ class MessengerOperatorPanel {
   }
 
   /**
-   * Остановить polling
+   * Остановить polling/SSE
    */
   stopPolling(conversationId) {
+    // Закрыть SSE
+    if (this.eventSource) {
+      this.eventSource.close();
+      this.eventSource = null;
+    }
+    
+    // Остановить polling fallback
     if (this.pollingIntervals[conversationId]) {
       clearInterval(this.pollingIntervals[conversationId]);
       delete this.pollingIntervals[conversationId];
