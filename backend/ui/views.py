@@ -11683,6 +11683,17 @@ def settings_messenger_overview(request: HttpRequest) -> HttpResponse:
             inbox.channel_type = Channel.Type.WEBSITE
         inbox.can_delete = inbox.id not in has_conversations
 
+    total_inboxes = len(inboxes)
+    active_inboxes = sum(1 for i in inboxes if i.is_active)
+    # Inbox, для которого по умолчанию показываем код вставки (приоритет — активный сайт)
+    snippet_inbox = None
+    for i in inboxes:
+        if i.is_active and i.channel_type == Channel.Type.WEBSITE:
+            snippet_inbox = i
+            break
+    if snippet_inbox is None and inboxes:
+        snippet_inbox = inboxes[0]
+
     # Получаем базовый URL для виджета
     from django.conf import settings
     base_url = getattr(settings, "PUBLIC_BASE_URL", request.build_absolute_uri("/").rstrip("/"))
@@ -11693,6 +11704,9 @@ def settings_messenger_overview(request: HttpRequest) -> HttpResponse:
         {
             "inboxes": inboxes,
             "base_url": base_url,
+            "total_inboxes": total_inboxes,
+            "active_inboxes": active_inboxes,
+            "snippet_inbox": snippet_inbox,
         },
     )
 

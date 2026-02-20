@@ -3,50 +3,188 @@
 {% block title %}Источники — Настройки — CRM ПРОФИ{% endblock %}
 
 {% block content %}
-  <div class="space-y-6 max-w-4xl">
+  <div class="space-y-6 max-w-6xl">
     <div class="flex items-start justify-between gap-4 flex-wrap">
       <div>
-        <div class="text-sm text-brand-dark/70"><a class="underline" href="{% url 'settings_dashboard' %}">Настройки</a> / Live-chat /</div>
-        <h1 class="text-2xl font-semibold mt-0.5">Источники</h1>
-        <p class="text-sm text-brand-dark/70 mt-2 max-w-xl">
-          Канал — это способ связи, который выбирает клиент. Входящий — место, где вы управляете диалогами по каналу. Сюда могут входить диалоги с сайта, мессенджеров и других источников.
+        <div class="text-sm text-brand-dark/70">
+          <a class="underline" href="{% url 'settings_dashboard' %}">Настройки</a> / Live-chat /
+        </div>
+        <h1 class="text-2xl font-semibold mt-0.5">Live-chat: источники и виджет</h1>
+        <p class="text-sm text-brand-dark/70 mt-2 max-w-2xl">
+          Здесь вы управляете входящими каналами (Inbox), кодом виджета на сайт и базовыми настройками Live-chat.
+          Страница собрана по мотивам Chatwoot: слева источники, справа — подключение и сервисные разделы.
         </p>
       </div>
-      <a href="{% url 'settings_messenger_source_choose' %}" class="btn btn-primary shrink-0">+ Добавить источник</a>
+      <div class="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+        {% if total_inboxes %}
+          <div class="text-xs text-brand-dark/60 sm:text-right">
+            <div>Всего источников: <span class="font-medium text-brand-dark">{{ total_inboxes }}</span></div>
+            <div>Активны: <span class="font-medium text-brand-dark">{{ active_inboxes }}</span></div>
+          </div>
+        {% endif %}
+        <a href="{% url 'settings_messenger_source_choose' %}" class="btn btn-primary shrink-0">+ Добавить источник</a>
+      </div>
     </div>
 
-    <div class="bg-white border border-brand-soft/60 rounded-2xl overflow-hidden">
-      <ul class="divide-y divide-brand-soft/40">
-        {% for inbox in inboxes %}
-          <li class="flex items-center gap-4 px-4 py-4 hover:bg-brand-soft/10 transition-colors">
-            <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-soft/30 text-brand-teal shrink-0" aria-hidden="true">
-              {% if inbox.channel_type == 'website' or not inbox.channel_type %}
-                <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
-              {% else %}
-                <span class="text-lg font-mono">{ }</span>
-              {% endif %}
+    <div class="grid gap-6 lg:grid-cols-[minmax(0,2.1fr)_minmax(0,1.5fr)] items-start">
+      <!-- Левая колонка: список Inbox (по мотивам Chatwoot Inboxes) -->
+      <div class="space-y-4">
+        <div class="bg-white border border-brand-soft/60 rounded-2xl overflow-hidden">
+          <ul class="divide-y divide-brand-soft/40">
+            {% for inbox in inboxes %}
+              <li class="flex items-center gap-4 px-4 py-4 hover:bg-brand-soft/10 transition-colors">
+                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-soft/30 text-brand-teal shrink-0" aria-hidden="true">
+                  {% if inbox.channel_type == 'website' or not inbox.channel_type %}
+                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/>
+                    </svg>
+                  {% else %}
+                    <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-brand-soft/60 text-brand-dark/80">
+                      {{ inbox.channel_type|default:"API" }}
+                    </span>
+                  {% endif %}
+                </div>
+                <div class="min-w-0 flex-1">
+                  <div class="flex items-center gap-2 flex-wrap">
+                    <div class="font-medium text-brand-dark truncate">{{ inbox.name }}</div>
+                    {% if inbox.branch %}
+                      <span class="inline-flex items-center rounded-full bg-brand-soft/40 px-2 py-0.5 text-[11px] text-brand-dark/70">
+                        {{ inbox.branch.name }}
+                      </span>
+                    {% else %}
+                      <span class="inline-flex items-center rounded-full bg-brand-soft/40 px-2 py-0.5 text-[11px] text-brand-dark/70">
+                        Глобальный inbox
+                      </span>
+                    {% endif %}
+                  </div>
+                  <div class="mt-1 text-xs text-brand-dark/60 space-x-1">
+                    <span>
+                      {% if inbox.channel_type == 'website' or not inbox.channel_type %}
+                        Канал: сайт
+                      {% else %}
+                        Канал: {{ inbox.channel_type }}
+                      {% endif %}
+                    </span>
+                    {% if inbox.open_conversations_count %}
+                      <span>· {{ inbox.open_conversations_count }} открытых диалогов</span>
+                    {% endif %}
+                    <span>· Создан {{ inbox.created_at|date:"d.m.Y" }}</span>
+                  </div>
+                </div>
+                <div class="flex flex-col items-end gap-2 shrink-0 text-right">
+                  <div>
+                    {% if inbox.is_active %}
+                      <span class="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 border border-emerald-100">
+                        ● Активен
+                      </span>
+                    {% else %}
+                      <span class="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700 border border-red-100">
+                        ● Выключен
+                      </span>
+                    {% endif %}
+                  </div>
+                  <div class="flex items-center gap-1">
+                    <a href="{% url 'settings_messenger_inbox_edit' inbox.id %}" class="px-2 py-1 rounded-lg text-[12px] text-brand-dark/70 hover:bg-brand-soft/40 hover:text-brand-teal transition" title="Настройки">
+                      Настройки
+                    </a>
+                    {% if inbox.can_delete %}
+                      <a href="{% url 'settings_messenger_inbox_edit' inbox.id %}#danger" class="px-2 py-1 rounded-lg text-[12px] text-red-600/80 hover:bg-red-50 hover:text-red-700 transition" title="Удалить">
+                        Удалить
+                      </a>
+                    {% endif %}
+                  </div>
+                </div>
+              </li>
+            {% empty %}
+              <li class="px-4 py-12 text-center text-brand-dark/60 space-y-3">
+                <p class="mb-2">Источников пока нет.</p>
+                <p class="text-sm text-brand-dark/60">
+                  Создайте первый источник — это будет ваш чат-виджет на сайте, как в Chatwoot.
+                </p>
+                <a href="{% url 'settings_messenger_source_choose' %}" class="btn btn-primary">Добавить источник</a>
+              </li>
+            {% endfor %}
+          </ul>
+        </div>
+
+        {% include "ui/settings/messenger_nav.html" with active="sources" %}
+      </div>
+
+      <!-- Правая колонка: подключение виджета и сервисные разделы -->
+      <div class="space-y-4">
+        <div class="bg-white border border-brand-soft/60 rounded-2xl p-4 space-y-3">
+          <h2 class="text-lg font-semibold text-brand-dark">Подключение виджета к сайту</h2>
+          <p class="text-sm text-brand-dark/70">
+            Скопируйте код и вставьте его перед закрывающим тегом <code>&lt;/body&gt;</code> на сайте. После этого новые диалоги будут
+            появляться в операторской панели Messenger.
+          </p>
+          {% if snippet_inbox %}
+            <p class="text-xs text-brand-dark/60">
+              Пример для источника: <span class="font-medium text-brand-dark">{{ snippet_inbox.name }}</span>
+              {% if snippet_inbox.branch %} ({{ snippet_inbox.branch.name }}){% endif %}
+            </p>
+            <pre class="bg-brand-dark text-white p-3 rounded-lg text-[11px] overflow-x-auto" id="messenger-embed-code"><code>&lt;script src="{{ base_url }}/static/messenger/widget.js" data-widget-token="{{ snippet_inbox.widget_token }}" data-api-base-url="{{ base_url }}"&gt;&lt;/script&gt;</code></pre>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" class="btn btn-primary btn-sm" onclick="copyMessengerEmbedCode()">Копировать код</button>
+              <a href="{% url 'settings_messenger_inbox_edit' snippet_inbox.id %}" class="btn btn-outline btn-sm">Открыть настройки источника</a>
             </div>
-            <div class="min-w-0 flex-1">
-              <div class="font-medium text-brand-dark">{{ inbox.name }}</div>
-              <div class="text-sm text-brand-dark/60">
-                {% if inbox.channel_type == 'website' or not inbox.channel_type %}Сайт{% else %}Источник API{% endif %}
-                {% if inbox.open_conversations_count %} · {{ inbox.open_conversations_count }} открытых диалогов{% endif %}
+          {% else %}
+            <p class="text-sm text-brand-dark/60">
+              Пока нет ни одного источника. Создайте источник, чтобы получить код виджета, как в Chatwoot.
+            </p>
+          {% endif %}
+        </div>
+
+        <div class="bg-white border border-brand-soft/60 rounded-2xl p-4 space-y-4">
+          <h2 class="text-lg font-semibold text-brand-dark">Маршрутизация, диагностика и аналитика</h2>
+          <div class="space-y-3">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <div class="text-sm font-medium text-brand-dark">Правила маршрутизации</div>
+                <div class="text-xs text-brand-dark/60">Регион → филиал / Inbox. Балансировка входящих диалогов по филиалам.</div>
               </div>
+              <a href="{% url 'settings_messenger_routing_list' %}" class="btn btn-outline btn-sm">Открыть</a>
             </div>
-            <div class="flex items-center gap-2 shrink-0">
-              <a href="{% url 'settings_messenger_inbox_edit' inbox.id %}" class="p-2 rounded-lg text-brand-dark/60 hover:bg-brand-soft/30 hover:text-brand-teal" title="Настройки"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg></a>
-              {% if inbox.can_delete %}<a href="{% url 'settings_messenger_inbox_edit' inbox.id %}#danger" class="p-2 rounded-lg text-brand-dark/50 hover:bg-red-50 hover:text-red-600" title="Удалить"><svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></a>{% endif %}
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <div class="text-sm font-medium text-brand-dark">Диагностика окружения</div>
+                <div class="text-xs text-brand-dark/60">Проверка MESSENGER_ENABLED, Redis и количества активных Inbox.</div>
+              </div>
+              <a href="{% url 'settings_messenger_health' %}" class="btn btn-outline btn-sm">Открыть</a>
             </div>
-          </li>
-        {% empty %}
-          <li class="px-4 py-12 text-center text-brand-dark/60">
-            <p class="mb-4">Источников пока нет.</p>
-            <a href="{% url 'settings_messenger_source_choose' %}" class="btn btn-primary">Добавить источник</a>
-          </li>
-        {% endfor %}
-      </ul>
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <div class="text-sm font-medium text-brand-dark">Аналитика по диалогам</div>
+                <div class="text-xs text-brand-dark/60">Диалоги по дням, среднее время первого ответа, топ операторов и филиалов.</div>
+              </div>
+              <a href="{% url 'settings_messenger_analytics' %}" class="btn btn-outline btn-sm">Открыть</a>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-
-    {% include "ui/settings/messenger_nav.html" with active="sources" %}
   </div>
+
+  <script>
+    function copyMessengerEmbedCode() {
+      var code = '<script src="{{ base_url }}/static/messenger/widget.js" data-widget-token="{{ snippet_inbox.widget_token|default_if_none:\'\'' }}" data-api-base-url="{{ base_url }}"><' + '/script>';
+      if (!code || code.indexOf('data-widget-token=') === -1) {
+        alert('Нет доступного источника для копирования кода. Сначала создайте Inbox.');
+        return;
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).then(function () {
+          alert('Код виджета скопирован в буфер обмена');
+        });
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = code;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        alert('Код виджета скопирован');
+      }
+    }
+  </script>
 {% endblock %}
