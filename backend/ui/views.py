@@ -11655,12 +11655,28 @@ def settings_messenger_overview(request: HttpRequest) -> HttpResponse:
     ensure_messenger_enabled_view()
 
     # Получаем все Inbox'ы (для админа можно показывать всё)
-    inboxes = Inbox.objects.select_related("branch").annotate(
-        open_conversations_count=Count(
-            "conversations",
-            filter=Q(conversations__status__in=[Conversation.Status.OPEN, Conversation.Status.PENDING]),
-        )
-    ).order_by("name")
+    inboxes = list(
+        Inbox.objects.select_related("branch").annotate(
+            open_conversations_count=Count(
+                "conversations",
+                filter=Q(conversations__status__in=[Conversation.Status.OPEN, Conversation.Status.PENDING]),
+            )
+        ).order_by("name")
+    )
+    inbox_ids = [i.id for i in inboxes]
+    # Тип канала по первому связанному Channel или из settings
+    from messenger.models import Channel
+    channel_types = dict(Channel.objects.filter(inbox_id__in=inbox_ids).values_list("inbox_id", "type"))
+    has_conversations = set(
+        Conversation.objects.filter(inbox_id__in=inbox_ids).values_list("inbox_id", flat=True).distinct()
+    )
+    for inbox in inboxes:
+        inbox.channel_type = channel_types.get(inbox.id)
+        if not inbox.channel_type and isinstance(inbox.settings, dict):
+            inbox.channel_type = (inbox.settings.get("channel") or {}).get("type")
+        if not inbox.channel_type:
+            inbox.channel_type = Channel.Type.WEBSITE
+        inbox.can_delete = inbox.id not in has_conversations
 
     # Получаем базовый URL для виджета
     from django.conf import settings
@@ -11673,6 +11689,45 @@ def settings_messenger_overview(request: HttpRequest) -> HttpResponse:
             "inboxes": inboxes,
             "base_url": base_url,
         },
+    )
+
+
+@login_required
+def settings_messenger_source_choose(request: HttpRequest) -> HttpResponse:
+    """
+    Выбор типа источника перед созданием (шаг 1 в стиле Chatwoot).
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+    ensure_messenger_enabled_view()
+    return render(
+        request,
+        "ui/settings/messenger_source_choose.html",
+        {},
+    )
+
+
+@login_required
+def settings_messenger_inbox_ready(request: HttpRequest, inbox_id: int) -> HttpResponse:
+    """
+    Страница «Источник готов» после создания: код вставки, Копировать, Перейти к настройкам.
+    """
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+    ensure_messenger_enabled_view()
+    try:
+        inbox = Inbox.objects.get(id=inbox_id)
+    except Inbox.DoesNotExist:
+        messages.error(request, "Источник не найден.")
+        return redirect("settings_messenger_overview")
+    from django.conf import settings as django_settings
+    base_url = getattr(django_settings, "PUBLIC_BASE_URL", request.build_absolute_uri("/").rstrip("/"))
+    return render(
+        request,
+        "ui/settings/messenger_inbox_ready.html",
+        {"inbox": inbox, "base_url": base_url},
     )
 
 
@@ -12122,7 +12177,8 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
                     "Inbox created",
                     extra={"inbox_id": inbox.id, "inbox_name": name, "branch_id": branch.id if branch else None},
                 )
-                messages.success(request, "Inbox создан.")
+                messages.success(request, "Источник создан.")
+                return redirect("settings_messenger_inbox_ready", inbox_id=inbox.id)
             
             return redirect("settings_messenger_overview")
         

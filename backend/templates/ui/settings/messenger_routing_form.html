@@ -4,7 +4,7 @@
 {% block content %}
   <div class="space-y-4 max-w-3xl">
     <div>
-      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> / <a class="underline" href="/settings/messenger/">Messenger</a> / <a class="underline" href="/settings/messenger/routing/">Маршрутизация</a> /</div>
+      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> / <a class="underline" href="{% url 'settings_messenger_overview' %}">Live-chat</a> / <a class="underline" href="{% url 'settings_messenger_routing_list' %}">Маршрутизация</a> /</div>
       <h1 class="text-2xl font-semibold">{% if rule %}Редактирование правила{% else %}Создание правила{% endif %} маршрутизации</h1>
     </div>
 

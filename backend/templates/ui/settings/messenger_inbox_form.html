@@ -5,13 +5,25 @@
 {% block content %}
   <div class="space-y-4 max-w-6xl">
     <div>
-      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> / <a class="underline" href="/settings/messenger/">Messenger</a> /</div>
-      <h1 class="text-2xl font-semibold">{% if inbox %}Редактирование Inbox{% else %}Создание Inbox{% endif %}</h1>
+      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> / <a class="underline" href="{% url 'settings_messenger_overview' %}">Live-chat</a> / <a class="underline" href="{% url 'settings_messenger_overview' %}">Источники</a> /</div>
+      <h1 class="text-2xl font-semibold">{% if inbox %}{{ inbox.name }}{% else %}Новый источник{% endif %}</h1>
     </div>
 
     <form method="post" class="space-y-4">
       {% csrf_token %}
-      
+
+      <nav class="flex flex-wrap gap-1 p-1 bg-brand-soft/20 rounded-xl border border-brand-soft/40 w-full max-w-3xl" role="tablist" aria-label="Разделы настроек">
+        <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition aria-selected:bg-white aria-selected:text-brand-teal aria-selected:shadow-sm bg-transparent text-brand-dark/70 hover:bg-white/60" role="tab" aria-selected="true" data-tab="main">Основные</button>
+        <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition aria-selected:bg-white aria-selected:text-brand-teal aria-selected:shadow-sm bg-transparent text-brand-dark/70 hover:bg-white/60" role="tab" aria-selected="false" data-tab="widget">Конструктор виджета</button>
+        <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition aria-selected:bg-white aria-selected:text-brand-teal aria-selected:shadow-sm bg-transparent text-brand-dark/70 hover:bg-white/60" role="tab" aria-selected="false" data-tab="hours">Время и офлайн</button>
+        <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition aria-selected:bg-white aria-selected:text-brand-teal aria-selected:shadow-sm bg-transparent text-brand-dark/70 hover:bg-white/60" role="tab" aria-selected="false" data-tab="extra">Вложения и оценка</button>
+        <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition aria-selected:bg-white aria-selected:text-brand-teal aria-selected:shadow-sm bg-transparent text-brand-dark/70 hover:bg-white/60" role="tab" aria-selected="false" data-tab="security">Безопасность и интеграции</button>
+        {% if inbox %}
+        <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition aria-selected:bg-white aria-selected:text-brand-teal aria-selected:shadow-sm bg-transparent text-red-600/80 hover:bg-red-50" role="tab" aria-selected="false" data-tab="danger">Опасная зона</button>
+        {% endif %}
+      </nav>
+
+      <div id="panel-main" class="inbox-form-tab space-y-4">
       <div class="card">
         <div class="card-pad">
           <h2 class="text-lg font-semibold mb-4">Основные настройки</h2>
@@ -121,27 +133,42 @@
           </div>
         </div>
       {% endif %}
+      </div><!-- /panel-main -->
 
-      {% if inbox %}
-      <div class="mt-8">
-        <div class="card border border-red-200 bg-red-50">
-          <div class="card-pad space-y-3">
-            <h2 class="text-lg font-semibold text-red-700">Опасная зона</h2>
-            <p class="text-sm text-red-800/80">
-              Удаление Inbox необратимо. Нельзя удалить Inbox, к которому уже привязаны диалоги.
-            </p>
-            <form method="post" onsubmit="return confirm('Вы уверены, что хотите удалить этот Inbox? Это действие нельзя будет отменить.');">
-              {% csrf_token %}
-              <input type="hidden" name="action" value="delete_inbox">
-              <button type="submit" class="btn btn-danger">Удалить этот Inbox</button>
-            </form>
+      <div id="panel-widget" class="inbox-form-tab hidden space-y-4">
+      <div class="card">
+        <div class="card-pad">
+          <h2 class="text-lg font-semibold mb-4">Настройки виджета</h2>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Название в шапке виджета</label>
+              <input type="text" name="widget_title" value="{{ inbox.settings.title|default:'Чат с поддержкой' }}" class="input" placeholder="Чат с поддержкой">
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Приветствие</label>
+              <textarea name="widget_greeting" class="textarea" rows="2" placeholder="Добро пожаловать! Как мы можем вам помочь?">{{ inbox.settings.greeting|default:'' }}</textarea>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Основной цвет</label>
+              <input type="color" name="widget_color" value="{{ inbox.settings.color|default:'#01948E' }}" class="input" style="width: 100px; height: 40px;">
+            </div>
+            <div class="space-y-2">
+              <label class="flex items-center gap-2">
+                <input type="checkbox" name="widget_show_email" {% if inbox.settings.show_email|default:False %}checked{% endif %} class="rounded">
+                <span class="text-sm font-medium text-brand-dark/80">Показывать поле email</span>
+              </label>
+              <label class="flex items-center gap-2">
+                <input type="checkbox" name="widget_show_phone" {% if inbox.settings.show_phone|default:False %}checked{% endif %} class="rounded">
+                <span class="text-sm font-medium text-brand-dark/80">Показывать поле телефона</span>
+              </label>
+            </div>
           </div>
         </div>
       </div>
-      {% endif %}
+      </div><!-- /panel-widget -->
 
+      <div id="panel-hours" class="inbox-form-tab hidden">
       <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-
       <div class="card">
         <div class="card-pad">
           <h2 class="text-lg font-semibold mb-4">Рабочие часы</h2>
@@ -195,7 +222,11 @@
           </div>
         </div>
       </div>
+      </div>
+      </div><!-- /panel-hours -->
 
+      <div id="panel-extra" class="inbox-form-tab hidden">
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
       <div class="card">
         <div class="card-pad">
           <h2 class="text-lg font-semibold mb-4">Вложения</h2>
@@ -214,6 +245,33 @@
         </div>
       </div>
 
+      <div class="card">
+        <div class="card-pad">
+          <h2 class="text-lg font-semibold mb-4">Оценка диалога</h2>
+          <p class="text-sm text-brand-dark/60 mb-3">После закрытия диалога виджет может запросить у посетителя оценку (звёзды 1–5 или NPS 0–10).</p>
+          <div class="space-y-4">
+            <label class="flex items-center gap-2">
+              <input type="checkbox" name="rating_enabled" {% if rating_settings.enabled %}checked{% endif %} class="rounded">
+              <span class="text-sm font-medium text-brand-dark/80">Запрашивать оценку после закрытия</span>
+            </label>
+            <div>
+              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Тип оценки</label>
+              <select name="rating_type" class="select">
+                <option value="stars" {% if rating_settings.type == 'stars' %}selected{% endif %}>Звёзды (1–5)</option>
+                <option value="nps" {% if rating_settings.type == 'nps' %}selected{% endif %}>NPS (0–10)</option>
+              </select>
+            </div>
+            <div id="rating-max-score-block">
+              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Макс. балл (звёзды)</label>
+              <input type="number" name="rating_max_score" min="1" max="5" value="{{ rating_settings.max_score|default:5 }}" class="input" style="width: 6rem">
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+      </div><!-- /panel-extra -->
+
+      <div id="panel-security" class="inbox-form-tab hidden space-y-4">
       <div class="card">
         <div class="card-pad">
           <h2 class="text-lg font-semibold mb-4">Безопасность</h2>
@@ -326,75 +384,62 @@
           <p class="text-xs text-brand-dark/50 mt-2">Если выключено, виджет будет работать через обычный poll.</p>
         </div>
       </div>
+      </div><!-- /panel-security -->
 
-      <div class="card">
-        <div class="card-pad">
-          <h2 class="text-lg font-semibold mb-4">Оценка диалога</h2>
-          <p class="text-sm text-brand-dark/60 mb-3">После закрытия диалога виджет может запросить у посетителя оценку (звёзды 1–5 или NPS 0–10).</p>
-          <div class="space-y-4">
-            <label class="flex items-center gap-2">
-              <input type="checkbox" name="rating_enabled" {% if rating_settings.enabled %}checked{% endif %} class="rounded">
-              <span class="text-sm font-medium text-brand-dark/80">Запрашивать оценку после закрытия</span>
-            </label>
-            <div>
-              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Тип оценки</label>
-              <select name="rating_type" class="select">
-                <option value="stars" {% if rating_settings.type == 'stars' %}selected{% endif %}>Звёзды (1–5)</option>
-                <option value="nps" {% if rating_settings.type == 'nps' %}selected{% endif %}>NPS (0–10)</option>
-              </select>
-            </div>
-            <div id="rating-max-score-block">
-              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Макс. балл (звёзды)</label>
-              <input type="number" name="rating_max_score" min="1" max="5" value="{{ rating_settings.max_score|default:5 }}" class="input" style="width: 6rem">
-            </div>
+      {% if inbox %}
+      <div id="danger" class="inbox-form-tab hidden">
+        <div class="card border border-red-200 bg-red-50">
+          <div class="card-pad space-y-3">
+            <h2 class="text-lg font-semibold text-red-700">Опасная зона</h2>
+            <p class="text-sm text-red-800/80">
+              Удаление Inbox необратимо. Нельзя удалить Inbox, к которому уже привязаны диалоги.
+            </p>
+            <form method="post" onsubmit="return confirm('Вы уверены, что хотите удалить этот Inbox? Это действие нельзя будет отменить.');">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="delete_inbox">
+              <button type="submit" class="btn btn-danger">Удалить этот Inbox</button>
+            </form>
           </div>
         </div>
       </div>
-
-      <div class="card xl:col-span-2">
-        <div class="card-pad">
-          <h2 class="text-lg font-semibold mb-4">Настройки виджета</h2>
-          
-          <div class="space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Название в шапке виджета</label>
-              <input type="text" name="widget_title" value="{{ inbox.settings.title|default:'Чат с поддержкой' }}" class="input" placeholder="Чат с поддержкой">
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Приветствие</label>
-              <textarea name="widget_greeting" class="textarea" rows="2" placeholder="Добро пожаловать! Как мы можем вам помочь?">{{ inbox.settings.greeting|default:'' }}</textarea>
-            </div>
-
-            <div>
-              <label class="block text-sm font-medium text-brand-dark/80 mb-1">Основной цвет</label>
-              <input type="color" name="widget_color" value="{{ inbox.settings.color|default:'#01948E' }}" class="input" style="width: 100px; height: 40px;">
-            </div>
-
-            <div class="space-y-2">
-              <label class="flex items-center gap-2">
-                <input type="checkbox" name="widget_show_email" {% if inbox.settings.show_email|default:False %}checked{% endif %} class="rounded">
-                <span class="text-sm font-medium text-brand-dark/80">Показывать поле email</span>
-              </label>
-              <label class="flex items-center gap-2">
-                <input type="checkbox" name="widget_show_phone" {% if inbox.settings.show_phone|default:False %}checked{% endif %} class="rounded">
-                <span class="text-sm font-medium text-brand-dark/80">Показывать поле телефона</span>
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      </div> <!-- /grid -->
+      {% endif %}
 
       <div class="flex items-center gap-3">
         <button type="submit" class="btn btn-primary">Сохранить</button>
-        <a href="/settings/messenger/" class="btn btn-outline">Отмена</a>
+        <a href="{% url 'settings_messenger_overview' %}" class="btn btn-outline">Отмена</a>
       </div>
     </form>
   </div>
 
   <script>
+    (function() {
+      var tabList = document.querySelector('.inbox-form-tabs');
+      if (!tabList) return;
+      var tabs = tabList.querySelectorAll('.inbox-tab-btn');
+      var getPanelId = function(tab) {
+        var t = tab.getAttribute('data-tab');
+        return t === 'danger' ? 'danger' : 'panel-' + t;
+      };
+      var showPanel = function(tab) {
+        var panelId = getPanelId(tab);
+        var panel = document.getElementById(panelId);
+        tabs.forEach(function(t) {
+          t.setAttribute('aria-selected', t === tab ? 'true' : 'false');
+        });
+        document.querySelectorAll('.inbox-form-tab').forEach(function(p) {
+          p.classList.toggle('hidden', p !== panel);
+        });
+        if (panel) panel.classList.remove('hidden');
+        if (tab.getAttribute('data-tab') === 'danger' && window.location.hash !== '#danger') window.location.hash = 'danger';
+      };
+      tabs.forEach(function(tab) {
+        tab.addEventListener('click', function() { showPanel(tab); });
+      });
+      if (window.location.hash === '#danger') {
+        var dangerTab = tabList.querySelector('[data-tab="danger"]');
+        if (dangerTab) showPanel(dangerTab);
+      }
+    })();
     function copyToken() {
       const token = '{{ inbox.widget_token }}';
       navigator.clipboard.writeText(token).then(() => {

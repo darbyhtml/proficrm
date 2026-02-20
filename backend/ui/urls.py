@@ -136,8 +136,10 @@ urlpatterns = [
     
     # Messenger settings (admin only)
     path("settings/messenger/", views.settings_messenger_overview, name="settings_messenger_overview"),
+    path("settings/messenger/sources/choose/", views.settings_messenger_source_choose, name="settings_messenger_source_choose"),
     path("settings/messenger/inboxes/new/", views.settings_messenger_inbox_edit, name="settings_messenger_inbox_create"),
     path("settings/messenger/inboxes/<int:inbox_id>/", views.settings_messenger_inbox_edit, name="settings_messenger_inbox_edit"),
+    path("settings/messenger/inboxes/<int:inbox_id>/ready/", views.settings_messenger_inbox_ready, name="settings_messenger_inbox_ready"),
     path("settings/messenger/routing/", views.settings_messenger_routing_list, name="settings_messenger_routing_list"),
     path("settings/messenger/routing/new/", views.settings_messenger_routing_edit, name="settings_messenger_routing_create"),
     path("settings/messenger/routing/<int:rule_id>/", views.settings_messenger_routing_edit, name="settings_messenger_routing_edit"),

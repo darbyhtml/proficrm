@@ -3,13 +3,14 @@
 
 {% block content %}
   <div class="space-y-4">
-    <div class="flex items-end justify-between gap-3">
+    <div class="flex items-end justify-between gap-3 flex-wrap">
       <div>
-        <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> / <a class="underline" href="/settings/messenger/">Messenger</a> /</div>
+        <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> / <a class="underline" href="{% url 'settings_messenger_overview' %}">Live-chat</a> / Маршрутизация /</div>
         <h1 class="text-2xl font-semibold">Распределение по регионам</h1>
       </div>
       <a href="/settings/messenger/routing/new/" class="btn btn-primary">+ Создать правило</a>
     </div>
+    {% include "ui/settings/messenger_nav.html" with active="routing" %}
 
     <div class="bg-white border rounded-2xl overflow-hidden">
       <table class="min-w-full text-sm">
@@ -74,7 +75,7 @@
     </div>
 
     <div>
-      <a href="/settings/messenger/" class="btn btn-outline">← Назад к списку Inbox'ов</a>
+      <a href="{% url 'settings_messenger_overview' %}" class="btn btn-outline">← Назад к источникам</a>
     </div>
   </div>
 {% endblock %}

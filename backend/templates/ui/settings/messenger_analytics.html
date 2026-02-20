@@ -5,10 +5,11 @@
 {% block content %}
   <div class="space-y-4 max-w-5xl">
     <div>
-      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> / <a class="underline" href="/settings/messenger/">Чат-виджет</a> /</div>
+      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> / <a class="underline" href="{% url 'settings_messenger_overview' %}">Live-chat</a> / Аналитика /</div>
       <h1 class="text-2xl font-semibold">Аналитика Messenger</h1>
       <p class="text-sm text-brand-dark/70 mt-1">Период: последние {{ days }} дней</p>
     </div>
+    {% include "ui/settings/messenger_nav.html" with active="analytics" %}
 
     <div class="flex gap-2 flex-wrap">
       <a class="btn btn-outline btn-sm {% if days == 7 %}btn-primary{% endif %}" href="?days=7">7 дней</a>
