@@ -166,7 +166,8 @@ def is_within_working_hours(inbox: "Inbox") -> bool:
     """
     from zoneinfo import ZoneInfo
 
-    wh = (inbox.settings or {}).get("working_hours") or {}
+    wh_raw = (inbox.settings or {}).get("working_hours")
+    wh = wh_raw if isinstance(wh_raw, dict) else {}
     if not wh.get("enabled"):
         return True
 

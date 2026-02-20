@@ -103,6 +103,22 @@ class WidgetApiMixin:
         return super().dispatch(*args, **kwargs)
 
 
+def _get_working_hours_enabled(inbox):
+    """Безопасно получает флаг enabled из настроек рабочих часов."""
+    wh_cfg = (inbox.settings or {}).get("working_hours")
+    if isinstance(wh_cfg, dict):
+        return bool(wh_cfg.get("enabled", False))
+    return False
+
+
+def _get_working_hours_schedule(inbox):
+    """Безопасно получает расписание рабочих часов."""
+    wh_cfg = (inbox.settings or {}).get("working_hours")
+    if isinstance(wh_cfg, dict):
+        return wh_cfg.get("schedule") or {}
+    return {}
+
+
 @api_view(["POST", "OPTIONS"])
 @permission_classes([AllowAny])
 @throttle_classes([WidgetBootstrapThrottle])
@@ -309,8 +325,8 @@ def widget_bootstrap(request):
             "outside_working_hours": outside_working_hours,
             "working_hours_message": working_hours_message,
             "working_hours_display": compact_working_hours_display(
-                bool((inbox.settings or {}).get("working_hours") or {}).get("enabled"),
-                ((inbox.settings or {}).get("working_hours") or {}).get("schedule") or {},
+                _get_working_hours_enabled(inbox),
+                _get_working_hours_schedule(inbox),
             ),
             "offline_mode": offline_mode,
             "offline_message": offline_message,
