@@ -11848,30 +11848,79 @@ def settings_messenger_analytics(request: HttpRequest) -> HttpResponse:
         m = s // 60
         return f"{m}м"
 
-    by_operator = []
-    for r in (
-        qs_annotated.filter(assignee__isnull=False)
-        .values("assignee__id", "assignee__first_name", "assignee__last_name", "assignee__username")
-        .annotate(count=Count("id"), avg=Avg("first_response_delta"))
-        .order_by("-count")[:20]
-    ):
-        name = ((f"{r.get('assignee__first_name') or ''} {r.get('assignee__last_name') or ''}").strip()
-                or r.get("assignee__username")
-                or f"#{r.get('assignee__id')}")
-        by_operator.append({"name": name, "count": r["count"], "avg_first_response": _fmt_avg(r.get("avg"))})
+    # Детальная аналитика по операторам и филиалам считаем в Python,
+    # чтобы избежать ошибок вложенных агрегатов в Django.
+    from collections import defaultdict
+    from datetime import timedelta
 
-    by_branch = [
-        {
-            "name": r.get("branch__name") or f"#{r.get('branch__id')}",
-            "count": r["count"],
-            "avg_first_response": _fmt_avg(r.get("avg")),
-        }
-        for r in (
-            qs_annotated.values("branch__id", "branch__name")
-            .annotate(count=Count("id"), avg=Avg("first_response_delta"))
-            .order_by("-count")
+    conv_rows = qs_annotated.filter(first_out_at__isnull=False).values(
+        "assignee__id",
+        "assignee__first_name",
+        "assignee__last_name",
+        "assignee__username",
+        "branch__id",
+        "branch__name",
+        "first_response_delta",
+    )
+
+    operator_stats = {}
+    branch_stats = {}
+
+    for row in conv_rows:
+        delta = row.get("first_response_delta")
+        if delta is None:
+            continue
+
+        assignee_id = row.get("assignee__id")
+        if assignee_id:
+            op = operator_stats.setdefault(
+                assignee_id,
+                {
+                    "first_name": row.get("assignee__first_name") or "",
+                    "last_name": row.get("assignee__last_name") or "",
+                    "username": row.get("assignee__username") or "",
+                    "count": 0,
+                    "sum_delta": timedelta(0),
+                },
+            )
+            op["count"] += 1
+            op["sum_delta"] += delta
+
+        branch_id = row.get("branch__id")
+        if branch_id:
+            br = branch_stats.setdefault(
+                branch_id,
+                {
+                    "name": row.get("branch__name") or f"#{branch_id}",
+                    "count": 0,
+                    "sum_delta": timedelta(0),
+                },
+            )
+            br["count"] += 1
+            br["sum_delta"] += delta
+
+    by_operator = []
+    for op in sorted(operator_stats.values(), key=lambda x: x["count"], reverse=True)[:20]:
+        name = (f"{op['first_name']} {op['last_name']}".strip() or op["username"] or "Без имени").strip()
+        avg_td = op["sum_delta"] / op["count"] if op["count"] else None
+        by_operator.append(
+            {
+                "name": name,
+                "count": op["count"],
+                "avg_first_response": _fmt_avg(avg_td),
+            }
         )
-    ]
+
+    by_branch = []
+    for br in sorted(branch_stats.values(), key=lambda x: x["count"], reverse=True):
+        avg_td = br["sum_delta"] / br["count"] if br["count"] else None
+        by_branch.append(
+            {
+                "name": br["name"],
+                "count": br["count"],
+                "avg_first_response": _fmt_avg(avg_td),
+            }
+        )
 
     return render(
         request,
