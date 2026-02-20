@@ -430,6 +430,63 @@
   background: #f0fdfa;
 }
 
+.messenger-widget-emoji {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+}
+
+.messenger-widget-emoji:hover {
+  background: #f3f4f6;
+}
+
+.messenger-widget-form-row-modern {
+  align-items: center;
+  gap: 6px;
+}
+
+.messenger-widget-form-row-modern .messenger-widget-input {
+  border-radius: 20px;
+  padding: 10px 16px;
+  min-height: 40px;
+}
+
+.messenger-widget-footer-attribution {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.messenger-widget-privacy,
+.messenger-widget-privacy-preview {
+  padding: 10px 16px;
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.45;
+  border-top: 1px solid #e5e7eb;
+  background: #fafafa;
+}
+
+.messenger-widget-privacy a,
+.messenger-widget-privacy-preview a {
+  color: #01948E;
+  text-decoration: none;
+}
+
+.messenger-widget-privacy a:hover,
+.messenger-widget-privacy-preview a:hover {
+  text-decoration: underline;
+}
+
 .messenger-widget-input {
   flex: 1;
   min-width: 0;

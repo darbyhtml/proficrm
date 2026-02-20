@@ -972,24 +972,12 @@
     }
 
     openImageModal(url, downloadUrl, title) {
-      if (!this.imageModal || !this.imageModalImg) return;
       const u = (url || '').toString().trim();
       if (!u) return;
-      if (this.imageModalTitle) this.imageModalTitle.textContent = (title || 'Изображение').toString();
-      if (this.imageModalOpenLink) this.imageModalOpenLink.setAttribute('href', u);
-      if (this.imageModalDownloadLink) this.imageModalDownloadLink.setAttribute('href', (downloadUrl || u).toString());
-      if (this.imageModalLoader) this.imageModalLoader.style.display = '';
-      this.imageModalImg.classList.add('hidden');
-      this.imageModalImg.alt = (title || 'Изображение').toString();
-      this.imageModalImg.onload = () => {
-        if (this.imageModalLoader) this.imageModalLoader.style.display = 'none';
-        this.imageModalImg.classList.remove('hidden');
-      };
-      this.imageModalImg.onerror = () => {
-        if (this.imageModalLoader) this.imageModalLoader.textContent = 'Не удалось загрузить изображение.';
-      };
-      this.imageModalImg.src = u;
-      this.imageModal.classList.remove('hidden');
+      // У клиента на сайте открываем в новой вкладке, чтобы не ломать страницу и не перехватывать фокус
+      if (typeof window !== 'undefined') {
+        window.open(u, '_blank', 'noopener,noreferrer');
+      }
     }
 
     closeImageModal() {
@@ -1192,7 +1180,7 @@
       form.appendChild(this.pendingFilesEl);
 
       const inputRow = document.createElement('div');
-      inputRow.className = 'messenger-widget-form-row';
+      inputRow.className = 'messenger-widget-form-row messenger-widget-form-row-modern';
 
       this.input = document.createElement('textarea');
       this.input.className = 'messenger-widget-input messenger-widget-input-autogrow';
@@ -1273,6 +1261,16 @@
         form.appendChild(this.fileInput);
       }
 
+      inputRow.appendChild(this.input);
+
+      const emojiBtn = document.createElement('button');
+      emojiBtn.type = 'button';
+      emojiBtn.className = 'messenger-widget-emoji';
+      emojiBtn.setAttribute('aria-label', 'Эмодзи');
+      emojiBtn.innerHTML = '😊';
+      emojiBtn.title = 'Эмодзи (скоро)';
+      inputRow.appendChild(emojiBtn);
+
       const attachBtn = this.attachmentsEnabled ? document.createElement('button') : null;
       if (attachBtn) {
         attachBtn.type = 'button';
@@ -1284,8 +1282,6 @@
         });
         inputRow.appendChild(attachBtn);
       }
-
-      inputRow.appendChild(this.input);
 
       this.sendButton = document.createElement('button');
       this.sendButton.className = 'messenger-widget-send';

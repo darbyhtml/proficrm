@@ -163,6 +163,17 @@
                   <span class="text-sm font-medium text-brand-dark/80">Показывать поле телефона</span>
                 </label>
               </div>
+              <div class="border-t border-brand-soft/40 pt-4 mt-4">
+                <h3 class="text-sm font-semibold text-brand-dark/80 mb-2">Согласие на обработку данных</h3>
+                <div>
+                  <label class="block text-sm font-medium text-brand-dark/80 mb-1">Текст согласия (отображается в виджете)</label>
+                  <textarea name="privacy_text" id="widget-preview-privacy-text" class="textarea text-sm" rows="3" placeholder="Даю согласие на обработку персональных данных...">{{ widget_display.privacy_text }}</textarea>
+                </div>
+                <div class="mt-2">
+                  <label class="block text-sm font-medium text-brand-dark/80 mb-1">Ссылка на политику конфиденциальности</label>
+                  <input type="url" name="privacy_url" id="widget-preview-privacy-url" value="{{ widget_display.privacy_url }}" class="input" placeholder="https://...">
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -170,30 +181,81 @@
         <div class="card">
           <div class="card-pad">
             <h2 class="text-lg font-semibold mb-2">Предпросмотр</h2>
-            <p class="text-sm text-brand-dark/60 mb-4">Так виджет будет выглядеть на сайте (те же стили, что и в виджете)</p>
-            <div class="widget-preview-stage bg-brand-soft/10 rounded-xl min-h-[420px] flex items-end justify-end p-4 relative">
-              <div id="widget-preview-popup" class="messenger-widget-popup messenger-widget-popup-open" style="width: 380px; max-height: 420px;">
-                <div id="widget-preview-header" class="messenger-widget-header" style="background-color: {{ widget_display.color }};">
-                  <div style="display:flex;flex-direction:column;">
-                    <span id="widget-preview-header-title">{{ widget_display.title }}</span>
-                    <div id="widget-preview-header-subtitle" class="messenger-widget-header-subtitle">{% if widget_display.greeting %}{{ widget_display.greeting }}{% else %}Добро пожаловать! Как мы можем вам помочь?{% endif %}</div>
+            <div class="flex gap-2 mb-4">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="preview_mode" value="default" class="preview-mode-radio" checked>
+                <span class="text-sm font-medium">По умолчанию</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="preview_mode" value="chat" class="preview-mode-radio">
+                <span class="text-sm font-medium">Чат</span>
+              </label>
+            </div>
+            <div class="widget-preview-stage bg-brand-soft/10 rounded-xl min-h-[480px] flex items-end justify-end p-4 relative">
+              <div id="widget-preview-default" class="widget-preview-pane w-full flex justify-end">
+                <div id="widget-preview-popup-default" class="messenger-widget-popup messenger-widget-popup-open" style="width: 380px; max-height: 460px;">
+                  <div id="widget-preview-header-default" class="messenger-widget-header" style="background-color: {{ widget_display.color }};">
+                    <div style="display:flex;flex-direction:column;">
+                      <span id="widget-preview-header-title">{{ widget_display.title }}</span>
+                      <div id="widget-preview-header-subtitle" class="messenger-widget-header-subtitle">{% if widget_display.greeting %}{{ widget_display.greeting }}{% else %}Добро пожаловать! Как мы можем вам помочь?{% endif %}</div>
+                    </div>
+                    <button type="button" class="messenger-widget-close" aria-label="Закрыть">×</button>
                   </div>
-                  <button type="button" class="messenger-widget-close" aria-label="Закрыть">×</button>
+                  <div class="messenger-widget-messages p-4 space-y-4">
+                    <div>
+                      <label class="block text-xs font-medium text-brand-dark/60 mb-1">Имя</label>
+                      <input type="text" placeholder="Как к вам обращаться?" class="messenger-widget-input" style="min-height:40px;" disabled>
+                    </div>
+                    <div id="widget-preview-email-block" class="messenger-widget-preview-field {% if not widget_display.show_email %}hidden{% endif %}">
+                      <label class="block text-xs font-medium text-brand-dark/60 mb-1">Email</label>
+                      <input type="email" placeholder="your@email.com" class="messenger-widget-input" style="min-height:40px;" disabled>
+                    </div>
+                    <div id="widget-preview-phone-block" class="messenger-widget-preview-field {% if not widget_display.show_phone %}hidden{% endif %}">
+                      <label class="block text-xs font-medium text-brand-dark/60 mb-1">Телефон</label>
+                      <input type="tel" placeholder="+7 (___) ___-__-__" class="messenger-widget-input" style="min-height:40px;" disabled>
+                    </div>
+                    <div class="text-xs text-brand-dark/60 pt-1 border-t border-brand-soft/40">
+                      <span id="widget-preview-working-hours">{{ widget_display.working_hours_display }}</span>
+                    </div>
+                    <div class="messenger-widget-privacy-preview text-xs text-brand-dark/70 pt-2">
+                      <label class="flex items-start gap-2 cursor-pointer">
+                        <input type="checkbox" class="mt-0.5 rounded" disabled>
+                        <span id="widget-preview-privacy-text-span">{{ widget_display.privacy_text }}</span>
+                      </label>
+                      <a id="widget-preview-privacy-link" href="{{ widget_display.privacy_url|default:'#' }}" target="_blank" rel="noopener" class="text-brand-teal underline mt-1 inline-block">Политика конфиденциальности</a>
+                    </div>
+                  </div>
                 </div>
-                <div class="messenger-widget-messages">
-                  <div id="widget-preview-email-block" class="messenger-widget-preview-field {% if not widget_display.show_email %}hidden{% endif %}" style="margin-bottom:10px;">
-                    <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px;">Email</label>
-                    <input type="email" placeholder="your@email.com" class="messenger-widget-input" style="min-height:40px;" disabled>
+              </div>
+              <div id="widget-preview-chat" class="widget-preview-pane hidden w-full flex justify-end">
+                <div id="widget-preview-popup-chat" class="messenger-widget-popup messenger-widget-popup-open" style="width: 380px; max-height: 460px;">
+                  <div id="widget-preview-header-chat" class="messenger-widget-header" style="background-color: {{ widget_display.color }};">
+                    <div style="display:flex;flex-direction:column;">
+                      <span id="widget-preview-header-title-chat">{{ widget_display.title }}</span>
+                      <div class="messenger-widget-header-subtitle">Обычно отвечаем в течение нескольких минут</div>
+                    </div>
+                    <button type="button" class="messenger-widget-close" aria-label="Закрыть">×</button>
                   </div>
-                  <div id="widget-preview-phone-block" class="messenger-widget-preview-field {% if not widget_display.show_phone %}hidden{% endif %}" style="margin-bottom:10px;">
-                    <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px;">Телефон</label>
-                    <input type="tel" placeholder="+7 (___) ___-__-__" class="messenger-widget-input" style="min-height:40px;" disabled>
+                  <div class="messenger-widget-messages p-4 space-y-3">
+                    <div class="messenger-widget-message messenger-widget-message-in">
+                      <div class="messenger-widget-message-body">Здравствуйте!</div>
+                      <div class="messenger-widget-message-meta"><span class="messenger-widget-message-time">только что</span></div>
+                    </div>
+                    <div class="messenger-widget-message messenger-widget-message-out">
+                      <div class="messenger-widget-message-body">Привет!</div>
+                      <div class="messenger-widget-message-meta"><span class="messenger-widget-message-time">только что</span></div>
+                    </div>
                   </div>
-                </div>
-                <div class="messenger-widget-form">
-                  <div class="messenger-widget-form-row">
-                    <textarea class="messenger-widget-input" placeholder="Введите сообщение... (Enter — отправить, Shift+Enter — перенос строки)" rows="1" disabled></textarea>
-                    <button type="button" class="messenger-widget-send" disabled>Отправить</button>
+                  <div class="messenger-widget-form">
+                    <div class="messenger-widget-form-row messenger-widget-form-row-modern">
+                      <textarea class="messenger-widget-input" placeholder="Введите сообщение" rows="1" disabled></textarea>
+                      <button type="button" class="messenger-widget-emoji" aria-label="Эмодзи" disabled>😊</button>
+                      <button type="button" class="messenger-widget-attach" aria-label="Прикрепить файл" disabled>📎</button>
+                      <button type="button" class="messenger-widget-send" disabled>Отправить</button>
+                    </div>
+                  </div>
+                  <div class="messenger-widget-footer-attribution text-center py-2 text-xs text-brand-dark/50 border-t border-brand-soft/40">
+                    Работает на Chatwoot
                   </div>
                 </div>
               </div>
@@ -500,31 +562,47 @@
       var colorEl = document.getElementById('widget-preview-color');
       var showEmailEl = document.getElementById('widget-preview-show-email');
       var showPhoneEl = document.getElementById('widget-preview-show-phone');
-      var headerEl = document.getElementById('widget-preview-header');
-      var headerTitleEl = document.getElementById('widget-preview-header-title');
-      var headerSubtitleEl = document.getElementById('widget-preview-header-subtitle');
+      var privacyTextEl = document.getElementById('widget-preview-privacy-text');
+      var privacyUrlEl = document.getElementById('widget-preview-privacy-url');
+      var headerDefault = document.getElementById('widget-preview-header-default');
+      var headerChat = document.getElementById('widget-preview-header-chat');
+      var titleDefault = document.getElementById('widget-preview-header-title');
+      var titleChat = document.getElementById('widget-preview-header-title-chat');
+      var subtitleDefault = document.getElementById('widget-preview-header-subtitle');
       var emailBlock = document.getElementById('widget-preview-email-block');
       var phoneBlock = document.getElementById('widget-preview-phone-block');
-      if (!headerEl || !titleEl) return;
+      var privacyTextSpan = document.getElementById('widget-preview-privacy-text-span');
+      var privacyLink = document.getElementById('widget-preview-privacy-link');
+      if (!titleDefault || !titleEl) return;
       function updatePreview() {
         var title = (titleEl && titleEl.value) ? titleEl.value : 'Чат с поддержкой';
         var greeting = (greetingEl && greetingEl.value) ? greetingEl.value : 'Добро пожаловать! Как мы можем вам помочь?';
         var color = (colorEl && colorEl.value) ? colorEl.value : '#01948E';
-        if (headerTitleEl) headerTitleEl.textContent = title;
-        if (headerSubtitleEl) headerSubtitleEl.textContent = greeting;
-        if (headerEl) headerEl.style.backgroundColor = color;
+        var privacyText = (privacyTextEl && privacyTextEl.value) ? privacyTextEl.value : '';
+        var privacyUrl = (privacyUrlEl && privacyUrlEl.value) ? privacyUrlEl.value : '#';
+        if (titleDefault) titleDefault.textContent = title;
+        if (titleChat) titleChat.textContent = title;
+        if (subtitleDefault) subtitleDefault.textContent = greeting;
+        if (headerDefault) headerDefault.style.backgroundColor = color;
+        if (headerChat) headerChat.style.backgroundColor = color;
         if (emailBlock) emailBlock.classList.toggle('hidden', !(showEmailEl && showEmailEl.checked));
         if (phoneBlock) phoneBlock.classList.toggle('hidden', !(showPhoneEl && showPhoneEl.checked));
+        if (privacyTextSpan) privacyTextSpan.textContent = privacyText || 'Даю согласие на обработку персональных данных...';
+        if (privacyLink) { privacyLink.href = privacyUrl; privacyLink.textContent = privacyUrl ? 'Политика конфиденциальности' : ''; }
       }
-      [titleEl, greetingEl, colorEl].forEach(function(el) {
-        if (el) {
-          el.addEventListener('input', updatePreview);
-          el.addEventListener('change', updatePreview);
-        }
+      [titleEl, greetingEl, colorEl, privacyTextEl, privacyUrlEl].forEach(function(el) {
+        if (el) { el.addEventListener('input', updatePreview); el.addEventListener('change', updatePreview); }
       });
       if (showEmailEl) showEmailEl.addEventListener('change', updatePreview);
       if (showPhoneEl) showPhoneEl.addEventListener('change', updatePreview);
       updatePreview();
+      document.querySelectorAll('.preview-mode-radio').forEach(function(radio) {
+        radio.addEventListener('change', function() {
+          var isDefault = document.querySelector('.preview-mode-radio[value="default"]').checked;
+          document.getElementById('widget-preview-default').classList.toggle('hidden', !isDefault);
+          document.getElementById('widget-preview-chat').classList.toggle('hidden', isDefault);
+        });
+      });
     })();
     {% if inbox %}
     function copyToken() {

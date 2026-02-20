@@ -11995,6 +11995,13 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
             settings_dict["show_email"] = widget_show_email
             settings_dict["show_phone"] = widget_show_phone
 
+            # Согласие на обработку персональных данных и ссылка на политику
+            privacy_url = (request.POST.get("privacy_url") or "").strip()
+            privacy_text = (request.POST.get("privacy_text") or "").strip()
+            if not privacy_text:
+                privacy_text = "Даю согласие на обработку моих персональных данных для обработки заявки и получения обратной связи. Подробная информация — в Политике конфиденциальности."
+            settings_dict["privacy"] = {"url": privacy_url, "text": privacy_text}
+
             # Рабочие часы
             working_hours_enabled = request.POST.get("working_hours_enabled") == "on"
             working_hours_tz = request.POST.get("working_hours_tz", "").strip() or "Europe/Moscow"
@@ -12265,13 +12272,31 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
         "sse": features_cfg.get("sse", True),
     }
 
-    widget_display = getattr(inbox, "settings", None) or {}
+    settings_obj_for_widget = getattr(inbox, "settings", None) or {}
+    privacy_cfg = settings_obj_for_widget.get("privacy") or {}
+    wh_cfg = settings_obj_for_widget.get("working_hours") or {}
+    schedule = wh_cfg.get("schedule") or {}
+    working_hours_display = "Обычно отвечаем в течение нескольких минут"
+    if wh_cfg.get("enabled") and schedule:
+        day_labels = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+        parts = []
+        for i in range(1, 8):
+            slot = schedule.get(str(i), [])
+            if len(slot) >= 2:
+                parts.append(f"{day_labels[i-1]} {slot[0]}-{slot[1]}")
+        if parts:
+            working_hours_display = ", ".join(parts[:5])
+            if len(parts) > 5:
+                working_hours_display += " …"
     widget_display = {
-        "title": widget_display.get("title", "Чат с поддержкой"),
-        "greeting": widget_display.get("greeting", ""),
-        "color": widget_display.get("color", "#01948E"),
-        "show_email": widget_display.get("show_email", False),
-        "show_phone": widget_display.get("show_phone", False),
+        "title": settings_obj_for_widget.get("title", "Чат с поддержкой"),
+        "greeting": settings_obj_for_widget.get("greeting", ""),
+        "color": settings_obj_for_widget.get("color", "#01948E"),
+        "show_email": settings_obj_for_widget.get("show_email", False),
+        "show_phone": settings_obj_for_widget.get("show_phone", False),
+        "privacy_url": privacy_cfg.get("url", ""),
+        "privacy_text": privacy_cfg.get("text", "Даю согласие на обработку моих персональных данных для обработки заявки и получения обратной связи. Подробная информация — в Политике конфиденциальности."),
+        "working_hours_display": working_hours_display,
     }
 
     return render(
