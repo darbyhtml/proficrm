@@ -9,11 +9,25 @@
 
   // Конфигурация
   const CONFIG = {
-    POLL_INTERVAL: 3000, // 3 секунды
-    API_BASE_URL: '', // Относительный путь (текущий домен)
+    POLL_INTERVAL: 3000,
+    API_BASE_URL: '',
     MAX_MESSAGE_LENGTH: 2000,
     STORAGE_PREFIX: 'messenger_widget::',
   };
+
+  const EMOJI_LIST = ['😀','😃','😄','😁','😅','😂','🤣','😊','😇','🙂','😉','😌','😍','🥰','😘','😗','😙','😚','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','😐','😑','😶','😏','😣','😥','😮','🤐','😯','😪','😫','😴','🤤','😷','🤒','🤕','🤢','🤮','😎','🤓','🧐','😕','😟','🙁','😮','😯','😲','😳','🥺','😢','😭','😤','😠','😡','👍','👎','👌','✌️','🤞','🤟','🤘','🤙','👋','🤚','🖐️','✋','🖖','👏','🙌','👐','🤲','🙏','❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟'];
+
+  /** Кодпоинт эмодзи в имя файла (Apple emoji-datasource: 1f600.png, 261d-fe0f.png) */
+  function emojiToCodepoint(emoji) {
+    var parts = [];
+    for (var i = 0; i < emoji.length; i++) {
+      var code = emoji.codePointAt(i);
+      if (code > 0xFFFF) i++;
+      parts.push(code.toString(16).toLowerCase());
+    }
+    return parts.join('-');
+  }
+  var EMOJI_APPLE_CDN = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.0/img/apple/64/';
 
   /**
    * Генерация UUIDv4
@@ -803,6 +817,44 @@
       }
     }
 
+    toggleEmojiPicker() {
+      if (!this.emojiPicker) return;
+      const isHidden = this.emojiPicker.classList.contains('messenger-widget-emoji-picker-hidden');
+      if (isHidden) {
+        this.emojiPicker.classList.remove('messenger-widget-emoji-picker-hidden');
+        this.emojiPickerCloseHandler = (e) => {
+          if (this.emojiPicker && !this.emojiPicker.contains(e.target) && !(e.target && e.target.closest && e.target.closest('.messenger-widget-emoji'))) {
+            this.closeEmojiPicker();
+          }
+        };
+        document.addEventListener('click', this.emojiPickerCloseHandler);
+      } else {
+        this.closeEmojiPicker();
+      }
+    }
+
+    closeEmojiPicker() {
+      if (this.emojiPicker) this.emojiPicker.classList.add('messenger-widget-emoji-picker-hidden');
+      if (this.emojiPickerCloseHandler) {
+        document.removeEventListener('click', this.emojiPickerCloseHandler);
+        this.emojiPickerCloseHandler = null;
+      }
+    }
+
+    insertEmojiAtCursor(emoji) {
+      if (!this.input) return;
+      const start = this.input.selectionStart;
+      const end = this.input.selectionEnd;
+      const text = this.input.value;
+      this.input.value = text.slice(0, start) + emoji + text.slice(end);
+      this.input.selectionStart = this.input.selectionEnd = start + emoji.length;
+      this.input.focus();
+      if (this.input.getAttribute('data-widget-autogrow-init')) {
+        this.input.style.height = 'auto';
+        this.input.style.height = this.input.scrollHeight + 'px';
+      }
+    }
+
     /**
      * Показать/скрыть кнопку запуска виджета (launcher)
      */
@@ -846,15 +898,12 @@
      * Обновить состояние кнопки отправки
      */
     updateSendButton() {
-      if (!this.sendButton) {
-        return;
-      }
+      if (!this.sendButton) return;
+      this.sendButton.disabled = this.isSending;
       if (this.isSending) {
-        this.sendButton.disabled = true;
-        this.sendButton.textContent = 'Отправка...';
+        this.sendButton.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="messenger-widget-send-spinner"><circle cx="12" cy="12" r="10" stroke-opacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10" stroke-dasharray="24 48"/></svg>';
       } else {
-        this.sendButton.disabled = false;
-        this.sendButton.textContent = 'Отправить';
+        this.sendButton.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
       }
     }
 
@@ -1330,11 +1379,11 @@
       form.appendChild(this.pendingFilesEl);
 
       const inputRow = document.createElement('div');
-      inputRow.className = 'messenger-widget-form-row messenger-widget-form-row-modern';
+      inputRow.className = 'messenger-widget-form-row messenger-widget-form-row-telegram';
 
       this.input = document.createElement('textarea');
       this.input.className = 'messenger-widget-input messenger-widget-input-autogrow';
-      this.input.placeholder = 'Введите сообщение... (Enter — отправить, Shift+Enter — перенос строки)';
+      this.input.placeholder = 'Введите сообщение...';
       this.input.rows = 1;
       this.input.maxLength = CONFIG.MAX_MESSAGE_LENGTH;
       this.input.addEventListener('keydown', (e) => {
@@ -1411,31 +1460,35 @@
         form.appendChild(this.fileInput);
       }
 
-      inputRow.appendChild(this.input);
-
-      const emojiBtn = document.createElement('button');
-      emojiBtn.type = 'button';
-      emojiBtn.className = 'messenger-widget-emoji';
-      emojiBtn.setAttribute('aria-label', 'Эмодзи');
-      emojiBtn.innerHTML = '😊';
-      emojiBtn.title = 'Эмодзи (скоро)';
-      inputRow.appendChild(emojiBtn);
-
-      const attachBtn = this.attachmentsEnabled ? document.createElement('button') : null;
-      if (attachBtn) {
+      if (this.attachmentsEnabled) {
+        const attachBtn = document.createElement('button');
         attachBtn.type = 'button';
-        attachBtn.className = 'messenger-widget-attach';
+        attachBtn.className = 'messenger-widget-attach messenger-widget-icon-btn';
         attachBtn.setAttribute('aria-label', 'Прикрепить файл');
         attachBtn.innerHTML = '📎';
+        attachBtn.title = 'Прикрепить';
         attachBtn.addEventListener('click', () => {
           if (this.fileInput) this.fileInput.click();
         });
         inputRow.appendChild(attachBtn);
       }
 
+      inputRow.appendChild(this.input);
+
+      const emojiBtn = document.createElement('button');
+      emojiBtn.type = 'button';
+      emojiBtn.className = 'messenger-widget-emoji messenger-widget-icon-btn';
+      emojiBtn.setAttribute('aria-label', 'Эмодзи');
+      emojiBtn.innerHTML = '😊';
+      emojiBtn.title = 'Эмодзи';
+      emojiBtn.addEventListener('click', () => this.toggleEmojiPicker());
+      inputRow.appendChild(emojiBtn);
+
       this.sendButton = document.createElement('button');
-      this.sendButton.className = 'messenger-widget-send';
-      this.sendButton.textContent = 'Отправить';
+      this.sendButton.className = 'messenger-widget-send messenger-widget-send-icon';
+      this.sendButton.setAttribute('aria-label', 'Отправить');
+      this.sendButton.title = 'Отправить';
+      this.sendButton.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
       this.sendButton.addEventListener('click', () => {
         const body = this.input.value.trim();
         if (body || this.pendingFiles.length > 0) {
@@ -1443,6 +1496,33 @@
         }
       });
       inputRow.appendChild(this.sendButton);
+
+      this.emojiPicker = document.createElement('div');
+      this.emojiPicker.className = 'messenger-widget-emoji-picker messenger-widget-emoji-picker-hidden';
+      this.emojiPicker.setAttribute('role', 'listbox');
+      EMOJI_LIST.forEach((emoji) => {
+        const span = document.createElement('span');
+        span.className = 'messenger-widget-emoji-picker-item';
+        span.setAttribute('role', 'option');
+        span.setAttribute('data-emoji', emoji);
+        const img = document.createElement('img');
+        img.src = EMOJI_APPLE_CDN + emojiToCodepoint(emoji) + '.png';
+        img.alt = emoji;
+        img.className = 'messenger-widget-emoji-picker-img';
+        img.loading = 'lazy';
+        img.onerror = function() { this.style.display = 'none'; if (this.nextSibling) this.nextSibling.style.display = 'inline'; };
+        span.appendChild(img);
+        const fallback = document.createElement('span');
+        fallback.className = 'messenger-widget-emoji-picker-fallback';
+        fallback.style.display = 'none';
+        fallback.textContent = emoji;
+        span.appendChild(fallback);
+        span.addEventListener('click', () => {
+          this.insertEmojiAtCursor(emoji);
+        });
+        this.emojiPicker.appendChild(span);
+      });
+      form.appendChild(this.emojiPicker);
 
       form.appendChild(inputRow);
       this.ratingForm = form;

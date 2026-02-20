@@ -349,6 +349,7 @@
 
 /* Форма отправки */
 .messenger-widget-form {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -466,6 +467,136 @@
   border-radius: 20px;
   padding: 10px 16px;
   min-height: 40px;
+}
+
+/* Строка ввода в стиле Telegram: скрепка слева, поле по центру, эмодзи и отправка справа */
+.messenger-widget-form-row-telegram {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+}
+.messenger-widget-form-row-telegram .messenger-widget-input {
+  flex: 1;
+  min-width: 0;
+  border-radius: 20px;
+  padding: 10px 14px;
+  min-height: 40px;
+  max-height: 120px;
+  resize: none;
+  border: 1px solid #e5e7eb;
+  font-size: 14px;
+  line-height: 1.4;
+}
+.messenger-widget-form-row-telegram .messenger-widget-input:focus {
+  outline: none;
+  border-color: #01948E;
+}
+.messenger-widget-icon-btn {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+  color: #6b7280;
+}
+.messenger-widget-icon-btn:hover {
+  background: #f3f4f6;
+  color: #374151;
+}
+.messenger-widget-form-row-telegram .messenger-widget-attach.messenger-widget-icon-btn,
+.messenger-widget-form-row-telegram .messenger-widget-emoji.messenger-widget-icon-btn {
+  width: 38px;
+  height: 38px;
+}
+.messenger-widget-send-icon {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: #01948E;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+.messenger-widget-send-icon:hover:not(:disabled) {
+  background: #017a75;
+}
+.messenger-widget-send-icon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.messenger-widget-send-icon svg {
+  width: 20px;
+  height: 20px;
+}
+.messenger-widget-send-spinner {
+  animation: messenger-send-spin 0.8s linear infinite;
+}
+@keyframes messenger-send-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Эмодзи-пикер (как в Telegram) */
+.messenger-widget-emoji-picker {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  margin: 0 8px 8px;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+  z-index: 10;
+}
+.messenger-widget-emoji-picker-hidden {
+  display: none !important;
+}
+.messenger-widget-emoji-picker-item {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.1s ease;
+}
+.messenger-widget-emoji-picker-item:hover {
+  background: #f3f4f6;
+}
+.messenger-widget-emoji-picker-img {
+  width: 28px;
+  height: 28px;
+  display: block;
+  object-fit: contain;
+}
+.messenger-widget-emoji-picker-fallback {
+  font-size: 22px;
+  line-height: 32px;
 }
 
 .messenger-widget-footer-attribution {

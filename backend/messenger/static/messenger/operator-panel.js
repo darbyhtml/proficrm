@@ -3,6 +3,19 @@
  * Управление трёхколоночной панелью мессенджера
  */
 
+const OPERATOR_EMOJI_LIST = ['😀','😃','😄','😁','😅','😂','🤣','😊','😇','🙂','😉','😌','😍','🥰','😘','😗','😙','😚','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','😐','😑','😶','😏','😣','😥','😮','🤐','😯','😪','😫','😴','🤤','😷','🤒','🤕','🤢','🤮','😎','🤓','🧐','😕','😟','🙁','😮','😯','😲','😳','🥺','😢','😭','😤','😠','😡','👍','👎','👌','✌️','🤞','🤟','🤘','🤙','👋','🤚','🖐️','✋','🖖','👏','🙌','👐','🤲','🙏','❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟'];
+
+function operatorEmojiToCodepoint(emoji) {
+  var parts = [];
+  for (var i = 0; i < emoji.length; i++) {
+    var code = emoji.codePointAt(i);
+    if (code > 0xFFFF) i++;
+    parts.push(code.toString(16).toLowerCase());
+  }
+  return parts.join('-');
+}
+var OPERATOR_EMOJI_APPLE_CDN = 'https://cdn.jsdelivr.net/npm/emoji-datasource-apple@15.1.0/img/apple/64/';
+
 class MessengerOperatorPanel {
   constructor() {
     this.currentConversationId = null;
@@ -659,30 +672,22 @@ class MessengerOperatorPanel {
             <div class="text-[10px] text-brand-dark/40">Ctrl+Enter</div>
           </div>
         </div>
-        <form id="messageForm" onsubmit="window.MessengerPanel.sendMessage(event)" enctype="multipart/form-data">
+        <form id="messageForm" class="messenger-operator-form" onsubmit="window.MessengerPanel.sendMessage(event)" enctype="multipart/form-data">
           <input type="hidden" name="conversation_id" value="${conversation.id}">
-          <div class="flex items-start gap-2">
-            <div class="flex-1 min-w-0">
-              <textarea name="body" id="messageBody" class="textarea messenger-input-autogrow w-full resize-none" rows="1" placeholder="Введите сообщение клиенту..."></textarea>
-              <div id="messageAttachmentsNames" class="text-xs text-brand-dark/60 mt-1 px-1"></div>
-              <div id="composeModeHint" class="text-[10px] text-brand-dark/40 mt-1 px-1">
-                Сообщение увидит клиент. Внутренние заметки доступны только сотрудникам.
-              </div>
-            </div>
-            <div class="flex items-start gap-1.5 flex-shrink-0">
-              <input type="file" name="attachments" id="messageAttachments" class="hidden" multiple accept="image/*,.pdf">
-              <button type="button" onclick="document.getElementById('messageAttachments').click()" class="btn btn-outline btn-sm p-2" title="Прикрепить файл">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
-                </svg>
-              </button>
-              <button type="submit" class="btn btn-primary p-2.5" title="Отправить (Ctrl+Enter)">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
-                </svg>
-              </button>
-            </div>
+          <div id="operatorEmojiPicker" class="messenger-operator-emoji-picker messenger-operator-emoji-picker-hidden"></div>
+          <div class="messenger-operator-form-row">
+            <input type="file" name="attachments" id="messageAttachments" class="hidden" multiple accept="image/*,.pdf">
+            <button type="button" id="messageAttachBtn" class="messenger-operator-icon-btn" title="Прикрепить файл">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+            </button>
+            <textarea name="body" id="messageBody" class="messenger-operator-input messenger-input-autogrow" rows="1" placeholder="Введите сообщение..." style="min-height:40px;max-height:120px;"></textarea>
+            <button type="button" id="messageEmojiBtn" class="messenger-operator-icon-btn" title="Эмодзи">😊</button>
+            <button type="submit" id="messageSendBtn" class="messenger-operator-send-btn" title="Отправить (Ctrl+Enter)">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+            </button>
           </div>
+          <div id="messageAttachmentsNames" class="text-xs text-brand-dark/60 mt-1 px-1"></div>
+          <div id="composeModeHint" class="text-[10px] text-brand-dark/40 mt-1 px-1">Сообщение увидит клиент. Внутренние заметки доступны только сотрудникам.</div>
           <p class="text-[10px] text-brand-dark/40 mt-1.5 px-1">Макс. 5 МБ на файл • изображения и PDF</p>
         </form>
       </div>
@@ -698,17 +703,20 @@ class MessengerOperatorPanel {
     this.pendingNewMessagesCount = 0;
     this.updateNewMessagesButton();
 
-    // Обработчик файлов
     const fileInput = document.getElementById('messageAttachments');
+    const attachBtn = document.getElementById('messageAttachBtn');
+    if (attachBtn && fileInput) {
+      attachBtn.addEventListener('click', () => fileInput.click());
+    }
     if (fileInput) {
       fileInput.addEventListener('change', function() {
         const names = Array.from(this.files).map(f => f.name).join(', ');
         const namesEl = document.getElementById('messageAttachmentsNames');
-        if (namesEl) {
-          namesEl.textContent = names || '';
-        }
+        if (namesEl) namesEl.textContent = names || '';
       });
     }
+
+    this.initOperatorEmojiPicker(conversation.id);
 
     // Ctrl+Enter для отправки
     const messageBody = document.getElementById('messageBody');
@@ -1766,6 +1774,66 @@ class MessengerOperatorPanel {
       clearInterval(this.pollingIntervals[conversationId]);
       delete this.pollingIntervals[conversationId];
     }
+  }
+
+  /**
+   * Эмодзи-пикер в форме сообщения оператора
+   */
+  initOperatorEmojiPicker(conversationId) {
+    const pickerEl = document.getElementById('operatorEmojiPicker');
+    const emojiBtn = document.getElementById('messageEmojiBtn');
+    const messageBody = document.getElementById('messageBody');
+    if (!pickerEl || !emojiBtn || !messageBody) return;
+    if (pickerEl.querySelector('.messenger-operator-emoji-picker-item')) return; // уже инициализирован
+    OPERATOR_EMOJI_LIST.forEach((emoji) => {
+      const span = document.createElement('span');
+      span.className = 'messenger-operator-emoji-picker-item';
+      const img = document.createElement('img');
+      img.src = OPERATOR_EMOJI_APPLE_CDN + operatorEmojiToCodepoint(emoji) + '.png';
+      img.alt = emoji;
+      img.className = 'messenger-operator-emoji-picker-img';
+      img.loading = 'lazy';
+      img.onerror = function() { this.style.display = 'none'; if (this.nextSibling) this.nextSibling.style.display = 'inline'; };
+      span.appendChild(img);
+      const fallback = document.createElement('span');
+      fallback.className = 'messenger-operator-emoji-picker-fallback';
+      fallback.style.display = 'none';
+      fallback.textContent = emoji;
+      span.appendChild(fallback);
+      span.addEventListener('click', (e) => {
+        e.preventDefault();
+        const start = messageBody.selectionStart;
+        const end = messageBody.selectionEnd;
+        const text = messageBody.value;
+        messageBody.value = text.slice(0, start) + emoji + text.slice(end);
+        messageBody.selectionStart = messageBody.selectionEnd = start + emoji.length;
+        messageBody.focus();
+        pickerEl.classList.add('messenger-operator-emoji-picker-hidden');
+        if (messageBody.getAttribute('data-messenger-autogrow-init')) {
+          messageBody.style.height = 'auto';
+          messageBody.style.height = messageBody.scrollHeight + 'px';
+        }
+      });
+      pickerEl.appendChild(span);
+    });
+    emojiBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const hidden = pickerEl.classList.toggle('messenger-operator-emoji-picker-hidden');
+      if (!hidden && this.operatorEmojiPickerCloseHandler) {
+        document.removeEventListener('click', this.operatorEmojiPickerCloseHandler);
+        this.operatorEmojiPickerCloseHandler = null;
+      }
+      if (!hidden) {
+        this.operatorEmojiPickerCloseHandler = (ev) => {
+          if (!pickerEl.contains(ev.target) && ev.target !== emojiBtn && !emojiBtn.contains(ev.target)) {
+            pickerEl.classList.add('messenger-operator-emoji-picker-hidden');
+            document.removeEventListener('click', this.operatorEmojiPickerCloseHandler);
+            this.operatorEmojiPickerCloseHandler = null;
+          }
+        };
+        setTimeout(() => document.addEventListener('click', this.operatorEmojiPickerCloseHandler), 0);
+      }
+    });
   }
 
   /**

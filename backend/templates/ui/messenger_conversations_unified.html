@@ -282,6 +282,122 @@
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
   }
+
+  /* Форма ввода сообщения оператора — в стиле Telegram */
+  .messenger-operator-form {
+    position: relative;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid rgba(194, 226, 222, 0.6);
+    background: #fff;
+  }
+  .messenger-operator-form-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+  }
+  .messenger-operator-input {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 20px;
+    font-size: 14px;
+    line-height: 1.4;
+    resize: none;
+    font-family: inherit;
+    transition: border-color 0.2s ease;
+  }
+  .messenger-operator-input:focus {
+    outline: none;
+    border-color: #01948E;
+  }
+  .messenger-operator-icon-btn {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+    transition: background 0.15s ease;
+  }
+  .messenger-operator-icon-btn:hover {
+    background: #f3f4f6;
+    color: #374151;
+  }
+  .messenger-operator-send-btn {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: #01948E;
+    color: #fff;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s ease;
+  }
+  .messenger-operator-send-btn:hover {
+    background: #017a75;
+  }
+  .messenger-operator-send-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+  .messenger-operator-emoji-picker {
+    position: absolute;
+    bottom: 100%;
+    left: 8px;
+    right: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    margin-bottom: 8px;
+    padding: 10px;
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 4px;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+    z-index: 20;
+  }
+  .messenger-operator-emoji-picker-hidden {
+    display: none !important;
+  }
+  .messenger-operator-emoji-picker-item {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    cursor: pointer;
+    border-radius: 8px;
+    transition: background 0.1s ease;
+  }
+  .messenger-operator-emoji-picker-item:hover {
+    background: #f3f4f6;
+  }
+  .messenger-operator-emoji-picker-img {
+    width: 28px;
+    height: 28px;
+    display: block;
+    object-fit: contain;
+  }
+  .messenger-operator-emoji-picker-fallback {
+    font-size: 22px;
+    line-height: 32px;
+  }
 </style>
 
 <div class="messenger-unified-layout">

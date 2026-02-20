@@ -224,6 +224,7 @@
                       </label>
                       <a id="widget-preview-privacy-link" href="{{ widget_display.privacy_url|default:'#' }}" target="_blank" rel="noopener" class="text-brand-teal underline mt-1 inline-block">Политика конфиденциальности</a>
                     </div>
+                    <button type="button" class="messenger-widget-prechat-submit mt-3 w-full" disabled style="pointer-events:none;">Применить и открыть чат</button>
                   </div>
                 </div>
               </div>
@@ -247,11 +248,11 @@
                     </div>
                   </div>
                   <div class="messenger-widget-form">
-                    <div class="messenger-widget-form-row messenger-widget-form-row-modern">
-                      <textarea class="messenger-widget-input" placeholder="Введите сообщение" rows="1" disabled></textarea>
-                      <button type="button" class="messenger-widget-emoji" aria-label="Эмодзи" disabled>😊</button>
-                      <button type="button" class="messenger-widget-attach" aria-label="Прикрепить файл" disabled>📎</button>
-                      <button type="button" class="messenger-widget-send" disabled>Отправить</button>
+                    <div class="messenger-widget-form-row messenger-widget-form-row-telegram">
+                      <button type="button" class="messenger-widget-attach messenger-widget-icon-btn" aria-label="Прикрепить файл" disabled title="Прикрепить">📎</button>
+                      <textarea class="messenger-widget-input messenger-widget-input-autogrow" placeholder="Введите сообщение..." rows="1" disabled style="min-height:40px;max-height:120px;"></textarea>
+                      <button type="button" class="messenger-widget-emoji messenger-widget-icon-btn" aria-label="Эмодзи" disabled title="Эмодзи">😊</button>
+                      <button type="button" class="messenger-widget-send messenger-widget-send-icon" aria-label="Отправить" disabled title="Отправить"><svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg></button>
                     </div>
                   </div>
                 </div>
