@@ -1,6 +1,13 @@
 {% extends "ui/base.html" %}
 {% load static %}
 {% block title %}{% if inbox %}Редактирование Inbox{% else %}Создание Inbox{% endif %} — CRM ПРОФИ{% endblock %}
+{% block extra_head %}
+  <link rel="stylesheet" href="{% static 'messenger/widget.css' %}">
+  <style>
+    .widget-preview-stage .messenger-widget-popup { position: relative; bottom: auto; right: auto; opacity: 1; transform: none; pointer-events: auto; }
+    .widget-preview-stage .messenger-widget-messages { min-height: 140px; }
+  </style>
+{% endblock %}
 
 {% block content %}
   <div class="space-y-4 max-w-6xl">
@@ -163,30 +170,30 @@
         <div class="card">
           <div class="card-pad">
             <h2 class="text-lg font-semibold mb-2">Предпросмотр</h2>
-            <p class="text-sm text-brand-dark/60 mb-4">Так виджет будет выглядеть на сайте</p>
+            <p class="text-sm text-brand-dark/60 mb-4">Так виджет будет выглядеть на сайте (те же стили, что и в виджете)</p>
             <div class="widget-preview-stage bg-brand-soft/10 rounded-xl min-h-[420px] flex items-end justify-end p-4 relative">
-              <div id="widget-preview-popup" class="bg-white rounded-xl shadow-lg flex flex-col overflow-hidden border border-brand-soft/40" style="width: 320px; max-height: 400px;">
-                <div id="widget-preview-header" class="flex items-center justify-between px-4 py-3 text-white rounded-t-xl" style="background-color: {{ widget_display.color }};">
-                  <div>
-                    <div id="widget-preview-header-title" class="font-semibold text-base">{{ widget_display.title }}</div>
-                    <div class="text-sm opacity-90 mt-0.5">Обычно отвечаем в течение нескольких минут</div>
+              <div id="widget-preview-popup" class="messenger-widget-popup messenger-widget-popup-open" style="width: 380px; max-height: 420px;">
+                <div id="widget-preview-header" class="messenger-widget-header" style="background-color: {{ widget_display.color }};">
+                  <div style="display:flex;flex-direction:column;">
+                    <span id="widget-preview-header-title">{{ widget_display.title }}</span>
+                    <div id="widget-preview-header-subtitle" class="messenger-widget-header-subtitle">{% if widget_display.greeting %}{{ widget_display.greeting }}{% else %}Добро пожаловать! Как мы можем вам помочь?{% endif %}</div>
                   </div>
-                  <button type="button" class="w-7 h-7 flex items-center justify-center rounded text-white/90 hover:bg-white/20 text-xl leading-none" aria-label="Закрыть">×</button>
+                  <button type="button" class="messenger-widget-close" aria-label="Закрыть">×</button>
                 </div>
-                <div class="flex-1 overflow-y-auto p-4 space-y-3 min-h-[180px]">
-                  <div id="widget-preview-greeting-block" class="text-sm text-brand-dark/80 whitespace-pre-line">
-                    <span id="widget-preview-greeting-text">{% if widget_display.greeting %}{{ widget_display.greeting }}{% else %}Добро пожаловать! Как мы можем вам помочь?{% endif %}</span>
+                <div class="messenger-widget-messages">
+                  <div id="widget-preview-email-block" class="messenger-widget-preview-field {% if not widget_display.show_email %}hidden{% endif %}" style="margin-bottom:10px;">
+                    <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px;">Email</label>
+                    <input type="email" placeholder="your@email.com" class="messenger-widget-input" style="min-height:40px;" disabled>
                   </div>
-                  <div id="widget-preview-email-block" class="text-sm {% if not widget_display.show_email %}hidden{% endif %}">
-                    <label class="block text-brand-dark/70 mb-1">Email</label>
-                    <input type="email" placeholder="your@email.com" class="input py-2 text-sm w-full" disabled>
+                  <div id="widget-preview-phone-block" class="messenger-widget-preview-field {% if not widget_display.show_phone %}hidden{% endif %}" style="margin-bottom:10px;">
+                    <label style="display:block;font-size:12px;color:#6b7280;margin-bottom:4px;">Телефон</label>
+                    <input type="tel" placeholder="+7 (___) ___-__-__" class="messenger-widget-input" style="min-height:40px;" disabled>
                   </div>
-                  <div id="widget-preview-phone-block" class="text-sm {% if not widget_display.show_phone %}hidden{% endif %}">
-                    <label class="block text-brand-dark/70 mb-1">Телефон</label>
-                    <input type="tel" placeholder="+7 (___) ___-__-__" class="input py-2 text-sm w-full" disabled>
-                  </div>
-                  <div class="pt-2 border-t border-brand-soft/40">
-                    <input type="text" placeholder="Введите сообщение..." class="input py-2 text-sm w-full" disabled>
+                </div>
+                <div class="messenger-widget-form">
+                  <div class="messenger-widget-form-row">
+                    <textarea class="messenger-widget-input" placeholder="Введите сообщение... (Enter — отправить, Shift+Enter — перенос строки)" rows="1" disabled></textarea>
+                    <button type="button" class="messenger-widget-send" disabled>Отправить</button>
                   </div>
                 </div>
               </div>
@@ -495,7 +502,7 @@
       var showPhoneEl = document.getElementById('widget-preview-show-phone');
       var headerEl = document.getElementById('widget-preview-header');
       var headerTitleEl = document.getElementById('widget-preview-header-title');
-      var greetingTextEl = document.getElementById('widget-preview-greeting-text');
+      var headerSubtitleEl = document.getElementById('widget-preview-header-subtitle');
       var emailBlock = document.getElementById('widget-preview-email-block');
       var phoneBlock = document.getElementById('widget-preview-phone-block');
       if (!headerEl || !titleEl) return;
@@ -504,7 +511,7 @@
         var greeting = (greetingEl && greetingEl.value) ? greetingEl.value : 'Добро пожаловать! Как мы можем вам помочь?';
         var color = (colorEl && colorEl.value) ? colorEl.value : '#01948E';
         if (headerTitleEl) headerTitleEl.textContent = title;
-        if (greetingTextEl) greetingTextEl.textContent = greeting;
+        if (headerSubtitleEl) headerSubtitleEl.textContent = greeting;
         if (headerEl) headerEl.style.backgroundColor = color;
         if (emailBlock) emailBlock.classList.toggle('hidden', !(showEmailEl && showEmailEl.checked));
         if (phoneBlock) phoneBlock.classList.toggle('hidden', !(showPhoneEl && showPhoneEl.checked));
