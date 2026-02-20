@@ -103,12 +103,12 @@ class ConversationViewSet(MessengerEnabledApiMixin, viewsets.ReadOnlyModelViewSe
         qs = qs.annotate(last_message_body=Subquery(last_message))
         
         # Аннотируем last_activity_at_fallback (fallback на created_at как в Chatwoot)
-        from django.db.models import Case, When, F
+        from django.db.models import Case, When, F, DateTimeField
         qs = qs.annotate(
             last_activity_at_fallback=Case(
                 When(last_activity_at__isnull=False, then=F('last_activity_at')),
                 default=F('created_at'),
-                output_field=models.DateTimeField()
+                output_field=DateTimeField()
             )
         )
 

@@ -11057,7 +11057,7 @@ def messenger_conversation_list(request: HttpRequest) -> HttpResponse:
     - assignee (назначенный оператор)
     - region (регион контакта)
 
-    Сортировка: по last_message_at (по умолчанию новые сверху).
+    Сортировка: по last_activity_at (по умолчанию новые сверху).
     """
     # Проверка feature flag
     ensure_messenger_enabled_view()
@@ -11105,17 +11105,18 @@ def messenger_conversation_list(request: HttpRequest) -> HttpResponse:
 
     # Сортировка
     sort_raw = (request.GET.get("sort") or "").strip()
-    sort = sort_raw or "last_message_at"
+    sort = sort_raw or "last_activity_at"
     direction = (request.GET.get("dir") or "").strip().lower() or "desc"
     direction = "asc" if direction == "asc" else "desc"
 
     sort_map = {
-        "last_message_at": "last_message_at",
+        "last_message_at": "last_activity_at",  # Поддержка старого параметра для обратной совместимости
+        "last_activity_at": "last_activity_at",
         "created_at": "created_at",
         "status": "status",
         "priority": "priority",
     }
-    sort_field = sort_map.get(sort, "last_message_at")
+    sort_field = sort_map.get(sort, "last_activity_at")
     order = [sort_field, "id"]
     if direction == "desc":
         order = [f"-{f}" for f in order]
