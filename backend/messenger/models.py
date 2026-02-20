@@ -305,10 +305,10 @@ class Conversation(models.Model):
             models.Index(fields=["waiting_since"]),
             models.Index(fields=["first_reply_created_at"]),
             # Составные индексы для производительности (по образцу Chatwoot)
-            models.Index(fields=["inbox", "status", "assignee"], name="messenger_conv_inbox_status_assignee_idx"),
-            models.Index(fields=["status", "priority"], name="messenger_conv_status_priority_idx"),
-            models.Index(fields=["branch", "status", "assignee"], name="messenger_conv_branch_status_assignee_idx"),
-            models.Index(fields=["contact", "inbox", "status"], name="messenger_conv_contact_inbox_status_idx"),
+            models.Index(fields=["inbox", "status", "assignee"], name="msg_conv_inbox_st_assign_idx"),
+            models.Index(fields=["status", "priority"], name="msg_conv_status_priority_idx"),
+            models.Index(fields=["branch", "status", "assignee"], name="msg_conv_branch_st_assign_idx"),
+            models.Index(fields=["contact", "inbox", "status"], name="msg_conv_cont_inbox_st_idx"),
             # Индекс для сортировки по waiting_since (уже есть в базовых, но добавляем для явности)
         ]
 
@@ -537,8 +537,8 @@ class Message(models.Model):
             models.Index(fields=["conversation", "direction", "created_at"]),
             models.Index(fields=["source_id"]),
             # Составные индексы для производительности (по образцу Chatwoot)
-            models.Index(fields=["sender_contact", "direction", "created_at"], name="messenger_msg_sender_contact_dir_created_idx"),
-            models.Index(fields=["sender_user", "direction", "created_at"], name="messenger_msg_sender_user_dir_created_idx"),
+            models.Index(fields=["sender_contact", "direction", "created_at"], name="msg_msg_cont_dir_crt_idx"),
+            models.Index(fields=["sender_user", "direction", "created_at"], name="msg_msg_user_dir_crt_idx"),
         ]
 
     def __str__(self) -> str:
