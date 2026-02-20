@@ -285,7 +285,8 @@
 
         const data = await response.json();
         this.sessionToken = data.widget_session_token;
-        this.sinceId = null; // Сбросить since_id при bootstrap
+        // НЕ сбрасываем sinceId при bootstrap - сохраняем из localStorage для продолжения получения сообщений
+        // this.sinceId остается из loadFromStorage() или null если первый раз
         this.offlineMode = data.offline_mode === true;
         this.offlineMessage = data.offline_message || '';
         this.workingHoursDisplay = data.working_hours_display || '';
@@ -311,12 +312,13 @@
             if (msg.id && (maxId === null || msg.id > maxId)) {
               maxId = msg.id;
             }
-            // Добавить в Set для anti-duplicate
-            if (msg.id) {
-              this.receivedMessageIds.add(msg.id);
-            }
+            // НЕ добавляем в receivedMessageIds здесь - это будет сделано в render() через addMessageToUI
+            // Это гарантирует, что сообщения будут сохранены в localStorage
           }
-          this.sinceId = maxId;
+          // Обновляем sinceId только если он больше текущего (не сбрасываем на null)
+          if (maxId !== null && (this.sinceId === null || maxId > this.sinceId)) {
+            this.sinceId = maxId;
+          }
           this.initialMessages = data.initial_messages;
         } else {
           this.initialMessages = [];
@@ -770,6 +772,8 @@
           // Bootstrap не удался (404) - виджет не активируется
           return;
         }
+        // После bootstrap нужно перерендерить UI, чтобы отобразить initialMessages
+        this.render();
         // После bootstrap запустить реалтайм
         if (!this.sseEnabled || !this.startRealtime()) {
           this.startPolling();

@@ -1121,7 +1121,7 @@ def widget_stream(request):
                     last_id = max_id
 
                 data = {
-                    "messages": messages_payload,
+                    "messages": messages_payload if messages_payload else [],  # Всегда отправляем массив, даже пустой
                     "operator_typing": operator_typing,
                     "rating_requested": rating_requested,
                     "rating_type": rating_type,
