@@ -307,9 +307,23 @@
     font-family: inherit;
     transition: border-color 0.2s ease;
   }
-  .messenger-operator-input:focus {
+  .messenger-operator-input-contenteditable {
+    overflow-y: auto;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    outline: none;
+    background: #fff;
+  }
+  .messenger-operator-input-contenteditable:empty:before {
+    content: attr(data-placeholder);
+    color: #9ca3af;
+    pointer-events: none;
+  }
+  .messenger-operator-input:focus,
+  .messenger-operator-input-contenteditable:focus {
     outline: none;
     border-color: #01948E;
+    box-shadow: 0 0 0 3px rgba(1, 148, 142, 0.12);
   }
   .messenger-operator-icon-btn {
     flex-shrink: 0;
@@ -320,16 +334,20 @@
     border-radius: 50%;
     background: transparent;
     cursor: pointer;
-    font-size: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
-    color: #6b7280;
-    transition: background 0.15s ease;
+    color: #64748b;
+    transition: background 0.15s ease, color 0.15s ease;
   }
   .messenger-operator-icon-btn:hover {
-    background: #f3f4f6;
-    color: #374151;
+    background: #f1f5f9;
+    color: #334155;
+  }
+  .messenger-operator-icon-btn svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
   }
   .messenger-operator-send-btn {
     flex-shrink: 0;
@@ -397,6 +415,13 @@
   .messenger-operator-emoji-picker-fallback {
     font-size: 22px;
     line-height: 32px;
+  }
+  .messenger-operator-emoji-inline {
+    width: 18px !important;
+    height: 18px !important;
+    vertical-align: middle;
+    display: inline-block;
+    margin: 0 1px;
   }
 </style>
 

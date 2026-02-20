@@ -678,12 +678,13 @@ class MessengerOperatorPanel {
           <div class="messenger-operator-form-row">
             <input type="file" name="attachments" id="messageAttachments" class="hidden" multiple accept="image/*,.pdf">
             <button type="button" id="messageAttachBtn" class="messenger-operator-icon-btn" title="Прикрепить файл">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
             </button>
-            <textarea name="body" id="messageBody" class="messenger-operator-input messenger-input-autogrow" rows="1" placeholder="Введите сообщение..." style="min-height:40px;max-height:120px;"></textarea>
-            <button type="button" id="messageEmojiBtn" class="messenger-operator-icon-btn" title="Эмодзи">😊</button>
+            <div id="messageBody" class="messenger-operator-input messenger-operator-input-contenteditable" contenteditable="true" data-placeholder="Введите сообщение..." role="textbox" aria-multiline="true" style="min-height:40px;max-height:120px;"></div>
+            <input type="hidden" name="body" id="messageBodyHidden">
+            <button type="button" id="messageEmojiBtn" class="messenger-operator-icon-btn" title="Эмодзи"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg></button>
             <button type="submit" id="messageSendBtn" class="messenger-operator-send-btn" title="Отправить (Ctrl+Enter)">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
             </button>
           </div>
           <div id="messageAttachmentsNames" class="text-xs text-brand-dark/60 mt-1 px-1"></div>
@@ -726,14 +727,35 @@ class MessengerOperatorPanel {
           e.preventDefault();
           const form = document.getElementById('messageForm');
           if (form) form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit'));
+        } else if (e.key === 'Enter' && !e.shiftKey && messageBody.contentEditable === 'true') {
+          e.preventDefault();
+          const form = document.getElementById('messageForm');
+          if (form) form.requestSubmit ? form.requestSubmit() : form.dispatchEvent(new Event('submit'));
         }
       });
       messageBody.addEventListener('input', () => {
+        this.updateOperatorInputHeight(messageBody);
         this.sendOperatorTypingPing(conversation.id);
       });
+      messageBody.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          range.deleteContents();
+          range.insertNode(document.createTextNode(text));
+          range.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+        this.updateOperatorInputHeight(messageBody);
+      });
       
-      // Инициализация авто-роста поля ввода
-      this.initMessageInputAutogrow(messageBody);
+      // Инициализация авто-роста поля ввода (только для textarea)
+      if (messageBody.tagName === 'TEXTAREA') {
+        this.initMessageInputAutogrow(messageBody);
+      }
     }
 
     // Кнопка "Новые сообщения"
@@ -1293,7 +1315,20 @@ class MessengerOperatorPanel {
     
     const form = event.target;
     const conversationId = form.querySelector('[name="conversation_id"]').value;
-    const body = form.querySelector('[name="body"]').value.trim();
+    const messageBodyEl = document.getElementById('messageBody');
+    let body = '';
+    if (messageBodyEl && messageBodyEl.contentEditable === 'true') {
+      const clone = messageBodyEl.cloneNode(true);
+      const emojiImgs = clone.querySelectorAll('img[data-emoji-char]');
+      emojiImgs.forEach(img => {
+        const emoji = img.getAttribute('data-emoji-char');
+        const textNode = document.createTextNode(emoji);
+        img.parentNode.replaceChild(textNode, img);
+      });
+      body = (clone.textContent || clone.innerText || '').trim();
+    } else {
+      body = form.querySelector('[name="body"]')?.value?.trim() || '';
+    }
     const fileInput = form.querySelector('[name="attachments"]');
     const files = fileInput ? Array.from(fileInput.files) : [];
     
@@ -1333,7 +1368,13 @@ class MessengerOperatorPanel {
       const newMessage = await response.json();
       
       // Очистить форму
-      form.querySelector('[name="body"]').value = '';
+      if (messageBodyEl && messageBodyEl.contentEditable === 'true') {
+        messageBodyEl.innerHTML = '';
+        this.updateOperatorInputHeight(messageBodyEl);
+      } else {
+        const bodyInput = form.querySelector('[name="body"]');
+        if (bodyInput) bodyInput.value = '';
+      }
       if (fileInput) {
         fileInput.value = '';
         const namesEl = document.getElementById('messageAttachmentsNames');
@@ -1355,7 +1396,7 @@ class MessengerOperatorPanel {
     } finally {
       if (submitButton) {
         submitButton.disabled = false;
-        submitButton.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
+        submitButton.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
       }
     }
   }
@@ -1463,7 +1504,7 @@ class MessengerOperatorPanel {
               : (isOutgoing ? 'bg-brand-teal/10' : 'bg-brand-soft/40')
           }">
             <div class="text-sm font-medium mb-1">${internalBadge}${this.escapeHtml(senderName)}</div>
-            <div class="text-sm text-brand-dark whitespace-pre-wrap">${this.escapeHtml(message.body || '')}</div>
+            <div class="text-sm text-brand-dark whitespace-pre-wrap">${this.renderMessageBodyWithEmojis(message.body || '')}</div>
             ${attachmentsHtml}
             <div class="flex items-center justify-between mt-1">
               <div class="text-xs text-brand-dark/50">
@@ -1802,17 +1843,32 @@ class MessengerOperatorPanel {
       span.appendChild(fallback);
       span.addEventListener('click', (e) => {
         e.preventDefault();
-        const start = messageBody.selectionStart;
-        const end = messageBody.selectionEnd;
-        const text = messageBody.value;
-        messageBody.value = text.slice(0, start) + emoji + text.slice(end);
-        messageBody.selectionStart = messageBody.selectionEnd = start + emoji.length;
+        const imgUrl = OPERATOR_EMOJI_APPLE_CDN + operatorEmojiToCodepoint(emoji) + '.png';
+        const img = document.createElement('img');
+        img.src = imgUrl;
+        img.alt = emoji;
+        img.className = 'messenger-operator-emoji-inline';
+        img.setAttribute('data-emoji-char', emoji);
+        img.style.width = '20px';
+        img.style.height = '20px';
+        img.style.verticalAlign = 'middle';
+        img.style.display = 'inline-block';
+        img.onerror = function() { this.style.display = 'none'; this.outerHTML = emoji; };
+        
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          range.deleteContents();
+          range.insertNode(img);
+          range.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        } else {
+          messageBody.appendChild(img);
+        }
         messageBody.focus();
         pickerEl.classList.add('messenger-operator-emoji-picker-hidden');
-        if (messageBody.getAttribute('data-messenger-autogrow-init')) {
-          messageBody.style.height = 'auto';
-          messageBody.style.height = messageBody.scrollHeight + 'px';
-        }
+        this.updateOperatorInputHeight(messageBody);
       });
       pickerEl.appendChild(span);
     });
@@ -1915,6 +1971,23 @@ class MessengerOperatorPanel {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  renderMessageBodyWithEmojis(text) {
+    let html = this.escapeHtml(text || '');
+    // Замена Unicode эмодзи на картинки Apple
+    html = html.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, (emoji) => {
+      const codepoint = operatorEmojiToCodepoint(emoji);
+      const imgUrl = OPERATOR_EMOJI_APPLE_CDN + codepoint + '.png';
+      return `<img src="${imgUrl}" alt="${emoji}" class="messenger-operator-emoji-inline" style="width:18px;height:18px;vertical-align:middle;display:inline-block;margin:0 1px;">`;
+    });
+    return html;
+  }
+
+  updateOperatorInputHeight(element) {
+    if (!element || element.tagName !== 'DIV') return;
+    element.style.height = 'auto';
+    element.style.height = Math.min(element.scrollHeight, 120) + 'px';
   }
 }
 

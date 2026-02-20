@@ -137,6 +137,12 @@
       html = html.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
       // переводы строк
       html = html.replace(/\r\n/g, '\n').replace(/\n/g, '<br>');
+      // Замена Unicode эмодзи на картинки Apple
+      html = html.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, (emoji) => {
+        const codepoint = emojiToCodepoint(emoji);
+        const imgUrl = EMOJI_APPLE_CDN + codepoint + '.png';
+        return `<img src="${imgUrl}" alt="${emoji}" class="messenger-widget-emoji-inline" style="width:20px;height:20px;vertical-align:middle;display:inline-block;margin:0 1px;">`;
+      });
       return html;
     }
 
@@ -431,7 +437,19 @@
           attachments: attachmentsPayload,
         });
 
-        if (this.input) this.input.value = '';
+        if (this.input) {
+          if (this.input.tagName === 'TEXTAREA') {
+            this.input.value = '';
+          } else {
+            this.input.innerHTML = '';
+            this.updateInputHeight();
+            // Сбросить фокус и восстановить курсор
+            if (window.getSelection) {
+              const selection = window.getSelection();
+              selection.removeAllRanges();
+            }
+          }
+        }
         this.pendingFiles = [];
         this.renderPendingFiles();
         this.isSending = false;
@@ -738,7 +756,17 @@
       if (this.prechatRequired && !this.prechatSubmitted && this.prechatName) {
         setTimeout(() => this.prechatName.focus(), 100);
       } else if (this.input) {
-        setTimeout(() => this.input.focus(), 100);
+        setTimeout(() => {
+          this.input.focus();
+          if (this.input.tagName === 'DIV' && window.getSelection) {
+            const selection = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(this.input);
+            range.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(range);
+          }
+        }, 100);
       }
       // Автоскролл вниз
       this.scrollToBottom();
@@ -801,7 +829,19 @@
             localStorage.setItem(this._storageKey('prechat_done'), '1');
           } catch (e) {}
           this.updatePrechatVisibility();
-          if (this.input) setTimeout(() => this.input.focus(), 100);
+          if (this.input) {
+            setTimeout(() => {
+              this.input.focus();
+              if (this.input.tagName === 'DIV' && window.getSelection) {
+                const selection = window.getSelection();
+                const range = document.createRange();
+                range.selectNodeContents(this.input);
+                range.collapse(false);
+                selection.removeAllRanges();
+                selection.addRange(range);
+              }
+            }, 100);
+          }
           this.scrollToBottom();
         } else {
           if (this.prechatSubmitBtn) {
@@ -843,16 +883,66 @@
 
     insertEmojiAtCursor(emoji) {
       if (!this.input) return;
-      const start = this.input.selectionStart;
-      const end = this.input.selectionEnd;
-      const text = this.input.value;
-      this.input.value = text.slice(0, start) + emoji + text.slice(end);
-      this.input.selectionStart = this.input.selectionEnd = start + emoji.length;
-      this.input.focus();
-      if (this.input.getAttribute('data-widget-autogrow-init')) {
-        this.input.style.height = 'auto';
-        this.input.style.height = this.input.scrollHeight + 'px';
+      const imgUrl = EMOJI_APPLE_CDN + emojiToCodepoint(emoji) + '.png';
+      const img = document.createElement('img');
+      img.src = imgUrl;
+      img.alt = emoji;
+      img.className = 'messenger-widget-emoji-inline';
+      img.setAttribute('data-emoji-char', emoji);
+      img.style.width = '20px';
+      img.style.height = '20px';
+      img.style.verticalAlign = 'middle';
+      img.style.display = 'inline-block';
+      img.onerror = function() { this.style.display = 'none'; this.outerHTML = emoji; };
+      
+      if (this.input.tagName === 'TEXTAREA') {
+        const start = this.input.selectionStart;
+        const end = this.input.selectionEnd;
+        const text = this.input.value;
+        this.input.value = text.slice(0, start) + emoji + text.slice(end);
+        this.input.selectionStart = this.input.selectionEnd = start + emoji.length;
+        this.input.focus();
+        if (this.input.getAttribute('data-widget-autogrow-init')) {
+          this.input.style.height = 'auto';
+          this.input.style.height = this.input.scrollHeight + 'px';
+        }
+      } else {
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          range.deleteContents();
+          range.insertNode(img);
+          range.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        } else {
+          this.input.appendChild(img);
+        }
+        this.input.focus();
+        this.updateInputHeight();
       }
+    }
+    
+    getInputText() {
+      if (!this.input) return '';
+      if (this.input.tagName === 'TEXTAREA') {
+        return this.input.value;
+      } else {
+        const clone = this.input.cloneNode(true);
+        const emojiImgs = clone.querySelectorAll('img[data-emoji-char]');
+        emojiImgs.forEach(img => {
+          const emoji = img.getAttribute('data-emoji-char');
+          const textNode = document.createTextNode(emoji);
+          img.parentNode.replaceChild(textNode, img);
+        });
+        return clone.textContent || clone.innerText || '';
+      }
+    }
+    
+    updateInputHeight() {
+      if (!this.input || this.input.tagName !== 'DIV') return;
+      this.input.style.height = 'auto';
+      this.input.style.height = Math.min(this.input.scrollHeight, 120) + 'px';
     }
 
     /**
@@ -901,9 +991,9 @@
       if (!this.sendButton) return;
       this.sendButton.disabled = this.isSending;
       if (this.isSending) {
-        this.sendButton.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="messenger-widget-send-spinner"><circle cx="12" cy="12" r="10" stroke-opacity="0.3"/><path d="M12 2a10 10 0 0 1 10 10" stroke-dasharray="24 48"/></svg>';
+        this.sendButton.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" class="messenger-widget-send-spinner"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>';
       } else {
-        this.sendButton.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
+        this.sendButton.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
       }
     }
 
@@ -1381,23 +1471,41 @@
       const inputRow = document.createElement('div');
       inputRow.className = 'messenger-widget-form-row messenger-widget-form-row-telegram';
 
-      this.input = document.createElement('textarea');
-      this.input.className = 'messenger-widget-input messenger-widget-input-autogrow';
-      this.input.placeholder = 'Введите сообщение...';
-      this.input.rows = 1;
-      this.input.maxLength = CONFIG.MAX_MESSAGE_LENGTH;
+      this.input = document.createElement('div');
+      this.input.className = 'messenger-widget-input messenger-widget-input-contenteditable';
+      this.input.contentEditable = 'true';
+      this.input.setAttribute('data-placeholder', 'Введите сообщение...');
+      this.input.setAttribute('role', 'textbox');
+      this.input.setAttribute('aria-multiline', 'true');
+      this.input.style.minHeight = '40px';
+      this.input.style.maxHeight = '120px';
       this.input.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
-          const body = this.input.value.trim();
+          const body = this.getInputText().trim();
           if (body || this.pendingFiles.length > 0) {
             this.sendMessage(body, this.pendingFiles);
           }
         }
       });
       this.input.addEventListener('input', () => {
+        this.updateInputHeight();
         clearTimeout(this.typingSendTimer);
         this.typingSendTimer = setTimeout(() => this.sendContactTyping(), 400);
+      });
+      this.input.addEventListener('paste', (e) => {
+        e.preventDefault();
+        const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          range.deleteContents();
+          range.insertNode(document.createTextNode(text));
+          range.collapse(false);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+        this.updateInputHeight();
       });
       this.input.addEventListener('paste', (e) => {
         if (!this.attachmentsEnabled) return;
@@ -1437,8 +1545,10 @@
         }
       });
 
-      // Инициализация авто-роста поля ввода
-      this.initInputAutogrow();
+      // Инициализация авто-роста поля ввода (только для textarea)
+      if (this.input.tagName === 'TEXTAREA') {
+        this.initInputAutogrow();
+      }
 
       if (this.attachmentsEnabled) {
         this.fileInput = document.createElement('input');
@@ -1465,7 +1575,7 @@
         attachBtn.type = 'button';
         attachBtn.className = 'messenger-widget-attach messenger-widget-icon-btn';
         attachBtn.setAttribute('aria-label', 'Прикрепить файл');
-        attachBtn.innerHTML = '📎';
+        attachBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
         attachBtn.title = 'Прикрепить';
         attachBtn.addEventListener('click', () => {
           if (this.fileInput) this.fileInput.click();
@@ -1479,7 +1589,7 @@
       emojiBtn.type = 'button';
       emojiBtn.className = 'messenger-widget-emoji messenger-widget-icon-btn';
       emojiBtn.setAttribute('aria-label', 'Эмодзи');
-      emojiBtn.innerHTML = '😊';
+      emojiBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>';
       emojiBtn.title = 'Эмодзи';
       emojiBtn.addEventListener('click', () => this.toggleEmojiPicker());
       inputRow.appendChild(emojiBtn);
@@ -1488,9 +1598,9 @@
       this.sendButton.className = 'messenger-widget-send messenger-widget-send-icon';
       this.sendButton.setAttribute('aria-label', 'Отправить');
       this.sendButton.title = 'Отправить';
-      this.sendButton.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>';
+      this.sendButton.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>';
       this.sendButton.addEventListener('click', () => {
-        const body = this.input.value.trim();
+        const body = this.getInputText().trim();
         if (body || this.pendingFiles.length > 0) {
           this.sendMessage(body, this.pendingFiles);
         }
