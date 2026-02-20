@@ -1128,8 +1128,16 @@ def widget_stream(request):
     resp = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
     resp["Cache-Control"] = "no-cache"
     resp["X-Accel-Buffering"] = "no"  # nginx: не буферизовать SSE
-    # Добавить CORS заголовки для SSE
-    resp = _add_widget_cors_headers(request, resp)
+    
+    # Добавить CORS заголовки для SSE вручную (StreamingHttpResponse не поддерживает _add_widget_cors_headers напрямую)
+    origin = (request.META.get("HTTP_ORIGIN") or "").strip()
+    if origin:
+        resp["Access-Control-Allow-Origin"] = origin
+        resp["Vary"] = "Origin"
+    resp["Access-Control-Allow-Credentials"] = "true"
+    resp["Access-Control-Allow-Headers"] = "Cache-Control"
+    resp["Access-Control-Expose-Headers"] = "Content-Type"
+    
     return resp
 
 

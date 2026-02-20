@@ -266,12 +266,12 @@
 }
 
 .messenger-widget-message-in {
-  align-self: flex-start;
+  align-self: flex-end; /* Сообщения клиента справа */
 }
 
 .messenger-widget-message-out,
 .messenger-widget-message-internal {
-  align-self: flex-end;
+  align-self: flex-start; /* Сообщения оператора слева */
 }
 
 .messenger-widget-message-body {
@@ -474,10 +474,9 @@
 .messenger-widget-form-row-telegram {
   display: flex;
   align-items: flex-end;
-  gap: 6px;
-  padding: 8px 12px;
+  gap: 8px;
+  padding: 10px 16px;
   background: #fff;
-  border-top: 1px solid #e5e7eb;
 }
 
 /* Контейнер поля ввода с иконками внутри */
@@ -487,11 +486,12 @@
   flex: 1;
   min-width: 0;
   border: 1px solid #e5e7eb;
-  border-radius: 20px;
+  border-radius: 22px;
   background: #fff;
   padding: 0;
   gap: 0;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  min-height: 44px;
 }
 
 .messenger-widget-input-wrapper:focus-within {

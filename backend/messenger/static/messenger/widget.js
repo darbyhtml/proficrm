@@ -242,21 +242,15 @@
       // Загрузить сохранённые данные
       this.loadFromStorage();
 
-      // Если нет сессии - bootstrap
-      if (!this.sessionToken) {
-        const success = await this.bootstrap();
-        if (!success) {
-          // Bootstrap не удался (404) - виджет не активируется
-          return;
-        }
-      }
-
-      // Рендерить UI
+      // Рендерить UI (без bootstrap - он будет вызван при открытии чата)
       this.render();
 
-      // Реалтайм (SSE) с fallback на poll
-      if (!this.sseEnabled || !this.startRealtime()) {
-        this.startPolling();
+      // Если есть сохраненная сессия - запустить реалтайм
+      if (this.sessionToken) {
+        // Реалтайм (SSE) с fallback на poll
+        if (!this.sseEnabled || !this.startRealtime()) {
+          this.startPolling();
+        }
       }
     }
 
@@ -762,10 +756,24 @@
     /**
      * Открыть popup
      */
-    open() {
+    async open() {
       if (!this.popup) {
         return;
       }
+      
+      // Если нет сессии - выполнить bootstrap при открытии чата
+      if (!this.sessionToken) {
+        const success = await this.bootstrap();
+        if (!success) {
+          // Bootstrap не удался (404) - виджет не активируется
+          return;
+        }
+        // После bootstrap запустить реалтайм
+        if (!this.sseEnabled || !this.startRealtime()) {
+          this.startPolling();
+        }
+      }
+      
       this.isOpen = true;
       this.unreadCount = 0;
       this.updateBadge && this.updateBadge();
@@ -847,6 +855,11 @@
             localStorage.setItem(this._storageKey('prechat_done'), '1');
           } catch (e) {}
           this.updatePrechatVisibility();
+          // Скрыть блок про политику после отправки pre-chat формы
+          const privacyBlock = document.getElementById('messenger-widget-privacy-block');
+          if (privacyBlock) {
+            privacyBlock.style.display = 'none';
+          }
           if (this.input) {
             setTimeout(() => {
               this.input.focus();
@@ -1021,6 +1034,14 @@
     addMessageToUI(message) {
       if (!this.messagesContainer) {
         return;
+      }
+
+      // Проверка на дубликаты по ID
+      if (message.id && this.receivedMessageIds.has(message.id)) {
+        return; // Сообщение уже добавлено
+      }
+      if (message.id) {
+        this.receivedMessageIds.add(message.id);
       }
 
       const messageEl = document.createElement('div');
@@ -1785,9 +1806,11 @@
       this.popup.appendChild(this.ratingBlock);
 
       // Privacy notice
-      if (this.privacyText) {
+      // Показывать текст про политику только если pre-chat не отправлен
+      if (this.privacyText && (!this.prechatRequired || !this.prechatSubmitted)) {
         const privacy = document.createElement('div');
         privacy.className = 'messenger-widget-privacy';
+        privacy.id = 'messenger-widget-privacy-block';
         const textSpan = document.createElement('span');
         textSpan.textContent = this.privacyText;
         privacy.appendChild(textSpan);
