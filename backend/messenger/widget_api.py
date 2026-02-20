@@ -48,7 +48,7 @@ from .automation import run_automation_for_incoming_message
 from .throttles import WidgetBootstrapThrottle, WidgetSendThrottle, WidgetPollThrottle
 
 
-def _add_widget_cors_headers(request, response: Response) -> Response:
+def _add_widget_cors_headers(request, response):
     """
     Добавляет CORS‑заголовки для ответов Widget API.
     Разрешаем origin, с которого пришёл запрос. Проверка домена выполняется
@@ -979,31 +979,34 @@ def widget_poll(request):
         )
 
 
-@api_view(["GET", "OPTIONS"])
-@permission_classes([AllowAny])
 def widget_stream(request):
     """
     GET /api/widget/stream/?widget_token=...&widget_session_token=...&since_id=...
 
     SSE-стрим обновлений для виджета (замена частого poll).
     Работает короткими соединениями (≈25 секунд), затем клиент переподключается.
+    
+    Используется обычный Django view вместо DRF, чтобы избежать проблем с content negotiation для text/event-stream.
     """
     ensure_messenger_enabled_api()
     
     # CORS preflight для EventSource
     if request.method == "OPTIONS":
-        preflight_resp = Response(status=status.HTTP_200_OK)
-        return _add_widget_cors_headers(request, preflight_resp)
+        from django.http import HttpResponse
+        resp = HttpResponse(status=200)
+        return _add_widget_cors_headers(request, resp)
 
-    widget_token = request.query_params.get("widget_token")
-    widget_session_token = request.query_params.get("widget_session_token")
-    since_id = request.query_params.get("since_id")
+    widget_token = request.GET.get("widget_token")
+    widget_session_token = request.GET.get("widget_session_token")
+    since_id = request.GET.get("since_id")
 
     if not widget_token or not widget_session_token:
-        return Response(
+        from django.http import JsonResponse
+        resp = JsonResponse(
             {"detail": "widget_token and widget_session_token are required."},
-            status=status.HTTP_400_BAD_REQUEST,
+            status=400,
         )
+        return _add_widget_cors_headers(request, resp)
 
     # Валидации как в poll
     try:
@@ -1019,10 +1022,12 @@ def widget_stream(request):
 
     session = get_widget_session(widget_session_token)
     if not session or session.inbox_id != inbox.id:
-        return Response(
+        from django.http import JsonResponse
+        resp = JsonResponse(
             {"detail": "Invalid or expired widget_session_token."},
-            status=status.HTTP_401_UNAUTHORIZED,
+            status=401,
         )
+        return _add_widget_cors_headers(request, resp)
 
     try:
         conversation = models.Conversation.objects.get(id=session.conversation_id, inbox=inbox)
@@ -1032,7 +1037,9 @@ def widget_stream(request):
     try:
         last_id = int(since_id) if since_id is not None else 0
     except ValueError:
-        return Response({"detail": "Invalid since_id format."}, status=status.HTTP_400_BAD_REQUEST)
+        from django.http import JsonResponse
+        resp = JsonResponse({"detail": "Invalid since_id format."}, status=400)
+        return _add_widget_cors_headers(request, resp)
 
     from .typing import get_typing_status
 
