@@ -32,6 +32,12 @@ class Migration(migrations.Migration):
             model_name='conversation',
             name='messenger_c_last_me_a91c41_idx',
         ),
+        # Переименовать last_message_at в last_activity_at для Conversation
+        migrations.RenameField(
+            model_name='conversation',
+            old_name='last_message_at',
+            new_name='last_activity_at',
+        ),
         migrations.AddField(
             model_name='contact',
             name='blocked',
@@ -62,50 +68,52 @@ class Migration(migrations.Migration):
             name='source_id',
             field=models.TextField(blank=True, db_index=True, help_text='ID источника для дедупликации.', null=True, verbose_name='ID источника'),
         ),
-        migrations.AlterField(
+        # Добавить новые поля в Conversation
+        migrations.AddField(
             model_name='conversation',
             name='additional_attributes',
             field=models.JSONField(blank=True, default=dict, help_text='Метаданные: referer, browser, OS, IP и т.д.', verbose_name='Дополнительные атрибуты'),
         ),
-        migrations.AlterField(
+        migrations.AddField(
             model_name='conversation',
             name='agent_last_seen_at',
             field=models.DateTimeField(blank=True, null=True, verbose_name='Когда агент последний раз видел диалог'),
         ),
-        migrations.AlterField(
+        migrations.AddField(
             model_name='conversation',
             name='contact_last_seen_at',
             field=models.DateTimeField(blank=True, null=True, verbose_name='Когда контакт последний раз видел диалог'),
         ),
-        migrations.AlterField(
+        migrations.AddField(
             model_name='conversation',
             name='custom_attributes',
             field=models.JSONField(blank=True, default=dict, help_text='Кастомные атрибуты для гибкости.', verbose_name='Кастомные атрибуты'),
         ),
-        migrations.AlterField(
+        migrations.AddField(
             model_name='conversation',
             name='first_reply_created_at',
             field=models.DateTimeField(blank=True, db_index=True, help_text='Используется для метрик времени первого ответа.', null=True, verbose_name='Время первого ответа оператора'),
         ),
-        migrations.AlterField(
+        migrations.AddField(
             model_name='conversation',
             name='identifier',
             field=models.CharField(blank=True, help_text='Идентификатор из внешней системы.', max_length=255, null=True, verbose_name='Идентификатор'),
         ),
-        migrations.AlterField(
-            model_name='conversation',
-            name='last_activity_at',
-            field=models.DateTimeField(blank=True, db_index=True, help_text='Обновляется при каждом сообщении. Fallback на created_at.', null=True, verbose_name='Время последней активности'),
-        ),
-        migrations.AlterField(
+        migrations.AddField(
             model_name='conversation',
             name='snoozed_until',
             field=models.DateTimeField(blank=True, null=True, verbose_name='Отложен до'),
         ),
-        migrations.AlterField(
+        migrations.AddField(
             model_name='conversation',
             name='waiting_since',
             field=models.DateTimeField(blank=True, db_index=True, help_text='Устанавливается при создании диалога или входящем сообщении. Очищается при первом ответе.', null=True, verbose_name='Когда начал ждать ответа'),
+        ),
+        # Обновить help_text для last_activity_at (уже переименовано выше)
+        migrations.AlterField(
+            model_name='conversation',
+            name='last_activity_at',
+            field=models.DateTimeField(blank=True, db_index=True, help_text='Обновляется при каждом сообщении. Fallback на created_at.', null=True, verbose_name='Время последней активности'),
         ),
         migrations.AlterField(
             model_name='message',
