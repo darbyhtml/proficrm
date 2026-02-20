@@ -42,6 +42,7 @@
   bottom: 90px;
   right: 20px;
   width: 380px;
+  min-height: 460px;
   max-width: calc(100vw - 40px);
   max-height: calc(100vh - 120px);
   background: #fff;
@@ -131,8 +132,8 @@
   flex: 1;
   overflow-y: auto;
   padding: 16px 18px;
-  min-height: 200px;
-  max-height: 400px;
+  min-height: 260px;
+  max-height: 420px;
   display: flex;
   flex-direction: column;
   gap: 12px;
