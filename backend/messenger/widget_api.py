@@ -25,6 +25,7 @@ from rest_framework.exceptions import ValidationError as DRFValidationError, Thr
 
 from . import models, serializers, services
 from .utils import (
+    compact_working_hours_display,
     create_widget_session,
     get_widget_session,
     ensure_messenger_enabled_api,
@@ -307,6 +308,10 @@ def widget_bootstrap(request):
             "initial_messages": initial_messages,
             "outside_working_hours": outside_working_hours,
             "working_hours_message": working_hours_message,
+            "working_hours_display": compact_working_hours_display(
+                bool((inbox.settings or {}).get("working_hours") or {}).get("enabled"),
+                ((inbox.settings or {}).get("working_hours") or {}).get("schedule") or {},
+            ),
             "offline_mode": offline_mode,
             "offline_message": offline_message,
             "title": settings_cfg.get("title") or "",
@@ -321,6 +326,7 @@ def widget_bootstrap(request):
                 "MESSENGER_PRIVACY_TEXT",
                 "Отправляя сообщение, вы соглашаетесь с обработкой персональных данных.",
             ),
+            "prechat_required": bool((settings_cfg.get("privacy") or {}).get("text") or getattr(settings, "MESSENGER_PRIVACY_TEXT", "")),
         }
         features_cfg = (inbox.settings or {}).get("features") or {}
         response_data["sse_enabled"] = bool(features_cfg.get("sse", True))
@@ -383,6 +389,86 @@ def widget_bootstrap(request):
             status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
         return _add_widget_cors_headers(request, resp)
+
+
+@api_view(["POST", "OPTIONS"])
+@permission_classes([AllowAny])
+def widget_contact_update(request):
+    """
+    POST /api/widget/contact/
+
+    Обновление данных контакта (имя, email, телефон) по сессии виджета.
+    Используется на шаге пре-чата перед открытием диалога.
+    """
+    if request.method == "OPTIONS":
+        preflight_resp = Response(status=status.HTTP_200_OK)
+        return _add_widget_cors_headers(request, preflight_resp)
+
+    ensure_messenger_enabled_api()
+
+    try:
+        data = request.data if request.data else {}
+    except Exception:
+        data = {}
+
+    widget_token = (data.get("widget_token") or "").strip()
+    widget_session_token = (data.get("widget_session_token") or "").strip()
+    if not widget_token or not widget_session_token:
+        resp = Response(
+            {"detail": "widget_token and widget_session_token are required."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+        return _add_widget_cors_headers(request, resp)
+
+    inbox = _get_inbox_by_widget_token(widget_token)
+    if not inbox:
+        return Response(
+            {"detail": "Invalid widget_token or inactive inbox."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    session = get_widget_session(widget_session_token)
+    if not session:
+        return Response(
+            {"detail": "Invalid or expired widget_session_token."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+
+    if session.inbox_id != inbox.id:
+        return Response(
+            {"detail": "Widget session token does not match widget_token."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+
+    try:
+        contact = models.Contact.objects.get(id=session.contact_id)
+    except models.Contact.DoesNotExist:
+        return Response(
+            {"detail": "Contact not found."},
+            status=status.HTTP_404_NOT_FOUND,
+        )
+
+    name = (data.get("name") or "").strip() or None
+    email = (data.get("email") or "").strip() or None
+    phone = (data.get("phone") or "").strip() or None
+
+    services.create_or_get_contact(
+        external_id=contact.external_id,
+        name=name,
+        email=email,
+        phone=phone,
+        update_if_exists=True,
+    )
+
+    resp = Response({"status": "ok"}, status=status.HTTP_200_OK)
+    return _add_widget_cors_headers(request, resp)
+
+
+def _get_inbox_by_widget_token(widget_token):
+    """Возвращает Inbox по widget_token или None."""
+    if not widget_token:
+        return None
+    return models.Inbox.objects.filter(widget_token=widget_token, is_active=True).first()
 
 
 def _parse_widget_send_input(request):

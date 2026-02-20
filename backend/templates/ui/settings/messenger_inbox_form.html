@@ -254,9 +254,6 @@
                       <button type="button" class="messenger-widget-send" disabled>Отправить</button>
                     </div>
                   </div>
-                  <div class="messenger-widget-footer-attribution text-center py-2 text-xs text-brand-dark/50 border-t border-brand-soft/40">
-                    Работает на Chatwoot
-                  </div>
                 </div>
               </div>
             </div>
@@ -280,21 +277,33 @@
               <label class="block text-sm font-medium text-brand-dark/80 mb-1">Часовой пояс</label>
               <input type="text" name="working_hours_tz" value="{{ working_hours.tz|default:'Europe/Moscow' }}" class="input" placeholder="Europe/Moscow">
             </div>
+            <div class="p-3 rounded-lg bg-brand-soft/30 border border-brand-soft/50">
+              <p class="text-sm font-medium text-brand-dark/80 mb-2">Шаблон: по будням</p>
+              <p class="text-xs text-brand-dark/60 mb-2">Заполнить один интервал для Пн–Пт, затем при необходимости измените отдельные дни ниже.</p>
+              <div class="flex flex-wrap items-center gap-2">
+                <input type="time" id="working_hours_weekday_start" value="09:00" class="input py-1.5 text-sm w-28">
+                <span class="text-brand-dark/60">–</span>
+                <input type="time" id="working_hours_weekday_end" value="18:00" class="input py-1.5 text-sm w-28">
+                <button type="button" id="working_hours_apply_weekdays" class="btn btn-secondary text-sm py-1.5 px-3">Применить к Пн–Пт</button>
+              </div>
+            </div>
             <div class="overflow-x-auto">
-              <table class="w-full text-sm">
+              <table class="w-full text-sm" id="working_hours_table">
                 <thead>
                   <tr class="border-b border-brand-soft/60">
                     <th class="text-left py-2 pr-4">День</th>
                     <th class="text-left py-2 pr-2">Начало</th>
-                    <th class="text-left py-2">Конец</th>
+                    <th class="text-left py-2 pr-2">Конец</th>
+                    <th class="text-left py-2 w-24">Выходной</th>
                   </tr>
                 </thead>
                 <tbody>
                   {% for day in working_hours_days %}
-                  <tr class="border-b border-brand-soft/40">
-                    <td class="py-1 pr-4">{{ day.label }}</td>
-                    <td class="py-1 pr-2"><input type="time" name="working_hours_{{ day.num }}_start" value="{{ day.start }}" class="input py-1 text-sm"></td>
-                    <td class="py-1"><input type="time" name="working_hours_{{ day.num }}_end" value="{{ day.end }}" class="input py-1 text-sm"></td>
+                  <tr class="border-b border-brand-soft/40 working-hours-row" data-day="{{ day.num }}">
+                    <td class="py-2 pr-4">{{ day.label }}</td>
+                    <td class="py-2 pr-2"><input type="time" name="working_hours_{{ day.num }}_start" value="{{ day.start }}" class="input py-1.5 text-sm w-full working-hours-start"></td>
+                    <td class="py-2 pr-2"><input type="time" name="working_hours_{{ day.num }}_end" value="{{ day.end }}" class="input py-1.5 text-sm w-full working-hours-end"></td>
+                    <td class="py-2"><label class="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" class="working-hours-day-off rounded" data-day="{{ day.num }}" {% if day.off %}checked{% endif %}> <span class="text-xs">Выходной</span></label></td>
                   </tr>
                   {% endfor %}
                 </tbody>
@@ -624,5 +633,51 @@
       } else { alert('Код скопирован'); }
     }
     {% endif %}
+
+    (function() {
+      var table = document.getElementById('working_hours_table');
+      var applyBtn = document.getElementById('working_hours_apply_weekdays');
+      var presetStart = document.getElementById('working_hours_weekday_start');
+      var presetEnd = document.getElementById('working_hours_weekday_end');
+      if (!table || !applyBtn) return;
+      function setDayOff(dayNum, isOff) {
+        var row = table.querySelector('.working-hours-row[data-day="' + dayNum + '"]');
+        if (!row) return;
+        var startInput = row.querySelector('.working-hours-start');
+        var endInput = row.querySelector('.working-hours-end');
+        var check = row.querySelector('.working-hours-day-off');
+        if (isOff) {
+          startInput.value = '';
+          endInput.value = '';
+          startInput.disabled = true;
+          endInput.disabled = true;
+          if (check) check.checked = true;
+        } else {
+          startInput.value = presetStart && presetStart.value ? presetStart.value : '09:00';
+          endInput.value = presetEnd && presetEnd.value ? presetEnd.value : '18:00';
+          startInput.disabled = false;
+          endInput.disabled = false;
+          if (check) check.checked = false;
+        }
+      }
+      table.querySelectorAll('.working-hours-day-off').forEach(function(check) {
+        check.addEventListener('change', function() {
+          setDayOff(parseInt(check.getAttribute('data-day'), 10), check.checked);
+        });
+      });
+      table.querySelectorAll('.working-hours-row').forEach(function(row) {
+        var dayNum = parseInt(row.getAttribute('data-day'), 10);
+        var check = row.querySelector('.working-hours-day-off');
+        if (check && check.checked) {
+          row.querySelector('.working-hours-start').disabled = true;
+          row.querySelector('.working-hours-end').disabled = true;
+        }
+      });
+      if (applyBtn && presetStart && presetEnd) {
+        applyBtn.addEventListener('click', function() {
+          for (var d = 1; d <= 5; d++) setDayOff(d, false);
+        });
+      }
+    })();
   </script>
 {% endblock %}

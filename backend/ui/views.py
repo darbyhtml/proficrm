@@ -12211,11 +12211,13 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
     working_hours_days = []
     for i in range(1, 8):
         slot = schedule.get(str(i), [])
+        is_off = not (isinstance(slot, (list, tuple)) and len(slot) >= 2)
         working_hours_days.append({
             "num": i,
             "label": day_labels[i - 1],
-            "start": (slot[0] if len(slot) > 0 else "09:00"),
-            "end": (slot[1] if len(slot) > 1 else "18:00"),
+            "start": (slot[0] if len(slot) > 0 else ""),
+            "end": (slot[1] if len(slot) > 1 else ""),
+            "off": is_off,
         })
     working_hours = {
         "enabled": wh.get("enabled", False),
@@ -12276,18 +12278,8 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
     privacy_cfg = settings_obj_for_widget.get("privacy") or {}
     wh_cfg = settings_obj_for_widget.get("working_hours") or {}
     schedule = wh_cfg.get("schedule") or {}
-    working_hours_display = "Обычно отвечаем в течение нескольких минут"
-    if wh_cfg.get("enabled") and schedule:
-        day_labels = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
-        parts = []
-        for i in range(1, 8):
-            slot = schedule.get(str(i), [])
-            if len(slot) >= 2:
-                parts.append(f"{day_labels[i-1]} {slot[0]}-{slot[1]}")
-        if parts:
-            working_hours_display = ", ".join(parts[:5])
-            if len(parts) > 5:
-                working_hours_display += " …"
+    from messenger.utils import compact_working_hours_display
+    working_hours_display = compact_working_hours_display(wh_cfg.get("enabled"), schedule)
     widget_display = {
         "title": settings_obj_for_widget.get("title", "Чат с поддержкой"),
         "greeting": settings_obj_for_widget.get("greeting", ""),

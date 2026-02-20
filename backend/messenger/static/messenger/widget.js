@@ -142,6 +142,12 @@
         const sinceIdStr = localStorage.getItem(this._storageKey('since_id'));
         this.sinceId = sinceIdStr ? parseInt(sinceIdStr, 10) : null;
         this.contactId = localStorage.getItem(this._storageKey('contact_id'));
+        this.prechatSubmitted = localStorage.getItem(this._storageKey('prechat_done')) === '1';
+        if (localStorage.getItem(this._storageKey('prechat_required')) === '1') {
+          this.prechatRequired = true;
+        }
+        const whDisplay = localStorage.getItem(this._storageKey('working_hours_display'));
+        if (whDisplay) this.workingHoursDisplay = whDisplay;
 
         // Если нет contact_id - генерируем и сохраняем
         if (!this.contactId) {
@@ -166,6 +172,12 @@
         }
         if (this.contactId) {
           localStorage.setItem(this._storageKey('contact_id'), this.contactId);
+        }
+        if (this.prechatRequired !== undefined) {
+          localStorage.setItem(this._storageKey('prechat_required'), this.prechatRequired ? '1' : '0');
+        }
+        if (this.workingHoursDisplay) {
+          localStorage.setItem(this._storageKey('working_hours_display'), this.workingHoursDisplay);
         }
       } catch (e) {
         console.error('[MessengerWidget] Error saving to storage:', e);
@@ -242,11 +254,13 @@
         this.sinceId = null; // Сбросить since_id при bootstrap
         this.offlineMode = data.offline_mode === true;
         this.offlineMessage = data.offline_message || '';
+        this.workingHoursDisplay = data.working_hours_display || '';
         this.title = data.title || 'Чат с поддержкой';
         this.greeting = data.greeting || '';
         this.color = data.color || '#01948E';
         this.privacyUrl = data.privacy_url || '';
         this.privacyText = data.privacy_text || '';
+        this.prechatRequired = data.prechat_required === true;
         this.captchaRequired = data.captcha_required === true;
         this.captchaToken = data.captcha_token || '';
         this.captchaQuestion = data.captcha_question || '';
@@ -706,8 +720,10 @@
       this.unreadCount = 0;
       this.updateBadge && this.updateBadge();
       this.popup.classList.add('messenger-widget-popup-open');
-      // Фокус на поле ввода
-      if (this.input) {
+      // Фокус: пре-чат или поле ввода
+      if (this.prechatRequired && !this.prechatSubmitted && this.prechatName) {
+        setTimeout(() => this.prechatName.focus(), 100);
+      } else if (this.input) {
         setTimeout(() => this.input.focus(), 100);
       }
       // Автоскролл вниз
@@ -724,6 +740,67 @@
       }
       this.isOpen = false;
       this.popup.classList.remove('messenger-widget-popup-open');
+    }
+
+    /**
+     * Показать пре-чат или чат в зависимости от состояния
+     */
+    updatePrechatVisibility() {
+      if (!this.prechatContainer || !this.chatBody) return;
+      const showPrechat = this.prechatRequired && !this.prechatSubmitted;
+      if (showPrechat) {
+        this.prechatContainer.classList.remove('messenger-widget-prechat-hidden');
+        this.chatBody.classList.add('messenger-widget-body-hidden');
+      } else {
+        this.prechatContainer.classList.add('messenger-widget-prechat-hidden');
+        this.chatBody.classList.remove('messenger-widget-body-hidden');
+      }
+    }
+
+    /**
+     * Отправить данные пре-чата и переключиться в режим чата
+     */
+    async submitPrechat() {
+      if (!this.prechatConsent || !this.prechatConsent.checked || !this.sessionToken) return;
+      const name = (this.prechatName && this.prechatName.value) ? this.prechatName.value.trim() : '';
+      const email = (this.prechatEmail && this.prechatEmail.value) ? this.prechatEmail.value.trim() : '';
+      const phone = (this.prechatPhone && this.prechatPhone.value) ? this.prechatPhone.value.trim() : '';
+      if (this.prechatSubmitBtn) {
+        this.prechatSubmitBtn.disabled = true;
+        this.prechatSubmitBtn.textContent = 'Применяем…';
+      }
+      try {
+        const response = await fetch(CONFIG.API_BASE_URL + '/api/widget/contact/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            widget_token: this.widgetToken,
+            widget_session_token: this.sessionToken,
+            name: name || undefined,
+            email: email || undefined,
+            phone: phone || undefined,
+          }),
+        });
+        if (response.ok) {
+          this.prechatSubmitted = true;
+          try {
+            localStorage.setItem(this._storageKey('prechat_done'), '1');
+          } catch (e) {}
+          this.updatePrechatVisibility();
+          if (this.input) setTimeout(() => this.input.focus(), 100);
+          this.scrollToBottom();
+        } else {
+          if (this.prechatSubmitBtn) {
+            this.prechatSubmitBtn.disabled = false;
+            this.prechatSubmitBtn.textContent = 'Применить и открыть чат';
+          }
+        }
+      } catch (e) {
+        if (this.prechatSubmitBtn) {
+          this.prechatSubmitBtn.disabled = false;
+          this.prechatSubmitBtn.textContent = 'Применить и открыть чат';
+        }
+      }
     }
 
     /**
@@ -1122,6 +1199,12 @@
         subtitle.textContent = this.greeting;
         headerText.appendChild(subtitle);
       }
+      if (this.workingHoursDisplay && this.workingHoursDisplay !== 'Обычно отвечаем в течение нескольких минут') {
+        const hoursLine = document.createElement('div');
+        hoursLine.className = 'messenger-widget-header-hours';
+        hoursLine.textContent = this.workingHoursDisplay;
+        headerText.appendChild(hoursLine);
+      }
 
       header.appendChild(headerText);
 
@@ -1134,10 +1217,77 @@
       header.appendChild(this.closeButton);
       this.popup.appendChild(header);
 
+      // Пре-чат: ввод данных и согласие перед началом диалога
+      this.prechatContainer = document.createElement('div');
+      this.prechatContainer.className = 'messenger-widget-prechat';
+      this.prechatContainer.innerHTML = '<div class="messenger-widget-prechat-title">Перед началом диалога</div>';
+      const prechatForm = document.createElement('div');
+      prechatForm.className = 'messenger-widget-prechat-form';
+      const nameLabel = document.createElement('label');
+      nameLabel.className = 'messenger-widget-prechat-label';
+      nameLabel.textContent = 'Имя';
+      this.prechatName = document.createElement('input');
+      this.prechatName.type = 'text';
+      this.prechatName.className = 'messenger-widget-prechat-input';
+      this.prechatName.placeholder = 'Как к вам обращаться?';
+      this.prechatName.autocomplete = 'name';
+      nameLabel.appendChild(this.prechatName);
+      prechatForm.appendChild(nameLabel);
+      const emailLabel = document.createElement('label');
+      emailLabel.className = 'messenger-widget-prechat-label';
+      emailLabel.textContent = 'Email';
+      this.prechatEmail = document.createElement('input');
+      this.prechatEmail.type = 'email';
+      this.prechatEmail.className = 'messenger-widget-prechat-input';
+      this.prechatEmail.placeholder = 'example@mail.ru';
+      this.prechatEmail.autocomplete = 'email';
+      emailLabel.appendChild(this.prechatEmail);
+      prechatForm.appendChild(emailLabel);
+      const phoneLabel = document.createElement('label');
+      phoneLabel.className = 'messenger-widget-prechat-label';
+      phoneLabel.textContent = 'Телефон';
+      this.prechatPhone = document.createElement('input');
+      this.prechatPhone.type = 'tel';
+      this.prechatPhone.className = 'messenger-widget-prechat-input';
+      this.prechatPhone.placeholder = '+7 (999) 123-45-67';
+      this.prechatPhone.autocomplete = 'tel';
+      phoneLabel.appendChild(this.prechatPhone);
+      prechatForm.appendChild(phoneLabel);
+      const consentWrap = document.createElement('div');
+      consentWrap.className = 'messenger-widget-prechat-consent';
+      this.prechatConsent = document.createElement('input');
+      this.prechatConsent.type = 'checkbox';
+      this.prechatConsent.id = 'messenger-widget-prechat-consent';
+      this.prechatConsent.className = 'messenger-widget-prechat-checkbox';
+      const consentLabel = document.createElement('label');
+      consentLabel.htmlFor = 'messenger-widget-prechat-consent';
+      consentLabel.className = 'messenger-widget-prechat-consent-label';
+      consentLabel.innerHTML = (this.privacyText || 'Я согласен с обработкой персональных данных.') + (this.privacyUrl ? ' <a href="' + this.privacyUrl + '" target="_blank" rel="noopener" class="messenger-widget-prechat-link">Политика конфиденциальности</a>' : '');
+      consentWrap.appendChild(this.prechatConsent);
+      consentWrap.appendChild(consentLabel);
+      prechatForm.appendChild(consentWrap);
+      this.prechatSubmitBtn = document.createElement('button');
+      this.prechatSubmitBtn.type = 'button';
+      this.prechatSubmitBtn.className = 'messenger-widget-prechat-submit';
+      this.prechatSubmitBtn.textContent = 'Применить и открыть чат';
+      this.prechatSubmitBtn.disabled = true;
+      const updatePrechatButton = () => {
+        this.prechatSubmitBtn.disabled = !this.prechatConsent.checked;
+      };
+      this.prechatConsent.addEventListener('change', updatePrechatButton);
+      this.prechatSubmitBtn.addEventListener('click', () => this.submitPrechat());
+      prechatForm.appendChild(this.prechatSubmitBtn);
+      this.prechatContainer.appendChild(prechatForm);
+      this.popup.appendChild(this.prechatContainer);
+
+      // Обёртка чата (лента + форма)
+      this.chatBody = document.createElement('div');
+      this.chatBody.className = 'messenger-widget-body';
+
       // Лента сообщений
       this.messagesContainer = document.createElement('div');
       this.messagesContainer.className = 'messenger-widget-messages';
-      this.popup.appendChild(this.messagesContainer);
+      this.chatBody.appendChild(this.messagesContainer);
 
       // Офлайн-баннер (настраиваемое сообщение)
       this.offlineBanner = document.createElement('div');
@@ -1148,7 +1298,7 @@
       } else {
         this.offlineBanner.classList.add('messenger-widget-offline-hidden');
       }
-      this.popup.appendChild(this.offlineBanner);
+      this.chatBody.appendChild(this.offlineBanner);
 
       // Предзагруженные сообщения после bootstrap
       if (this.initialMessages && this.initialMessages.length) {
@@ -1162,7 +1312,7 @@
       this.typingIndicator = document.createElement('div');
       this.typingIndicator.className = 'messenger-widget-typing messenger-widget-typing-hidden';
       this.typingIndicator.innerHTML = 'Оператор печатает<span class="messenger-widget-typing-dots"><span class="messenger-widget-typing-dot"></span><span class="messenger-widget-typing-dot"></span><span class="messenger-widget-typing-dot"></span></span>';
-      this.popup.appendChild(this.typingIndicator);
+      this.chatBody.appendChild(this.typingIndicator);
 
       // Форма отправки
       const form = document.createElement('div');
@@ -1296,7 +1446,8 @@
 
       form.appendChild(inputRow);
       this.ratingForm = form;
-      this.popup.appendChild(form);
+      this.chatBody.appendChild(form);
+      this.popup.appendChild(this.chatBody);
 
       // Модалка для просмотра изображений
       const imgModal = document.createElement('div');
@@ -1399,6 +1550,7 @@
         this.popup.appendChild(privacy);
       }
 
+      this.updatePrechatVisibility();
       container.appendChild(this.button);
       container.appendChild(this.popup);
       document.body.appendChild(container);

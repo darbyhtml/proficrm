@@ -161,6 +161,8 @@ class WidgetBootstrapResponseSerializer(serializers.Serializer):
     color = serializers.CharField(required=False, allow_blank=True)
     privacy_url = serializers.CharField(required=False, allow_blank=True)
     privacy_text = serializers.CharField(required=False, allow_blank=True)
+    prechat_required = serializers.BooleanField(required=False, default=False)
+    working_hours_display = serializers.CharField(required=False, allow_blank=True)
 
 
 class WidgetSendSerializer(serializers.Serializer):

@@ -200,6 +200,41 @@ def is_within_working_hours(inbox: "Inbox") -> bool:
     return now_min >= start_min or now_min < end_min
 
 
+def compact_working_hours_display(enabled: bool, schedule: dict) -> str:
+    """
+    Формирует компактную строку расписания для отображения в виджете и настройках.
+    Пример: «Пн–Пт 09:00–18:00, Сб 10:00–14:00».
+    """
+    if not enabled or not schedule:
+        return "Обычно отвечаем в течение нескольких минут"
+    day_labels = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+    slots = []
+    for i in range(1, 8):
+        slot = schedule.get(str(i), [])
+        if isinstance(slot, (list, tuple)) and len(slot) >= 2:
+            slots.append((day_labels[i - 1], str(slot[0]).strip(), str(slot[1]).strip()))
+        else:
+            slots.append((day_labels[i - 1], None, None))
+    parts = []
+    i = 0
+    while i < 7:
+        label, start, end = slots[i]
+        if start is None and end is None:
+            i += 1
+            continue
+        j = i + 1
+        while j < 7 and slots[j][1] == start and slots[j][2] == end:
+            j += 1
+        if j == i + 1:
+            parts.append(f"{label} {start}–{end}")
+        else:
+            parts.append(f"{label}–{slots[j - 1][0]} {start}–{end}")
+        i = j
+    if not parts:
+        return "Обычно отвечаем в течение нескольких минут"
+    return ", ".join(parts)
+
+
 # ---------------------------------------------------------------------------
 # Вложения виджета: лимиты и валидация
 # ---------------------------------------------------------------------------
