@@ -1128,6 +1128,8 @@ def widget_stream(request):
     resp = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
     resp["Cache-Control"] = "no-cache"
     resp["X-Accel-Buffering"] = "no"  # nginx: не буферизовать SSE
+    # Добавить CORS заголовки для SSE
+    resp = _add_widget_cors_headers(request, resp)
     return resp
 
 

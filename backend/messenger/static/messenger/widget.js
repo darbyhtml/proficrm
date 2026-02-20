@@ -66,6 +66,7 @@
       this.isOpen = false;
       this.isSending = false;
       this.receivedMessageIds = new Set(); // Anti-duplicate: Set для отслеживания полученных сообщений
+      this.savedMessages = []; // Сохраненные сообщения для восстановления после перезагрузки (инициализируется в loadFromStorage)
       this.typingSendTimer = null;
       this.offlineMode = false;
       this.offlineMessage = '';
@@ -169,6 +170,18 @@
         const whDisplay = localStorage.getItem(this._storageKey('working_hours_display'));
         if (whDisplay) this.workingHoursDisplay = whDisplay;
 
+        // Загрузить сохраненные сообщения
+        const savedMessagesStr = localStorage.getItem(this._storageKey('messages'));
+        if (savedMessagesStr) {
+          try {
+            this.savedMessages = JSON.parse(savedMessagesStr);
+          } catch (e) {
+            this.savedMessages = [];
+          }
+        } else {
+          this.savedMessages = [];
+        }
+
         // Если нет contact_id - генерируем и сохраняем
         if (!this.contactId) {
           this.contactId = generateUUID();
@@ -198,6 +211,11 @@
         }
         if (this.workingHoursDisplay) {
           localStorage.setItem(this._storageKey('working_hours_display'), this.workingHoursDisplay);
+        }
+        // Сохранить сообщения (максимум 100 последних)
+        if (this.savedMessages && Array.isArray(this.savedMessages)) {
+          const messagesToSave = this.savedMessages.slice(-100);
+          localStorage.setItem(this._storageKey('messages'), JSON.stringify(messagesToSave));
         }
       } catch (e) {
         console.error('[MessengerWidget] Error saving to storage:', e);
@@ -1107,6 +1125,26 @@
       messageEl.appendChild(metaEl);
       this.messagesContainer.appendChild(messageEl);
 
+      // Сохранить сообщение в массив для восстановления после перезагрузки
+      if (!this.savedMessages) {
+        this.savedMessages = [];
+      }
+      // Проверяем, нет ли уже такого сообщения (по ID)
+      const existingIndex = this.savedMessages.findIndex(m => m.id === message.id);
+      if (existingIndex === -1 && message.id) {
+        this.savedMessages.push(message);
+        // Ограничиваем размер массива (максимум 100 сообщений)
+        if (this.savedMessages.length > 100) {
+          this.savedMessages = this.savedMessages.slice(-100);
+        }
+        // Сохраняем в localStorage
+        try {
+          localStorage.setItem(this._storageKey('messages'), JSON.stringify(this.savedMessages));
+        } catch (e) {
+          console.error('[MessengerWidget] Error saving messages to storage:', e);
+        }
+      }
+
       this.scrollToBottom();
 
       // Непрочитанные: считаем только исходящие сообщения, когда виджет закрыт
@@ -1439,10 +1477,25 @@
       }
       this.chatBody.appendChild(this.offlineBanner);
 
+      // Загрузить сохраненные сообщения из localStorage (если есть)
+      if (this.savedMessages && this.savedMessages.length > 0) {
+        for (const msg of this.savedMessages) {
+          // Проверяем, что сообщение еще не добавлено (по ID)
+          if (!this.receivedMessageIds.has(msg.id)) {
+            this.receivedMessageIds.add(msg.id);
+            this.addMessageToUI(msg);
+          }
+        }
+      }
+
       // Предзагруженные сообщения после bootstrap
       if (this.initialMessages && this.initialMessages.length) {
         for (const msg of this.initialMessages) {
-          this.addMessageToUI(msg);
+          // Проверяем, что сообщение еще не добавлено (по ID)
+          if (!this.receivedMessageIds.has(msg.id)) {
+            this.receivedMessageIds.add(msg.id);
+            this.addMessageToUI(msg);
+          }
         }
       }
       this.scheduleMarkOutgoingRead();
@@ -1470,6 +1523,10 @@
 
       const inputRow = document.createElement('div');
       inputRow.className = 'messenger-widget-form-row messenger-widget-form-row-telegram';
+
+      // Контейнер для поля ввода с иконками внутри
+      const inputWrapper = document.createElement('div');
+      inputWrapper.className = 'messenger-widget-input-wrapper';
 
       this.input = document.createElement('div');
       this.input.className = 'messenger-widget-input messenger-widget-input-contenteditable';
@@ -1570,6 +1627,7 @@
         form.appendChild(this.fileInput);
       }
 
+      // Иконка прикрепления файла (слева внутри контейнера)
       if (this.attachmentsEnabled) {
         const attachBtn = document.createElement('button');
         attachBtn.type = 'button';
@@ -1580,11 +1638,13 @@
         attachBtn.addEventListener('click', () => {
           if (this.fileInput) this.fileInput.click();
         });
-        inputRow.appendChild(attachBtn);
+        inputWrapper.appendChild(attachBtn);
       }
 
-      inputRow.appendChild(this.input);
+      // Поле ввода
+      inputWrapper.appendChild(this.input);
 
+      // Иконка эмодзи (справа внутри контейнера)
       const emojiBtn = document.createElement('button');
       emojiBtn.type = 'button';
       emojiBtn.className = 'messenger-widget-emoji messenger-widget-icon-btn';
@@ -1592,8 +1652,9 @@
       emojiBtn.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>';
       emojiBtn.title = 'Эмодзи';
       emojiBtn.addEventListener('click', () => this.toggleEmojiPicker());
-      inputRow.appendChild(emojiBtn);
+      inputWrapper.appendChild(emojiBtn);
 
+      // Кнопка отправки (справа внутри контейнера)
       this.sendButton = document.createElement('button');
       this.sendButton.className = 'messenger-widget-send messenger-widget-send-icon';
       this.sendButton.setAttribute('aria-label', 'Отправить');
@@ -1605,7 +1666,10 @@
           this.sendMessage(body, this.pendingFiles);
         }
       });
-      inputRow.appendChild(this.sendButton);
+      inputWrapper.appendChild(this.sendButton);
+
+      // Добавляем контейнер с полем ввода и иконками в строку
+      inputRow.appendChild(inputWrapper);
 
       this.emojiPicker = document.createElement('div');
       this.emojiPicker.className = 'messenger-widget-emoji-picker messenger-widget-emoji-picker-hidden';

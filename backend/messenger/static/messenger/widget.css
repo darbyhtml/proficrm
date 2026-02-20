@@ -144,24 +144,25 @@
   flex-direction: column;
   gap: 12px;
   background: #fafafa;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
 }
 
 .messenger-widget-messages::-webkit-scrollbar {
-  width: 6px;
+  width: 0;
+  display: none;
 }
 
 .messenger-widget-messages::-webkit-scrollbar-track {
-  background: #f3f4f6;
-  border-radius: 3px;
+  background: transparent;
 }
 
 .messenger-widget-messages::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 3px;
+  background: transparent;
 }
 
 .messenger-widget-messages::-webkit-scrollbar-thumb:hover {
-  background: #9ca3af;
+  background: transparent;
 }
 
 .messenger-widget-typing {
@@ -478,6 +479,25 @@
   background: #fff;
   border-top: 1px solid #e5e7eb;
 }
+
+/* Контейнер поля ввода с иконками внутри */
+.messenger-widget-input-wrapper {
+  display: flex;
+  align-items: flex-end;
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #e5e7eb;
+  border-radius: 20px;
+  background: #fff;
+  padding: 0;
+  gap: 0;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.messenger-widget-input-wrapper:focus-within {
+  border-color: #01948E;
+  box-shadow: 0 0 0 3px rgba(1, 148, 142, 0.12);
+}
 .messenger-widget-form-row-telegram .messenger-widget-input {
   flex: 1;
   min-width: 0;
@@ -490,22 +510,23 @@
   font-size: 14px;
   line-height: 1.4;
 }
-.messenger-widget-form-row-telegram .messenger-widget-input-contenteditable {
-  padding: 10px 14px;
-  border: 1px solid #e5e7eb;
-  border-radius: 20px;
-  background: #fff;
+.messenger-widget-input-wrapper .messenger-widget-input-contenteditable {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 4px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
   font-size: 14px;
   line-height: 1.4;
   overflow-y: auto;
   word-wrap: break-word;
   white-space: pre-wrap;
   outline: none;
+  color: #1f2937;
 }
-.messenger-widget-form-row-telegram .messenger-widget-input-contenteditable:focus {
+.messenger-widget-input-wrapper .messenger-widget-input-contenteditable:focus {
   outline: none;
-  border-color: #01948E;
-  box-shadow: 0 0 0 3px rgba(1, 148, 142, 0.12);
 }
 .messenger-widget-form-row-telegram .messenger-widget-input-contenteditable:empty:before {
   content: attr(data-placeholder);
@@ -518,8 +539,8 @@
 }
 .messenger-widget-icon-btn {
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border: none;
   border-radius: 50%;
@@ -530,6 +551,7 @@
   justify-content: center;
   color: #64748b;
   transition: background 0.15s ease, color 0.15s ease;
+  margin: 2px;
 }
 .messenger-widget-icon-btn:hover {
   background: #f1f5f9;
@@ -540,10 +562,16 @@
   height: 20px;
   flex-shrink: 0;
 }
-.messenger-widget-form-row-telegram .messenger-widget-attach.messenger-widget-icon-btn,
-.messenger-widget-form-row-telegram .messenger-widget-emoji.messenger-widget-icon-btn {
-  width: 38px;
-  height: 38px;
+.messenger-widget-input-wrapper .messenger-widget-attach.messenger-widget-icon-btn,
+.messenger-widget-input-wrapper .messenger-widget-emoji.messenger-widget-icon-btn {
+  width: 36px;
+  height: 36px;
+}
+.messenger-widget-input-wrapper .messenger-widget-send-icon {
+  width: 36px;
+  height: 36px;
+  margin: 2px;
+  flex-shrink: 0;
 }
 .messenger-widget-form-row-telegram .messenger-widget-icon-btn svg {
   width: 19px;
@@ -802,6 +830,7 @@
   word-wrap: break-word;
   white-space: pre-wrap;
   outline: none;
+  color: #1f2937;
 }
 .messenger-widget-input-contenteditable:empty:before {
   content: attr(data-placeholder);
