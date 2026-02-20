@@ -65,7 +65,6 @@ from messenger.integrations import notify_conversation_closed
 import secrets
 import logging
 import json
-import logging
 import mimetypes
 import os
 import re
@@ -12266,6 +12265,15 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
         "sse": features_cfg.get("sse", True),
     }
 
+    widget_display = getattr(inbox, "settings", None) or {}
+    widget_display = {
+        "title": widget_display.get("title", "Чат с поддержкой"),
+        "greeting": widget_display.get("greeting", ""),
+        "color": widget_display.get("color", "#01948E"),
+        "show_email": widget_display.get("show_email", False),
+        "show_phone": widget_display.get("show_phone", False),
+    }
+
     return render(
         request,
         "ui/settings/messenger_inbox_form.html",
@@ -12285,6 +12293,7 @@ def settings_messenger_inbox_edit(request: HttpRequest, inbox_id: int = None) ->
             "integration_settings": integration_settings,
             "automation_settings": automation_settings,
             "feature_settings": feature_settings,
+            "widget_display": widget_display,
         },
     )
 

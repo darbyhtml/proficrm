@@ -5,10 +5,10 @@
   <div class="space-y-4">
     <div class="flex items-end justify-between gap-3 flex-wrap">
       <div>
-        <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> / <a class="underline" href="{% url 'settings_messenger_overview' %}">Live-chat</a> / Маршрутизация /</div>
+        <div class="text-sm text-brand-dark/70"><a class="underline" href="{% url 'settings_dashboard' %}">Настройки</a> / <a class="underline" href="{% url 'settings_messenger_overview' %}">Live-chat</a> / Маршрутизация /</div>
         <h1 class="text-2xl font-semibold">Распределение по регионам</h1>
       </div>
-      <a href="/settings/messenger/routing/new/" class="btn btn-primary">+ Создать правило</a>
+      <a href="{% url 'settings_messenger_routing_create' %}" class="btn btn-primary">+ Создать правило</a>
     </div>
     {% include "ui/settings/messenger_nav.html" with active="routing" %}
 
@@ -58,9 +58,9 @@
               </td>
               <td class="px-4 py-3">
                 <div class="flex items-center gap-2">
-                  <a class="underline text-brand-teal" href="/settings/messenger/routing/{{ rule.id }}/">Редактировать</a>
+                  <a class="underline text-brand-teal" href="{% url 'settings_messenger_routing_edit' rule.id %}">Редактировать</a>
                   <span class="text-brand-dark/40">|</span>
-                  <form method="post" action="/settings/messenger/routing/{{ rule.id }}/delete/" onsubmit="return confirm('Удалить правило?');" class="inline">
+                  <form method="post" action="{% url 'settings_messenger_routing_delete' rule.id %}" onsubmit="return confirm('Удалить правило?');" class="inline">
                     {% csrf_token %}
                     <button type="submit" class="underline text-red-600">Удалить</button>
                   </form>
@@ -68,7 +68,7 @@
               </td>
             </tr>
           {% empty %}
-            <tr><td class="px-4 py-6 text-brand-dark/70" colspan="8">Правил маршрутизации нет. <a href="/settings/messenger/routing/new/" class="underline">Создать первое</a></td></tr>
+            <tr><td class="px-4 py-6 text-brand-dark/70" colspan="8">Правил маршрутизации нет. <a href="{% url 'settings_messenger_routing_create' %}" class="underline">Создать первое</a></td></tr>
           {% endfor %}
         </tbody>
       </table>

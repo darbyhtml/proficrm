@@ -1,21 +1,21 @@
 <nav class="flex flex-wrap gap-1 p-1 bg-brand-soft/20 rounded-xl border border-brand-soft/40 w-fit" aria-label="Подразделы Live-chat">
   {% if active == 'sources' %}
-    <span class="px-3 py-2 rounded-lg bg-white font-medium text-brand-teal shadow-sm text-sm">Источники</span>
+    <span class="px-3 py-2 rounded-lg bg-white font-medium text-brand-teal shadow-sm text-sm" aria-current="page">Источники</span>
   {% else %}
     <a href="{% url 'settings_messenger_overview' %}" class="px-3 py-2 rounded-lg text-sm text-brand-dark/70 hover:bg-white/80 hover:text-brand-dark transition">Источники</a>
   {% endif %}
   {% if active == 'routing' %}
-    <span class="px-3 py-2 rounded-lg bg-white font-medium text-brand-teal shadow-sm text-sm">Маршрутизация</span>
+    <span class="px-3 py-2 rounded-lg bg-white font-medium text-brand-teal shadow-sm text-sm" aria-current="page">Маршрутизация</span>
   {% else %}
     <a href="{% url 'settings_messenger_routing_list' %}" class="px-3 py-2 rounded-lg text-sm text-brand-dark/70 hover:bg-white/80 hover:text-brand-dark transition">Маршрутизация</a>
   {% endif %}
   {% if active == 'health' %}
-    <span class="px-3 py-2 rounded-lg bg-white font-medium text-brand-teal shadow-sm text-sm">Диагностика</span>
+    <span class="px-3 py-2 rounded-lg bg-white font-medium text-brand-teal shadow-sm text-sm" aria-current="page">Диагностика</span>
   {% else %}
     <a href="{% url 'settings_messenger_health' %}" class="px-3 py-2 rounded-lg text-sm text-brand-dark/70 hover:bg-white/80 hover:text-brand-dark transition">Диагностика</a>
   {% endif %}
   {% if active == 'analytics' %}
-    <span class="px-3 py-2 rounded-lg bg-white font-medium text-brand-teal shadow-sm text-sm">Аналитика</span>
+    <span class="px-3 py-2 rounded-lg bg-white font-medium text-brand-teal shadow-sm text-sm" aria-current="page">Аналитика</span>
   {% else %}
     <a href="{% url 'settings_messenger_analytics' %}" class="px-3 py-2 rounded-lg text-sm text-brand-dark/70 hover:bg-white/80 hover:text-brand-dark transition">Аналитика</a>
   {% endif %}

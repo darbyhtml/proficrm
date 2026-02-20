@@ -5,7 +5,7 @@
 {% block content %}
   <div class="space-y-4 max-w-6xl">
     <div>
-      <div class="text-sm text-brand-dark/70"><a class="underline" href="/settings/">Настройки</a> / <a class="underline" href="{% url 'settings_messenger_overview' %}">Live-chat</a> / <a class="underline" href="{% url 'settings_messenger_overview' %}">Источники</a> /</div>
+      <div class="text-sm text-brand-dark/70"><a class="underline" href="{% url 'settings_dashboard' %}">Настройки</a> / <a class="underline" href="{% url 'settings_messenger_overview' %}">Live-chat</a> / <a class="underline" href="{% url 'settings_messenger_overview' %}">Источники</a> /</div>
       <h1 class="text-2xl font-semibold">{% if inbox %}{{ inbox.name }}{% else %}Новый источник{% endif %}</h1>
     </div>
 
@@ -13,13 +13,13 @@
       {% csrf_token %}
 
       <nav class="flex flex-wrap gap-1 p-1 bg-brand-soft/20 rounded-xl border border-brand-soft/40 w-full max-w-3xl" role="tablist" aria-label="Разделы настроек">
-        <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition aria-selected:bg-white aria-selected:text-brand-teal aria-selected:shadow-sm bg-transparent text-brand-dark/70 hover:bg-white/60" role="tab" aria-selected="true" data-tab="main">Основные</button>
-        <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition aria-selected:bg-white aria-selected:text-brand-teal aria-selected:shadow-sm bg-transparent text-brand-dark/70 hover:bg-white/60" role="tab" aria-selected="false" data-tab="widget">Конструктор виджета</button>
-        <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition aria-selected:bg-white aria-selected:text-brand-teal aria-selected:shadow-sm bg-transparent text-brand-dark/70 hover:bg-white/60" role="tab" aria-selected="false" data-tab="hours">Время и офлайн</button>
-        <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition aria-selected:bg-white aria-selected:text-brand-teal aria-selected:shadow-sm bg-transparent text-brand-dark/70 hover:bg-white/60" role="tab" aria-selected="false" data-tab="extra">Вложения и оценка</button>
-        <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition aria-selected:bg-white aria-selected:text-brand-teal aria-selected:shadow-sm bg-transparent text-brand-dark/70 hover:bg-white/60" role="tab" aria-selected="false" data-tab="security">Безопасность и интеграции</button>
+        <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition bg-white text-brand-teal shadow-sm hover:bg-white/90" role="tab" aria-selected="true" data-tab="main">Основные</button>
+        <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition bg-transparent text-brand-dark/70 hover:bg-white/60" role="tab" aria-selected="false" data-tab="widget">Конструктор виджета</button>
+        <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition bg-transparent text-brand-dark/70 hover:bg-white/60" role="tab" aria-selected="false" data-tab="hours">Время и офлайн</button>
+        <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition bg-transparent text-brand-dark/70 hover:bg-white/60" role="tab" aria-selected="false" data-tab="extra">Вложения и оценка</button>
+        <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition bg-transparent text-brand-dark/70 hover:bg-white/60" role="tab" aria-selected="false" data-tab="security">Безопасность и интеграции</button>
         {% if inbox %}
-        <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition aria-selected:bg-white aria-selected:text-brand-teal aria-selected:shadow-sm bg-transparent text-red-600/80 hover:bg-red-50" role="tab" aria-selected="false" data-tab="danger">Опасная зона</button>
+        <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition bg-transparent text-red-600/80 hover:bg-red-50" role="tab" aria-selected="false" data-tab="danger">Опасная зона</button>
         {% endif %}
       </nav>
 
@@ -121,14 +121,6 @@
                   <button type="button" onclick="copyLazyCode()" class="btn btn-outline btn-sm">Скопировать код (ленивая загрузка)</button>
                 </div>
               </div>
-
-              <div class="border-t border-brand-soft/60 pt-3">
-                <form method="post" onsubmit="return confirm('Внимание! Старый токен перестанет работать. Все виджеты на сайтах нужно будет обновить. Продолжить?');">
-                  {% csrf_token %}
-                  <input type="hidden" name="action" value="regenerate_token">
-                  <button type="submit" class="btn btn-danger btn-sm">Сгенерировать новый токен</button>
-                </form>
-              </div>
             </div>
           </div>
         </div>
@@ -142,23 +134,23 @@
           <div class="space-y-4">
             <div>
               <label class="block text-sm font-medium text-brand-dark/80 mb-1">Название в шапке виджета</label>
-              <input type="text" name="widget_title" value="{{ inbox.settings.title|default:'Чат с поддержкой' }}" class="input" placeholder="Чат с поддержкой">
+              <input type="text" name="widget_title" value="{{ widget_display.title }}" class="input" placeholder="Чат с поддержкой">
             </div>
             <div>
               <label class="block text-sm font-medium text-brand-dark/80 mb-1">Приветствие</label>
-              <textarea name="widget_greeting" class="textarea" rows="2" placeholder="Добро пожаловать! Как мы можем вам помочь?">{{ inbox.settings.greeting|default:'' }}</textarea>
+              <textarea name="widget_greeting" class="textarea" rows="2" placeholder="Добро пожаловать! Как мы можем вам помочь?">{{ widget_display.greeting }}</textarea>
             </div>
             <div>
               <label class="block text-sm font-medium text-brand-dark/80 mb-1">Основной цвет</label>
-              <input type="color" name="widget_color" value="{{ inbox.settings.color|default:'#01948E' }}" class="input" style="width: 100px; height: 40px;">
+              <input type="color" name="widget_color" value="{{ widget_display.color }}" class="input" style="width: 100px; height: 40px;">
             </div>
             <div class="space-y-2">
               <label class="flex items-center gap-2">
-                <input type="checkbox" name="widget_show_email" {% if inbox.settings.show_email|default:False %}checked{% endif %} class="rounded">
+                <input type="checkbox" name="widget_show_email" {% if widget_display.show_email %}checked{% endif %} class="rounded">
                 <span class="text-sm font-medium text-brand-dark/80">Показывать поле email</span>
               </label>
               <label class="flex items-center gap-2">
-                <input type="checkbox" name="widget_show_phone" {% if inbox.settings.show_phone|default:False %}checked{% endif %} class="rounded">
+                <input type="checkbox" name="widget_show_phone" {% if widget_display.show_phone %}checked{% endif %} class="rounded">
                 <span class="text-sm font-medium text-brand-dark/80">Показывать поле телефона</span>
               </label>
             </div>
@@ -386,29 +378,38 @@
       </div>
       </div><!-- /panel-security -->
 
-      {% if inbox %}
-      <div id="danger" class="inbox-form-tab hidden">
-        <div class="card border border-red-200 bg-red-50">
-          <div class="card-pad space-y-3">
-            <h2 class="text-lg font-semibold text-red-700">Опасная зона</h2>
-            <p class="text-sm text-red-800/80">
-              Удаление Inbox необратимо. Нельзя удалить Inbox, к которому уже привязаны диалоги.
-            </p>
-            <form method="post" onsubmit="return confirm('Вы уверены, что хотите удалить этот Inbox? Это действие нельзя будет отменить.');">
-              {% csrf_token %}
-              <input type="hidden" name="action" value="delete_inbox">
-              <button type="submit" class="btn btn-danger">Удалить этот Inbox</button>
-            </form>
-          </div>
-        </div>
-      </div>
-      {% endif %}
-
       <div class="flex items-center gap-3">
         <button type="submit" class="btn btn-primary">Сохранить</button>
         <a href="{% url 'settings_messenger_overview' %}" class="btn btn-outline">Отмена</a>
       </div>
     </form>
+
+    {% if inbox %}
+    <div class="mt-4 border-t border-brand-soft/60 pt-4">
+      <p class="text-sm text-brand-dark/60 mb-2">Токен виджета можно сменить. После смены старый перестанет работать.</p>
+      <form method="post" action="{% url 'settings_messenger_inbox_edit' inbox.id %}" onsubmit="return confirm('Внимание! Старый токен перестанет работать. Все виджеты на сайтах нужно будет обновить. Продолжить?');" class="inline">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="regenerate_token">
+        <button type="submit" class="btn btn-danger btn-sm">Сгенерировать новый токен</button>
+      </form>
+    </div>
+
+    <div id="danger" class="inbox-form-tab hidden mt-6">
+      <div class="card border border-red-200 bg-red-50">
+        <div class="card-pad space-y-3">
+          <h2 class="text-lg font-semibold text-red-700">Опасная зона</h2>
+          <p class="text-sm text-red-800/80">
+            Удаление Inbox необратимо. Нельзя удалить Inbox, к которому уже привязаны диалоги.
+          </p>
+          <form method="post" action="{% url 'settings_messenger_inbox_edit' inbox.id %}" onsubmit="return confirm('Вы уверены, что хотите удалить этот Inbox? Это действие нельзя будет отменить.');">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete_inbox">
+            <button type="submit" class="btn btn-danger">Удалить этот Inbox</button>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endif %}
   </div>
 
   <script>
@@ -424,7 +425,15 @@
         var panelId = getPanelId(tab);
         var panel = document.getElementById(panelId);
         tabs.forEach(function(t) {
-          t.setAttribute('aria-selected', t === tab ? 'true' : 'false');
+          var active = t === tab;
+          t.setAttribute('aria-selected', active ? 'true' : 'false');
+          t.classList.toggle('bg-white', active);
+          t.classList.toggle('text-brand-teal', active && t.getAttribute('data-tab') !== 'danger');
+          t.classList.toggle('text-red-600', active && t.getAttribute('data-tab') === 'danger');
+          t.classList.toggle('shadow-sm', active);
+          t.classList.toggle('bg-transparent', !active);
+          t.classList.toggle('text-brand-dark/70', !active && t.getAttribute('data-tab') !== 'danger');
+          t.classList.toggle('text-red-600/80', !active && t.getAttribute('data-tab') === 'danger');
         });
         document.querySelectorAll('.inbox-form-tab').forEach(function(p) {
           p.classList.toggle('hidden', p !== panel);
@@ -440,32 +449,25 @@
         if (dangerTab) showPanel(dangerTab);
       }
     })();
+    {% if inbox %}
     function copyToken() {
-      const token = '{{ inbox.widget_token }}';
-      navigator.clipboard.writeText(token).then(() => {
-        alert('Токен скопирован в буфер обмена');
-      });
+      var token = '{{ inbox.widget_token }}';
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(token).then(function() { alert('Токен скопирован в буфер обмена'); });
+      } else { alert('Токен: ' + token); }
     }
     function copyCode() {
-      const code =
-        '<script src="{{ base_url }}/static/messenger/widget.js" ' +
-        'data-widget-token="{{ inbox.widget_token }}" ' +
-        'data-api-base-url="{{ base_url }}"></' +
-        'script>';
-      navigator.clipboard.writeText(code).then(() => {
-        alert('Код скопирован в буфер обмена');
-      });
+      var code = '<script src="{{ base_url }}/static/messenger/widget.js" data-widget-token="{{ inbox.widget_token }}" data-api-base-url="{{ base_url }}"><' + '/script>';
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).then(function() { alert('Код скопирован в буфер обмена'); });
+      } else { alert('Код скопирован'); }
     }
     function copyLazyCode() {
-      const code =
-        '<script src="{{ base_url }}/static/messenger/widget-loader.js" ' +
-        'data-widget-token="{{ inbox.widget_token }}" ' +
-        'data-api-base-url="{{ base_url }}" ' +
-        'data-load-on-scroll="1" data-load-after="5"></' +
-        'script>';
-      navigator.clipboard.writeText(code).then(() => {
-        alert('Код (ленивая загрузка) скопирован в буфер обмена');
-      });
+      var code = '<script src="{{ base_url }}/static/messenger/widget-loader.js" data-widget-token="{{ inbox.widget_token }}" data-api-base-url="{{ base_url }}" data-load-on-scroll="1" data-load-after="5"><' + '/script>';
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code).then(function() { alert('Код (ленивая загрузка) скопирован в буфер обмена'); });
+      } else { alert('Код скопирован'); }
     }
+    {% endif %}
   </script>
 {% endblock %}
