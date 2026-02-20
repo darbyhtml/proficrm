@@ -12,7 +12,7 @@
     <form method="post" class="space-y-4">
       {% csrf_token %}
 
-      <nav class="flex flex-wrap gap-1 p-1 bg-brand-soft/20 rounded-xl border border-brand-soft/40 w-full max-w-3xl" role="tablist" aria-label="Разделы настроек">
+      <nav class="inbox-form-tabs flex flex-wrap gap-1 p-1 bg-brand-soft/20 rounded-xl border border-brand-soft/40 w-full" role="tablist" aria-label="Разделы настроек">
         <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition bg-white text-brand-teal shadow-sm hover:bg-white/90" role="tab" aria-selected="true" data-tab="main">Основные</button>
         <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition bg-transparent text-brand-dark/70 hover:bg-white/60" role="tab" aria-selected="false" data-tab="widget">Конструктор виджета</button>
         <button type="button" class="inbox-tab-btn px-3 py-2 rounded-lg text-sm font-medium transition bg-transparent text-brand-dark/70 hover:bg-white/60" role="tab" aria-selected="false" data-tab="hours">Время и офлайн</button>
