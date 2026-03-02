@@ -411,18 +411,24 @@
     (function(){
       const form = document.getElementById('bulkTransferForm');
       const selectAll = document.getElementById('bulkSelectAll');
-      const items = Array.from(document.querySelectorAll('.bulk-company'));
       const countEl = document.getElementById('bulkSelectedCount');
       const clearBtn = document.getElementById('bulkClear');
       const selectFilteredBtn = document.getElementById('bulkSelectFiltered');
       const modeEl = document.getElementById('bulkApplyMode');
       const hintEl = document.getElementById('bulkModeHint');
+      const companyListBody = document.getElementById('companyListBody');
+
+      // Всегда получаем актуальные чекбоксы (после AJAX-обновления таблицы прежние элементы удаляются)
+      function getBulkItems() {
+        return Array.from(document.querySelectorAll('.bulk-company'));
+      }
 
       function selectedCount() {
-        return items.filter(i => i.checked).length;
+        return getBulkItems().filter(i => i.checked).length;
       }
 
       function update() {
+        const items = getBulkItems();
         const cnt = selectedCount();
         if (countEl) countEl.textContent = String(cnt);
         if (form) form.style.display = (cnt > 0) ? 'block' : 'none';
@@ -434,16 +440,21 @@
       if (selectAll) {
         selectAll.addEventListener('change', () => {
           const v = !!selectAll.checked;
-          items.forEach(i => { i.checked = v; });
+          getBulkItems().forEach(i => { i.checked = v; });
           update();
         });
       }
 
-      items.forEach(i => i.addEventListener('change', update));
+      // Делегирование: чекбоксы пересоздаются при AJAX, слушатель вешаем на tbody
+      if (companyListBody) {
+        companyListBody.addEventListener('change', (e) => {
+          if (e.target && e.target.matches && e.target.matches('.bulk-company')) update();
+        });
+      }
 
       if (clearBtn) {
         clearBtn.addEventListener('click', () => {
-          items.forEach(i => { i.checked = false; });
+          getBulkItems().forEach(i => { i.checked = false; });
           update();
         });
       }
@@ -464,7 +475,7 @@
 
       // Проверка прав на передачу и возможности нажатия «Переназначить»
       function checkTransferRights() {
-        const checked = items.filter(i => i.checked);
+        const checked = getBulkItems().filter(i => i.checked);
         const transferBtn = document.getElementById('bulkTransferBtn');
         const responsibleSelect = form ? form.querySelector('select[name="responsible_id"]') : null;
         const responsibleId = responsibleSelect ? responsibleSelect.value : '';
@@ -705,6 +716,8 @@
       }
       
       update();
+      // Даём второму скрипту обновлять UI после AJAX-загрузки таблицы
+      window.updateBulkTransfer = update;
     })();
   </script>
 
@@ -1074,10 +1087,10 @@
             window.updateRelativeTimes();
           }
           
-          // Обновляем чекбоксы для массового переназначения (если функция доступна)
+          // Обновляем чекбоксы и кнопку «Переназначить» после замены строк таблицы
           setTimeout(() => {
-            if (typeof update === 'function') {
-              update();
+            if (typeof window.updateBulkTransfer === 'function') {
+              window.updateBulkTransfer();
             }
           }, 100);
           
