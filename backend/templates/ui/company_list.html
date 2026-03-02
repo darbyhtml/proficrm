@@ -703,9 +703,44 @@
             // Блокируем кнопку подтверждения, если нет разрешённых компаний
             modalConfirm.disabled = (allowedCount === 0);
             
-            // Обработчик подтверждения
-            modalConfirm.onclick = function() {
-              form.submit();
+            // Обработчик подтверждения: AJAX-отправка + live refresh таблицы
+            modalConfirm.onclick = async function() {
+              modalConfirm.disabled = true;
+              modalContent.innerHTML = '<div class="text-center py-8"><div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-teal"></div><p class="mt-4 text-brand-dark/70">Переназначение...</p></div>';
+              try {
+                const formData = new FormData(form);
+                const resp = await fetch('/companies/bulk-transfer/', {
+                  method: 'POST',
+                  body: formData,
+                  headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': form.querySelector('[name=csrfmiddlewaretoken]').value
+                  }
+                });
+                const data = await resp.json().catch(() => ({}));
+                if (resp.ok && data.success) {
+                  hideModal();
+                  getBulkItems().forEach(i => { i.checked = false; });
+                  if (typeof window.updateBulkTransfer === 'function') window.updateBulkTransfer();
+                  if (typeof window.loadCompanies === 'function') {
+                    window.loadCompanies(true);
+                  } else {
+                    window.location.reload();
+                  }
+                  const msg = document.createElement('div');
+                  msg.className = 'fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg bg-green-600 text-white text-sm';
+                  msg.textContent = 'Переназначено ' + (data.updated || 0) + ' компаний → ' + (data.new_responsible || '');
+                  document.body.appendChild(msg);
+                  setTimeout(() => msg.remove(), 4000);
+                } else {
+                  modalContent.innerHTML = '<div class="py-8"><div class="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">' + (data.error || 'Ошибка переназначения') + '</div></div>';
+                  modalConfirm.disabled = false;
+                }
+              } catch (err) {
+                console.error(err);
+                modalContent.innerHTML = '<div class="py-8"><div class="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">Ошибка сети. Попробуйте ещё раз.</div></div>';
+                modalConfirm.disabled = false;
+              }
             };
             
           } catch (error) {
@@ -1120,6 +1155,7 @@
           }
         }
       }
+      window.loadCompanies = loadCompanies;
 
       // Инициализация чекбоксов из localStorage
       (function initRememberUi() {

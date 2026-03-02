@@ -2834,26 +2834,46 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
     Массовое переназначение ответственного:
     - либо по выбранным company_ids[]
     - либо по текущему фильтру (apply_mode=filtered), чтобы быстро переназначить, например, все компании уволенного сотрудника.
+
+    При AJAX (X-Requested-With: XMLHttpRequest) возвращает JSON вместо redirect.
     """
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
     if request.method != "POST":
+        if is_ajax:
+            return JsonResponse({"success": False, "error": "Method not allowed"}, status=405)
         return redirect("company_list")
 
     user: User = request.user
     new_resp_id = (request.POST.get("responsible_id") or "").strip()
     apply_mode = (request.POST.get("apply_mode") or "selected").strip().lower()
     if not new_resp_id:
-        messages.error(request, "Выберите нового ответственного.")
+        msg = "Выберите нового ответственного."
+        if is_ajax:
+            return JsonResponse({"success": False, "error": msg}, status=400)
+        messages.error(request, msg)
         return redirect("company_list")
 
-    new_resp = get_object_or_404(User, id=new_resp_id, is_active=True)
-    
+    try:
+        new_resp = User.objects.get(id=new_resp_id, is_active=True)
+    except User.DoesNotExist:
+        if is_ajax:
+            return JsonResponse({"success": False, "error": "Ответственный не найден"}, status=404)
+        return redirect("company_list")
+
     # Проверка, что новый ответственный разрешён (не GROUP_MANAGER, не ADMIN)
     if new_resp.role in (User.Role.GROUP_MANAGER, User.Role.ADMIN):
-        messages.error(request, "Нельзя передать компании управляющему или администратору.")
+        msg = "Нельзя передать компании управляющему или администратору."
+        if is_ajax:
+            return JsonResponse({"success": False, "error": msg}, status=400)
+        messages.error(request, msg)
         return redirect("company_list")
-    
+
     if new_resp.role not in (User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD):
-        messages.error(request, "Нового ответственного можно выбрать только из: менеджер / директор филиала / РОП.")
+        msg = "Нового ответственного можно выбрать только из: менеджер / директор филиала / РОП."
+        if is_ajax:
+            return JsonResponse({"success": False, "error": msg}, status=400)
+        messages.error(request, msg)
         return redirect("company_list")
 
     # Базовый QS: все компании (просмотр всем) → сужаем до редактируемых пользователем
@@ -2872,42 +2892,55 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
         cap = 5000
         ids = list(qs.values_list("id", flat=True)[:cap])
         if not ids:
-            messages.error(request, "Нет компаний для переназначения (или нет прав).")
+            msg = "Нет компаний для переназначения (или нет прав)."
+            if is_ajax:
+                return JsonResponse({"success": False, "error": msg}, status=400)
+            messages.error(request, msg)
             return redirect("company_list")
         if len(ids) >= cap:
-            messages.warning(request, f"Выбрано слишком много компаний (>{cap}). Сузьте фильтр и повторите.")
+            msg = f"Выбрано слишком много компаний (>{cap}). Сузьте фильтр и повторите."
+            if is_ajax:
+                return JsonResponse({"success": False, "error": msg}, status=400)
+            messages.warning(request, msg)
             return redirect("company_list")
     else:
         ids = request.POST.getlist("company_ids") or []
         ids = [i for i in ids if i]
         if not ids:
-            messages.error(request, "Выберите хотя бы одну компанию (чекбоксы слева).")
+            msg = "Выберите хотя бы одну компанию (чекбоксы слева)."
+            if is_ajax:
+                return JsonResponse({"success": False, "error": msg}, status=400)
+            messages.error(request, msg)
             return redirect("company_list")
 
         # ограничиваем до редактируемых
         ids = list(editable_qs.filter(id__in=ids).values_list("id", flat=True))
         if not ids:
-            messages.error(request, "Нет выбранных компаний, доступных для переназначения.")
+            msg = "Нет выбранных компаний, доступных для переназначения."
+            if is_ajax:
+                return JsonResponse({"success": False, "error": msg}, status=400)
+            messages.error(request, msg)
             return redirect("company_list")
 
     # Проверка прав на передачу каждой компании (используем новую функцию)
     transfer_check = can_transfer_companies(user, ids)
     if transfer_check["forbidden"]:
-        # Есть запрещённые компании - показываем детали
         forbidden_names = [f["name"] for f in transfer_check["forbidden"][:5]]
         if len(transfer_check["forbidden"]) > 5:
             forbidden_names.append(f"... и ещё {len(transfer_check['forbidden']) - 5}")
-        messages.error(
-            request,
-            f"Некоторые компании нельзя передать ({len(transfer_check['forbidden'])} из {len(ids)}): "
-            f"{', '.join(forbidden_names)}"
-        )
+        msg = f"Некоторые компании нельзя передать ({len(transfer_check['forbidden'])} из {len(ids)}): {', '.join(forbidden_names)}"
+        if is_ajax:
+            return JsonResponse({"success": False, "error": msg}, status=400)
+        messages.error(request, msg)
         return redirect("company_list")
-    
+
     # Используем только разрешённые компании
     ids = transfer_check["allowed"]
     if not ids:
-        messages.error(request, "Нет компаний, доступных для переназначения.")
+        msg = "Нет компаний, доступных для переназначения."
+        if is_ajax:
+            return JsonResponse({"success": False, "error": msg}, status=400)
+        messages.error(request, msg)
         return redirect("company_list")
 
     now_ts = timezone.now()
@@ -3006,7 +3039,13 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
     
     # Инвалидируем кэш количества компаний после массового переназначения
     _invalidate_company_count_cache()
-    
+
+    if is_ajax:
+        return JsonResponse({
+            "success": True,
+            "updated": updated,
+            "new_responsible": str(new_resp),
+        })
     return redirect("company_list")
 
 
