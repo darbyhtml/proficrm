@@ -324,6 +324,24 @@
                       </svg>
                     </button>
                   </form>
+                  <button
+                    type="button"
+                    class="flex items-center justify-center w-8 h-8 rounded bg-white border border-red-400 hover:bg-red-50 transition-colors{% if u.id == request.user.id %} opacity-40 cursor-not-allowed{% endif %}"
+                    title="Удалить пользователя"
+                    aria-label="Удалить пользователя"
+                    data-user-delete
+                    data-user-id="{{ u.id }}"
+                    data-user-name="{{ u.get_full_name|default:u.username }}"
+                    {% if u.id == request.user.id %}disabled aria-disabled="true"{% endif %}
+                    style="color:#b91c1c;"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                      <path d="M10 11v6M14 11v6"/>
+                      <path d="M9 6V4h6v2"/>
+                    </svg>
+                  </button>
                 </div>
               </td>
             </tr>
@@ -793,6 +811,30 @@
         });
       });
     })();
+
+    // Удаление пользователя
+    document.querySelectorAll('[data-user-delete]').forEach(function (btn) {
+      btn.addEventListener('click', async function () {
+        const userId = this.dataset.userId;
+        const userName = this.dataset.userName || 'пользователь';
+        if (!confirm('Удалить пользователя «' + userName + '»?\n\nКомпании останутся в системе, но поле «Ответственный» будет очищено. Это действие нельзя отменить.')) return;
+        try {
+          const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+          const resp = await fetch('/settings/users/' + userId + '/delete/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken },
+          });
+          const data = await resp.json();
+          if (data.ok) {
+            window.location.reload();
+          } else {
+            alert(data.error || 'Ошибка удаления.');
+          }
+        } catch (e) {
+          alert('Ошибка сети. Попробуйте ещё раз.');
+        }
+      });
+    });
   </script>
 {% endblock %}
 

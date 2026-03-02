@@ -9441,6 +9441,50 @@ def settings_user_update_ajax(request: HttpRequest, user_id: int) -> JsonRespons
 
 
 @login_required
+def settings_user_delete(request: HttpRequest, user_id: int) -> JsonResponse:
+    """AJAX: полное удаление пользователя. Компании остаются (responsible → NULL)."""
+    if not require_admin(request.user):
+        return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
+
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "Метод не поддерживается."}, status=405)
+
+    user = get_object_or_404(User, id=user_id)
+
+    if user.id == request.user.id:
+        return JsonResponse({"ok": False, "error": "Нельзя удалить самого себя."}, status=400)
+
+    if user.role == User.Role.ADMIN or user.is_superuser:
+        remaining_admins = User.objects.filter(
+            is_active=True,
+            role=User.Role.ADMIN,
+        ).exclude(id=user.id).count()
+        if remaining_admins == 0:
+            return JsonResponse(
+                {"ok": False, "error": "Нельзя удалить последнего администратора системы."},
+                status=400,
+            )
+
+    username = user.username
+    full_name = user.get_full_name() or username
+
+    log_event(
+        actor=request.user,
+        verb=ActivityEvent.Verb.DELETE,
+        entity_type="user",
+        entity_id=str(user.id),
+        message=f"Удалён пользователь: {full_name} ({username})",
+    )
+
+    user.delete()
+
+    return JsonResponse({
+        "ok": True,
+        "message": f"Пользователь «{full_name}» удалён.",
+    })
+
+
+@login_required
 def settings_dicts(request: HttpRequest) -> HttpResponse:
     if not require_admin(request.user):
         messages.error(request, "Доступ запрещён.")

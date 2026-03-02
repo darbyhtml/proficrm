@@ -93,6 +93,7 @@ urlpatterns = [
     path("settings/users/<int:user_id>/logout/", views.settings_user_logout, name="settings_user_logout"),
     path("settings/users/<int:user_id>/form/", views.settings_user_form_ajax, name="settings_user_form_ajax"),
     path("settings/users/<int:user_id>/update/", views.settings_user_update_ajax, name="settings_user_update_ajax"),
+    path("settings/users/<int:user_id>/delete/", views.settings_user_delete, name="settings_user_delete"),
     path("settings/dicts/", views.settings_dicts, name="settings_dicts"),
     path("settings/dicts/company-status/new/", views.settings_company_status_create, name="settings_company_status_create"),
     path("settings/dicts/company-status/<int:status_id>/edit/", views.settings_company_status_edit, name="settings_company_status_edit"),
