@@ -709,6 +709,11 @@
               modalContent.innerHTML = '<div class="text-center py-8"><div class="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-brand-teal"></div><p class="mt-4 text-brand-dark/70">Переназначение...</p></div>';
               try {
                 const formData = new FormData(form);
+                // Явно добавляем company_ids — чекбоксы могут быть вне form в DOM
+                formData.delete('company_ids');
+                getBulkItems().filter(cb => cb.checked).forEach(cb => {
+                  if (cb.value) formData.append('company_ids', cb.value);
+                });
                 const resp = await fetch('/companies/bulk-transfer/', {
                   method: 'POST',
                   body: formData,
@@ -733,12 +738,13 @@
                   document.body.appendChild(msg);
                   setTimeout(() => msg.remove(), 4000);
                 } else {
-                  modalContent.innerHTML = '<div class="py-8"><div class="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">' + (data.error || 'Ошибка переназначения') + '</div></div>';
+                  const errMsg = data.error || (resp.status === 400 ? 'Проверьте права или выбранные компании.' : 'Ошибка переназначения');
+                  modalContent.innerHTML = '<div class="py-8"><div class="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">' + errMsg + '</div><p class="text-sm mt-2 text-red-600">Если ошибка повторяется — попробуйте обновить страницу и повторить.</p></div>';
                   modalConfirm.disabled = false;
                 }
               } catch (err) {
-                console.error(err);
-                modalContent.innerHTML = '<div class="py-8"><div class="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">Ошибка сети. Попробуйте ещё раз.</div></div>';
+                console.error('Bulk transfer error:', err);
+                modalContent.innerHTML = '<div class="py-8"><div class="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">Ошибка сети. Попробуйте обновить страницу (F5) и повторить.</div></div>';
                 modalConfirm.disabled = false;
               }
             };
