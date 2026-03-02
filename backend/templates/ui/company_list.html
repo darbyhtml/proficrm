@@ -458,25 +458,45 @@
           if (hintEl) hintEl.textContent = ' (все по фильтру)';
           if (form) form.style.display = 'block';
           if (countEl) countEl.textContent = '{{ companies_filtered }}';
+          if (typeof checkTransferRights === 'function') checkTransferRights();
         });
       }
 
-      // Проверка прав на передачу выбранных компаний
+      // Проверка прав на передачу и возможности нажатия «Переназначить»
       function checkTransferRights() {
         const checked = items.filter(i => i.checked);
         const transferBtn = document.getElementById('bulkTransferBtn');
+        const responsibleSelect = form ? form.querySelector('select[name="responsible_id"]') : null;
+        const responsibleId = responsibleSelect ? responsibleSelect.value : '';
+        const isFilteredMode = modeEl && modeEl.value === 'filtered';
         if (!transferBtn) return;
-        
-        if (checked.length === 0) {
+
+        // Нет компаний для переназначения: ни выбранных галочкой, ни по фильтру
+        if (checked.length === 0 && !isFilteredMode) {
+          transferBtn.disabled = true;
+          transferBtn.title = 'Выберите компании или нажмите «Выбрать все по фильтру»';
+          transferBtn.classList.add('opacity-50', 'cursor-not-allowed');
+          return;
+        }
+
+        // Не выбран новый ответственный — кнопка неактивна (частая причина «Переназначить не активно»)
+        if (!responsibleId) {
+          transferBtn.disabled = true;
+          transferBtn.title = 'Выберите нового ответственного в списке «Новый ответственный…»';
+          transferBtn.classList.add('opacity-50', 'cursor-not-allowed');
+          return;
+        }
+
+        // В режиме «по фильтру» не проверяем canTransfer по чекбоксам
+        if (isFilteredMode) {
           transferBtn.disabled = false;
           transferBtn.title = '';
           transferBtn.classList.remove('opacity-50', 'cursor-not-allowed');
           return;
         }
-        
+
         // Проверяем, все ли выбранные компании можно передать
         const forbidden = checked.filter(i => i.dataset.canTransfer === '0');
-        
         if (forbidden.length > 0) {
           transferBtn.disabled = true;
           transferBtn.title = 'Одна или несколько выбранных компаний не принадлежат вам (вы не ответственный). Уберите их из выбора или откройте только свои компании.';
@@ -494,6 +514,12 @@
         originalUpdate();
         checkTransferRights();
       };
+
+      // При смене «Новый ответственный» обновляем активность кнопки «Переназначить»
+      const responsibleSelectEl = form ? form.querySelector('select[name="responsible_id"]') : null;
+      if (responsibleSelectEl) {
+        responsibleSelectEl.addEventListener('change', checkTransferRights);
+      }
       
       // Модальное окно для превью
       const modal = document.getElementById('bulkTransferModal');
