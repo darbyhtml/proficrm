@@ -554,7 +554,6 @@
         
         // Добавляем текущие значения из формы фильтров
         const filterFormData = new FormData(filterForm);
-        const beforeEl = form.querySelector('select[name="responsible_id"]');
         fieldsToUpdate.forEach(fieldName => {
           const values = filterFormData.getAll(fieldName) || [];
           values.forEach(value => {
@@ -563,11 +562,7 @@
             input.type = 'hidden';
             input.name = fieldName;
             input.value = String(value);
-            if (beforeEl) {
-              form.insertBefore(input, beforeEl);
-            } else {
-              form.appendChild(input);
-            }
+            form.appendChild(input);
           });
         });
       }
@@ -1527,13 +1522,8 @@
     
     // Старый код автодополнения (отключен, но оставлен для совместимости)
     (function() {
-      const searchInput = document.getElementById('company-search-input');
-      if (!searchInput) return;
-
-      let debounceTimer = null;
-      let abortController = null;
-
       // Глобальные хелперы для отображения "N мин. назад" рядом с датой обновления
+      // Определяются до guard, чтобы работали независимо от автодополнения
       window.formatRelativeTime = function formatRelativeTime(dateStr) {
         if (!dateStr) return '';
         const date = new Date(dateStr);
@@ -1571,6 +1561,14 @@
           window.updateRelativeTimes();
         }
       }
+
+      // Далее — старый код автодополнения. Запускаем только если элементы присутствуют.
+      const searchInput = document.getElementById('company-search-input');
+      const dropdown = document.getElementById('company-autocomplete-dropdown');
+      if (!searchInput || !dropdown) return;
+
+      let debounceTimer = null;
+      let abortController = null;
 
       function escapeHtml(text) {
         const div = document.createElement('div');

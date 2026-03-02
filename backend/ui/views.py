@@ -2769,9 +2769,15 @@ def company_bulk_transfer_preview(request: HttpRequest) -> JsonResponse:
     
     # Проверка, что новый ответственный из того же филиала (для РОП/директора)
     if user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
+        if not new_resp.branch_id:
+            return JsonResponse({
+                "error": f"У сотрудника «{new_resp}» не указан филиал. Обратитесь к администратору для настройки профиля.",
+                "allowed_count": 0,
+                "forbidden_count": len(ids),
+            }, status=400)
         if new_resp.branch_id != user.branch_id:
             return JsonResponse({
-                "error": "Новый ответственный должен быть из вашего филиала",
+                "error": f"Сотрудник «{new_resp}» из другого филиала. Можно передавать только внутри своего филиала.",
                 "allowed_count": 0,
                 "forbidden_count": len(ids),
             }, status=400)
@@ -2813,6 +2819,9 @@ def company_bulk_transfer_preview(request: HttpRequest) -> JsonResponse:
     
     return JsonResponse({
         "total_count": len(ids),
+        "allowed_count": len(allowed_ids),
+        "forbidden_count": len(forbidden_list),
+        "forbidden": forbidden_list[:10],
         "preview_count": len(companies_preview),
         "new_responsible": {
             "id": str(new_resp.id),
@@ -3036,7 +3045,7 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
             body=f"Количество: {updated}",
             url=f"/companies/?responsible={new_resp.id}",
         )
-    
+
     # Инвалидируем кэш количества компаний после массового переназначения
     _invalidate_company_count_cache()
 
@@ -3046,7 +3055,7 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
             "updated": updated,
             "new_responsible": str(new_resp),
         })
-    return redirect("company_list")
+    return redirect(f"/companies/?responsible={new_resp.id}")
 
 
 @login_required
