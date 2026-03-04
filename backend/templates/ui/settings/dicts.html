@@ -46,16 +46,19 @@
         <ul class="space-y-2 text-sm">
           {% for s in company_spheres %}
             <li class="rounded-lg border px-3 py-2 flex items-center justify-between gap-2" data-dict-item data-dict-type="company-sphere" data-dict-id="{{ s.id }}" data-dict-name="{{ s.name }}">
-              <span class="inline-flex items-center gap-1">
-                {{ s.name }}
+              <span class="inline-flex items-center gap-1 min-w-0">
+                <span class="truncate">{{ s.name }}</span>
                 {% if s.is_important %}
                   <span
-                    class="inline-flex items-center justify-center rounded-full border border-brand-orange/80 text-brand-orange bg-white"
+                    class="inline-flex items-center justify-center rounded-full border border-brand-orange/80 text-brand-orange bg-white flex-shrink-0"
                     style="width:1.15rem;height:1.15rem;border-width:1.5px;"
                     title="Важная сфера (особое внимание при работе)"
                   >
                     <span style="font-size:0.8rem;line-height:1;font-weight:700;">?</span>
                   </span>
+                {% endif %}
+                {% if s.company_count %}
+                  <span class="flex-shrink-0 inline-flex items-center justify-center rounded-full bg-brand-dark/10 text-brand-dark/60 text-xs font-medium" style="min-width:1.35rem;height:1.35rem;padding:0 .3rem;" title="{{ s.company_count }} компани{% if s.company_count == 1 %}я{% elif s.company_count < 5 %}и{% else %}й{% endif %}">{{ s.company_count }}</span>
                 {% endif %}
               </span>
               <div class="flex items-center gap-1">
@@ -244,10 +247,50 @@
           const dictType = item.dataset.dictType;
           const dictId = item.dataset.dictId;
           const dictName = item.dataset.dictName;
-          
-          if (!confirm(`Удалить "${dictName}"?`)) return;
-          
           const url = `/settings/dicts/${dictType}/${dictId}/delete/`;
+
+          // Для сфер — открываем modal с выбором действия
+          if (dictType === 'company-sphere') {
+            try {
+              const res = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+              if (!res.ok) throw new Error('Ошибка загрузки');
+              const html = await res.text();
+              modalContent.innerHTML = html;
+              modal.classList.remove('hidden');
+
+              // Обработка форм внутри модалки
+              modalContent.querySelectorAll('[data-sphere-delete-form], [data-sphere-merge-form]').forEach(form => {
+                form.addEventListener('submit', async function(e) {
+                  e.preventDefault();
+                  const formData = new FormData(form);
+                  formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+                  try {
+                    const r = await fetch(url, {
+                      method: 'POST',
+                      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                      body: formData
+                    });
+                    const data = await r.json();
+                    if (data.ok) {
+                      closeModal();
+                      item.remove();
+                    } else {
+                      alert('Ошибка: ' + (data.error || 'Не удалось выполнить'));
+                    }
+                  } catch (err) {
+                    alert('Ошибка: ' + err.message);
+                  }
+                });
+              });
+            } catch (err) {
+              alert('Ошибка загрузки: ' + err.message);
+            }
+            return;
+          }
+
+          // Для остальных — стандартный confirm
+          if (!confirm(`Удалить "${dictName}"?`)) return;
+
           try {
             const res = await fetch(url, {
               method: 'POST',

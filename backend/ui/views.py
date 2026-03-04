@@ -9494,7 +9494,7 @@ def settings_dicts(request: HttpRequest) -> HttpResponse:
         "ui/settings/dicts.html",
         {
             "company_statuses": CompanyStatus.objects.order_by("name"),
-            "company_spheres": CompanySphere.objects.order_by("name"),
+            "company_spheres": CompanySphere.objects.annotate(company_count=Count("companies")).order_by("name"),
             "contract_types": ContractType.objects.order_by("order", "name"),
             "task_types": TaskType.objects.order_by("name"),
         },
@@ -9623,12 +9623,36 @@ def settings_company_sphere_edit(request: HttpRequest, sphere_id: int) -> HttpRe
 
 @login_required
 def settings_company_sphere_delete(request: HttpRequest, sphere_id: int) -> HttpResponse:
-    """Удаление сферы компании"""
+    """Удаление сферы компании (с возможностью слияния)"""
     if not require_admin(request.user):
         return JsonResponse({"ok": False, "error": "Доступ запрещён."}, status=403)
+
+    sphere = get_object_or_404(CompanySphere, id=sphere_id)
+
+    # GET — вернуть модалку с выбором действия
+    if request.method == "GET" and request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        other_spheres = CompanySphere.objects.exclude(id=sphere_id).order_by("name")
+        company_count = sphere.companies.count()
+        return render(
+            request,
+            "ui/settings/sphere_delete_modal.html",
+            {"sphere": sphere, "company_count": company_count, "other_spheres": other_spheres},
+        )
+
     if request.method != "POST":
         return JsonResponse({"ok": False, "error": "Method not allowed."}, status=405)
-    sphere = get_object_or_404(CompanySphere, id=sphere_id)
+
+    action = request.POST.get("action", "delete")
+
+    if action == "merge":
+        target_id = request.POST.get("target_id")
+        if not target_id:
+            return JsonResponse({"ok": False, "error": "Целевая сфера не выбрана."}, status=400)
+        target_sphere = get_object_or_404(CompanySphere, id=target_id)
+        # Переносим все компании на целевую сферу
+        for company in sphere.companies.all():
+            company.spheres.add(target_sphere)
+
     sphere.delete()
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return JsonResponse({"ok": True})

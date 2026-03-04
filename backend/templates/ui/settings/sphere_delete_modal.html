@@ -1,0 +1,44 @@
+<div class="bg-white border rounded-2xl p-4 space-y-4" id="sphereDeleteModal">
+  <div class="flex items-center justify-between">
+    <h2 class="text-lg font-semibold">Удалить сферу «{{ sphere.name }}»</h2>
+    <button type="button" class="btn btn-outline flex-shrink-0" style="padding:.35rem .5rem;font-size:.875rem" data-close-dict-modal aria-label="Закрыть" title="Закрыть">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </button>
+  </div>
+
+  {% if company_count > 0 %}
+    <div class="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+      С этой сферой связано <strong>{{ company_count }} компани{% if company_count == 1 %}я{% elif company_count < 5 %}и{% else %}й{% endif %}</strong>.
+    </div>
+  {% else %}
+    <div class="text-sm text-brand-dark/60">С этой сферой не связано ни одной компании.</div>
+  {% endif %}
+
+  <!-- Вариант 1: просто удалить -->
+  <form method="post" data-sphere-delete-form>
+    {% csrf_token %}
+    <input type="hidden" name="action" value="delete">
+    <button type="submit" class="btn btn-danger w-full">
+      Удалить безвозвратно{% if company_count > 0 %} (у компаний сфера исчезнет){% endif %}
+    </button>
+  </form>
+
+  {% if company_count > 0 and other_spheres %}
+    <div class="border-t pt-3 space-y-2">
+      <div class="text-sm font-medium">Или перенести компании на другую сферу и удалить:</div>
+      <form method="post" data-sphere-merge-form class="space-y-2">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="merge">
+        <select name="target_id" class="input w-full" required>
+          <option value="">— Выберите сферу —</option>
+          {% for s in other_spheres %}
+            <option value="{{ s.id }}">{{ s.name }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-primary w-full">Перенести и удалить</button>
+      </form>
+    </div>
+  {% endif %}
+</div>

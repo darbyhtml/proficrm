@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.db.models import Count
 
 from accounts.models import User
 from accounts.scope import apply_company_scope
@@ -25,8 +26,15 @@ class CompanyStatusAdmin(admin.ModelAdmin):
 @admin.register(CompanySphere)
 class CompanySphereAdmin(admin.ModelAdmin):
     search_fields = ("name",)
-    list_display = ("name", "is_important")
+    list_display = ("name", "is_important", "company_count")
     list_editable = ("is_important",)
+
+    @admin.display(description="Компаний", ordering="company_count")
+    def company_count(self, obj):
+        return obj.company_count
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).annotate(company_count=Count("companies"))
 
 
 @admin.register(Region)
