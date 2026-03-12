@@ -2098,8 +2098,8 @@ def import_company_histories(
     valid_amo_ids = [aid for aid in company_amo_ids if companies_map.get(int(aid))]
     result.companies_processed = len(valid_amo_ids)
 
-    # ── Батчинг: один запрос к amoCRM на 50 компаний вместо N запросов ──────
-    BATCH_SIZE = 50
+    # ── Батчинг: amoCRM Events API допускает max 10 entity_id за запрос ─────
+    BATCH_SIZE = 10
     for batch_start in range(0, len(valid_amo_ids), BATCH_SIZE):
         batch = valid_amo_ids[batch_start:batch_start + BATCH_SIZE]
         logger.info(
