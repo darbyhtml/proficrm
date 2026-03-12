@@ -2126,7 +2126,15 @@ def import_company_histories(
             logger.error(f"import_company_histories: ошибка батча (первые ids: {batch[:3]}): {e}")
             continue
 
-        for ev in (events_raw or []):
+        for _debug_idx, ev in enumerate(events_raw or []):
+            # DEBUG: логируем первые 2 события, чтобы увидеть реальную структуру
+            if _debug_idx < 2:
+                logger.warning(
+                    f"[DEBUG history event] id={ev.get('id')} "
+                    f"value_before={ev.get('value_before')!r} "
+                    f"value_after={ev.get('value_after')!r} "
+                    f"created_by={ev.get('created_by')!r}"
+                )
             amo_event_id = str(ev.get("id") or "")
             if not amo_event_id:
                 continue
