@@ -179,20 +179,71 @@ class Command(BaseCommand):
             f"пропущено (компания удалена) {transfer_missing}"
         )
 
+        # --- 3. Синтетическое "создана" для компаний без такого события ---
+        self.stdout.write("\nДобавляем синтетическое событие «Создана» для остальных компаний...")
+
+        # Компании, у которых уже есть "created" event
+        already_have_created: set[uuid.UUID] = set(
+            CompanyHistoryEvent.objects.filter(
+                event_type=CompanyHistoryEvent.EventType.CREATED,
+            ).values_list("company_id", flat=True)
+        )
+
+        # В dry-run включаем и те, что только что добавили (они ещё не в БД)
+        if dry_run:
+            for ev in batch:  # batch пустой, но на случай остатка
+                already_have_created.add(ev.company_id)
+
+        companies_missing_created = (
+            Company.objects
+            .exclude(id__in=already_have_created)
+            .only("id", "created_at")
+            .order_by("created_at")
+        )
+        synthetic_count = 0
+        batch = []
+
+        for company in companies_missing_created.iterator(chunk_size=batch_size):
+            if company.created_at is None:
+                continue
+            batch.append(CompanyHistoryEvent(
+                company_id=company.id,
+                event_type=CompanyHistoryEvent.EventType.CREATED,
+                source=CompanyHistoryEvent.Source.LOCAL,
+                actor=None,
+                actor_name="",
+                occurred_at=company.created_at,
+            ))
+            synthetic_count += 1
+
+            if len(batch) >= batch_size:
+                if not dry_run:
+                    with transaction.atomic():
+                        CompanyHistoryEvent.objects.bulk_create(batch, ignore_conflicts=True)
+                batch = []
+
+        if batch and not dry_run:
+            with transaction.atomic():
+                CompanyHistoryEvent.objects.bulk_create(batch, ignore_conflicts=True)
+
+        self.stdout.write(
+            f"  Синтетических «Создана»: {'будет создано' if dry_run else 'создано'} {synthetic_count}"
+        )
+
         # --- Итог ---
-        total = created_total + transfer_created
+        total = created_total + transfer_created + synthetic_count
         self.stdout.write("")
         if dry_run:
             self.stdout.write(
                 self.style.SUCCESS(
                     f"[DRY-RUN] Итого событий для создания: {total} "
-                    f"({created_total} создание + {transfer_created} передача)"
+                    f"({created_total} с автором + {synthetic_count} синтетических + {transfer_created} передача)"
                 )
             )
         else:
             self.stdout.write(
                 self.style.SUCCESS(
                     f"Готово! Создано событий: {total} "
-                    f"({created_total} создание + {transfer_created} передача)"
+                    f"({created_total} с автором + {synthetic_count} синтетических + {transfer_created} передача)"
                 )
             )
