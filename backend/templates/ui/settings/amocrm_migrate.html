@@ -14,7 +14,9 @@
       </div>
       <form method="post" id="migrate-form" class="grid grid-cols-1 md:grid-cols-2 gap-3" data-progress-url="{% url 'settings_amocrm_migrate_progress' %}">
         {% csrf_token %}
-        <input type="hidden" name="offset" value="{{ form.offset.value|default:0 }}" />
+        <input type="hidden" name="offset" value="0" />
+        <input type="hidden" name="prev_events_created" value="0" />
+        <input type="hidden" name="prev_events_skipped" value="0" />
 
         <div class="flex items-end">
           <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
