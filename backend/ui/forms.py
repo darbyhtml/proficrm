@@ -1067,6 +1067,11 @@ class AmoMigrateFilterForm(forms.Form):
     import_tasks = forms.BooleanField(label="Импортировать задачи", required=False, initial=True)
     import_notes = forms.BooleanField(label="Импортировать заметки", required=False, initial=True)
     import_contacts = forms.BooleanField(label="Импортировать контакты (может быть медленно)", required=False, initial=False)
+    import_history = forms.BooleanField(
+        label="Только импорт истории передвижений (быстро, данные карточек не изменяются)",
+        required=False,
+        initial=False,
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1077,12 +1082,16 @@ class AmoMigrateFilterForm(forms.Form):
     def clean(self):
         cleaned_data = super().clean()
         migrate_all = cleaned_data.get("migrate_all_companies", False)
+        import_history = cleaned_data.get("import_history", False)
         custom_field_id = cleaned_data.get("custom_field_id")
-        
-        # Если не выбрана миграция всех компаний, то кастомное поле обязательно
-        if not migrate_all and not custom_field_id:
-            raise forms.ValidationError("Выберите кастомное поле или включите опцию 'Мигрировать все компании ответственного'.")
-        
+
+        # Если режим «только история» — фильтр по полю не обязателен
+        if not migrate_all and not import_history and not custom_field_id:
+            raise forms.ValidationError(
+                "Выберите кастомное поле, включите 'Мигрировать все компании' "
+                "или выберите режим 'Только импорт истории'."
+            )
+
         return cleaned_data
 
 

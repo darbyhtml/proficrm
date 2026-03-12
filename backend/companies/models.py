@@ -708,3 +708,79 @@ class CompanySearchIndex(models.Model):
             GinIndex(fields=["normalized_inns"], name="cmp_si_ninns_gin_idx"),
         ]
 
+
+class CompanyHistoryEvent(models.Model):
+    """
+    История передвижений карточки компании.
+    Хранит события: создание карточки и передачи между ответственными.
+    Источник — либо наша CRM (source=local), либо импорт из amoCRM (source=amocrm).
+    Текстовые *_name поля заполняются всегда — для корректного отображения
+    даже если пользователь был удалён или пришёл без локального аккаунта.
+    """
+
+    class EventType(models.TextChoices):
+        CREATED = "created", "Создана"
+        ASSIGNED = "assigned", "Передана"
+
+    class Source(models.TextChoices):
+        LOCAL = "local", "CRM"
+        AMOCRM = "amocrm", "amoCRM"
+
+    company = models.ForeignKey(
+        Company,
+        on_delete=models.CASCADE,
+        related_name="history_events",
+        verbose_name="Компания",
+    )
+    event_type = models.CharField(
+        "Тип события", max_length=16, choices=EventType.choices, db_index=True
+    )
+
+    actor_name = models.CharField("Кто выполнил (текст)", max_length=255, blank=True, default="")
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="actor_history_events",
+        verbose_name="Кто выполнил",
+    )
+
+    from_user_name = models.CharField("От кого (текст)", max_length=255, blank=True, default="")
+    from_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        verbose_name="От кого",
+    )
+
+    to_user_name = models.CharField("Кому (текст)", max_length=255, blank=True, default="")
+    to_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        verbose_name="Кому",
+    )
+
+    occurred_at = models.DateTimeField("Когда произошло", db_index=True)
+    source = models.CharField(
+        "Источник", max_length=16, choices=Source.choices, default=Source.LOCAL, db_index=True
+    )
+    # ID события в amoCRM — для дедупликации при повторном импорте.
+    # Для "created"-события синтетический: f"created_{amo_company_id}".
+    external_id = models.CharField("Внешний ID", max_length=64, blank=True, default="", db_index=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-occurred_at"]
+        verbose_name = "История компании"
+        verbose_name_plural = "История компаний"
+        indexes = [
+            models.Index(fields=["company", "-occurred_at"]),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.get_event_type_display()} {self.company_id} @ {self.occurred_at:%d.%m.%Y %H:%M}"
+

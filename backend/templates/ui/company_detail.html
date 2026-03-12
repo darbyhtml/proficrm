@@ -426,6 +426,16 @@
             </button>
           {% endif %}
 
+          <!-- История передвижений (Classic) -->
+          {% if history_events %}
+            <button type="button" class="btn btn-outline btn-sm" id="openHistoryModal"
+                    title="История передвижений" aria-label="История передвижений">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+            </button>
+          {% endif %}
+
           <!-- Копирование ссылки на карточку -->
           <button type="button" class="btn btn-outline btn-sm" data-copy-text="{{ request.build_absolute_uri }}" title="Копировать ссылку" aria-label="Копировать ссылку">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -3299,6 +3309,16 @@
             {% elif can_request_delete %}
               <button type="button" class="btn btn-outline btn-xs md:btn-sm btn-danger" id="openDeleteRequestModal">
                 {% if delete_req %}Отменить запрос{% else %}Запросить удаление{% endif %}
+              </button>
+            {% endif %}
+
+            <!-- История передвижений (Modern) -->
+            {% if history_events %}
+              <button type="button" class="btn btn-outline btn-xs md:btn-sm" id="openHistoryModalModern"
+                      title="История передвижений" aria-label="История передвижений">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
               </button>
             {% endif %}
 
@@ -8015,6 +8035,109 @@
       });
     })();
   </script>
+
+  <!-- ===== МОДАЛКА: История передвижений карточки ===== -->
+  {% if history_events %}
+  <div id="historyModal" class="fixed inset-0 z-[250] hidden">
+    <div class="fixed inset-0 bg-black/35" id="historyModalOverlay"></div>
+    <div class="absolute inset-x-4 top-14 mx-auto max-w-lg" style="max-height:calc(100vh - 4rem)">
+      <div class="bg-white border rounded-2xl p-4 max-h-full overflow-y-auto shadow-xl">
+        <div class="flex items-center justify-between mb-4">
+          <div class="font-semibold text-base flex items-center gap-2">
+            <svg class="w-5 h-5 text-brand-teal flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            История передвижений
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" id="closeHistoryModal" aria-label="Закрыть">✕</button>
+        </div>
+
+        <ol class="relative border-l border-brand-soft/60 ml-3 space-y-0">
+          {% for ev in history_events %}
+            <li class="mb-5 ml-5">
+              <!-- Точка на таймлайне -->
+              <span class="absolute -left-[9px] flex h-[18px] w-[18px] items-center justify-center rounded-full
+                {% if ev.event_type == 'created' %}bg-green-50 border-2 border-green-400{% else %}bg-blue-50 border-2 border-blue-400{% endif %}">
+                {% if ev.event_type == 'created' %}
+                  <svg class="w-2.5 h-2.5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v3.586L7.707 9.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 10.586V7z" clip-rule="evenodd"/>
+                  </svg>
+                {% else %}
+                  <svg class="w-2.5 h-2.5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd"/>
+                  </svg>
+                {% endif %}
+              </span>
+
+              <!-- Дата + источник -->
+              <time class="mb-0.5 block text-xs text-brand-dark/50 leading-tight">
+                {{ ev.occurred_at|date:"d.m.Y H:i" }}
+                <span class="ml-1 text-[10px] rounded px-1 {% if ev.source == 'amocrm' %}bg-orange-100 text-orange-600{% else %}bg-teal-100 text-teal-600{% endif %}">
+                  {% if ev.source == 'amocrm' %}amoCRM{% else %}CRM{% endif %}
+                </span>
+              </time>
+
+              <!-- Описание события -->
+              {% if ev.event_type == 'created' %}
+                <p class="text-sm text-brand-dark/80 leading-snug">
+                  <span class="font-medium text-green-700">Создана</span>
+                  {% if ev.actor_name %}
+                    <span class="text-brand-dark/60"> · </span><span class="font-medium">{{ ev.actor_name }}</span>
+                  {% endif %}
+                </p>
+              {% else %}
+                <p class="text-sm text-brand-dark/80 leading-snug">
+                  <span class="font-medium text-blue-700">Передана</span>
+                  {% if ev.from_user_name %}
+                    <span class="text-brand-dark/60"> от </span><span class="font-medium">{{ ev.from_user_name }}</span>
+                  {% endif %}
+                  {% if ev.to_user_name %}
+                    <span class="text-brand-dark/60"> → </span><span class="font-medium">{{ ev.to_user_name }}</span>
+                  {% endif %}
+                  {% if ev.actor_name and ev.actor_name != ev.from_user_name and ev.actor_name != ev.to_user_name %}
+                    <span class="text-brand-dark/40 text-xs"> (выполнил: {{ ev.actor_name }})</span>
+                  {% endif %}
+                </p>
+              {% endif %}
+            </li>
+          {% endfor %}
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      const modal = document.getElementById('historyModal');
+      if (!modal) return;
+
+      function openHistoryModal() {
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+      }
+      function closeHistoryModal() {
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+      }
+
+      // Кнопки открытия (classic + modern)
+      ['openHistoryModal', 'openHistoryModalModern'].forEach(function(id) {
+        var btn = document.getElementById(id);
+        if (btn) btn.addEventListener('click', openHistoryModal);
+      });
+
+      // Закрытие
+      var closeBtn = document.getElementById('closeHistoryModal');
+      if (closeBtn) closeBtn.addEventListener('click', closeHistoryModal);
+      var overlay = document.getElementById('historyModalOverlay');
+      if (overlay) overlay.addEventListener('click', closeHistoryModal);
+      document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeHistoryModal();
+      });
+    })();
+  </script>
+  {% endif %}
+
 {% endblock %}
 
 

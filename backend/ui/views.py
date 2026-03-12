@@ -26,6 +26,7 @@ from companies.models import (
     ContractType,
     Company,
     CompanyDeal,
+    CompanyHistoryEvent,
     CompanyNote,
     CompanyNoteAttachment,
     CompanySphere,
@@ -95,7 +96,13 @@ from .forms import (
 from ui.models import UiGlobalConfig, AmoApiConfig, UiUserPreference
 
 from amocrm.client import AmoApiError, AmoClient
-from amocrm.migrate import fetch_amo_users, fetch_company_custom_fields, migrate_filtered
+from amocrm.migrate import (
+    fetch_amo_users,
+    fetch_company_custom_fields,
+    fetch_matched_amo_company_ids,
+    import_company_histories,
+    migrate_filtered,
+)
 from crm.utils import require_admin, get_effective_user, get_view_as_user
 from policy.decorators import policy_required
 from policy.engine import decide as policy_decide
@@ -2997,8 +3004,34 @@ def company_bulk_transfer(request: HttpRequest) -> HttpResponse:
             "task_filter": request.POST.get("task_filter", ""),
         }
     
+    # Собираем данные ДО обновления (нужен старый ответственный для истории)
+    _hist_items = list(qs_to_update.values_list("id", "responsible_id"))
+    _old_resp_ids = list({rid for _, rid in _hist_items if rid})
+    _old_resp_map = {
+        str(u.id): u
+        for u in User.objects.filter(id__in=_old_resp_ids)
+    } if _old_resp_ids else {}
+
     updated = qs_to_update.update(responsible=new_resp, branch=new_resp.branch, updated_at=now_ts)
     _invalidate_company_count_cache()  # Инвалидируем кэш при массовом переназначении
+
+    # Создаём события истории для каждой перенесённой компании
+    _hist_now = now_ts
+    CompanyHistoryEvent.objects.bulk_create([
+        CompanyHistoryEvent(
+            company_id=comp_id,
+            event_type=CompanyHistoryEvent.EventType.ASSIGNED,
+            source=CompanyHistoryEvent.Source.LOCAL,
+            actor=user,
+            actor_name=str(user),
+            from_user_id=old_resp_id,
+            from_user_name=str(_old_resp_map[str(old_resp_id)]) if old_resp_id and str(old_resp_id) in _old_resp_map else "",
+            to_user=new_resp,
+            to_user_name=str(new_resp),
+            occurred_at=_hist_now,
+        )
+        for comp_id, old_resp_id in _hist_items
+    ], ignore_conflicts=True)
     
     # Аудит-лог массовой передачи
     forbidden_count = len(transfer_check.get("forbidden", []))
@@ -3428,6 +3461,14 @@ def company_create(request: HttpRequest) -> HttpResponse:
                 company_id=company.id,
                 message=f"Создана компания: {company.name}",
             )
+            CompanyHistoryEvent.objects.create(
+                company=company,
+                event_type=CompanyHistoryEvent.EventType.CREATED,
+                source=CompanyHistoryEvent.Source.LOCAL,
+                actor=user,
+                actor_name=str(user),
+                occurred_at=company.created_at,
+            )
             return redirect("company_detail", company_id=company.id)
     else:
         form = CompanyCreateForm(user=user)
@@ -3765,6 +3806,10 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     activity = []
     if can_view_activity:
         activity = ActivityEvent.objects.filter(company_id=company.id).select_related("actor")[:50]
+
+    history_events = list(
+        company.history_events.select_related("actor", "from_user", "to_user").order_by("-occurred_at")[:50]
+    )
     quick_form = CompanyQuickEditForm(instance=company)
     contract_form = CompanyContractForm(instance=company)
 
@@ -3874,6 +3919,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "notes_overview_preview": notes_overview_preview,  # Заметки для превью на вкладке «Обзор» (без текущей display_note)
             "statuses": CompanyStatus.objects.order_by("name"),  # Для быстрого изменения статуса в Modern
             "contacts_rest": list(contacts)[5:],  # Контакты с 6-го для кнопки «Показать всех» в Modern
+            "history_events": history_events,  # История передвижений карточки
         },
     )
 
@@ -5601,6 +5647,18 @@ def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
         company_id=company.id,
         message="Изменён ответственный компании",
         meta={"from": str(old_resp) if old_resp else "", "to": str(new_resp)},
+    )
+    CompanyHistoryEvent.objects.create(
+        company=company,
+        event_type=CompanyHistoryEvent.EventType.ASSIGNED,
+        source=CompanyHistoryEvent.Source.LOCAL,
+        actor=user,
+        actor_name=str(user),
+        from_user=old_resp,
+        from_user_name=str(old_resp) if old_resp else "",
+        to_user=new_resp,
+        to_user_name=str(new_resp),
+        occurred_at=timezone.now(),
     )
     if new_resp.id != user.id:
         notify(
@@ -10315,30 +10373,63 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                                     run_id = None
                                 else:
                                     try:
+                                        import_history_only = bool(form.cleaned_data.get("import_history"))
                                         target_responsible = form.cleaned_data.get("target_responsible")
-                                        result = migrate_filtered(
-                                            client=client,
-                                            actor=request.user,
-                                            responsible_user_id=responsible_user_id,
-                                            sphere_field_id=int(custom_field_id),
-                                            sphere_option_id=form.cleaned_data.get("custom_value_enum_id") or None,
-                                            sphere_label=form.cleaned_data.get("custom_value_label") or None,
-                                            limit_companies=batch_size,
-                                            offset=int(form.cleaned_data.get("offset") or 0),
-                                            dry_run=dry_run,
-                                            import_tasks=bool(form.cleaned_data.get("import_tasks")),
-                                            import_notes=bool(form.cleaned_data.get("import_notes")),
-                                            import_contacts=bool(form.cleaned_data.get("import_contacts")),
-                                            company_fields_meta=fields,
-                                            skip_field_filter=migrate_all,
-                                            region_field_id=getattr(cfg, "region_custom_field_id", None) or None,
-                                            target_responsible=target_responsible,
-                                        )
-                                        migrate_responsible_user_id = responsible_user_id
-                                        if dry_run:
-                                            messages.success(request, "Проверка (dry-run) выполнена.")
+
+                                        if import_history_only:
+                                            # Режим «только история» — не меняем данные карточек
+                                            sphere_field_id_hist = int(custom_field_id) if custom_field_id else 0
+                                            company_amo_ids = fetch_matched_amo_company_ids(
+                                                client,
+                                                responsible_user_id=responsible_user_id,
+                                                sphere_field_id=sphere_field_id_hist,
+                                                sphere_option_id=form.cleaned_data.get("custom_value_enum_id") or None,
+                                                sphere_label=form.cleaned_data.get("custom_value_label") or None,
+                                                skip_field_filter=migrate_all,
+                                            )
+                                            result = import_company_histories(
+                                                client,
+                                                actor=request.user,
+                                                dry_run=dry_run,
+                                                company_amo_ids=company_amo_ids,
+                                            )
+                                            migrate_responsible_user_id = responsible_user_id
+                                            if dry_run:
+                                                messages.success(
+                                                    request,
+                                                    f"Dry-run: найдено {len(company_amo_ids)} компаний, "
+                                                    f"событий для создания: {result.events_created}."
+                                                )
+                                            else:
+                                                messages.success(
+                                                    request,
+                                                    f"История импортирована: создано {result.events_created} событий, "
+                                                    f"пропущено {result.events_skipped} (дубликаты)."
+                                                )
                                         else:
-                                            messages.success(request, "Импорт выполнен.")
+                                            result = migrate_filtered(
+                                                client=client,
+                                                actor=request.user,
+                                                responsible_user_id=responsible_user_id,
+                                                sphere_field_id=int(custom_field_id),
+                                                sphere_option_id=form.cleaned_data.get("custom_value_enum_id") or None,
+                                                sphere_label=form.cleaned_data.get("custom_value_label") or None,
+                                                limit_companies=batch_size,
+                                                offset=int(form.cleaned_data.get("offset") or 0),
+                                                dry_run=dry_run,
+                                                import_tasks=bool(form.cleaned_data.get("import_tasks")),
+                                                import_notes=bool(form.cleaned_data.get("import_notes")),
+                                                import_contacts=bool(form.cleaned_data.get("import_contacts")),
+                                                company_fields_meta=fields,
+                                                skip_field_filter=migrate_all,
+                                                region_field_id=getattr(cfg, "region_custom_field_id", None) or None,
+                                                target_responsible=target_responsible,
+                                            )
+                                            migrate_responsible_user_id = responsible_user_id
+                                            if dry_run:
+                                                messages.success(request, "Проверка (dry-run) выполнена.")
+                                            else:
+                                                messages.success(request, "Импорт выполнен.")
                                     finally:
                                         # Удаляем ключ только если lock реально взяли (мы в ветке else при lock_acquired=True).
                                         cache.delete(lock_key)

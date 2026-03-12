@@ -14,7 +14,7 @@ from django.utils.dateparse import parse_datetime, parse_date
 from datetime import date as dt_date, datetime, time as dt_time, timezone as dt_timezone
 
 from accounts.models import User
-from companies.models import Company, CompanyNote, CompanySphere, Region, Contact, ContactEmail, ContactPhone, CompanyPhone, CompanyEmail
+from companies.models import Company, CompanyHistoryEvent, CompanyNote, CompanySphere, Region, Contact, ContactEmail, ContactPhone, CompanyPhone, CompanyEmail
 from companies.region_utils import find_region_by_name
 from tasksapp.models import Task
 
@@ -2021,6 +2021,220 @@ def fetch_company_custom_fields(client: AmoClient) -> list[dict[str, Any]]:
     emb = data.get("_embedded") or {}
     fields = emb.get("custom_fields") or []
     return fields if isinstance(fields, list) else []
+
+
+def _extract_resp_id(value_list: Any) -> int:
+    """Извлекает responsible_user_id из value_before/value_after события amoCRM."""
+    if not isinstance(value_list, list) or not value_list:
+        return 0
+    item = value_list[0]
+    if not isinstance(item, dict):
+        return 0
+    try:
+        return int(item.get("responsible_user_id") or 0)
+    except (ValueError, TypeError):
+        return 0
+
+
+@dataclass
+class HistoryImportResult:
+    companies_processed: int = 0
+    events_created: int = 0       # реально создано (или «would create» в dry-run)
+    events_skipped: int = 0       # уже существуют (дубликаты)
+    errors: int = 0
+    dry_run: bool = False
+    preview: list[dict] = None    # заполняется в dry-run (первые 50 событий)
+
+    def __post_init__(self):
+        if self.preview is None:
+            self.preview = []
+
+
+def import_company_histories(
+    client: AmoClient,
+    *,
+    actor: User,
+    dry_run: bool = True,
+    company_amo_ids: list[int],
+) -> HistoryImportResult:
+    """
+    Импортирует историю передвижений карточек компаний из amoCRM Events API.
+
+    Для каждой компании по её amocrm_company_id запрашивает события типа
+    entity_responsible_changed и создаёт CompanyHistoryEvent(source="amocrm").
+
+    Дедупликация по external_id = str(amo_event_id).
+    В dry-run режиме ничего не пишет в БД, заполняет result.preview.
+
+    Эндпоинт amoCRM: GET /api/v4/events
+      ?filter[entity_type][]=company
+      &filter[entity_id][]=<amo_id>
+      &filter[type][]=entity_responsible_changed
+    """
+    result = HistoryImportResult(dry_run=dry_run)
+
+    if not company_amo_ids:
+        return result
+
+    # Словарь amoCRM-пользователей: amo_user_id → dict
+    amo_users_list = fetch_amo_users(client)
+    amo_user_by_id: dict[int, dict] = {}
+    for u in amo_users_list:
+        try:
+            uid = int(u.get("id") or 0)
+            if uid:
+                amo_user_by_id[uid] = u
+        except (TypeError, ValueError):
+            pass
+
+    # Карта amocrm_company_id → Company
+    companies_map: dict[int, Company] = {
+        int(c.amocrm_company_id): c
+        for c in Company.objects.filter(amocrm_company_id__in=company_amo_ids)
+        if c.amocrm_company_id
+    }
+
+    for amo_id in company_amo_ids:
+        company = companies_map.get(int(amo_id))
+        if company is None:
+            logger.warning(f"import_company_histories: компания с amocrm_id={amo_id} не найдена в БД, пропускаем")
+            continue
+
+        result.companies_processed += 1
+
+        try:
+            events_raw = client.get_all_pages(
+                "/api/v4/events",
+                params={
+                    "filter[entity_type][]": "company",
+                    "filter[entity_id][]": str(amo_id),
+                    "filter[type][]": "entity_responsible_changed",
+                },
+                embedded_key="events",
+                limit=50,
+                max_pages=20,
+            )
+        except (AmoApiError, RateLimitError) as e:
+            result.errors += 1
+            logger.error(f"import_company_histories: ошибка для company {company.id} (amo {amo_id}): {e}")
+            continue
+
+        for ev in (events_raw or []):
+            amo_event_id = str(ev.get("id") or "")
+            if not amo_event_id:
+                continue
+
+            created_at_ts = ev.get("created_at") or 0
+            try:
+                occurred_at = datetime.fromtimestamp(int(created_at_ts), tz=dt_timezone.utc)
+            except (ValueError, OSError, OverflowError):
+                continue
+
+            from_amo_uid = _extract_resp_id(ev.get("value_before"))
+            to_amo_uid = _extract_resp_id(ev.get("value_after"))
+            actor_amo_uid = int(ev.get("created_by") or 0)
+
+            from_amo_user = amo_user_by_id.get(from_amo_uid, {}) if from_amo_uid else {}
+            to_amo_user = amo_user_by_id.get(to_amo_uid, {}) if to_amo_uid else {}
+            actor_amo_user = amo_user_by_id.get(actor_amo_uid, {}) if actor_amo_uid else {}
+
+            from_user_name = (from_amo_user.get("name") or "")[:255]
+            to_user_name = (to_amo_user.get("name") or "")[:255]
+            actor_name = (actor_amo_user.get("name") or "")[:255]
+
+            from_user = _map_amo_user_to_local(from_amo_user) if from_amo_user else None
+            to_user = _map_amo_user_to_local(to_amo_user) if to_amo_user else None
+            local_actor = _map_amo_user_to_local(actor_amo_user) if actor_amo_user else None
+
+            if dry_run:
+                result.events_created += 1
+                if len(result.preview) < 50:
+                    result.preview.append({
+                        "company_name": company.name,
+                        "amo_id": amo_id,
+                        "event_type": "assigned",
+                        "occurred_at": occurred_at.strftime("%d.%m.%Y %H:%M"),
+                        "from": from_user_name,
+                        "to": to_user_name,
+                        "actor": actor_name,
+                    })
+                continue
+
+            _, created = CompanyHistoryEvent.objects.get_or_create(
+                company=company,
+                external_id=amo_event_id,
+                defaults={
+                    "event_type": CompanyHistoryEvent.EventType.ASSIGNED,
+                    "source": CompanyHistoryEvent.Source.AMOCRM,
+                    "occurred_at": occurred_at,
+                    "actor": local_actor,
+                    "actor_name": actor_name,
+                    "from_user": from_user,
+                    "from_user_name": from_user_name,
+                    "to_user": to_user,
+                    "to_user_name": to_user_name,
+                },
+            )
+            if created:
+                result.events_created += 1
+            else:
+                result.events_skipped += 1
+
+        # "Создана" — синтетическое событие из метаданных компании
+        created_ext_id = f"created_{amo_id}"
+        if dry_run:
+            if not CompanyHistoryEvent.objects.filter(
+                company=company,
+                external_id=created_ext_id,
+            ).exists():
+                result.events_created += 1
+                if len(result.preview) < 50:
+                    result.preview.append({
+                        "company_name": company.name,
+                        "amo_id": amo_id,
+                        "event_type": "created",
+                        "occurred_at": company.created_at.strftime("%d.%m.%Y %H:%M") if company.created_at else "?",
+                        "from": "",
+                        "to": "",
+                        "actor": "",
+                    })
+        else:
+            CompanyHistoryEvent.objects.get_or_create(
+                company=company,
+                external_id=created_ext_id,
+                defaults={
+                    "event_type": CompanyHistoryEvent.EventType.CREATED,
+                    "source": CompanyHistoryEvent.Source.AMOCRM,
+                    "occurred_at": company.created_at,
+                    "actor_name": "",
+                },
+            )
+
+    return result
+
+
+def fetch_matched_amo_company_ids(
+    client: AmoClient,
+    *,
+    responsible_user_id: int,
+    sphere_field_id: int,
+    sphere_option_id: int | None,
+    sphere_label: str | None,
+    skip_field_filter: bool = False,
+) -> list[int]:
+    """
+    Возвращает список amoCRM ID компаний, соответствующих фильтру по ответственному
+    и (опционально) кастомному полю. Используется в history-only режиме.
+    """
+    companies = fetch_companies_by_responsible(client, responsible_user_id, with_contacts=False)
+    if skip_field_filter:
+        matched = companies
+    else:
+        matched = [
+            c for c in companies
+            if _custom_has_value(c, sphere_field_id, option_id=sphere_option_id, label=sphere_label)
+        ]
+    return [int(c["id"]) for c in matched if c.get("id")]
 
 
 def _field_options(field: dict[str, Any]) -> list[dict[str, Any]]:

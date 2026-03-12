@@ -84,22 +84,36 @@
 
         <div class="flex items-end">
           <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
-            <input type="checkbox" name="import_tasks" value="on" {% if form.import_tasks.value %}checked{% endif %} />
+            <input type="checkbox" name="import_tasks" value="on" {% if form.import_tasks.value %}checked{% endif %} id="cb_import_tasks" />
             Импортировать задачи
           </label>
         </div>
         <div class="flex items-end">
           <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
-            <input type="checkbox" name="import_notes" value="on" {% if form.import_notes.value %}checked{% endif %} />
+            <input type="checkbox" name="import_notes" value="on" {% if form.import_notes.value %}checked{% endif %} id="cb_import_notes" />
             Импортировать заметки
           </label>
         </div>
         <div class="flex items-end">
           <label class="inline-flex items-center gap-2 text-sm text-brand-dark/80">
-            <input type="checkbox" name="import_contacts" value="on" {% if form.import_contacts.value %}checked{% endif %} />
+            <input type="checkbox" name="import_contacts" value="on" {% if form.import_contacts.value %}checked{% endif %} id="cb_import_contacts" />
             Импортировать контакты
             <span class="text-xs muted-2">(может быть медленно)</span>
           </label>
+        </div>
+
+        <div class="md:col-span-2 border-t pt-3">
+          <label class="inline-flex items-center gap-2 text-sm font-medium text-brand-dark/80 cursor-pointer" id="lbl_import_history">
+            <input type="checkbox" name="import_history" value="on" {% if form.import_history.value %}checked{% endif %} id="cb_import_history" />
+            <span>
+              <span class="text-brand-teal font-semibold">Только импорт истории передвижений</span>
+              <span class="font-normal text-brand-dark/60"> — быстро, данные карточек не изменяются</span>
+            </span>
+          </label>
+          <p class="text-xs text-brand-dark/50 mt-1 ml-6">
+            Загружает из amoCRM кто и когда передавал карточку. Отображается в карточке компании иконкой часов.
+            Компании фильтруются так же, как при обычном импорте (по ответственному и полю).
+          </p>
         </div>
 
         <div class="md:col-span-2 flex gap-2">
@@ -119,6 +133,53 @@
             <b>Dry-run: данные НЕ сохранены</b>
           </div>
         {% endif %}
+
+        {# ---- Результат для режима «только история» ---- #}
+        {% if form.import_history.value %}
+          <div class="text-sm text-brand-dark/80 space-y-1">
+            <div>Компаний обработано: <b>{{ result.companies_processed }}</b></div>
+            <div>
+              {% if form.dry_run.value %}Событий будет создано{% else %}Событий создано{% endif %}: <b>{{ result.events_created }}</b>
+            </div>
+            <div>Пропущено (уже есть): <b>{{ result.events_skipped }}</b></div>
+            {% if result.errors %}<div class="text-red-600">Ошибок: <b>{{ result.errors }}</b></div>{% endif %}
+          </div>
+          {% if result.preview %}
+            <div class="mt-4">
+              <div class="font-medium text-sm mb-2">
+                {% if form.dry_run.value %}Предпросмотр событий (первые {{ result.preview|length }}):{% else %}Созданные события (первые {{ result.preview|length }}):{% endif %}
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-xs border-collapse">
+                  <thead>
+                    <tr class="bg-brand-soft/40">
+                      <th class="text-left px-2 py-1 border border-brand-soft">Компания</th>
+                      <th class="text-left px-2 py-1 border border-brand-soft">Тип</th>
+                      <th class="text-left px-2 py-1 border border-brand-soft">Дата</th>
+                      <th class="text-left px-2 py-1 border border-brand-soft">От</th>
+                      <th class="text-left px-2 py-1 border border-brand-soft">Кому</th>
+                      <th class="text-left px-2 py-1 border border-brand-soft">Выполнил</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for ev in result.preview %}
+                      <tr class="hover:bg-brand-soft/20">
+                        <td class="px-2 py-1 border border-brand-soft">{{ ev.company_name }}</td>
+                        <td class="px-2 py-1 border border-brand-soft">
+                          {% if ev.event_type == "created" %}<span class="text-green-700">Создана</span>{% else %}<span class="text-blue-700">Передана</span>{% endif %}
+                        </td>
+                        <td class="px-2 py-1 border border-brand-soft whitespace-nowrap">{{ ev.occurred_at }}</td>
+                        <td class="px-2 py-1 border border-brand-soft">{{ ev.from }}</td>
+                        <td class="px-2 py-1 border border-brand-soft">{{ ev.to }}</td>
+                        <td class="px-2 py-1 border border-brand-soft">{{ ev.actor }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          {% endif %}
+        {% else %}
         {% if result.error %}
           <div class="mb-4 rounded-xl border border-red-500/60 bg-red-500/20 px-4 py-3 text-sm text-red-700">
             <div class="font-medium mb-1">⚠️ Ошибка миграции:</div>
@@ -633,7 +694,7 @@
               </div>
             {% endif %}
           </div>
-        {% endif %}
+        {% endif %}{# /import_history else #}
 
         {% if result.companies_has_more and not form.dry_run.value %}
           <div class="mt-4 border-t pt-4">
@@ -737,8 +798,29 @@
       
       if (migrateAllCheckbox) {
         migrateAllCheckbox.addEventListener('change', updateCustomFieldVisibility);
-        // Инициализация при загрузке страницы
         updateCustomFieldVisibility();
+      }
+
+      // Режим «только история» — скрываем чекбоксы задач/заметок/контактов
+      const cbImportHistory = document.getElementById('cb_import_history');
+      const historyOnlySections = [
+        document.getElementById('cb_import_tasks')?.closest('.flex'),
+        document.getElementById('cb_import_notes')?.closest('.flex'),
+        document.getElementById('cb_import_contacts')?.closest('.flex'),
+      ].filter(Boolean);
+
+      function updateHistoryMode() {
+        if (!cbImportHistory) return;
+        const isHistory = cbImportHistory.checked;
+        historyOnlySections.forEach(el => {
+          el.style.opacity = isHistory ? '0.35' : '1';
+          el.style.pointerEvents = isHistory ? 'none' : '';
+        });
+      }
+
+      if (cbImportHistory) {
+        cbImportHistory.addEventListener('change', updateHistoryMode);
+        updateHistoryMode();
       }
       
       // Очистка результатов при отправке основной формы (новый импорт)
