@@ -198,6 +198,8 @@
               <input type="hidden" name="import_history" value="on" />
               <input type="hidden" name="limit_companies" value="{{ form.limit_companies.value|default:200 }}" />
               <input type="hidden" name="offset" value="{{ result.companies_next_offset }}" />
+              <input type="hidden" name="prev_events_created" value="{{ result.events_created }}" />
+              <input type="hidden" name="prev_events_skipped" value="{{ result.events_skipped }}" />
               <input type="hidden" name="responsible_user_id" value="{{ migrate_responsible_user_id|default:form.responsible_user_id.value }}" />
               <input type="hidden" name="custom_field_id" value="{{ form.custom_field_id.value }}" />
               <input type="hidden" name="custom_value_label" value="{{ form.custom_value_label.value }}" />
