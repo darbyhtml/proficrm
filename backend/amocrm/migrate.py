@@ -2024,13 +2024,21 @@ def fetch_company_custom_fields(client: AmoClient) -> list[dict[str, Any]]:
 
 
 def _extract_resp_id(value_list: Any) -> int:
-    """Извлекает responsible_user_id из value_before/value_after события amoCRM."""
+    """Извлекает responsible_user_id из value_before/value_after события amoCRM.
+
+    amoCRM Events API возвращает структуру:
+      [{"responsible_user": {"id": 12345}}]
+    """
     if not isinstance(value_list, list) or not value_list:
         return 0
     item = value_list[0]
     if not isinstance(item, dict):
         return 0
     try:
+        resp_user = item.get("responsible_user")
+        if isinstance(resp_user, dict):
+            return int(resp_user.get("id") or 0)
+        # fallback на случай другого формата
         return int(item.get("responsible_user_id") or 0)
     except (ValueError, TypeError):
         return 0
@@ -2126,15 +2134,7 @@ def import_company_histories(
             logger.error(f"import_company_histories: ошибка батча (первые ids: {batch[:3]}): {e}")
             continue
 
-        for _debug_idx, ev in enumerate(events_raw or []):
-            # DEBUG: логируем первые 2 события, чтобы увидеть реальную структуру
-            if _debug_idx < 2:
-                logger.warning(
-                    f"[DEBUG history event] id={ev.get('id')} "
-                    f"value_before={ev.get('value_before')!r} "
-                    f"value_after={ev.get('value_after')!r} "
-                    f"created_by={ev.get('created_by')!r}"
-                )
+        for ev in (events_raw or []):
             amo_event_id = str(ev.get("id") or "")
             if not amo_event_id:
                 continue
