@@ -2094,34 +2094,46 @@ def import_company_histories(
         if c.amocrm_company_id
     }
 
-    for amo_id in company_amo_ids:
-        company = companies_map.get(int(amo_id))
-        if company is None:
-            logger.warning(f"import_company_histories: компания с amocrm_id={amo_id} не найдена в БД, пропускаем")
-            continue
+    # Только компании, реально присутствующие в БД
+    valid_amo_ids = [aid for aid in company_amo_ids if companies_map.get(int(aid))]
+    result.companies_processed = len(valid_amo_ids)
 
-        result.companies_processed += 1
+    # ── Батчинг: один запрос к amoCRM на 50 компаний вместо N запросов ──────
+    BATCH_SIZE = 50
+    for batch_start in range(0, len(valid_amo_ids), BATCH_SIZE):
+        batch = valid_amo_ids[batch_start:batch_start + BATCH_SIZE]
+        logger.info(
+            f"import_company_histories: батч {batch_start // BATCH_SIZE + 1}, "
+            f"компаний в батче: {len(batch)}"
+        )
 
         try:
+            # Ключ без [] — клиент превратит список в filter[entity_id][]=id1&filter[entity_id][]=id2
             events_raw = client.get_all_pages(
                 "/api/v4/events",
                 params={
                     "filter[entity_type][]": "company",
-                    "filter[entity_id][]": str(amo_id),
+                    "filter[entity_id]": [str(aid) for aid in batch],
                     "filter[type][]": "entity_responsible_changed",
                 },
                 embedded_key="events",
                 limit=50,
-                max_pages=20,
+                max_pages=200,
             )
         except (AmoApiError, RateLimitError) as e:
-            result.errors += 1
-            logger.error(f"import_company_histories: ошибка для company {company.id} (amo {amo_id}): {e}")
+            result.errors += len(batch)
+            logger.error(f"import_company_histories: ошибка батча (первые ids: {batch[:3]}): {e}")
             continue
 
         for ev in (events_raw or []):
             amo_event_id = str(ev.get("id") or "")
             if not amo_event_id:
+                continue
+
+            # Определяем компанию по entity_id в самом событии
+            entity_id = int(ev.get("entity_id") or 0)
+            company = companies_map.get(entity_id)
+            if company is None:
                 continue
 
             created_at_ts = ev.get("created_at") or 0
@@ -2151,7 +2163,7 @@ def import_company_histories(
                 if len(result.preview) < 50:
                     result.preview.append({
                         "company_name": company.name,
-                        "amo_id": amo_id,
+                        "amo_id": entity_id,
                         "event_type": "assigned",
                         "occurred_at": occurred_at.strftime("%d.%m.%Y %H:%M"),
                         "from": from_user_name,
@@ -2180,7 +2192,9 @@ def import_company_histories(
             else:
                 result.events_skipped += 1
 
-        # "Создана" — синтетическое событие из метаданных компании
+    # ── Синтетическое событие «Создана» — только DB-операции, быстро ────────
+    for amo_id in valid_amo_ids:
+        company = companies_map[int(amo_id)]
         created_ext_id = f"created_{amo_id}"
         if dry_run:
             if not CompanyHistoryEvent.objects.filter(
