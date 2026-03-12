@@ -10379,7 +10379,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                                         if import_history_only:
                                             # Режим «только история» — не меняем данные карточек
                                             sphere_field_id_hist = int(custom_field_id) if custom_field_id else 0
-                                            company_amo_ids = fetch_matched_amo_company_ids(
+                                            company_amo_ids, amo_created_by = fetch_matched_amo_company_ids(
                                                 client,
                                                 responsible_user_id=responsible_user_id,
                                                 sphere_field_id=sphere_field_id_hist,
@@ -10392,6 +10392,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                                                 actor=request.user,
                                                 dry_run=dry_run,
                                                 company_amo_ids=company_amo_ids,
+                                                amo_created_by=amo_created_by,
                                             )
                                             migrate_responsible_user_id = responsible_user_id
                                             if dry_run:

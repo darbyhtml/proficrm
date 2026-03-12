@@ -2056,6 +2056,7 @@ def import_company_histories(
     actor: User,
     dry_run: bool = True,
     company_amo_ids: list[int],
+    amo_created_by: dict[int, int] | None = None,  # amo_company_id → amo_user_id
 ) -> HistoryImportResult:
     """
     Импортирует историю передвижений карточек компаний из amoCRM Events API.
@@ -2193,9 +2194,17 @@ def import_company_histories(
                 result.events_skipped += 1
 
     # ── Синтетическое событие «Создана» — только DB-операции, быстро ────────
+    _created_by = amo_created_by or {}
     for amo_id in valid_amo_ids:
         company = companies_map[int(amo_id)]
         created_ext_id = f"created_{amo_id}"
+
+        # Автор создания из поля created_by amoCRM-компании
+        creator_amo_uid = _created_by.get(int(amo_id), 0)
+        creator_amo_user = amo_user_by_id.get(creator_amo_uid, {}) if creator_amo_uid else {}
+        creator_name = (creator_amo_user.get("name") or "")[:255]
+        creator_local = _map_amo_user_to_local(creator_amo_user) if creator_amo_user else None
+
         if dry_run:
             if not CompanyHistoryEvent.objects.filter(
                 company=company,
@@ -2210,7 +2219,7 @@ def import_company_histories(
                         "occurred_at": company.created_at.strftime("%d.%m.%Y %H:%M") if company.created_at else "?",
                         "from": "",
                         "to": "",
-                        "actor": "",
+                        "actor": creator_name,
                     })
         else:
             CompanyHistoryEvent.objects.get_or_create(
@@ -2220,7 +2229,8 @@ def import_company_histories(
                     "event_type": CompanyHistoryEvent.EventType.CREATED,
                     "source": CompanyHistoryEvent.Source.AMOCRM,
                     "occurred_at": company.created_at,
-                    "actor_name": "",
+                    "actor": creator_local,
+                    "actor_name": creator_name,
                 },
             )
 
@@ -2235,10 +2245,11 @@ def fetch_matched_amo_company_ids(
     sphere_option_id: int | None,
     sphere_label: str | None,
     skip_field_filter: bool = False,
-) -> list[int]:
+) -> tuple[list[int], dict[int, int]]:
     """
-    Возвращает список amoCRM ID компаний, соответствующих фильтру по ответственному
-    и (опционально) кастомному полю. Используется в history-only режиме.
+    Возвращает (ids, created_by_map):
+      ids            — список amoCRM ID компаний по фильтру
+      created_by_map — {amo_company_id: amo_user_id} для синтетических событий «Создана»
     """
     companies = fetch_companies_by_responsible(client, responsible_user_id, with_contacts=False)
     if skip_field_filter:
@@ -2248,7 +2259,13 @@ def fetch_matched_amo_company_ids(
             c for c in companies
             if _custom_has_value(c, sphere_field_id, option_id=sphere_option_id, label=sphere_label)
         ]
-    return [int(c["id"]) for c in matched if c.get("id")]
+    ids = [int(c["id"]) for c in matched if c.get("id")]
+    created_by_map = {
+        int(c["id"]): int(c["created_by"])
+        for c in matched
+        if c.get("id") and c.get("created_by")
+    }
+    return ids, created_by_map
 
 
 def _field_options(field: dict[str, Any]) -> list[dict[str, Any]]:
