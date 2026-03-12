@@ -2047,6 +2047,10 @@ def _extract_resp_id(value_list: Any) -> int:
 @dataclass
 class HistoryImportResult:
     companies_processed: int = 0
+    companies_total: int = 0      # всего компаний до применения offset/limit
+    companies_offset: int = 0     # текущий offset
+    companies_next_offset: int = 0  # offset для следующей пачки
+    companies_has_more: bool = False  # есть ли ещё компании после текущей пачки
     events_created: int = 0       # реально создано (или «would create» в dry-run)
     events_skipped: int = 0       # уже существуют (дубликаты)
     errors: int = 0
@@ -2065,6 +2069,8 @@ def import_company_histories(
     dry_run: bool = True,
     company_amo_ids: list[int],
     amo_created_by: dict[int, int] | None = None,  # amo_company_id → amo_user_id
+    offset: int = 0,
+    limit_companies: int = 0,  # 0 = все
 ) -> HistoryImportResult:
     """
     Импортирует историю передвижений карточек компаний из amoCRM Events API.
@@ -2105,6 +2111,21 @@ def import_company_histories(
 
     # Только компании, реально присутствующие в БД
     valid_amo_ids = [aid for aid in company_amo_ids if companies_map.get(int(aid))]
+    result.companies_total = len(valid_amo_ids)
+    result.companies_offset = max(int(offset or 0), 0)
+
+    # Применяем offset и limit
+    off = result.companies_offset
+    lim = int(limit_companies or 0)
+    if lim > 0:
+        valid_amo_ids = valid_amo_ids[off:off + lim]
+        result.companies_next_offset = off + len(valid_amo_ids)
+        result.companies_has_more = result.companies_next_offset < result.companies_total
+    else:
+        valid_amo_ids = valid_amo_ids[off:]
+        result.companies_next_offset = result.companies_total
+        result.companies_has_more = False
+
     result.companies_processed = len(valid_amo_ids)
 
     # ── Батчинг: amoCRM Events API допускает max 10 entity_id за запрос ─────

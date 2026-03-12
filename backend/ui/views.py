@@ -10387,25 +10387,36 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                                                 sphere_label=form.cleaned_data.get("custom_value_label") or None,
                                                 skip_field_filter=migrate_all,
                                             )
+                                            history_offset = int(request.POST.get("offset") or 0)
+                                            history_limit = int(form.cleaned_data.get("limit_companies") or 0)
                                             result = import_company_histories(
                                                 client,
                                                 actor=request.user,
                                                 dry_run=dry_run,
                                                 company_amo_ids=company_amo_ids,
                                                 amo_created_by=amo_created_by,
+                                                offset=history_offset,
+                                                limit_companies=history_limit,
                                             )
                                             migrate_responsible_user_id = responsible_user_id
                                             if dry_run:
                                                 messages.success(
                                                     request,
-                                                    f"Dry-run: найдено {len(company_amo_ids)} компаний, "
+                                                    f"Dry-run: компаний в пачке {result.companies_processed} "
+                                                    f"(из {result.companies_total}), "
                                                     f"событий для создания: {result.events_created}."
                                                 )
                                             else:
+                                                more_msg = (
+                                                    f" Осталось ещё: следующая пачка с offset={result.companies_next_offset}."
+                                                    if result.companies_has_more else ""
+                                                )
                                                 messages.success(
                                                     request,
                                                     f"История импортирована: создано {result.events_created} событий, "
-                                                    f"пропущено {result.events_skipped} (дубликаты)."
+                                                    f"пропущено {result.events_skipped} (дубликаты). "
+                                                    f"Обработано {result.companies_processed} из {result.companies_total} компаний."
+                                                    f"{more_msg}"
                                                 )
                                         else:
                                             result = migrate_filtered(

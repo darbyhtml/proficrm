@@ -703,7 +703,7 @@
                 <div class="text-sm text-brand-dark">
                   <b>Автоматическое продолжение:</b> следующая пачка запустится через <span id="countdown">5</span> сек.
                   <span class="text-xs muted-2 block mt-1">
-                    Прогресс: {{ result.companies_next_offset }} / {{ result.companies_matched }} компаний
+                    Прогресс: {{ result.companies_next_offset }} / {{ result.companies_total }} компаний
                   </span>
                 </div>
                 <button id="stop-auto-continue" class="btn btn-outline text-sm" type="button">Остановить</button>
@@ -712,6 +712,7 @@
             <form id="continue-form" method="post" class="flex flex-wrap gap-2 items-center">
               {% csrf_token %}
               <input type="hidden" name="dry_run" value="" />
+              <input type="hidden" name="import_history" value="on" />
               <input type="hidden" name="limit_companies" value="{{ form.limit_companies.value|default:10 }}" />
               <input type="hidden" name="offset" value="{{ result.companies_next_offset }}" />
               <input type="hidden" name="responsible_user_id" value="{{ migrate_responsible_user_id|default:form.responsible_user_id.value }}" />
