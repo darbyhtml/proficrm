@@ -2803,12 +2803,14 @@ def campaign_resume(request: HttpRequest, campaign_id) -> HttpResponse:
                 }
             )
             if not created:
-                if queue_entry.status != CampaignQueue.Status.PENDING:
-                    queue_entry.status = CampaignQueue.Status.PENDING
-                    queue_entry.queued_at = timezone.now()
-                    queue_entry.started_at = None
-                    queue_entry.completed_at = None
-                    queue_entry.save(update_fields=["status", "queued_at", "started_at", "completed_at"])
+                queue_entry.status = CampaignQueue.Status.PENDING
+                queue_entry.queued_at = timezone.now()
+                queue_entry.started_at = None
+                queue_entry.completed_at = None
+                queue_entry.deferred_until = None
+                queue_entry.defer_reason = ""
+                queue_entry.consecutive_transient_errors = 0
+                queue_entry.save(update_fields=["status", "queued_at", "started_at", "completed_at", "deferred_until", "defer_reason", "consecutive_transient_errors"])
             
             # Определяем позицию в очереди
             queue_position = None

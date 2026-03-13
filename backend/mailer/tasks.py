@@ -489,7 +489,8 @@ def send_pending_emails(self, batch_size: int = 50):
                     next_queue.started_at = timezone.now()
                     next_queue.deferred_until = None
                     next_queue.defer_reason = ""
-                    next_queue.save(update_fields=["status", "started_at", "deferred_until", "defer_reason"])
+                    next_queue.consecutive_transient_errors = 0
+                    next_queue.save(update_fields=["status", "started_at", "deferred_until", "defer_reason", "consecutive_transient_errors"])
             
             if next_queue:
                 camps = [next_queue.campaign]
@@ -1003,10 +1004,10 @@ def send_pending_emails(self, batch_size: int = 50):
                 has_failed = camp.recipients.filter(status=CampaignRecipient.Status.FAILED).exists()
                 has_sent = camp.recipients.filter(status=CampaignRecipient.Status.SENT).exists()
                 
-                if camp.status == Campaign.Status.SENDING:
+                if camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
                     camp.status = Campaign.Status.SENT
                     camp.save(update_fields=["status", "updated_at"])
-                    
+
                     # ENTERPRISE: Structured logging для завершения кампании (метрики)
                     sent_count = camp.recipients.filter(status=CampaignRecipient.Status.SENT).count()
                     failed_count = camp.recipients.filter(status=CampaignRecipient.Status.FAILED).count()
@@ -1098,9 +1099,15 @@ def reconcile_campaign_queue():
         # TODO: Alert через monitoring system (Prometheus, Sentry, etc.)
 
     # 2) Закрываем очереди, где pending уже нет / или кампания не должна быть в очереди
-    for q in CampaignQueue.objects.filter(status__in=(CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING)).select_related("campaign").iterator():
+    from django.db.models import Count, Q as DQ
+    active_queues = (
+        CampaignQueue.objects.filter(status__in=(CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING))
+        .select_related("campaign")
+        .annotate(pending_count=Count("campaign__recipients", filter=DQ(campaign__recipients__status=CampaignRecipient.Status.PENDING)))
+    )
+    for q in active_queues.iterator():
         camp = q.campaign
-        has_pending = camp.recipients.filter(status=CampaignRecipient.Status.PENDING).exists()
+        has_pending = q.pending_count > 0
 
         if not has_pending:
             if camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
