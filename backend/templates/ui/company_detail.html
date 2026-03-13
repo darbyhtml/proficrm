@@ -8114,6 +8114,9 @@
       function openHistoryModal() {
         modal.classList.remove('hidden');
         document.body.style.overflow = 'hidden';
+        // Прокрутить к последнему (самому новому) событию
+        var scrollEl = modal.querySelector('.overflow-y-auto');
+        if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
       }
       function closeHistoryModal() {
         modal.classList.add('hidden');

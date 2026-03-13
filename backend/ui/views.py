@@ -3808,7 +3808,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
         activity = ActivityEvent.objects.filter(company_id=company.id).select_related("actor")[:50]
 
     history_events = list(
-        company.history_events.select_related("actor", "from_user", "to_user").order_by("-occurred_at")[:50]
+        company.history_events.select_related("actor", "from_user", "to_user").order_by("occurred_at")[:50]
     )
     quick_form = CompanyQuickEditForm(instance=company)
     contract_form = CompanyContractForm(instance=company)
