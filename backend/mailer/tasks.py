@@ -398,11 +398,7 @@ def send_pending_emails(self, batch_size: int = 50):
                 camp = q.campaign
                 if camp and camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
                     # Проверяем наличие failed получателей перед установкой SENT
-                    has_failed = camp.recipients.filter(status=CampaignRecipient.Status.FAILED).exists()
-                    if has_failed:
-                        camp.status = Campaign.Status.SENDING
-                    else:
-                        camp.status = Campaign.Status.SENT
+                    camp.status = Campaign.Status.SENT
                     camp.save(update_fields=["status", "updated_at"])
                 q.status = CampaignQueue.Status.COMPLETED
                 q.completed_at = now
@@ -429,15 +425,9 @@ def send_pending_emails(self, batch_size: int = 50):
                 if not camp.recipients.filter(status=CampaignRecipient.Status.PENDING).exists():
                     # Ставим статус кампании SENT (если была в процессе/готова) и закрываем очередь
                     # ENTERPRISE: Проверяем failed получателей перед SENT
-                    has_failed = camp.recipients.filter(status=CampaignRecipient.Status.FAILED).exists()
                     if camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
-                        if has_failed:
-                            # Если есть failed, оставляем SENDING для видимости проблем
-                            camp.status = Campaign.Status.SENDING
-                            camp.save(update_fields=["status", "updated_at"])
-                        else:
-                            camp.status = Campaign.Status.SENT
-                            camp.save(update_fields=["status", "updated_at"])
+                        camp.status = Campaign.Status.SENT
+                        camp.save(update_fields=["status", "updated_at"])
                     processing_queue.status = CampaignQueue.Status.COMPLETED
                     processing_queue.completed_at = timezone.now()
                     processing_queue.save(update_fields=["status", "completed_at"])
@@ -665,11 +655,7 @@ def send_pending_emails(self, batch_size: int = 50):
                 if not camp.recipients.filter(status=CampaignRecipient.Status.PENDING).exists():
                     if camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
                         # Проверяем наличие failed получателей перед установкой SENT
-                        has_failed = camp.recipients.filter(status=CampaignRecipient.Status.FAILED).exists()
-                        if has_failed:
-                            camp.status = Campaign.Status.SENDING
-                        else:
-                            camp.status = Campaign.Status.SENT
+                        camp.status = Campaign.Status.SENT
                         camp.save(update_fields=["status", "updated_at"])
 
                     queue_entry = getattr(camp, "queue_entry", None)
@@ -983,15 +969,30 @@ def send_pending_emails(self, batch_size: int = 50):
                         )
                         camp.status = Campaign.Status.PAUSED
                         camp.save(update_fields=["status", "updated_at"])
-                        queue_entry.status = CampaignQueue.Status.PENDING
-                        queue_entry.save(update_fields=["status", "consecutive_transient_errors"])
-                        # TODO: Уведомить администратора
+                        queue_entry.status = CampaignQueue.Status.CANCELLED
+                        queue_entry.completed_at = timezone.now()
+                        queue_entry.save(update_fields=["status", "completed_at", "consecutive_transient_errors"])
+                        try:
+                            from notifications.service import notify
+                            from notifications.models import Notification
+                            notify(
+                                user=user,
+                                kind=Notification.Kind.SYSTEM,
+                                title="Рассылка приостановлена",
+                                body=f"Кампания '{camp.name}' приостановлена из-за повторяющихся ошибок SMTP ({queue_entry.consecutive_transient_errors} подряд). Проверьте настройки почты.",
+                                url=f"/mail/campaigns/{camp.id}/",
+                                dedupe_seconds=3600,
+                            )
+                        except Exception:
+                            pass
                     else:
-                        # Используем defer_queue для фиксации причины и времени возобновления
+                        # Экспоненциальный backoff: 5m → 10m → 20m → 40m → max 60m
                         from datetime import timedelta
                         from django.conf import settings
-                        retry_delay_minutes = getattr(settings, "MAILER_TRANSIENT_RETRY_DELAY_MINUTES", 5)
-                        next_retry = timezone.now() + timedelta(minutes=retry_delay_minutes)
+                        base_delay = getattr(settings, "MAILER_TRANSIENT_RETRY_DELAY_MINUTES", 5)
+                        errors = queue_entry.consecutive_transient_errors or 1
+                        delay_minutes = min(base_delay * (2 ** (errors - 1)), 60)
+                        next_retry = timezone.now() + timedelta(minutes=delay_minutes)
                         defer_queue(queue_entry, DEFER_REASON_TRANSIENT_ERROR, next_retry, notify=False)
                         queue_entry.save(update_fields=["consecutive_transient_errors"])
 
@@ -1003,12 +1004,7 @@ def send_pending_emails(self, batch_size: int = 50):
                 has_sent = camp.recipients.filter(status=CampaignRecipient.Status.SENT).exists()
                 
                 if camp.status == Campaign.Status.SENDING:
-                    # Если есть failed - оставляем SENDING для видимости проблем
-                    # Если нет failed - переводим в SENT
-                    if has_failed:
-                        camp.status = Campaign.Status.SENDING
-                    else:
-                        camp.status = Campaign.Status.SENT
+                    camp.status = Campaign.Status.SENT
                     camp.save(update_fields=["status", "updated_at"])
                     
                     # ENTERPRISE: Structured logging для завершения кампании (метрики)
@@ -1109,14 +1105,8 @@ def reconcile_campaign_queue():
         if not has_pending:
             if camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
                 # Проверяем наличие failed получателей перед установкой SENT
-                has_failed = camp.recipients.filter(status=CampaignRecipient.Status.FAILED).exists()
-                if has_failed:
-                    # Если есть failed, оставляем SENDING для видимости проблем
-                    camp.status = Campaign.Status.SENDING
-                    camp.save(update_fields=["status", "updated_at"])
-                else:
-                    camp.status = Campaign.Status.SENT
-                    camp.save(update_fields=["status", "updated_at"])
+                camp.status = Campaign.Status.SENT
+                camp.save(update_fields=["status", "updated_at"])
             q.status = CampaignQueue.Status.COMPLETED
             q.completed_at = now
             q.save(update_fields=["status", "completed_at"])
