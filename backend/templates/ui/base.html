@@ -3339,6 +3339,150 @@
       })();
     </script>
     {% block extra_js %}{% endblock %}
+    {# CRM Announcements modal — показывается при наличии непрочитанного объявления #}
+    <div id="crmAnnouncementModal"
+      style="display:none;position:fixed;inset:0;z-index:9990;align-items:center;justify-content:center;background:rgba(0,61,56,0.35);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);opacity:0;transition:opacity .25s ease;">
+      <div id="crmAnnouncementBox"
+        style="position:relative;max-width:480px;width:92vw;background:#fff;border-radius:1.25rem;box-shadow:0 24px 60px rgba(0,61,56,0.18);padding:2rem;border-top:4px solid #01948E;transform:translateY(12px);transition:transform .25s ease;"
+        role="dialog" aria-modal="true" aria-labelledby="crmAnnTitle">
+        <div id="crmAnnTypeBadge" style="display:inline-flex;align-items:center;border-radius:999px;padding:.15rem .65rem;font-size:.72rem;font-weight:600;margin-bottom:.75rem;border:1px solid rgba(194,226,222,.9);background:rgba(1,148,142,.10);color:#01948E;"></div>
+        <h2 id="crmAnnTitle" style="font-size:1.125rem;font-weight:700;color:#003D38;margin:0 0 .6rem 0;"></h2>
+        <p id="crmAnnBody" style="font-size:.9rem;color:rgba(0,61,56,.78);white-space:pre-wrap;margin:0 0 1.5rem 0;"></p>
+        <div style="display:flex;justify-content:flex-end;">
+          <button id="crmAnnCloseBtn"
+            style="display:inline-flex;align-items:center;gap:.4rem;background:#01948E;color:#fff;border:none;border-radius:.75rem;padding:.55rem 1.1rem;font-size:.875rem;cursor:pointer;transition:background .15s ease;"
+            onmouseover="this.style.background='#003D38'" onmouseout="this.style.background='#01948E'">
+            Понятно
+          </button>
+        </div>
+      </div>
+    </div>
+    <script>
+      (function(){
+        var modal = document.getElementById('crmAnnouncementModal');
+        var box = document.getElementById('crmAnnouncementBox');
+        var titleEl = document.getElementById('crmAnnTitle');
+        var bodyEl = document.getElementById('crmAnnBody');
+        var badgeEl = document.getElementById('crmAnnTypeBadge');
+        var closeBtn = document.getElementById('crmAnnCloseBtn');
+        if(!modal || !box || !titleEl || !bodyEl || !closeBtn) return;
+
+        var currentAnnId = null;
+
+        var typeConfig = {
+          'info':      { label: 'Информация', borderColor: '#2563eb', badgeBg: 'rgba(37,99,235,.10)', badgeColor: '#2563eb' },
+          'important': { label: 'Важно',       borderColor: '#ca8a04', badgeBg: 'rgba(202,138,4,.12)',  badgeColor: '#854d0e' },
+          'urgent':    { label: 'Срочно',      borderColor: '#dc2626', badgeBg: 'rgba(220,38,38,.12)', badgeColor: '#991b1b' },
+        };
+
+        function escAnn(s){
+          return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        }
+
+        function showAnnouncement(ann){
+          if(!ann || !ann.id) return;
+          currentAnnId = ann.id;
+          var cfg = typeConfig[ann.type] || typeConfig['info'];
+
+          box.style.borderTopColor = cfg.borderColor;
+          badgeEl.style.background = cfg.badgeBg;
+          badgeEl.style.color = cfg.badgeColor;
+          badgeEl.style.borderColor = cfg.borderColor.replace(')',', .35)').replace('rgb','rgba');
+          badgeEl.textContent = cfg.label;
+          titleEl.textContent = ann.title || '';
+          bodyEl.textContent = ann.body || '';
+
+          modal.style.display = 'flex';
+          // trigger transition
+          requestAnimationFrame(function(){
+            requestAnimationFrame(function(){
+              modal.style.opacity = '1';
+              box.style.transform = 'translateY(0)';
+            });
+          });
+        }
+
+        function hideAnnouncement(){
+          modal.style.opacity = '0';
+          box.style.transform = 'translateY(12px)';
+          setTimeout(function(){ modal.style.display = 'none'; }, 260);
+        }
+
+        function getCsrf(){
+          var value = '; ' + document.cookie;
+          var parts = value.split('; csrftoken=');
+          if(parts.length === 2) return parts.pop().split(';').shift();
+          return '';
+        }
+
+        function markRead(annId){
+          if(!annId) return;
+          fetch('/notifications/announcements/' + annId + '/read/', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'X-CSRFToken': getCsrf(), 'Content-Type': 'application/json'},
+          }).catch(function(){});
+        }
+
+        closeBtn.addEventListener('click', function(){
+          if(currentAnnId) markRead(currentAnnId);
+          hideAnnouncement();
+        });
+
+        // Close on backdrop click
+        modal.addEventListener('click', function(e){
+          if(e.target === modal){
+            if(currentAnnId) markRead(currentAnnId);
+            hideAnnouncement();
+          }
+        });
+
+        // Close on Escape
+        document.addEventListener('keydown', function(e){
+          if(e.key === 'Escape' && modal.style.display !== 'none'){
+            if(currentAnnId) markRead(currentAnnId);
+            hideAnnouncement();
+          }
+        });
+
+        // Hook into existing poll function — listen for announcement in poll response
+        var _origFetch = window.fetch;
+        // Instead of patching fetch, we listen via MutationObserver/poll override approach.
+        // We intercept the poll by wrapping the interval check:
+        var annShownIds = (function(){
+          try{ return JSON.parse(sessionStorage.getItem('crm_ann_shown') || '{}'); }catch(_e){ return {}; }
+        })();
+
+        function saveShown(id){
+          annShownIds[id] = 1;
+          try{ sessionStorage.setItem('crm_ann_shown', JSON.stringify(annShownIds)); }catch(_e){}
+        }
+
+        // Poll for announcements independently (reuses same endpoint)
+        var annPollInFlight = false;
+        function pollAnnouncement(){
+          if(annPollInFlight) return;
+          annPollInFlight = true;
+          fetch('/notifications/poll/', {credentials:'same-origin'})
+            .then(function(r){ return r.json(); })
+            .then(function(data){
+              if(data && data.announcement && data.announcement.id){
+                var ann = data.announcement;
+                if(!annShownIds[ann.id]){
+                  saveShown(ann.id);
+                  showAnnouncement(ann);
+                }
+              }
+            })
+            .catch(function(){})
+            .finally(function(){ annPollInFlight = false; });
+        }
+
+        // Run after a short delay to let the page load, then every 60s
+        setTimeout(pollAnnouncement, 2000);
+        setInterval(pollAnnouncement, 60000);
+      })();
+    </script>
   </body>
 </html>
 

@@ -1,0 +1,175 @@
+{% extends "ui/base.html" %}
+{% block title %}Объявления CRM — CRM ПРОФИ{% endblock %}
+
+{% block content %}
+  <div class="space-y-6 bg-gradient-to-b from-brand-soft/30 via-white to-white px-4 pt-4 pb-6 rounded-3xl shadow-sm">
+
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <div class="text-xs text-brand-dark/50 mb-1">
+          <a href="/settings/" class="hover:text-brand-teal transition">Настройки</a>
+          <span class="mx-1">›</span>
+          <span>Объявления CRM</span>
+        </div>
+        <h1 class="text-2xl font-semibold">Объявления CRM</h1>
+        <div class="text-sm text-brand-dark/70">Рассылка обновлений всем пользователям системы</div>
+      </div>
+    </div>
+
+    {% if messages %}
+      <div class="space-y-2">
+        {% for message in messages %}
+          <div class="rounded-xl px-4 py-2.5 text-sm
+            {% if message.tags == 'error' %}bg-red-50 border border-red-200 text-red-700
+            {% else %}bg-brand-teal/10 border border-brand-teal/25 text-brand-dark{% endif %}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {# Create form #}
+    <div class="bg-white border border-brand-soft rounded-2xl p-5 shadow-sm">
+      <h2 class="font-semibold text-brand-dark mb-4">Новое объявление</h2>
+      <form method="post" class="space-y-4">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="create">
+
+        <div>
+          <label class="block text-sm font-medium text-brand-dark mb-1">Заголовок</label>
+          <input type="text" name="title" required maxlength="200"
+            class="input"
+            placeholder="Например: Плановое обновление системы">
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-brand-dark mb-1">Текст сообщения</label>
+          <textarea name="body" required rows="4"
+            class="textarea"
+            placeholder="Опишите, что изменилось или что планируется…"></textarea>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-brand-dark mb-1">Тип</label>
+            <select name="announcement_type" class="select">
+              {% for value, label in type_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-brand-dark mb-1">
+              Показать с
+              <span class="text-brand-dark/50 font-normal">(необязательно)</span>
+            </label>
+            <input type="datetime-local" name="scheduled_at"
+              class="input">
+            <p class="text-xs text-brand-dark/50 mt-1">Если не указано — показывается сразу</p>
+          </div>
+        </div>
+
+        <div class="flex justify-end">
+          <button type="submit" class="btn btn-primary">
+            Отправить объявление
+          </button>
+        </div>
+      </form>
+    </div>
+
+    {# History table #}
+    <div class="bg-white border border-brand-soft rounded-2xl shadow-sm overflow-hidden">
+      <div class="px-5 py-4 border-b border-brand-soft/60">
+        <h2 class="font-semibold text-brand-dark">История объявлений</h2>
+      </div>
+      {% if announcements %}
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-brand-soft/20 text-brand-dark/70 text-xs uppercase tracking-wide">
+                <th class="text-left px-4 py-3 font-medium">Дата</th>
+                <th class="text-left px-4 py-3 font-medium">Тип</th>
+                <th class="text-left px-4 py-3 font-medium">Заголовок</th>
+                <th class="text-left px-4 py-3 font-medium">Автор</th>
+                <th class="text-left px-4 py-3 font-medium">Прочитали</th>
+                <th class="text-left px-4 py-3 font-medium">Статус</th>
+                <th class="text-left px-4 py-3 font-medium">Действия</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-brand-soft/40">
+              {% for item in announcements %}
+                {% with a=item.obj %}
+                <tr class="hover:bg-brand-soft/10 transition">
+                  <td class="px-4 py-3 whitespace-nowrap text-brand-dark/70">
+                    {{ a.created_at|date:"d.m.Y H:i" }}
+                    {% if a.scheduled_at %}
+                      <div class="text-xs text-brand-dark/40">с {{ a.scheduled_at|date:"d.m.Y H:i" }}</div>
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3">
+                    {% if a.announcement_type == "info" %}
+                      <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-blue-100 text-blue-700">Информация</span>
+                    {% elif a.announcement_type == "important" %}
+                      <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-700">Важно</span>
+                    {% elif a.announcement_type == "urgent" %}
+                      <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-red-100 text-red-700">Срочно</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3">
+                    <div class="font-medium text-brand-dark">{{ a.title }}</div>
+                    <div class="text-xs text-brand-dark/50 line-clamp-2 mt-0.5">{{ a.body }}</div>
+                  </td>
+                  <td class="px-4 py-3 text-brand-dark/70">
+                    {% if a.created_by %}
+                      {{ a.created_by.get_full_name|default:a.created_by.username }}
+                    {% else %}
+                      <span class="text-brand-dark/40">—</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3">
+                    <span class="font-medium text-brand-dark">{{ item.read_count }}</span>
+                    <span class="text-brand-dark/50"> из {{ item.total_users }}</span>
+                  </td>
+                  <td class="px-4 py-3">
+                    {% if a.is_active %}
+                      <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-green-100 text-green-700">Активно</span>
+                    {% else %}
+                      <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-gray-100 text-gray-500">Неактивно</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3">
+                    <form method="post" class="inline">
+                      {% csrf_token %}
+                      <input type="hidden" name="ann_id" value="{{ a.id }}">
+                      {% if a.is_active %}
+                        <input type="hidden" name="action" value="deactivate">
+                        <button type="submit"
+                          class="btn btn-sm btn-outline text-brand-dark/70 hover:text-red-600 hover:border-red-200">
+                          Деактивировать
+                        </button>
+                      {% else %}
+                        <input type="hidden" name="action" value="activate">
+                        <button type="submit"
+                          class="btn btn-sm btn-outline text-brand-dark/70 hover:text-brand-teal hover:border-brand-teal/40">
+                          Активировать
+                        </button>
+                      {% endif %}
+                    </form>
+                  </td>
+                </tr>
+                {% endwith %}
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="px-5 py-10 text-center text-brand-dark/50">
+          <div class="text-4xl mb-3">📢</div>
+          <div class="font-medium">Объявлений пока нет</div>
+          <div class="text-sm mt-1">Создайте первое объявление выше</div>
+        </div>
+      {% endif %}
+    </div>
+
+  </div>
+{% endblock %}

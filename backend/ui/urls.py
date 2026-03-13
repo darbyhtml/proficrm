@@ -78,6 +78,7 @@ urlpatterns = [
 
     # Settings (admin only)
     path("settings/", views.settings_dashboard, name="settings_dashboard"),
+    path("settings/announcements/", views.settings_announcements, name="settings_announcements"),
     path("settings/access/", views.settings_access, name="settings_access"),
     path("settings/access/roles/<str:role>/", views.settings_access_role, name="settings_access_role"),
     # Режим "просмотр как" (админ может визуально переключаться под роль/филиал)

@@ -8490,6 +8490,70 @@ def settings_dashboard(request: HttpRequest) -> HttpResponse:
 
 
 @login_required
+def settings_announcements(request: HttpRequest) -> HttpResponse:
+    from notifications.models import CrmAnnouncement, CrmAnnouncementRead
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+
+    if not require_admin(request.user):
+        messages.error(request, "Доступ запрещён.")
+        return redirect("dashboard")
+
+    if request.method == "POST":
+        action = request.POST.get("action")
+        if action == "create":
+            title = request.POST.get("title", "").strip()
+            body = request.POST.get("body", "").strip()
+            ann_type = request.POST.get("announcement_type", "info")
+            scheduled_at_str = request.POST.get("scheduled_at", "").strip()
+            if title and body:
+                import datetime
+                scheduled_at = None
+                if scheduled_at_str:
+                    try:
+                        scheduled_at = datetime.datetime.fromisoformat(scheduled_at_str)
+                        if timezone.is_naive(scheduled_at):
+                            scheduled_at = timezone.make_aware(scheduled_at)
+                    except ValueError:
+                        pass
+                CrmAnnouncement.objects.create(
+                    title=title,
+                    body=body,
+                    announcement_type=ann_type,
+                    created_by=request.user,
+                    scheduled_at=scheduled_at,
+                )
+                messages.success(request, "Объявление отправлено.")
+            else:
+                messages.error(request, "Заполните заголовок и текст.")
+        elif action == "deactivate":
+            ann_id = request.POST.get("ann_id")
+            CrmAnnouncement.objects.filter(id=ann_id).update(is_active=False)
+            messages.success(request, "Объявление деактивировано.")
+        elif action == "activate":
+            ann_id = request.POST.get("ann_id")
+            CrmAnnouncement.objects.filter(id=ann_id).update(is_active=True)
+            messages.success(request, "Объявление активировано.")
+        return redirect("settings_announcements")
+
+    total_users = User.objects.filter(is_active=True).count()
+    announcements = CrmAnnouncement.objects.select_related("created_by").prefetch_related("reads").order_by("-created_at")[:50]
+    ann_data = []
+    for a in announcements:
+        ann_data.append({
+            "obj": a,
+            "read_count": a.reads.count(),
+            "total_users": total_users,
+        })
+
+    return render(request, "ui/settings/announcements.html", {
+        "announcements": ann_data,
+        "total_users": total_users,
+        "type_choices": CrmAnnouncement.Type.choices,
+    })
+
+
+@login_required
 def settings_access(request: HttpRequest) -> HttpResponse:
     """
     UI-админка: управление policy (режим observe/enforce + переход к правкам по ролям).
