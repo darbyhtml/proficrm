@@ -271,7 +271,7 @@
         <span class="text-xs text-brand-dark/50 font-medium">Таблица задач</span>
         <button type="button" id="colsToggleBtn" class="inline-flex items-center gap-1.5 text-xs font-medium text-brand-dark/70 hover:text-brand-dark bg-brand-soft/30 hover:bg-brand-soft/60 border border-brand-soft/60 rounded-lg px-2.5 py-1.5 transition-colors" title="Показать / скрыть дополнительные колонки (Постановщик, Дата создания)">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-          <span id="colsToggleBtnLabel">Все колонки</span>
+          <span id="colsToggleBtnLabel">Показать все</span>
         </button>
       </div>
       <div class="overflow-x-auto">
@@ -2030,7 +2030,7 @@
 
       function apply(compact) {
         table.classList.toggle('hide-secondary', compact);
-        if (label) label.textContent = compact ? 'Все колонки' : 'Доп. колонки';
+        if (label) label.textContent = compact ? 'Показать все' : 'Скрыть доп.';
         btn.title = compact ? 'Показать все колонки (Постановщик, Дата создания)' : 'Скрыть дополнительные колонки';
       }
 
