@@ -3,6 +3,44 @@
 {% block title %}Задачи — CRM ПРОФИ{% endblock %}
 
 {% block content %}
+  {# ── Быстрый редирект: фильтры + сортировка ──────────────────────────────────
+     Запускается СИНХРОННО до рендера контента — пользователь никогда не увидит
+     «пустую» страницу и не заметит flash при восстановлении настроек. #}
+  <script>
+    (function(){
+      try {
+        var uid = '{{ request.user.id|default:"anon" }}';
+        var qs = window.location.search;
+
+        // 1) Восстановление запомненных фильтров (Запомнить)
+        var prefKey = 'proficrm:' + uid + ':tasks:remember_filters';
+        var qsKey   = 'proficrm:' + uid + ':tasks:filters_qs';
+        if (localStorage.getItem(prefKey) === '1') {
+          var saved = localStorage.getItem(qsKey) || '';
+          if (saved && (!qs || qs === '?')) {
+            document.documentElement.style.opacity = '0';
+            window.location.replace('/tasks/?' + saved);
+            return;
+          }
+        }
+
+        // 2) Восстановление предпочтения сортировки
+        var sortKey = 'proficrm:' + uid + ':tasks:sort_pref';
+        var params = new URLSearchParams(qs);
+        if (!params.has('sort')) {
+          var pref = null;
+          try { pref = JSON.parse(localStorage.getItem(sortKey) || 'null'); } catch(e2){}
+          if (pref && pref.sort) {
+            params.set('sort', pref.sort);
+            if (pref.dir) params.set('dir', pref.dir);
+            document.documentElement.style.opacity = '0';
+            window.location.replace('/tasks/?' + params.toString());
+            return;
+          }
+        }
+      } catch(e) {}
+    })();
+  </script>
   <div class="tasks-layout">
     <div class="flex items-end justify-between gap-4 mb-5">
       <div>
@@ -1812,18 +1850,8 @@
         });
       }
 
-      // Автовосстановление при заходе на /tasks/ без querystring
-      (function restoreOnLoad() {
-        if (!rememberCb.checked) return;
-        const saved = getSavedQs();
-        if (!saved) return;
-        // Восстанавливаем только если пользователь пришёл на "чистый" /tasks/ без параметров.
-        // Это позволяет возвращаться с сохранёнными фильтрами каждый раз, пока включено «Запомнить».
-        if (window.location.search && window.location.search !== '?') {
-          return;
-        }
-        window.location.replace('/tasks/?' + saved);
-      })();
+      // Редирект для восстановления фильтров перенесён в fast-path вверху страницы
+      // (запускается синхронно до рендера контента, без flash)
     })();
   </script>
 
@@ -2100,17 +2128,7 @@
         });
       });
 
-      // Восстановление при заходе без sort в URL
-      const params = new URLSearchParams(window.location.search);
-      if (!params.has('sort')) {
-        const pref = getSortPref();
-        if (pref && pref.sort) {
-          // Добавляем sort к текущим параметрам и применяем без перезагрузки (1 раз — т.к. sort теперь есть в URL)
-          params.set('sort', pref.sort);
-          if (pref.dir) params.set('dir', pref.dir);
-          window.location.replace('/tasks/?' + params.toString());
-        }
-      }
+      // Редирект для восстановления сортировки перенесён в fast-path вверху страницы
     })();
   </script>
 
