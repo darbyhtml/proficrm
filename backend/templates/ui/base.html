@@ -2630,7 +2630,10 @@
             }
 
             let currentDate = input.value ? new Date(input.value) : new Date();
-            let selectedDate = currentDate;
+            // selectedDate — только дата (полночь) без времени, иначе isSelected при pre-filled значении не совпадёт
+            let selectedDate = input.value
+              ? new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate())
+              : null;
             let initialHour = input.type === 'datetime-local' ? currentDate.getHours() : 0;
             let initialMinute = input.type === 'datetime-local' ? currentDate.getMinutes() : 0;
             const clampedInitial = clampTime(initialHour, initialMinute);
@@ -2886,7 +2889,7 @@
               popup.querySelector('.btn-today').addEventListener('click', () => {
                 const now = new Date();
                 currentDate = new Date(now);
-                selectedDate = new Date(now);
+                selectedDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                 if (input.type === 'datetime-local') {
                   const clamped = clampTime(now.getHours(), now.getMinutes());
                   selectedHour = clamped.hour;
@@ -2923,6 +2926,7 @@
             }
             
             function openPopup() {
+              overlay._activeClosePopup = closePopup;
               overlay.classList.add('active');
               const rect = visualInput.getBoundingClientRect();
               // Позиционируем popup прямо под полем ввода
@@ -2964,32 +2968,56 @@
               e.stopPropagation();
               openPopup();
             });
-            
-            overlay.addEventListener('click', (e) => {
-              if (e.target === overlay) {
-                closePopup();
-              }
-            });
-            
-            // Предотвращаем закрытие при клике на popup
-            popup.addEventListener('click', (e) => {
-              e.stopPropagation();
-            });
-            
-            // Закрытие по Escape
-            document.addEventListener('keydown', handleEscape);
-            
+
+            // Глобальные обработчики вешаем только один раз (не дублируем на каждый пикер)
+            if (!overlay._hasCloseHandler) {
+              overlay._hasCloseHandler = true;
+              overlay.addEventListener('click', (e) => {
+                if (e.target === overlay && overlay._activeClosePopup) {
+                  overlay._activeClosePopup();
+                }
+              });
+            }
+
+            if (!popup._hasStopPropHandler) {
+              popup._hasStopPropHandler = true;
+              popup.addEventListener('click', (e) => { e.stopPropagation(); });
+            }
+
+            if (!overlay._hasEscapeHandler) {
+              overlay._hasEscapeHandler = true;
+              document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && overlay.classList.contains('active') && overlay._activeClosePopup) {
+                  overlay._activeClosePopup();
+                }
+              });
+            }
+
             input.addEventListener('change', updateVisualInput);
           });
         }
-        
+
         if (document.readyState === 'loading') {
           document.addEventListener('DOMContentLoaded', initCustomDatetimePicker);
         } else {
           initCustomDatetimePicker();
         }
-        
-        const observer = new MutationObserver(initCustomDatetimePicker);
+
+        // MutationObserver: только при добавлении новых datetime/date input-ов, не на каждый рендер попапа
+        const observer = new MutationObserver((mutations) => {
+          for (const m of mutations) {
+            for (const node of m.addedNodes) {
+              if (node.nodeType !== 1) continue;
+              if (
+                (node.matches && node.matches('input[type="datetime-local"], input[type="date"]')) ||
+                (node.querySelector && node.querySelector('input[type="datetime-local"], input[type="date"]'))
+              ) {
+                initCustomDatetimePicker();
+                return;
+              }
+            }
+          }
+        });
         observer.observe(document.body, { childList: true, subtree: true });
       })();
     </script>
