@@ -75,9 +75,7 @@ def _is_transient_send_error(err: str) -> bool:
         "temporarily",
         "временно",
         "too many",
-        "rate",
-        "dns",
-        "no route to host",
+        "rate limit",
         "network is unreachable",
     )
     return any(h in e for h in transient_hints)
@@ -281,7 +279,7 @@ def _notify_campaign_started(user, camp) -> None:
             dedupe_seconds=3600,
         )
     except Exception:
-        pass
+        logger.warning("Не удалось отправить уведомление 'кампания началась' для %s", camp.id, exc_info=True)
 
 
 def _notify_campaign_finished(user, camp, *, sent_count: int, failed_count: int, total_count: int) -> None:
@@ -303,7 +301,7 @@ def _notify_campaign_finished(user, camp, *, sent_count: int, failed_count: int,
             url=f"/mail/campaigns/{camp.id}/",
         )
     except Exception:
-        pass
+        logger.warning("Не удалось отправить уведомление 'кампания завершена' для %s", camp.id, exc_info=True)
 
 
 def _notify_circuit_breaker_tripped(user, camp, *, error_count: int) -> None:
@@ -323,7 +321,7 @@ def _notify_circuit_breaker_tripped(user, camp, *, error_count: int) -> None:
             dedupe_seconds=3600,
         )
     except Exception:
-        pass
+        logger.warning("Не удалось отправить уведомление circuit breaker для %s", camp.id, exc_info=True)
 
 
 def _notify_attachment_error(camp, *, error: str) -> None:
@@ -341,7 +339,7 @@ def _notify_attachment_error(camp, *, error: str) -> None:
             url=f"/mail/campaigns/{camp.id}/",
         )
     except Exception:
-        pass
+        logger.warning("Не удалось отправить уведомление об ошибке вложения для %s", camp.id, exc_info=True)
 
 
 # ---------------------------------------------------------------------------
@@ -540,6 +538,6 @@ def _process_batch_recipients(
                     batch_size=BULK_UPDATE_BATCH_SIZE,
                 )
             if logs_to_create:
-                SendLog.objects.bulk_create(logs_to_create)
+                SendLog.objects.bulk_create(logs_to_create, ignore_conflicts=True)
 
     return transient_blocked, rate_limited

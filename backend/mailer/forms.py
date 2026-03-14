@@ -146,7 +146,7 @@ class CampaignForm(forms.ModelForm):
         required=False,
         widget=forms.DateTimeInput(attrs={"class": "input", "type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
         input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S"],
-        help_text="Оставьте пустым для немедленного старта. Рассылка не начнётся раньше указанного времени.",
+        help_text="Оставьте пустым для немедленного старта. Рассылка не начнётся раньше указанного времени. Время — МСК (UTC+3).",
     )
 
     class Meta:
@@ -160,6 +160,29 @@ class CampaignForm(forms.ModelForm):
             "attachment": forms.FileInput(attrs={"class": "input", "accept": ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv,.zip,.rar"}),
         }
     
+    # Таблица магических байтов: расширение → (сигнатура(ы), смещение)
+    _MAGIC_BYTES: dict[str, list[tuple[bytes, int]]] = {
+        ".pdf":  [(b"%PDF", 0)],
+        ".png":  [(b"\x89PNG\r\n\x1a\n", 0)],
+        ".jpg":  [(b"\xff\xd8\xff", 0)],
+        ".jpeg": [(b"\xff\xd8\xff", 0)],
+        ".gif":  [(b"GIF87a", 0), (b"GIF89a", 0)],
+        ".webp": [(b"RIFF", 0)],  # RIFF....WEBP — достаточно первых 4 байт
+        # Office Open XML (.docx/.xlsx/.pptx) и .zip — ZIP-контейнер
+        ".docx": [(b"PK\x03\x04", 0)],
+        ".xlsx": [(b"PK\x03\x04", 0)],
+        ".pptx": [(b"PK\x03\x04", 0)],
+        ".zip":  [(b"PK\x03\x04", 0), (b"PK\x05\x06", 0)],
+        ".rar":  [(b"Rar!\x1a\x07", 0)],
+        # Устаревший OLE2 (бинарный .doc/.xls/.ppt)
+        ".doc":  [(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", 0)],
+        ".xls":  [(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", 0)],
+        ".ppt":  [(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1", 0)],
+        # Текстовые форматы — магических байтов нет; проверяем только расширение
+        ".txt":  [],
+        ".csv":  [],
+    }
+
     def clean_attachment(self):
         attachment = self.cleaned_data.get("attachment")
         if attachment:
@@ -168,16 +191,27 @@ class CampaignForm(forms.ModelForm):
             if attachment.size > max_size:
                 raise forms.ValidationError(f"Размер файла не должен превышать 15 МБ. Текущий размер: {attachment.size / 1024 / 1024:.2f} МБ")
             # Allowlist расширений (дублируем accept атрибут, но на сервере)
-            allowed_ext = {
-                ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
-                ".png", ".jpg", ".jpeg", ".gif", ".webp",
-                ".txt", ".csv", ".zip", ".rar",
-            }
+            allowed_ext = set(self._MAGIC_BYTES.keys())
             name = getattr(attachment, "name", "") or ""
             lower = name.lower()
-            ext = "." + lower.split(".")[-1] if "." in lower else ""
-            if ext and ext not in allowed_ext:
+            ext = "." + lower.rsplit(".", 1)[-1] if "." in lower else ""
+            if ext not in allowed_ext:
                 raise forms.ValidationError("Недопустимый тип файла вложения.")
+            # Верификация по magic bytes (для форматов, где сигнатура определена)
+            signatures = self._MAGIC_BYTES.get(ext, [])
+            if signatures:
+                try:
+                    attachment.seek(0)
+                    header = attachment.read(16)
+                    attachment.seek(0)
+                except Exception:
+                    header = b""
+                matched = any(header[offset:offset + len(sig)] == sig for sig, offset in signatures)
+                if not matched:
+                    raise forms.ValidationError(
+                        "Содержимое файла не соответствует его расширению. "
+                        "Проверьте, что файл не повреждён."
+                    )
         return attachment
 
     def clean_body_html(self):

@@ -34,8 +34,29 @@ $COMPOSE build
 
 # 4) Запуск db и redis, ожидание готовности
 $COMPOSE up -d db redis
-echo "Ожидание db/redis 15 сек..."
-sleep 15
+echo "Ожидание готовности db (до 60 сек)..."
+_db_ready=0
+for i in $(seq 1 60); do
+  if $COMPOSE exec -T db pg_isready -U "${POSTGRES_USER:-postgres}" -q 2>/dev/null; then
+    echo "  db готова (попытка ${i})"
+    _db_ready=1
+    break
+  fi
+  sleep 1
+done
+[ "$_db_ready" -eq 0 ] && echo "WARN: db не ответила за 60 сек — продолжаем всё равно"
+
+echo "Ожидание готовности redis (до 30 сек)..."
+_redis_ready=0
+for i in $(seq 1 30); do
+  if $COMPOSE exec -T redis redis-cli ping 2>/dev/null | grep -q PONG; then
+    echo "  redis готов (попытка ${i})"
+    _redis_ready=1
+    break
+  fi
+  sleep 1
+done
+[ "$_redis_ready" -eq 0 ] && echo "WARN: redis не ответил за 30 сек — продолжаем всё равно"
 
 # 5) Миграции (один раз, не в celery/beat)
 echo ">>> migrate"

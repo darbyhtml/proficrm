@@ -29,10 +29,11 @@ logger = logging.getLogger(__name__)
 def campaign_pick(request: HttpRequest) -> JsonResponse:
     """
     Список кампаний, доступных пользователю для добавления email из карточки компании.
+    Поддерживает поиск (?q=...) и пагинацию (?page=N, page_size=25/50).
     """
     user: User = request.user
     enforce(user=request.user, resource_type="action", resource="ui:mail:campaigns:pick", context={"path": request.path, "method": request.method})
-    qs = Campaign.objects.all().order_by("-created_at")
+    qs = Campaign.objects.filter(is_template=False).only("id", "name", "status").order_by("-created_at")
     if user.role == User.Role.MANAGER:
         qs = qs.filter(created_by=user)
     elif user.role in (User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD) and user.branch_id:
@@ -40,10 +41,31 @@ def campaign_pick(request: HttpRequest) -> JsonResponse:
     elif user.role not in (User.Role.ADMIN, User.Role.GROUP_MANAGER) and not user.is_superuser:
         qs = qs.filter(created_by=user)
 
-    items = []
-    for c in qs[:200]:
-        items.append({"id": str(c.id), "name": c.name, "status": c.status})
-    return JsonResponse({"ok": True, "campaigns": items})
+    q = (request.GET.get("q") or "").strip()
+    if q:
+        qs = qs.filter(name__icontains=q)
+
+    from django.core.paginator import Paginator as _Paginator
+    try:
+        page_size = min(int(request.GET.get("page_size") or 25), 50)
+    except (ValueError, TypeError):
+        page_size = 25
+    paginator = _Paginator(qs, page_size)
+    try:
+        page_num = int(request.GET.get("page") or 1)
+    except (ValueError, TypeError):
+        page_num = 1
+    page = paginator.get_page(page_num)
+
+    items = [{"id": str(c.id), "name": c.name, "status": c.status} for c in page.object_list]
+    return JsonResponse({
+        "ok": True,
+        "campaigns": items,
+        "total": paginator.count,
+        "num_pages": paginator.num_pages,
+        "page": page.number,
+        "has_next": page.has_next(),
+    })
 
 
 @login_required

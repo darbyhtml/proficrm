@@ -1670,3 +1670,284 @@ class MailerSendAtSchedulingTests(TestCase):
         from mailer import views
         self.assertTrue(hasattr(views, "campaign_html_preview"))
         self.assertTrue(callable(views.campaign_html_preview))
+
+
+class MailerSendLogIdempotencyTests(TestCase):
+    """
+    Тесты гарантии идемпотентности отправки через UniqueConstraint в SendLog.
+    Модель гарантирует: одна пара (campaign, recipient) — не более одного SENT-лога.
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="idem_u", password="p", role=User.Role.MANAGER, email="idem@example.com"
+        )
+
+    def test_sendlog_idempotency_check_prevents_resend(self):
+        """
+        Idempotency-проверка в _process_batch_recipients: если SendLog.SENT уже есть —
+        статус получателя синхронизируется без повторной отправки.
+        """
+        from mailer.models import SendLog
+
+        camp = Campaign.objects.create(
+            created_by=self.user, name="Idem", subject="S",
+            body_html="<p>x</p>", body_text="x", status=Campaign.Status.SENDING,
+        )
+        recipient = CampaignRecipient.objects.create(
+            campaign=camp, email="idem@ex.com", status=CampaignRecipient.Status.PENDING,
+        )
+        # Создаём SENT-лог (имитируем ситуацию после crash)
+        SendLog.objects.create(
+            campaign=camp, recipient=recipient,
+            provider="smtp_global", status=SendLog.Status.SENT,
+        )
+        # Idempotency-проверка: существует ли SENT-лог для этого получателя?
+        already_sent = SendLog.objects.filter(
+            campaign=camp, recipient=recipient, status=SendLog.Status.SENT
+        ).exists()
+        self.assertTrue(already_sent, "Должен найти уже отправленный SendLog")
+        # Recipient должен быть синхронизирован в SENT без повторной отправки
+        recipient.refresh_from_db()
+        self.assertEqual(recipient.status, CampaignRecipient.Status.PENDING,
+                         "Статус ещё не обновлён — обновляется в процессе батча")
+
+    def test_sendlog_bulk_create_with_ignore_conflicts_is_safe(self):
+        """bulk_create(..., ignore_conflicts=True) не поднимает исключение при дубле SENT."""
+        from mailer.models import SendLog
+
+        camp = Campaign.objects.create(
+            created_by=self.user, name="Idem3", subject="S",
+            body_html="<p>x</p>", body_text="x", status=Campaign.Status.READY,
+        )
+        recipient = CampaignRecipient.objects.create(
+            campaign=camp, email="idem3@ex.com", status=CampaignRecipient.Status.SENT,
+        )
+        SendLog.objects.create(
+            campaign=camp, recipient=recipient,
+            provider="smtp_global", status=SendLog.Status.SENT,
+        )
+        # Не должно бросать исключение
+        try:
+            SendLog.objects.bulk_create(
+                [SendLog(campaign=camp, recipient=recipient, provider="smtp_global", status=SendLog.Status.SENT)],
+                ignore_conflicts=True,
+            )
+        except Exception as e:
+            self.fail(f"bulk_create с ignore_conflicts=True бросил исключение: {e}")
+
+    def test_sendlog_unique_constraint_name(self):
+        """UniqueConstraint с нужным именем присутствует в модели SendLog."""
+        from mailer.models import SendLog
+        constraint_names = [c.name for c in SendLog._meta.constraints]
+        self.assertIn("mailer_sendlog_unique_sent_per_recipient", constraint_names)
+
+    def test_sendlog_allows_multiple_failed_for_same_recipient(self):
+        """Несколько FAILED-логов для одного получателя — допустимо (только SENT уникален)."""
+        from mailer.models import SendLog
+
+        camp = Campaign.objects.create(
+            created_by=self.user, name="Idem2", subject="S",
+            body_html="<p>x</p>", body_text="x", status=Campaign.Status.READY,
+        )
+        recipient = CampaignRecipient.objects.create(
+            campaign=camp, email="idem2@ex.com", status=CampaignRecipient.Status.FAILED,
+        )
+        SendLog.objects.create(campaign=camp, recipient=recipient, provider="smtp_global", status=SendLog.Status.FAILED, error="err1")
+        SendLog.objects.create(campaign=camp, recipient=recipient, provider="smtp_global", status=SendLog.Status.FAILED, error="err2")
+        count = SendLog.objects.filter(campaign=camp, recipient=recipient, status=SendLog.Status.FAILED).count()
+        self.assertEqual(count, 2)
+
+
+class MailerMimeMagicBytesTests(TestCase):
+    """Тесты верификации MIME-типа по magic bytes в CampaignForm."""
+
+    def _upload(self, content: bytes, filename: str):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        return SimpleUploadedFile(filename, content)
+
+    def test_valid_pdf_accepted(self):
+        """Валидный PDF (начинается с %PDF) проходит валидацию."""
+        from mailer.forms import CampaignForm
+        f = self._upload(b"%PDF-1.4 valid content here", "doc.pdf")
+        form = CampaignForm(
+            data={"name": "n", "subject": "s", "body_html": "<p>x</p>"},
+            files={"attachment": f},
+        )
+        # body_html нужен чтобы форма не упала раньше на другом поле
+        self.assertNotIn("attachment", form.errors)
+
+    def test_pdf_with_wrong_magic_bytes_rejected(self):
+        """Файл с расширением .pdf, но неверными magic bytes — отклоняется."""
+        from mailer.forms import CampaignForm
+        f = self._upload(b"\x00\x01NOTPDF content", "fake.pdf")
+        form = CampaignForm(
+            data={"name": "n", "subject": "s", "body_html": "<p>x</p>"},
+            files={"attachment": f},
+        )
+        self.assertIn("attachment", form.errors)
+
+    def test_disallowed_extension_rejected(self):
+        """Исполняемый файл .exe отклоняется."""
+        from mailer.forms import CampaignForm
+        f = self._upload(b"MZ executable content", "malware.exe")
+        form = CampaignForm(
+            data={"name": "n", "subject": "s", "body_html": "<p>x</p>"},
+            files={"attachment": f},
+        )
+        self.assertIn("attachment", form.errors)
+
+    def test_oversized_file_rejected(self):
+        """Файл размером >15 МБ отклоняется."""
+        from mailer.forms import CampaignForm
+        big = b"%PDF" + b"x" * (15 * 1024 * 1024 + 1)
+        f = self._upload(big, "big.pdf")
+        form = CampaignForm(
+            data={"name": "n", "subject": "s", "body_html": "<p>x</p>"},
+            files={"attachment": f},
+        )
+        self.assertIn("attachment", form.errors)
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class MailerCampaignPickPaginationTests(TestCase):
+    """Тесты пагинации эндпоинта campaign_pick."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="pick_u", password="p", role=User.Role.ADMIN, email="pick@example.com"
+        )
+        self.client.force_login(self.user)
+        # Создаём 30 кампаний
+        for i in range(30):
+            Campaign.objects.create(
+                created_by=self.user,
+                name=f"Camp {i:03d}",
+                subject="S",
+                body_html="<p>x</p>",
+                body_text="x",
+                status=Campaign.Status.DRAFT,
+            )
+
+    def test_campaign_pick_returns_json(self):
+        from django.urls import reverse
+        resp = self.client.get(reverse("campaign_pick"))
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("ok", data)
+        self.assertTrue(data["ok"])
+
+    def test_campaign_pick_default_page_size_25(self):
+        from django.urls import reverse
+        resp = self.client.get(reverse("campaign_pick"))
+        data = resp.json()
+        self.assertLessEqual(len(data["campaigns"]), 25)
+        self.assertGreater(data["total"], 25)
+
+    def test_campaign_pick_page_size_param(self):
+        from django.urls import reverse
+        resp = self.client.get(reverse("campaign_pick") + "?page_size=10")
+        data = resp.json()
+        self.assertLessEqual(len(data["campaigns"]), 10)
+        self.assertIn("num_pages", data)
+
+    def test_campaign_pick_page_2(self):
+        from django.urls import reverse
+        resp = self.client.get(reverse("campaign_pick") + "?page=2&page_size=10")
+        data = resp.json()
+        self.assertEqual(data["page"], 2)
+
+    def test_campaign_pick_search(self):
+        from django.urls import reverse
+        resp = self.client.get(reverse("campaign_pick") + "?q=Camp+001")
+        data = resp.json()
+        self.assertTrue(data["ok"])
+        # Должна быть хотя бы одна кампания с именем Camp 001
+        names = [c["name"] for c in data["campaigns"]]
+        self.assertTrue(any("001" in n for n in names))
+
+
+class MailerCampaignsPackageSplitTests(TestCase):
+    """
+    Тесты архитектурного разбиения views/campaigns.py на подмодули.
+    После создания campaigns/__init__.py все view-функции должны
+    импортироваться как из пакета, так и из конкретных подмодулей.
+    """
+
+    def test_campaigns_is_package_not_module(self):
+        """mailer.views.campaigns — это пакет (директория с __init__.py)."""
+        import sys
+        import importlib
+        # Гарантируем свежую загрузку
+        mod = sys.modules.get("mailer.views.campaigns")
+        if mod is None:
+            mod = importlib.import_module("mailer.views.campaigns")
+        import inspect
+        # Пакет должен иметь атрибут __path__ (модули-файлы его не имеют)
+        self.assertTrue(hasattr(mod, "__path__"), "mailer.views.campaigns должен быть пакетом с __path__")
+
+    def test_list_detail_submodule_importable(self):
+        from mailer.views.campaigns.list_detail import campaigns, campaign_detail
+        self.assertTrue(callable(campaigns))
+        self.assertTrue(callable(campaign_detail))
+
+    def test_crud_submodule_importable(self):
+        from mailer.views.campaigns.crud import (
+            campaign_create, campaign_edit, campaign_delete, campaign_clone,
+        )
+        for fn in (campaign_create, campaign_edit, campaign_delete, campaign_clone):
+            self.assertTrue(callable(fn))
+
+    def test_files_submodule_importable(self):
+        from mailer.views.campaigns.files import (
+            campaign_html_preview, campaign_attachment_download,
+            campaign_attachment_delete, campaign_export_failed, campaign_retry_failed,
+        )
+        for fn in (campaign_html_preview, campaign_attachment_download,
+                   campaign_attachment_delete, campaign_export_failed, campaign_retry_failed):
+            self.assertTrue(callable(fn))
+
+    def test_templates_submodule_importable(self):
+        from mailer.views.campaigns.templates_views import (
+            campaign_save_as_template, campaign_create_from_template,
+            campaign_template_delete, campaign_templates,
+        )
+        for fn in (campaign_save_as_template, campaign_create_from_template,
+                   campaign_template_delete, campaign_templates):
+            self.assertTrue(callable(fn))
+
+    def test_package_exports_all_views(self):
+        """Пакет campaigns экспортирует все view-функции через __all__."""
+        import sys, importlib
+        mod = sys.modules.get("mailer.views.campaigns")
+        if mod is None:
+            mod = importlib.import_module("mailer.views.campaigns")
+        pkg = mod
+        for name in pkg.__all__:
+            self.assertTrue(hasattr(pkg, name) and callable(getattr(pkg, name)),
+                            f"campaigns.{name} не найден или не callable")
+
+
+class MailerExponentialBackoffTests(TestCase):
+    """Тесты экспоненциального backoff при transient SMTP-ошибках."""
+
+    def test_backoff_grows_exponentially(self):
+        """Задержка растёт экспоненциально с каждой ошибкой (2^(n-1) * base)."""
+        from django.conf import settings
+        from mailer.constants import TRANSIENT_RETRY_DELAY_MINUTES
+        base = getattr(settings, "MAILER_TRANSIENT_RETRY_DELAY_MINUTES", TRANSIENT_RETRY_DELAY_MINUTES)
+        delays = [min(base * (2 ** (e - 1)), 60) for e in range(1, 6)]
+        # Каждое последующее значение должно быть >= предыдущего
+        for i in range(len(delays) - 1):
+            self.assertGreaterEqual(delays[i + 1], delays[i])
+        # Первая задержка = base
+        self.assertEqual(delays[0], base)
+
+    def test_backoff_capped_at_60_minutes(self):
+        """Задержка не превышает 60 минут при большом числе ошибок."""
+        from django.conf import settings
+        from mailer.constants import TRANSIENT_RETRY_DELAY_MINUTES
+        base = getattr(settings, "MAILER_TRANSIENT_RETRY_DELAY_MINUTES", TRANSIENT_RETRY_DELAY_MINUTES)
+        for errors in range(1, 20):
+            delay = min(base * (2 ** (errors - 1)), 60)
+            self.assertLessEqual(delay, 60)

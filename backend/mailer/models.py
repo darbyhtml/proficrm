@@ -199,7 +199,7 @@ class CampaignRecipient(models.Model):
     company_id = models.UUIDField("ID компании", null=True, blank=True)
 
     status = models.CharField("Статус", max_length=16, choices=Status.choices, default=Status.PENDING)
-    last_error = models.CharField("Ошибка", max_length=500, blank=True, default="")
+    last_error = models.CharField("Ошибка", max_length=2000, blank=True, default="")
 
     created_at = models.DateTimeField("Создано", auto_now_add=True)
     updated_at = models.DateTimeField("Обновлено", auto_now=True)
@@ -237,6 +237,17 @@ class SendLog(models.Model):
             models.Index(fields=["provider", "status", "created_at"]),
             # Ускоряет запросы idempotency check и campaign stats
             models.Index(fields=["campaign", "recipient", "status"]),
+        ]
+        constraints = [
+            # Гарантирует идемпотентность: для одной пары (campaign, recipient) не может быть
+            # двух SENT-записей. Если send_via_smtp отправил письмо, но процесс упал до
+            # bulk_create — при retry bulk_create(..., ignore_conflicts=True) просто пропустит
+            # дубль, а idempotency-чек выше синхронизирует статус получателя.
+            models.UniqueConstraint(
+                fields=["campaign", "recipient"],
+                condition=models.Q(status="sent"),
+                name="mailer_sendlog_unique_sent_per_recipient",
+            ),
         ]
 
     def __str__(self) -> str:
