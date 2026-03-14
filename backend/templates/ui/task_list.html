@@ -9,27 +9,13 @@
         var uid = '{{ request.user.id|default:"anon" }}';
         var qs = window.location.search;
 
-        // 1) Восстановление запомненных фильтров (Запомнить)
+        // Восстановление запомненных фильтров (Запомнить)
         var prefKey = 'proficrm:' + uid + ':tasks:remember_filters';
         var qsKey   = 'proficrm:' + uid + ':tasks:filters_qs';
         if (localStorage.getItem(prefKey) === '1') {
           var saved = localStorage.getItem(qsKey) || '';
           if (saved && (!qs || qs === '?')) {
             window.location.replace('/tasks/?' + saved);
-            return;
-          }
-        }
-
-        // 2) Восстановление предпочтения сортировки
-        var sortKey = 'proficrm:' + uid + ':tasks:sort_pref';
-        var params = new URLSearchParams(qs);
-        if (!params.has('sort')) {
-          var pref = null;
-          try { pref = JSON.parse(localStorage.getItem(sortKey) || 'null'); } catch(e2){}
-          if (pref && pref.sort) {
-            params.set('sort', pref.sort);
-            if (pref.dir) params.set('dir', pref.dir);
-            window.location.replace('/tasks/?' + params.toString());
             return;
           }
         }
@@ -2068,17 +2054,19 @@
         try { return JSON.parse(localStorage.getItem(LS_SORT_KEY) || 'null'); } catch(e) { return null; }
       }
 
-      // При клике на любую ссылку сортировки — запоминаем
+      // При клике на любую ссылку сортировки — запоминаем в localStorage И в cookie
+      // cookie task_list_sort читается сервером напрямую — без JS-редиректа на следующей загрузке
       document.querySelectorAll('th[aria-sort] a[href]').forEach(function(link) {
         link.addEventListener('click', function() {
           const url = new URL(this.href, window.location.origin);
           const sort = url.searchParams.get('sort');
-          const dir = url.searchParams.get('dir');
-          if (sort) saveSortPref(sort, dir || 'asc');
+          const dir = url.searchParams.get('dir') || 'asc';
+          if (sort) {
+            saveSortPref(sort, dir);
+            try { document.cookie = 'task_list_sort=' + sort + ':' + dir + '; path=/; max-age=31536000; SameSite=Lax'; } catch(e) {}
+          }
         });
       });
-
-      // Редирект для восстановления сортировки перенесён в fast-path вверху страницы
     })();
   </script>
 
