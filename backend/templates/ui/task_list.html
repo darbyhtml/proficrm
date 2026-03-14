@@ -255,7 +255,25 @@
     </div>
     {% endif %}
 
+    <script>
+      (function(){try{
+        var v=localStorage.getItem('proficrm:tasks:cols_compact');
+        if(v===null||v==='1'){
+          var s=document.createElement('style');
+          s.id='_tasks_cols_init';
+          s.textContent='.tasks-table col.col-secondary,.tasks-table .col-secondary{display:none}';
+          (document.head||document.documentElement).appendChild(s);
+        }
+      }catch(e){}}());
+    </script>
     <div class="bg-white border border-brand-soft/60 rounded-2xl overflow-hidden tasks-layout-block">
+      <div class="flex items-center justify-between px-4 py-2.5 border-b border-brand-soft/40">
+        <span class="text-xs text-brand-dark/50 font-medium">Таблица задач</span>
+        <button type="button" id="colsToggleBtn" class="inline-flex items-center gap-1.5 text-xs font-medium text-brand-dark/70 hover:text-brand-dark bg-brand-soft/30 hover:bg-brand-soft/60 border border-brand-soft/60 rounded-lg px-2.5 py-1.5 transition-colors" title="Показать / скрыть дополнительные колонки (Постановщик, Дата создания)">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          <span id="colsToggleBtnLabel">Все колонки</span>
+        </button>
+      </div>
       <div class="overflow-x-auto">
         <table class="table w-full tasks-table" style="table-layout: fixed; min-width: 60rem;">
           <colgroup>
@@ -549,10 +567,6 @@
             {# Фильтры инжектируются JS-функцией injectCurrentFilters() перед сабмитом #}
           </form>
           <span class="w-px self-stretch bg-brand-soft/60" aria-hidden="true"></span>
-          <button type="button" id="colsToggleBtn" class="inline-flex items-center gap-1.5 text-xs text-brand-dark/40 hover:text-brand-dark/80 transition-colors" title="Показать / скрыть дополнительные колонки">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-            <span id="colsToggleBtnLabel">Доп. колонки</span>
-          </button>
         </div>
         <div>
           {% include "ui/_pagination.html" with page=page qs=qs %}
@@ -2020,8 +2034,10 @@
         btn.title = compact ? 'Показать все колонки (Постановщик, Дата создания)' : 'Скрыть дополнительные колонки';
       }
 
-      // Restore on load
+      // Restore on load; remove the FOUC-prevention style that was injected synchronously
       apply(isCompact());
+      var initStyle = document.getElementById('_tasks_cols_init');
+      if (initStyle) initStyle.parentNode.removeChild(initStyle);
 
       btn.addEventListener('click', function() {
         const next = !table.classList.contains('hide-secondary');
