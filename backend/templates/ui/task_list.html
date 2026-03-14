@@ -35,103 +35,6 @@
         margin-top:1.75rem;
       }
 
-      /* Bulk-действия в «Задачах»: единый UI в обёртке .task-bulk-panel (без !important) */
-      .task-bulk-panel #task-bulk-reschedule,
-      .task-bulk-panel #task-bulk-actions .task-bulk-block{
-        background:#fff;
-        border:1px solid var(--brand-soft);
-        border-radius:0.75rem;
-        box-shadow:0 1px 3px rgba(0,61,56,.06);
-        padding:0.875rem 1rem;
-        margin:0;
-      }
-
-      .task-bulk-panel #task-bulk-reschedule form,
-      .task-bulk-panel #task-bulk-actions .task-bulk-row{
-        display:flex;
-        align-items:center;
-        gap:1rem;
-        flex-wrap:wrap;
-        margin:0;
-        padding:0;
-        border:0;
-        background:transparent;
-      }
-
-      .task-bulk-panel #task-bulk-reschedule .tbr-label,
-      .task-bulk-panel #task-bulk-actions .task-bulk-head{
-        display:flex;
-        align-items:center;
-        gap:0.5rem;
-        flex-shrink:0;
-        font-size:0.875rem;
-        font-weight:500;
-        color:rgba(0,61,56,.85);
-        min-width:10.5rem;
-      }
-
-      .task-bulk-panel #task-bulk-reschedule .tbr-icon,
-      .task-bulk-panel #task-bulk-actions .task-bulk-icon{
-        display:inline-flex;
-        align-items:center;
-        justify-content:center;
-        width:2rem;
-        height:2rem;
-        border-radius:0.5rem;
-        background:rgba(1,148,142,.12);
-        color:var(--brand-teal);
-        flex-shrink:0;
-      }
-
-      .task-bulk-panel #task-bulk-reschedule .tbr-sep,
-      .task-bulk-panel #task-bulk-actions .task-bulk-sep{
-        width:1px;
-        align-self:stretch;
-        background:rgba(0,61,56,.25);
-        border-radius:999px;
-        min-height:2rem;
-        flex-shrink:0;
-      }
-
-      .task-bulk-panel #task-bulk-reschedule .tbr-fields,
-      .task-bulk-panel #task-bulk-actions .task-bulk-controls{
-        display:flex;
-        align-items:center;
-        gap:0.5rem;
-        flex-wrap:wrap;
-        min-width:0;
-        flex:1 1 auto;
-      }
-
-      .task-bulk-panel #task-bulk-reschedule .tbr-fields input[type="datetime-local"],
-      .task-bulk-panel #task-bulk-actions .task-bulk-controls select{
-        min-height:2.25rem;
-        padding:0.5rem 0.625rem;
-        font-size:0.875rem;
-        line-height:1.25;
-        border:1px solid rgba(194,226,222,.8);
-        border-radius:0.5rem;
-        background:#fff;
-        box-sizing:border-box;
-        min-width:11rem;
-        max-width:18rem;
-      }
-
-      .task-bulk-panel #task-bulk-reschedule .tbr-fields .custom-datetime-picker{
-        flex-shrink:0;
-        min-width:11rem;
-        max-width:18rem;
-      }
-      .task-bulk-panel #task-bulk-reschedule .tbr-fields .custom-datetime-picker .input{width:100%;}
-
-      .task-bulk-panel #task-bulk-reschedule .tbr-fields .btn,
-      .task-bulk-panel #task-bulk-actions .task-bulk-controls .btn{
-        min-height:2.25rem;
-        padding:0.5rem 0.75rem;
-        font-size:0.875rem;
-        box-sizing:border-box;
-      }
-
       /* Модалка подтверждения переноса: плавное появление */
       #bulkRescheduleConfirmModal{opacity:0; transition:opacity .18s ease;}
       #bulkRescheduleConfirmModal.is-open{opacity:1;}
@@ -255,46 +158,29 @@
     </script>
 
     {% if can_bulk_actions and page.object_list %}
-    <div class="task-bulk-panel tasks-layout-block">
-      <div class="tasks-layout-block" style="position: sticky; top: .75rem; z-index: 30;">
-        <div class="flex items-center justify-between gap-3 mb-2">
-          <p class="text-sm font-medium text-brand-dark/80 m-0">Массовые действия с задачами</p>
-          <div class="flex items-center gap-2">
-            <span class="text-xs text-brand-dark/60" aria-live="polite">
-              Выбрано: <b id="bulkSelectedCount">0</b>
-            </span>
-            <button type="button" class="btn btn-outline btn-sm opacity-60 pointer-events-none" id="bulkClearSelectionBtn" title="Снять все галочки" disabled aria-disabled="true">Снять выбор</button>
-          </div>
-        </div>
-      </div>
-    {% if can_bulk_reschedule %}
-      <div id="task-bulk-reschedule" class="tasks-layout-block">
-        <p class="text-xs text-brand-dark/60 mb-2 font-medium">Массовый перенос дедлайна: укажите <strong>новую дату</strong>, на которую нужно перенести задачи, и нажмите кнопку справа — дедлайн изменится у отмеченных галочкой задач.</p>
-        <form method="post" action="{% url 'task_bulk_reschedule' %}" id="bulkRescheduleForm">
+    <div class="tasks-layout-block" style="position:sticky;top:.75rem;z-index:30;">
+      <div class="bg-white border border-brand-soft/60 rounded-2xl px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span class="text-xs font-medium text-brand-dark/50 whitespace-nowrap flex-shrink-0">Массовые действия</span>
+        {% if can_bulk_reschedule %}
+        <form method="post" action="{% url 'task_bulk_reschedule' %}" id="bulkRescheduleForm" class="flex items-center gap-2 flex-shrink-0 flex-wrap">
           {% csrf_token %}
-          <span class="tbr-label">
-            <span class="tbr-icon">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-            </span>
-            Новая дата дедлайна
-          </span>
-          <span class="tbr-sep" aria-hidden="true"></span>
-          <div class="tbr-fields">
-            <input type="datetime-local" name="due_at" id="bulkRescheduleDateTime"
-              value=""
-              title="На эту дату будут перенесены выбранные задачи (рабочие часы 8:00–17:50)"
-              aria-label="Новая дата дедлайна для переноса"
-              autocomplete="off"
-            />
-            <button type="button"
-                    data-apply-mode="selected"
-                    class="btn btn-primary opacity-60 pointer-events-none"
-                    title="Перенести дедлайн только у отмеченных галочкой задач"
-                    disabled
-                    aria-disabled="true">
-              Перенести выбранные
-            </button>
-          </div>
+          <svg class="w-3.5 h-3.5 text-brand-dark/40 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          <input type="datetime-local" name="due_at" id="bulkRescheduleDateTime"
+            value=""
+            class="rounded-lg border border-brand-soft/80"
+            style="padding:.375rem .5rem;font-size:.8125rem;"
+            title="На эту дату будут перенесены выбранные задачи (рабочие часы 8:00–17:50)"
+            aria-label="Новая дата дедлайна для переноса"
+            autocomplete="off"
+          />
+          <button type="button"
+                  data-apply-mode="selected"
+                  class="btn btn-primary btn-sm opacity-60 pointer-events-none"
+                  title="Перенести дедлайн только у отмеченных галочкой задач"
+                  disabled
+                  aria-disabled="true">
+            Перенести выбранные
+          </button>
           <input type="hidden" name="status" value="{{ status }}" />
           <input type="hidden" name="mine" value="{{ mine }}" />
           <input type="hidden" name="overdue" value="{{ overdue }}" />
@@ -304,49 +190,39 @@
           <input type="hidden" name="date_from" value="{{ date_from|default:'' }}" />
           <input type="hidden" name="date_to" value="{{ date_to|default:'' }}" />
         </form>
-      </div>
-    {% endif %}
-
-    {% if view_is_admin %}
-      <div id="task-bulk-actions" class="tasks-layout-block">
-        <div class="task-bulk-block">
-          <form method="post" action="{% url 'task_bulk_reassign' %}" id="bulkReassignForm">
-            {% csrf_token %}
-            <div class="task-bulk-row">
-              <div class="task-bulk-head">
-                <span class="task-bulk-icon">
-                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
-                </span>
-                <span>Переназначить на</span>
-              </div>
-              <span class="task-bulk-sep" aria-hidden="true"></span>
-              <div class="task-bulk-controls">
-                <select name="assigned_to_id" required>
-                  <option value="">Выберите сотрудника</option>
-                  {% regroup transfer_targets by branch as branches_list %}
-                  {% for branch_group in branches_list %}
-                    <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
-                      {% for u in branch_group.list %}
-                        <option value="{{ u.id }}">{{ u }} ({{ u.get_role_display }})</option>
-                      {% endfor %}
-                    </optgroup>
-                  {% endfor %}
-                </select>
-                <button type="submit" name="apply_mode" value="selected" class="btn btn-primary opacity-60 pointer-events-none" title="Переназначить только отмеченные галочкой задачи" disabled aria-disabled="true">Переназначить выбранные</button>
-              </div>
-            </div>
-            <input type="hidden" name="status" value="{{ status }}" />
-            <input type="hidden" name="mine" value="{{ mine }}" />
-            <input type="hidden" name="overdue" value="{{ overdue }}" />
-            <input type="hidden" name="today" value="{{ today }}" />
-            <input type="hidden" name="assigned_to" value="{{ assigned_to|default:'' }}" />
-            <input type="hidden" name="show_done" value="{{ show_done|default:'' }}" />
-            <input type="hidden" name="date_from" value="{{ date_from|default:'' }}" />
-            <input type="hidden" name="date_to" value="{{ date_to|default:'' }}" />
-          </form>
+        {% endif %}
+        {% if view_is_admin %}
+        <div class="w-px self-stretch bg-brand-soft/70 flex-shrink-0" aria-hidden="true"></div>
+        <form method="post" action="{% url 'task_bulk_reassign' %}" id="bulkReassignForm" class="flex items-center gap-2 flex-shrink-0 flex-wrap">
+          {% csrf_token %}
+          <svg class="w-3.5 h-3.5 text-brand-dark/40 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+          <select name="assigned_to_id" required class="select" style="font-size:.8125rem;padding:.375rem .625rem;min-width:9rem;">
+            <option value="">Выберите сотрудника</option>
+            {% regroup transfer_targets by branch as branches_list %}
+            {% for branch_group in branches_list %}
+              <optgroup label="Филиал: {{ branch_group.grouper.name|default:"Без филиала" }}">
+                {% for u in branch_group.list %}
+                  <option value="{{ u.id }}">{{ u }} ({{ u.get_role_display }})</option>
+                {% endfor %}
+              </optgroup>
+            {% endfor %}
+          </select>
+          <button type="submit" name="apply_mode" value="selected" class="btn btn-primary btn-sm opacity-60 pointer-events-none" title="Переназначить только отмеченные галочкой задачи" disabled aria-disabled="true">Переназначить выбранные</button>
+          <input type="hidden" name="status" value="{{ status }}" />
+          <input type="hidden" name="mine" value="{{ mine }}" />
+          <input type="hidden" name="overdue" value="{{ overdue }}" />
+          <input type="hidden" name="today" value="{{ today }}" />
+          <input type="hidden" name="assigned_to" value="{{ assigned_to|default:'' }}" />
+          <input type="hidden" name="show_done" value="{{ show_done|default:'' }}" />
+          <input type="hidden" name="date_from" value="{{ date_from|default:'' }}" />
+          <input type="hidden" name="date_to" value="{{ date_to|default:'' }}" />
+        </form>
+        {% endif %}
+        <div class="ml-auto flex items-center gap-2 flex-shrink-0">
+          <span class="text-xs text-brand-dark/60" aria-live="polite">Выбрано: <b id="bulkSelectedCount">0</b></span>
+          <button type="button" class="btn btn-outline btn-sm opacity-60 pointer-events-none" id="bulkClearSelectionBtn" title="Снять все галочки" disabled aria-disabled="true">Снять выбор</button>
         </div>
       </div>
-    {% endif %}
     </div>
     {% endif %}
 
