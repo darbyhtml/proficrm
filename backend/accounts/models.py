@@ -35,6 +35,13 @@ class User(AbstractUser):
 
     email_signature_html = models.TextField("Подпись в письме (HTML)", blank=True, default="")
 
+    avatar = models.ImageField(
+        "Фото профиля",
+        upload_to="users/avatars/",
+        null=True,
+        blank=True,
+    )
+
     def __str__(self) -> str:
         full = f"{self.last_name} {self.first_name}".strip()
         return full or self.get_username()

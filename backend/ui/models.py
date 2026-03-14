@@ -149,6 +149,22 @@ class UiUserPreference(models.Model):
         ],
         help_text="Режим отображения карточки компании: классический (старый layout) или современный (новый layout)",
     )
+    tasks_per_page = models.PositiveSmallIntegerField(
+        "Строк на странице (задачи)",
+        default=25,
+        choices=[(10, "10"), (25, "25"), (50, "50"), (100, "100")],
+    )
+    default_task_tab = models.CharField(
+        "Вкладка задач по умолчанию",
+        max_length=20,
+        default="all",
+        choices=[
+            ("all", "Все"),
+            ("mine", "Мои"),
+            ("overdue", "Просроченные"),
+            ("today", "Сегодня"),
+        ],
+    )
     updated_at = models.DateTimeField("Обновлено", auto_now=True)
 
     class Meta:

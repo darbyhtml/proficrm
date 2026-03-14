@@ -958,13 +958,23 @@
                 </div>
               </div>
             </div>
-            <span class="text-brand-dark/80">
+            <a href="/preferences/#profile" class="shrink-0" title="Настройки профиля">
+              {% if request.user.avatar %}
+                <img src="{{ request.user.avatar.url }}" alt=""
+                     class="w-8 h-8 rounded-full object-cover border border-brand-soft shadow-sm hover:opacity-80 transition-opacity" />
+              {% else %}
+                <div class="w-8 h-8 rounded-full bg-brand-teal/20 border border-brand-soft flex items-center justify-center text-xs font-bold text-brand-teal hover:bg-brand-teal/30 transition-colors select-none">
+                  {{ request.user.first_name|first|upper }}{{ request.user.last_name|first|upper }}{% if not request.user.first_name and not request.user.last_name %}{{ request.user.username|first|upper }}{% endif %}
+                </div>
+              {% endif %}
+            </a>
+            <a href="/preferences/" class="text-brand-dark/80 hover:text-brand-dark transition-colors">
               {% if request.user.first_name or request.user.last_name %}
                 {{ request.user.last_name }} {{ request.user.first_name }}
               {% else %}
                 {{ request.user.get_username }}
               {% endif %}
-            </span>
+            </a>
             <form method="post" action="/logout/">
               {% csrf_token %}
               <button class="rounded-lg border border-brand-soft bg-white px-3 py-1.5 hover:bg-brand-soft/40 active:scale-[0.99]">Выйти</button>

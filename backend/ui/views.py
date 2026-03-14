@@ -1529,14 +1529,20 @@ def help_page(request: HttpRequest) -> HttpResponse:
 @policy_required(resource_type="page", resource="ui:preferences")
 def preferences(request: HttpRequest) -> HttpResponse:
     """
-    Настройки пользователя (не админские).
-    Здесь собраны страницы, которые доступны всем ролям и позволяют что-то "донастроить".
+    Единая страница настроек пользователя.
+    Включает: профиль, безопасность, интерфейс, почта.
     """
+    user = request.user
+    prefs = UiUserPreference.load_for_user(user)
     return render(
         request,
         "ui/preferences.html",
         {
-            "user": request.user,
+            "user": user,
+            "ui_font_scale_value": prefs.font_scale_float(),
+            "company_detail_view_mode": prefs.company_detail_view_mode,
+            "tasks_per_page": prefs.tasks_per_page,
+            "default_task_tab": prefs.default_task_tab,
         },
     )
 
@@ -1545,7 +1551,9 @@ def preferences(request: HttpRequest) -> HttpResponse:
 @policy_required(resource_type="page", resource="ui:preferences")
 def preferences_ui(request: HttpRequest) -> HttpResponse:
     """
-    Настройки интерфейса (персональные): масштаб шрифта и т.п.
+    Настройки интерфейса: масштаб шрифта.
+    GET → редирект на единую страницу настроек.
+    POST → сохраняет масштаб, редиректит обратно.
     """
     user = request.user
 
@@ -1558,7 +1566,7 @@ def preferences_ui(request: HttpRequest) -> HttpResponse:
 
         if scale is None or not (0.90 <= scale <= 1.15):
             messages.error(request, "Некорректный масштаб. Допустимо от 90% до 115%.")
-            return redirect("preferences_ui")
+            return redirect("/preferences/#interface")
 
         prefs = UiUserPreference.load_for_user(user)
         prefs.font_scale = Decimal(f"{scale:.2f}")
@@ -1568,18 +1576,9 @@ def preferences_ui(request: HttpRequest) -> HttpResponse:
         except Exception:
             pass
         messages.success(request, "Настройки интерфейса сохранены.")
-        return redirect("preferences_ui")
+        return redirect("/preferences/#interface")
 
-    prefs = UiUserPreference.load_for_user(user)
-    font_scale = prefs.font_scale_float()
-    return render(
-        request,
-        "ui/preferences_ui.html",
-        {
-            "user": user,
-            "ui_font_scale_value": font_scale,
-        },
-    )
+    return redirect("/preferences/#interface")
 
 
 @login_required
@@ -1615,15 +1614,192 @@ def preferences_company_detail_view_mode(request: HttpRequest) -> JsonResponse:
 @policy_required(resource_type="page", resource="ui:preferences")
 def preferences_mail(request: HttpRequest) -> HttpResponse:
     """
-    Почтовые настройки/разделы.
+    Почтовые настройки — редирект на единую страницу настроек.
     """
-    return render(
-        request,
-        "ui/preferences_mail.html",
-        {
-            "user": request.user,
-        },
-    )
+    return redirect("/preferences/#mail")
+
+
+@login_required
+@policy_required(resource_type="page", resource="ui:preferences")
+def preferences_profile(request: HttpRequest) -> HttpResponse:
+    """
+    AJAX/POST: сохранение профиля пользователя (имя, фамилия).
+    """
+    if request.method != "POST":
+        return redirect("preferences")
+
+    user = request.user
+    first_name = (request.POST.get("first_name") or "").strip()[:30]
+    last_name = (request.POST.get("last_name") or "").strip()[:150]
+
+    user.first_name = first_name
+    user.last_name = last_name
+    user.save(update_fields=["first_name", "last_name"])
+    messages.success(request, "Профиль обновлён.")
+    return redirect("/preferences/#profile")
+
+
+@login_required
+@policy_required(resource_type="page", resource="ui:preferences")
+def preferences_password(request: HttpRequest) -> HttpResponse:
+    """
+    POST: смена пароля через Django PasswordChangeForm.
+    """
+    from django.contrib.auth import update_session_auth_hash
+    from django.contrib.auth.forms import PasswordChangeForm
+
+    if request.method != "POST":
+        return redirect("preferences")
+
+    form = PasswordChangeForm(request.user, request.POST)
+    if form.is_valid():
+        user = form.save()
+        update_session_auth_hash(request, user)
+        messages.success(request, "Пароль успешно изменён.")
+        return redirect("/preferences/#security")
+    else:
+        for field_errors in form.errors.values():
+            for err in field_errors:
+                messages.error(request, err)
+        return redirect("/preferences/#security")
+
+
+@login_required
+@policy_required(resource_type="page", resource="ui:preferences")
+def preferences_mail_signature(request: HttpRequest) -> HttpResponse:
+    """
+    POST: сохранение HTML-подписи в письмах.
+    """
+    if request.method != "POST":
+        return redirect("preferences")
+
+    user = request.user
+    signature_html = request.POST.get("email_signature_html", "").strip()
+    if len(signature_html) > 10_000:
+        messages.error(request, "Подпись слишком длинная (максимум 10 000 символов).")
+        return redirect("/preferences/#mail")
+
+    user.email_signature_html = signature_html
+    user.save(update_fields=["email_signature_html"])
+    messages.success(request, "Подпись сохранена.")
+    return redirect("/preferences/#mail")
+
+
+@login_required
+@policy_required(resource_type="page", resource="ui:preferences")
+def preferences_avatar_upload(request: HttpRequest) -> HttpResponse:
+    """
+    POST: загрузка фото профиля. Ресайзит до 300×300 через Pillow, сохраняет как JPEG.
+    """
+    if request.method != "POST":
+        return redirect("preferences")
+
+    uploaded = request.FILES.get("avatar")
+    if not uploaded:
+        messages.error(request, "Файл не выбран.")
+        return redirect("/preferences/#profile")
+
+    if uploaded.size > 5 * 1024 * 1024:
+        messages.error(request, "Файл слишком большой (максимум 5 МБ).")
+        return redirect("/preferences/#profile")
+
+    try:
+        from PIL import Image
+        import io
+        from django.core.files.base import ContentFile
+
+        img = Image.open(uploaded)
+        img.verify()  # Проверяем, что файл — реальное изображение
+
+        # Повторно открываем после verify (он закрывает поток)
+        uploaded.seek(0)
+        img = Image.open(uploaded)
+
+        # Конвертируем в RGB (убираем alpha-канал, если RGBA/PA)
+        if img.mode not in ("RGB", "L"):
+            img = img.convert("RGB")
+
+        # Ресайз с сохранением пропорций, вписываем в квадрат 300×300
+        img.thumbnail((300, 300), Image.LANCZOS)
+
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=88, optimize=True)
+        buf.seek(0)
+
+        user = request.user
+        filename = f"user_{user.pk}.jpg"
+
+        # Удаляем старый файл, если он есть
+        if user.avatar:
+            try:
+                user.avatar.delete(save=False)
+            except Exception:
+                pass
+
+        user.avatar.save(filename, ContentFile(buf.read()), save=True)
+        messages.success(request, "Фото профиля обновлено.")
+
+    except Exception:
+        messages.error(request, "Не удалось обработать изображение. Убедитесь, что файл — это JPEG, PNG или WEBP.")
+
+    return redirect("/preferences/#profile")
+
+
+@login_required
+@policy_required(resource_type="page", resource="ui:preferences")
+def preferences_avatar_delete(request: HttpRequest) -> HttpResponse:
+    """
+    POST: удаление фото профиля.
+    """
+    if request.method != "POST":
+        return redirect("preferences")
+
+    user = request.user
+    if user.avatar:
+        try:
+            user.avatar.delete(save=False)
+        except Exception:
+            pass
+        user.avatar = None
+        user.save(update_fields=["avatar"])
+        messages.success(request, "Фото профиля удалено.")
+
+    return redirect("/preferences/#profile")
+
+
+@login_required
+@policy_required(resource_type="page", resource="ui:preferences")
+def preferences_table_settings(request: HttpRequest) -> HttpResponse:
+    """
+    POST: сохранение настроек таблиц (строк на странице, вкладка задач).
+    """
+    if request.method != "POST":
+        return redirect("preferences")
+
+    user = request.user
+    prefs = UiUserPreference.load_for_user(user)
+
+    per_page_raw = request.POST.get("tasks_per_page", "")
+    try:
+        per_page = int(per_page_raw)
+        if per_page not in (10, 25, 50, 100):
+            raise ValueError
+    except (ValueError, TypeError):
+        per_page = 25
+
+    default_tab = (request.POST.get("default_task_tab") or "all").strip()
+    if default_tab not in ("all", "mine", "overdue", "today"):
+        default_tab = "all"
+
+    prefs.tasks_per_page = per_page
+    prefs.default_task_tab = default_tab
+    prefs.save(update_fields=["tasks_per_page", "default_task_tab", "updated_at"])
+
+    # Обновляем сессию, чтобы task_list подхватил без перезагрузки
+    request.session["task_list_per_page"] = per_page
+
+    messages.success(request, "Настройки таблиц сохранены.")
+    return redirect("/preferences/#interface")
 
 
 @login_required

@@ -500,7 +500,23 @@
                     —
                   {% endif %}
                 </td>
-                <td class="px-3 py-3 min-w-0 break-words"><span style="line-height:1.4">{{ t.assigned_to|default:"—" }}</span></td>
+                <td class="px-3 py-3 min-w-0">
+                  {% if t.assigned_to %}
+                    <span class="inline-flex items-center gap-1.5 min-w-0">
+                      {% if t.assigned_to.avatar %}
+                        <img src="{{ t.assigned_to.avatar.url }}" alt=""
+                             class="w-5 h-5 rounded-full object-cover shrink-0 border border-brand-soft" />
+                      {% else %}
+                        <span class="w-5 h-5 rounded-full bg-brand-teal/20 border border-brand-soft flex items-center justify-center text-[9px] font-bold text-brand-teal shrink-0 select-none">
+                          {{ t.assigned_to.first_name|first|upper }}{{ t.assigned_to.last_name|first|upper }}{% if not t.assigned_to.first_name and not t.assigned_to.last_name %}{{ t.assigned_to.username|first|upper }}{% endif %}
+                        </span>
+                      {% endif %}
+                      <span class="truncate" style="line-height:1.4">{{ t.assigned_to }}</span>
+                    </span>
+                  {% else %}
+                    <span class="muted">—</span>
+                  {% endif %}
+                </td>
                 <td class="px-3 py-3 min-w-0 break-words"><span style="line-height:1.4">{{ t.created_by|default:"—" }}</span></td>
                 <td class="muted px-3 py-3 min-w-0 break-words" style="width:12rem;min-width:12rem;max-width:12rem;">
                   {% if t.status == 'done' and t.completed_at %}

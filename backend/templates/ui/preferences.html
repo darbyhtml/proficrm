@@ -2,31 +2,549 @@
 {% block title %}Настройки — CRM ПРОФИ{% endblock %}
 
 {% block content %}
-  <div class="space-y-4">
-    <div class="flex items-end justify-between gap-3">
-      <div>
-        <h1 class="text-2xl font-semibold">Настройки</h1>
-        <div class="muted text-sm">Выберите раздел настроек.</div>
-      </div>
-    </div>
-
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <a class="card card-pad block hover:bg-brand-soft/20 transition-colors" href="/preferences/ui/">
-        <div class="font-medium mb-1">Интерфейс</div>
-        <div class="text-sm muted mb-3">Размер шрифта и визуальные параметры.</div>
-        <div class="btn btn-outline">Открыть</div>
-      </a>
-
-      <a class="card card-pad block hover:bg-brand-soft/20 transition-colors" href="/preferences/mail/">
-        <div class="font-medium mb-1">Почта</div>
-        <div class="text-sm muted mb-3">Подпись, рассылки и связанные настройки.</div>
-        <div class="btn btn-outline">Открыть</div>
-      </a>
-    </div>
-
-    <div class="text-xs muted-2">
-      Если вам нужны админские настройки (пользователи, справочники, безопасность) — они доступны только администраторам.
+<div class="space-y-4">
+  <div class="flex items-end justify-between gap-3">
+    <div>
+      <h1 class="text-2xl font-semibold">Настройки</h1>
+      <div class="muted text-sm">Личные настройки вашего аккаунта.</div>
     </div>
   </div>
-{% endblock %}
 
+  {% if messages %}
+    <div class="space-y-2" id="globalMessages">
+      {% for msg in messages %}
+        <div class="rounded-xl px-4 py-2.5 text-sm font-medium
+          {% if msg.tags == 'success' %}bg-emerald-50 text-emerald-800 border border-emerald-200
+          {% elif msg.tags == 'error' %}bg-red-50 text-red-800 border border-red-200
+          {% else %}bg-brand-soft/30 text-brand-dark border border-brand-soft{% endif %}">
+          {{ msg }}
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <div class="flex flex-col md:flex-row gap-5">
+    {# ── Sidebar ── #}
+    <nav class="md:w-52 shrink-0" id="prefNav">
+      <div class="card overflow-hidden">
+        <button type="button" class="pref-tab w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-left transition-colors hover:bg-brand-soft/20 border-b border-brand-soft/30"
+                data-tab="profile">
+          <svg class="w-4 h-4 shrink-0 text-brand-dark/50" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">
+            <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+          </svg>
+          Профиль
+        </button>
+        <button type="button" class="pref-tab w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-left transition-colors hover:bg-brand-soft/20 border-b border-brand-soft/30"
+                data-tab="security">
+          <svg class="w-4 h-4 shrink-0 text-brand-dark/50" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">
+            <rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>
+          </svg>
+          Безопасность
+        </button>
+        <button type="button" class="pref-tab w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-left transition-colors hover:bg-brand-soft/20 border-b border-brand-soft/30"
+                data-tab="interface">
+          <svg class="w-4 h-4 shrink-0 text-brand-dark/50" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">
+            <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+          </svg>
+          Интерфейс
+        </button>
+        <button type="button" class="pref-tab w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-left transition-colors hover:bg-brand-soft/20"
+                data-tab="mail">
+          <svg class="w-4 h-4 shrink-0 text-brand-dark/50" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24">
+            <rect x="2" y="4" width="20" height="16" rx="2"/><path d="m2 7 10 7 10-7"/>
+          </svg>
+          Почта
+        </button>
+      </div>
+    </nav>
+
+    {# ── Content ── #}
+    <div class="flex-1 min-w-0 space-y-4">
+
+      {# ─── Профиль ─── #}
+      <section class="pref-section" data-section="profile">
+
+        {# Avatar #}
+        <div class="card card-pad space-y-4 mb-4">
+          <div>
+            <div class="font-semibold text-base mb-0.5">Фото профиля</div>
+            <div class="text-sm muted">Отображается в навигации и сообщениях. JPEG, PNG или WEBP, до 5 МБ.</div>
+          </div>
+
+          <div class="flex items-center gap-5">
+            {# Avatar preview #}
+            <div class="relative shrink-0">
+              {% if user.avatar %}
+                <img id="avatarPreview" src="{{ user.avatar.url }}" alt="Фото профиля"
+                     class="w-20 h-20 rounded-full object-cover border-2 border-brand-soft shadow-sm" />
+              {% else %}
+                <div id="avatarPreview"
+                     class="w-20 h-20 rounded-full bg-brand-teal/20 border-2 border-brand-soft flex items-center justify-center text-2xl font-bold text-brand-teal select-none">
+                  {{ user.first_name|first|upper }}{{ user.last_name|first|upper }}{% if not user.first_name and not user.last_name %}{{ user.username|first|upper }}{% endif %}
+                </div>
+              {% endif %}
+              {% if user.avatar %}
+                <form method="post" action="/preferences/avatar/delete/" class="absolute -bottom-1 -right-1">
+                  {% csrf_token %}
+                  <button type="submit"
+                          class="w-6 h-6 rounded-full bg-red-100 border border-red-300 text-red-600 flex items-center justify-center hover:bg-red-200 transition-colors"
+                          title="Удалить фото" onclick="return confirm('Удалить фото профиля?')">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                      <path d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                  </button>
+                </form>
+              {% endif %}
+            </div>
+
+            {# Upload form #}
+            <form method="post" action="/preferences/avatar/upload/" enctype="multipart/form-data" class="space-y-2 flex-1">
+              {% csrf_token %}
+              <label class="block">
+                <input type="file" name="avatar" accept="image/jpeg,image/png,image/webp"
+                       class="block w-full text-sm text-brand-dark/70
+                              file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-brand-soft
+                              file:text-sm file:font-medium file:bg-brand-soft/20 file:text-brand-dark
+                              hover:file:bg-brand-soft/40 file:cursor-pointer file:transition-colors"
+                       id="avatarFileInput" />
+              </label>
+              <button type="submit" class="btn btn-outline btn-sm">Загрузить фото</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="card card-pad space-y-4">
+          <div>
+            <div class="font-semibold text-base mb-0.5">Профиль</div>
+            <div class="text-sm muted">Имя, которое видят другие сотрудники в задачах и карточках.</div>
+          </div>
+
+          <form method="post" action="/preferences/profile/" class="space-y-4">
+            {% csrf_token %}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="text-xs muted-2 mb-1 block" for="id_first_name">Имя</label>
+                <input id="id_first_name" class="input" type="text" name="first_name"
+                       value="{{ user.first_name|default:'' }}" maxlength="30" placeholder="Иван" />
+              </div>
+              <div>
+                <label class="text-xs muted-2 mb-1 block" for="id_last_name">Фамилия</label>
+                <input id="id_last_name" class="input" type="text" name="last_name"
+                       value="{{ user.last_name|default:'' }}" maxlength="150" placeholder="Иванов" />
+              </div>
+            </div>
+
+            <div class="rounded-xl border border-brand-soft/50 bg-brand-soft/10 divide-y divide-brand-soft/30">
+              <div class="flex items-center justify-between px-4 py-2.5 text-sm">
+                <span class="muted-2">Логин</span>
+                <span class="font-medium">{{ user.username }}</span>
+              </div>
+              <div class="flex items-center justify-between px-4 py-2.5 text-sm">
+                <span class="muted-2">Роль</span>
+                <span class="font-medium">{{ user.get_role_display }}</span>
+              </div>
+              {% if user.branch %}
+              <div class="flex items-center justify-between px-4 py-2.5 text-sm">
+                <span class="muted-2">Филиал</span>
+                <span class="font-medium">{{ user.branch.name }}</span>
+              </div>
+              {% endif %}
+              {% if user.email %}
+              <div class="flex items-center justify-between px-4 py-2.5 text-sm">
+                <span class="muted-2">Email</span>
+                <span class="font-medium truncate max-w-xs">{{ user.email }}</span>
+              </div>
+              {% endif %}
+            </div>
+
+            <div>
+              <button type="submit" class="btn btn-primary">Сохранить профиль</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      {# ─── Безопасность ─── #}
+      <section class="pref-section hidden" data-section="security">
+        <div class="card card-pad space-y-4">
+          <div>
+            <div class="font-semibold text-base mb-0.5">Безопасность</div>
+            <div class="text-sm muted">Смена пароля. После изменения вы останетесь авторизованы.</div>
+          </div>
+
+          <form method="post" action="/preferences/password/" class="space-y-3" autocomplete="off">
+            {% csrf_token %}
+            <div>
+              <label class="text-xs muted-2 mb-1 block" for="id_old_password">Текущий пароль</label>
+              <input id="id_old_password" class="input" type="password" name="old_password"
+                     autocomplete="current-password" required placeholder="••••••••" />
+            </div>
+            <div>
+              <label class="text-xs muted-2 mb-1 block" for="id_new_password1">Новый пароль</label>
+              <input id="id_new_password1" class="input" type="password" name="new_password1"
+                     autocomplete="new-password" required placeholder="Минимум 8 символов" />
+            </div>
+            <div>
+              <label class="text-xs muted-2 mb-1 block" for="id_new_password2">Повторите новый пароль</label>
+              <input id="id_new_password2" class="input" type="password" name="new_password2"
+                     autocomplete="new-password" required placeholder="••••••••" />
+            </div>
+            <div>
+              <button type="submit" class="btn btn-primary">Изменить пароль</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      {# ─── Интерфейс ─── #}
+      <section class="pref-section hidden" data-section="interface">
+        <div class="space-y-4">
+
+          {# Font scale #}
+          <div class="card card-pad space-y-4">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="font-semibold text-base mb-0.5">Размер шрифта</div>
+                <div class="text-sm muted">Масштаб интерфейса на всех страницах. Диапазон ограничен, чтобы верстка не «ехала».</div>
+              </div>
+              <div class="text-sm font-semibold whitespace-nowrap" id="fontScaleLabel"></div>
+            </div>
+
+            <form method="post" action="/preferences/ui/" class="space-y-3" id="fontScaleForm">
+              {% csrf_token %}
+              <input type="hidden" name="font_scale" id="fontScaleHidden" value="{{ ui_font_scale_value|default:1.0 }}" />
+
+              <div class="flex items-center gap-3">
+                <div class="text-xs muted-2 w-10 text-right">90%</div>
+                <input id="fontScaleRange" type="range" min="90" max="115" step="1" class="w-full" />
+                <div class="text-xs muted-2 w-10">115%</div>
+              </div>
+
+              <div class="rounded-xl border border-brand-soft bg-brand-soft/15 p-3" id="fontScalePreview">
+                <div class="font-semibold mb-1">Предпросмотр</div>
+                <div class="text-sm muted mb-3">Пример элементов интерфейса при выбранном масштабе.</div>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  <div class="space-y-2">
+                    <div class="font-medium">Карточка</div>
+                    <div class="text-sm muted">Небольшой текст описания.</div>
+                    <div class="flex flex-wrap items-center gap-2">
+                      <button type="button" class="btn btn-primary">Кнопка</button>
+                      <button type="button" class="btn btn-outline">Вторичная</button>
+                      <span class="badge badge-new">Новый</span>
+                    </div>
+                  </div>
+                  <div class="space-y-2">
+                    <div class="font-medium">Поля</div>
+                    <div class="grid grid-cols-2 gap-2">
+                      <div>
+                        <div class="text-xs muted-2 mb-1">Название</div>
+                        <input class="input" type="text" value="ООО Пример" readonly />
+                      </div>
+                      <div>
+                        <div class="text-xs muted-2 mb-1">Статус</div>
+                        <select class="select" disabled><option selected>Новый</option></select>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-2">
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+                <button type="button" class="btn btn-outline" id="fontScaleCancelBtn">Отменить</button>
+                <button type="button" class="btn btn-secondary" id="fontScaleResetBtn">100%</button>
+                <span class="text-xs muted-2">Если таблицы не помещаются — уменьшите масштаб.</span>
+              </div>
+            </form>
+          </div>
+
+          {# Table / list settings #}
+          <div class="card card-pad space-y-4">
+            <div>
+              <div class="font-semibold text-base mb-0.5">Настройки таблиц</div>
+              <div class="text-sm muted">Строк на странице и раздел по умолчанию при открытии задач.</div>
+            </div>
+
+            <form method="post" action="/preferences/table-settings/" class="space-y-4">
+              {% csrf_token %}
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="text-xs muted-2 mb-1.5 block" for="id_tasks_per_page">Строк на странице (задачи)</label>
+                  <select id="id_tasks_per_page" name="tasks_per_page" class="select">
+                    <option value="10"  {% if tasks_per_page == 10  %}selected{% endif %}>10</option>
+                    <option value="25"  {% if tasks_per_page == 25  %}selected{% endif %}>25</option>
+                    <option value="50"  {% if tasks_per_page == 50  %}selected{% endif %}>50</option>
+                    <option value="100" {% if tasks_per_page == 100 %}selected{% endif %}>100</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="text-xs muted-2 mb-1.5 block" for="id_default_task_tab">Раздел задач по умолчанию</label>
+                  <select id="id_default_task_tab" name="default_task_tab" class="select">
+                    <option value="all"     {% if default_task_tab == 'all'     %}selected{% endif %}>Все задачи</option>
+                    <option value="mine"    {% if default_task_tab == 'mine'    %}selected{% endif %}>Мои задачи</option>
+                    <option value="overdue" {% if default_task_tab == 'overdue' %}selected{% endif %}>Просроченные</option>
+                    <option value="today"   {% if default_task_tab == 'today'   %}selected{% endif %}>На сегодня</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <button type="submit" class="btn btn-primary">Сохранить</button>
+              </div>
+            </form>
+          </div>
+
+          {# Company detail view mode #}
+          <div class="card card-pad space-y-4">
+            <div>
+              <div class="font-semibold text-base mb-0.5">Режим карточки компании</div>
+              <div class="text-sm muted">Выберите, как по умолчанию открывается карточка компании.</div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="viewModeOptions">
+              <label class="view-mode-option cursor-pointer rounded-xl border-2 p-4 transition-colors
+                {% if company_detail_view_mode == 'classic' %}border-brand-teal bg-brand-teal/10{% else %}border-brand-soft/50 hover:border-brand-teal/50{% endif %}"
+                data-mode="classic">
+                <input type="radio" name="view_mode" value="classic" class="sr-only"
+                  {% if company_detail_view_mode == 'classic' %}checked{% endif %} />
+                <div class="flex items-center gap-2 mb-2">
+                  <svg class="w-5 h-5 text-brand-dark/60" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <rect x="3" y="3" width="8" height="8" rx="1"/><rect x="13" y="3" width="8" height="8" rx="1"/>
+                    <rect x="3" y="13" width="8" height="8" rx="1"/><rect x="13" y="13" width="8" height="8" rx="1"/>
+                  </svg>
+                  <span class="font-medium">Классический</span>
+                </div>
+                <p class="text-sm muted">Секции развернуты. Вся информация сразу на виду.</p>
+              </label>
+
+              <label class="view-mode-option cursor-pointer rounded-xl border-2 p-4 transition-colors
+                {% if company_detail_view_mode == 'modern' %}border-brand-teal bg-brand-teal/10{% else %}border-brand-soft/50 hover:border-brand-teal/50{% endif %}"
+                data-mode="modern">
+                <input type="radio" name="view_mode" value="modern" class="sr-only"
+                  {% if company_detail_view_mode == 'modern' %}checked{% endif %} />
+                <div class="flex items-center gap-2 mb-2">
+                  <svg class="w-5 h-5 text-brand-dark/60" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                    <rect x="3" y="3" width="18" height="4" rx="1"/><rect x="3" y="10" width="18" height="4" rx="1"/>
+                    <rect x="3" y="17" width="18" height="4" rx="1"/>
+                  </svg>
+                  <span class="font-medium">Современный</span>
+                </div>
+                <p class="text-sm muted">Вкладки и аккордеоны. Удобно на больших карточках.</p>
+              </label>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <button type="button" class="btn btn-primary" id="viewModeSaveBtn">Сохранить</button>
+              <span class="text-xs muted-2" id="viewModeSaveStatus"></span>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      {# ─── Почта ─── #}
+      <section class="pref-section hidden" data-section="mail">
+        <div class="space-y-4">
+
+          {# Signature #}
+          <div class="card card-pad space-y-4">
+            <div>
+              <div class="font-semibold text-base mb-0.5">Подпись в письмах</div>
+              <div class="text-sm muted">Подпись добавляется в конец каждого исходящего письма. Можно использовать HTML-разметку.</div>
+            </div>
+
+            <form method="post" action="/preferences/mail-signature/" class="space-y-3" id="signatureForm">
+              {% csrf_token %}
+
+              <div>
+                <div class="flex items-center justify-between mb-1">
+                  <label class="text-xs muted-2" for="id_sig_source">HTML-код подписи</label>
+                  <div class="flex items-center gap-2">
+                    <button type="button" class="text-xs text-brand-teal hover:underline" id="sigPreviewToggle">Предпросмотр</button>
+                  </div>
+                </div>
+                <textarea id="id_sig_source" name="email_signature_html" rows="8"
+                          class="input font-mono text-xs resize-y w-full"
+                          placeholder="<p>С уважением,<br><strong>Ваше имя</strong><br>Должность • Компания<br><a href=&quot;tel:+79001234567&quot;>+7 900 123-45-67</a></p>"
+                          maxlength="10000">{{ user.email_signature_html|default:'' }}</textarea>
+                <div class="text-xs muted-2 mt-1">Максимум 10 000 символов. Используйте &lt;p&gt;, &lt;br&gt;, &lt;strong&gt;, &lt;a&gt;.</div>
+              </div>
+
+              <div id="sigPreviewBox" class="hidden rounded-xl border border-brand-soft bg-white p-4 text-sm" aria-label="Предпросмотр подписи"></div>
+
+              <div>
+                <button type="submit" class="btn btn-primary">Сохранить подпись</button>
+              </div>
+            </form>
+          </div>
+
+          {# Quick links #}
+          <div class="card card-pad">
+            <div class="font-semibold text-base mb-3">Рассылки</div>
+            <p class="text-sm muted mb-3">Управление почтовыми кампаниями доступно в разделе Почта.</p>
+            <a href="/mail/" class="btn btn-outline text-sm">Перейти в раздел Почта</a>
+          </div>
+
+        </div>
+      </section>
+
+    </div>{# /content #}
+  </div>{# /flex #}
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ── Tab switching ── */
+  var tabs    = document.querySelectorAll('.pref-tab');
+  var sections = document.querySelectorAll('.pref-section');
+  var ACTIVE_CLS  = ['bg-brand-teal/10', 'text-brand-teal', 'border-l-2', 'border-brand-teal'];
+  var DEFAULT_TAB = 'profile';
+
+  function activate(tabName) {
+    tabs.forEach(function (btn) {
+      var isActive = btn.dataset.tab === tabName;
+      ACTIVE_CLS.forEach(function (cls) {
+        btn.classList.toggle(cls, isActive);
+      });
+    });
+    sections.forEach(function (sec) {
+      sec.classList.toggle('hidden', sec.dataset.section !== tabName);
+    });
+  }
+
+  function tabFromHash() {
+    var hash = (window.location.hash || '').replace('#', '');
+    var valid = Array.from(tabs).map(function (b) { return b.dataset.tab; });
+    return valid.indexOf(hash) !== -1 ? hash : DEFAULT_TAB;
+  }
+
+  tabs.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var tab = btn.dataset.tab;
+      history.replaceState(null, '', '#' + tab);
+      activate(tab);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  });
+
+  window.addEventListener('hashchange', function () {
+    activate(tabFromHash());
+  });
+
+  activate(tabFromHash());
+
+  /* ── Font scale ── */
+  (function () {
+    var htmlEl    = document.documentElement;
+    var range     = document.getElementById('fontScaleRange');
+    var hidden    = document.getElementById('fontScaleHidden');
+    var label     = document.getElementById('fontScaleLabel');
+    var cancelBtn = document.getElementById('fontScaleCancelBtn');
+    var resetBtn  = document.getElementById('fontScaleResetBtn');
+    if (!range || !hidden || !label) return;
+
+    var savedScale = (function () {
+      var raw = (hidden.value || '').replace(',', '.');
+      var f = parseFloat(raw);
+      return (isFinite(f) && f > 0) ? f : 1.0;
+    })();
+
+    function setScale(scale) {
+      var safe = Math.max(0.90, Math.min(1.15, scale));
+      htmlEl.style.setProperty('--ui-font-scale', safe.toFixed(2));
+      hidden.value = safe.toFixed(2);
+      label.textContent = Math.round(safe * 100) + '%';
+      range.value = String(Math.round(safe * 100));
+    }
+
+    setScale(savedScale);
+
+    range.addEventListener('input', function () {
+      setScale(parseInt(range.value, 10) / 100);
+    });
+    cancelBtn && cancelBtn.addEventListener('click', function () { setScale(savedScale); });
+    resetBtn  && resetBtn.addEventListener('click',  function () { setScale(1.0); });
+  })();
+
+  /* ── Company detail view mode ── */
+  (function () {
+    var options   = document.querySelectorAll('.view-mode-option');
+    var saveBtn   = document.getElementById('viewModeSaveBtn');
+    var statusEl  = document.getElementById('viewModeSaveStatus');
+    if (!saveBtn) return;
+
+    options.forEach(function (label) {
+      label.addEventListener('click', function () {
+        options.forEach(function (l) {
+          var active = l === label;
+          l.classList.toggle('border-brand-teal',    active);
+          l.classList.toggle('bg-brand-teal/10',     active);
+          l.classList.toggle('border-brand-soft/50', !active);
+          var radio = l.querySelector('input[type=radio]');
+          if (radio) radio.checked = active;
+        });
+      });
+    });
+
+    saveBtn.addEventListener('click', function () {
+      var checked = document.querySelector('.view-mode-option input[type=radio]:checked');
+      if (!checked) return;
+      var mode = checked.value;
+
+      saveBtn.disabled = true;
+      if (statusEl) statusEl.textContent = 'Сохраняем…';
+
+      var csrf = document.querySelector('input[name=csrfmiddlewaretoken]');
+      var body = new URLSearchParams();
+      body.set('view_mode', mode);
+      if (csrf) body.set('csrfmiddlewaretoken', csrf.value);
+
+      fetch('/preferences/ui/company-detail-view-mode/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-CSRFToken': csrf ? csrf.value : '' },
+        body: body.toString(),
+        credentials: 'same-origin',
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (statusEl) statusEl.textContent = data.success ? 'Сохранено ✓' : (data.error || 'Ошибка');
+        setTimeout(function () { if (statusEl) statusEl.textContent = ''; }, 3000);
+      })
+      .catch(function () {
+        if (statusEl) statusEl.textContent = 'Ошибка сети';
+      })
+      .finally(function () {
+        saveBtn.disabled = false;
+      });
+    });
+  })();
+
+  /* ── Signature preview ── */
+  (function () {
+    var toggle    = document.getElementById('sigPreviewToggle');
+    var previewEl = document.getElementById('sigPreviewBox');
+    var textarea  = document.getElementById('id_sig_source');
+    if (!toggle || !previewEl || !textarea) return;
+
+    var open = false;
+
+    function updatePreview() {
+      previewEl.innerHTML = textarea.value || '<em class="muted-2">Пусто</em>';
+    }
+
+    toggle.addEventListener('click', function () {
+      open = !open;
+      previewEl.classList.toggle('hidden', !open);
+      toggle.textContent = open ? 'Скрыть' : 'Предпросмотр';
+      if (open) updatePreview();
+    });
+
+    textarea.addEventListener('input', function () {
+      if (open) updatePreview();
+    });
+  })();
+
+})();
+</script>
+{% endblock %}
