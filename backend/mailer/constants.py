@@ -38,3 +38,43 @@ DEFER_REASONS = (
     (DEFER_REASON_TRANSIENT_ERROR, "Временная ошибка отправки"),
 )
 
+# Redis lock timeout для задачи send_pending_emails (секунды).
+# Переопределяется через settings.MAILER_SEND_LOCK_TIMEOUT.
+# 120 сек достаточно: батч из 50 писем × ~2 сек/письмо = ~100 сек.
+SEND_TASK_LOCK_TIMEOUT = 120
+
+# Задержка перед следующей проверкой квоты smtp.bz (минуты)
+QUOTA_RECHECK_MINUTES = 30
+
+# Таймаут для определения "зависшей" кампании в reconcile (минуты)
+STUCK_CAMPAIGN_TIMEOUT_MINUTES = 30
+
+# Максимальное количество страниц при синхронизации smtp.bz логов за один запуск
+SMTP_BZ_SYNC_MAX_PAGES = 10
+
+# Максимальное количество получателей в одном батче отправки.
+# Переопределяется через settings.MAILER_SEND_BATCH_SIZE.
+SEND_BATCH_SIZE_DEFAULT = 10
+
+# Circuit breaker: после N подряд transient-ошибок SMTP кампания ставится на паузу
+CIRCUIT_BREAKER_THRESHOLD = 10
+
+# Базовая задержка (минуты) перед повтором при transient-ошибке SMTP (exponential backoff)
+TRANSIENT_RETRY_DELAY_MINUTES = 5
+
+# Лимит попыток отписки с одного IP в час (защита от перебора токенов)
+UNSUBSCRIBE_RATE_LIMIT_PER_HOUR = 10
+
+# TTL (секунды) для ключей Redis rate limiter (2 часа — запас на граничный час)
+RATE_LIMIT_CACHE_TTL_SECONDS = 7200
+
+# Fallback-лимиты smtp.bz, если квота ещё не синхронизирована
+SMTP_BZ_MAX_PER_HOUR_DEFAULT = 100
+SMTP_BZ_EMAILS_LIMIT_DEFAULT = 15000
+
+# Максимальная длина сообщения об ошибке в SendLog и CampaignRecipient.last_error
+MAX_ERROR_MESSAGE_LENGTH = 500
+
+# Размер батча при bulk_update (защита от превышения max_allowed_packet MySQL/Postgres)
+BULK_UPDATE_BATCH_SIZE = 500
+

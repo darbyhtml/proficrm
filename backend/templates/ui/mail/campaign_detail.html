@@ -34,6 +34,13 @@
         <div class="flex-1 min-w-0">
           <div class="text-sm muted mb-1"><a class="link" href="/mail/campaigns/">Почта</a> /</div>
           <h1 class="text-xl font-semibold truncate">{{ campaign.name }}</h1>
+          {% if campaign.send_at %}
+            <div class="text-xs muted-2 mt-0.5">
+              <span class="font-medium text-brand-dark/70">Запланировано на:</span>
+              {{ campaign.send_at|date:"d.m.Y H:i" }}
+              {% if campaign.send_at > now %}<span class="badge bg-yellow-100 text-yellow-800 ml-1" style="font-size:.7rem">ожидает</span>{% endif %}
+            </div>
+          {% endif %}
         </div>
         
         {# Компактная статистика (обновляется по опросу для live-прогресса) #}
@@ -61,6 +68,12 @@
           <a class="btn-icon btn btn-outline" href="/mail/campaigns/{{ campaign.id }}/edit/" title="Редактировать" style="padding:0.375rem 0.75rem;font-size:0.875rem">
             <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
               <path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10" />
+            </svg>
+          </a>
+          <a class="btn-icon btn btn-outline" href="/mail/campaigns/{{ campaign.id }}/preview/" target="_blank" rel="noopener" title="Превью письма" style="padding:0.375rem 0.75rem;font-size:0.875rem">
+            <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
             </svg>
           </a>
           <form method="post" action="/mail/campaigns/{{ campaign.id }}/test-send/" class="inline">
@@ -112,6 +125,47 @@
             </svg>
           </button>
           
+          {# Сохранить как шаблон #}
+          {% if not campaign.is_template and campaign.status != 'sending' and campaign.status != 'ready' %}
+            <form method="post" action="/mail/campaigns/{{ campaign.id }}/save-as-template/" class="inline">
+              {% csrf_token %}
+              <button class="btn-icon btn btn-outline" type="submit" title="Сохранить как шаблон" style="padding:0.375rem 0.75rem;font-size:0.875rem">
+                <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0 1 11.186 0Z" />
+                </svg>
+              </button>
+            </form>
+          {% endif %}
+
+          {# Клонировать кампанию #}
+          <form method="post" action="/mail/campaigns/{{ campaign.id }}/clone/" class="inline">
+            {% csrf_token %}
+            <button class="btn-icon btn btn-outline" type="submit" title="Создать копию кампании" style="padding:0.375rem 0.75rem;font-size:0.875rem">
+              <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75" />
+              </svg>
+            </button>
+          </form>
+
+          {# Повторная отправка получателям с ошибкой #}
+          {% if counts.failed > 0 and campaign.status != 'sending' and campaign.status != 'ready' %}
+            <form method="post" action="/mail/campaigns/{{ campaign.id }}/retry-failed/" onsubmit="return confirm('Повторить отправку {{ counts.failed }} получателям с ошибками?');" class="inline">
+              {% csrf_token %}
+              <button class="btn-icon btn btn-outline" type="submit" title="Повторить отправку для {{ counts.failed }} ошибочных получателей" style="padding:0.375rem 0.75rem;font-size:0.875rem;border-color:#f97316;color:#f97316">
+                <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                </svg>
+              </button>
+            </form>
+
+            {# Экспорт ошибочных получателей в CSV #}
+            <a class="btn-icon btn btn-outline" href="/mail/campaigns/{{ campaign.id }}/export-failed/" title="Скачать список ошибочных получателей (CSV)" style="padding:0.375rem 0.75rem;font-size:0.875rem;border-color:#6b7280;color:#6b7280">
+              <svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+              </svg>
+            </a>
+          {% endif %}
+
           {% if can_delete_campaign %}
             <form method="post" action="/mail/campaigns/{{ campaign.id }}/delete/" onsubmit="return confirm('Удалить кампанию?');" class="inline">
               {% csrf_token %}
@@ -125,11 +179,53 @@
         </div>
       </div>
       
-      {# Баннер: отложено из-за дневного лимита (не пауза — продолжим завтра) #}
-      {% if is_deferred_daily_limit and deferred_until and per_user_daily_limit %}
-        <div class="mt-3 p-3 rounded-lg border border-amber-200 bg-amber-50/80 text-amber-900 text-sm flex items-center gap-2">
-          <span>Дневной лимит {{ per_user_daily_limit }} достигнут. Продолжим завтра в {{ deferred_until|time:"H:i" }} ({{ deferred_until|date:"d.m" }}).</span>
+      {# Баннер: кампания на паузе — причина/причины #}
+      {% if campaign.status == 'paused' %}
+        <div class="mt-3 p-3 rounded-lg border border-orange-200 bg-orange-50/80 text-orange-900 text-sm flex items-start gap-2">
+          <svg class="w-4 h-4 flex-shrink-0 mt-0.5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25v13.5m-7.5-13.5v13.5" />
+          </svg>
+          <div>
+            <b>Кампания на паузе.</b>
+            {% if pause_reasons %}
+              <ul class="mt-1 space-y-0.5 list-disc list-inside">
+                {% for reason in pause_reasons %}<li>{{ reason }}</li>{% endfor %}
+              </ul>
+            {% else %}
+              Нажмите «Продолжить», чтобы возобновить отправку.
+            {% endif %}
+          </div>
         </div>
+      {% endif %}
+
+      {# Баннеры отложенности по причине — показываем для любого defer_reason #}
+      {% if deferred_until and defer_reason and queue_entry and queue_entry.status == 'pending' %}
+        {% if defer_reason == 'daily_limit' %}
+          <div class="mt-3 p-3 rounded-lg border border-amber-200 bg-amber-50/80 text-amber-900 text-sm flex items-center gap-2">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6l4 2m6-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z"/></svg>
+            <span>Дневной лимит {% if per_user_daily_limit %}({{ per_user_daily_limit }} писем){% endif %} достигнут. Продолжим в {{ deferred_until|time:"H:i" }} ({{ deferred_until|date:"d.m" }}).</span>
+          </div>
+        {% elif defer_reason == 'quota_exhausted' %}
+          <div class="mt-3 p-3 rounded-lg border border-red-200 bg-red-50/80 text-red-900 text-sm flex items-center gap-2">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126Z"/></svg>
+            <span>Квота smtp.bz исчерпана. Рассылка будет продолжена в {{ deferred_until|time:"H:i" }} ({{ deferred_until|date:"d.m" }}) после обновления квоты.</span>
+          </div>
+        {% elif defer_reason == 'outside_hours' %}
+          <div class="mt-3 p-3 rounded-lg border border-blue-200 bg-blue-50/80 text-blue-900 text-sm flex items-center gap-2">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6l4 2m6-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z"/></svg>
+            <span>Вне рабочего времени (9:00–18:00 МСК). Рассылка продолжится в {{ deferred_until|time:"H:i" }} ({{ deferred_until|date:"d.m" }}).</span>
+          </div>
+        {% elif defer_reason == 'rate_per_hour' %}
+          <div class="mt-3 p-3 rounded-lg border border-amber-200 bg-amber-50/80 text-amber-900 text-sm flex items-center gap-2">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6v6l4 2m6-2a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z"/></svg>
+            <span>Достигнут лимит отправки в час. Рассылка продолжится в {{ deferred_until|time:"H:i" }}.</span>
+          </div>
+        {% elif defer_reason == 'transient_error' %}
+          <div class="mt-3 p-3 rounded-lg border border-orange-200 bg-orange-50/80 text-orange-900 text-sm flex items-center gap-2">
+            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126Z"/></svg>
+            <span>Временная ошибка SMTP. Автоматический повтор в {{ deferred_until|time:"H:i" }}. Если ошибки повторяются — проверьте настройки SMTP.</span>
+          </div>
+        {% endif %}
       {% endif %}
 
       {# Дополнительная информация #}
@@ -137,7 +233,25 @@
         <div class="text-sm text-brand-dark/70">
           <span>Тема: <b>{{ campaign.subject }}</b></span>
           {% if per_user_daily_limit and sent_today_user is not None %}
-            <span class="ml-3">Отправлено сегодня: <b>{{ sent_today_user }}/{{ per_user_daily_limit }}</b></span>
+            <span class="ml-3">Отправлено сегодня:
+              {% if sent_today_user >= per_user_daily_limit %}
+                <b class="text-red-600">{{ sent_today_user }}/{{ per_user_daily_limit }}</b>
+                <span class="text-red-500 text-xs ml-1">(лимит исчерпан)</span>
+              {% else %}
+                <b>{{ sent_today_user }}/{{ per_user_daily_limit }}</b>
+              {% endif %}
+            </span>
+            {# Предупреждение при ≥80% лимита — рассчитываем через JS чтобы не делать деление в шаблоне #}
+            <span id="limit-warn-80" class="hidden ml-2 text-xs text-amber-600 font-medium">⚠ Осталось мало</span>
+            <script>
+              (function(){
+                var sent={{ sent_today_user|default:0 }}, lim={{ per_user_daily_limit|default:0 }};
+                if(lim > 0 && sent < lim && sent / lim >= 0.8){
+                  var el = document.getElementById('limit-warn-80');
+                  if(el){ el.classList.remove('hidden'); el.textContent = '⚠ Использовано ' + sent + ' из ' + lim + ' (' + Math.round(sent/lim*100) + '%) — скоро лимит'; }
+                }
+              })();
+            </script>
           {% endif %}
         </div>
         <details class="mt-2">
@@ -1024,13 +1138,20 @@
           statusBadge.textContent = (data.status === 'sent' && data.failed > 0) ? 'Завершено с ошибками' : (statusLabels[data.status] || data.status);
         }
       }
+      const TERMINAL_STATUSES = ['sent', 'stopped', 'draft'];
+      let pollTimer = null;
       function poll() {
         fetch('/mail/campaigns/' + campaignId + '/progress/poll/', { credentials: 'same-origin' })
           .then(function (r) { return r.json(); })
-          .then(updateUi)
+          .then(function(data) {
+            updateUi(data);
+            if (data && data.ok && TERMINAL_STATUSES.indexOf(data.status) !== -1 && data.pending === 0) {
+              clearInterval(pollTimer);
+            }
+          })
           .catch(function () {});
       }
-      setInterval(poll, POLL_MS);
+      pollTimer = setInterval(poll, POLL_MS);
     })();
   </script>
 {% endblock %}

@@ -237,6 +237,13 @@
         <div class="text-xs text-brand-dark/50 mt-1.5">Максимальный размер: 15 МБ. Файл будет прикреплен ко всем письмам кампании.</div>
       </div>
 
+      <div>
+        <label class="block text-sm text-brand-dark/80 mb-1">Запланировать отправку (опционально)</label>
+        {{ form.send_at }}
+        <div class="text-xs muted-2 mt-1">{{ form.send_at.help_text }}</div>
+        {% if form.send_at.errors %}<div class="text-xs text-red-600 mt-1">{{ form.send_at.errors }}</div>{% endif %}
+      </div>
+
       {% if form.errors %}
         <div class="rounded-xl border border-brand-orange/60 bg-brand-orange/20 px-4 py-3 text-sm text-brand-dark">Проверь поля формы.</div>
       {% endif %}

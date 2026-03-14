@@ -24,6 +24,14 @@ class _SmtpAccountLike(Protocol):
     def get_password(self) -> str: ...
 
 
+_RE_CRLF = re.compile(r"[\r\n]")
+
+
+def _sanitize_header(value: str) -> str:
+    """Удаляет CRLF из значения заголовка для защиты от header injection."""
+    return _RE_CRLF.sub("", value)
+
+
 _RE_DATA_IMG = re.compile(
     r"""(<img\b[^>]*?\bsrc\s*=\s*)(["'])(data:image/[^;"']+;base64,[^"']+)\2""",
     re.IGNORECASE,
@@ -96,12 +104,12 @@ def build_message(
     attachment_filename: Optional[str] = None,
 ) -> EmailMessage:
     msg = EmailMessage()
-    msg["Subject"] = subject
-    _from_email = (from_email or account.from_email or account.smtp_username or "").strip()
-    _from_name = (from_name or account.from_name or "").strip()
+    msg["Subject"] = _sanitize_header(subject or "")
+    _from_email = _sanitize_header((from_email or account.from_email or account.smtp_username or "").strip())
+    _from_name = _sanitize_header((from_name or account.from_name or "").strip())
     msg["From"] = formataddr((_from_name, _from_email)) if _from_name else _from_email
-    msg["To"] = to_email
-    _reply_to = (reply_to or account.reply_to or "").strip()
+    msg["To"] = _sanitize_header(to_email or "")
+    _reply_to = _sanitize_header((reply_to or account.reply_to or "").strip())
     if _reply_to:
         msg["Reply-To"] = _reply_to
 

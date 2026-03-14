@@ -3,6 +3,22 @@
 from django.db import migrations, models
 
 
+
+
+def _rename_indexes_pg(apps, schema_editor):
+    """ALTER INDEX IF EXISTS работает только в PostgreSQL; для SQLite — пропускаем."""
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute("ALTER INDEX IF EXISTS phonebridge_env_is_ac_upload_idx RENAME TO phonebridge_env_ac3dc6_idx;")
+    schema_editor.execute("ALTER INDEX IF EXISTS phonebridge_token_idx RENAME TO phonebridge_token_d78bf5_idx;")
+    schema_editor.execute("ALTER INDEX IF EXISTS phonebridge_user_creat_idx RENAME TO phonebridge_user_id_43a6d6_idx;")
+    schema_editor.execute("ALTER INDEX IF EXISTS phonebridge_expires_idx RENAME TO phonebridge_expires_88a1ee_idx;")
+    schema_editor.execute("ALTER INDEX IF EXISTS phonebridge_last_see_idx RENAME TO phonebridge_last_se_a9839e_idx;")
+    schema_editor.execute("ALTER INDEX IF EXISTS phonebridge_log_user_ts_idx RENAME TO phonebridge_user_id_9749ea_idx;")
+    schema_editor.execute("ALTER INDEX IF EXISTS phonebridge_log_source_ts_idx RENAME TO phonebridge_source_edb9f8_idx;")
+    schema_editor.execute("ALTER INDEX IF EXISTS phonebridge_telemetry_user_ts_idx RENAME TO phonebridge_user_id_76c561_idx;")
+    schema_editor.execute("ALTER INDEX IF EXISTS phonebridge_telemetry_ep_ts_idx RENAME TO phonebridge_endpoin_eecea4_idx;")
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -12,42 +28,7 @@ class Migration(migrations.Migration):
     operations = [
         migrations.SeparateDatabaseAndState(
             database_operations=[
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS phonebridge_env_is_ac_upload_idx RENAME TO phonebridge_env_ac3dc6_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS phonebridge_env_ac3dc6_idx RENAME TO phonebridge_env_is_ac_upload_idx;",
-                ),
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS phonebridge_token_idx RENAME TO phonebridge_token_d78bf5_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS phonebridge_token_d78bf5_idx RENAME TO phonebridge_token_idx;",
-                ),
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS phonebridge_user_creat_idx RENAME TO phonebridge_user_id_43a6d6_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS phonebridge_user_id_43a6d6_idx RENAME TO phonebridge_user_creat_idx;",
-                ),
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS phonebridge_expires_idx RENAME TO phonebridge_expires_88a1ee_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS phonebridge_expires_88a1ee_idx RENAME TO phonebridge_expires_idx;",
-                ),
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS phonebridge_last_see_idx RENAME TO phonebridge_last_se_a9839e_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS phonebridge_last_se_a9839e_idx RENAME TO phonebridge_last_see_idx;",
-                ),
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS phonebridge_log_user_ts_idx RENAME TO phonebridge_user_id_9749ea_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS phonebridge_user_id_9749ea_idx RENAME TO phonebridge_log_user_ts_idx;",
-                ),
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS phonebridge_log_source_ts_idx RENAME TO phonebridge_source_edb9f8_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS phonebridge_source_edb9f8_idx RENAME TO phonebridge_log_source_ts_idx;",
-                ),
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS phonebridge_telemetry_user_ts_idx RENAME TO phonebridge_user_id_76c561_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS phonebridge_user_id_76c561_idx RENAME TO phonebridge_telemetry_user_ts_idx;",
-                ),
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS phonebridge_telemetry_ep_ts_idx RENAME TO phonebridge_endpoin_eecea4_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS phonebridge_endpoin_eecea4_idx RENAME TO phonebridge_telemetry_ep_ts_idx;",
-                ),
+                migrations.RunPython(_rename_indexes_pg, migrations.RunPython.noop),
             ],
             state_operations=[
                 migrations.RenameIndex(

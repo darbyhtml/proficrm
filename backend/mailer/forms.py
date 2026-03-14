@@ -84,7 +84,7 @@ class GlobalMailAccountForm(forms.ModelForm):
         if self.instance and self.instance.pk and self.instance.smtp_password_enc:
             self.fields["smtp_password"].help_text = "Оставьте пустым, чтобы не менять сохраненный пароль. " + (self.fields["smtp_password"].help_text or "")
         # Если API ключ уже сохранен, показываем подсказку
-        if self.instance and self.instance.pk and self.instance.smtp_bz_api_key:
+        if self.instance and self.instance.pk and self.instance.smtp_bz_api_key_enc:
             self.fields["smtp_bz_api_key"].help_text = "Оставьте пустым, чтобы не менять сохраненный ключ. " + (self.fields["smtp_bz_api_key"].help_text or "")
 
     class Meta:
@@ -96,7 +96,6 @@ class GlobalMailAccountForm(forms.ModelForm):
             "smtp_username",
             "from_email",
             "from_name",
-            "smtp_bz_api_key",
             "is_enabled",
         ]
         widgets = {
@@ -106,7 +105,6 @@ class GlobalMailAccountForm(forms.ModelForm):
             "smtp_username": forms.TextInput(attrs={"class": "input"}),
             "from_email": forms.EmailInput(attrs={"class": "input"}),
             "from_name": forms.TextInput(attrs={"class": "input"}),
-            "smtp_bz_api_key": forms.TextInput(attrs={"class": "input", "type": "password", "autocomplete": "off"}),
         }
     
     def clean(self):
@@ -127,10 +125,10 @@ class GlobalMailAccountForm(forms.ModelForm):
         p = (self.cleaned_data.get("smtp_password") or "").strip()
         if p:
             obj.set_password(p)
-        # Сохраняем API ключ, если он был указан (если пусто - не меняем существующий)
+        # Сохраняем API ключ зашифрованным (если указан; пусто — не меняем)
         api_key = (self.cleaned_data.get("smtp_bz_api_key") or "").strip()
         if api_key:
-            obj.smtp_bz_api_key = api_key
+            obj.set_api_key(api_key)
         if commit:
             obj.save()
         return obj
@@ -143,10 +141,17 @@ class CampaignForm(forms.ModelForm):
         initial=False,
         help_text="Если включено — текущее вложение будет удалено при сохранении.",
     )
+    send_at = forms.DateTimeField(
+        label="Запланировано на",
+        required=False,
+        widget=forms.DateTimeInput(attrs={"class": "input", "type": "datetime-local"}, format="%Y-%m-%dT%H:%M"),
+        input_formats=["%Y-%m-%dT%H:%M", "%Y-%m-%d %H:%M", "%Y-%m-%dT%H:%M:%S"],
+        help_text="Оставьте пустым для немедленного старта. Рассылка не начнётся раньше указанного времени.",
+    )
 
     class Meta:
         model = Campaign
-        fields = ["name", "subject", "sender_name", "body_html", "attachment"]
+        fields = ["name", "subject", "sender_name", "body_html", "attachment", "send_at"]
         widgets = {
             "name": forms.TextInput(attrs={"class": "input"}),
             "subject": forms.TextInput(attrs={"class": "input"}),
@@ -177,7 +182,13 @@ class CampaignForm(forms.ModelForm):
 
     def clean_body_html(self):
         html = (self.cleaned_data.get("body_html") or "").strip()
-        return sanitize_email_html(html)
+        sanitized = sanitize_email_html(html)
+        # Проверяем что после санитизации осталось видимое содержимое
+        import re as _re
+        text_only = _re.sub(r"<[^>]+>", "", sanitized).strip()
+        if not text_only:
+            raise forms.ValidationError("Текст письма не может быть пустым.")
+        return sanitized
 
     def save(self, commit=True):
         obj: Campaign = super().save(commit=False)

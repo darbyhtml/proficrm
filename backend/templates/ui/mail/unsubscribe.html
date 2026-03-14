@@ -19,13 +19,34 @@
   </head>
   <body class="bg-brand-soft/40 text-brand-dark min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-lg bg-white border border-brand-soft rounded-2xl p-6">
-      <div class="text-xl font-semibold mb-2">Вы отписаны</div>
-      <div class="text-sm text-brand-dark/80">
-        {% if email %}Email: <span class="font-mono">{{ email }}</span>{% endif %}
-      </div>
-      <div class="text-sm text-brand-dark/70 mt-3">
-        Вы больше не будете получать рассылки на этот адрес.
-      </div>
+      {% if rate_limited %}
+        <div class="flex items-center gap-2 mb-2">
+          <svg aria-hidden="true" class="w-6 h-6 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126Z"/></svg>
+          <div class="text-xl font-semibold">Слишком много запросов</div>
+        </div>
+        <div class="text-sm text-brand-dark/70 mt-1">
+          Превышен лимит запросов на отписку. Попробуйте снова через 1 час.
+        </div>
+      {% elif email %}
+        <div class="flex items-center gap-2 mb-2">
+          <svg aria-hidden="true" class="w-6 h-6 text-green-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+          <div class="text-xl font-semibold">Вы успешно отписаны</div>
+        </div>
+        <div class="text-sm text-brand-dark/80 mt-1">
+          Адрес <span class="font-mono bg-brand-soft/40 px-1 rounded">{{ email }}</span> добавлен в список отписок.
+        </div>
+        <div class="text-sm text-brand-dark/60 mt-3">
+          Вы больше не будете получать рассылки на этот адрес. Если это произошло по ошибке — обратитесь к отправителю письма.
+        </div>
+      {% else %}
+        <div class="flex items-center gap-2 mb-2">
+          <svg aria-hidden="true" class="w-6 h-6 text-amber-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126Z"/></svg>
+          <div class="text-xl font-semibold">Ссылка недействительна</div>
+        </div>
+        <div class="text-sm text-brand-dark/70 mt-1">
+          Ссылка для отписки устарела или неверна. Возможно, вы уже отписались ранее.
+        </div>
+      {% endif %}
     </div>
   </body>
 </html>

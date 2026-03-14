@@ -3,6 +3,17 @@
 from django.db import migrations
 
 
+
+
+def _rename_indexes_pg(apps, schema_editor):
+    """ALTER INDEX IF EXISTS работает только в PostgreSQL; для SQLite — пропускаем."""
+    if schema_editor.connection.vendor != "postgresql":
+        return
+    schema_editor.execute("ALTER INDEX IF EXISTS audit_error_created_idx RENAME TO audit_error_created_dc9bc2_idx;")
+    schema_editor.execute("ALTER INDEX IF EXISTS audit_error_level_res_idx RENAME TO audit_error_level_bbfdc3_idx;")
+    schema_editor.execute("ALTER INDEX IF EXISTS audit_error_path_res_idx RENAME TO audit_error_path_54ddb9_idx;")
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -12,18 +23,7 @@ class Migration(migrations.Migration):
     operations = [
         migrations.SeparateDatabaseAndState(
             database_operations=[
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS audit_error_created_idx RENAME TO audit_error_created_dc9bc2_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS audit_error_created_dc9bc2_idx RENAME TO audit_error_created_idx;",
-                ),
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS audit_error_level_res_idx RENAME TO audit_error_level_bbfdc3_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS audit_error_level_bbfdc3_idx RENAME TO audit_error_level_res_idx;",
-                ),
-                migrations.RunSQL(
-                    sql="ALTER INDEX IF EXISTS audit_error_path_res_idx RENAME TO audit_error_path_54ddb9_idx;",
-                    reverse_sql="ALTER INDEX IF EXISTS audit_error_path_54ddb9_idx RENAME TO audit_error_path_res_idx;",
-                ),
+                migrations.RunPython(_rename_indexes_pg, migrations.RunPython.noop),
             ],
             state_operations=[
                 migrations.RenameIndex(

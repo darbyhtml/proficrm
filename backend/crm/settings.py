@@ -295,6 +295,13 @@ if not DEBUG and not MAILER_FERNET_KEY:
 # Public base URL for emails/unsubscribe (optional; example: https://crm.example.ru)
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
 
+# Mailer: размер батча отправки (получателей за один проход задачи)
+MAILER_SEND_BATCH_SIZE = int(os.getenv("MAILER_SEND_BATCH_SIZE", "10"))
+# Mailer: таймаут Redis-лока задачи send_pending_emails (секунды)
+MAILER_SEND_LOCK_TIMEOUT = int(os.getenv("MAILER_SEND_LOCK_TIMEOUT", "120"))
+# Mailer: максимум получателей в кампании
+MAILER_MAX_CAMPAIGN_RECIPIENTS = int(os.getenv("MAILER_MAX_CAMPAIGN_RECIPIENTS", "10000"))
+
 # Security contact email for security.txt
 SECURITY_CONTACT_EMAIL = os.getenv("SECURITY_CONTACT_EMAIL", "")
 
@@ -610,3 +617,7 @@ MAILER_LOG_FULL_EMAILS = os.getenv("MAILER_LOG_FULL_EMAILS", "False").lower() ==
 # Установите уникальный MAILER_LOG_HASH_SALT через environment variable.
 # Пример: MAILER_LOG_HASH_SALT=$(openssl rand -hex 32)
 MAILER_LOG_HASH_SALT = os.getenv("MAILER_LOG_HASH_SALT", "default-salt-change-in-production")
+
+# Custom test runner: при тестах на SQLite игнорирует PostgreSQL-специфичный синтаксис
+# (GIN/trigram/tsvector индексы, расширения, триггеры). На PostgreSQL — стандартный DiscoverRunner.
+TEST_RUNNER = "crm.test_runner.SQLiteCompatibleTestRunner"

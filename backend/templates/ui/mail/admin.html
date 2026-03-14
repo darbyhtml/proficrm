@@ -127,6 +127,20 @@
       </div>
     </div>
 
+    {# Предупреждение: PUBLIC_BASE_URL не задан — ссылки отписки не будут работать #}
+    {% if public_base_url_missing %}
+      <div class="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 flex items-start gap-3 text-sm text-amber-900">
+        <svg class="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+        </svg>
+        <div>
+          <b>PUBLIC_BASE_URL не задан.</b>
+          Ссылки отписки в письмах будут генерироваться некорректно — получатели не смогут отписаться.
+          Задайте переменную окружения <code class="bg-amber-100 px-1 rounded">PUBLIC_BASE_URL=https://ваш-домен.ru</code> и перезапустите приложение.
+        </div>
+      </div>
+    {% endif %}
+
     {# Табы #}
     <div class="glass-card rounded-2xl p-6">
       <div class="flex flex-wrap gap-3 mb-6 pb-4 border-b border-brand-soft/30">
