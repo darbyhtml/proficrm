@@ -8,7 +8,7 @@ from rest_framework import status
 
 from companies.models import Company
 from companies.services import resolve_target_companies
-from tasksapp.models import Task, TaskType
+from tasksapp.models import Task, TaskComment, TaskEvent, TaskType
 from ui import views as ui_views
 
 User = get_user_model()
@@ -457,3 +457,123 @@ class TaskBulkFilterSummaryUnitTestCase(TestCase):
             "Фильтры не ограничивают выборку (все доступные задачи).",
             summary_text,
         )
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class TaskCommentTestCase(TestCase):
+    """Тесты модели TaskComment — добавление комментариев к задаче."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="commenter",
+            email="commenter@example.com",
+            password="testpass123",
+            role=User.Role.MANAGER,
+        )
+        self.task_type = TaskType.objects.create(name="Комментируемая задача")
+        self.task = Task.objects.create(
+            created_by=self.user,
+            assigned_to=self.user,
+            title="Тестовая задача",
+            type=self.task_type,
+            status=Task.Status.IN_PROGRESS,
+        )
+
+    def test_comment_created_and_linked(self):
+        """Комментарий создаётся и привязывается к задаче."""
+        comment = TaskComment.objects.create(
+            task=self.task,
+            author=self.user,
+            text="Первый комментарий",
+        )
+        self.assertEqual(comment.task_id, self.task.id)
+        self.assertEqual(comment.author_id, self.user.id)
+        self.assertEqual(comment.text, "Первый комментарий")
+        self.assertEqual(self.task.comments.count(), 1)
+
+    def test_multiple_comments_ordered_by_created_at(self):
+        """Комментарии возвращаются в порядке создания."""
+        TaskComment.objects.create(task=self.task, author=self.user, text="Первый")
+        TaskComment.objects.create(task=self.task, author=self.user, text="Второй")
+        texts = list(self.task.comments.values_list("text", flat=True))
+        self.assertEqual(texts, ["Первый", "Второй"])
+
+    def test_comment_deleted_with_task(self):
+        """При удалении задачи удаляются и её комментарии (CASCADE)."""
+        TaskComment.objects.create(task=self.task, author=self.user, text="Будет удалён")
+        task_id = self.task.id
+        self.task.delete()
+        self.assertEqual(TaskComment.objects.filter(task_id=task_id).count(), 0)
+
+    def test_comment_str(self):
+        """__str__ работает без ошибок."""
+        comment = TaskComment.objects.create(task=self.task, author=self.user, text="Test")
+        self.assertIn(str(self.task.id), str(comment))
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class TaskEventTestCase(TestCase):
+    """Тесты модели TaskEvent — история изменений задачи."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="actor_user",
+            email="actor@example.com",
+            password="testpass123",
+            role=User.Role.ADMIN,
+        )
+        self.task_type = TaskType.objects.create(name="Отслеживаемая задача")
+        self.task = Task.objects.create(
+            created_by=self.user,
+            assigned_to=self.user,
+            title="Задача с историей",
+            type=self.task_type,
+            status=Task.Status.NEW,
+        )
+
+    def test_event_created(self):
+        """Событие создаётся и привязывается к задаче."""
+        ev = TaskEvent.objects.create(
+            task=self.task,
+            actor=self.user,
+            kind=TaskEvent.Kind.CREATED,
+            new_value="Задача с историей",
+        )
+        self.assertEqual(ev.task_id, self.task.id)
+        self.assertEqual(ev.kind, TaskEvent.Kind.CREATED)
+        self.assertEqual(ev.new_value, "Задача с историей")
+        self.assertEqual(ev.old_value, "")
+
+    def test_status_changed_event(self):
+        """Событие смены статуса содержит старое и новое значение."""
+        ev = TaskEvent.objects.create(
+            task=self.task,
+            actor=self.user,
+            kind=TaskEvent.Kind.STATUS_CHANGED,
+            old_value="Новая",
+            new_value="В работе",
+        )
+        self.assertEqual(ev.old_value, "Новая")
+        self.assertEqual(ev.new_value, "В работе")
+
+    def test_events_ordered_by_created_at(self):
+        """События возвращаются в хронологическом порядке."""
+        TaskEvent.objects.create(task=self.task, actor=self.user, kind=TaskEvent.Kind.CREATED, new_value="a")
+        TaskEvent.objects.create(task=self.task, actor=self.user, kind=TaskEvent.Kind.STATUS_CHANGED, old_value="a", new_value="b")
+        kinds = list(self.task.events.values_list("kind", flat=True))
+        self.assertEqual(kinds[0], TaskEvent.Kind.CREATED)
+        self.assertEqual(kinds[1], TaskEvent.Kind.STATUS_CHANGED)
+
+    def test_events_deleted_with_task(self):
+        """При удалении задачи удаляются и события (CASCADE)."""
+        TaskEvent.objects.create(task=self.task, actor=self.user, kind=TaskEvent.Kind.CREATED)
+        task_id = self.task.id
+        self.task.delete()
+        self.assertEqual(TaskEvent.objects.filter(task_id=task_id).count(), 0)
+
+    def test_all_kind_choices_valid(self):
+        """Все варианты kind из TaskEvent.Kind корректно сохраняются."""
+        for kind, _ in TaskEvent.Kind.choices:
+            ev = TaskEvent.objects.create(task=self.task, actor=self.user, kind=kind)
+            self.assertEqual(ev.kind, kind)
+            ev.delete()

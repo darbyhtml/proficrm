@@ -49,4 +49,52 @@ class Task(models.Model):
     def __str__(self) -> str:
         return self.title
 
-# Create your models here.
+
+class TaskComment(models.Model):
+    """Комментарий к задаче — внутренняя переписка/заметки по ходу работы."""
+
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="comments")
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Автор",
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="task_comments",
+    )
+    text = models.TextField("Текст")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self) -> str:
+        return f"Комментарий к задаче {self.task_id}"
+
+
+class TaskEvent(models.Model):
+    """История изменений задачи: смена статуса, переназначение, перенос дедлайна."""
+
+    class Kind(models.TextChoices):
+        CREATED = "created", "Создана"
+        STATUS_CHANGED = "status_changed", "Статус изменён"
+        ASSIGNED = "assigned", "Переназначена"
+        DEADLINE_CHANGED = "deadline_changed", "Дедлайн изменён"
+
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="events")
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="Кто изменил",
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="task_events",
+    )
+    kind = models.CharField("Тип события", max_length=32, choices=Kind.choices)
+    old_value = models.CharField("Старое значение", max_length=255, blank=True, default="")
+    new_value = models.CharField("Новое значение", max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.get_kind_display()} — задача {self.task_id}"

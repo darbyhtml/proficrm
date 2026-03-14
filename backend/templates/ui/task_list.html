@@ -8,7 +8,19 @@
       <div>
         <h1 class="text-2xl font-semibold">Задачи</h1>
         <div class="text-sm text-brand-dark/70">
-          Фильтры: мои / просрочено / статус
+          {% if mine == '1' or overdue == '1' or today == '1' or show_done == '1' or status or assigned_to or search_q or date_from or date_to %}
+            <span class="text-brand-dark/50">Активные фильтры:</span>
+            {% if mine == '1' %}<span class="inline-flex items-center gap-1 ml-1 px-1.5 py-0.5 rounded bg-brand-soft/50 text-brand-dark text-xs">Мои</span>{% endif %}
+            {% if overdue == '1' %}<span class="inline-flex items-center gap-1 ml-1 px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-xs">Просрочено</span>{% endif %}
+            {% if today == '1' %}<span class="inline-flex items-center gap-1 ml-1 px-1.5 py-0.5 rounded bg-brand-soft/50 text-brand-dark text-xs">Сегодня</span>{% endif %}
+            {% if show_done == '1' %}<span class="inline-flex items-center gap-1 ml-1 px-1.5 py-0.5 rounded bg-green-100 text-green-700 text-xs">Выполненные</span>{% endif %}
+            {% if status %}<span class="inline-flex items-center gap-1 ml-1 px-1.5 py-0.5 rounded bg-brand-soft/50 text-brand-dark text-xs">Статус</span>{% endif %}
+            {% if assigned_to %}<span class="inline-flex items-center gap-1 ml-1 px-1.5 py-0.5 rounded bg-brand-soft/50 text-brand-dark text-xs">Исполнитель</span>{% endif %}
+            {% if search_q %}<span class="inline-flex items-center gap-1 ml-1 px-1.5 py-0.5 rounded bg-brand-orange/20 text-brand-dark text-xs">«{{ search_q }}»</span>{% endif %}
+            {% if date_from or date_to %}<span class="inline-flex items-center gap-1 ml-1 px-1.5 py-0.5 rounded bg-brand-soft/50 text-brand-dark text-xs">Период</span>{% endif %}
+          {% else %}
+            <span class="text-brand-dark/40">Все задачи</span>
+          {% endif %}
           {% if tasks_count is not None %}
             <span class="ml-2 font-medium text-brand-dark">· Найдено: {{ tasks_count }}</span>
           {% endif %}
@@ -186,13 +198,13 @@
         </label>
         <label class="inline-flex items-center gap-1.5 text-xs text-brand-dark/80 cursor-pointer whitespace-nowrap py-1 px-1.5 rounded hover:bg-brand-soft/30 transition-colors" title="Показать только выполненные задачи">
           <input type="checkbox" name="show_done" value="1" {% if show_done == '1' %}checked{% endif %} class="rounded border-brand-soft/80" />
-          <span>Выполн.</span>
+          <span>Выполненные</span>
         </label>
       </div>
       <div class="flex items-center gap-2 flex-shrink-0 ml-auto">
-        <label class="inline-flex items-center gap-1.5 text-xs text-brand-dark/80 cursor-pointer whitespace-nowrap py-1 px-1.5 rounded hover:bg-brand-soft/30 transition-colors" title="При возврате в «Задачи» фильтры восстановятся">
+        <label class="inline-flex items-center gap-1.5 text-xs text-brand-dark/80 cursor-pointer whitespace-nowrap py-1 px-1.5 rounded hover:bg-brand-soft/30 transition-colors" title="Запомнить текущие фильтры — при возврате на страницу задач они восстановятся">
           <input type="checkbox" id="rememberTaskFilters" class="rounded border-brand-soft/80" />
-          <span>Запомнить</span>
+          <span>Запомнить фильтры</span>
         </label>
         <button type="button" class="btn btn-outline btn-sm flex items-center gap-1.5 py-1.5 px-2.5 text-sm" id="dateFilterBtn" title="{% if show_done == '1' %}Период: когда задача была выполнена{% else %}Период: дедлайн задачи{% endif %}">
           <svg class="w-3.5 h-3.5 text-brand-dark/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -242,7 +254,7 @@
       })();
     </script>
 
-    {% if can_bulk_actions %}
+    {% if can_bulk_actions and page.object_list %}
     <div class="task-bulk-panel tasks-layout-block">
       <div class="tasks-layout-block" style="position: sticky; top: .75rem; z-index: 30;">
         <div class="flex items-center justify-between gap-3 mb-2">
@@ -386,8 +398,8 @@
                 </a>
               </th>
               <th class="text-left px-2 py-2">
-                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=assignee&dir={% if sort_field == 'assignee' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'assignee' %}text-brand-orange font-bold{% endif %}">
-                  Кому
+                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=assignee&dir={% if sort_field == 'assignee' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'assignee' %}text-brand-orange font-bold{% endif %}" title="Исполнитель — кому назначена задача">
+                  Исполнитель
                   <div class="flex flex-col gap-0.5">
                     <svg class="w-3 h-3 {% if sort_field == 'assignee' and sort_dir == 'asc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
@@ -399,8 +411,8 @@
                 </a>
               </th>
               <th class="text-left px-2 py-2">
-                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=created_by&dir={% if sort_field == 'created_by' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'created_by' %}text-brand-orange font-bold{% endif %}">
-                  Кто
+                <a href="?{% if qs %}{{ qs }}&{% endif %}sort=created_by&dir={% if sort_field == 'created_by' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'created_by' %}text-brand-orange font-bold{% endif %}" title="Постановщик — кто создал задачу">
+                  Постановщик
                   <div class="flex flex-col gap-0.5">
                     <svg class="w-3 h-3 {% if sort_field == 'created_by' and sort_dir == 'asc' %}text-brand-orange{% else %}opacity-30{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
@@ -613,7 +625,18 @@
                 <td class="muted px-2 py-2" style="width:7.5rem;min-width:7.5rem;max-width:7.5rem;word-wrap:break-word;overflow-wrap:break-word;"><span style="line-height:1.4">{{ t.created_at|date:"d.m.Y H:i" }}</span></td>
               </tr>
             {% empty %}
-              <tr><td class="muted" colspan="{% if show_task_checkboxes %}8{% else %}7{% endif %}" style="padding:1.25rem 1rem">Задач нет.</td></tr>
+              <tr>
+                <td colspan="{% if show_task_checkboxes %}8{% else %}7{% endif %}" style="padding:2rem 1rem;text-align:center;">
+                  <div class="text-brand-dark/50 text-sm">
+                    {% if mine == '1' or overdue == '1' or today == '1' or show_done == '1' or status or assigned_to or search_q or date_from or date_to %}
+                      По текущим фильтрам задач не найдено.
+                      <a href="{% url 'task_list' %}" class="link ml-1">Сбросить фильтры</a>
+                    {% else %}
+                      Задач нет. <button type="button" class="link" data-create-task>Создать первую задачу</button>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
             {% endfor %}
           </tbody>
         </table>
@@ -635,6 +658,10 @@
             {% if today %}<input type="hidden" name="today" value="{{ today }}" />{% endif %}
             {% if show_done %}<input type="hidden" name="show_done" value="{{ show_done }}" />{% endif %}
             {% if sort %}<input type="hidden" name="sort" value="{{ sort }}" />{% endif %}
+            {% if assigned_to %}<input type="hidden" name="assigned_to" value="{{ assigned_to }}" />{% endif %}
+            {% if search_q %}<input type="hidden" name="q" value="{{ search_q }}" />{% endif %}
+            {% if date_from %}<input type="hidden" name="date_from" value="{{ date_from }}" />{% endif %}
+            {% if date_to %}<input type="hidden" name="date_to" value="{{ date_to }}" />{% endif %}
           </form>
         </div>
         <div>

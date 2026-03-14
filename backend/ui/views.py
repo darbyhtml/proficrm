@@ -51,7 +51,7 @@ from companies.permissions import (
 )
 from companies.policy import can_view_company as can_view_company_policy, visible_companies_qs
 from companies.decorators import require_can_view_company, require_can_view_note_company
-from tasksapp.models import Task, TaskType
+from tasksapp.models import Task, TaskComment, TaskEvent, TaskType
 from tasksapp.policy import visible_tasks_qs, can_manage_task_status
 from notifications.models import Notification
 from notifications.service import notify
@@ -6982,6 +6982,13 @@ def task_create(request: HttpRequest) -> HttpResponse:
 
             task.save()
             form.save_m2m()
+            # История создания
+            TaskEvent.objects.create(
+                task=task,
+                actor=user,
+                kind=TaskEvent.Kind.CREATED,
+                new_value=task.title,
+            )
             # уведомление назначенному (если это не создатель)
             if task.assigned_to_id and task.assigned_to_id != user.id:
                 notify(
@@ -8180,6 +8187,7 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
         messages.error(request, "Нет прав на изменение статуса этой задачи.")
         return redirect("task_list")
 
+    old_status = task.status
     new_status = (request.POST.get("status") or "").strip()
     if new_status not in {s for s, _ in Task.Status.choices}:
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
@@ -8220,6 +8228,17 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
     if new_status == Task.Status.DONE:
         task.completed_at = timezone.now()
     task.save(update_fields=["status", "completed_at", "updated_at"])
+
+    # История изменений
+    old_label = dict(Task.Status.choices).get(old_status, old_status)
+    new_label = dict(Task.Status.choices).get(new_status, new_status)
+    TaskEvent.objects.create(
+        task=task,
+        actor=user,
+        kind=TaskEvent.Kind.STATUS_CHANGED,
+        old_value=old_label,
+        new_value=new_label,
+    )
 
     if not save_to_notes:
         messages.success(request, "Статус обновлён.")
@@ -8305,6 +8324,35 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
 
 
 @login_required
+def task_add_comment(request: HttpRequest, task_id) -> HttpResponse:
+    """Добавление комментария к задаче (только POST/AJAX)."""
+    if request.method != "POST":
+        return JsonResponse({"error": "Метод не поддерживается."}, status=405)
+
+    user: User = request.user
+    task = get_object_or_404(Task, id=task_id)
+
+    # Проверяем, что пользователь имеет доступ к задаче
+    if not (_can_manage_task_status_ui(user, task) or _can_edit_task_ui(user, task)):
+        return JsonResponse({"error": "Нет доступа к этой задаче."}, status=403)
+
+    text = (request.POST.get("text") or "").strip()
+    if not text:
+        return JsonResponse({"error": "Комментарий не может быть пустым."}, status=400)
+
+    comment = TaskComment.objects.create(task=task, author=user, text=text)
+    return JsonResponse({
+        "ok": True,
+        "comment": {
+            "id": comment.id,
+            "author": str(user),
+            "text": comment.text,
+            "created_at": comment.created_at.strftime("%d.%m.%Y %H:%M"),
+        },
+    })
+
+
+@login_required
 @policy_required(resource_type="page", resource="ui:tasks:detail")
 def task_view(request: HttpRequest, task_id) -> HttpResponse:
     """
@@ -8319,6 +8367,7 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
     task = get_object_or_404(
         Task.objects.select_related("company", "assigned_to", "created_by", "type").only(
             "id", "title", "description", "status", "due_at", "created_at", "completed_at",
+            "is_urgent", "recurrence_rrule",
             "company_id", "assigned_to_id", "created_by_id", "type_id",
             "company__id", "company__name", "company__responsible_id",
             "assigned_to__id", "assigned_to__first_name", "assigned_to__last_name",
@@ -8405,10 +8454,15 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
     now = timezone.now()
     local_now = timezone.localtime(now)
     
+    comments = list(task.comments.select_related("author").all())
+    events = list(task.events.select_related("actor").all())
+
     return render(request, "ui/task_view_modal.html", {
         "view_task": task,
         "view_task_overdue_days": view_task_overdue_days,
         "local_now": local_now,
+        "task_comments": comments,
+        "task_events": events,
     })
 
 
@@ -8439,11 +8493,23 @@ def task_edit(request: HttpRequest, task_id) -> HttpResponse:
     if request.method == "POST":
         form = TaskEditForm(request.POST, instance=task)
         if form.is_valid():
+            old_due_at = task.due_at
             updated_task: Task = form.save(commit=False)
             # Заголовок всегда синхронизируем с выбранным типом/статусом
             if updated_task.type:
                 updated_task.title = updated_task.type.name
             updated_task.save()
+            # История: дедлайн изменился?
+            if old_due_at != updated_task.due_at:
+                old_str = old_due_at.strftime("%d.%m.%Y %H:%M") if old_due_at else "—"
+                new_str = updated_task.due_at.strftime("%d.%m.%Y %H:%M") if updated_task.due_at else "—"
+                TaskEvent.objects.create(
+                    task=updated_task,
+                    actor=user,
+                    kind=TaskEvent.Kind.DEADLINE_CHANGED,
+                    old_value=old_str,
+                    new_value=new_str,
+                )
             log_event(
                 actor=user,
                 verb=ActivityEvent.Verb.UPDATE,
