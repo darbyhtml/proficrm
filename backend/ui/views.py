@@ -6562,6 +6562,13 @@ def task_list(request: HttpRequest) -> HttpResponse:
     if show_done == "1" and (date_from or date_to):
         qs = qs.filter(completed_at__isnull=False)
 
+    # Текстовый поиск по названию/описанию задачи
+    search_q = (request.GET.get("q") or "").strip()
+    if search_q:
+        qs = qs.filter(
+            Q(title__icontains=search_q) | Q(description__icontains=search_q)
+        )
+
     # Сортировка: читаем из GET или из cookies
     sort_field = (request.GET.get("sort") or "").strip()
     sort_dir = (request.GET.get("dir") or "").strip().lower()
@@ -6693,6 +6700,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
                         view_task_overdue_days = delta.days
                     # Добавляем флаги прав
                     view_task.can_edit_task = _can_edit_task_ui(user, view_task)  # type: ignore[attr-defined]
+                    view_task.can_manage_status = _can_manage_task_status_ui(user, view_task)  # type: ignore[attr-defined]
         except (ValueError, TypeError):
             pass
 
@@ -6757,6 +6765,7 @@ def task_list(request: HttpRequest) -> HttpResponse:
             "view_task": view_task,
             "view_task_overdue_days": view_task_overdue_days,
             "tasks_count": tasks_count,
+            "search_q": search_q,
         },
     )
     
@@ -8381,8 +8390,9 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
         delta = task.completed_at - task.due_at
         view_task_overdue_days = delta.days
     
-    # Добавляем флаг для прав на редактирование
+    # Добавляем флаги прав
     task.can_edit_task = _can_edit_task_ui(user, task)  # type: ignore[attr-defined]
+    task.can_manage_status = _can_manage_task_status_ui(user, task)  # type: ignore[attr-defined]
     
     # Сопоставляем задачу с TaskType если нужно
     if not task.type and task.title:

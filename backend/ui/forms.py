@@ -753,10 +753,11 @@ class TaskEditForm(forms.ModelForm):
     class Meta:
         model = Task
         # Заголовок не редактируется вручную, берётся из выбранного типа/статуса.
-        fields = ["description", "type", "due_at"]
+        fields = ["description", "type", "due_at", "is_urgent"]
         widgets = {
             "description": forms.Textarea(attrs={"rows": 4, "class": "w-full rounded-lg border px-3 py-2"}),
             "type": TaskTypeSelectWidget(attrs={"class": "w-full rounded-lg border px-3 py-2 task-type-select"}),
+            "is_urgent": forms.CheckboxInput(attrs={"class": "rounded border-gray-300"}),
         }
 
     def clean_type(self):

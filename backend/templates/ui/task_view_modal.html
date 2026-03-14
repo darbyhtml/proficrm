@@ -108,6 +108,29 @@
           </div>
         {% endif %}
       </div>
+
+      {# Кнопки смены статуса прямо из модалки просмотра #}
+      {% if view_task.can_manage_status and view_task.status != 'done' and view_task.status != 'cancelled' %}
+        <div class="flex flex-wrap gap-2 pt-3 border-t mt-3">
+          {% if view_task.status != 'in_progress' %}
+            <form method="post" action="{% url 'task_set_status' view_task.id %}">
+              {% csrf_token %}
+              <button name="status" value="in_progress" class="btn btn-outline flex items-center gap-1.5">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zM8 6v4M16 6v4M8 14h8"/>
+                </svg>
+                В работу
+              </button>
+            </form>
+          {% endif %}
+          <button type="button" class="btn btn-primary flex items-center gap-1.5" data-task-complete data-task-id="{{ view_task.id }}">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+            Выполнено
+          </button>
+        </div>
+      {% endif %}
     </div>
   </div>
 </div>
