@@ -15,7 +15,6 @@
         if (localStorage.getItem(prefKey) === '1') {
           var saved = localStorage.getItem(qsKey) || '';
           if (saved && (!qs || qs === '?')) {
-            document.documentElement.style.opacity = '0';
             window.location.replace('/tasks/?' + saved);
             return;
           }
@@ -30,24 +29,12 @@
           if (pref && pref.sort) {
             params.set('sort', pref.sort);
             if (pref.dir) params.set('dir', pref.dir);
-            document.documentElement.style.opacity = '0';
             window.location.replace('/tasks/?' + params.toString());
             return;
           }
         }
       } catch(e) {}
     })();
-  </script>
-  <script>
-    (function(){try{
-      var v=localStorage.getItem('proficrm:tasks:cols_compact');
-      if(v===null||v==='1'){
-        var s=document.createElement('style');
-        s.id='_tasks_cols_init';
-        s.textContent='.tasks-table col.col-secondary,.tasks-table .col-secondary{display:none}';
-        (document.head||document.documentElement).appendChild(s);
-      }
-    }catch(e){}}());
   </script>
   <div class="tasks-layout">
     <div class="flex items-end justify-between gap-4 mb-5">
@@ -85,11 +72,6 @@
       .tasks-table tbody tr[data-view-task]:hover > td { background: rgba(0,61,56,.05); }
       .tasks-table tbody tr[data-view-task]:focus { outline: none; }
       .tasks-table tbody tr[data-view-task]:focus-visible > td { background: rgba(0,61,56,.07); box-shadow: inset 0 0 0 2px rgba(0,61,56,.3); }
-
-      /* Колонки toggle: скрываем и <col> и <td>/<th> вместе,
-         иначе colgroup резервирует ширину под скрытые ячейки и ломает layout */
-      .tasks-table.hide-secondary col.col-secondary { display: none; }
-      .tasks-table.hide-secondary .col-secondary { display: none; }
 
       /* Запомнить фильтры — визуальный акцент когда активно */
       #rememberTaskFilters:checked + span { color: rgb(0,61,56); font-weight: 500; }
@@ -342,25 +324,21 @@
     {% endif %}
 
     <div class="bg-white border border-brand-soft/60 rounded-2xl overflow-hidden tasks-layout-block">
-      <div class="flex items-center justify-between px-4 py-2.5 border-b border-brand-soft/40">
+      <div class="px-4 py-2.5 border-b border-brand-soft/40">
         <span class="text-xs text-brand-dark/50 font-medium">Таблица задач</span>
-        <button type="button" id="colsToggleBtn" class="inline-flex items-center gap-1.5 text-xs font-medium text-brand-dark/70 hover:text-brand-dark bg-brand-soft/30 hover:bg-brand-soft/60 border border-brand-soft/60 rounded-lg px-2.5 py-1.5 transition-colors" title="Показать / скрыть дополнительные колонки (Постановщик, Дата создания)">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-          <span id="colsToggleBtnLabel">Показать все</span>
-        </button>
       </div>
       <div class="overflow-x-auto">
-        <table class="table w-full tasks-table" style="table-layout: fixed; min-width: 62rem;">
+        <table class="table w-full tasks-table" style="table-layout: fixed; min-width: 76rem;">
           <colgroup>
             {% if show_task_checkboxes %}<col style="width: 2.8125rem;" />{% endif %}
             <col style="width: 13rem;" />
             <col style="width: 10rem;" />
             <col style="width: 10rem;" />
-            <col class="col-secondary" style="width: 8rem;" />
+            <col style="width: 8rem;" />
             <col style="width: 12rem;" />
             <col style="width: 5.5rem;" />
             <col style="width: 7rem;" />
-            <col class="col-secondary" style="width: 7.5rem;" />
+            <col style="width: 7.5rem;" />
           </colgroup>
           <thead>
             <tr>
@@ -408,7 +386,7 @@
                   </div>
                 </a>
               </th>
-              <th scope="col" class="text-left px-3 py-3 col-secondary" aria-sort="{% if sort_field == 'created_by' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}">
+              <th scope="col" class="text-left px-3 py-3" aria-sort="{% if sort_field == 'created_by' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=created_by&dir={% if sort_field == 'created_by' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'created_by' %}text-brand-orange font-bold{% endif %}" title="Постановщик — кто создал задачу">
                   Постановщик
                   <div class="flex flex-col gap-0.5">
@@ -448,7 +426,7 @@
                 </a>
               </th>
               <th scope="col" class="text-center px-3 py-3">Действия</th>
-              <th scope="col" class="text-left px-3 py-3 col-secondary" aria-sort="{% if sort_field == 'created_at' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}">
+              <th scope="col" class="text-left px-3 py-3" aria-sort="{% if sort_field == 'created_at' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=created_at&dir={% if sort_field == 'created_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'created_at' %}text-brand-orange font-bold{% endif %}">
                   Дата создания
                   <div class="flex flex-col gap-0.5">
@@ -537,7 +515,7 @@
                   {% endif %}
                 </td>
                 <td class="px-3 py-3 min-w-0 break-words"><span style="line-height:1.4">{{ t.assigned_to|default:"—" }}</span></td>
-                <td class="px-3 py-3 min-w-0 break-words col-secondary"><span style="line-height:1.4">{{ t.created_by|default:"—" }}</span></td>
+                <td class="px-3 py-3 min-w-0 break-words"><span style="line-height:1.4">{{ t.created_by|default:"—" }}</span></td>
                 <td class="muted px-3 py-3 min-w-0 break-words" style="width:12rem;min-width:12rem;max-width:12rem;">
                   {% if t.status == 'done' and t.completed_at %}
                     <div class="flex flex-col gap-0.5" style="line-height:1.4">
@@ -606,7 +584,7 @@
                     {% endif %}
                   </div>
                 </td>
-                <td class="muted px-3 py-3 col-secondary" style="width:7.5rem;min-width:7.5rem;max-width:7.5rem;word-wrap:break-word;overflow-wrap:break-word;"><span style="line-height:1.4">{{ t.created_at|date:"d.m.Y H:i" }}</span></td>
+                <td class="muted px-3 py-3" style="width:7.5rem;min-width:7.5rem;max-width:7.5rem;word-wrap:break-word;overflow-wrap:break-word;"><span style="line-height:1.4">{{ t.created_at|date:"d.m.Y H:i" }}</span></td>
               </tr>
             {% empty %}
               <tr>
@@ -2069,45 +2047,6 @@
         .catch(err => {
           _taskNotify('Ошибка: ' + err.message);
         });
-      });
-    })();
-  </script>
-
-  <script>
-    // Колонки toggle: скрывает/показывает вторичные колонки, сохраняет в localStorage
-    (function() {
-      const table = document.querySelector('.tasks-table');
-      const btn = document.getElementById('colsToggleBtn');
-      const label = document.getElementById('colsToggleBtnLabel');
-      if (!table || !btn) return;
-
-      const LS_KEY = 'proficrm:tasks:cols_compact';
-
-      function isCompact() {
-        try {
-          const v = localStorage.getItem(LS_KEY);
-          return v === null ? true : v === '1'; // по умолчанию — скрывать вторичные колонки
-        } catch(e) { return true; }
-      }
-      function setCompact(v) {
-        try { localStorage.setItem(LS_KEY, v ? '1' : '0'); } catch(e) {}
-      }
-
-      function apply(compact) {
-        table.classList.toggle('hide-secondary', compact);
-        if (label) label.textContent = compact ? 'Показать все' : 'Скрыть доп.';
-        btn.title = compact ? 'Показать все колонки (Постановщик, Дата создания)' : 'Скрыть дополнительные колонки';
-      }
-
-      // Restore on load; remove the FOUC-prevention style that was injected synchronously
-      apply(isCompact());
-      var initStyle = document.getElementById('_tasks_cols_init');
-      if (initStyle) initStyle.parentNode.removeChild(initStyle);
-
-      btn.addEventListener('click', function() {
-        const next = !table.classList.contains('hide-secondary');
-        setCompact(next);
-        apply(next);
       });
     })();
   </script>
