@@ -167,29 +167,55 @@
         if (!form) return;
         const mineCb = form.querySelector('input[name="mine"]');
         const assigneeSelect = form.querySelector('select[name="assigned_to"]');
-        if (!mineCb || !assigneeSelect) return;
+        const rememberCb = document.getElementById('rememberTaskFilters');
 
-        function syncMineAndAssignee() {
-          if (mineCb.checked) {
-            // Сохраняем предыдущее значение, чтобы восстановить после снятия "Мои"
-            assigneeSelect.dataset.prevValue = assigneeSelect.value || '';
-            assigneeSelect.value = '';
-            assigneeSelect.disabled = true;
-            assigneeSelect.classList.add('opacity-60', 'pointer-events-none');
-            assigneeSelect.title = 'Для выбора конкретного исполнителя снимите галочку «Мои».';
-          } else {
-            assigneeSelect.disabled = false;
-            assigneeSelect.classList.remove('opacity-60', 'pointer-events-none');
-            assigneeSelect.title = '';
-            if (assigneeSelect.dataset.prevValue !== undefined) {
-              assigneeSelect.value = assigneeSelect.dataset.prevValue;
+        // ── 1. Синхронизация «Мои» и Исполнитель ────────────────────────────────
+        if (mineCb && assigneeSelect) {
+          function syncMineAndAssignee() {
+            if (mineCb.checked) {
+              assigneeSelect.dataset.prevValue = assigneeSelect.value || '';
+              assigneeSelect.value = '';
+              assigneeSelect.disabled = true;
+              assigneeSelect.classList.add('opacity-60', 'pointer-events-none');
+              assigneeSelect.title = 'Для выбора конкретного исполнителя снимите галочку «Мои».';
+            } else {
+              assigneeSelect.disabled = false;
+              assigneeSelect.classList.remove('opacity-60', 'pointer-events-none');
+              assigneeSelect.title = '';
+              if (assigneeSelect.dataset.prevValue !== undefined) {
+                assigneeSelect.value = assigneeSelect.dataset.prevValue;
+              }
             }
           }
+          syncMineAndAssignee();
+          mineCb.addEventListener('change', syncMineAndAssignee);
         }
 
-        syncMineAndAssignee();
-        mineCb.addEventListener('change', syncMineAndAssignee);
+        // ── 2. Авто-сабмит при смене чекбоксов и селектов ───────────────────────
+        // Исключаем только «Запомнить» (он управляет localStorage, не фильтром)
+        form.querySelectorAll('input[type="checkbox"], select').forEach(function(el) {
+          if (el === rememberCb) return;
+          el.addEventListener('change', function() {
+            // setTimeout(0) — ждём, пока syncMineAndAssignee отработает первым
+            setTimeout(function() { form.submit(); }, 0);
+          });
+        });
       })();
+    </script>
+
+    <script>
+      // ── 3. Клик по бейджу-фильтру «Мои ×», «Сегодня ×» и т.д. ─────────────
+      // data-clear-filter может быть одним ключом ("mine") или списком ("date_from,date_to")
+      document.addEventListener('click', function(e) {
+        var btn = e.target && e.target.closest ? e.target.closest('[data-clear-filter]') : null;
+        if (!btn) return;
+        var keys = (btn.getAttribute('data-clear-filter') || '').split(',').map(function(k) { return k.trim(); }).filter(Boolean);
+        if (!keys.length) return;
+        var params = new URLSearchParams(window.location.search);
+        keys.forEach(function(k) { params.delete(k); });
+        params.delete('page'); // сбрасываем на первую страницу
+        window.location.href = '/tasks/' + (params.toString() ? '?' + params.toString() : '');
+      });
     </script>
 
     {% if can_bulk_actions and page.object_list %}
