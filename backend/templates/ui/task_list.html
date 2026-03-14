@@ -38,6 +38,17 @@
       } catch(e) {}
     })();
   </script>
+  <script>
+    (function(){try{
+      var v=localStorage.getItem('proficrm:tasks:cols_compact');
+      if(v===null||v==='1'){
+        var s=document.createElement('style');
+        s.id='_tasks_cols_init';
+        s.textContent='.tasks-table col.col-secondary,.tasks-table .col-secondary{display:none}';
+        (document.head||document.documentElement).appendChild(s);
+      }
+    }catch(e){}}());
+  </script>
   <div class="tasks-layout">
     <div class="flex items-end justify-between gap-4 mb-5">
       <div>
@@ -330,17 +341,6 @@
     </div>
     {% endif %}
 
-    <script>
-      (function(){try{
-        var v=localStorage.getItem('proficrm:tasks:cols_compact');
-        if(v===null||v==='1'){
-          var s=document.createElement('style');
-          s.id='_tasks_cols_init';
-          s.textContent='.tasks-table col.col-secondary,.tasks-table .col-secondary{display:none}';
-          (document.head||document.documentElement).appendChild(s);
-        }
-      }catch(e){}}());
-    </script>
     <div class="bg-white border border-brand-soft/60 rounded-2xl overflow-hidden tasks-layout-block">
       <div class="flex items-center justify-between px-4 py-2.5 border-b border-brand-soft/40">
         <span class="text-xs text-brand-dark/50 font-medium">Таблица задач</span>
@@ -350,22 +350,22 @@
         </button>
       </div>
       <div class="overflow-x-auto">
-        <table class="table w-full tasks-table" style="table-layout: fixed; min-width: 60rem;">
+        <table class="table w-full tasks-table" style="table-layout: fixed; min-width: 62rem;">
           <colgroup>
-            {% if show_task_checkboxes %}<col style="width: 2.25rem;" />{% endif %}
+            {% if show_task_checkboxes %}<col style="width: 2.8125rem;" />{% endif %}
             <col style="width: 13rem;" />
             <col style="width: 10rem;" />
             <col style="width: 10rem;" />
             <col class="col-secondary" style="width: 8rem;" />
             <col style="width: 12rem;" />
             <col style="width: 5.5rem;" />
-            <col style="width: 6.5rem;" />
+            <col style="width: 7rem;" />
             <col class="col-secondary" style="width: 7.5rem;" />
           </colgroup>
           <thead>
             <tr>
               {% if show_task_checkboxes %}
-                <th scope="col" class="text-center px-1 py-3 w-9 shrink-0" style="width: 2.25rem;">
+                <th scope="col" class="text-center px-1 py-3 shrink-0" style="width: 2.8125rem;">
                   <input type="checkbox" id="bulkSelectAll" aria-label="Выбрать все задачи на странице" class="rounded" />
                 </th>
               {% endif %}
