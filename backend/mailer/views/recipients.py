@@ -55,6 +55,8 @@ def campaign_pick(request: HttpRequest) -> JsonResponse:
         page_num = int(request.GET.get("page") or 1)
     except (ValueError, TypeError):
         page_num = 1
+    # Ограничиваем номер страницы снизу и сверху — предотвращает дорогие запросы
+    page_num = max(1, min(page_num, paginator.num_pages or 1))
     page = paginator.get_page(page_num)
 
     items = [{"id": str(c.id), "name": c.name, "status": c.status} for c in page.object_list]

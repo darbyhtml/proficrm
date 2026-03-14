@@ -1,155 +1,137 @@
 """
 Сервис для контроля rate limiting через Redis.
-Обеспечивает строгое соблюдение лимита 100 писем/час.
+Обеспечивает строгое соблюдение лимита N писем/час.
+
+Политика при недоступности Redis задаётся настройкой MAILER_RATE_LIMIT_FAIL_OPEN:
+  True  (по умолчанию) — fail-open:  разрешить отправку, залогировать CRITICAL.
+  False               — fail-closed: запретить отправку до восстановления Redis.
 """
 from __future__ import annotations
 
 import logging
-from django.utils import timezone
+from datetime import timedelta
+
 from django.core.cache import cache
+from django.utils import timezone
+
 from mailer.constants import RATE_LIMIT_CACHE_TTL_SECONDS
 
 logger = logging.getLogger(__name__)
 
 
+def _hour_ttl(now) -> int:
+    """
+    Возвращает TTL (сек) до конца текущего часа + 1 час запаса.
+    Это предотвращает ситуацию, когда фиксированный TTL истекает
+    раньше смены часа и сбрасывает счётчик раньше времени.
+    """
+    seconds_remaining_in_hour = (60 - now.minute) * 60 + (60 - now.second)
+    return seconds_remaining_in_hour + 3600  # остаток часа + буфер
+
+
+def _touch_safe(key: str, ttl: int) -> None:
+    """cache.touch() с перехватом ошибок — дрейф TTL не критичен."""
+    try:
+        cache.touch(key, timeout=ttl)
+    except Exception:
+        logger.debug("Rate limiter: cache.touch() failed for key %s (non-critical)", key)
+
+
 def reserve_rate_limit_token(max_per_hour: int = 100) -> tuple[bool, int, timezone.datetime | None]:
     """
-    Атомарно резервирует токен для отправки письма (reserve → send → commit схема).
-    Использует атомарный Redis INCR для гарантии, что два воркера не могут одновременно
-    получить токен, если лимит уже достигнут.
-    
-    Args:
-        max_per_hour: Максимальное количество писем в час
-        
+    Атомарно резервирует токен для отправки письма.
+
     Returns:
         (reserved, current_count, next_reset_at)
-        - reserved: Успешно ли зарезервирован токен (True = можно отправлять)
-        - current_count: Текущее значение после резервации (если reserved=True)
-        - next_reset_at: Время сброса счетчика (начало следующего часа), если reserved=False
-    
-    ENTERPRISE NOTE: Ключ Redis будет иметь формат "crm:mailer:rate:hour:YYYY-MM-DD:HH"
-    (KEY_PREFIX="crm" добавляется автоматически Django Redis в production).
+        - reserved:      можно ли отправлять
+        - current_count: счётчик после инкремента
+        - next_reset_at: время сброса, если reserved=False
     """
+    from django.conf import settings
+    fail_open: bool = getattr(settings, "MAILER_RATE_LIMIT_FAIL_OPEN", True)
+
     now = timezone.now()
     hour_key = f"mailer:rate:hour:{now.strftime('%Y-%m-%d:%H')}"
-    
+    ttl = _hour_ttl(now)
+
     try:
-        # Атомарно увеличиваем счетчик
+        # Атомарный INCR
         try:
             new_value = cache.incr(hour_key)
-            # Устанавливаем/обновляем TTL (2 часа — запас на случай граничного часа)
-            cache.touch(hour_key, timeout=RATE_LIMIT_CACHE_TTL_SECONDS)
-
-            # Проверяем лимит ПОСЛЕ атомарного увеличения
-            if new_value > max_per_hour:
-                # Превысили лимит - откатываем (DECR)
-                try:
-                    cache.decr(hour_key)
-                except Exception:
-                    logger.warning(
-                        "Rate limiter: DECR failed for key %s, counter may drift by 1",
-                        hour_key,
-                    )
-                # Вычисляем время сброса
-                from datetime import timedelta
-                next_hour = (now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1))
-                return False, new_value - 1, next_hour
-
-            return True, new_value, None
+            _touch_safe(hour_key, ttl)
         except ValueError:
-            # Ключ не существует - создаем атомарно
-            if cache.add(hour_key, 1, timeout=RATE_LIMIT_CACHE_TTL_SECONDS):
+            # Ключ не существует — создаём атомарно
+            if cache.add(hour_key, 1, timeout=ttl):
                 return True, 1, None
-            else:
-                # Ключ уже создан другим процессом - используем incr
-                new_value = cache.incr(hour_key)
-                cache.touch(hour_key, timeout=RATE_LIMIT_CACHE_TTL_SECONDS)
-                if new_value > max_per_hour:
-                    try:
-                        cache.decr(hour_key)
-                    except Exception:
-                        logger.warning(
-                            "Rate limiter: DECR failed for key %s, counter may drift by 1",
-                            hour_key,
-                        )
-                    from datetime import timedelta
-                    next_hour = (now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1))
-                    return False, new_value - 1, next_hour
-                return True, new_value, None
-    except Exception as e:
-        # ENTERPRISE: FAIL-OPEN при ошибке Redis (availability-first для rate limiter)
-        # Логируем ERROR для alerting, но разрешаем отправку
-        logger.critical(
-            "RATE LIMITER UNAVAILABLE: Redis недоступен при попытке зарезервировать токен. "
-            "Отправка разрешена (fail-open). Возможно превышение лимита %d писем/час.",
-            max_per_hour,
-            exc_info=True,
-            extra={
-                "error_type": "rate_limiter_backend_error",
-                "policy": "fail_open",
-                "max_per_hour": max_per_hour,
-            },
-        )
-        # При ошибке Redis разрешаем отправку (fail-open для availability)
-        # ВАЖНО: logger.critical гарантирует алерт в любой системе мониторинга
-        # (Sentry, Datadog, ELK — перехватят CRITICAL уровень).
-        return True, 0, None
+            # Ключ уже создан другим процессом
+            new_value = cache.incr(hour_key)
+            _touch_safe(hour_key, ttl)
 
+        if new_value > max_per_hour:
+            # Откатываем превышение
+            try:
+                cache.decr(hour_key)
+            except Exception:
+                logger.warning(
+                    "Rate limiter: DECR failed for key %s, counter may drift by 1", hour_key
+                )
+            next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+            return False, new_value - 1, next_hour
+
+        return True, new_value, None
+
+    except Exception as exc:
+        if fail_open:
+            logger.critical(
+                "RATE LIMITER UNAVAILABLE: Redis недоступен. "
+                "Отправка разрешена (fail-open, MAILER_RATE_LIMIT_FAIL_OPEN=True). "
+                "Возможно превышение лимита %d писем/час.",
+                max_per_hour,
+                exc_info=True,
+                extra={"error_type": "rate_limiter_backend_error", "policy": "fail_open"},
+            )
+            return True, 0, None
+        else:
+            logger.critical(
+                "RATE LIMITER UNAVAILABLE: Redis недоступен. "
+                "Отправка ЗАБЛОКИРОВАНА (fail-closed, MAILER_RATE_LIMIT_FAIL_OPEN=False).",
+                exc_info=True,
+                extra={"error_type": "rate_limiter_backend_error", "policy": "fail_closed"},
+            )
+            next_retry = now + timedelta(minutes=1)
+            return False, 0, next_retry
 
 
 def increment_rate_limit_per_hour(max_per_hour: int = 100) -> tuple[bool, int]:
-    """
-    Атомарно увеличивает счетчик отправленных писем в час.
-    Использует Redis INCR для гарантии атомарности.
-    
-    Args:
-        max_per_hour: Максимальное количество писем в час
-        
-    Returns:
-        (success, current_count)
-        - success: Успешно ли увеличен счетчик
-        - current_count: Текущее значение после увеличения
-    """
+    """Атомарно увеличивает счётчик (без проверки лимита — используется для аудита)."""
     now = timezone.now()
     hour_key = f"mailer:rate:hour:{now.strftime('%Y-%m-%d:%H')}"
-    
+    ttl = _hour_ttl(now)
+
     try:
-        # Атомарно увеличиваем счетчик через incr
-        # Если ключа нет, incr создаст его со значением 1
         try:
             new_value = cache.incr(hour_key)
-            cache.touch(hour_key, timeout=RATE_LIMIT_CACHE_TTL_SECONDS)
+            _touch_safe(hour_key, ttl)
             return True, new_value
         except ValueError:
-            # Ключ не существует и incr не может его создать (некоторые backends)
-            # Используем add для атомарного создания
-            if cache.add(hour_key, 1, timeout=RATE_LIMIT_CACHE_TTL_SECONDS):
+            if cache.add(hour_key, 1, timeout=ttl):
                 return True, 1
-            else:
-                # Ключ уже создан другим процессом, используем incr
-                new_value = cache.incr(hour_key)
-                cache.touch(hour_key, timeout=RATE_LIMIT_CACHE_TTL_SECONDS)
-                return True, new_value
+            new_value = cache.incr(hour_key)
+            _touch_safe(hour_key, ttl)
+            return True, new_value
     except Exception as e:
-        logger.error(f"Error incrementing rate limit: {e}", exc_info=True)
+        logger.error("Rate limiter: increment failed: %s", e, exc_info=True)
         return False, 0
 
 
 _QUOTA_CACHE_KEY = "mailer:effective_quota_available"
-_QUOTA_CACHE_TTL = 30  # секунд: баланс между свежестью и нагрузкой на БД
+_QUOTA_CACHE_TTL = 30  # секунд
 
 
 def get_effective_quota_available() -> int:
     """
-    Вычисляет эффективную доступную квоту с учетом локальных отправок.
-    Результат кешируется на 30 секунд, чтобы не нагружать БД при частых вызовах из батчей.
-
-    Учитывает:
-    - emails_available из SmtpBzQuota
-    - Локальные отправки с момента последнего sync
-
-    Returns:
-        Эффективная доступная квота (не может быть отрицательной)
+    Вычисляет эффективную доступную квоту с учётом локальных отправок.
+    Кешируется на 30 секунд.
     """
     try:
         cached = cache.get(_QUOTA_CACHE_KEY)
@@ -162,13 +144,10 @@ def get_effective_quota_available() -> int:
 
     quota = SmtpBzQuota.load()
 
-    # Если квота не синхронизирована, используем дефолтное значение
     if not quota.last_synced_at or quota.sync_error:
-        return 15000  # Дефолт
+        return 15000  # Дефолт при отсутствии данных
 
     emails_available = quota.emails_available or 0
-
-    # Подсчитываем локальные отправки с момента последнего sync
     sync_time = quota.last_synced_at
     local_sent = SendLog.objects.filter(
         provider="smtp_global",
@@ -176,12 +155,11 @@ def get_effective_quota_available() -> int:
         created_at__gte=sync_time,
     ).count()
 
-    # Эффективная квота = доступная - отправленные локально (не может быть отрицательной)
     effective = max(0, emails_available - local_sent)
 
     try:
         cache.set(_QUOTA_CACHE_KEY, effective, timeout=_QUOTA_CACHE_TTL)
     except Exception:
-        pass  # fail-open: кеш недоступен, работаем без него
+        pass
 
     return effective

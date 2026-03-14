@@ -63,6 +63,17 @@ from mailer.tasks.helpers import (
 logger = logging.getLogger(__name__)
 
 
+def _calc_next_working_start() -> timezone.datetime:
+    """Возвращает ближайший момент начала рабочего окна (МСК)."""
+    msk_now = timezone.now().astimezone(ZoneInfo("Europe/Moscow"))
+    next_start = msk_now.replace(hour=WORKING_HOURS_START, minute=0, second=0, microsecond=0)
+    if msk_now.hour >= WORKING_HOURS_END:
+        next_start = (msk_now + timezone.timedelta(days=1)).replace(
+            hour=WORKING_HOURS_START, minute=0, second=0, microsecond=0
+        )
+    return next_start
+
+
 @shared_task(name="mailer.tasks.send_pending_emails", bind=True, max_retries=3)
 def send_pending_emails(self, batch_size: int | None = None):
     """
@@ -85,26 +96,25 @@ def send_pending_emails(self, batch_size: int | None = None):
     try:
         did_work = False
 
-        # Авто-очистка записей очереди без pending-получателей
-        # Используем list() чтобы избежать двойного запроса (exists + iterate).
-        stale_list = list(
-            CampaignQueue.objects.filter(
-                status__in=(CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING)
+        # Авто-очистка записей очереди без pending-получателей.
+        # select_for_update(skip_locked=True) предотвращает race condition:
+        # два воркера не могут одновременно завершить одну и ту же запись очереди.
+        now = timezone.now()
+        with transaction.atomic():
+            stale_list = list(
+                CampaignQueue.objects.select_for_update(skip_locked=True)
+                .filter(status__in=(CampaignQueue.Status.PENDING, CampaignQueue.Status.PROCESSING))
+                .exclude(campaign__recipients__status=CampaignRecipient.Status.PENDING)
+                .select_related("campaign")
             )
-            .exclude(campaign__recipients__status=CampaignRecipient.Status.PENDING)
-            .select_related("campaign")
-        )
-        if stale_list:
-            now = timezone.now()
             for q in stale_list:
                 camp = q.campaign
-                with transaction.atomic():
-                    if camp and camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
-                        camp.status = Campaign.Status.SENT
-                        camp.save(update_fields=["status", "updated_at"])
-                    q.status = CampaignQueue.Status.COMPLETED
-                    q.completed_at = now
-                    q.save(update_fields=["status", "completed_at"])
+                if camp and camp.status in (Campaign.Status.READY, Campaign.Status.SENDING):
+                    camp.status = Campaign.Status.SENT
+                    camp.save(update_fields=["status", "updated_at"])
+                q.status = CampaignQueue.Status.COMPLETED
+                q.completed_at = now
+                q.save(update_fields=["status", "completed_at"])
 
         # --- Выбор кампании из очереди ---
         processing_queue = (
@@ -136,24 +146,14 @@ def send_pending_emails(self, batch_size: int | None = None):
                     camps = [camp]
                     # Вне рабочего времени — откладываем обработку
                     if not _is_working_hours():
-                        msk_now = timezone.now().astimezone(ZoneInfo("Europe/Moscow"))
-                        next_start = msk_now.replace(hour=WORKING_HOURS_START, minute=0, second=0, microsecond=0)
-                        if msk_now.hour >= WORKING_HOURS_END:
-                            next_start = (msk_now + timezone.timedelta(days=1)).replace(
-                                hour=WORKING_HOURS_START, minute=0, second=0, microsecond=0
-                            )
+                        next_start = _calc_next_working_start()
                         defer_queue(processing_queue, DEFER_REASON_OUTSIDE_HOURS, next_start, notify=True)
                         return {"processed": False, "campaigns": 0, "reason": "outside_working_hours"}
 
         if not processing_queue:
             # Вне рабочего времени — не начинаем новую кампанию
             if not _is_working_hours():
-                msk_now = timezone.now().astimezone(ZoneInfo("Europe/Moscow"))
-                next_start = msk_now.replace(hour=WORKING_HOURS_START, minute=0, second=0, microsecond=0)
-                if msk_now.hour >= WORKING_HOURS_END:
-                    next_start = (msk_now + timezone.timedelta(days=1)).replace(
-                        hour=WORKING_HOURS_START, minute=0, second=0, microsecond=0
-                    )
+                next_start = _calc_next_working_start()
                 pending_qs = CampaignQueue.objects.filter(
                     status__in=(CampaignQueue.Status.PROCESSING, CampaignQueue.Status.PENDING),
                     campaign__recipients__status=CampaignRecipient.Status.PENDING,

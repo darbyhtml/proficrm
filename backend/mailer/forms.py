@@ -167,7 +167,9 @@ class CampaignForm(forms.ModelForm):
         ".jpg":  [(b"\xff\xd8\xff", 0)],
         ".jpeg": [(b"\xff\xd8\xff", 0)],
         ".gif":  [(b"GIF87a", 0), (b"GIF89a", 0)],
-        ".webp": [(b"RIFF", 0)],  # RIFF....WEBP — достаточно первых 4 байт
+        # WEBP: байты 0-3 = "RIFF", байты 8-11 = "WEBP" — оба условия обязательны.
+        # Хранится как два отдельных entry; проверяются через all() в clean_attachment.
+        ".webp": [(b"RIFF", 0), (b"WEBP", 8)],
         # Office Open XML (.docx/.xlsx/.pptx) и .zip — ZIP-контейнер
         ".docx": [(b"PK\x03\x04", 0)],
         ".xlsx": [(b"PK\x03\x04", 0)],
@@ -197,7 +199,9 @@ class CampaignForm(forms.ModelForm):
             ext = "." + lower.rsplit(".", 1)[-1] if "." in lower else ""
             if ext not in allowed_ext:
                 raise forms.ValidationError("Недопустимый тип файла вложения.")
-            # Верификация по magic bytes (для форматов, где сигнатура определена)
+            # Верификация по magic bytes (для форматов, где сигнатура определена).
+            # GIF / ZIP: несколько допустимых сигнатур — any().
+            # WEBP: требует ОБЕ сигнатуры (RIFF @ 0 И WEBP @ 8) — all().
             signatures = self._MAGIC_BYTES.get(ext, [])
             if signatures:
                 try:
@@ -206,7 +210,10 @@ class CampaignForm(forms.ModelForm):
                     attachment.seek(0)
                 except Exception:
                     header = b""
-                matched = any(header[offset:offset + len(sig)] == sig for sig, offset in signatures)
+                if ext == ".webp":
+                    matched = all(header[offset:offset + len(sig)] == sig for sig, offset in signatures)
+                else:
+                    matched = any(header[offset:offset + len(sig)] == sig for sig, offset in signatures)
                 if not matched:
                     raise forms.ValidationError(
                         "Содержимое файла не соответствует его расширению. "
@@ -230,8 +237,11 @@ class CampaignForm(forms.ModelForm):
         att = self.cleaned_data.get("attachment")
         if att is not None:
             # Если пользователь загрузил новый файл, фиксируем оригинальное имя.
+            # os.path.basename защищает от path-traversal (старые браузеры слали полный путь).
             try:
-                obj.attachment_original_name = (getattr(att, "name", "") or "").strip()[:255]
+                import os as _os
+                raw_name = (getattr(att, "name", "") or "").strip()
+                obj.attachment_original_name = _os.path.basename(raw_name)[:255]
             except Exception:
                 pass
             # При замене снимаем флаг удаления (на случай, если пользователь отметил галку и выбрал файл)

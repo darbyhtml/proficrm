@@ -1,4 +1,8 @@
+import logging
+
 from django.apps import AppConfig
+
+logger = logging.getLogger(__name__)
 
 
 class MailerConfig(AppConfig):
@@ -21,6 +25,10 @@ def _create_singletons(sender, **kwargs):
         from mailer.models import GlobalMailAccount, SmtpBzQuota
         GlobalMailAccount.objects.get_or_create(id=1)
         SmtpBzQuota.objects.get_or_create(id=1)
-    except Exception:
-        # Таблицы ещё не созданы (первые миграции) — игнорируем.
-        pass
+    except Exception as exc:
+        # Таблицы ещё не созданы во время первых миграций — это штатная ситуация.
+        # Логируем на DEBUG чтобы не пугать в production logs при накатке новых миграций.
+        logger.debug(
+            "mailer singletons not created (expected during initial migrations): %s",
+            exc,
+        )

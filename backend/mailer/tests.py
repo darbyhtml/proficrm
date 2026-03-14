@@ -38,44 +38,80 @@ from mailer.services.rate_limiter import (
 
 
 class MailerBaseTestCase(TestCase):
-    """Базовый TestCase для mailer тестов с очисткой кеша и отключением лимитов."""
-    
+    """
+    Базовый TestCase для mailer-тестов.
+
+    Стратегия патчинга (намеренная):
+    ─────────────────────────────────
+    Тесты в этом классе проверяют бизнес-логику отправки (батчинг, circuit breaker,
+    идемпотентность, defer-логику), а не Redis или SMTP-инфраструктуру.
+    Поэтому три внешние зависимости заменяются детерминированными stub'ами:
+
+      1. _is_working_hours  → всегда True (не хотим зависеть от времени запуска CI)
+      2. reserve_rate_limit_token → всегда (True, 1, None)  (Redis недоступен в тестах)
+      3. get_effective_quota_available → 10 000  (квота всегда есть)
+
+    Патчи ставятся на все точки импорта, где функции используются (send.py, helpers.py,
+    mailer.tasks.*), чтобы гарантировать перехват независимо от порядка импортов.
+
+    Тесты конкретно для rate_limiter и working_hours — в отдельных классах
+    (MailerRateLimiterTests, MailerOutsideHoursDeferTests), где патчи не применяются.
+    """
+
     def setUp(self):
         from django.core.cache import cache
-        cache.clear()
-        # Патчим лимиты для детерминированности тестов
-        self._patches = []
-        
-        # Отключаем проверку рабочего времени
+        # Очищаем только mailer-ключи, чтобы не мешать другим приложениям в shared-окружении
+        for key in ("mailer:effective_quota_available",):
+            try:
+                cache.delete(key)
+            except Exception:
+                pass
+        cache.clear()  # в тестах используется LocMemCache — изолирован по умолчанию
+
         from unittest.mock import patch
-        # Патчим там, где функция реально используется (в send.py) и в __init__ для совместимости
-        self._patches.append(patch('mailer.tasks.send._is_working_hours', return_value=True))
-        self._patches.append(patch('mailer.tasks._is_working_hours', return_value=True))
-        
-        # Отключаем rate limit (всегда резервируем токен)
-        # Патчим в send.py, helpers.py (где батч-отправка) и в services для полного покрытия
-        self._patches.append(patch('mailer.tasks.send.reserve_rate_limit_token', return_value=(True, 1, None)))
-        self._patches.append(patch('mailer.tasks.helpers.reserve_rate_limit_token', return_value=(True, 1, None)))
-        self._patches.append(patch('mailer.tasks.reserve_rate_limit_token', return_value=(True, 1, None)))
-        self._patches.append(patch('mailer.services.rate_limiter.reserve_rate_limit_token', return_value=(True, 1, None)))
-        
-        # Отключаем daily limit (возвращаем tuple для совместимости с тестами)
-        # Сохраняем ссылку на патч, чтобы можно было остановить в дочерних классах
-        self._throttle_patch = patch('mailer.throttle.is_user_throttled', return_value=(False, 0, None))
+        self._patches = []
+
+        # 1) Рабочее время — всегда True
+        self._patches.append(patch("mailer.tasks.send._is_working_hours", return_value=True))
+        self._patches.append(patch("mailer.tasks._is_working_hours", return_value=True))
+
+        # 2) Rate limit — всегда выдаём токен (Redis нет в тестах)
+        _token_ok = (True, 1, None)
+        self._patches.append(patch("mailer.tasks.send.reserve_rate_limit_token", return_value=_token_ok))
+        self._patches.append(patch("mailer.tasks.helpers.reserve_rate_limit_token", return_value=_token_ok))
+        self._patches.append(patch("mailer.tasks.reserve_rate_limit_token", return_value=_token_ok))
+        self._patches.append(patch("mailer.services.rate_limiter.reserve_rate_limit_token", return_value=_token_ok))
+
+        # 3) Throttle (daily limit via mailer.throttle)
+        self._throttle_patch = patch("mailer.throttle.is_user_throttled", return_value=(False, 0, None))
         self._patches.append(self._throttle_patch)
-        
-        # Отключаем quota check
-        # Патчим в send.py (где функция реально используется) и в helpers/services
-        self._patches.append(patch('mailer.tasks.send.get_effective_quota_available', return_value=10000))
-        self._patches.append(patch('mailer.tasks.get_effective_quota_available', return_value=10000))
-        self._patches.append(patch('mailer.services.rate_limiter.get_effective_quota_available', return_value=10000))
-        
+
+        # 4) Квота smtp.bz — всегда достаточно
+        self._patches.append(patch("mailer.tasks.send.get_effective_quota_available", return_value=10000))
+        self._patches.append(patch("mailer.tasks.get_effective_quota_available", return_value=10000))
+        self._patches.append(patch("mailer.services.rate_limiter.get_effective_quota_available", return_value=10000))
+
+        started = []
         for p in self._patches:
-            p.start()
-    
+            try:
+                p.start()
+                started.append(p)
+            except Exception as exc:
+                # Если патч не смог стартовать (неверный путь) — останавливаем уже запущенные
+                for sp in started:
+                    try:
+                        sp.stop()
+                    except Exception:
+                        pass
+                raise RuntimeError(f"Не удалось запустить patch: {exc}") from exc
+        self._started_patches = started
+
     def tearDown(self):
-        for p in self._patches:
-            p.stop()
+        for p in reversed(self._started_patches):
+            try:
+                p.stop()
+            except Exception:
+                pass
 
 
 @override_settings(SECURE_SSL_REDIRECT=False)

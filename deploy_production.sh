@@ -18,6 +18,21 @@ if [ ! -f ".env" ]; then
     exit 1
 fi
 
+# Проверяем, что обязательные переменные заполнены в .env
+_check_env_var() {
+    local var="$1"
+    local val
+    val=$(grep -E "^${var}=" .env 2>/dev/null | cut -d= -f2- | tr -d '"'"'" | xargs)
+    if [ -z "$val" ]; then
+        echo "ERROR: .env не содержит или не заполняет переменную ${var}"
+        exit 1
+    fi
+}
+_check_env_var DJANGO_SECRET_KEY
+_check_env_var POSTGRES_PASSWORD
+_check_env_var DJANGO_ALLOWED_HOSTS
+_check_env_var DJANGO_CSRF_TRUSTED_ORIGINS
+
 # 1) Каталоги для static/media (на проде: sudo chown 1000:1000 data/staticfiles data/media)
 mkdir -p data/staticfiles data/media
 if command -v chown >/dev/null 2>&1; then
@@ -26,7 +41,11 @@ fi
 
 # 2) Обновление кода
 echo ">>> git pull"
-git pull origin main
+if ! git pull origin main; then
+    echo "ERROR: git pull завершился с ошибкой. Деплой прерван."
+    exit 1
+fi
+echo "  HEAD: $(git rev-parse --short HEAD)"
 
 # 3) Сборка образов
 echo ">>> docker compose build"
@@ -60,11 +79,17 @@ done
 
 # 5) Миграции (один раз, не в celery/beat)
 echo ">>> migrate"
-$COMPOSE run --rm web python manage.py migrate --noinput
+if ! $COMPOSE run --rm web python manage.py migrate --noinput; then
+    echo "ERROR: migrate завершилась с ошибкой. Деплой прерван — код и БД рассинхронизированы."
+    echo "  Откатитесь вручную: git checkout <prev-commit> && ./deploy_production.sh"
+    exit 1
+fi
 
 # 6) Статика
 echo ">>> collectstatic"
-$COMPOSE run --rm web python manage.py collectstatic --noinput
+if ! $COMPOSE run --rm web python manage.py collectstatic --noinput; then
+    echo "WARN: collectstatic завершился с ошибкой. Статика может быть устаревшей."
+fi
 
 # 6.1) Перестроение поискового индекса (пропуск при SKIP_INDEXING=1 — потом: docker compose run --rm web python manage.py rebuild_company_search_index)
 if [ -z "${SKIP_INDEXING}" ] || [ "${SKIP_INDEXING}" = "0" ]; then
@@ -80,4 +105,24 @@ fi
 echo ">>> up -d"
 $COMPOSE up -d
 
-echo "Готово. Проверка: curl -sI http://127.0.0.1:8001/health/"
+# 8) Ожидание готовности web-сервиса (health-check по /health/)
+echo "Ожидание готовности web (до 60 сек)..."
+_web_ready=0
+_health_url="http://127.0.0.1:8001/health/"
+for i in $(seq 1 60); do
+  _status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 "$_health_url" 2>/dev/null || true)
+  if [ "$_status" = "200" ] || [ "$_status" = "204" ]; then
+    echo "  web готов (попытка ${i}, HTTP ${_status})"
+    _web_ready=1
+    break
+  fi
+  sleep 1
+done
+
+if [ "$_web_ready" -eq 0 ]; then
+    echo "WARN: web не ответил на ${_health_url} за 60 сек."
+    echo "  Проверьте логи: $COMPOSE logs --tail=50 web"
+    echo "  Возможно, приложение упало — деплой завершён, но требует ручной проверки."
+else
+    echo "Деплой успешен. HEAD: $(git rev-parse --short HEAD)"
+fi
