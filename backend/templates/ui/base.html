@@ -354,10 +354,17 @@
       }
       
       /* Кастомный календарик */
+      /* Скрываем нативный input до инициализации JS — убирает FOUC («мигание» нативного пикера) */
+      input[type="datetime-local"]:not([data-custom-picker-initialized]),
+      input[type="date"]:not([data-custom-picker-initialized]) {
+        opacity: 0;
+        pointer-events: none;
+      }
+
       .custom-datetime-picker {
         position: relative;
       }
-      
+
       .custom-datetime-picker input {
         width: 100%;
       }
