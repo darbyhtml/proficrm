@@ -2,13 +2,6 @@
 {% block title %}Настройки — CRM ПРОФИ{% endblock %}
 
 {% block content %}
-<link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet" />
-<style>
-  .ql-toolbar.ql-snow { border-radius: 0.75rem 0.75rem 0 0; border-color: var(--color-brand-soft, #e2e8f0); background: #fafafa; }
-  .ql-container.ql-snow { border-radius: 0 0 0.75rem 0.75rem; border-color: var(--color-brand-soft, #e2e8f0); min-height: 8rem; font-size: 0.875rem; }
-  .ql-editor { min-height: 8rem; }
-  .ql-editor p { margin: 0; }
-</style>
 <div class="space-y-4">
   <div class="flex items-end justify-between gap-3">
     <div>
@@ -310,7 +303,7 @@
       <section class="pref-section hidden" data-section="mail">
         <div class="space-y-4">
 
-          {# Signature — Quill WYSIWYG #}
+          {# Signature — contenteditable WYSIWYG (same engine as /mail/signature/) #}
           <div class="card card-pad space-y-4">
             <div>
               <div class="font-semibold text-base mb-0.5">Подпись в письмах</div>
@@ -319,13 +312,82 @@
 
             <form method="post" action="/preferences/mail-signature/" class="space-y-3" id="signatureForm">
               {% csrf_token %}
-              <input type="hidden" name="email_signature_html" id="sigHiddenField" />
-              <div id="sigEditor" style="background:#fff;"></div>
-              <div id="sigSeedData" style="display:none">{{ user.email_signature_html|default:'' }}</div>
+              {# Скрытое поле — заполняется из редактора перед сабмитом #}
+              <textarea name="email_signature_html" id="prefSigHidden" class="hidden">{{ user.email_signature_html|default:'' }}</textarea>
 
-              <div class="flex items-center gap-3">
-                <button type="submit" class="btn btn-primary" id="sigSaveBtn">Сохранить подпись</button>
-                <span class="text-xs muted-2">Можно вставить готовую подпись из почты.</span>
+              <div>
+                <div class="flex items-end justify-between gap-2 mb-2">
+                  <label class="block text-xs muted-2">Подпись</label>
+                  <div class="flex gap-2">
+                    <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="prefSigBtnVisual">Визуальный</button>
+                    <button type="button" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" id="prefSigBtnHtml">HTML‑код</button>
+                  </div>
+                </div>
+
+                {# HTML-режим #}
+                <div id="prefSigHtmlWrap" class="hidden">
+                  <textarea id="prefSigHtmlArea" class="input font-mono text-xs resize-y w-full" rows="8"></textarea>
+                  <div class="text-xs muted-2 mt-1">Можно писать HTML вручную.</div>
+                </div>
+
+                {# Визуальный редактор #}
+                <div id="prefSigVisualWrap">
+                  <div class="rounded-lg border border-brand-soft bg-brand-soft/40 px-2 py-1 mb-2 flex flex-nowrap items-center gap-1 text-xs overflow-x-auto">
+                    <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-pref-cmd="bold" title="Жирный"><b>Ж</b></button>
+                    <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-pref-cmd="italic" title="Курсив"><i>К</i></button>
+                    <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-pref-cmd="underline" title="Подчёркивание"><u>Ч</u></button>
+                    <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-pref-cmd="strikeThrough" title="Зачёркивание"><s>З</s></button>
+                    <span class="mx-1 h-4 w-px bg-brand-soft"></span>
+                    <select id="prefSigFont" class="select !py-1 !px-2 text-xs" title="Шрифт">
+                      <option value="">Шрифт</option>
+                      <option value="Arial" style="font-family:Arial;">Arial</option>
+                      <option value="Tahoma" style="font-family:Tahoma;">Tahoma</option>
+                      <option value="Times New Roman" style="font-family:'Times New Roman';">Times New Roman</option>
+                      <option value="Courier New" style="font-family:'Courier New';">Courier New</option>
+                    </select>
+                    <select id="prefSigSize" class="select !py-1 !px-2 text-xs" title="Размер">
+                      <option value="">Размер</option>
+                      <option value="2">10</option>
+                      <option value="3">12</option>
+                      <option value="4">14</option>
+                      <option value="5">16</option>
+                      <option value="6">18</option>
+                    </select>
+                    <span class="mx-1 h-4 w-px bg-brand-soft"></span>
+                    <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-pref-cmd="justifyLeft" title="По левому краю">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
+                    <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-pref-cmd="justifyCenter" title="По центру">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="6" y1="12" x2="18" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
+                    <span class="mx-1 h-4 w-px bg-brand-soft"></span>
+                    <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" id="prefSigLinkBtn" title="Вставить ссылку">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    </button>
+                    <button type="button" class="btn btn-outline" style="padding:.15rem .4rem" data-pref-cmd="removeFormat" title="Очистить форматирование">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><line x1="2" y1="2" x2="22" y2="22"/></svg>
+                    </button>
+                  </div>
+
+                  <div class="rounded-xl border border-brand-soft bg-white p-3 overflow-x-auto">
+                    <div id="prefSigEditor" contenteditable="true" role="textbox" aria-multiline="true"
+                         class="min-h-[180px] outline-none text-sm" style="white-space:pre-wrap;"></div>
+                  </div>
+
+                  <div id="prefSigLinkPanel" class="hidden mt-2 flex items-center gap-2 p-2 bg-brand-soft/20 rounded-lg border border-brand-soft">
+                    <input id="prefSigLinkInput" type="url" class="input flex-1 text-sm" placeholder="https://..." />
+                    <button type="button" id="prefSigLinkConfirm" class="btn btn-primary btn-sm">Вставить</button>
+                    <button type="button" id="prefSigLinkCancel" class="btn btn-outline btn-sm">Отмена</button>
+                  </div>
+
+                  <div class="text-xs muted-2 mt-2">
+                    Можно скопировать подпись из Yandex или другой почты и вставить сюда — форматирование сохранится.
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <button type="submit" class="btn btn-primary">Сохранить подпись</button>
               </div>
             </form>
           </div>
@@ -334,7 +396,7 @@
           <div class="card card-pad">
             <div class="font-semibold text-base mb-3">Рассылки</div>
             <p class="text-sm muted mb-3">Управление почтовыми кампаниями доступно в разделе Почта.</p>
-            <a href="/mail/" class="btn btn-outline text-sm">Перейти в раздел Почта</a>
+            <a href="/mail/campaigns/" class="btn btn-outline text-sm">Перейти в раздел Почта</a>
           </div>
 
         </div>
@@ -488,43 +550,211 @@
 })();
 </script>
 
-{# Quill WYSIWYG signature editor — loaded after main JS #}
-<script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
+{# ── Signature WYSIWYG (contenteditable, same engine as /mail/signature/) ── #}
+<style>
+  #prefSigEditor:empty:before { content: "Напишите подпись письма..."; color: rgba(0,61,56,.45); pointer-events:none; }
+  #prefSigEditor img { max-width:100% !important; height:auto !important; width:auto; object-fit:contain; display:inline-block; vertical-align:middle; }
+  #prefSigEditor table { border-collapse:collapse; max-width:100%; }
+  #prefSigEditor td, #prefSigEditor th { padding:4px 8px; border:1px solid #ddd; }
+</style>
 <script>
 (function () {
-  var editorEl  = document.getElementById('sigEditor');
-  var hiddenEl  = document.getElementById('sigHiddenField');
-  var seedEl    = document.getElementById('sigSeedData');
-  var form      = document.getElementById('signatureForm');
-  if (!editorEl || !hiddenEl || !form) return;
+  var form        = document.getElementById('signatureForm');
+  var htmlWrap    = document.getElementById('prefSigHtmlWrap');
+  var visualWrap  = document.getElementById('prefSigVisualWrap');
+  var btnVisual   = document.getElementById('prefSigBtnVisual');
+  var btnHtml     = document.getElementById('prefSigBtnHtml');
+  var editor      = document.getElementById('prefSigEditor');
+  var htmlArea    = document.getElementById('prefSigHtmlArea');
+  var hiddenField = document.getElementById('prefSigHidden');
+  var fontSelect  = document.getElementById('prefSigFont');
+  var sizeSelect  = document.getElementById('prefSigSize');
+  var linkBtn     = document.getElementById('prefSigLinkBtn');
+  var linkPanel   = document.getElementById('prefSigLinkPanel');
+  var linkInput   = document.getElementById('prefSigLinkInput');
+  var linkConfirm = document.getElementById('prefSigLinkConfirm');
+  var linkCancel  = document.getElementById('prefSigLinkCancel');
 
-  var quill = new Quill(editorEl, {
-    theme: 'snow',
-    modules: {
-      toolbar: [
-        ['bold', 'italic', 'underline'],
-        [{ 'color': [] }, { 'background': [] }],
-        [{ 'size': ['small', false, 'large'] }],
-        [{ 'font': [] }],
-        ['link', 'image'],
-        [{ 'align': [] }],
-        ['clean'],
-      ],
-    },
-  });
+  if (!form || !editor || !hiddenField) return;
 
-  // Загружаем существующую подпись как HTML
-  if (seedEl) {
-    var existing = seedEl.textContent.trim();
-    if (existing) {
-      quill.root.innerHTML = existing;
-    }
+  var _savedRange = null;
+
+  function syncToHidden() {
+    hiddenField.value = editor.innerHTML || '';
+    if (htmlArea) htmlArea.value = hiddenField.value;
   }
 
-  // Перед отправкой формы — пишем HTML из редактора в hidden-поле
-  form.addEventListener('submit', function () {
-    hiddenEl.value = quill.root.innerHTML;
+  function loadSignature() {
+    editor.innerHTML = hiddenField.value || '';
+    editor.querySelectorAll('img').forEach(function (img) {
+      if (!img.style.maxWidth) img.style.maxWidth = '100%';
+      if (!img.style.height) img.style.height = 'auto';
+    });
+  }
+
+  function setActive(on, off) {
+    on.classList.add('bg-brand-soft/40');
+    off.classList.remove('bg-brand-soft/40');
+  }
+
+  function showVisual() {
+    htmlWrap.classList.add('hidden');
+    visualWrap.classList.remove('hidden');
+    setActive(btnVisual, btnHtml);
+    loadSignature();
+  }
+
+  function showHtml() {
+    syncToHidden();
+    visualWrap.classList.add('hidden');
+    htmlWrap.classList.remove('hidden');
+    if (htmlArea) htmlArea.value = hiddenField.value;
+    setActive(btnHtml, btnVisual);
+  }
+
+  btnVisual.addEventListener('click', showVisual);
+  btnHtml.addEventListener('click', showHtml);
+
+  // Toolbar buttons
+  document.querySelectorAll('[data-pref-cmd]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.execCommand(btn.getAttribute('data-pref-cmd'), false, null);
+      editor.focus();
+      syncToHidden();
+    });
   });
+
+  if (fontSelect) {
+    fontSelect.addEventListener('change', function () {
+      if (!fontSelect.value) return;
+      document.execCommand('fontName', false, fontSelect.value);
+      editor.focus(); syncToHidden();
+    });
+  }
+
+  if (sizeSelect) {
+    sizeSelect.addEventListener('change', function () {
+      if (!sizeSelect.value) return;
+      document.execCommand('fontSize', false, sizeSelect.value);
+      editor.focus(); syncToHidden();
+    });
+  }
+
+  // Link panel
+  if (linkBtn && linkPanel && linkInput) {
+    linkBtn.addEventListener('click', function () {
+      var sel = window.getSelection();
+      _savedRange = (sel && sel.rangeCount > 0) ? sel.getRangeAt(0).cloneRange() : null;
+      linkPanel.classList.remove('hidden');
+      linkInput.value = '';
+      linkInput.focus();
+    });
+    linkConfirm.addEventListener('click', function () {
+      var url = linkInput.value.trim();
+      linkPanel.classList.add('hidden');
+      if (!url) return;
+      if (_savedRange) {
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(_savedRange);
+        _savedRange = null;
+      }
+      document.execCommand('createLink', false, url);
+      editor.focus(); syncToHidden();
+    });
+    linkCancel.addEventListener('click', function () {
+      linkPanel.classList.add('hidden');
+      _savedRange = null;
+      editor.focus();
+    });
+    linkInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); linkConfirm.click(); }
+      if (e.key === 'Escape') { e.preventDefault(); linkCancel.click(); }
+    });
+  }
+
+  editor.addEventListener('input', syncToHidden);
+
+  // HTML mode sync back to hidden on change
+  if (htmlArea) {
+    htmlArea.addEventListener('input', function () {
+      hiddenField.value = htmlArea.value;
+    });
+  }
+
+  // Paste — preserve HTML and images (same as /mail/signature/)
+  editor.addEventListener('paste', function (e) {
+    e.preventDefault();
+    var cd = e.clipboardData || window.clipboardData;
+    var htmlData = cd.getData('text/html');
+    var textData = cd.getData('text/plain');
+    var imageItem = Array.from(cd.items || []).find(function (i) { return i.type.indexOf('image') !== -1; });
+
+    if (imageItem) {
+      var file = imageItem.getAsFile();
+      if (file) {
+        var reader = new FileReader();
+        reader.onload = function (ev) {
+          var img = document.createElement('img');
+          img.src = ev.target.result;
+          img.style.maxWidth = '100%';
+          img.style.height = 'auto';
+          var sel = window.getSelection();
+          if (sel && sel.rangeCount > 0) {
+            var range = sel.getRangeAt(0);
+            range.deleteContents();
+            range.insertNode(img);
+            range.collapse(false);
+            sel.removeAllRanges(); sel.addRange(range);
+          } else { editor.appendChild(img); }
+          syncToHidden();
+        };
+        reader.readAsDataURL(file);
+        return;
+      }
+    }
+
+    if (htmlData) {
+      var tmp = document.createElement('div');
+      tmp.innerHTML = htmlData;
+      var bodyEl = tmp.querySelector('body');
+      if (bodyEl) { tmp.innerHTML = ''; while (bodyEl.firstChild) tmp.appendChild(bodyEl.firstChild); }
+      tmp.querySelectorAll('[data-cke-saved-src]').forEach(function (el) {
+        var v = el.getAttribute('data-cke-saved-src');
+        if (v && !el.getAttribute('src')) el.setAttribute('src', v);
+        el.removeAttribute('data-cke-saved-src');
+      });
+      tmp.querySelectorAll('img').forEach(function (img) {
+        img.style.maxWidth = '100%'; img.style.height = 'auto';
+      });
+      var sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        var range = sel.getRangeAt(0);
+        range.deleteContents();
+        var frag = document.createDocumentFragment();
+        while (tmp.firstChild) frag.appendChild(tmp.firstChild);
+        range.insertNode(frag);
+        range.collapse(false);
+        sel.removeAllRanges(); sel.addRange(range);
+      } else { while (tmp.firstChild) editor.appendChild(tmp.firstChild); }
+    } else if (textData) {
+      var sel2 = window.getSelection();
+      if (sel2 && sel2.rangeCount > 0) {
+        var range2 = sel2.getRangeAt(0);
+        range2.deleteContents();
+        var tn = document.createTextNode(textData);
+        range2.insertNode(tn);
+        range2.collapse(false);
+        sel2.removeAllRanges(); sel2.addRange(range2);
+      }
+    }
+    syncToHidden();
+  });
+
+  form.addEventListener('submit', syncToHidden);
+
+  // Init
+  showVisual();
 })();
 </script>
 {% endblock %}
