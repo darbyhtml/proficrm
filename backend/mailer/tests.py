@@ -1684,7 +1684,7 @@ class MailerSendAtSchedulingTests(TestCase):
             status=Campaign.Status.DRAFT,
         )
         self.client.force_login(self.user)
-        resp = self.client.get(f"/mail/campaigns/{camp.id}/preview/")
+        resp = self.client.get(f"/mail/campaigns/{camp.id}/preview/", secure=True)
         self.assertEqual(resp.status_code, 200)
         self.assertContains(resp, "Test preview")
 
