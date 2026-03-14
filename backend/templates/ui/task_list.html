@@ -37,6 +37,8 @@
       /* Кликабельные строки задач */
       .tasks-table tbody tr[data-view-task] { cursor: pointer; }
       .tasks-table tbody tr[data-view-task]:hover > td { background: rgba(0,61,56,.05); }
+      .tasks-table tbody tr[data-view-task]:focus { outline: none; }
+      .tasks-table tbody tr[data-view-task]:focus-visible > td { background: rgba(0,61,56,.07); box-shadow: inset 0 0 0 2px rgba(0,61,56,.3); }
 
       /* Колонки toggle: скрываем и <col> и <td>/<th> вместе,
          иначе colgroup резервирует ширину под скрытые ячейки и ломает layout */
@@ -78,7 +80,7 @@
       <div class="flex items-center gap-1.5 flex-shrink-0">
         <svg class="w-3.5 h-3.5 text-brand-dark/40 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
         <input
-          type="text"
+          type="search"
           name="q"
           value="{{ search_q|default:'' }}"
           placeholder="Поиск по задачам…"
@@ -86,6 +88,7 @@
           style="min-width:9rem;"
           id="taskSearchInput"
           autocomplete="off"
+          aria-label="Поиск по задачам"
         >
         {% if search_q %}
           <span class="text-xs bg-brand-orange/25 text-brand-dark px-1 rounded">✓</span>
@@ -222,14 +225,7 @@
                   aria-disabled="true">
             Перенести
           </button>
-          <input type="hidden" name="status" value="{{ status }}" />
-          <input type="hidden" name="mine" value="{{ mine }}" />
-          <input type="hidden" name="overdue" value="{{ overdue }}" />
-          <input type="hidden" name="today" value="{{ today }}" />
-          <input type="hidden" name="assigned_to" value="{{ assigned_to|default:'' }}" />
-          <input type="hidden" name="show_done" value="{{ show_done|default:'' }}" />
-          <input type="hidden" name="date_from" value="{{ date_from|default:'' }}" />
-          <input type="hidden" name="date_to" value="{{ date_to|default:'' }}" />
+          {# Фильтры инжектируются JS-функцией injectCurrentFilters() перед сабмитом — без дублирования в шаблоне #}
         </form>
         {% endif %}
         {% if view_is_admin %}
@@ -248,14 +244,7 @@
             {% endfor %}
           </select>
           <button type="submit" name="apply_mode" value="selected" class="btn btn-primary py-1.5 px-3 text-sm opacity-60 pointer-events-none" title="Переназначить только отмеченные галочкой задачи" disabled aria-disabled="true">Переназначить</button>
-          <input type="hidden" name="status" value="{{ status }}" />
-          <input type="hidden" name="mine" value="{{ mine }}" />
-          <input type="hidden" name="overdue" value="{{ overdue }}" />
-          <input type="hidden" name="today" value="{{ today }}" />
-          <input type="hidden" name="assigned_to" value="{{ assigned_to|default:'' }}" />
-          <input type="hidden" name="show_done" value="{{ show_done|default:'' }}" />
-          <input type="hidden" name="date_from" value="{{ date_from|default:'' }}" />
-          <input type="hidden" name="date_to" value="{{ date_to|default:'' }}" />
+          {# Фильтры инжектируются JS-функцией injectCurrentFilters() перед сабмитом — без дублирования в шаблоне #}
         </form>
         {% endif %}
         <div class="ml-auto flex items-center gap-3 flex-shrink-0">
@@ -283,11 +272,11 @@
           <thead>
             <tr>
               {% if show_task_checkboxes %}
-                <th class="text-center px-1 py-3 w-9 shrink-0" style="width: 2.25rem;">
-                  <input type="checkbox" id="bulkSelectAll" title="Выбрать все" class="rounded" />
+                <th scope="col" class="text-center px-1 py-3 w-9 shrink-0" style="width: 2.25rem;">
+                  <input type="checkbox" id="bulkSelectAll" aria-label="Выбрать все задачи на странице" class="rounded" />
                 </th>
               {% endif %}
-              <th class="text-left px-3 py-3" aria-sort="{% if sort_field == 'title' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}">
+              <th scope="col" class="text-left px-3 py-3" aria-sort="{% if sort_field == 'title' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=title&dir={% if sort_field == 'title' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'title' %}text-brand-orange font-bold{% endif %}">
                   Задача
                   <div class="flex flex-col gap-0.5">
@@ -300,7 +289,7 @@
                   </div>
                 </a>
               </th>
-              <th class="text-left px-3 py-3" aria-sort="{% if sort_field == 'company' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}">
+              <th scope="col" class="text-left px-3 py-3" aria-sort="{% if sort_field == 'company' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=company&dir={% if sort_field == 'company' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'company' %}text-brand-orange font-bold{% endif %}">
                   Компания
                   <div class="flex flex-col gap-0.5">
@@ -313,7 +302,7 @@
                   </div>
                 </a>
               </th>
-              <th class="text-left px-3 py-3" aria-sort="{% if sort_field == 'assignee' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}">
+              <th scope="col" class="text-left px-3 py-3" aria-sort="{% if sort_field == 'assignee' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=assignee&dir={% if sort_field == 'assignee' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'assignee' %}text-brand-orange font-bold{% endif %}" title="Исполнитель — кому назначена задача">
                   Исполнитель
                   <div class="flex flex-col gap-0.5">
@@ -326,7 +315,7 @@
                   </div>
                 </a>
               </th>
-              <th class="text-left px-3 py-3 col-secondary" aria-sort="{% if sort_field == 'created_by' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}">
+              <th scope="col" class="text-left px-3 py-3 col-secondary" aria-sort="{% if sort_field == 'created_by' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=created_by&dir={% if sort_field == 'created_by' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'created_by' %}text-brand-orange font-bold{% endif %}" title="Постановщик — кто создал задачу">
                   Постановщик
                   <div class="flex flex-col gap-0.5">
@@ -339,7 +328,7 @@
                   </div>
                 </a>
               </th>
-              <th class="text-left px-3 py-3" aria-sort="{% if sort_field == 'due_at' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}">
+              <th scope="col" class="text-left px-3 py-3" aria-sort="{% if sort_field == 'due_at' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=due_at&dir={% if sort_field == 'due_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'due_at' %}text-brand-orange font-bold{% endif %}">
                   Дедлайн
                   <div class="flex flex-col gap-0.5">
@@ -352,7 +341,7 @@
                   </div>
                 </a>
               </th>
-              <th class="text-left px-3 py-3" aria-sort="{% if sort_field == 'status' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}">
+              <th scope="col" class="text-left px-3 py-3" aria-sort="{% if sort_field == 'status' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=status&dir={% if sort_field == 'status' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'status' %}text-brand-orange font-bold{% endif %}">
                   Статус
                   <div class="flex flex-col gap-0.5">
@@ -365,8 +354,8 @@
                   </div>
                 </a>
               </th>
-              <th class="text-center px-3 py-3">Действия</th>
-              <th class="text-left px-3 py-3 col-secondary" aria-sort="{% if sort_field == 'created_at' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}">
+              <th scope="col" class="text-center px-3 py-3">Действия</th>
+              <th scope="col" class="text-left px-3 py-3 col-secondary" aria-sort="{% if sort_field == 'created_at' %}{% if sort_dir == 'asc' %}ascending{% else %}descending{% endif %}{% else %}none{% endif %}">
                 <a href="?{% if qs %}{{ qs }}&{% endif %}sort=created_at&dir={% if sort_field == 'created_at' and sort_dir == 'asc' %}desc{% else %}asc{% endif %}" class="flex items-center gap-1 hover:text-brand-orange cursor-pointer select-none {% if sort_field == 'created_at' %}text-brand-orange font-bold{% endif %}">
                   Дата создания
                   <div class="flex flex-col gap-0.5">
@@ -396,7 +385,7 @@
                   </tr>
                 {% endifchanged %}
               {% endif %}
-              <tr class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %}" data-view-task data-task-id="{{ t.id }}">
+              <tr class="{% if t.due_at and t.due_at < local_now and t.status != 'done' and t.status != 'cancelled' %}task-overdue{% endif %}" data-view-task data-task-id="{{ t.id }}" tabindex="0" aria-label="Задача: {{ t.title|default:t.type|default:'Без названия' }}">
                 {% if show_task_checkboxes %}
                   <td class="px-1 py-3 text-center" style="width:2.8125rem;min-width:2.8125rem;max-width:2.8125rem">
                     <input type="checkbox" name="task_ids" value="{{ t.id }}" class="task-checkbox" aria-label="Выбрать задачу" />
@@ -425,7 +414,7 @@
                         {% endif %}
                       </div>
                       {% if t.description %}
-                        <div class="text-sm text-brand-dark/80 mt-1" style="line-height:1.3">{{ t.description }}</div>
+                        <div class="text-sm text-brand-dark/80 mt-1" style="line-height:1.45">{{ t.description }}</div>
                       {% endif %}
                       {% include "ui/partials/_task_meta.html" with task=t hide_created_by=True only %}
                     </div>
@@ -517,7 +506,7 @@
                         data-task-delete
                         data-task-id="{{ t.id }}"
                       >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#b91c1c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-700">
                           <path d="M6 7h12M10 11v6M14 11v6M9 7l1-3h4l1 3M19 7l-1 12H6L5 7"/>
                         </svg>
                       </button>
@@ -529,12 +518,15 @@
             {% empty %}
               <tr>
                 <td colspan="{% if show_task_checkboxes %}9{% else %}8{% endif %}" style="padding:2rem 1rem;text-align:center;">
-                  <div class="text-brand-dark/50 text-sm">
+                  <div class="text-brand-dark/50 text-sm flex flex-col items-center gap-2">
                     {% if mine == '1' or overdue == '1' or today == '1' or show_done == '1' or status or assigned_to or search_q or date_from or date_to %}
-                      По текущим фильтрам задач не найдено.
-                      <a href="{% url 'task_list' %}" class="link ml-1">Сбросить фильтры</a>
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="opacity-30" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                      <span>По текущим фильтрам задач не найдено.</span>
+                      <a href="{% url 'task_list' %}" class="link">Сбросить фильтры</a>
                     {% else %}
-                      Задач нет. <button type="button" class="link" data-create-task>Создать первую задачу</button>
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="opacity-30" aria-hidden="true"><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M4 7h16a1 1 0 0 1 1 1v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a1 1 0 0 1 1-1z"/><path d="M9 12h6M9 16h4"/></svg>
+                      <span>Задач пока нет.</span>
+                      <button type="button" class="btn btn-primary btn-sm" data-create-task>+ Создать первую задачу</button>
                     {% endif %}
                   </div>
                 </td>
@@ -547,23 +539,14 @@
       <div class="border-t px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
         <div class="flex items-center gap-3">
           <form method="get" class="flex items-center gap-2" id="perPageForm">
-            <label class="text-sm text-brand-dark/70 whitespace-nowrap">На странице:</label>
-            <select name="per_page" class="select" onchange="document.getElementById('perPageForm').submit()" style="padding:.25rem .5rem;font-size:.875rem;min-width:auto">
+            <label class="text-sm text-brand-dark/70 whitespace-nowrap" for="perPageSelect">На странице:</label>
+            <select name="per_page" id="perPageSelect" class="select" style="padding:.25rem .5rem;font-size:.875rem;min-width:auto" aria-label="Задач на странице">
               <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
               <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
               <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
               <option value="200" {% if per_page == 200 %}selected{% endif %}>200</option>
             </select>
-            {% if status %}<input type="hidden" name="status" value="{{ status }}" />{% endif %}
-            {% if mine %}<input type="hidden" name="mine" value="{{ mine }}" />{% endif %}
-            {% if overdue %}<input type="hidden" name="overdue" value="{{ overdue }}" />{% endif %}
-            {% if today %}<input type="hidden" name="today" value="{{ today }}" />{% endif %}
-            {% if show_done %}<input type="hidden" name="show_done" value="{{ show_done }}" />{% endif %}
-            {% if sort %}<input type="hidden" name="sort" value="{{ sort }}" />{% endif %}
-            {% if assigned_to %}<input type="hidden" name="assigned_to" value="{{ assigned_to }}" />{% endif %}
-            {% if search_q %}<input type="hidden" name="q" value="{{ search_q }}" />{% endif %}
-            {% if date_from %}<input type="hidden" name="date_from" value="{{ date_from }}" />{% endif %}
-            {% if date_to %}<input type="hidden" name="date_to" value="{{ date_to }}" />{% endif %}
+            {# Фильтры инжектируются JS-функцией injectCurrentFilters() перед сабмитом #}
           </form>
           <span class="w-px self-stretch bg-brand-soft/60" aria-hidden="true"></span>
           <button type="button" id="colsToggleBtn" class="inline-flex items-center gap-1.5 text-xs text-brand-dark/40 hover:text-brand-dark/80 transition-colors" title="Показать / скрыть дополнительные колонки">
@@ -727,7 +710,7 @@
         if (idx >= 0 && idx < ids.length - 1) loadTask(ids[idx + 1]);
       });
 
-      // Открытие по клику на [data-view-task]
+      // Открытие по клику или Enter/Space на [data-view-task]
       document.addEventListener('click', async function(e) {
         const trigger = e.target.closest('[data-view-task]');
         if (!trigger) return;
@@ -738,9 +721,41 @@
         openModal();
         await loadTask(taskId);
       });
+
+      // Клавиатурная навигация по строкам таблицы: Enter/Space открывают задачу
+      document.addEventListener('keydown', async function(e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        const trigger = e.target.closest('[data-view-task]');
+        if (!trigger) return;
+        if (e.target.closest('button, a, input, label, select')) return;
+        e.preventDefault();
+        const taskId = trigger.dataset.taskId;
+        if (!taskId) return;
+        openModal();
+        await loadTask(taskId);
+      });
     })();
   </script>
   {% endif %}
+
+  <script>
+    // DRY: инжектируем текущие параметры фильтрации из URL в любую форму перед сабмитом.
+    // Заменяет три дублирующихся набора hidden-полей в шаблоне (перенос, переназначение, per_page).
+    function injectCurrentFilters(formEl, excludeKeys) {
+      excludeKeys = excludeKeys || [];
+      formEl.querySelectorAll('[data-filter-injected]').forEach(function(el) { el.remove(); });
+      const params = new URLSearchParams(window.location.search);
+      params.forEach(function(value, key) {
+        if (excludeKeys.indexOf(key) !== -1) return;
+        const inp = document.createElement('input');
+        inp.type = 'hidden';
+        inp.name = key;
+        inp.value = value;
+        inp.setAttribute('data-filter-injected', '1');
+        formEl.appendChild(inp);
+      });
+    }
+  </script>
 
   {% if show_task_checkboxes %}
     <script>
@@ -959,6 +974,7 @@
               const label = (selectAssigneeEl.options[selectAssigneeEl.selectedIndex] || {}).textContent || '';
               if (openReassignModal({ assigneeLabel: label.trim(), count })) {
                 reassignModalConfirm.onclick = function() {
+                  injectCurrentFilters(reassignForm, ['assigned_to_id', 'page']);
                   const tmpSubmit = document.createElement('button');
                   tmpSubmit.type = 'submit';
                   tmpSubmit.style.display = 'none';
@@ -1027,6 +1043,7 @@
               })();
               if (openRescheduleModal({ dateLabel: prettyDate, count })) {
                 rescheduleModalConfirm.onclick = function() {
+                  injectCurrentFilters(rescheduleForm, ['due_at', 'page']);
                   const tmpSubmit = document.createElement('button');
                   tmpSubmit.type = 'submit';
                   tmpSubmit.style.display = 'none';
@@ -1745,10 +1762,12 @@
       if (resetBtn) {
         resetBtn.addEventListener('click', (e) => {
           e.preventDefault();
-          // Жёсткий сброс: очищаем сохранённое и выключаем режим запоминания
+          // Жёсткий сброс: очищаем фильтры, запомненную сортировку и выключаем запоминание
           setSavedQs('');
           rememberCb.checked = false;
           setPref(false);
+          // Также очищаем sort_pref, чтобы после сброса не восстановилась последняя сортировка
+          try { localStorage.removeItem('proficrm:' + userId + ':tasks:sort_pref'); } catch(e) {}
           window.location.href = '/tasks/';
         });
       }
@@ -2065,6 +2084,17 @@
         });
       }, { threshold: 1.0 });
       obs.observe(sentinel);
+    })();
+
+    // perPageForm: инжектируем текущие фильтры из URL перед сменой per_page
+    (function() {
+      const sel = document.getElementById('perPageSelect');
+      const form = document.getElementById('perPageForm');
+      if (!sel || !form) return;
+      sel.addEventListener('change', function() {
+        injectCurrentFilters(form, ['per_page', 'page']);
+        form.submit();
+      });
     })();
 
     // Filter bar: правый фейд-индикатор горизонтального скролла
