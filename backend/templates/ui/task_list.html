@@ -35,11 +35,6 @@
         margin-top:1.75rem;
       }
 
-      /* Модалка подтверждения переноса: плавное появление */
-      #bulkRescheduleConfirmModal{opacity:0; transition:opacity .18s ease;}
-      #bulkRescheduleConfirmModal.is-open{opacity:1;}
-      #bulkRescheduleConfirmModal .bulk-modal-panel{transform:translateY(8px) scale(.98); transition:transform .18s ease;}
-      #bulkRescheduleConfirmModal.is-open .bulk-modal-panel{transform:translateY(0) scale(1);}
     </style>
 
     <form class="bg-white border border-brand-soft/60 rounded-2xl px-3 py-2.5 flex flex-wrap items-center gap-x-4 gap-y-2 tasks-layout-block" method="get" id="taskFilterForm" data-user-id="{{ request.user.id }}">
@@ -346,7 +341,7 @@
               {% if sort_field == 'company' %}
                 {% ifchanged t.company_id %}
                   <tr class="bg-brand-soft/20">
-                    <td class="px-4 py-2 text-xs text-brand-dark/70 font-medium" colspan="{% if show_task_checkboxes %}8{% else %}7{% endif %}">
+                    <td class="px-4 py-2 text-xs text-brand-dark/70 font-medium" colspan="{% if show_task_checkboxes %}9{% else %}8{% endif %}">
                       {% if t.company %}
                         Компания: <a class="link" href="/companies/{{ t.company.id }}/">{{ t.company.name }}</a>
                       {% else %}
@@ -502,7 +497,7 @@
               </tr>
             {% empty %}
               <tr>
-                <td colspan="{% if show_task_checkboxes %}8{% else %}7{% endif %}" style="padding:2rem 1rem;text-align:center;">
+                <td colspan="{% if show_task_checkboxes %}9{% else %}8{% endif %}" style="padding:2rem 1rem;text-align:center;">
                   <div class="text-brand-dark/50 text-sm">
                     {% if mine == '1' or overdue == '1' or today == '1' or show_done == '1' or status or assigned_to or search_q or date_from or date_to %}
                       По текущим фильтрам задач не найдено.
