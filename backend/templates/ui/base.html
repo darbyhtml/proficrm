@@ -368,6 +368,12 @@
       .custom-datetime-picker input {
         width: 100%;
       }
+      /* Прячем нативный input до инициализации JS — убирает мигание нативного UI */
+      input[type="datetime-local"]:not([data-custom-picker-initialized]),
+      input[type="date"]:not([data-custom-picker-initialized]) {
+        opacity: 0;
+        pointer-events: none;
+      }
       
       .custom-datetime-overlay {
         position: fixed;
@@ -2555,7 +2561,10 @@
             visualInput.style.alignItems = 'center';
             visualInput.style.justifyContent = 'space-between';
             visualInput.style.position = 'relative';
-            
+            // Копируем padding и font-size из оригинального input, чтобы визуальный div совпадал по размеру
+            if (input.style.padding) visualInput.style.padding = input.style.padding;
+            if (input.style.fontSize) visualInput.style.fontSize = input.style.fontSize;
+
             // Добавляем текст
             const textSpan = document.createElement('span');
             textSpan.style.flex = '1';
