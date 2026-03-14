@@ -1573,6 +1573,7 @@ class MailerHeaderInjectionTests(TestCase):
         self.assertIn("42", str(msg["Subject"]))
 
 
+@override_settings(SECURE_SSL_REDIRECT=False)
 class MailerSendAtSchedulingTests(TestCase):
     """Тесты планировщика send_at — кампания не стартует раньше времени."""
 
