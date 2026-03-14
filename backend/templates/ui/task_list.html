@@ -80,7 +80,7 @@
           </select>
         </span>
       </div>
-      <div class="flex items-center gap-1 border-l border-brand-soft/70 pl-3 flex-shrink-0">
+      <div class="flex flex-wrap items-center gap-1 border-l border-brand-soft/70 pl-3 flex-shrink-0">
         <label class="inline-flex items-center gap-1.5 text-sm text-brand-dark/80 cursor-pointer whitespace-nowrap py-1 px-2 rounded hover:bg-brand-soft/30 transition-colors">
           <input type="checkbox" name="mine" value="1" {% if mine == '1' %}checked{% endif %} class="rounded border-brand-soft/80" />
           <span>Мои</span>
@@ -97,12 +97,13 @@
           <input type="checkbox" name="show_done" value="1" {% if show_done == '1' %}checked{% endif %} class="rounded border-brand-soft/80" />
           <span>Выполненные</span>
         </label>
-      </div>
-      <div class="flex items-center gap-2 flex-shrink-0 ml-auto">
+        <span class="w-px self-stretch bg-brand-soft/70 mx-1" aria-hidden="true"></span>
         <label class="inline-flex items-center gap-1.5 text-sm text-brand-dark/80 cursor-pointer whitespace-nowrap py-1 px-2 rounded hover:bg-brand-soft/30 transition-colors" title="Запомнить текущие фильтры — при возврате на страницу задач они восстановятся">
           <input type="checkbox" id="rememberTaskFilters" class="rounded border-brand-soft/80" />
           <span>Запомнить фильтры</span>
         </label>
+      </div>
+      <div class="flex items-center gap-2 flex-shrink-0 ml-auto">
         <button type="button" class="btn btn-outline flex items-center gap-1.5 py-1.5 px-3 text-sm" id="dateFilterBtn" title="{% if show_done == '1' %}Период: когда задача была выполнена{% else %}Период: дедлайн задачи{% endif %}">
           <svg class="w-4 h-4 text-brand-dark/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
@@ -363,12 +364,12 @@
                         </svg>
                       </div>
                     {% endif %}
-                    <div class="flex-1" style="line-height:1.4">
+                    <div class="flex-1 cursor-pointer group/task" style="line-height:1.4" data-view-task data-task-id="{{ t.id }}" title="Открыть задачу">
                       <div class="mb-0.5">
                         {% if t.type %}
                           {% include "ui/partials/task_type_badge.html" with task_type=t.type only %}
                         {% elif t.title %}
-                          <span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-800">
+                          <span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-800 group-hover/task:bg-brand-soft/60 transition-colors">
                             {{ t.title }}
                           </span>
                         {% else %}
@@ -426,7 +427,7 @@
                 </td>
                 <td class="px-3 py-3" style="width:5.5rem;min-width:5.5rem;max-width:5.5rem;"><span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span></td>
                 <td class="px-3 py-3 w-28 shrink-0">
-                  <div class="grid grid-cols-2 gap-1">
+                  <div class="flex flex-wrap gap-1">
                     {% if t.can_edit_task %}
                       <button type="button" class="flex items-center justify-center w-9 h-9 rounded-lg bg-white border border-brand-soft hover:bg-brand-soft/40 transition-colors" data-edit-task data-task-id="{{ t.id }}" title="Редактировать" aria-label="Редактировать">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -434,8 +435,6 @@
                           <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
                         </svg>
                       </button>
-                    {% else %}
-                      <div></div>
                     {% endif %}
                     {% if t.can_manage_status and t.status != 'in_progress' %}
                       <form method="post" action="{% url 'task_set_status' t.id %}" class="inline">
@@ -450,10 +449,6 @@
                           </svg>
                         </button>
                       </form>
-                    {% elif t.can_manage_status %}
-                      <div></div>
-                    {% else %}
-                      <div></div>
                     {% endif %}
                     {% if t.can_manage_status and t.status != 'done' %}
                       <button
@@ -468,8 +463,6 @@
                           <polyline points="20 6 9 17 4 12"/>
                         </svg>
                       </button>
-                    {% else %}
-                      <div></div>
                     {% endif %}
                     {% if t.can_delete_task %}
                       <button
@@ -484,8 +477,6 @@
                           <path d="M6 7h12M10 11v6M14 11v6M9 7l1-3h4l1 3M19 7l-1 12H6L5 7"/>
                         </svg>
                       </button>
-                    {% else %}
-                      <div></div>
                     {% endif %}
                   </div>
                 </td>
@@ -540,6 +531,71 @@
 
   {% if view_task %}
     {% include "ui/task_view_modal.html" %}
+  {% endif %}
+
+  {# AJAX-модалка просмотра задачи — заполняется JS при клике на задачу #}
+  {% if not view_task %}
+  <div id="taskViewAjaxModal" class="fixed inset-0 z-[200] hidden" aria-hidden="true">
+    <div class="fixed inset-0 bg-black/35" id="taskViewAjaxOverlay"></div>
+    <div class="absolute inset-x-4 top-12 mx-auto max-w-2xl max-h-[90vh] overflow-y-auto" id="taskViewAjaxInner"></div>
+  </div>
+  <script>
+    (function() {
+      const modal = document.getElementById('taskViewAjaxModal');
+      const overlay = document.getElementById('taskViewAjaxOverlay');
+      const inner = document.getElementById('taskViewAjaxInner');
+      if (!modal) return;
+
+      function openModal() {
+        modal.classList.remove('hidden');
+        modal.removeAttribute('aria-hidden');
+      }
+      function closeModal() {
+        modal.classList.add('hidden');
+        modal.setAttribute('aria-hidden', 'true');
+        inner.innerHTML = '';
+      }
+
+      overlay.addEventListener('click', closeModal);
+      document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeModal(); });
+      // Делегирование для кнопок закрытия внутри загруженного контента
+      document.addEventListener('click', e => {
+        if (e.target.closest('[data-close-task-view]') && !modal.classList.contains('hidden')) closeModal();
+      });
+
+      // Открытие по клику на [data-view-task]
+      document.addEventListener('click', async function(e) {
+        const trigger = e.target.closest('[data-view-task]');
+        if (!trigger) return;
+        // Не открывать если кликнули на кнопку действия внутри ячейки
+        if (e.target.closest('button, a, input, label')) return;
+
+        const taskId = trigger.dataset.taskId;
+        if (!taskId) return;
+
+        openModal();
+        inner.innerHTML = '<div class="card card-pad"><div class="flex items-center justify-center gap-3 py-10 text-brand-dark/50"><svg class="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg><span class="text-sm">Загрузка…</span></div></div>';
+
+        try {
+          const res = await fetch('/tasks/' + taskId + '/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+          if (!res.ok) throw new Error('Ошибка ' + res.status);
+          const html = await res.text();
+          const doc = new DOMParser().parseFromString(html, 'text/html');
+          const fetched = doc.querySelector('#taskViewModal');
+          if (fetched) {
+            const contentWrap = fetched.querySelector('.absolute.inset-x-4');
+            inner.innerHTML = contentWrap ? contentWrap.innerHTML : fetched.innerHTML;
+          } else {
+            inner.innerHTML = html;
+          }
+          // Инициализируем кастомный datetime-picker, если нужен внутри модалки
+          if (window.initCustomDatetimePicker) window.initCustomDatetimePicker();
+        } catch (err) {
+          inner.innerHTML = '<div class="card card-pad"><p class="text-sm text-red-600">Не удалось загрузить задачу. Попробуйте ещё раз.</p></div>';
+        }
+      });
+    })();
+  </script>
   {% endif %}
 
   {% if show_task_checkboxes %}
