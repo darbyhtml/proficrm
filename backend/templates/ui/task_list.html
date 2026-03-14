@@ -3,9 +3,6 @@
 {% block title %}Задачи — CRM ПРОФИ{% endblock %}
 
 {% block content %}
-  {# ── Быстрый редирект: фильтры + сортировка ──────────────────────────────────
-     Запускается СИНХРОННО до рендера контента — пользователь никогда не увидит
-     «пустую» страницу и не заметит flash при восстановлении настроек. #}
   <script>
     (function(){
       try {
@@ -251,7 +248,21 @@
         if (!keys.length) return;
         var params = new URLSearchParams(window.location.search);
         keys.forEach(function(k) { params.delete(k); });
-        params.delete('page'); // сбрасываем на первую страницу
+        params.delete('page');
+        // Обновляем сохранённые фильтры в localStorage, иначе fast-path вернёт удалённые фильтры обратно
+        try {
+          var form = document.getElementById('taskFilterForm');
+          var uid = form && form.dataset ? (form.dataset.userId || 'anon') : 'anon';
+          var prefKey = 'proficrm:' + uid + ':tasks:remember_filters';
+          var qsKey = 'proficrm:' + uid + ':tasks:filters_qs';
+          if (localStorage.getItem(prefKey) === '1') {
+            var savedParams = new URLSearchParams(localStorage.getItem(qsKey) || '');
+            keys.forEach(function(k) { savedParams.delete(k); });
+            var newSaved = savedParams.toString();
+            if (newSaved) localStorage.setItem(qsKey, newSaved);
+            else localStorage.removeItem(qsKey);
+          }
+        } catch(ign) {}
         window.location.href = '/tasks/' + (params.toString() ? '?' + params.toString() : '');
       });
     </script>
@@ -343,9 +354,9 @@
           <colgroup>
             {% if show_task_checkboxes %}<col style="width: 2.25rem;" />{% endif %}
             <col style="width: 13rem;" />
-            <col />
-            <col />
-            <col class="col-secondary" />
+            <col style="width: 10rem;" />
+            <col style="width: 10rem;" />
+            <col class="col-secondary" style="width: 8rem;" />
             <col style="width: 12rem;" />
             <col style="width: 5.5rem;" />
             <col style="width: 6.5rem;" />
