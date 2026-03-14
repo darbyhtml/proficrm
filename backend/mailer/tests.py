@@ -1106,7 +1106,7 @@ class MailerApiKeyEncryptionTests(TestCase):
 
     def test_set_and_get_api_key_roundtrip(self):
         """set_api_key шифрует, get_api_key расшифровывает — round-trip."""
-        cfg = GlobalMailAccount.objects.create(is_enabled=True)
+        cfg, _ = GlobalMailAccount.objects.update_or_create(id=1, defaults={"is_enabled": True})
         cfg.set_api_key("secret-key-123")
         cfg.save()
 
@@ -1115,7 +1115,7 @@ class MailerApiKeyEncryptionTests(TestCase):
 
     def test_api_key_stored_encrypted(self):
         """Значение в поле smtp_bz_api_key_enc не равно исходному ключу."""
-        cfg = GlobalMailAccount.objects.create(is_enabled=True)
+        cfg, _ = GlobalMailAccount.objects.update_or_create(id=1, defaults={"is_enabled": True})
         cfg.set_api_key("my-plaintext-key")
         cfg.save()
 
@@ -1125,7 +1125,7 @@ class MailerApiKeyEncryptionTests(TestCase):
 
     def test_smtp_bz_api_key_property_backward_compat(self):
         """Свойство smtp_bz_api_key возвращает расшифрованный ключ (обратная совместимость)."""
-        cfg = GlobalMailAccount.objects.create(is_enabled=True)
+        cfg, _ = GlobalMailAccount.objects.update_or_create(id=1, defaults={"is_enabled": True})
         cfg.set_api_key("compat-key")
         cfg.save()
         cfg.refresh_from_db()
@@ -1134,7 +1134,7 @@ class MailerApiKeyEncryptionTests(TestCase):
 
     def test_empty_api_key(self):
         """Пустой ключ сохраняется и считывается без ошибок."""
-        cfg = GlobalMailAccount.objects.create(is_enabled=True)
+        cfg, _ = GlobalMailAccount.objects.update_or_create(id=1, defaults={"is_enabled": True})
         cfg.set_api_key("")
         cfg.save()
         cfg.refresh_from_db()
