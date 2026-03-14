@@ -365,7 +365,7 @@ class TaskBulkFilterSummaryUnitTestCase(TestCase):
         qs = Task.objects.all()
         params = {
             "status": "",  # без явного статуса — по умолчанию DONE исключается
-            "mine": "1",
+            "mine": "",
             "assigned_to": str(self.user.id),
             "overdue": "",
             "today": "",
