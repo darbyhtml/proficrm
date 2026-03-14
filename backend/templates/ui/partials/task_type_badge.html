@@ -2,10 +2,10 @@
 {% load static %}
 {% with tt=task_type %}
   {% if not tt %}
-    <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">Без статуса</span>
+    <span class="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">Без статуса</span>
   {% else %}
     {% with color=tt.color|default:"badge-gray" icon=tt.icon|default:"" %}
-      <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full
+      <span class="inline-flex items-center gap-1 text-sm px-2 py-0.5 rounded-full
         {% if color == 'badge-blue' %}bg-blue-100 text-blue-800
         {% elif color == 'badge-green' %}bg-green-100 text-green-800
         {% elif color == 'badge-red' %}bg-red-100 text-red-800
