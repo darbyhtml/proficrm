@@ -38,7 +38,9 @@
       .tasks-table tbody tr[data-view-task] { cursor: pointer; }
       .tasks-table tbody tr[data-view-task]:hover > td { background: rgba(0,61,56,.05); }
 
-      /* Колонки toggle */
+      /* Колонки toggle: скрываем и <col> и <td>/<th> вместе,
+         иначе colgroup резервирует ширину под скрытые ячейки и ломает layout */
+      .tasks-table.hide-secondary col.col-secondary { display: none; }
       .tasks-table.hide-secondary .col-secondary { display: none; }
 
       /* Запомнить фильтры — визуальный акцент когда активно */
@@ -241,7 +243,7 @@
 
     <div class="bg-white border border-brand-soft/60 rounded-2xl overflow-hidden tasks-layout-block">
       <div class="flex items-center justify-end px-4 py-1.5 border-b border-brand-soft/20 bg-brand-soft/5">
-        <button type="button" id="colsToggleBtn" class="inline-flex items-center gap-1.5 text-xs font-medium text-brand-dark/50 hover:text-brand-dark border border-brand-soft/60 rounded px-2 py-1 transition-colors" title="Показать / скрыть дополнительные колонки">
+        <button type="button" id="colsToggleBtn" class="inline-flex items-center gap-1.5 text-xs text-brand-dark/40 hover:text-brand-dark/80 transition-colors" title="Показать / скрыть дополнительные колонки">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
           <span id="colsToggleBtnLabel">Доп. колонки</span>
         </button>
@@ -253,11 +255,11 @@
             <col style="width: 13rem;" />
             <col />
             <col />
-            <col />
+            <col class="col-secondary" />
             <col style="width: 12rem;" />
             <col style="width: 5.5rem;" />
-            <col style="width: 7.5rem;" />
-            <col style="width: 7.5rem;" />
+            <col style="width: 6.5rem;" />
+            <col class="col-secondary" style="width: 7.5rem;" />
           </colgroup>
           <thead>
             <tr>
@@ -456,7 +458,7 @@
                 <td class="px-3 py-3 w-28 shrink-0 align-middle">
                   <div class="flex flex-wrap gap-1 justify-center">
                     {% if t.can_edit_task %}
-                      <button type="button" class="flex items-center justify-center w-10 h-10 rounded-lg bg-white border border-brand-soft hover:bg-brand-soft/40 transition-colors" data-edit-task data-task-id="{{ t.id }}" title="Редактировать" aria-label="Редактировать">
+                      <button type="button" class="flex items-center justify-center w-9 h-9 rounded-lg bg-white border border-brand-soft hover:bg-brand-soft/40 transition-colors" data-edit-task data-task-id="{{ t.id }}" title="Редактировать" aria-label="Редактировать">
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                           <path d="M12 20h9"/>
                           <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>
@@ -466,7 +468,7 @@
                     {% if t.can_manage_status and t.status != 'in_progress' %}
                       <form method="post" action="{% url 'task_set_status' t.id %}" class="inline">
                         {% csrf_token %}
-                        <button name="status" value="in_progress" class="flex items-center justify-center w-10 h-10 rounded-lg bg-brand-orange hover:opacity-90 text-white transition-colors" title="В работу" aria-label="В работу">
+                        <button name="status" value="in_progress" class="flex items-center justify-center w-9 h-9 rounded-lg bg-brand-orange hover:opacity-90 text-white transition-colors" title="В работу" aria-label="В работу">
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <polygon points="5 3 19 12 5 21 5 3"/>
                           </svg>
@@ -476,7 +478,7 @@
                     {% if t.can_manage_status and t.status != 'done' %}
                       <button
                         type="button"
-                        class="flex items-center justify-center w-10 h-10 rounded-lg bg-brand-teal hover:bg-brand-dark text-white transition-colors"
+                        class="flex items-center justify-center w-9 h-9 rounded-lg bg-brand-teal hover:bg-brand-dark text-white transition-colors"
                         title="Выполнено"
                         aria-label="Выполнено"
                         data-task-complete
@@ -490,7 +492,7 @@
                     {% if t.can_delete_task %}
                       <button
                         type="button"
-                        class="flex items-center justify-center w-10 h-10 rounded-lg bg-white border border-red-200 hover:bg-red-50 transition-colors"
+                        class="flex items-center justify-center w-9 h-9 rounded-lg bg-white border border-red-200 hover:bg-red-50 transition-colors"
                         title="Удалить"
                         aria-label="Удалить"
                         data-task-delete
