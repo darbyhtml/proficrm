@@ -21,9 +21,9 @@
               </div>
             {% endif %}
             <div class="mt-2 space-y-0.5 text-[11px] text-brand-dark/70">
-              <div class="flex items-center gap-1">
+              <div>
                 <span class="font-semibold">Статус:</span>
-                {% include "ui/partials/_task_status_badge.html" with task=t %}
+                <span class="badge {% if t.status == 'new' %}badge-new{% elif t.status == 'in_progress' %}badge-progress{% elif t.status == 'done' %}badge-done{% elif t.status == 'cancelled' %}badge-cancel{% endif %}">{{ t.get_status_display }}</span>
               </div>
               <div>
                 <span class="font-semibold">Поставил:</span>
