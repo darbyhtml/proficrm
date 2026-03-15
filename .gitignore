@@ -96,3 +96,6 @@ sphere_merge.json
 
 # Node / Tailwind build
 node_modules/
+
+# External reference repos (не часть проекта)
+chatwoot-reference/

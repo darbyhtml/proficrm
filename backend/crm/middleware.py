@@ -47,15 +47,14 @@ class ErrorLoggingMiddleware(MiddlewareMixin):
         try:
             from audit.models import ErrorLog
             
+            # Http404 и PermissionDenied — штатные ситуации, не ошибки
+            if isinstance(exception, (Http404, PermissionDenied, SystemExit, KeyboardInterrupt)):
+                return None
+
             # Определяем уровень ошибки
             level = ErrorLog.Level.EXCEPTION
             if isinstance(exception, (ValueError, TypeError, AttributeError)):
                 level = ErrorLog.Level.ERROR
-            elif isinstance(exception, (PermissionDenied, Http404)):
-                level = ErrorLog.Level.WARNING
-            elif isinstance(exception, (SystemExit, KeyboardInterrupt)):
-                # Не логируем системные исключения
-                return None
             
             # Логируем ошибку
             ErrorLog.log_error(
