@@ -47,6 +47,12 @@ if ! git pull origin main; then
 fi
 echo "  HEAD: $(git rev-parse --short HEAD)"
 
+# 3a) Сборка Tailwind CSS (если есть node_modules)
+if [ -f "package.json" ] && [ -d "node_modules" ]; then
+    echo ">>> npm run build:css"
+    npm run build:css
+fi
+
 # 3) Сборка образов
 echo ">>> docker compose build"
 $COMPOSE build

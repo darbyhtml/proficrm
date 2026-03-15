@@ -93,3 +93,6 @@ sphere_merge.json
 
 # Local audit & planning docs (Claude Code workspace)
 .audit/
+
+# Node / Tailwind build
+node_modules/
