@@ -21,7 +21,7 @@
               {% endif %}
             </div>
             {# Статус справа #}
-            {% include "ui/partials/_task_status_badge.html" with task=view_task %}
+            <span class="badge {% if view_task.status == 'new' %}badge-new{% elif view_task.status == 'in_progress' %}badge-progress{% elif view_task.status == 'done' %}badge-done{% elif view_task.status == 'cancelled' %}badge-cancel{% endif %}">{{ view_task.get_status_display }}</span>
           </div>
           <h2 class="text-xl font-semibold text-brand-dark">{{ view_task.title }}</h2>
           {% if view_task.description %}
