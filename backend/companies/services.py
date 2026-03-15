@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable
 
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q
@@ -16,11 +17,84 @@ from django.utils import timezone
 from accounts.models import User
 from audit.service import log_event
 from audit.models import ActivityEvent
-from companies.models import Company, CompanyPhone, CompanyEmail, CompanyNote
+from companies.models import Company, CompanyPhone, CompanyEmail, CompanyNote, CompanyHistoryEvent
 from companies.permissions import can_edit_company, can_transfer_company
 from crm.request_id_middleware import get_request_id
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Чистые функции (без сайд-эффектов)
+# ---------------------------------------------------------------------------
+
+def get_contract_alert(company: Company) -> tuple[str, int | None]:
+    """
+    Вычисляет уровень тревоги для договора компании.
+
+    Returns:
+        (alert_level, days_left) — alert_level: "" | "warn" | "danger", days_left: int или None
+    """
+    if not company.contract_until:
+        return "", None
+
+    today = timezone.localdate(timezone.now())
+    days_left = (company.contract_until - today).days
+
+    if company.contract_type:
+        warning_days = company.contract_type.warning_days
+        danger_days = company.contract_type.danger_days
+        if days_left <= danger_days:
+            return "danger", days_left
+        if days_left <= warning_days:
+            return "warn", days_left
+    else:
+        # Fallback на жёстко заданные пороги
+        if days_left < 14:
+            return "danger", days_left
+        if days_left <= 30:
+            return "warn", days_left
+
+    return "", days_left
+
+
+def get_worktime_status(company: Company) -> dict:
+    """
+    Вычисляет статус рабочего времени для компании.
+
+    Returns:
+        dict с ключами: has (bool), status (str|None), label (str)
+    """
+    worktime: dict = {
+        "has": bool(company.work_schedule),
+        "status": None,
+        "label": "",
+    }
+    if not company.work_schedule:
+        return worktime
+
+    try:
+        from zoneinfo import ZoneInfo
+        from ui.timezone_utils import guess_ru_timezone_from_address
+        from core.work_schedule_utils import get_worktime_status_from_schedule
+
+        guessed = guess_ru_timezone_from_address(company.address or "")
+        tz_name = (((company.work_timezone or "").strip()) or guessed or "Europe/Moscow").strip()
+        tz = ZoneInfo(tz_name)
+        now_tz = timezone.now().astimezone(tz)
+
+        status, _mins = get_worktime_status_from_schedule(company.work_schedule, now_tz=now_tz)
+        worktime["status"] = status
+        worktime["label"] = {
+            "ok": "Рабочее время",
+            "warn_end": "Остался час",
+            "off": "Не рабочее время",
+        }.get(status, "")
+    except Exception:
+        worktime["status"] = "unknown"
+        worktime["label"] = ""
+
+    return worktime
 
 
 def get_org_root(company: Company) -> Company:
@@ -247,14 +321,41 @@ class CompanyService:
         
         old_responsible = company.responsible
         old_branch = company.branch
-        
-        # Обновление
+
+        # Обновление: всегда синхронизируем филиал под нового ответственного
         company.responsible = new_responsible
-        # При передаче обновляем филиал компании под филиал нового ответственного
-        if new_responsible.branch:
-            company.branch = new_responsible.branch
+        company.branch = new_responsible.branch
         company.save(update_fields=["responsible", "branch", "updated_at"])
-        
+
+        # Инвалидируем кэш счётчиков (смена ответственного/филиала)
+        cache.delete("companies_total_count")
+
+        # История передвижения карточки
+        CompanyHistoryEvent.objects.create(
+            company=company,
+            event_type=CompanyHistoryEvent.EventType.ASSIGNED,
+            source=CompanyHistoryEvent.Source.LOCAL,
+            actor=user,
+            actor_name=str(user),
+            from_user=old_responsible,
+            from_user_name=str(old_responsible) if old_responsible else "",
+            to_user=new_responsible,
+            to_user_name=str(new_responsible),
+            occurred_at=timezone.now(),
+        )
+
+        # Уведомление новому ответственному (если это не сам инициатор)
+        if new_responsible.id != user.id:
+            from notifications.models import Notification
+            from notifications.service import notify
+            notify(
+                user=new_responsible,
+                kind=Notification.Kind.COMPANY,
+                title="Вам передали компанию",
+                body=str(company.name),
+                url=f"/companies/{company.id}/",
+            )
+
         # Логирование
         log_event(
             actor=user,
@@ -262,16 +363,23 @@ class CompanyService:
             entity_type="company",
             entity_id=company.id,
             company_id=company.id,
-            message=f"Компания передана от {old_responsible} к {new_responsible}",
+            message="Изменён ответственный компании",
             meta={
-                "old_responsible_id": str(old_responsible.id) if old_responsible else None,
-                "new_responsible_id": str(new_responsible.id),
-                "old_branch_id": str(old_branch.id) if old_branch else None,
-                "new_branch_id": str(new_responsible.branch.id) if new_responsible.branch else None,
+                "from": str(old_responsible) if old_responsible else "",
+                "to": str(new_responsible),
                 "request_id": get_request_id(),
             },
         )
-        
+
+        logger.info(
+            "Company transferred: company_id=%s, old_responsible_id=%s, "
+            "new_responsible_id=%s, transferred_by_user_id=%s",
+            company.id,
+            old_responsible.id if old_responsible else None,
+            new_responsible.id,
+            user.id,
+        )
+
         return {
             "success": True,
             "company_id": str(company.id),

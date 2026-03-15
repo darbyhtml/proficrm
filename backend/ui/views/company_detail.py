@@ -99,37 +99,8 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     now = timezone.now()
     local_now = timezone.localtime(now)
     # Индикатор: можно ли звонить (рабочее время компании + часовой пояс)
-    worktime = {
-        # Источник "можно ли звонить" теперь только "Режим работы"
-        "has": bool(company.work_schedule),
-        "status": None,  # "ok" | "warn_end" | "off" | "unknown"
-        "label": "",
-    }
-    try:
-        from zoneinfo import ZoneInfo
-        from ui.timezone_utils import guess_ru_timezone_from_address
-        from core.work_schedule_utils import get_worktime_status_from_schedule
-
-        guessed = guess_ru_timezone_from_address(company.address or "")
-        # приоритет: сохранённый вручную, затем авто по адресу
-        tz_name = (((company.work_timezone or "").strip()) or guessed or "Europe/Moscow").strip()
-        tz = ZoneInfo(tz_name)
-        now_tz = timezone.now().astimezone(tz)
-
-        if company.work_schedule:
-            status, _mins = get_worktime_status_from_schedule(company.work_schedule, now_tz=now_tz)
-            worktime["status"] = status
-            if status == "ok":
-                worktime["label"] = "Рабочее время"
-            elif status == "warn_end":
-                worktime["label"] = "Остался час"
-            elif status == "off":
-                worktime["label"] = "Не рабочее время"
-            else:
-                worktime["label"] = ""
-    except Exception:
-        worktime["status"] = "unknown"
-        worktime["label"] = ""
+    from companies.services import get_worktime_status
+    worktime = get_worktime_status(company)
     tasks = (
         Task.objects.filter(company=company)
         .exclude(status=Task.Status.DONE)  # Исключаем выполненные задачи
@@ -165,26 +136,8 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     transfer_targets = get_transfer_targets(user)
 
     # Подсветка договора: используем настройки из ContractType
-    contract_alert = ""
-    contract_days_left = None
-    if company.contract_until:
-        today_date = timezone.localdate(timezone.now())
-        contract_days_left = (company.contract_until - today_date).days
-        if contract_days_left is not None:
-            if company.contract_type:
-                # Используем настройки из ContractType
-                warning_days = company.contract_type.warning_days
-                danger_days = company.contract_type.danger_days
-                if contract_days_left <= danger_days:
-                    contract_alert = "danger"
-                elif contract_days_left <= warning_days:
-                    contract_alert = "warn"
-            else:
-                # Fallback на старую логику, если нет contract_type
-                if contract_days_left < 14:
-                    contract_alert = "danger"
-                elif contract_days_left <= 30:
-                    contract_alert = "warn"
+    from companies.services import get_contract_alert
+    contract_alert, contract_days_left = get_contract_alert(company)
 
     # Принудительно загружаем телефоны, чтобы убедиться, что prefetch работает
     # Это гарантирует, что телефоны будут доступны в шаблоне
@@ -1949,11 +1902,6 @@ def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
 
     user: User = request.user
     company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
-    
-    # Проверка прав на передачу (используем новую функцию)
-    if not can_transfer_company(user, company):
-        messages.error(request, "Нет прав на передачу компании.")
-        return redirect("company_detail", company_id=company.id)
 
     new_resp_id = (request.POST.get("responsible_id") or "").strip()
     if not new_resp_id:
@@ -1961,59 +1909,19 @@ def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
         return redirect("company_detail", company_id=company.id)
 
     new_resp = get_object_or_404(User, id=new_resp_id, is_active=True)
-    if new_resp.role not in (User.Role.MANAGER, User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD):
-        messages.error(request, "Назначить ответственным можно только менеджера, директора филиала или РОП.")
+
+    from companies.services import CompanyService
+    from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
+    try:
+        CompanyService.transfer(company=company, user=user, new_responsible=new_resp)
+    except DjangoPermissionDenied:
+        messages.error(request, "Нет прав на передачу компании.")
+        return redirect("company_detail", company_id=company.id)
+    except ValidationError as exc:
+        messages.error(request, exc.message if hasattr(exc, "message") else str(exc))
         return redirect("company_detail", company_id=company.id)
 
-    old_resp = company.responsible
-    old_resp_id = company.responsible_id
-    
-    # При передаче обновляем филиал компании под филиал нового ответственного (может быть другой регион).
-    company.responsible = new_resp
-    company.branch = new_resp.branch
-    company.save(update_fields=["responsible", "branch", "updated_at"])
-    
-    # Логируем для отладки
-    import logging
-    logger = logging.getLogger(__name__)
-    logger.info(
-        f"Company transferred: company_id={company.id}, "
-        f"old_responsible_id={old_resp_id}, new_responsible_id={new_resp.id}, "
-        f"transferred_by_user_id={user.id}"
-    )
-    
-    _invalidate_company_count_cache()  # Инвалидируем кэш при передаче компании
-
     messages.success(request, f"Ответственный обновлён: {new_resp}.")
-    log_event(
-        actor=user,
-        verb=ActivityEvent.Verb.UPDATE,
-        entity_type="company",
-        entity_id=company.id,
-        company_id=company.id,
-        message="Изменён ответственный компании",
-        meta={"from": str(old_resp) if old_resp else "", "to": str(new_resp)},
-    )
-    CompanyHistoryEvent.objects.create(
-        company=company,
-        event_type=CompanyHistoryEvent.EventType.ASSIGNED,
-        source=CompanyHistoryEvent.Source.LOCAL,
-        actor=user,
-        actor_name=str(user),
-        from_user=old_resp,
-        from_user_name=str(old_resp) if old_resp else "",
-        to_user=new_resp,
-        to_user_name=str(new_resp),
-        occurred_at=timezone.now(),
-    )
-    if new_resp.id != user.id:
-        notify(
-            user=new_resp,
-            kind=Notification.Kind.COMPANY,
-            title="Вам передали компанию",
-            body=f"{company.name}",
-            url=f"/companies/{company.id}/",
-        )
     return redirect("company_detail", company_id=company.id)
 
 
