@@ -40,6 +40,7 @@ from companies.models import (
     CompanyPhone,
     CompanySearchIndex,
 )
+from companies.normalizers import normalize_phone as _normalize_phone_canonical
 from companies.services import resolve_target_companies
 from companies.permissions import (
     can_edit_company as can_edit_company_perm,
@@ -348,36 +349,8 @@ def _companies_with_overdue_flag(*, now):
 
 
 def _normalize_phone_for_search(phone: str) -> str:
-    """
-    Нормализует номер телефона для поиска.
-    Поддерживает различные форматы: 89123456789, +79123456789, 8(912)3456789 и т.д.
-    """
-    if not phone:
-        return ""
-    phone = str(phone).strip()
-    # Убираем все нецифровые символы, кроме + в начале
-    raw = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-    normalized = "".join(ch for i, ch in enumerate(raw) if ch.isdigit() or (ch == "+" and i == 0))
-    
-    # Если номер уже в формате +7XXXXXXXXXX, оставляем как есть
-    if normalized.startswith("+7") and len(normalized) == 12:
-        return normalized
-    else:
-        # Приводим к формату +7XXXXXXXXXX для российских номеров
-        digits = normalized[1:] if normalized.startswith("+") else normalized
-        if digits.startswith("8") and len(digits) == 11:
-            return "+7" + digits[1:]
-        elif digits.startswith("7") and len(digits) == 11:
-            return "+7" + digits
-        elif len(digits) == 10:
-            return "+7" + digits
-        # Fallback для случаев, когда номер пришел без плюса, но с 11 цифрами и российским префиксом
-        elif normalized and not normalized.startswith("+") and len(normalized) >= 11 and normalized[0] in ("7", "8"):
-            return "+7" + normalized[1:]
-        # Если не российский номер или не 10-11 цифр, оставляем как есть (с плюсом, если был)
-        elif not normalized.startswith("+") and normalized:
-            return "+" + normalized
-    return normalized
+    """Нормализует номер телефона для поиска через единый нормализатор."""
+    return _normalize_phone_canonical(phone)
 
 
 def _normalize_for_search(text: str) -> str:
