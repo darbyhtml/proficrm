@@ -318,7 +318,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
-        print(f"AMOCRM_MIGRATE_ERROR: Failed to load AmoApiConfig: {error_details}")
+        logger.error("AMOCRM_MIGRATE_ERROR: Failed to load AmoApiConfig: %s", error_details)
         messages.error(request, f"Ошибка загрузки настроек amoCRM: {str(e)}. Проверьте логи сервера.")
         # Создаём пустой объект для рендера
         cfg = AmoApiConfig(domain="kmrprofi.amocrm.ru")
@@ -365,7 +365,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
-        print(f"AMOCRM_MIGRATE_INIT_ERROR: {error_details}")
+        logger.error("AMOCRM_MIGRATE_INIT_ERROR: %s", error_details)
         messages.error(request, f"Ошибка инициализации: {str(e)}. Проверьте логи сервера.")
         if not client:
             # Возвращаем страницу с пустыми данными, но с формой
@@ -537,7 +537,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                     error_details = traceback.format_exc()
                     messages.error(request, f"Ошибка миграции: {str(e)}. Проверьте логи сервера для деталей.")
                     # В продакшене можно логировать в файл или sentry
-                    print(f"AMOCRM_MIGRATE_ERROR: {error_details}")
+                    logger.error("AMOCRM_MIGRATE_ERROR: %s", error_details)
     else:
         # попытка найти ответственную по имени "Иванова Юлия"
         default_resp = None
@@ -548,7 +548,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
                     default_resp = int(u.get("id") or 0)
                     break
         except Exception as e:
-            print(f"AMOCRM_MIGRATE_ERROR: Failed to find default responsible: {e}")
+            logger.error("AMOCRM_MIGRATE_ERROR: Failed to find default responsible: %s", e)
 
         try:
             form = AmoMigrateFilterForm(
@@ -567,7 +567,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
         except Exception as e:
             import traceback
             error_details = traceback.format_exc()
-            print(f"AMOCRM_MIGRATE_ERROR: Failed to create form: {error_details}")
+            logger.error("AMOCRM_MIGRATE_ERROR: Failed to create form: %s", error_details)
             # Создаём минимальную форму
             form = AmoMigrateFilterForm(initial={"dry_run": True, "limit_companies": 10, "offset": 0})
 
@@ -588,7 +588,7 @@ def settings_amocrm_migrate(request: HttpRequest) -> HttpResponse:
     except Exception as e:
         import traceback
         error_details = traceback.format_exc()
-        print(f"AMOCRM_MIGRATE_ERROR: Failed to render template: {error_details}")
+        logger.error("AMOCRM_MIGRATE_ERROR: Failed to render template: %s", error_details)
         # Возвращаем простую страницу с ошибкой
         from django.http import HttpResponse
         return HttpResponse(f"Ошибка рендеринга страницы миграции: {str(e)}. Проверьте логи сервера для деталей.", status=500)
@@ -700,7 +700,7 @@ def settings_amocrm_contacts_dry_run(request: HttpRequest) -> HttpResponse:
     except Exception as e:
         import traceback
         messages.error(request, f"Ошибка: {str(e)}")
-        print(f"AMOCRM_CONTACTS_DRY_RUN_ERROR: {traceback.format_exc()}")
+        logger.error("AMOCRM_CONTACTS_DRY_RUN_ERROR: %s", traceback.format_exc())
         return redirect("settings_amocrm_migrate")
 
 
@@ -818,7 +818,7 @@ def settings_amocrm_debug_contacts(request: HttpRequest) -> HttpResponse:
     except Exception as e:
         import traceback
         messages.error(request, f"Ошибка: {str(e)}")
-        print(f"AMOCRM_DEBUG_CONTACTS_ERROR: {traceback.format_exc()}")
+        logger.error("AMOCRM_DEBUG_CONTACTS_ERROR: %s", traceback.format_exc())
         return redirect("settings_amocrm_migrate")
 
 
