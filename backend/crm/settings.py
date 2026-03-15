@@ -233,6 +233,12 @@ if DB_ENGINE == "postgres":
         }
     }
 else:
+    if _is_production_like:
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured(
+            "DB_ENGINE is not set to 'postgres' in a production-like environment. "
+            "Set DB_ENGINE=postgres in your .env file."
+        )
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
@@ -369,11 +375,10 @@ CORS_ALLOWED_ORIGINS = [o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "ht
 if not DEBUG:
     localhost_origins = [o for o in CORS_ALLOWED_ORIGINS if "localhost" in o.lower() or "127.0.0.1" in o.lower()]
     if localhost_origins:
-        import warnings
-        warnings.warn(
-            f"⚠️ SECURITY WARNING: CORS_ALLOWED_ORIGINS contains localhost origins in production: {localhost_origins}. "
-            "This is unsafe. Set CORS_ALLOWED_ORIGINS to your production domain(s) only.",
-            UserWarning
+        from django.core.exceptions import ImproperlyConfigured
+        raise ImproperlyConfigured(
+            f"CORS_ALLOWED_ORIGINS contains localhost origins in production: {localhost_origins}. "
+            "Set CORS_ALLOWED_ORIGINS to your production domain(s) only."
         )
 
 CORS_ALLOW_CREDENTIALS = True

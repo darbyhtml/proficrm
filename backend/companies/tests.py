@@ -15,7 +15,7 @@ from rest_framework import status
 from django.db import connection
 
 from .normalizers import normalize_phone, normalize_inn, normalize_work_schedule
-from .models import Company, CompanyStatus, CompanyEmail, CompanyPhone, Contact, ContactEmail, ContactPhone
+from .models import Company, CompanyDeletionRequest, CompanyStatus, CompanyEmail, CompanyPhone, Contact, ContactEmail, ContactPhone
 from .search_index import rebuild_company_search_index
 
 User = get_user_model()
@@ -607,3 +607,29 @@ class CompanyHeadCompanyCycleTestCase(TestCase):
         from django.core.exceptions import ValidationError
         with self.assertRaises(ValidationError):
             a.clean()
+
+
+class CompanyDeletionRequestSignalTest(TestCase):
+    """Signal: при DELETE Company PENDING-заявки автоматически отменяются."""
+
+    def setUp(self):
+        self.company = Company.objects.create(name="DeleteMe")
+        self.request = CompanyDeletionRequest.objects.create(
+            company=self.company,
+            company_id_snapshot=self.company.id,
+            company_name_snapshot=self.company.name,
+            status=CompanyDeletionRequest.Status.PENDING,
+        )
+
+    def test_pending_request_cancelled_on_company_delete(self):
+        self.company.delete()
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.status, CompanyDeletionRequest.Status.CANCELLED)
+
+    def test_approved_request_not_touched(self):
+        """Уже одобренные заявки сигнал не трогает."""
+        self.request.status = CompanyDeletionRequest.Status.APPROVED
+        self.request.save()
+        self.company.delete()
+        self.request.refresh_from_db()
+        self.assertEqual(self.request.status, CompanyDeletionRequest.Status.APPROVED)
