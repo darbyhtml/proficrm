@@ -146,7 +146,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    command: ["celery", "-A", "crm", "beat", "--loglevel=info"]
+    command: ["celery", "-A", "crm", "beat", "--loglevel=info", "-s", "/tmp/celerybeat-schedule"]
     security_opt:
       - no-new-privileges:true
     cap_drop:
