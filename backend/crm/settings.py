@@ -501,6 +501,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "companies.tasks.reindex_companies_daily",
         "schedule": crontab(hour=0, minute=0),  # Ежедневно 00:00 (по CELERY_TIMEZONE = Europe/Moscow)
     },
+    "generate-recurring-tasks": {
+        "task": "tasksapp.tasks.generate_recurring_tasks",
+        "schedule": crontab(hour=6, minute=0),  # Ежедневно 06:00 по Moscow
+    },
 }
 
 # Логирование
