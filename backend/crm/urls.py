@@ -133,3 +133,10 @@ urlpatterns = [
 if settings.DEBUG:
     from django.conf.urls.static import static as static_files
     urlpatterns += static_files(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+    # OpenAPI schema + Swagger UI — только в development (не экспонировать в production)
+    from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+    urlpatterns += [
+        path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+        path("api/schema/swagger-ui/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    ]

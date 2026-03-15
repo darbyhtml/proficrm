@@ -153,6 +153,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'django_filters',
     'corsheaders',
+    'drf_spectacular',  # OpenAPI 3.0 schema generation
 
     # Local apps
     'accounts',
@@ -322,6 +323,18 @@ REST_FRAMEWORK = {
     ),
     # Защита от утечки информации через ошибки API
     "EXCEPTION_HANDLER": "crm.exceptions.custom_exception_handler",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "ProfiCRM API",
+    "DESCRIPTION": "REST API для ProfiCRM. Аутентификация: JWT Bearer token.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,  # Не включать /api/schema/ в сам schema
+    # Swagger UI доступен только в DEBUG режиме (защита от exposure в production)
+    "SWAGGER_UI_SETTINGS": {
+        "persistAuthorization": True,
+    },
 }
 
 # Настройки JWT (simplejwt). Подобраны безопасные дефолты без изменения текущей логики API.

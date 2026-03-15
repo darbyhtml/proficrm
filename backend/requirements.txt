@@ -20,4 +20,5 @@ firebase-admin==7.1.0
 phonenumbers==9.0.21
 gunicorn==23.0.0
 nh3==0.3.3
+drf-spectacular==0.28.0
 
