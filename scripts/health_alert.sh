@@ -12,7 +12,8 @@ set -euo pipefail
 
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8001/health/}"
 STATE_FILE="/tmp/crm_health_state"
-LOG_FILE="/var/log/crm_health_alert.log"
+LOG_FILE="/opt/proficrm/logs/health_alert.log"
+mkdir -p "$(dirname "$LOG_FILE")"
 
 # Загружаем .env если переменные не заданы
 if [ -z "${TG_BOT_TOKEN:-}" ] && [ -f "/opt/proficrm/.env" ]; then
