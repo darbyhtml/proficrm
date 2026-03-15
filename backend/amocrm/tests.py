@@ -612,7 +612,7 @@ class TestNotesBulkFallback(unittest.TestCase):
         with patch.object(mock_client, 'get_all_pages', side_effect=AmoApiError("404 Not Found")):
             try:
                 fetch_notes_for_companies(mock_client, [123])
-            except:
+            except Exception:
                 pass
         
         # Второй вызов - должен сразу использовать per-company, не пытаться bulk
