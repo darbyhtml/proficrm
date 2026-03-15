@@ -62,8 +62,8 @@ def _admin_has_permission(request):
 
 admin.site.has_permission = _admin_has_permission
 
-# Canonical router (DefaultRouter with API root browser at /api/)
-router = routers.DefaultRouter()
+# Canonical router — SimpleRouter (no API root browser page, avoids endpoint discovery)
+router = routers.SimpleRouter()
 router.register(r"companies", CompanyViewSet, basename="company")
 router.register(r"contacts", ContactViewSet, basename="contact")
 router.register(r"company-notes", CompanyNoteViewSet, basename="company-note")

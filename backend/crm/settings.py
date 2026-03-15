@@ -283,14 +283,12 @@ SESSION_SAVE_EVERY_REQUEST = True
 # Mailer encryption key (Fernet). Generate once and store in env on VDS.
 MAILER_FERNET_KEY = os.getenv("MAILER_FERNET_KEY", "")
 
-# Проверка: в production MAILER_FERNET_KEY должен быть установлен, если используется mailer функциональность
+# В production MAILER_FERNET_KEY обязателен — без него пароли SMTP хранятся в plaintext.
+# Генерация: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
 if not DEBUG and not MAILER_FERNET_KEY:
-    import warnings
-    warnings.warn(
-        "⚠️ SECURITY WARNING: MAILER_FERNET_KEY is not set in production. "
-        "Email account passwords cannot be encrypted. Set MAILER_FERNET_KEY in .env. "
-        "Generate: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\"",
-        UserWarning
+    raise ImproperlyConfigured(
+        "MAILER_FERNET_KEY is not set. Email account passwords cannot be encrypted. "
+        "Generate: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
     )
 
 # Public base URL for emails/unsubscribe (optional; example: https://crm.example.ru)
@@ -617,8 +615,17 @@ MAILER_LOG_FULL_EMAILS = os.getenv("MAILER_LOG_FULL_EMAILS", "False").lower() ==
 # Соль для хэширования email в логах
 # ⚠️ ВАЖНО: Дефолтный salt НЕ должен использоваться в production!
 # Установите уникальный MAILER_LOG_HASH_SALT через environment variable.
-# Пример: MAILER_LOG_HASH_SALT=$(openssl rand -hex 32)
-MAILER_LOG_HASH_SALT = os.getenv("MAILER_LOG_HASH_SALT", "default-salt-change-in-production")
+# Генерация: openssl rand -hex 32
+_DEFAULT_LOG_HASH_SALT = "default-salt-change-in-production"
+MAILER_LOG_HASH_SALT = os.getenv("MAILER_LOG_HASH_SALT", _DEFAULT_LOG_HASH_SALT)
+if not DEBUG and MAILER_LOG_HASH_SALT == _DEFAULT_LOG_HASH_SALT:
+    import warnings
+    warnings.warn(
+        "⚠️ MAILER_LOG_HASH_SALT is using the default value. "
+        "Set a unique salt in .env to protect email masking in logs. "
+        "Generate: openssl rand -hex 32",
+        UserWarning,
+    )
 
 # Custom test runner: при тестах на SQLite игнорирует PostgreSQL-специфичный синтаксис
 # (GIN/trigram/tsvector индексы, расширения, триггеры). На PostgreSQL — стандартный DiscoverRunner.
