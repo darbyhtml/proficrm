@@ -99,7 +99,7 @@ def health_check(request):
     # --- celery (ping, timeout 2s — warning only) ---
     try:
         from celery import current_app
-        reply = current_app.control.ping(timeout=2)
+        reply = current_app.control.ping(timeout=1)
         if reply:
             checks["celery"] = {"status": "ok", "workers": len(reply)}
         else:

@@ -116,7 +116,7 @@ echo "Ожидание готовности web (до 60 сек)..."
 _web_ready=0
 _health_url="http://127.0.0.1:8001/health/"
 for i in $(seq 1 60); do
-  _status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 "$_health_url" 2>/dev/null || true)
+  _status=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$_health_url" 2>/dev/null || true)
   if [ "$_status" = "200" ] || [ "$_status" = "204" ]; then
     echo "  web готов (попытка ${i}, HTTP ${_status})"
     _web_ready=1
