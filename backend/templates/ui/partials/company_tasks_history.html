@@ -21,9 +21,9 @@
               </div>
             {% endif %}
             <div class="mt-2 space-y-0.5 text-[11px] text-brand-dark/70">
-              <div>
+              <div class="flex items-center gap-1">
                 <span class="font-semibold">Статус:</span>
-                {{ t.get_status_display }}
+                {% include "ui/partials/_task_status_badge.html" with task=t %}
               </div>
               <div>
                 <span class="font-semibold">Поставил:</span>

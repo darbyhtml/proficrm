@@ -45,4 +45,4 @@ POSTGRES_PORT=5433 \
 DJANGO_SECRET_KEY=test-secret-key-local \
 DJANGO_DEBUG=1 \
 REDIS_URL="" \
-  python manage.py test --verbosity=2 "$@"
+  python manage.py test --verbosity=2 --noinput "$@"

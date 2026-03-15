@@ -1486,9 +1486,9 @@
                       <div class="text-xs text-brand-dark/70 mt-1" style="line-height:1.3">{{ t.description|truncatechars:120 }}</div>
                     {% endif %}
                     {% include "ui/partials/_task_meta.html" with task=t only %}
-                    <div class="text-xs text-brand-dark/70 mt-1">
-                      {{ t.get_status_display }}
-                      {% if t.assigned_to %} · {{ t.assigned_to }}{% endif %}
+                    <div class="text-xs text-brand-dark/70 mt-1 flex items-center gap-1 flex-wrap">
+                      {% include "ui/partials/_task_status_badge.html" with task=t %}
+                      {% if t.assigned_to %}<span>· {{ t.assigned_to }}</span>{% endif %}
                     </div>
                   </div>
                   <div class="text-right flex-shrink-0">

@@ -16,7 +16,7 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
         # Добавляем CSP только в production
         if not settings.DEBUG and hasattr(settings, 'CSP_HEADER'):
             response['Content-Security-Policy'] = settings.CSP_HEADER
-        
+
         # Permissions-Policy (ограничение доступа к браузерным API)
         if not settings.DEBUG:
             response['Permissions-Policy'] = (
@@ -26,7 +26,11 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
                 'payment=(), '
                 'usb=()'
             )
-        
+
+        # API version header — позволяет мобильному приложению определять версию API
+        if request.path.startswith('/api/'):
+            response['X-API-Version'] = '1'
+
         return response
 
 

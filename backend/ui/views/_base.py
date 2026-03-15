@@ -95,14 +95,6 @@ from ..forms import (
 )
 from ui.models import UiGlobalConfig, AmoApiConfig, UiUserPreference
 
-from amocrm.client import AmoApiError, AmoClient
-from amocrm.migrate import (
-    fetch_amo_users,
-    fetch_company_custom_fields,
-    fetch_matched_amo_company_ids,
-    import_company_histories,
-    migrate_filtered,
-)
 from crm.utils import require_admin, get_effective_user, get_view_as_user
 from policy.decorators import policy_required
 from policy.engine import decide as policy_decide
@@ -186,10 +178,6 @@ __all__ = [
     "_date",
     "cache",
     "UiGlobalConfig", "AmoApiConfig", "UiUserPreference",
-    "AmoApiError", "AmoClient",
-    "fetch_amo_users", "fetch_company_custom_fields",
-    "fetch_matched_amo_company_ids", "import_company_histories",
-    "migrate_filtered",
     "require_admin", "get_effective_user", "get_view_as_user",
     "policy_required",
     "policy_decide",

@@ -62,12 +62,22 @@ def _admin_has_permission(request):
 
 admin.site.has_permission = _admin_has_permission
 
+# Canonical router (DefaultRouter with API root browser at /api/)
 router = routers.DefaultRouter()
 router.register(r"companies", CompanyViewSet, basename="company")
 router.register(r"contacts", ContactViewSet, basename="contact")
 router.register(r"company-notes", CompanyNoteViewSet, basename="company-note")
 router.register(r"task-types", TaskTypeViewSet, basename="task-type")
 router.register(r"tasks", TaskViewSet, basename="task")
+
+# Versioned router at /api/v1/ — same viewsets, separate basenames to avoid URL name conflicts.
+# SimpleRouter = no API root browser page (cleaner for versioned endpoint).
+router_v1 = routers.SimpleRouter()
+router_v1.register(r"companies", CompanyViewSet, basename="v1-company")
+router_v1.register(r"contacts", ContactViewSet, basename="v1-contact")
+router_v1.register(r"company-notes", CompanyNoteViewSet, basename="v1-company-note")
+router_v1.register(r"task-types", TaskTypeViewSet, basename="v1-task-type")
+router_v1.register(r"tasks", TaskViewSet, basename="v1-task")
 
 urlpatterns = [
     path("robots.txt", robots_txt, name="robots_txt"),
@@ -83,8 +93,12 @@ urlpatterns = [
     path("logout/", auth_views.LogoutView.as_view(), name="logout"),
     # Magic link authentication
     path("auth/magic/<str:token>/", magic_link_login, name="magic_link_login"),
+    # JWT token endpoints: canonical + /api/v1/ alias (no names for aliases to avoid conflicts)
     path("api/token/", SecureTokenObtainPairView.as_view(), name="token_obtain_pair"),
     path("api/token/refresh/", LoggedTokenRefreshView.as_view(), name="token_refresh"),
+    path("api/v1/token/", SecureTokenObtainPairView.as_view()),
+    path("api/v1/token/refresh/", LoggedTokenRefreshView.as_view()),
+    # Phonebridge: canonical at /api/phone/ (backward compat)
     path("api/phone/devices/register/", RegisterDeviceView.as_view(), name="phone_register_device"),
     path("api/phone/devices/heartbeat/", DeviceHeartbeatView.as_view(), name="phone_device_heartbeat"),
     path("api/phone/calls/pull/", PullCallView.as_view(), name="phone_pull_call"),
@@ -97,7 +111,22 @@ urlpatterns = [
     path("api/phone/qr/status/", QrTokenStatusView.as_view(), name="phone_qr_status"),
     path("api/phone/logout/", LogoutView.as_view(), name="phone_logout"),
     path("api/phone/logout/all/", LogoutAllView.as_view(), name="phone_logout_all"),
+    # Phonebridge: /api/v1/phone/ aliases (no names to avoid conflicts)
+    path("api/v1/phone/devices/register/", RegisterDeviceView.as_view()),
+    path("api/v1/phone/devices/heartbeat/", DeviceHeartbeatView.as_view()),
+    path("api/v1/phone/calls/pull/", PullCallView.as_view()),
+    path("api/v1/phone/calls/update/", UpdateCallInfoView.as_view()),
+    path("api/v1/phone/telemetry/", PhoneTelemetryView.as_view()),
+    path("api/v1/phone/logs/", PhoneLogUploadView.as_view()),
+    path("api/v1/phone/qr/create/", QrTokenCreateView.as_view()),
+    path("api/v1/phone/user/info/", UserInfoView.as_view()),
+    path("api/v1/phone/qr/exchange/", QrTokenExchangeView.as_view()),
+    path("api/v1/phone/qr/status/", QrTokenStatusView.as_view()),
+    path("api/v1/phone/logout/", LogoutView.as_view()),
+    path("api/v1/phone/logout/all/", LogoutAllView.as_view()),
+    # DRF resources: /api/ canonical + /api/v1/ versioned (separate routers, no name conflict)
     path("api/", include(router.urls)),
+    path("api/v1/", include(router_v1.urls)),
 ]
 
 # Serve user-uploaded media files in development

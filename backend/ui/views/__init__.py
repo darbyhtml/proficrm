@@ -2,11 +2,6 @@ from __future__ import annotations
 # Auto-generated package init — re-exports all public view names.
 
 from ui.views._base import RESPONSIBLE_FILTER_NONE, STRONG_CONFIRM_THRESHOLD  # noqa: F401
-from ui.views._base import (  # noqa: F401  # re-export for test mocking (patch targets)
-    fetch_amo_users,
-    fetch_company_custom_fields,
-    migrate_filtered,
-)
 from ui.views.dashboard import (
     view_as_update, view_as_reset,
     dashboard, dashboard_poll, dashboard_sse,

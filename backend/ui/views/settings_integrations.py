@@ -5,23 +5,28 @@ logger = logging.getLogger(__name__)
 
 import sys as _sys  # noqa: E402
 
+# amocrm is imported here (and only here) so that other view modules don't
+# trigger its import at startup. Keep these lazy if you want zero-cost startup.
+from amocrm.client import AmoApiError, AmoClient  # noqa: F401,E402
+from amocrm.migrate import (  # noqa: F401,E402
+    fetch_amo_users,
+    fetch_company_custom_fields,
+    fetch_matched_amo_company_ids,
+    import_company_histories,
+    migrate_filtered,
+)
+
 
 def _amo_fetch_users(client):
-    """Lazy proxy: calls ui.views.fetch_amo_users so test patches via 'ui.views' work."""
-    import ui.views as _uv  # lazy to avoid circular import at module load time
-    return _uv.fetch_amo_users(client)
+    return fetch_amo_users(client)
 
 
 def _amo_fetch_custom_fields(client):
-    """Lazy proxy: calls ui.views.fetch_company_custom_fields."""
-    import ui.views as _uv
-    return _uv.fetch_company_custom_fields(client)
+    return fetch_company_custom_fields(client)
 
 
 def _amo_migrate_filtered(*args, **kwargs):
-    """Lazy proxy: calls ui.views.migrate_filtered."""
-    import ui.views as _uv
-    return _uv.migrate_filtered(*args, **kwargs)
+    return migrate_filtered(*args, **kwargs)
 
 
 @login_required
