@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from django.utils import timezone
-from django.db import models
+from django.core.cache import cache
 
 from notifications.models import Notification
 from notifications.models import CompanyContractReminder
@@ -11,55 +11,79 @@ from notifications.service import notify
 from tasksapp.models import Task
 from companies.models import Company
 
+_BELL_CACHE_TTL = 30  # seconds
+
+
+def _get_bell_data(user, now):
+    """Read-only bell data: notifications + task reminders. Cached per user for 30s."""
+    cache_key = f"bell_data:{user.pk}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    notif_unread_count = Notification.objects.filter(user=user, is_read=False).count()
+    notif_items = list(
+        Notification.objects.filter(user=user, is_read=False).order_by("-created_at")[:10]
+    )
+
+    reminders_qs = (
+        Task.objects.filter(assigned_to=user)
+        .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+        .select_related("company")
+    )
+    overdue = list(reminders_qs.filter(due_at__lt=now).order_by("due_at")[:10])
+    today = list(reminders_qs.filter(due_at__date=now.date()).order_by("due_at")[:10])
+
+    reminder_items = []
+    for t in overdue:
+        reminder_items.append({
+            "title": f"Просрочено: {t.title}",
+            "subtitle": (t.company.name if t.company else ""),
+            "url": "/tasks/?overdue=1",
+            "kind": "overdue",
+        })
+    for t in today:
+        reminder_items.append({
+            "title": f"На сегодня: {t.title}",
+            "subtitle": (t.company.name if t.company else ""),
+            "url": "/tasks/?today=1",
+            "kind": "today",
+        })
+    reminder_count = len(overdue) + len(today)
+
+    result = {
+        "notif_unread_count": notif_unread_count,
+        "notif_items": notif_items,
+        "reminder_count": reminder_count,
+        "reminder_items": reminder_items,
+    }
+    cache.set(cache_key, result, _BELL_CACHE_TTL)
+    return result
+
 
 def notifications_panel(request):
     """
     Данные для колокольчика:
     - notif_unread_count / notif_items: реальные уведомления (можно отмечать прочитанными)
     - reminder_count / reminder_items: напоминания из задач (просроченные/на сегодня)
+
+    Read-only часть кэшируется в Redis на 30 секунд (per user).
     """
     user = getattr(request, "user", None)
     if not user or not user.is_authenticated:
         return {}
 
-    notif_unread_count = Notification.objects.filter(user=user, is_read=False).count()
-    # В выпадающем списке показываем только актуальные (непрочитанные), чтобы после галочки они исчезали.
-    notif_items = Notification.objects.filter(user=user, is_read=False).order_by("-created_at")[:10]
-
     now = timezone.now()
-    # напоминания: мои задачи (назначенные пользователю)
-    reminders = (
-        Task.objects.filter(assigned_to=user)
-        .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
-        .select_related("company")
-    )
-    overdue = reminders.filter(due_at__lt=now).order_by("due_at")[:10]
-    today = reminders.filter(due_at__date=now.date()).order_by("due_at")[:10]
-    reminder_items = []
-    for t in list(overdue):
-        reminder_items.append(
-            {
-                "title": f"Просрочено: {t.title}",
-                "subtitle": (t.company.name if t.company else ""),
-                "url": f"/tasks/?overdue=1",
-                "kind": "overdue",
-            }
-        )
-    for t in list(today):
-        reminder_items.append(
-            {
-                "title": f"На сегодня: {t.title}",
-                "subtitle": (t.company.name if t.company else ""),
-                "url": f"/tasks/?today=1",
-                "kind": "today",
-            }
-        )
-    reminder_count = len(overdue) + len(today)
+    bell = _get_bell_data(user, now)
+
+    notif_unread_count = bell["notif_unread_count"]
+    notif_items = bell["notif_items"]
+    reminder_count = bell["reminder_count"]
+    reminder_items = list(bell["reminder_items"])  # copy — contract items appended below
 
     # Напоминания по договорам (для ответственного): показываем в "Напоминаниях"
     # + создаём реальное уведомление на порогах (30/14 дней) с дедупликацией.
     try:
-        now = timezone.now()
         today_date = timezone.localdate(now)
         # лёгкий троттлинг, чтобы не бегать по БД на каждом запросе
         last_ts = int(request.session.get("contract_reminders_checked_at", 0) or 0)

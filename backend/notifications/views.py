@@ -8,6 +8,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from datetime import timedelta
 
+from django.core.cache import cache
+
 from notifications.models import Notification, CrmAnnouncement, CrmAnnouncementRead
 from notifications.context_processors import notifications_panel
 from tasksapp.models import Task
@@ -21,6 +23,7 @@ def mark_all_read(request: HttpRequest) -> HttpResponse:
         return redirect(request.META.get("HTTP_REFERER") or "/")
     enforce(user=request.user, resource_type="action", resource="ui:notifications:mark_all_read", context={"path": request.path, "method": request.method})
     Notification.objects.filter(user=request.user, is_read=False).update(is_read=True)
+    cache.delete(f"bell_data:{request.user.pk}")
     messages.success(request, "Уведомления отмечены как прочитанные.")
     return redirect(request.META.get("HTTP_REFERER") or "/")
 
@@ -33,6 +36,7 @@ def mark_read(request: HttpRequest, notification_id: int) -> HttpResponse:
     n = get_object_or_404(Notification, id=notification_id, user=request.user)
     n.is_read = True
     n.save(update_fields=["is_read"])
+    cache.delete(f"bell_data:{request.user.pk}")
     return redirect(n.url or (request.META.get("HTTP_REFERER") or "/"))
 
 
