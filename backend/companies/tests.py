@@ -582,3 +582,28 @@ class CompanyAutocompleteOrgFlagsTestCase(TestCase):
         self.assertIsNotNone(br)
         self.assertTrue(br.get("is_branch"))
         # Для ветки наличие своих под‑филиалов не проверяем здесь
+
+
+class CompanyHeadCompanyCycleTestCase(TestCase):
+    """Тесты защиты от циклов в head_company."""
+
+    def test_direct_cycle_raises_validation_error(self):
+        a = Company.objects.create(name="A")
+        b = Company.objects.create(name="B", head_company=a)
+        a.head_company = b
+        from django.core.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            a.clean()
+
+    def test_no_cycle_passes(self):
+        a = Company.objects.create(name="Root")
+        b = Company.objects.create(name="Child", head_company=a)
+        b.head_company = a
+        b.clean()  # не должно поднимать исключение
+
+    def test_self_reference_raises(self):
+        a = Company.objects.create(name="Self")
+        a.head_company = a
+        from django.core.exceptions import ValidationError
+        with self.assertRaises(ValidationError):
+            a.clean()

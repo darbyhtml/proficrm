@@ -202,6 +202,19 @@ class Company(models.Model):
             GinIndex(OpClass(Upper("email"), name="gin_trgm_ops"), name="cmp_email_trgm_gin_idx"),
         ]
 
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.head_company_id and self.pk:
+            visited = set()
+            current_id = self.head_company_id
+            while current_id is not None:
+                if current_id == self.pk:
+                    raise ValidationError({"head_company": "Нельзя создать циклическую связь головных организаций."})
+                if current_id in visited:
+                    break
+                visited.add(current_id)
+                current_id = Company.objects.filter(pk=current_id).values_list("head_company_id", flat=True).first()
+
     def save(self, *args, **kwargs):
         """
         Сохранение компании с нормализацией данных.
