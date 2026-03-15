@@ -7,6 +7,7 @@ from rest_framework import serializers
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.authentication import JWTAuthentication
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import CallRequest, PhoneDevice, PhoneTelemetry, PhoneLogBundle, MobileAppQrToken
@@ -110,6 +111,7 @@ class RegisterDeviceSerializer(serializers.Serializer):
 
 
 class RegisterDeviceView(APIView):
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -155,6 +157,7 @@ class DeviceHeartbeatView(APIView):
     Не ломает существующий /devices/register/ и /calls/pull/.
     """
 
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -271,6 +274,7 @@ class PullCallView(APIView):
     Клиент вызывает этот endpoint раз в 1-3 секунды и получает следующую команду "позвонить".
     """
 
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
@@ -417,6 +421,7 @@ class UpdateCallInfoView(APIView):
     Android приложение собирает данные из CallLog и отправляет сюда.
     """
 
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -536,6 +541,7 @@ class PhoneTelemetryView(APIView):
     Минимальный, неблокирующий endpoint: лишние поля тихо игнорируются.
     """
 
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -603,6 +609,7 @@ class PhoneLogUploadView(APIView):
     Использовать редко, только при ошибках — не для всего logcat.
     """
 
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -786,6 +793,7 @@ class LogoutView(APIView):
     Удалённый logout: инвалидирует refresh token или все сессии пользователя.
     Используется для безопасного завершения сессии с другого устройства или из CRM.
     """
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -847,6 +855,7 @@ class LogoutAllView(APIView):
     Завершить все мобильные сессии пользователя.
     Используется для полного logout со всех устройств.
     """
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
@@ -885,7 +894,8 @@ class UserInfoView(APIView):
     Получить информацию о текущем пользователе (включая роль).
     Используется для проверки прав доступа в мобильном приложении.
     """
-    
+
+    authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
     
     def get(self, request):
