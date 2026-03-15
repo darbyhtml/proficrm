@@ -121,7 +121,7 @@
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 mb-1">
                         {% if t.type %}
-                          {% include "ui/partials/task_type_badge.html" with task_type=t.type only %}
+                          {% task_type_badge t.type %}
                         {% else %}
                           <div class="text-sm font-medium">{{ t.title }}</div>
                         {% endif %}
@@ -200,7 +200,7 @@
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 mb-1">
                         {% if t.type %}
-                          {% include "ui/partials/task_type_badge.html" with task_type=t.type only %}
+                          {% task_type_badge t.type %}
                         {% else %}
                           <div class="text-sm font-medium">{{ t.title }}</div>
                         {% endif %}
@@ -280,7 +280,7 @@
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 mb-1">
                         {% if t.type %}
-                          {% include "ui/partials/task_type_badge.html" with task_type=t.type only %}
+                          {% task_type_badge t.type %}
                         {% else %}
                           <div class="text-sm font-medium">{{ t.title }}</div>
                         {% endif %}
@@ -447,7 +447,7 @@
                     <div class="flex-1 min-w-0">
                       <div class="flex items-center gap-2 mb-1">
                         {% if t.type %}
-                          {% include "ui/partials/task_type_badge.html" with task_type=t.type only %}
+                          {% task_type_badge t.type %}
                         {% else %}
                           <div class="text-sm font-medium">{{ t.title }}</div>
                         {% endif %}

@@ -461,7 +461,7 @@
                     <div class="flex-1 group/task" style="line-height:1.4">
                       <div class="mb-0.5">
                         {% if t.type %}
-                          {% include "ui/partials/task_type_badge.html" with task_type=t.type only %}
+                          {% task_type_badge t.type %}
                         {% elif t.title %}
                           <span class="inline-flex items-center text-sm px-2 py-0.5 rounded-full bg-gray-100 text-gray-800 group-hover/task:bg-brand-soft/60 transition-colors">
                             {{ t.title }}

@@ -1,4 +1,5 @@
 {% extends "ui/base.html" %}
+{% load ui_extras %}
 {% block title %}Справочники — CRM ПРОФИ{% endblock %}
 
 {% block content %}
@@ -133,7 +134,7 @@
           {% for t in task_types %}
             <li class="rounded-lg border px-3 py-2 flex items-center justify-between gap-2" data-dict-item data-dict-type="task-type" data-dict-id="{{ t.id }}" data-dict-name="{{ t.name }}" data-dict-icon="{{ t.icon|default:'' }}" data-dict-color="{{ t.color|default:'' }}">
               <div class="flex items-center gap-2">
-                {% include "ui/partials/task_type_badge.html" with task_type=t only %}
+                {% task_type_badge t %}
               </div>
               <div class="flex items-center gap-1">
                 <button type="button" class="text-brand-dark/60 hover:text-brand-orange transition-colors" data-edit-dict title="Редактировать" aria-label="Редактировать">

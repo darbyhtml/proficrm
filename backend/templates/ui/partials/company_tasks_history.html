@@ -8,7 +8,7 @@
           <div class="flex-1 min-w-0">
             <div class="flex items-start gap-2 mb-1">
               {% if t.type %}
-                {% include "ui/partials/task_type_badge.html" with task_type=t.type only %}
+                {% task_type_badge t.type %}
               {% else %}
                 <span class="inline-flex items-center text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-800">
                   {{ t.title|default:"Без названия" }}
