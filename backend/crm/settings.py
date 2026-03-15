@@ -632,12 +632,10 @@ MAILER_LOG_FULL_EMAILS = os.getenv("MAILER_LOG_FULL_EMAILS", "False").lower() ==
 _DEFAULT_LOG_HASH_SALT = "default-salt-change-in-production"
 MAILER_LOG_HASH_SALT = os.getenv("MAILER_LOG_HASH_SALT", _DEFAULT_LOG_HASH_SALT)
 if not DEBUG and MAILER_LOG_HASH_SALT == _DEFAULT_LOG_HASH_SALT:
-    import warnings
-    warnings.warn(
-        "⚠️ MAILER_LOG_HASH_SALT is using the default value. "
+    raise ImproperlyConfigured(
+        "MAILER_LOG_HASH_SALT is using the default value in production. "
         "Set a unique salt in .env to protect email masking in logs. "
-        "Generate: openssl rand -hex 32",
-        UserWarning,
+        "Generate: openssl rand -hex 32"
     )
 
 # Custom test runner: при тестах на SQLite игнорирует PostgreSQL-специфичный синтаксис

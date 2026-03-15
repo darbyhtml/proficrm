@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import timedelta, datetime, time as time_cls
 
 from django.test import TestCase, override_settings
 from django.utils import timezone
@@ -319,6 +319,7 @@ class TaskBulkFilterSummaryUnitTestCase(TestCase):
         self.task_type = TaskType.objects.create(name="Bulk type")
 
         now = timezone.now()
+        today_local = timezone.localdate()
         # Задача в пределах периода и на нужного исполнителя
         self.t1 = Task.objects.create(
             title="В период, мой исполнитель",
@@ -326,7 +327,7 @@ class TaskBulkFilterSummaryUnitTestCase(TestCase):
             company=self.company,
             type=self.task_type,
             assigned_to=self.user,
-            due_at=now.replace(hour=10, minute=0, second=0, microsecond=0),
+            due_at=timezone.make_aware(datetime.combine(today_local, time_cls(10, 0))),
         )
         # Задача вне периода
         self.t2 = Task.objects.create(

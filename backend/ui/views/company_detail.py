@@ -1970,9 +1970,6 @@ def company_transfer(request: HttpRequest, company_id) -> HttpResponse:
     
     # При передаче обновляем филиал компании под филиал нового ответственного (может быть другой регион).
     company.responsible = new_resp
-    
-    # Инвалидируем кэш количества компаний после передачи
-    _invalidate_company_count_cache()
     company.branch = new_resp.branch
     company.save(update_fields=["responsible", "branch", "updated_at"])
     
