@@ -39,7 +39,19 @@ class Task(models.Model):
     completed_at = models.DateTimeField("Завершено", null=True, blank=True)
     is_urgent = models.BooleanField("Срочно", default=False, db_index=True)
 
-    # Повторяющиеся задачи: храним RRULE (iCal) строкой; генерацию экземпляров можно добавить позже cron'ом.
+    # Повторяющиеся задачи: строка в формате iCalendar RRULE (RFC 5545).
+    # Пустая строка = задача не повторяется.
+    #
+    # Примеры:
+    #   FREQ=DAILY                          — каждый день
+    #   FREQ=WEEKLY;BYDAY=MO,WE,FR          — пн/ср/пт каждую неделю
+    #   FREQ=MONTHLY;BYMONTHDAY=1           — первого числа каждого месяца
+    #   FREQ=WEEKLY;INTERVAL=2;BYDAY=MO     — каждый второй понедельник
+    #   FREQ=DAILY;UNTIL=20261231T235959Z   — каждый день до 31.12.2026
+    #   FREQ=WEEKLY;COUNT=10                — 10 раз, раз в неделю
+    #
+    # Реализация: поле только хранит правило. Генерация экземпляров задач
+    # по расписанию — отдельная Celery-задача (не реализована, TODO).
     recurrence_rrule = models.CharField("Повтор (RRULE)", max_length=500, blank=True, default="")
 
     # Импорт/интеграции (amo и т.п.) — для дедупликации и трассировки источника
