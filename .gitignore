@@ -90,3 +90,6 @@ backend/mailer/*.bak.*
 
 # local data files
 sphere_merge.json
+
+# Local audit & planning docs (Claude Code workspace)
+.audit/

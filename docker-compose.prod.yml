@@ -30,18 +30,6 @@ services:
       retries: 5
     restart: unless-stopped
 
-  typesense:
-    image: typesense/typesense:30.0
-    environment:
-      TYPESENSE_DATA_DIR: /data
-      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-xyz}
-    volumes:
-      - typesense_data:/data
-    ports:
-      - "127.0.0.1:8108:8108"
-    command: ['--data-dir', '/data', '--api-key=${TYPESENSE_API_KEY:-xyz}']
-    restart: unless-stopped
-
   web:
     build:
       context: .
@@ -71,17 +59,11 @@ services:
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/1
       CELERY_RESULT_BACKEND: redis://redis:6379/2
-      TYPESENSE_HOST: typesense
-      TYPESENSE_PORT: 8108
-      TYPESENSE_PROTOCOL: http
-      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-xyz}
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
-      typesense:
-        condition: service_started
     command: ["gunicorn", "crm.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--timeout", "120", "--access-logfile", "-", "--error-logfile", "-"]
     security_opt:
       - no-new-privileges:true
@@ -121,6 +103,12 @@ services:
       redis:
         condition: service_healthy
     command: ["celery", "-A", "crm", "worker", "--loglevel=info", "--concurrency=2"]
+    healthcheck:
+      test: ["CMD", "celery", "-A", "crm", "inspect", "ping", "-d", "celery@$$HOSTNAME", "--timeout", "5"]
+      interval: 60s
+      timeout: 15s
+      retries: 3
+      start_period: 90s
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -172,4 +160,3 @@ services:
 volumes:
   pgdata:
   redisdata:
-  typesense_data:
