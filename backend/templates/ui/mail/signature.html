@@ -189,6 +189,8 @@
         const images = editor.querySelectorAll("img");
         images.forEach((img) => {
           img.style.width = ""; img.style.height = "";
+          const w = parseInt(img.getAttribute("width") || "0", 10);
+          if (w > 400) { img.removeAttribute("width"); img.removeAttribute("height"); }
           img.style.maxWidth = "100%";
         });
       }
@@ -374,9 +376,9 @@
             window.uiToast('В подпись вставлены картинки из Яндекс.Почты по защищённым ссылкам — у получателей они могут не отображаться.', 'error');
           }
           images.forEach((img) => {
-            // Снимаем inline-стили размера (Яндекс/Gmail ставят style="width:640px"),
-            // HTML-атрибуты width/height оставляем — они задают нужный размер в таблицах.
             img.style.width = ""; img.style.height = "";
+            const w = parseInt(img.getAttribute("width") || "0", 10);
+            if (w > 400) { img.removeAttribute("width"); img.removeAttribute("height"); }
             img.style.maxWidth = "100%";
           });
 

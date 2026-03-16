@@ -553,9 +553,11 @@
 {# ── Signature WYSIWYG (contenteditable, same engine as /mail/signature/) ── #}
 <style>
   #prefSigEditor:empty:before { content: "Напишите подпись письма..."; color: rgba(0,61,56,.45); pointer-events:none; }
-  #prefSigEditor img { max-width:100% !important; height:auto !important; object-fit:contain; display:inline-block; vertical-align:middle; }
-  #prefSigEditor table { border-collapse:collapse; max-width:100%; }
-  #prefSigEditor td, #prefSigEditor th { padding:4px 8px; border:1px solid #ddd; }
+  /* Ширина 620px = стандарт email — таблицы подписи не растягиваются */
+  #prefSigEditor { max-width: 620px; }
+  #prefSigEditor img { max-width:100% !important; height:auto !important; display:inline-block; vertical-align:middle; }
+  #prefSigEditor table { border-collapse:collapse; }
+  #prefSigEditor td, #prefSigEditor th { vertical-align:top; }
 </style>
 <script nonce="{{ csp_nonce }}">
 (function () {
@@ -588,6 +590,8 @@
     editor.innerHTML = hiddenField.value || '';
     editor.querySelectorAll('img').forEach(function (img) {
       img.style.width = ''; img.style.height = '';
+      var w = parseInt(img.getAttribute('width') || '0', 10);
+      if (w > 400) { img.removeAttribute('width'); img.removeAttribute('height'); }
       img.style.maxWidth = '100%';
     });
   }
@@ -725,9 +729,9 @@
         el.removeAttribute('data-cke-saved-src');
       });
       tmp.querySelectorAll('img').forEach(function (img) {
-        // Снимаем только inline-стили (Яндекс/Gmail ставят style="width:640px"),
-        // HTML-атрибуты width/height оставляем — они задают нужный размер в таблицах подписи.
         img.style.width = ''; img.style.height = '';
+        var w = parseInt(img.getAttribute('width') || '0', 10);
+        if (w > 400) { img.removeAttribute('width'); img.removeAttribute('height'); }
         img.style.maxWidth = '100%';
       });
       var sel = window.getSelection();
