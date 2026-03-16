@@ -602,33 +602,19 @@ def company_cold_call_toggle(request: HttpRequest, company_id) -> HttpResponse:
         messages.info(request, "Основной контакт уже отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
-    phone = (company.phone or "").strip()
-    if not phone:
+    from companies.services import ColdCallService
+    result = ColdCallService.mark_company(company=company, user=user)
+
+    if result.get("no_phone"):
         if _is_ajax(request):
             return JsonResponse({"ok": False, "error": "У компании не задан основной телефон."}, status=400)
         messages.error(request, "У компании не задан основной телефон.")
         return redirect("company_detail", company_id=company.id)
 
-    # Опционально привязываем к последнему звонку из CRM (пока приложение не доработано — можно ставить отметку в любой момент)
-    normalized = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-    now = timezone.now()
-    last_call = (
-        CallRequest.objects.filter(created_by=user, company=company, contact__isnull=True, phone_raw=normalized)
-        .order_by("-created_at")
-        .first()
-    )
-
-    company.primary_contact_is_cold_call = True
-    company.primary_cold_marked_at = now
-    company.primary_cold_marked_by = user
-    company.primary_cold_marked_call = last_call
-    company.save(update_fields=["primary_contact_is_cold_call", "primary_cold_marked_at", "primary_cold_marked_by", "primary_cold_marked_call", "updated_at"])
-
-    if last_call and not last_call.is_cold_call:
-        last_call.is_cold_call = True
-        last_call.save(update_fields=["is_cold_call"])
+    last_call = result.get("call")
 
     if _is_ajax(request):
+        company.refresh_from_db(fields=["primary_contact_is_cold_call", "primary_cold_marked_at", "primary_cold_marked_by"])
         return _cold_call_json(
             entity="company",
             entity_id=str(company.id),
@@ -699,25 +685,12 @@ def contact_cold_call_toggle(request: HttpRequest, contact_id) -> HttpResponse:
         messages.info(request, "Контакт уже отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
-    # Опционально привязываем к последнему звонку из CRM (пока приложение не доработано — можно ставить отметку в любой момент)
-    now = timezone.now()
-    last_call = (
-        CallRequest.objects.filter(created_by=user, contact=contact)
-        .order_by("-created_at")
-        .first()
-    )
-
-    contact.is_cold_call = True
-    contact.cold_marked_at = now
-    contact.cold_marked_by = user
-    contact.cold_marked_call = last_call
-    contact.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call", "updated_at"])
-
-    if last_call and not last_call.is_cold_call:
-        last_call.is_cold_call = True
-        last_call.save(update_fields=["is_cold_call"])
+    from companies.services import ColdCallService
+    result = ColdCallService.mark_contact(contact=contact, user=user)
+    last_call = result.get("call")
 
     if _is_ajax(request):
+        contact.refresh_from_db(fields=["is_cold_call", "cold_marked_at", "cold_marked_by"])
         return _cold_call_json(
             entity="contact",
             entity_id=str(contact.id),
@@ -777,19 +750,15 @@ def company_cold_call_reset(request: HttpRequest, company_id) -> HttpResponse:
         messages.info(request, "Основной контакт не отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
-    # Откатываем отметку (убираем признак и метаданные, чтобы не показывать бейдж)
-    company.primary_contact_is_cold_call = False
-    company.primary_cold_marked_at = None
-    company.primary_cold_marked_by = None
-    company.primary_cold_marked_call = None
-    company.save(update_fields=["primary_contact_is_cold_call", "primary_cold_marked_at", "primary_cold_marked_by", "primary_cold_marked_call", "updated_at"])
+    from companies.services import ColdCallService
+    ColdCallService.reset_company(company=company, user=user)
 
     if _is_ajax(request):
         return _cold_call_json(
             entity="company",
             entity_id=str(company.id),
             is_cold_call=False,
-            marked_at=company.primary_cold_marked_at,
+            marked_at=None,
             marked_by="",
             can_reset=True,
             message="Отметка холодного звонка отменена (основной контакт).",
@@ -844,20 +813,15 @@ def contact_cold_call_reset(request: HttpRequest, contact_id) -> HttpResponse:
         messages.info(request, "Контакт не отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
-    # Откатываем отметку
-    contact.is_cold_call = False
-    # Важно для отчетов/аналитики: очищаем метаданные, иначе звонок продолжит считаться "подтвержденным".
-    contact.cold_marked_at = None
-    contact.cold_marked_by = None
-    contact.cold_marked_call = None
-    contact.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
+    from companies.services import ColdCallService
+    ColdCallService.reset_contact(contact=contact, user=user)
 
     if _is_ajax(request):
         return _cold_call_json(
             entity="contact",
             entity_id=str(contact.id),
             is_cold_call=False,
-            marked_at=contact.cold_marked_at,
+            marked_at=None,
             marked_by="",
             can_reset=True,
             message="Отметка холодного звонка отменена (контакт).",
@@ -929,42 +893,12 @@ def contact_phone_cold_call_toggle(request: HttpRequest, contact_phone_id) -> Ht
         messages.info(request, "Этот номер уже отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
-    # Ищем последний звонок по этому номеру телефона
-    now = timezone.now()
-    # Нормализуем номер телефона так же, как в phone_call_create
-    raw = contact_phone.value.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-    normalized_phone = "".join(ch for i, ch in enumerate(raw) if ch.isdigit() or (ch == "+" and i == 0))
-    digits = normalized_phone[1:] if normalized_phone.startswith("+") else normalized_phone
-    if digits.startswith("8") and len(digits) == 11:
-        normalized_phone = "+7" + digits[1:]
-    elif digits.startswith("7") and len(digits) == 11:
-        normalized_phone = "+7" + digits[1:]
-    elif len(digits) == 10:
-        normalized_phone = "+7" + digits
-    elif normalized_phone.startswith("8") and len(normalized_phone) == 11:
-        normalized_phone = "+7" + normalized_phone[1:]
-    elif normalized_phone.startswith("7") and len(normalized_phone) == 11:
-        normalized_phone = "+7" + normalized_phone[1:]
-    elif normalized_phone and not normalized_phone.startswith("+") and len(normalized_phone) >= 11 and normalized_phone[0] in ("7", "8"):
-        normalized_phone = "+7" + normalized_phone[1:]
-    
-    last_call = (
-        CallRequest.objects.filter(created_by=user, contact=contact, phone_raw=normalized_phone)
-        .order_by("-created_at")
-        .first()
-    )
-
-    contact_phone.is_cold_call = True
-    contact_phone.cold_marked_at = now
-    contact_phone.cold_marked_by = user
-    contact_phone.cold_marked_call = last_call
-    contact_phone.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
-
-    if last_call and not last_call.is_cold_call:
-        last_call.is_cold_call = True
-        last_call.save(update_fields=["is_cold_call"])
+    from companies.services import ColdCallService
+    result = ColdCallService.mark_contact_phone(contact_phone=contact_phone, user=user)
+    last_call = result.get("call")
 
     if _is_ajax(request):
+        contact_phone.refresh_from_db(fields=["is_cold_call", "cold_marked_at", "cold_marked_by"])
         return _cold_call_json(
             entity="contact_phone",
             entity_id=str(contact_phone.id),
@@ -1029,19 +963,15 @@ def contact_phone_cold_call_reset(request: HttpRequest, contact_phone_id) -> Htt
         messages.info(request, "Этот номер не отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
-    # Откатываем отметку (убираем признак и метаданные, чтобы не показывать бейдж)
-    contact_phone.is_cold_call = False
-    contact_phone.cold_marked_at = None
-    contact_phone.cold_marked_by = None
-    contact_phone.cold_marked_call = None
-    contact_phone.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
+    from companies.services import ColdCallService
+    ColdCallService.reset_contact_phone(contact_phone=contact_phone, user=user)
 
     if _is_ajax(request):
         return _cold_call_json(
             entity="contact_phone",
             entity_id=str(contact_phone.id),
             is_cold_call=False,
-            marked_at=contact_phone.cold_marked_at,
+            marked_at=None,
             marked_by="",
             can_reset=True,
             message=f"Отметка холодного звонка отменена (номер {contact_phone.value}).",
@@ -1109,42 +1039,12 @@ def company_phone_cold_call_toggle(request: HttpRequest, company_phone_id) -> Ht
         messages.info(request, "Этот номер уже отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
-    # Ищем последний звонок по этому номеру телефона
-    now = timezone.now()
-    # Нормализуем номер телефона так же, как в phone_call_create
-    raw = company_phone.value.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-    normalized_phone = "".join(ch for i, ch in enumerate(raw) if ch.isdigit() or (ch == "+" and i == 0))
-    digits = normalized_phone[1:] if normalized_phone.startswith("+") else normalized_phone
-    if digits.startswith("8") and len(digits) == 11:
-        normalized_phone = "+7" + digits[1:]
-    elif digits.startswith("7") and len(digits) == 11:
-        normalized_phone = "+7" + digits[1:]
-    elif len(digits) == 10:
-        normalized_phone = "+7" + digits
-    elif normalized_phone.startswith("8") and len(normalized_phone) == 11:
-        normalized_phone = "+7" + normalized_phone[1:]
-    elif normalized_phone.startswith("7") and len(normalized_phone) == 11:
-        normalized_phone = "+7" + normalized_phone[1:]
-    elif normalized_phone and not normalized_phone.startswith("+") and len(normalized_phone) >= 11 and normalized_phone[0] in ("7", "8"):
-        normalized_phone = "+7" + normalized_phone[1:]
-
-    last_call = (
-        CallRequest.objects.filter(created_by=user, company=company, phone_raw=normalized_phone)
-        .order_by("-created_at")
-        .first()
-    )
-
-    company_phone.is_cold_call = True
-    company_phone.cold_marked_at = now
-    company_phone.cold_marked_by = user
-    company_phone.cold_marked_call = last_call
-    company_phone.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
-
-    if last_call and not last_call.is_cold_call:
-        last_call.is_cold_call = True
-        last_call.save(update_fields=["is_cold_call"])
+    from companies.services import ColdCallService
+    result = ColdCallService.mark_company_phone(company_phone=company_phone, user=user)
+    last_call = result.get("call")
 
     if _is_ajax(request):
+        company_phone.refresh_from_db(fields=["is_cold_call", "cold_marked_at", "cold_marked_by"])
         return _cold_call_json(
             entity="company_phone",
             entity_id=str(company_phone.id),
@@ -1205,19 +1105,15 @@ def company_phone_cold_call_reset(request: HttpRequest, company_phone_id) -> Htt
         messages.info(request, "Этот номер не отмечен как холодный.")
         return redirect("company_detail", company_id=company.id)
 
-    # Откатываем отметку (убираем признак и метаданные, чтобы не показывать бейдж)
-    company_phone.is_cold_call = False
-    company_phone.cold_marked_at = None
-    company_phone.cold_marked_by = None
-    company_phone.cold_marked_call = None
-    company_phone.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
+    from companies.services import ColdCallService
+    ColdCallService.reset_company_phone(company_phone=company_phone, user=user)
 
     if _is_ajax(request):
         return _cold_call_json(
             entity="company_phone",
             entity_id=str(company_phone.id),
             is_cold_call=False,
-            marked_at=company_phone.cold_marked_at,
+            marked_at=None,
             marked_by="",
             can_reset=True,
             message=f"Отметка холодного звонка отменена (номер {company_phone.value}).",

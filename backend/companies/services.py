@@ -17,7 +17,8 @@ from django.utils import timezone
 from accounts.models import User
 from audit.service import log_event
 from audit.models import ActivityEvent
-from companies.models import Company, CompanyPhone, CompanyEmail, CompanyNote, CompanyNoteAttachment, CompanyHistoryEvent
+from companies.models import Company, CompanyPhone, CompanyEmail, CompanyNote, CompanyNoteAttachment, CompanyHistoryEvent, Contact, ContactPhone
+from companies.normalizers import normalize_phone as _normalize_phone
 from companies.permissions import can_edit_company, can_transfer_company
 from crm.request_id_middleware import get_request_id
 
@@ -471,3 +472,209 @@ class CompanyService:
                 logger.warning("Ошибка при отправке уведомления о заметке: %s", e, exc_info=True)
 
         return note
+
+
+# ---------------------------------------------------------------------------
+# ColdCallService — единообразная отметка холодного звонка по 4 уровням
+# ---------------------------------------------------------------------------
+
+class ColdCallService:
+    """
+    Централизованная логика отметки/сброса холодного звонка для:
+    - Company (основной контакт)
+    - Contact
+    - ContactPhone
+    - CompanyPhone
+    """
+
+    @staticmethod
+    def _find_last_call_for_company(user: User, company: Company):
+        """Найти последний CallRequest от user по основному телефону компании."""
+        from phonebridge.models import CallRequest
+        phone = (company.phone or "").strip()
+        if not phone:
+            return None
+        normalized = _normalize_phone(phone)
+        raw_stripped = phone.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+        return (
+            CallRequest.objects.filter(
+                created_by=user,
+                company=company,
+                contact__isnull=True,
+                phone_raw__in=[normalized, raw_stripped, phone],
+            )
+            .order_by("-created_at")
+            .first()
+        )
+
+    @staticmethod
+    def _find_last_call_for_contact(user: User, contact: Contact):
+        """Найти последний CallRequest от user по контакту."""
+        from phonebridge.models import CallRequest
+        return (
+            CallRequest.objects.filter(created_by=user, contact=contact)
+            .order_by("-created_at")
+            .first()
+        )
+
+    @staticmethod
+    def _find_last_call_for_phone(user: User, phone_value: str, *, company=None, contact=None):
+        """Найти последний CallRequest по нормализованному номеру телефона."""
+        from phonebridge.models import CallRequest
+        normalized = _normalize_phone(phone_value)
+        qs = CallRequest.objects.filter(created_by=user, phone_raw=normalized)
+        if company is not None:
+            qs = qs.filter(company=company)
+        if contact is not None:
+            qs = qs.filter(contact=contact)
+        return qs.order_by("-created_at").first()
+
+    @staticmethod
+    def _link_call(call) -> None:
+        """Пометить CallRequest как холодный, если ещё не помечен."""
+        if call and not call.is_cold_call:
+            call.is_cold_call = True
+            call.save(update_fields=["is_cold_call"])
+
+    # ------------------------------------------------------------------
+    # Company
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def mark_company(*, company: Company, user: User) -> dict:
+        """
+        Отметить основной контакт компании как холодный звонок.
+        Возвращает {"changed": bool, "already_set": bool}.
+        Ожидает, что телефон задан (иначе возвращает {"changed": False, "no_phone": True}).
+        """
+        if company.primary_contact_is_cold_call:
+            return {"changed": False, "already_set": True}
+        if not (company.phone or "").strip():
+            return {"changed": False, "no_phone": True}
+
+        last_call = ColdCallService._find_last_call_for_company(user, company)
+        now = timezone.now()
+        company.primary_contact_is_cold_call = True
+        company.primary_cold_marked_at = now
+        company.primary_cold_marked_by = user
+        company.primary_cold_marked_call = last_call
+        company.save(update_fields=[
+            "primary_contact_is_cold_call", "primary_cold_marked_at",
+            "primary_cold_marked_by", "primary_cold_marked_call", "updated_at",
+        ])
+        ColdCallService._link_call(last_call)
+        return {"changed": True, "already_set": False, "call": last_call}
+
+    @staticmethod
+    def reset_company(*, company: Company, user: User) -> dict:
+        """Откатить отметку холодного звонка для основного контакта компании."""
+        if not company.primary_contact_is_cold_call:
+            return {"changed": False, "already_reset": True}
+        company.primary_contact_is_cold_call = False
+        company.primary_cold_marked_at = None
+        company.primary_cold_marked_by = None
+        company.primary_cold_marked_call = None
+        company.save(update_fields=[
+            "primary_contact_is_cold_call", "primary_cold_marked_at",
+            "primary_cold_marked_by", "primary_cold_marked_call", "updated_at",
+        ])
+        return {"changed": True}
+
+    # ------------------------------------------------------------------
+    # Contact
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def mark_contact(*, contact: Contact, user: User) -> dict:
+        """Отметить контакт как холодный звонок."""
+        if contact.is_cold_call:
+            return {"changed": False, "already_set": True}
+        last_call = ColdCallService._find_last_call_for_contact(user, contact)
+        now = timezone.now()
+        contact.is_cold_call = True
+        contact.cold_marked_at = now
+        contact.cold_marked_by = user
+        contact.cold_marked_call = last_call
+        contact.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call", "updated_at"])
+        ColdCallService._link_call(last_call)
+        return {"changed": True, "already_set": False, "call": last_call}
+
+    @staticmethod
+    def reset_contact(*, contact: Contact, user: User) -> dict:
+        """Откатить отметку холодного звонка для контакта."""
+        if not contact.is_cold_call:
+            return {"changed": False, "already_reset": True}
+        contact.is_cold_call = False
+        contact.cold_marked_at = None
+        contact.cold_marked_by = None
+        contact.cold_marked_call = None
+        contact.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
+        return {"changed": True}
+
+    # ------------------------------------------------------------------
+    # ContactPhone
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def mark_contact_phone(*, contact_phone: ContactPhone, user: User) -> dict:
+        """Отметить телефон контакта как холодный звонок."""
+        if contact_phone.is_cold_call:
+            return {"changed": False, "already_set": True}
+        contact = contact_phone.contact
+        last_call = ColdCallService._find_last_call_for_phone(
+            user, contact_phone.value, contact=contact
+        )
+        now = timezone.now()
+        contact_phone.is_cold_call = True
+        contact_phone.cold_marked_at = now
+        contact_phone.cold_marked_by = user
+        contact_phone.cold_marked_call = last_call
+        contact_phone.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
+        ColdCallService._link_call(last_call)
+        return {"changed": True, "already_set": False, "call": last_call}
+
+    @staticmethod
+    def reset_contact_phone(*, contact_phone: ContactPhone, user: User) -> dict:
+        """Откатить отметку холодного звонка для телефона контакта."""
+        if not contact_phone.is_cold_call and not contact_phone.cold_marked_at:
+            return {"changed": False, "already_reset": True}
+        contact_phone.is_cold_call = False
+        contact_phone.cold_marked_at = None
+        contact_phone.cold_marked_by = None
+        contact_phone.cold_marked_call = None
+        contact_phone.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
+        return {"changed": True}
+
+    # ------------------------------------------------------------------
+    # CompanyPhone
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def mark_company_phone(*, company_phone: CompanyPhone, user: User) -> dict:
+        """Отметить телефон компании как холодный звонок."""
+        if company_phone.is_cold_call:
+            return {"changed": False, "already_set": True}
+        company = company_phone.company
+        last_call = ColdCallService._find_last_call_for_phone(
+            user, company_phone.value, company=company
+        )
+        now = timezone.now()
+        company_phone.is_cold_call = True
+        company_phone.cold_marked_at = now
+        company_phone.cold_marked_by = user
+        company_phone.cold_marked_call = last_call
+        company_phone.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
+        ColdCallService._link_call(last_call)
+        return {"changed": True, "already_set": False, "call": last_call}
+
+    @staticmethod
+    def reset_company_phone(*, company_phone: CompanyPhone, user: User) -> dict:
+        """Откатить отметку холодного звонка для телефона компании."""
+        if not company_phone.is_cold_call and not company_phone.cold_marked_at:
+            return {"changed": False, "already_reset": True}
+        company_phone.is_cold_call = False
+        company_phone.cold_marked_at = None
+        company_phone.cold_marked_by = None
+        company_phone.cold_marked_call = None
+        company_phone.save(update_fields=["is_cold_call", "cold_marked_at", "cold_marked_by", "cold_marked_call"])
+        return {"changed": True}

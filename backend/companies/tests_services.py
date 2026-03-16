@@ -3,6 +3,7 @@
 - get_contract_alert()
 - get_worktime_status()
 - CompanyService.transfer()
+- ColdCallService
 """
 from __future__ import annotations
 
@@ -14,8 +15,8 @@ from django.test import TestCase
 from django.utils import timezone
 
 from accounts.models import Branch, User
-from companies.models import Company, CompanyHistoryEvent, ContractType
-from companies.services import CompanyService, get_contract_alert, get_worktime_status
+from companies.models import Company, CompanyHistoryEvent, ContractType, Contact, ContactPhone, CompanyPhone
+from companies.services import CompanyService, ColdCallService, get_contract_alert, get_worktime_status
 
 
 # ---------------------------------------------------------------------------
@@ -202,3 +203,183 @@ class CompanyServiceTransferTest(TestCase):
         self.assertTrue(result["success"])
         self.assertEqual(result["new_responsible_id"], str(self.manager2.id))
         self.assertEqual(result["old_responsible_id"], str(self.manager1.id))
+
+
+# ---------------------------------------------------------------------------
+# ColdCallService tests
+# ---------------------------------------------------------------------------
+
+class ColdCallServiceCompanyTest(TestCase):
+    def setUp(self):
+        self.manager = User.objects.create_user(
+            username="cc_mgr", password="pass", role=User.Role.MANAGER
+        )
+        self.company = Company.objects.create(
+            name="Тест ХЗ", responsible=self.manager, phone="+79001234567"
+        )
+
+    def test_mark_company_sets_flag(self):
+        result = ColdCallService.mark_company(company=self.company, user=self.manager)
+        self.assertTrue(result["changed"])
+        self.company.refresh_from_db()
+        self.assertTrue(self.company.primary_contact_is_cold_call)
+        self.assertIsNotNone(self.company.primary_cold_marked_at)
+        self.assertEqual(self.company.primary_cold_marked_by, self.manager)
+
+    def test_mark_company_idempotent(self):
+        ColdCallService.mark_company(company=self.company, user=self.manager)
+        self.company.refresh_from_db()
+        result2 = ColdCallService.mark_company(company=self.company, user=self.manager)
+        self.assertFalse(result2["changed"])
+        self.assertTrue(result2["already_set"])
+
+    def test_mark_company_no_phone(self):
+        self.company.phone = ""
+        self.company.save(update_fields=["phone"])
+        result = ColdCallService.mark_company(company=self.company, user=self.manager)
+        self.assertFalse(result["changed"])
+        self.assertTrue(result.get("no_phone"))
+
+    def test_reset_company_clears_flag(self):
+        ColdCallService.mark_company(company=self.company, user=self.manager)
+        self.company.refresh_from_db()
+        result = ColdCallService.reset_company(company=self.company, user=self.manager)
+        self.assertTrue(result["changed"])
+        self.company.refresh_from_db()
+        self.assertFalse(self.company.primary_contact_is_cold_call)
+        self.assertIsNone(self.company.primary_cold_marked_at)
+        self.assertIsNone(self.company.primary_cold_marked_by)
+
+    def test_reset_company_idempotent(self):
+        result = ColdCallService.reset_company(company=self.company, user=self.manager)
+        self.assertFalse(result["changed"])
+        self.assertTrue(result.get("already_reset"))
+
+
+class ColdCallServiceContactTest(TestCase):
+    def setUp(self):
+        self.manager = User.objects.create_user(
+            username="cc_mgr2", password="pass", role=User.Role.MANAGER
+        )
+        self.company = Company.objects.create(
+            name="Тест ХЗ контакт", responsible=self.manager
+        )
+        self.contact = Contact.objects.create(
+            company=self.company, first_name="Иван", last_name="Петров"
+        )
+
+    def test_mark_contact_sets_flag(self):
+        result = ColdCallService.mark_contact(contact=self.contact, user=self.manager)
+        self.assertTrue(result["changed"])
+        self.contact.refresh_from_db()
+        self.assertTrue(self.contact.is_cold_call)
+        self.assertIsNotNone(self.contact.cold_marked_at)
+        self.assertEqual(self.contact.cold_marked_by, self.manager)
+
+    def test_mark_contact_idempotent(self):
+        ColdCallService.mark_contact(contact=self.contact, user=self.manager)
+        self.contact.refresh_from_db()
+        result2 = ColdCallService.mark_contact(contact=self.contact, user=self.manager)
+        self.assertFalse(result2["changed"])
+        self.assertTrue(result2["already_set"])
+
+    def test_reset_contact_clears_flag(self):
+        ColdCallService.mark_contact(contact=self.contact, user=self.manager)
+        self.contact.refresh_from_db()
+        result = ColdCallService.reset_contact(contact=self.contact, user=self.manager)
+        self.assertTrue(result["changed"])
+        self.contact.refresh_from_db()
+        self.assertFalse(self.contact.is_cold_call)
+        self.assertIsNone(self.contact.cold_marked_at)
+
+    def test_reset_contact_idempotent(self):
+        result = ColdCallService.reset_contact(contact=self.contact, user=self.manager)
+        self.assertFalse(result["changed"])
+        self.assertTrue(result.get("already_reset"))
+
+
+class ColdCallServiceContactPhoneTest(TestCase):
+    def setUp(self):
+        self.manager = User.objects.create_user(
+            username="cc_mgr3", password="pass", role=User.Role.MANAGER
+        )
+        self.company = Company.objects.create(
+            name="Тест ХЗ тел", responsible=self.manager
+        )
+        self.contact = Contact.objects.create(
+            company=self.company, first_name="Анна"
+        )
+        self.phone = ContactPhone.objects.create(
+            contact=self.contact, value="+79009876543"
+        )
+
+    def test_mark_contact_phone_sets_flag(self):
+        result = ColdCallService.mark_contact_phone(contact_phone=self.phone, user=self.manager)
+        self.assertTrue(result["changed"])
+        self.phone.refresh_from_db()
+        self.assertTrue(self.phone.is_cold_call)
+        self.assertIsNotNone(self.phone.cold_marked_at)
+        self.assertEqual(self.phone.cold_marked_by, self.manager)
+
+    def test_mark_contact_phone_idempotent(self):
+        ColdCallService.mark_contact_phone(contact_phone=self.phone, user=self.manager)
+        self.phone.refresh_from_db()
+        result2 = ColdCallService.mark_contact_phone(contact_phone=self.phone, user=self.manager)
+        self.assertFalse(result2["changed"])
+        self.assertTrue(result2["already_set"])
+
+    def test_reset_contact_phone_clears_flag(self):
+        ColdCallService.mark_contact_phone(contact_phone=self.phone, user=self.manager)
+        self.phone.refresh_from_db()
+        result = ColdCallService.reset_contact_phone(contact_phone=self.phone, user=self.manager)
+        self.assertTrue(result["changed"])
+        self.phone.refresh_from_db()
+        self.assertFalse(self.phone.is_cold_call)
+        self.assertIsNone(self.phone.cold_marked_at)
+
+    def test_reset_contact_phone_idempotent(self):
+        result = ColdCallService.reset_contact_phone(contact_phone=self.phone, user=self.manager)
+        self.assertFalse(result["changed"])
+        self.assertTrue(result.get("already_reset"))
+
+
+class ColdCallServiceCompanyPhoneTest(TestCase):
+    def setUp(self):
+        self.manager = User.objects.create_user(
+            username="cc_mgr4", password="pass", role=User.Role.MANAGER
+        )
+        self.company = Company.objects.create(
+            name="Тест ХЗ тел компании", responsible=self.manager
+        )
+        self.phone = CompanyPhone.objects.create(
+            company=self.company, value="+79001112233"
+        )
+
+    def test_mark_company_phone_sets_flag(self):
+        result = ColdCallService.mark_company_phone(company_phone=self.phone, user=self.manager)
+        self.assertTrue(result["changed"])
+        self.phone.refresh_from_db()
+        self.assertTrue(self.phone.is_cold_call)
+        self.assertIsNotNone(self.phone.cold_marked_at)
+        self.assertEqual(self.phone.cold_marked_by, self.manager)
+
+    def test_mark_company_phone_idempotent(self):
+        ColdCallService.mark_company_phone(company_phone=self.phone, user=self.manager)
+        self.phone.refresh_from_db()
+        result2 = ColdCallService.mark_company_phone(company_phone=self.phone, user=self.manager)
+        self.assertFalse(result2["changed"])
+        self.assertTrue(result2["already_set"])
+
+    def test_reset_company_phone_clears_flag(self):
+        ColdCallService.mark_company_phone(company_phone=self.phone, user=self.manager)
+        self.phone.refresh_from_db()
+        result = ColdCallService.reset_company_phone(company_phone=self.phone, user=self.manager)
+        self.assertTrue(result["changed"])
+        self.phone.refresh_from_db()
+        self.assertFalse(self.phone.is_cold_call)
+        self.assertIsNone(self.phone.cold_marked_at)
+
+    def test_reset_company_phone_idempotent(self):
+        result = ColdCallService.reset_company_phone(company_phone=self.phone, user=self.manager)
+        self.assertFalse(result["changed"])
+        self.assertTrue(result.get("already_reset"))
