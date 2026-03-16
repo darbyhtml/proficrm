@@ -555,7 +555,7 @@
   #prefSigEditor:empty:before { content: "Напишите подпись письма..."; color: rgba(0,61,56,.45); pointer-events:none; }
   /* Ширина 620px = стандарт email — таблицы подписи не растягиваются */
   #prefSigEditor { max-width: 620px; }
-  #prefSigEditor img { max-width:min(100%, 400px) !important; height:auto !important; object-fit:contain; display:inline-block; vertical-align:middle; }
+  #prefSigEditor img { max-width:min(100%, 400px) !important; height:auto; object-fit:contain; display:inline-block; vertical-align:middle; }
   #prefSigEditor img[data-resize-sel] { outline:2px solid #01948E; box-shadow:0 0 0 3px rgba(1,148,142,.2); }
   #prefSigEditor table { border-collapse:collapse; max-width:100%; }
   #prefSigEditor td, #prefSigEditor th { vertical-align:top; }
@@ -591,8 +591,11 @@
 
   function loadSignature() {
     editor.innerHTML = hiddenField.value || '';
-    // CSS (max-width:min(100%,400px); height:auto) сам управляет отображением картинок
+    // Восстанавливаем inline-размеры: CSS height:auto без !important — inline style побеждает
   }
+
+  // Отключаем браузерные нативные ручки ресайза картинок в contenteditable
+  try { document.execCommand('enableObjectResizing', false, false); } catch(e) {}
 
   function setActive(on, off) {
     on.classList.add('bg-brand-soft/40');
