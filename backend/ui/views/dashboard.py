@@ -153,16 +153,6 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     
     contract_until_30 = today_date + timedelta(days=30)
 
-    # Кэш-ключ: включает user_id и дату (инвалидируется при изменении дня)
-    # ВРЕМЕННО ОТКЛЮЧАЕМ КЭШ ДЛЯ ОТЛАДКИ
-    # cache_key = f"dashboard_{user.id}_{today_date.isoformat()}"
-    # cached_data = cache.get(cache_key)
-    # 
-    # if cached_data:
-    #     # Восстанавливаем datetime объекты из строк (кэш сериализует их)
-    #     cached_data["now"] = now
-    #     cached_data["local_now"] = local_now
-    #     return render(request, "ui/dashboard.html", cached_data)
 
     # ОПТИМИЗАЦИЯ: один запрос на активные задачи, затем категоризация в Python
     all_tasks = (
@@ -304,6 +294,29 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             task.can_edit_task = _can_edit_task_ui(user, task)  # type: ignore[attr-defined]
             task.can_delete_task = _can_delete_task_ui(user, task)  # type: ignore[attr-defined]
 
+    # Выполнено сегодня (отдельный запрос — активные задачи его не содержат)
+    tasks_done_today = Task.objects.filter(
+        assigned_to=user,
+        status=Task.Status.DONE,
+        updated_at__gte=today_start,
+        updated_at__lt=tomorrow_start,
+    ).count()
+
+    # Компании без активных задач (для виджета «зависшие компании»)
+    active_company_ids = (
+        Task.objects.filter(assigned_to=user, company__isnull=False)
+        .exclude(status__in=[Task.Status.DONE, Task.Status.CANCELLED])
+        .values_list("company_id", flat=True)
+    )
+    stale_companies_qs = (
+        Company.objects.filter(responsible=user)
+        .exclude(id__in=active_company_ids)
+        .only("id", "name")
+        .order_by("name")
+    )
+    stale_companies_count = stale_companies_qs.count()
+    stale_companies = list(stale_companies_qs[:5])
+
     # Запросы на удаление компаний для РОП/директора
     deletion_requests = []
     deletion_requests_count = 0
@@ -338,17 +351,20 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         "tasks_today_count": tasks_today_count,
         "overdue_count": overdue_count,
         "tasks_week_count": tasks_week_count,
-        # Диапазон дат для "Задачи на неделю"
+        # Диапазон дат для "Ближайшие 7 дней"
         "week_monday": week_monday,
         "week_sunday": week_sunday,
+        # Выполнено сегодня
+        "tasks_done_today": tasks_done_today,
+        # Компании без активных задач
+        "stale_companies": stale_companies,
+        "stale_companies_count": stale_companies_count,
+        "effective_user_id": user.id,
         # Запросы на удаление
         "deletion_requests": deletion_requests,
         "deletion_requests_count": deletion_requests_count,
     }
 
-    # ВРЕМЕННО ОТКЛЮЧАЕМ КЭШ ДЛЯ ОТЛАДКИ
-    # cache.set(cache_key, context, timeout=120)
-    
     return render(request, "ui/dashboard.html", context)
 
 

@@ -96,11 +96,14 @@
                 </div>
 
                 <div class="max-h-[420px] overflow-auto bg-white">
-                  {% if reminder_items %}
-                    <div class="px-4 pt-3 pb-2 flex items-center justify-between">
+                  {# Секция напоминаний — всегда в DOM, скрывается если пусто #}
+                  <div id="reminderSection" {% if not reminder_items %}class="hidden"{% endif %}>
+                    <div class="px-4 pt-3 pb-2 flex items-center justify-between" id="reminderHeader">
                       <span class="text-xs muted">Напоминания</span>
                       {% if reminder_count > reminder_items|length %}
-                        <a href="/notifications/reminders/all/" class="text-xs link">Показать все ({{ reminder_count }})</a>
+                        <a href="/notifications/reminders/all/" class="text-xs link" id="reminderShowAll">Показать все ({{ reminder_count }})</a>
+                      {% else %}
+                        <span id="reminderShowAll" class="hidden"></span>
                       {% endif %}
                     </div>
                     <div class="px-2 pb-2" id="reminderList">
@@ -111,7 +114,7 @@
                         </a>
                       {% endfor %}
                     </div>
-                  {% endif %}
+                  </div>
 
                   <div class="px-4 pt-3 pb-2 flex items-center justify-between">
                     <span class="text-xs muted">Новые</span>
@@ -144,7 +147,7 @@
                               {% endif %}
                             </div>
                             {% if n.body %}<div class="text-xs muted mt-0.5">{{ n.body|truncatechars:140 }}</div>{% endif %}
-                            <div class="muted-2 mt-1" style="font-size:0.6875rem;">{{ n.created_at }}</div>
+                            <div class="muted-2 mt-1" style="font-size:0.6875rem;">{{ n.created_at|date:"d.m.Y H:i" }}</div>
                           </div>
                           <form method="post" action="/notifications/{{ n.id }}/read/" class="js-notif-read-form">
                             {% csrf_token %}
@@ -597,9 +600,16 @@
           }
         }
 
+        const reminderSection = document.getElementById('reminderSection');
+        const reminderShowAll = document.getElementById('reminderShowAll');
+
         function renderReminders(items, totalCount){
           if(!reminderList) return;
           const arr = Array.isArray(items) ? items : [];
+          // Показываем/скрываем всю секцию напоминаний
+          if(reminderSection){
+            reminderSection.classList.toggle('hidden', arr.length === 0);
+          }
           if(!arr.length){
             reminderList.innerHTML = '';
             return;
@@ -613,85 +623,92 @@
               ${subtitle ? `<div class="text-xs muted mt-0.5">${subtitle}</div>` : ''}
             </a>`;
           }).join('');
-          
-          // Обновляем заголовок с кнопкой "Показать все"
-          const reminderHeader = reminderList.previousElementSibling;
-          if(reminderHeader){
-            const existingLink = reminderHeader.querySelector('a');
+          // Обновляем ссылку "Показать все"
+          if(reminderShowAll){
             if(totalCount && totalCount > arr.length){
-              if(!existingLink){
-                const showAllLink = document.createElement('a');
-                showAllLink.href = '/notifications/reminders/all/';
-                showAllLink.className = 'text-xs link';
-                showAllLink.textContent = `Показать все (${totalCount})`;
-                reminderHeader.appendChild(showAllLink);
-              } else {
-                existingLink.textContent = `Показать все (${totalCount})`;
-              }
-            } else if(existingLink){
-              existingLink.remove();
+              reminderShowAll.textContent = `Показать все (${totalCount})`;
+              reminderShowAll.href = '/notifications/reminders/all/';
+              reminderShowAll.className = 'text-xs link';
+              reminderShowAll.classList.remove('hidden');
+            } else {
+              reminderShowAll.classList.add('hidden');
             }
           }
         }
+
+        // Форматирование времени: "сегодня в 14:32", "вчера в 09:10", "16.03.2026"
+        function formatNotifTime(raw){
+          if(!raw) return '';
+          try{
+            // Django выводит ISO или "March 16, 2026, 3:14 p.m." — пробуем распарсить
+            const d = new Date(raw);
+            if(isNaN(d.getTime())) return String(raw);
+            const now = new Date();
+            const pad = n => String(n).padStart(2,'0');
+            const hhmm = pad(d.getHours()) + ':' + pad(d.getMinutes());
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
+            const dDay = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+            if(dDay.getTime() === today.getTime()) return 'сегодня в ' + hhmm;
+            if(dDay.getTime() === yesterday.getTime()) return 'вчера в ' + hhmm;
+            return pad(d.getDate()) + '.' + pad(d.getMonth()+1) + '.' + d.getFullYear() + ' ' + hhmm;
+          }catch(_e){ return String(raw); }
+        }
+
+        const notifShowAllEl = document.getElementById('notifShowAll') || null;
 
         function renderNotifs(items, totalCount){
           if(!notifList) return;
           const arr = Array.isArray(items) ? items : [];
           if(!arr.length){
             notifList.innerHTML = '<div class="px-2 pb-3 muted text-sm" id="notifEmpty">Уведомлений пока нет.</div>';
-            return;
-          }
-          notifList.innerHTML = arr.map(n => {
-            const id = escapeHtml(n.id);
-            const title = escapeHtml(n.title);
-            const body = escapeHtml(n.body || '');
-            const created = escapeHtml(n.created_at || '');
-            const url = escapeHtml(n.url || '');
-            const payload = n.payload || {};
-            const openLink = url ? `<a class="link text-sm mt-2 inline-block" href="${url}">Открыть</a>` : '';
-            const bodyShort = body ? (body.length > 140 ? body.slice(0, 140) + '…' : body) : '';
-            
-            // Иконки ролей и бейдж "СРОЧНО"
-            let roleIcon = '';
-            if (payload.creator_role === 'sales_head') {
-              roleIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-brand-teal inline-block ml-1" title="РОП"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>';
-            } else if (payload.creator_role === 'branch_director') {
-              roleIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-amber-600 inline-block ml-1" title="Директор филиала"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>';
-            }
-            
-            const urgentBadge = payload.is_urgent ? '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-red-100 text-red-700 border border-red-200 ml-1">СРОЧНО</span>' : '';
-            
-            return `<div class="rounded-xl border border-brand-soft px-3 py-2 mb-2 bg-brand-soft/20" data-notif-id="${id}">
-              <div class="flex items-start justify-between gap-2">
-                <div class="flex-1">
-                  <div class="text-sm font-medium flex items-center gap-1">${title}${roleIcon}${urgentBadge}</div>
-                  ${bodyShort ? `<div class="text-xs muted mt-0.5">${bodyShort}</div>` : ''}
-                  <div class="muted-2 mt-1" style="font-size:0.6875rem;">${created}</div>
+          } else {
+            notifList.innerHTML = arr.map(n => {
+              const id = escapeHtml(String(n.id || ''));
+              const title = escapeHtml(n.title || '');
+              const body = escapeHtml(n.body || '');
+              const created = formatNotifTime(n.created_at || '');
+              const url = escapeHtml(n.url || '');
+              const payload = n.payload || {};
+              const openLink = url ? `<a class="link text-sm mt-2 inline-block" href="${url}">Открыть →</a>` : '';
+              const bodyShort = body ? (body.length > 140 ? body.slice(0, 140) + '…' : body) : '';
+              let roleIcon = '';
+              if(payload.creator_role === 'sales_head'){
+                roleIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#01948E;display:inline;margin-left:3px" title="РОП"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>';
+              } else if(payload.creator_role === 'branch_director'){
+                roleIcon = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:#d97706;display:inline;margin-left:3px" title="Директор филиала"><path d="M5 16L3 5l5.5 5L12 4l3.5 6L21 5l-2 11H5z"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>';
+              }
+              const urgentBadge = payload.is_urgent ? '<span style="display:inline-flex;align-items:center;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:600;background:rgba(239,68,68,.1);color:#b91c1c;border:1px solid rgba(239,68,68,.25);margin-left:4px">СРОЧНО</span>' : '';
+              return `<div class="rounded-xl border border-brand-soft px-3 py-2 mb-2 bg-brand-soft/20" data-notif-id="${id}">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium">${title}${roleIcon}${urgentBadge}</div>
+                    ${bodyShort ? `<div class="text-xs muted mt-0.5 break-words">${bodyShort}</div>` : ''}
+                    <div class="muted-2 mt-1" style="font-size:0.6875rem;">${created}</div>
+                  </div>
+                  <form method="post" action="/notifications/${id}/read/" class="js-notif-read-form flex-shrink-0">
+                    <button class="btn btn-outline btn-sm" type="submit" title="Отметить прочитанным">✓</button>
+                  </form>
                 </div>
-                <form method="post" action="/notifications/${id}/read/" class="js-notif-read-form">
-                  <button class="btn btn-outline btn-sm" type="submit" title="Отметить прочитанным">✓</button>
-                </form>
-              </div>
-              ${openLink}
-            </div>`;
-          }).join('');
-          
-          // Обновляем заголовок с кнопкой "Показать все"
+                ${openLink}
+              </div>`;
+            }).join('');
+          }
+          // Обновляем ссылку "Показать все" (ищем в заголовке секции)
           const notifHeader = notifList.previousElementSibling;
           if(notifHeader){
-            const existingLink = notifHeader.querySelector('a');
+            let link = notifHeader.querySelector('a.js-notif-show-all');
             if(totalCount && totalCount > arr.length){
-              if(!existingLink){
-                const showAllLink = document.createElement('a');
-                showAllLink.href = '/notifications/all/';
-                showAllLink.className = 'text-xs link';
-                showAllLink.textContent = `Показать все (${totalCount})`;
-                notifHeader.appendChild(showAllLink);
-              } else {
-                existingLink.textContent = `Показать все (${totalCount})`;
+              if(!link){
+                link = document.createElement('a');
+                link.href = '/notifications/all/';
+                link.className = 'text-xs link js-notif-show-all';
+                notifHeader.appendChild(link);
               }
-            } else if(existingLink){
-              existingLink.remove();
+              link.textContent = `Показать все (${totalCount})`;
+              link.classList.remove('hidden');
+            } else if(link){
+              link.classList.add('hidden');
             }
           }
         }

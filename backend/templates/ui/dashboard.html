@@ -49,9 +49,23 @@
     <div class="flex items-end justify-between">
       <div>
         <h1 class="text-2xl font-semibold">Рабочий стол</h1>
-        <div class="text-sm text-brand-dark/70">Сегодняшние задачи и последние изменения</div>
+        <div class="text-sm text-brand-dark/70 flex items-center flex-wrap gap-2 mt-0.5">
+          <span>Сегодняшние задачи и последние изменения</span>
+          {% if tasks_done_today > 0 %}
+            <span class="inline-flex items-center gap-1 text-xs font-medium rounded px-2 py-0.5" style="background:rgba(1,148,142,.1);border:1px solid rgba(1,148,142,.25);color:#01948E">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              Выполнено сегодня: {{ tasks_done_today }}
+            </span>
+          {% endif %}
+        </div>
       </div>
       <div class="flex items-center gap-2 flex-wrap">
+        <button type="button" id="dashRefreshBtn" class="btn btn-outline btn-min-h" style="min-height:2.375rem" title="Обновить рабочий стол">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 4v6h6"/><path d="M23 20v-6h-6"/>
+            <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/>
+          </svg>
+        </button>
         {% if can_view_cold_call_reports %}
           <button type="button" class="btn btn-outline btn-min-h" style="min-height:2.375rem" id="openColdDay" title="Ежедневный отчёт: холодные звонки, входящие звонки, новые компании и контакты" aria-label="Ежедневный отчёт">
             <span class="inline-flex items-center gap-2">
@@ -420,7 +434,7 @@
         <div class="flex items-center justify-between mb-3">
           <div>
             <div class="font-medium">
-              Задачи на неделю
+              Ближайшие 7 дней
               {% if tasks_week_count > 0 %}
                 <span class="ml-2 badge badge-progress">{{ tasks_week_count }}</span>
               {% endif %}
@@ -540,6 +554,30 @@
         </section>
       {% endif %}
     </div>
+
+    {# Компании без активных задач — показываем только если есть #}
+    {% if stale_companies_count > 0 %}
+    <section class="card card-pad dashboard-card mt-2">
+      <div class="flex items-center justify-between mb-3">
+        <div class="font-medium">
+          Компании без активных задач
+          <span class="ml-2 badge badge-warn">{{ stale_companies_count }}</span>
+        </div>
+        {% if stale_companies_count > 5 %}
+          <a class="text-sm link" href="/companies/?responsible={{ effective_user_id }}">Посмотреть все ({{ stale_companies_count }})</a>
+        {% endif %}
+      </div>
+      <div class="space-y-1.5">
+        {% for c in stale_companies %}
+          <div class="flex items-center justify-between px-3 py-2 rounded-lg border border-brand-soft hover:bg-brand-soft/20 transition-colors">
+            <a href="/companies/{{ c.id }}/" class="text-sm font-medium link flex-1 min-w-0 truncate">{{ c.name }}</a>
+            <button type="button" class="btn btn-outline btn-sm text-xs flex-shrink-0 ml-2" data-create-task data-company-id="{{ c.id }}">+ Задача</button>
+          </div>
+        {% endfor %}
+      </div>
+      <div class="mt-2 text-xs text-brand-dark/50">Компании, за которыми вы закреплены, но без активных задач.</div>
+    </section>
+    {% endif %}
 
     {# Модальное окно для создания задачи #}
     <div id="taskCreateModal" class="fixed inset-0 z-[200] hidden">
@@ -1544,54 +1582,159 @@
     })();
   </script>
 
-  {# AJAX Polling с индикатором обновления #}
+  {# AJAX Polling с тостом при обновлении данных #}
   <script nonce="{{ csp_nonce }}">
     (function(){
       const updateIndicator = document.getElementById('dashboard-update-indicator');
-      let pollInterval = null;
+      const refreshBtn = document.getElementById('dashRefreshBtn');
+      let lastPollTs = Date.now();
       let isPolling = false;
-      
-      function showUpdateIndicator() {
-        if(updateIndicator) updateIndicator.classList.remove('hidden');
+      let reloadToastShown = false;
+
+      // Кнопка ручного обновления страницы
+      if(refreshBtn){
+        refreshBtn.addEventListener('click', function(){
+          this.disabled = true;
+          location.reload();
+        });
       }
-      
-      function hideUpdateIndicator() {
-        if(updateIndicator) updateIndicator.classList.add('hidden');
+
+      function showReloadToast(){
+        if(reloadToastShown) return;
+        reloadToastShown = true;
+        const id = 'dashReloadToast';
+        if(document.getElementById(id)) return;
+        const el = document.createElement('div');
+        el.id = id;
+        el.style.cssText = 'position:fixed;bottom:80px;right:16px;z-index:9000;animation:slideIn .25s ease-out';
+        el.innerHTML = '<div style="border:1px solid rgba(1,148,142,.35);background:#fff;border-radius:.75rem;padding:.6rem 1rem;box-shadow:0 .5rem 1.5rem rgba(0,61,56,.12);font-size:.875rem;color:#003D38;display:flex;align-items:center;gap:.75rem">'
+          + '<span>Данные обновились</span>'
+          + '<button onclick="location.reload()" style="background:#01948E;color:#fff;border:none;border-radius:.5rem;padding:.25rem .75rem;cursor:pointer;font-size:.8125rem;font-weight:500">Обновить</button>'
+          + '<button onclick="this.closest(\'#dashReloadToast\').remove()" style="border:none;background:none;cursor:pointer;color:#003D38;font-size:1.25rem;line-height:1;opacity:.5;margin-left:2px">&times;</button>'
+          + '</div>';
+        document.body.appendChild(el);
       }
-      
-      async function pollDashboard() {
+
+      async function pollDashboard(){
         if(isPolling) return;
         isPolling = true;
-        showUpdateIndicator();
-        
-        try {
-          const response = await fetch('/api/dashboard/poll/', {
+        if(updateIndicator) updateIndicator.classList.remove('hidden');
+        try{
+          const res = await fetch(`/api/dashboard/poll/?since=${lastPollTs}`, {
             credentials: 'same-origin',
             headers: { 'Accept': 'application/json' }
           });
-          
-          if(response.ok) {
-            const data = await response.json();
-            // Если есть изменения, можно обновить страницу или обновить только нужные секции
-            // Пока просто скрываем индикатор
+          if(res.ok){
+            const data = await res.json().catch(() => null);
+            if(data && data.updated){
+              lastPollTs = data.timestamp || Date.now();
+              showReloadToast();
+            }
           }
-        } catch(e) {
-          console.error('Dashboard poll error:', e);
-        } finally {
-          hideUpdateIndicator();
+        }catch(_e){}
+        finally{
+          if(updateIndicator) updateIndicator.classList.add('hidden');
           isPolling = false;
         }
       }
-      
+
       // Запускаем polling каждые 30 секунд
-      if(updateIndicator) {
-        pollInterval = setInterval(pollDashboard, 30000);
-        
-        // Останавливаем polling при уходе со страницы
-        window.addEventListener('beforeunload', () => {
-          if(pollInterval) clearInterval(pollInterval);
-        });
-      }
+      const pollInterval = setInterval(pollDashboard, 30000);
+      window.addEventListener('beforeunload', () => clearInterval(pollInterval));
+    })();
+  </script>
+
+  {# Быстрые действия на задачах (В работу / Выполнить без открытия модалки) #}
+  <script nonce="{{ csp_nonce }}">
+    (function(){
+      const csrftoken = (document.querySelector('[name=csrfmiddlewaretoken]') || {}).value || '';
+
+      // Добавляем quick-action кнопки к каждой строке задачи
+      document.querySelectorAll('[data-view-task]').forEach(function(btn){
+        const taskId = btn.dataset.taskId;
+        const li = btn.parentElement;
+        if(!taskId || !li) return;
+
+        // Определяем статус по badge-классам внутри кнопки
+        const badge = btn.querySelector('.badge');
+        let status = 'new';
+        if(badge){
+          if(badge.classList.contains('badge-progress')) status = 'in_progress';
+          else if(badge.classList.contains('badge-done')) status = 'done';
+          else if(badge.classList.contains('badge-cancel')) status = 'cancelled';
+        }
+        if(status === 'done' || status === 'cancelled') return;
+
+        const actions = document.createElement('div');
+        actions.style.cssText = 'display:none;flex-wrap:wrap;gap:.25rem;margin-top:.25rem';
+
+        if(status === 'new'){
+          const bInProgress = document.createElement('button');
+          bInProgress.type = 'button';
+          bInProgress.className = 'btn btn-outline btn-sm';
+          bInProgress.style.fontSize = '.75rem';
+          bInProgress.dataset.quickAction = 'in_progress';
+          bInProgress.dataset.taskId = taskId;
+          bInProgress.textContent = 'В работу';
+          actions.appendChild(bInProgress);
+        }
+
+        const bDone = document.createElement('button');
+        bDone.type = 'button';
+        bDone.className = 'btn btn-primary btn-sm';
+        bDone.style.fontSize = '.75rem';
+        bDone.dataset.quickAction = 'done';
+        bDone.dataset.taskId = taskId;
+        bDone.textContent = 'Выполнить';
+        actions.appendChild(bDone);
+
+        li.appendChild(actions);
+        li.addEventListener('mouseenter', function(){ actions.style.display = 'flex'; });
+        li.addEventListener('mouseleave', function(){ actions.style.display = 'none'; });
+      });
+
+      // Обработчик кликов на quick-action кнопки
+      document.addEventListener('click', function(e){
+        const btn = e.target.closest('[data-quick-action]');
+        if(!btn) return;
+        e.stopPropagation();
+        const taskId = btn.dataset.taskId;
+        const action = btn.dataset.quickAction;
+        if(!taskId || !action) return;
+
+        if(action === 'in_progress'){
+          btn.disabled = true;
+          btn.textContent = '...';
+          const fd = new FormData();
+          fd.append('status', 'in_progress');
+          fd.append('csrfmiddlewaretoken', csrftoken);
+          fetch(`/tasks/${taskId}/status/`, {
+            method: 'POST', body: fd,
+            headers: {'X-Requested-With': 'XMLHttpRequest'}
+          })
+          .then(r => r.json())
+          .then(data => {
+            if(data.success){
+              if(window.uiToast) window.uiToast('Задача взята в работу', 'success');
+              setTimeout(function(){ location.reload(); }, 600);
+            } else {
+              if(window.uiToast) window.uiToast(data.error || 'Ошибка', 'error');
+              btn.disabled = false;
+              btn.textContent = 'В работу';
+            }
+          })
+          .catch(function(){
+            if(window.uiToast) window.uiToast('Ошибка сети', 'error');
+            btn.disabled = false;
+            btn.textContent = 'В работу';
+          });
+        } else if(action === 'done'){
+          // Открываем модалку выполнения (спросит про заметки)
+          window.currentDashboardTaskId = taskId;
+          const modal = document.getElementById('taskCompleteModal');
+          if(modal) modal.classList.remove('hidden');
+        }
+      });
     })();
   </script>
 {% endblock %}
