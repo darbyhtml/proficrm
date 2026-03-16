@@ -948,51 +948,29 @@ def task_delete(request: HttpRequest, task_id) -> HttpResponse:
 
     if request.method == "POST":
         save_to_notes = request.POST.get("save_to_notes") == "1"
-        title = task.title
-        company_id = task.company_id
-        
-        # Если нужно сохранить в заметки
-        if save_to_notes and task.company_id:
-            try:
-                note = _create_note_from_task(task, user)
-                log_event(
-                    actor=user,
-                    verb=ActivityEvent.Verb.COMMENT,
-                    entity_type="note",
-                    entity_id=note.id,
-                    company_id=company_id,
-                    message="Добавлена заметка из задачи",
-                )
-                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-                    # Не удаляем задачу здесь, удалим ниже
-                    pass
-                else:
-                    messages.success(request, f"Задача «{title}» удалена. Заметка создана.")
-            except Exception as e:
-                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-                    return JsonResponse({"error": f"Ошибка при создании заметки: {str(e)}"}, status=500)
-                messages.error(request, f"Ошибка при создании заметки: {str(e)}")
-        
-        task.delete()
-        
-        if not save_to_notes:
+
+        from tasksapp.services import TaskService
+        try:
+            result = TaskService.delete_task(task=task, user=user, save_to_notes=save_to_notes)
+        except Exception as e:
             if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-                pass  # Вернем JSON ниже
-            else:
-                messages.success(request, f"Задача «{title}» удалена.")
-        
-        log_event(
-            actor=user,
-            verb=ActivityEvent.Verb.DELETE,
-            entity_type="task",
-            entity_id=str(task_id),
-            company_id=company_id,
-            message=f"Удалена задача: {title}",
-        )
-        
+                return JsonResponse({"error": str(e)}, status=500)
+            messages.error(request, str(e))
+            return redirect(request.META.get("HTTP_REFERER") or "task_list")
+
+        title = result["title"]
+        if result["note_created"]:
+            messages.success(request, f"Задача «{title}» удалена. Заметка создана.")
+        else:
+            messages.success(request, f"Задача «{title}» удалена.")
+
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            return JsonResponse({"success": True, "note_created": save_to_notes, "message": f"Задача «{title}» удалена." + (" Заметка создана." if save_to_notes else "")})
-        
+            return JsonResponse({
+                "success": True,
+                "note_created": result["note_created"],
+                "message": f"Задача «{title}» удалена." + (" Заметка создана." if result["note_created"] else ""),
+            })
+
         return redirect(request.META.get("HTTP_REFERER") or "task_list")
 
     return redirect("task_list")
@@ -1773,122 +1751,32 @@ def task_set_status(request: HttpRequest, task_id) -> HttpResponse:
             messages.error(request, "Менеджер может менять статус только своих задач (созданных им или назначенных ему).")
             return redirect("task_list")
 
-    # Если статус меняется на "Выполнено", проверяем, нужно ли перенести в заметки
-    save_to_notes = False
-    if new_status == Task.Status.DONE:
-        save_to_notes = request.POST.get("save_to_notes") == "1"
-        if save_to_notes and task.company_id:
-            try:
-                note = _create_note_from_task(task, user)
-                log_event(
-                    actor=user,
-                    verb=ActivityEvent.Verb.COMMENT,
-                    entity_type="note",
-                    entity_id=note.id,
-                    company_id=task.company_id,
-                    message="Добавлена заметка из выполненной задачи",
-                )
-            except Exception as e:
-                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-                    return JsonResponse({"error": f"Ошибка при создании заметки: {str(e)}"}, status=500)
-                messages.error(request, f"Ошибка при создании заметки: {str(e)}")
+    save_to_notes = request.POST.get("save_to_notes") == "1" if new_status == Task.Status.DONE else False
 
-    task.status = new_status
-    if new_status == Task.Status.DONE:
-        task.completed_at = timezone.now()
-    task.save(update_fields=["status", "completed_at", "updated_at"])
+    from tasksapp.services import TaskService
+    try:
+        result = TaskService.set_status(
+            task=task, user=user, new_status=new_status, save_to_notes=save_to_notes
+        )
+    except Exception as e:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"error": str(e)}, status=500)
+        messages.error(request, str(e))
+        return redirect(request.META.get("HTTP_REFERER") or "/tasks/")
 
-    # История изменений
-    old_label = dict(Task.Status.choices).get(old_status, old_status)
-    new_label = dict(Task.Status.choices).get(new_status, new_status)
-    TaskEvent.objects.create(
-        task=task,
-        actor=user,
-        kind=TaskEvent.Kind.STATUS_CHANGED,
-        old_value=old_label,
-        new_value=new_label,
-    )
-
-    if not save_to_notes:
+    if not result["note_created"]:
         messages.success(request, "Статус обновлён.")
     else:
         messages.success(request, "Задача выполнена. Заметка создана.")
 
-    # Для всех статусов ссылка ведёт на список задач с модальным окном просмотра конкретной задачи.
-    task_url = f"/tasks/?view_task={task.id}"
-
-    if new_status == Task.Status.DONE:
-        # Уведомления о выполненной задаче:
-        # 1) Исполнитель (кто поменял статус)
-        # 2) Ответственный за задачу (assigned_to)
-        # 3) Создатель задачи
-        # 4) Директор филиала / РОП по филиалу компании/ответственного
-        # 5) Управляющие группой компаний
-        recipient_ids: set[int] = set()
-        recipient_ids.add(user.id)
-        if task.assigned_to_id:
-            recipient_ids.add(task.assigned_to_id)
-        if task.created_by_id:
-            recipient_ids.add(task.created_by_id)
-
-        branch_id = None
-        if task.company_id and getattr(task, "company", None):
-            branch_id = getattr(task.company, "branch_id", None)
-        if not branch_id and getattr(task, "assigned_to", None):
-            branch_id = getattr(task.assigned_to, "branch_id", None)
-
-        if branch_id:
-            for uid in User.objects.filter(
-                is_active=True,
-                role__in=[User.Role.BRANCH_DIRECTOR, User.Role.SALES_HEAD],
-                branch_id=branch_id,
-            ).values_list("id", flat=True):
-                recipient_ids.add(int(uid))
-
-        for uid in User.objects.filter(is_active=True, role=User.Role.GROUP_MANAGER).values_list("id", flat=True):
-            recipient_ids.add(int(uid))
-
-        for uid in recipient_ids:
-            try:
-                u = User.objects.get(id=uid, is_active=True)
-            except User.DoesNotExist:
-                continue
-            notify(
-                user=u,
-                kind=Notification.Kind.TASK,
-                title="Задача выполнена",
-                body=f"{task.title}",
-                url=task_url,
-            )
-    else:
-        # Для остальных статусов сохраняем старую логику: уведомляем создателя (если это не он меняет)
-        if task.created_by_id and task.created_by_id != user.id:
-            notify(
-                user=task.created_by,
-                kind=Notification.Kind.TASK,
-                title="Статус изменён",
-                body=f"{task.title}: {task.get_status_display()}",
-                url=task_url,
-            )
-    if task.company_id:
-        log_event(
-            actor=user,
-            verb=ActivityEvent.Verb.STATUS,
-            entity_type="task",
-            entity_id=task.id,
-            company_id=task.company_id,
-            message=f"Статус: {task.get_status_display()}",
-            meta={"status": new_status},
-        )
-    
     if request.headers.get("X-Requested-With") == "XMLHttpRequest":
         return JsonResponse({
             "success": True,
-            "note_created": save_to_notes,
-            "message": "Задача выполнена." + (" Заметка создана." if save_to_notes else ""),
-            "redirect": request.META.get("HTTP_REFERER") or "/tasks/"
+            "note_created": result["note_created"],
+            "message": "Задача выполнена." + (" Заметка создана." if result["note_created"] else ""),
+            "redirect": request.META.get("HTTP_REFERER") or "/tasks/",
         })
-    
+
     return redirect(request.META.get("HTTP_REFERER") or "/tasks/")
 
 
@@ -1905,11 +1793,13 @@ def task_add_comment(request: HttpRequest, task_id) -> HttpResponse:
     if not (_can_manage_task_status_ui(user, task) or _can_edit_task_ui(user, task)):
         return JsonResponse({"error": "Нет доступа к этой задаче."}, status=403)
 
-    text = (request.POST.get("text") or "").strip()
-    if not text:
-        return JsonResponse({"error": "Комментарий не может быть пустым."}, status=400)
+    text = request.POST.get("text") or ""
+    from tasksapp.services import TaskService
+    try:
+        comment = TaskService.add_comment(task=task, user=user, text=text)
+    except ValueError as e:
+        return JsonResponse({"error": str(e)}, status=400)
 
-    comment = TaskComment.objects.create(task=task, author=user, text=text)
     return JsonResponse({
         "ok": True,
         "comment": {
