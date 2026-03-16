@@ -726,8 +726,31 @@
         if (v && !el.getAttribute('src')) el.setAttribute('src', v);
         el.removeAttribute('data-cke-saved-src');
       });
+      // Убираем inline-стили max-width:100%;height:auto которые Яндекс-почта
+      // навязывает картинкам при отображении письма (перекрывают оригинальные размеры).
       tmp.querySelectorAll('img').forEach(function (img) {
-        img.style.maxWidth = '100%';
+        if (img.style.maxWidth === '100%') img.style.maxWidth = '';
+        if (img.style.height === 'auto') img.style.height = '';
+      });
+      // Масштабируем ячейки таблицы пропорционально до 400px.
+      tmp.querySelectorAll('table').forEach(function (table) {
+        var MAX_W = 400;
+        var cells = Array.from(table.querySelectorAll('tr:first-child > td, tr:first-child > th'));
+        var totalW = 0;
+        cells.forEach(function (c) {
+          totalW += parseInt(c.style.width || c.getAttribute('width') || '0', 10);
+        });
+        if (totalW > MAX_W) {
+          var scale = MAX_W / totalW;
+          cells.forEach(function (c) {
+            var w = parseInt(c.style.width || c.getAttribute('width') || '0', 10);
+            if (w > 0) { c.style.width = Math.round(w * scale) + 'px'; c.removeAttribute('width'); }
+          });
+        }
+      });
+      // Картинки вне таблицы — ограничиваем 350px.
+      tmp.querySelectorAll('img').forEach(function (img) {
+        if (!img.closest('table')) img.style.maxWidth = '350px';
         img.style.height = 'auto';
       });
       var sel = window.getSelection();
