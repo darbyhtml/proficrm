@@ -591,7 +591,12 @@
 
   function loadSignature() {
     editor.innerHTML = hiddenField.value || '';
-    // Восстанавливаем inline-размеры: CSS height:auto без !important — inline style побеждает
+    // Стрипаем Яндекс-вьювер стили (max-width:100%;height:auto), сохранённые в БД —
+    // они перекрывают CSS и делают картинки во всю ширину
+    editor.querySelectorAll('img').forEach(function (img) {
+      if (img.style.maxWidth === '100%') img.style.maxWidth = '';
+      if (img.style.height === 'auto') img.style.height = '';
+    });
   }
 
   // Отключаем браузерные нативные ручки ресайза картинок в contenteditable
