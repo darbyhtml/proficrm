@@ -185,11 +185,11 @@
       function loadSignature() {
         const html = htmlField.value || "";
         editor.innerHTML = html;
-        // Убеждаемся, что изображения правильно отображаются
-        const images = editor.querySelectorAll("img");
-        images.forEach((img) => {
-          img.style.maxWidth = "100%";
-          img.style.height = "auto";
+        // Стрипаем Яндекс-вьювер стили (max-width:100%;height:auto) сохранённые в БД —
+        // они перекрывают CSS и делают картинки во всю ширину редактора
+        editor.querySelectorAll("img").forEach((img) => {
+          if (img.style.maxWidth === "100%") img.style.maxWidth = "";
+          if (img.style.height === "auto") img.style.height = "";
         });
       }
       loadSignature();
@@ -481,8 +481,8 @@
     }
     /* В редакторе подписи не растягиваем картинки */
     #sigEditor img{
-      max-width: 100% !important;
-      height: auto !important;
+      max-width: min(100%, 400px) !important;
+      height: auto;
       object-fit: contain;
       display: inline-block;
       vertical-align: middle;
