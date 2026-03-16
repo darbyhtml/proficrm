@@ -317,7 +317,7 @@
 {% endblock %}
 
 {% block extra_js %}
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Клик по строке таблицы с data-href — переход без onclick на <tr>
     document.addEventListener('click', function(e) {
       var row = e.target && e.target.closest ? e.target.closest('tr[data-href]') : null;
@@ -326,7 +326,7 @@
       window.location.href = row.getAttribute('data-href');
     });
   </script>
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function () {
       const quotaCard = document.getElementById('quota-card');
       if (!quotaCard) return;
@@ -401,7 +401,7 @@
   </script>
 
   {% if view_is_admin %}
-    <script>
+    <script nonce="{{ csp_nonce }}">
       (function () {
         const modal = document.getElementById('unsubscribes-modal');
         const openBtn = document.getElementById('open-unsubscribes-modal');

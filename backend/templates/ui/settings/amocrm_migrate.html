@@ -211,7 +211,7 @@
               <span class="text-xs muted-2">Следующий offset: {{ result.companies_next_offset }} / {{ result.companies_total }}</span>
             </form>
           </div>
-          <script>
+          <script nonce="{{ csp_nonce }}">
             (function() {
               let countdown = 5;
               let autoContinue = true;
@@ -787,7 +787,7 @@
               <span class="text-xs muted-2">Следующий offset: {{ result.companies_next_offset }}</span>
             </form>
           </div>
-          <script>
+          <script nonce="{{ csp_nonce }}">
             (function() {
               // Скролл к результатам при загрузке страницы
               const resultCard = document.querySelector('.card.card-pad');
@@ -839,7 +839,7 @@
 
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function() {
       // Управление видимостью кастомного поля в зависимости от чекбокса
       const migrateAllCheckbox = document.getElementById('migrate_all_checkbox');

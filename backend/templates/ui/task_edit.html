@@ -61,7 +61,7 @@
   </div>
 
   {% if can_delete_task %}
-  <script>
+  <script nonce="{{ csp_nonce }}">
     document.getElementById('deleteTaskBtn')?.addEventListener('click', function () {
       if (!confirm('Удалить задачу?')) return;
       const f = document.createElement('form');

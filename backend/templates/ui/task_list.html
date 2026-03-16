@@ -3,7 +3,7 @@
 {% block title %}Задачи — CRM ПРОФИ{% endblock %}
 
 {% block content %}
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function(){
       try {
         var uid = '{{ request.user.id|default:"anon" }}';
@@ -50,7 +50,7 @@
 
     <style>
       /* Ровные отступы между основными блоками (фильтры / bulk / таблица).
-         Используем ~ вместо +, т.к. между блоками могут быть <script> теги. */
+         Используем ~ вместо +, т.к. между блоками могут быть <script nonce="{{ csp_nonce }}"> теги. */
       .tasks-layout > .tasks-layout-block ~ .tasks-layout-block { margin-top: 1rem; }
 
       /* Кликабельные строки задач */
@@ -175,7 +175,7 @@
     </form>
     </div>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
       (function() {
         const form = document.getElementById('taskFilterForm');
         if (!form) return;
@@ -217,7 +217,7 @@
       })();
     </script>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // ── 3. Клик по бейджу-фильтру «Мои ×», «Сегодня ×» и т.д. ─────────────
       // data-clear-filter может быть одним ключом ("mine") или списком ("date_from,date_to")
       document.addEventListener('click', function(e) {
@@ -648,7 +648,7 @@
     </button>
     <div class="absolute inset-x-4 top-12 mx-auto max-w-2xl max-h-[90vh] overflow-y-auto" id="taskViewAjaxInner"></div>
   </div>
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function() {
       const modal = document.getElementById('taskViewAjaxModal');
       const overlay = document.getElementById('taskViewAjaxOverlay');
@@ -807,7 +807,7 @@
   </script>
   {% endif %}
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // DRY: инжектируем текущие параметры фильтрации из URL в любую форму перед сабмитом.
     // Заменяет три дублирующихся набора hidden-полей в шаблоне (перенос, переназначение, per_page).
     function injectCurrentFilters(formEl, excludeKeys) {
@@ -827,7 +827,7 @@
   </script>
 
   {% if show_task_checkboxes %}
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Вспомогательная функция: показывает toast если доступен, иначе alert (крайний fallback)
       function _taskNotify(msg, type) {
         if (window.uiToast) { window.uiToast(msg, type || 'error'); }
@@ -1237,7 +1237,7 @@
   </div>
 
   {% if view_task %}
-    <script>
+    <script nonce="{{ csp_nonce }}">
       (function(){
         const modal = document.getElementById('taskViewModal');
         if (!modal) return;
@@ -1270,7 +1270,7 @@
     </script>
   {% endif %}
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function() {
       const modal = document.getElementById('taskEditModal');
       const modalContent = document.getElementById('taskEditModalContent');
@@ -1357,7 +1357,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function() {
       const modal = document.getElementById('taskCreateModal');
       const modalContent = document.getElementById('taskCreateModalContent');
@@ -1589,7 +1589,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function() {
       const modal = document.getElementById('dateFilterModal');
       const btn = document.getElementById('dateFilterBtn');
@@ -1710,7 +1710,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
   // Автоматическое применение фильтров задач:
   // при изменении любого из основных полей фильтра форма отправляется сразу,
   // так что отдельная кнопка "Применить" не требуется.
@@ -1745,7 +1745,7 @@
   })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Запоминание фильтров задач (localStorage, per-user). Восстановление только при заходе на /tasks/ без querystring.
     (function() {
       const form = document.getElementById('taskFilterForm');
@@ -1896,7 +1896,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function() {
       let currentTaskId = null;
       const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
@@ -2053,7 +2053,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Сохранение предпочтения сортировки в localStorage.
     // Работает независимо от «Запомнить фильтры» — сохраняет sort+dir даже без явного включения.
     // При заходе на /tasks/ без параметров sort/dir — восстанавливает последнее.
@@ -2086,7 +2086,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Sticky bulk-panel: тень через IntersectionObserver когда панель «прилипла»
     (function() {
       const sentinel = document.getElementById('tasksBulkSentinel');

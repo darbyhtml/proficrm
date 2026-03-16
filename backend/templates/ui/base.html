@@ -389,7 +389,7 @@
       </div>
     </a>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
       (function(){
         const btn = document.getElementById('notifBtn');
         const panel = document.getElementById('notifPanel');
@@ -402,7 +402,7 @@
         document.addEventListener('keydown', function(e){ if(e.key === 'Escape') close(); });
       })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Live notifications (polling). Без WebSocket, безопасно: если JS не работает — всё как раньше.
       (function(){
         function getCookie(name) {
@@ -767,7 +767,7 @@
         setInterval(pollOnce, 15000);
       })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       (function(){
         const openBtn = document.getElementById('menuBtn');
         const closeBtn = document.getElementById('menuCloseBtn');
@@ -788,7 +788,7 @@
         document.addEventListener('keydown', function(e){ if(e.key === 'Escape') close(); });
       })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Checkbox multiselect over <select multiple>
       (function(){
         function initOne(root){
@@ -894,7 +894,7 @@
         };
       })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Searchable single select over <select> (not multiple)
       (function(){
         const MAX_RENDER = 200;
@@ -1186,7 +1186,7 @@
         };
       })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Failsafe: если пользователь кликает по .ms-btn, но виджет не успел инициализироваться,
       // инициализируем "на лету" и открываем панель.
       (function(){
@@ -1215,7 +1215,7 @@
         }, true);
       })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Автоматическое форматирование номеров телефонов при вводе
       function formatPhoneInput(input) {
         let value = input.value.replace(/\D/g, ''); // Убираем все нецифровые символы
@@ -1557,7 +1557,7 @@
         setInterval(poll, 4000);
       })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Кастомный dropdown для выбора типа задачи с иконками и цветами
       (function() {
         window.initTaskTypeSelects = function() {
@@ -1739,7 +1739,7 @@
         observer.observe(document.body, { childList: true, subtree: true });
       })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Кастомный календарик для datetime-local и date с подписями "Часы" и "Минуты"
       (function() {
         function initCustomDatetimePicker() {
@@ -2258,7 +2258,7 @@
         observer.observe(document.body, { childList: true, subtree: true });
       })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Live clock + live worktime colors (ok/warn/off) without page reload.
       (function(){
         const DAY_MAP = { 'пн':0, 'вт':1, 'ср':2, 'чт':3, 'пт':4, 'сб':5, 'вс':6 };
@@ -2592,7 +2592,7 @@
         }
       })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Глобальный обработчик data-confirm на формах — заменяет inline onsubmit="return confirm(...)"
       document.addEventListener('submit', function(e) {
         var msg = e.target && e.target.getAttribute ? e.target.getAttribute('data-confirm') : null;
@@ -2618,7 +2618,7 @@
         </div>
       </div>
     </div>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       (function(){
         var modal = document.getElementById('crmAnnouncementModal');
         var box = document.getElementById('crmAnnouncementBox');

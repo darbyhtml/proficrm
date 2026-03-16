@@ -679,7 +679,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function(){
       const modal = document.getElementById('coldCallsModal');
       const titleEl = document.getElementById('coldCallsTitle');
@@ -816,7 +816,7 @@
   </script>
 
   {# Модальное окно для просмотра задач с кнопками действий #}
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function(){
       const modal = document.getElementById('taskViewModal');
       const modalContent = document.getElementById('taskViewContent');
@@ -1066,7 +1066,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function() {
       // Модальное окно для создания задачи
       const createModal = document.getElementById('taskCreateModal');
@@ -1320,7 +1320,7 @@
   </script>
 
   {# Инлайн-редактирование суммы договора на рабочем столе #}
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function() {
       const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value;
       if (!csrftoken) return;
@@ -1388,7 +1388,7 @@
   </script>
 
   {# Модальные окна для выполнения и удаления задач #}
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function(){
       // Используем глобальную переменную для хранения taskId
       window.currentDashboardTaskId = null;
@@ -1545,7 +1545,7 @@
   </script>
 
   {# AJAX Polling с индикатором обновления #}
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function(){
       const updateIndicator = document.getElementById('dashboard-update-indicator');
       let pollInterval = null;

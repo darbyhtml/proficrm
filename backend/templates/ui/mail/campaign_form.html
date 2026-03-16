@@ -261,7 +261,7 @@
 
   {% load static %}
   <script src="{% static 'ui/purify.min.js' %}"></script>
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function () {
       const htmlWrap = document.getElementById("html-wrap");
       const visualWrap = document.getElementById("visual-wrap");

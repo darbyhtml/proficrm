@@ -98,7 +98,7 @@
     </form>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', () => {
       // Защита от повторной отправки формы
       const taskFormEl = document.querySelector('form[method="post"]');

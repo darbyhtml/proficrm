@@ -200,6 +200,7 @@ TEMPLATES = [
                 'django.contrib.messages.context_processors.messages',
                 'ui.context_processors.ui_globals',
                 'notifications.context_processors.notifications_panel',
+                'crm.context_processors.csp_nonce',
             ],
         },
     },

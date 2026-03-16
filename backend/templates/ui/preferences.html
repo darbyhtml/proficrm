@@ -406,7 +406,7 @@
   </div>{# /flex #}
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
   'use strict';
 
@@ -557,7 +557,7 @@
   #prefSigEditor table { border-collapse:collapse; max-width:100%; }
   #prefSigEditor td, #prefSigEditor th { padding:4px 8px; border:1px solid #ddd; }
 </style>
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
   var form        = document.getElementById('signatureForm');
   var htmlWrap    = document.getElementById('prefSigHtmlWrap');

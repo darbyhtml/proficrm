@@ -243,7 +243,7 @@
             </span>
             {# Предупреждение при ≥80% лимита — рассчитываем через JS чтобы не делать деление в шаблоне #}
             <span id="limit-warn-80" class="hidden ml-2 text-xs text-amber-600 font-medium">⚠ Осталось мало</span>
-            <script>
+            <script nonce="{{ csp_nonce }}">
               (function(){
                 var sent={{ sent_today_user|default:0 }}, lim={{ per_user_daily_limit|default:0 }};
                 if(lim > 0 && sent < lim && sent / lim >= 0.8){
@@ -522,7 +522,7 @@
           </div>
         </div>
         
-        <script>
+        <script nonce="{{ csp_nonce }}">
           (function() {
             const selectAllGroupedCheckbox = document.getElementById('selectAllRecipientsGrouped');
             const recipientCheckboxes = document.querySelectorAll('.recipient-checkbox');
@@ -615,7 +615,7 @@
           })();
         </script>
 
-        <script>
+        <script nonce="{{ csp_nonce }}">
           // Инициализация фильтра "Область" в модалке генерации.
           // Важно: модалка находится ниже по DOM, поэтому инициализируем ПОСЛЕ загрузки DOM
           // и дополнительно при открытии модалки.
@@ -1034,7 +1034,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Закрытие модального окна по клику вне его
     document.getElementById('generateModal').addEventListener('click', function(e) {
       if (e.target === this) {
@@ -1114,7 +1114,7 @@
 {% endblock %}
 
 {% block extra_js %}
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function () {
       const statsEl = document.getElementById('campaign-stats');
       const campaignId = statsEl && statsEl.getAttribute('data-campaign-id');

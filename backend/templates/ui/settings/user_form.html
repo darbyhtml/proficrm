@@ -261,7 +261,7 @@
     {% endif %}
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     function switchAccessKeyTab(tab) {
       const tokenTab = document.getElementById('tab-key-token');
       const linkTab = document.getElementById('tab-key-link');

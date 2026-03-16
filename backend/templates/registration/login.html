@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Вход — CRM ПРОФИ</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
       tailwind.config = {
         theme: {
           extend: {
@@ -98,7 +98,7 @@
       </div>
     </div>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
       function switchTab(tab) {
         const accessKeyTab = document.getElementById('tab-access-key');
         const passwordTab = document.getElementById('tab-password');

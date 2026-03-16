@@ -365,7 +365,7 @@
               {% endif %}
             </div>
           </div>
-          <script>
+          <script nonce="{{ csp_nonce }}">
             (function(){
               var btn = document.getElementById('pinnedNoteExpandBtn');
               var preview = document.getElementById('pinnedNotePreview');
@@ -1913,7 +1913,7 @@
                 <button class="btn btn-outline" type="button" data-close-contract>Отмена</button>
               </div>
             </form>
-            <script>
+            <script nonce="{{ csp_nonce }}">
               (function() {
                 const contractTypeSelect = document.getElementById('contractTypeSelect');
                 const contractUntilField = document.getElementById('contractUntilField');
@@ -1944,7 +1944,7 @@
       </div>
     {% endif %}
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
       (function(){
         function getCookie(name) {
           const value = `; ${document.cookie}`;
@@ -2796,7 +2796,7 @@
       })();
     </script>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
       (function(){
         const input = document.getElementById('noteFile');
         const inputMulti = document.getElementById('noteFilesMultiple');
@@ -2903,7 +2903,7 @@
       })();
     </script>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
       // Черновик заметки в карточке компании: сохраняем текст локально, чтобы не терялся при переходах.
       (function(){
         const form = document.getElementById('noteForm');
@@ -4461,7 +4461,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function() {
       // Просмотр изображений (вложения заметок) без новой вкладки
       const imgModal = document.getElementById('imagePreviewModal');
@@ -4850,7 +4850,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Кнопка поиска из классического режима: плавный переход в Modern + открытие поиска
     (function() {
       const classicSearchBtn = document.getElementById('quickSearchBtnClassic');
@@ -4904,7 +4904,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Гарантированная инициализация modern-модалки заметок после загрузки DOM.
     // Нужна, потому что основной скрипт может выполниться до вставки разметки modern-блока.
     (function() {
@@ -5055,7 +5055,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // История выполненных задач по компании (модалка)
     (function() {
       const btn = document.getElementById('taskHistoryButton');
@@ -5168,7 +5168,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function() {
       let currentTaskId = null;
       const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || document.querySelector('meta[name=csrf-token]')?.content;
@@ -5838,7 +5838,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Копирование email при клике
     (function() {
       document.querySelectorAll('.js-copy-email').forEach(el => {
@@ -5878,7 +5878,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Dropdown меню для телефонов/email + копирование телефона + инлайн-редактирование phone/email
     (function() {
       const csrftoken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || document.querySelector('meta[name=csrf-token]')?.content;
@@ -6327,7 +6327,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Открытие модалки задачи из карточки компании
     (function() {
       const modal = document.getElementById('taskViewModal');
@@ -6575,7 +6575,7 @@
       window.initTaskViewModalTriggers = initTaskViewModalTriggers;
     })();
   </script>
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Немодальная панель контакта: открывается поверх, но НЕ блокирует фон (можно копировать данные из карточки)
     (function() {
       const panel = document.getElementById('contactPanel');
@@ -6915,7 +6915,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Управление сворачиванием дополнительных телефонов
     (function() {
       const toggleBtn = document.querySelector('[data-toggle-additional-phones]');
@@ -6968,7 +6968,7 @@
 
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Переключение режима просмотра карточки компании (classic/modern)
     (function() {
       const viewModeClassicBtn = document.getElementById('viewModeClassicDetail');
@@ -7111,7 +7111,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Dropdown действий в Modern режиме
     (function() {
       const btn = document.getElementById('companyActionsBtnModern');
@@ -7132,7 +7132,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Копирование телефона
     (function() {
       document.addEventListener('click', function(e) {
@@ -7155,7 +7155,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Обработчик формы заметок в modern режиме (inline)
     (function(){
       const input = document.getElementById('noteFileModernInline');
@@ -7266,7 +7266,7 @@
       }
     })();
   </script>
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Авто-рост поля заметки и вставка скриншотов по Ctrl+V (классический и современный вид)
     (function(){
       function initNoteTextarea(textarea) {
@@ -7311,7 +7311,7 @@
       window.initNoteInputAutogrow();
     })();
   </script>
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Черновик заметки в modern режиме (inline-форма)
     (function(){
       function initDraft(formId) {
@@ -7413,7 +7413,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Вкладки Modern: переключение контента без перезагрузки
     (function() {
       const modernRoot = document.getElementById('companyDetailModern');
@@ -7508,7 +7508,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Горячие клавиши для Modern режима
     (function() {
       const modernView = document.getElementById('companyDetailModern');
@@ -7576,7 +7576,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Поиск по карточке в Modern режиме
     (function() {
       const searchBtn = document.getElementById('quickSearchBtnModern');
@@ -7709,7 +7709,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Шаблоны заметок
     (function() {
       const templates = {
@@ -7738,7 +7738,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Копирование текста (универсальное)
     (function() {
       document.addEventListener('click', function(e) {
@@ -7761,7 +7761,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Быстрые действия в Modern режиме
     (function() {
       // Добавить заметку
@@ -7799,7 +7799,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Завершение задачи и перенос сроков
     (function() {
       // Завершение задачи
@@ -7871,7 +7871,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Быстрое изменение статуса компании
     (function() {
       const statusSelect = document.getElementById('quickStatusChangeModern');
@@ -7903,7 +7903,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Индикатор несохранённых изменений
     (function() {
       const indicator = document.getElementById('unsavedChangesIndicatorModern');
@@ -7972,7 +7972,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Обработка кнопок "Развернуть/Свернуть" для заметок в modern режиме (основная + превью)
     (function() {
       function updateExpandVisibility() {
@@ -8106,7 +8106,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function() {
       const modal = document.getElementById('historyModal');
       if (!modal) return;

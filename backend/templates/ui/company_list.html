@@ -407,7 +407,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function(){
       const form = document.getElementById('bulkTransferForm');
       const selectAll = document.getElementById('bulkSelectAll');
@@ -757,7 +757,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // AJAX-фильтрация и поиск компаний (поиск только по Enter / лупа; без оверлея)
     (function() {
       const filterForm = document.getElementById('companyFilterForm');
@@ -1439,7 +1439,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Функция подсветки совпадений (используется в таблице)
     (function() {
       window.highlightMatch = function(text, query) {

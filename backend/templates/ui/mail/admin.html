@@ -780,7 +780,7 @@
 {% endblock %}
 
 {% block extra_js %}
-  <script>
+  <script nonce="{{ csp_nonce }}">
     (function () {
       const quotaCard = document.getElementById('quota-card');
       if (!quotaCard) return;
