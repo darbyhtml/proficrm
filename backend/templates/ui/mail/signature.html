@@ -186,15 +186,17 @@
         const html = htmlField.value || "";
         editor.innerHTML = html;
         editor.querySelectorAll("img").forEach((img) => {
-          if (!img.style.maxWidth) img.style.maxWidth = "100%";
           if (!img.style.height) img.style.height = "auto";
-          // Если нет явной ширины — применяем naturalWidth после загрузки
-          if (!img.style.width) {
+          // Если нет явной ширины ни в style, ни в атрибуте — применяем naturalWidth
+          if (!img.style.width && !img.getAttribute("width")) {
             const applyNatural = () => {
-              if (img.naturalWidth > 0 && !img.style.width) {
-                img.style.width = Math.min(img.naturalWidth, 600) + "px";
+              if (img.naturalWidth > 0 && !img.style.width && !img.getAttribute("width")) {
+                const w = Math.min(img.naturalWidth, 500);
+                img.style.width = w + "px";
                 img.style.maxWidth = "";
                 img.style.height = "auto";
+                img.setAttribute("width", w);
+                img.removeAttribute("height");
                 syncToTextarea();
               }
             };
@@ -203,7 +205,6 @@
           }
         });
       }
-      loadSignature();
 
       function setActive(btnOn, btnOff) {
         btnOn.classList.add("bg-brand-soft/40");
@@ -393,12 +394,15 @@
               }
             }
             // Если нет явной ширины — применяем naturalWidth после загрузки
-            if (!img.style.width) {
+            if (!img.style.width && !img.getAttribute('width')) {
               const applyNatural = () => {
-                if (img.naturalWidth > 0 && !img.style.width) {
-                  img.style.width = Math.min(img.naturalWidth, 600) + "px";
+                if (img.naturalWidth > 0 && !img.style.width && !img.getAttribute('width')) {
+                  const w = Math.min(img.naturalWidth, 600);
+                  img.style.width = w + "px";
                   img.style.maxWidth = "";
                   img.style.height = "auto";
+                  img.setAttribute('width', w);
+                  img.removeAttribute('height');
                   syncToTextarea();
                 }
               };
@@ -523,8 +527,8 @@
           selImg.style.width  = newW + 'px';
           selImg.style.height = newH + 'px';
           selImg.style.maxWidth = '';
-          selImg.removeAttribute('width');
-          selImg.removeAttribute('height');
+          selImg.setAttribute('width', newW);
+          selImg.setAttribute('height', newH);
           placeHandle();
         });
         document.addEventListener('mouseup', function () {
@@ -546,9 +550,6 @@
     /* В редакторе подписи не растягиваем картинки */
     #sigEditor img{
       max-width: 100% !important;
-      height: auto;
-      width: auto;
-      object-fit: contain;
       display: inline-block;
       vertical-align: middle;
     }

@@ -555,7 +555,7 @@
   #prefSigEditor:empty:before { content: "Напишите подпись письма..."; color: rgba(0,61,56,.45); pointer-events:none; }
   /* Ширина 620px = стандарт email — таблицы подписи не растягиваются */
   #prefSigEditor { max-width: 620px; }
-  #prefSigEditor img { max-width:100% !important; height:auto; width:auto; object-fit:contain; display:inline-block; vertical-align:middle; }
+  #prefSigEditor img { max-width:100% !important; display:inline-block; vertical-align:middle; }
   #prefSigEditor img[data-resize-sel] { outline:2px solid #01948E; box-shadow:0 0 0 3px rgba(1,148,142,.2); }
   #prefSigEditor table { border-collapse:collapse; max-width:100%; }
   #prefSigEditor td, #prefSigEditor th { vertical-align:top; }
@@ -592,15 +592,17 @@
   function loadSignature() {
     editor.innerHTML = hiddenField.value || '';
     editor.querySelectorAll('img').forEach(function (img) {
-      if (!img.style.maxWidth) img.style.maxWidth = '100%';
       if (!img.style.height) img.style.height = 'auto';
-      // Если нет явной ширины — применяем naturalWidth после загрузки
-      if (!img.style.width) {
+      // Если нет явной ширины ни в style, ни в атрибуте — применяем naturalWidth
+      if (!img.style.width && !img.getAttribute('width')) {
         var applyNatural = function () {
-          if (img.naturalWidth > 0 && !img.style.width) {
-            img.style.width = Math.min(img.naturalWidth, 600) + 'px';
+          if (img.naturalWidth > 0 && !img.style.width && !img.getAttribute('width')) {
+            var w = Math.min(img.naturalWidth, 600);
+            img.style.width = w + 'px';
             img.style.maxWidth = '';
             img.style.height = 'auto';
+            img.setAttribute('width', w);
+            img.removeAttribute('height');
             syncToHidden();
           }
         };
@@ -748,12 +750,15 @@
       tmp.querySelectorAll('img').forEach(function (img) {
         img.style.maxWidth = '100%'; img.style.height = 'auto';
         // Если нет явной ширины — применяем naturalWidth после загрузки
-        if (!img.style.width) {
+        if (!img.style.width && !img.getAttribute('width')) {
           var applyNatural = function () {
-            if (img.naturalWidth > 0 && !img.style.width) {
-              img.style.width = Math.min(img.naturalWidth, 600) + 'px';
+            if (img.naturalWidth > 0 && !img.style.width && !img.getAttribute('width')) {
+              var w = Math.min(img.naturalWidth, 600);
+              img.style.width = w + 'px';
               img.style.maxWidth = '';
               img.style.height = 'auto';
+              img.setAttribute('width', w);
+              img.removeAttribute('height');
               syncToHidden();
             }
           };
@@ -835,8 +840,9 @@
       var newH = Math.max(1, Math.round(newW / dragState.aspect));
       selImg.style.width  = newW + 'px';
       selImg.style.height = newH + 'px';
-      selImg.removeAttribute('width');
-      selImg.removeAttribute('height');
+      selImg.style.maxWidth = '';
+      selImg.setAttribute('width', newW);
+      selImg.setAttribute('height', newH);
       placeHandle();
     });
 
