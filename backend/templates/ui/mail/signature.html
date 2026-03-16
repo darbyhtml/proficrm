@@ -185,11 +185,14 @@
       function loadSignature() {
         const html = htmlField.value || "";
         editor.innerHTML = html;
-        // Стрипаем Яндекс-вьювер стили (max-width:100%;height:auto) сохранённые в БД —
-        // они перекрывают CSS и делают картинки во всю ширину редактора
         editor.querySelectorAll("img").forEach((img) => {
+          // Стрипаем Яндекс-вьювер стили которые делают картинки на всю ширину
           if (img.style.maxWidth === "100%") img.style.maxWidth = "";
           if (img.style.height === "auto") img.style.height = "";
+          // Если явного размера нет совсем (данные потеряны) — ставим разумный дефолт
+          if (!img.style.width && !img.getAttribute("width") && !img.style.maxWidth) {
+            img.style.maxWidth = "150px";
+          }
         });
       }
       loadSignature();
@@ -200,11 +203,8 @@
       }
 
       function syncToTextarea() {
-        // Сохраняем HTML с сохранением всех атрибутов и стилей
-        let html = editor.innerHTML || "";
-        // Убеждаемся, что base64 изображения сохраняются полностью
-        // (они уже должны быть в innerHTML, но на всякий случай проверяем)
-        htmlField.value = html;
+        editor.querySelectorAll('[data-resize-sel]').forEach(function (el) { el.removeAttribute('data-resize-sel'); });
+        htmlField.value = editor.innerHTML || "";
       }
 
       // toolbar commands
@@ -471,6 +471,62 @@
       form.addEventListener("submit", () => {
         syncToTextarea();
       });
+
+      // ── Drag-to-resize для картинок ──────────────────────────────────────────
+      try { document.execCommand('enableObjectResizing', false, false); } catch(e) {}
+      (function () {
+        var selImg = null, dragState = null;
+        var rHandle = document.createElement('span');
+        rHandle.setAttribute('aria-hidden', 'true');
+        rHandle.style.cssText = 'position:fixed;width:12px;height:12px;background:#01948E;border:2px solid #fff;border-radius:3px;cursor:se-resize;z-index:9998;display:none;box-shadow:0 1px 4px rgba(0,0,0,.3);';
+        document.body.appendChild(rHandle);
+        function placeHandle() {
+          if (!selImg) { rHandle.style.display = 'none'; return; }
+          var r = selImg.getBoundingClientRect();
+          rHandle.style.left = (r.right - 6) + 'px';
+          rHandle.style.top  = (r.bottom - 6) + 'px';
+          rHandle.style.display = 'block';
+        }
+        function pickImg(img) {
+          if (selImg) selImg.removeAttribute('data-resize-sel');
+          selImg = img;
+          selImg.setAttribute('data-resize-sel', '1');
+          placeHandle();
+        }
+        function dropImg() {
+          if (selImg) selImg.removeAttribute('data-resize-sel');
+          selImg = null;
+          rHandle.style.display = 'none';
+        }
+        editor.addEventListener('click', function (e) {
+          if (e.target.tagName === 'IMG') { e.preventDefault(); pickImg(e.target); }
+          else if (!rHandle.contains(e.target)) { dropImg(); }
+        });
+        rHandle.addEventListener('mousedown', function (e) {
+          e.preventDefault();
+          if (!selImg) return;
+          var r = selImg.getBoundingClientRect();
+          dragState = { startX: e.clientX, w: Math.round(r.width), aspect: r.width / Math.max(1, r.height) };
+        });
+        document.addEventListener('mousemove', function (e) {
+          if (!dragState || !selImg) return;
+          var newW = Math.max(20, Math.round(dragState.w + (e.clientX - dragState.startX)));
+          var newH = Math.max(1, Math.round(newW / dragState.aspect));
+          selImg.style.width  = newW + 'px';
+          selImg.style.height = newH + 'px';
+          selImg.style.maxWidth = '';
+          selImg.removeAttribute('width');
+          selImg.removeAttribute('height');
+          placeHandle();
+        });
+        document.addEventListener('mouseup', function () {
+          if (dragState) { dragState = null; syncToTextarea(); }
+        });
+        window.addEventListener('scroll', placeHandle, { passive: true });
+        window.addEventListener('resize', placeHandle, { passive: true });
+        editor.addEventListener('scroll', placeHandle, { passive: true });
+        editor.addEventListener('blur', function () { setTimeout(dropImg, 200); });
+      })();
     })();
   </script>
   <style>
@@ -487,6 +543,7 @@
       display: inline-block;
       vertical-align: middle;
     }
+    #sigEditor img[data-resize-sel] { outline:2px solid #01948E; box-shadow:0 0 0 3px rgba(1,148,142,.2); }
     /* Сохраняем стили таблиц и других элементов из вставленного HTML */
     #sigEditor table {
       border-collapse: collapse;

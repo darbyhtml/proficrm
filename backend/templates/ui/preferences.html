@@ -591,11 +591,14 @@
 
   function loadSignature() {
     editor.innerHTML = hiddenField.value || '';
-    // Стрипаем Яндекс-вьювер стили (max-width:100%;height:auto), сохранённые в БД —
-    // они перекрывают CSS и делают картинки во всю ширину
     editor.querySelectorAll('img').forEach(function (img) {
+      // Стрипаем Яндекс-вьювер стили которые делают картинки на всю ширину
       if (img.style.maxWidth === '100%') img.style.maxWidth = '';
       if (img.style.height === 'auto') img.style.height = '';
+      // Если явного размера нет совсем (данные потеряны) — ставим разумный дефолт
+      if (!img.style.width && !img.getAttribute('width') && !img.style.maxWidth) {
+        img.style.maxWidth = '150px';
+      }
     });
   }
 
