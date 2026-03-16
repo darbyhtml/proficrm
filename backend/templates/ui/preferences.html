@@ -553,7 +553,7 @@
 {# ── Signature WYSIWYG (contenteditable, same engine as /mail/signature/) ── #}
 <style>
   #prefSigEditor:empty:before { content: "Напишите подпись письма..."; color: rgba(0,61,56,.45); pointer-events:none; }
-  #prefSigEditor img { max-width:100% !important; height:auto !important; width:auto !important; object-fit:contain; display:inline-block; vertical-align:middle; }
+  #prefSigEditor img { max-width:100% !important; height:auto !important; object-fit:contain; display:inline-block; vertical-align:middle; }
   #prefSigEditor table { border-collapse:collapse; max-width:100%; }
   #prefSigEditor td, #prefSigEditor th { padding:4px 8px; border:1px solid #ddd; }
 </style>
@@ -587,8 +587,8 @@
   function loadSignature() {
     editor.innerHTML = hiddenField.value || '';
     editor.querySelectorAll('img').forEach(function (img) {
-      img.removeAttribute('width'); img.removeAttribute('height');
-      img.style.width = ''; img.style.maxWidth = '100%'; img.style.height = 'auto';
+      img.style.width = ''; img.style.height = '';
+      img.style.maxWidth = '100%';
     });
   }
 
@@ -725,8 +725,10 @@
         el.removeAttribute('data-cke-saved-src');
       });
       tmp.querySelectorAll('img').forEach(function (img) {
-        img.removeAttribute('width'); img.removeAttribute('height');
-        img.style.width = ''; img.style.maxWidth = '100%'; img.style.height = 'auto';
+        // Снимаем только inline-стили (Яндекс/Gmail ставят style="width:640px"),
+        // HTML-атрибуты width/height оставляем — они задают нужный размер в таблицах подписи.
+        img.style.width = ''; img.style.height = '';
+        img.style.maxWidth = '100%';
       });
       var sel = window.getSelection();
       if (sel && sel.rangeCount > 0) {

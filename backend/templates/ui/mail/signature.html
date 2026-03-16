@@ -188,12 +188,8 @@
         // Убеждаемся, что изображения правильно отображаются
         const images = editor.querySelectorAll("img");
         images.forEach((img) => {
-          if (!img.style.maxWidth) {
-            img.style.maxWidth = "100%";
-          }
-          if (!img.style.height) {
-            img.style.height = "auto";
-          }
+          img.style.width = ""; img.style.height = "";
+          img.style.maxWidth = "100%";
         });
       }
       loadSignature();
@@ -378,24 +374,10 @@
             window.uiToast('В подпись вставлены картинки из Яндекс.Почты по защищённым ссылкам — у получателей они могут не отображаться.', 'error');
           }
           images.forEach((img) => {
-            const src = img.getAttribute("src");
-            if (src) {
-              // Если это base64, оставляем как есть
-              if (src.startsWith("data:image/")) {
-                // Убеждаемся, что атрибуты стиля сохранены
-                if (!img.style.maxWidth) {
-                  img.style.maxWidth = "100%";
-                }
-                if (!img.style.height) {
-                  img.style.height = "auto";
-                }
-              } else if (src.startsWith("http://") || src.startsWith("https://")) {
-                // Внешние ссылки оставляем как есть (могут не работать в некоторых почтовиках)
-                // Можно было бы конвертировать в base64, но это требует загрузки изображения
-                img.style.maxWidth = "100%";
-                img.style.height = "auto";
-              }
-            }
+            // Снимаем inline-стили размера (Яндекс/Gmail ставят style="width:640px"),
+            // HTML-атрибуты width/height оставляем — они задают нужный размер в таблицах.
+            img.style.width = ""; img.style.height = "";
+            img.style.maxWidth = "100%";
           });
 
           // Сохраняем все стили и атрибуты элементов
