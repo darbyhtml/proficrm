@@ -1,5 +1,27 @@
 from __future__ import annotations
-from ui.views._base import *  # noqa: F401,F403
+from ui.views._base import (
+    CallRequest,
+    Company,
+    CompanyPhone,
+    Contact,
+    ContactPhone,
+    F,
+    HttpRequest,
+    JsonResponse,
+    Q,
+    User,
+    _add_months,
+    _can_view_cold_call_reports,
+    _cold_call_confirm_q,
+    _date,
+    _month_label,
+    _month_start,
+    datetime,
+    login_required,
+    policy_required,
+    timedelta,
+    timezone,
+)
 import logging
 logger = logging.getLogger(__name__)
 

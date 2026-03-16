@@ -33,7 +33,7 @@
                 <input type="hidden" name="next" value="{{ request.get_full_path }}">
                 <div class="flex items-center gap-1">
                   <span class="text-brand-dark/60">Пользователь:</span>
-                  <select name="view_user_id" class="select w-auto py-1 px-2 text-xs" style="min-width: 150px;">
+                  <select name="view_user_id" class="select w-auto py-1 px-2 text-xs">
                     <option value="">— Выбрать —</option>
                     {% for u in view_as_users %}
                       <option value="{{ u.id }}" {% if view_as_user and view_as_user.id == u.id %}selected{% endif %}>
@@ -1904,7 +1904,7 @@
                   <div class="calendar-header">
                     <div class="month-year" style="cursor: pointer;">Выберите год</div>
                     <div class="nav-buttons">
-                      <button class="close-year-selector" type="button" style="font-size: 1.125rem; line-height: 1;">✕</button>
+                      <button class="close-year-selector" type="button">✕</button>
                     </div>
                   </div>
                   <div class="year-selector">
@@ -1957,8 +1957,8 @@
                   <div class="calendar-header">
                     <div class="month-year" style="cursor: pointer;">Выберите месяц</div>
                     <div class="nav-buttons">
-                      <button class="show-year-selector" type="button" style="min-width: 3.75rem; font-weight: 600;">${year}</button>
-                      <button class="close-month-selector" type="button" style="font-size: 1.125rem; line-height: 1;">✕</button>
+                      <button class="show-year-selector" type="button">${year}</button>
+                      <button class="close-month-selector" type="button">✕</button>
                     </div>
                   </div>
                   <div class="month-year-selector">

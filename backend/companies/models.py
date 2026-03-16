@@ -397,6 +397,14 @@ class CompanyDeal(models.Model):
 
 
 class Contact(models.Model):
+    """
+    Контакт (физическое лицо) связанный с компанией.
+
+    ВАЖНО (L-7): При удалении Company контакты НЕ удаляются — company=NULL (SET_NULL).
+    Это намеренное поведение: контакт может существовать без компании (независимый контакт,
+    переход в другую компанию и т.д.). Такие контакты видны в общем реестре контактов,
+    но не отображаются в карточке ни одной компании. При необходимости — удалять вручную.
+    """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     company = models.ForeignKey(Company, verbose_name="Компания", null=True, blank=True, on_delete=models.SET_NULL, related_name="contacts")
 

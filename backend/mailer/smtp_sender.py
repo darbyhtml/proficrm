@@ -196,7 +196,22 @@ def format_smtp_error(error: Exception, account: _SmtpAccountLike) -> str:
     if "authentication failed" in error_str.lower() or "535" in error_str or "535-" in error_str:
         return "Ошибка аутентификации: неверный логин или пароль SMTP. Проверьте настройки в Почта → Настройки."
     
-    # Ошибки подключения
+    # Ошибки STARTTLS
+    if "STARTTLS" in error_str or "starttls" in error_str.lower():
+        return f"Ошибка установки защищенного соединения (STARTTLS) с {account.smtp_host}:{account.smtp_port}. Попробуйте отключить STARTTLS или проверьте настройки."
+
+    # Специфические SMTP-ошибки — должны быть ДО проверки OSError,
+    # т.к. SMTPException наследуется от OSError.
+    if isinstance(error, smtplib.SMTPRecipientsRefused):
+        return f"Получатель отклонен сервером: {error_str[:200]}"
+
+    if isinstance(error, smtplib.SMTPSenderRefused):
+        return f"Отправитель отклонен сервером: {error_str[:200]}"
+
+    if isinstance(error, smtplib.SMTPDataError):
+        return f"Ошибка данных письма: {error_str[:200]}"
+
+    # Ошибки подключения (OSError/ConnectionError — после специфических SMTP)
     if isinstance(error, (smtplib.SMTPConnectError, ConnectionError, OSError)):
         if "Connection refused" in error_str or "Connection refused" in str(error):
             return f"Не удалось подключиться к SMTP серверу {account.smtp_host}:{account.smtp_port}. Проверьте настройки подключения."
@@ -205,20 +220,6 @@ def format_smtp_error(error: Exception, account: _SmtpAccountLike) -> str:
         if "Name or service not known" in error_str or "getaddrinfo failed" in error_str:
             return f"Не удалось найти SMTP сервер {account.smtp_host}. Проверьте правильность адреса сервера."
         return f"Ошибка подключения к SMTP серверу: {error_str[:200]}"
-    
-    # Ошибки STARTTLS
-    if "STARTTLS" in error_str or "starttls" in error_str.lower():
-        return f"Ошибка установки защищенного соединения (STARTTLS) с {account.smtp_host}:{account.smtp_port}. Попробуйте отключить STARTTLS или проверьте настройки."
-    
-    # Ошибки отправки
-    if isinstance(error, smtplib.SMTPRecipientsRefused):
-        return f"Получатель отклонен сервером: {error_str[:200]}"
-    
-    if isinstance(error, smtplib.SMTPSenderRefused):
-        return f"Отправитель отклонен сервером: {error_str[:200]}"
-    
-    if isinstance(error, smtplib.SMTPDataError):
-        return f"Ошибка данных письма: {error_str[:200]}"
     
     if isinstance(error, smtplib.SMTPException):
         # Парсим код ошибки SMTP (например, "550 5.1.1 User unknown")

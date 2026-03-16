@@ -1,5 +1,19 @@
 from __future__ import annotations
-from ui.views._base import *  # noqa: F401,F403
+from ui.views._base import (
+    ActivityEvent,
+    FileResponse,
+    Http404,
+    HttpRequest,
+    HttpResponse,
+    MobileAppBuild,
+    MobileAppQrToken,
+    cache,
+    get_object_or_404,
+    log_event,
+    login_required,
+    policy_required,
+    render,
+)
 import logging
 logger = logging.getLogger(__name__)
 

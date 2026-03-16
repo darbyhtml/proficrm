@@ -1,5 +1,41 @@
 from __future__ import annotations
-from ui.views._base import *  # noqa: F401,F403
+from ui.views._base import (
+    ActivityEvent,
+    AmoApiConfig,
+    AmoApiConfigForm,
+    AmoMigrateFilterForm,
+    Avg,
+    CallRequest,
+    CompanyListColumnsForm,
+    Count,
+    HttpRequest,
+    HttpResponse,
+    ImportCompaniesForm,
+    ImportTasksIcsForm,
+    JsonResponse,
+    Max,
+    Paginator,
+    PhoneDevice,
+    Q,
+    UiGlobalConfig,
+    User,
+    _month_label,
+    cache,
+    datetime,
+    get_object_or_404,
+    get_users_for_lists,
+    json,
+    login_required,
+    messages,
+    models,
+    os,
+    redirect,
+    render,
+    require_admin,
+    timedelta,
+    timezone,
+    uuid,
+)
 import logging
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,39 @@
 from __future__ import annotations
-from ui.views._base import *  # noqa: F401,F403
+from ui.views._base import (
+    ActivityEvent,
+    Branch,
+    BranchForm,
+    CompanySphere,
+    CompanySphereForm,
+    CompanyStatus,
+    CompanyStatusForm,
+    ContractType,
+    ContractTypeForm,
+    Count,
+    HttpRequest,
+    HttpResponse,
+    JsonResponse,
+    MagicLinkToken,
+    Paginator,
+    Q,
+    TaskType,
+    TaskTypeForm,
+    User,
+    UserCreateForm,
+    UserEditForm,
+    cache,
+    datetime,
+    get_object_or_404,
+    log_event,
+    login_required,
+    messages,
+    models,
+    redirect,
+    render,
+    require_admin,
+    timedelta,
+    timezone,
+)
 import logging
 logger = logging.getLogger(__name__)
 

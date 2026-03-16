@@ -9,6 +9,13 @@ from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from django.core.files.storage import default_storage
+from django.core.exceptions import ValidationError
+
+
+def _validate_apk_extension(value):
+    """Валидатор: разрешены только файлы с расширением .apk."""
+    if not value.name.lower().endswith(".apk"):
+        raise ValidationError("Разрешены только APK-файлы (.apk).")
 
 
 class PhoneDevice(models.Model):
@@ -225,7 +232,11 @@ class MobileAppBuild(models.Model):
     env = models.CharField(max_length=16, default="production", db_index=True, help_text="Только production")
     version_name = models.CharField(max_length=32, verbose_name="Версия (name)")
     version_code = models.IntegerField(verbose_name="Версия (code)")
-    file = models.FileField(upload_to="mobile_apps/", verbose_name="APK файл")
+    file = models.FileField(
+        upload_to="mobile_apps/",
+        verbose_name="APK файл",
+        validators=[_validate_apk_extension],
+    )
     sha256 = models.CharField(max_length=64, blank=True, verbose_name="SHA256 хеш")
     uploaded_at = models.DateTimeField(auto_now_add=True, verbose_name="Дата загрузки")
     uploaded_by = models.ForeignKey(

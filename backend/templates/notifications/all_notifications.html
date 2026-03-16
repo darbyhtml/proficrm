@@ -32,11 +32,11 @@
                 </div>
                 <div class="flex items-center gap-2">
                   {% if n.url %}
-                    <a href="{{ n.url }}" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem">Открыть</a>
+                    <a href="{{ n.url }}" class="btn btn-outline btn-sm">Открыть</a>
                   {% endif %}
                   <form method="post" action="/notifications/{{ n.id }}/read/" class="js-notif-read-form">
                     {% csrf_token %}
-                    <button class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem" type="submit" title="Отметить прочитанным">✓</button>
+                    <button class="btn btn-outline btn-sm" type="submit" title="Отметить прочитанным">✓</button>
                   </form>
                 </div>
               </div>
@@ -61,7 +61,7 @@
                   <div class="text-[11px] muted-2 mt-2">{{ n.created_at|date:"d.m.Y H:i" }}</div>
                 </div>
                 {% if n.url %}
-                  <a href="{{ n.url }}" class="btn btn-outline" style="padding:.35rem .6rem;font-size:.75rem">Открыть</a>
+                  <a href="{{ n.url }}" class="btn btn-outline btn-sm">Открыть</a>
                 {% endif %}
               </div>
             </div>
