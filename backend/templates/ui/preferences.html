@@ -555,8 +555,8 @@
   #prefSigEditor:empty:before { content: "Напишите подпись письма..."; color: rgba(0,61,56,.45); pointer-events:none; }
   /* Ширина 620px = стандарт email — таблицы подписи не растягиваются */
   #prefSigEditor { max-width: 620px; }
-  #prefSigEditor img { max-width:100% !important; height:auto !important; display:inline-block; vertical-align:middle; }
-  #prefSigEditor table { border-collapse:collapse; }
+  #prefSigEditor img { max-width:100% !important; height:auto !important; width:auto; object-fit:contain; display:inline-block; vertical-align:middle; }
+  #prefSigEditor table { border-collapse:collapse; max-width:100%; }
   #prefSigEditor td, #prefSigEditor th { vertical-align:top; }
 </style>
 <script nonce="{{ csp_nonce }}">
@@ -589,10 +589,8 @@
   function loadSignature() {
     editor.innerHTML = hiddenField.value || '';
     editor.querySelectorAll('img').forEach(function (img) {
-      img.style.width = ''; img.style.height = '';
-      var w = parseInt(img.getAttribute('width') || '0', 10);
-      if (w > 400) { img.removeAttribute('width'); img.removeAttribute('height'); }
       img.style.maxWidth = '100%';
+      img.style.height = 'auto';
     });
   }
 
@@ -729,10 +727,8 @@
         el.removeAttribute('data-cke-saved-src');
       });
       tmp.querySelectorAll('img').forEach(function (img) {
-        img.style.width = ''; img.style.height = '';
-        var w = parseInt(img.getAttribute('width') || '0', 10);
-        if (w > 400) { img.removeAttribute('width'); img.removeAttribute('height'); }
         img.style.maxWidth = '100%';
+        img.style.height = 'auto';
       });
       var sel = window.getSelection();
       if (sel && sel.rangeCount > 0) {
