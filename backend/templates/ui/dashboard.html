@@ -1607,11 +1607,22 @@
         const el = document.createElement('div');
         el.id = id;
         el.style.cssText = 'position:fixed;bottom:80px;right:16px;z-index:9000;animation:slideIn .25s ease-out';
-        el.innerHTML = '<div style="border:1px solid rgba(1,148,142,.35);background:#fff;border-radius:.75rem;padding:.6rem 1rem;box-shadow:0 .5rem 1.5rem rgba(0,61,56,.12);font-size:.875rem;color:#003D38;display:flex;align-items:center;gap:.75rem">'
-          + '<span>Данные обновились</span>'
-          + '<button onclick="location.reload()" style="background:#01948E;color:#fff;border:none;border-radius:.5rem;padding:.25rem .75rem;cursor:pointer;font-size:.8125rem;font-weight:500">Обновить</button>'
-          + '<button onclick="this.closest(\'#dashReloadToast\').remove()" style="border:none;background:none;cursor:pointer;color:#003D38;font-size:1.25rem;line-height:1;opacity:.5;margin-left:2px">&times;</button>'
-          + '</div>';
+        const inner = document.createElement('div');
+        inner.style.cssText = 'border:1px solid rgba(1,148,142,.35);background:#fff;border-radius:.75rem;padding:.6rem 1rem;box-shadow:0 .5rem 1.5rem rgba(0,61,56,.12);font-size:.875rem;color:#003D38;display:flex;align-items:center;gap:.75rem';
+        const txt = document.createElement('span');
+        txt.textContent = 'Данные обновились';
+        const btnReload = document.createElement('button');
+        btnReload.textContent = 'Обновить';
+        btnReload.style.cssText = 'background:#01948E;color:#fff;border:none;border-radius:.5rem;padding:.25rem .75rem;cursor:pointer;font-size:.8125rem;font-weight:500';
+        btnReload.addEventListener('click', function(){ location.reload(); });
+        const btnClose = document.createElement('button');
+        btnClose.innerHTML = '&times;';
+        btnClose.style.cssText = 'border:none;background:none;cursor:pointer;color:#003D38;font-size:1.25rem;line-height:1;opacity:.5;margin-left:2px';
+        btnClose.addEventListener('click', function(){ el.remove(); });
+        inner.appendChild(txt);
+        inner.appendChild(btnReload);
+        inner.appendChild(btnClose);
+        el.appendChild(inner);
         document.body.appendChild(el);
       }
 

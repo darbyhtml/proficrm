@@ -74,7 +74,7 @@ def _month_label(d: _date) -> str:
 
 
 @login_required
-@policy_required(resource_type="page", resource="ui:analytics")
+@policy_required(resource_type="page", resource="ui:dashboard")
 def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
     user: User = request.user
     if not _can_view_cold_call_reports(user):
@@ -266,7 +266,7 @@ def cold_calls_report_day(request: HttpRequest) -> JsonResponse:
 
 
 @login_required
-@policy_required(resource_type="page", resource="ui:analytics")
+@policy_required(resource_type="page", resource="ui:dashboard")
 def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
     user: User = request.user
     if not _can_view_cold_call_reports(user):
@@ -485,7 +485,7 @@ def cold_calls_report_month(request: HttpRequest) -> JsonResponse:
 
 
 @login_required
-@policy_required(resource_type="page", resource="ui:analytics")
+@policy_required(resource_type="page", resource="ui:dashboard")
 def cold_calls_report_last_7_days(request: HttpRequest) -> JsonResponse:
     """
     Сводка по холодным звонкам за последние 7 дней (включая сегодня) для текущего пользователя:

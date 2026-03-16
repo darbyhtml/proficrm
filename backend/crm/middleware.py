@@ -23,9 +23,17 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
         if not settings.DEBUG and getattr(settings, 'CSP_HEADER', None):
             nonce = getattr(request, 'csp_nonce', None)
             if nonce:
-                csp = settings.CSP_HEADER.replace(
-                    "'unsafe-inline'", f"'nonce-{nonce}'"
-                )
+                # Nonce заменяет 'unsafe-inline' только в script-src.
+                # В style-src оставляем 'unsafe-inline' — нонс работает только
+                # для <style nonce="...">, но не для атрибутов style="...".
+                parts = settings.CSP_HEADER.split('; ')
+                processed = []
+                for part in parts:
+                    if part.startswith('script-src '):
+                        processed.append(part.replace("'unsafe-inline'", f"'nonce-{nonce}'"))
+                    else:
+                        processed.append(part)
+                csp = '; '.join(processed)
             else:
                 csp = settings.CSP_HEADER
             response['Content-Security-Policy'] = csp

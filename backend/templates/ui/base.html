@@ -2628,8 +2628,7 @@
         <p id="crmAnnBody" style="font-size:.9rem;color:rgba(0,61,56,.78);white-space:pre-wrap;margin:0 0 1.5rem 0;"></p>
         <div style="display:flex;justify-content:flex-end;">
           <button id="crmAnnCloseBtn"
-            style="display:inline-flex;align-items:center;gap:.4rem;background:#01948E;color:#fff;border:none;border-radius:.75rem;padding:.55rem 1.1rem;font-size:.875rem;cursor:pointer;transition:background .15s ease;"
-            onmouseover="this.style.background='#003D38'" onmouseout="this.style.background='#01948E'">
+            style="display:inline-flex;align-items:center;gap:.4rem;background:#01948E;color:#fff;border:none;border-radius:.75rem;padding:.55rem 1.1rem;font-size:.875rem;cursor:pointer;transition:background .15s ease;">
             Понятно
           </button>
         </div>
@@ -2702,6 +2701,8 @@
           }).catch(function(){});
         }
 
+        closeBtn.addEventListener('mouseover', function(){ this.style.background = '#003D38'; });
+        closeBtn.addEventListener('mouseout', function(){ this.style.background = '#01948E'; });
         closeBtn.addEventListener('click', function(){
           if(currentAnnId) markRead(currentAnnId);
           hideAnnouncement();
