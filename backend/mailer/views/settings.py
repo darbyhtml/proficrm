@@ -37,28 +37,8 @@ def mail_signature(request: HttpRequest) -> HttpResponse:
     if request.method == "POST":
         form = EmailSignatureForm(request.POST)
         if form.is_valid():
-            raw_html = (form.cleaned_data.get("signature_html") or "").strip()
-            try:
-                import nh3
-                html = nh3.clean(
-                    raw_html,
-                    tags={
-                        "a", "b", "br", "div", "em", "font", "h1", "h2", "h3",
-                        "h4", "h5", "h6", "hr", "i", "img", "li", "ol", "p",
-                        "s", "span", "strong", "table", "tbody", "td", "th",
-                        "thead", "tr", "u", "ul",
-                    },
-                    attributes={
-                        "a": {"href", "target"},
-                        "img": {"src", "alt", "width", "height"},
-                        "td": {"colspan", "rowspan", "align", "valign"},
-                        "th": {"colspan", "rowspan", "align", "valign"},
-                        "table": {"border", "cellpadding", "cellspacing", "width"},
-                        "*": {"style", "class"},
-                    },
-                )
-            except Exception:
-                html = raw_html
+            # clean_signature_html() already runs sanitize_email_html + _normalize_email_img_tags
+            html = (form.cleaned_data.get("signature_html") or "").strip()
             user.email_signature_html = html
             user.save(update_fields=["email_signature_html"])
             messages.success(request, "Подпись сохранена.")

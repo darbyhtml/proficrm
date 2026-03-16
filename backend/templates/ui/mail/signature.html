@@ -188,6 +188,19 @@
         editor.querySelectorAll("img").forEach((img) => {
           if (!img.style.maxWidth) img.style.maxWidth = "100%";
           if (!img.style.height) img.style.height = "auto";
+          // Если нет явной ширины — применяем naturalWidth после загрузки
+          if (!img.style.width) {
+            const applyNatural = () => {
+              if (img.naturalWidth > 0 && !img.style.width) {
+                img.style.width = Math.min(img.naturalWidth, 600) + "px";
+                img.style.maxWidth = "";
+                img.style.height = "auto";
+                syncToTextarea();
+              }
+            };
+            if (img.complete && img.naturalWidth > 0) applyNatural();
+            else img.addEventListener("load", applyNatural, { once: true });
+          }
         });
       }
       loadSignature();
@@ -378,6 +391,19 @@
                 img.style.maxWidth = "100%";
                 img.style.height = "auto";
               }
+            }
+            // Если нет явной ширины — применяем naturalWidth после загрузки
+            if (!img.style.width) {
+              const applyNatural = () => {
+                if (img.naturalWidth > 0 && !img.style.width) {
+                  img.style.width = Math.min(img.naturalWidth, 600) + "px";
+                  img.style.maxWidth = "";
+                  img.style.height = "auto";
+                  syncToTextarea();
+                }
+              };
+              if (img.complete && img.naturalWidth > 0) applyNatural();
+              else img.addEventListener("load", applyNatural, { once: true });
             }
           });
 
