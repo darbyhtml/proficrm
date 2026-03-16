@@ -555,7 +555,7 @@
   #prefSigEditor:empty:before { content: "Напишите подпись письма..."; color: rgba(0,61,56,.45); pointer-events:none; }
   /* Ширина 620px = стандарт email — таблицы подписи не растягиваются */
   #prefSigEditor { max-width: 620px; }
-  #prefSigEditor img { max-width:min(100%, 400px) !important; height:auto; object-fit:contain; display:inline-block; vertical-align:middle; }
+  #prefSigEditor img { max-width:100% !important; height:auto; width:auto; object-fit:contain; display:inline-block; vertical-align:middle; }
   #prefSigEditor img[data-resize-sel] { outline:2px solid #01948E; box-shadow:0 0 0 3px rgba(1,148,142,.2); }
   #prefSigEditor table { border-collapse:collapse; max-width:100%; }
   #prefSigEditor td, #prefSigEditor th { vertical-align:top; }
@@ -592,13 +592,8 @@
   function loadSignature() {
     editor.innerHTML = hiddenField.value || '';
     editor.querySelectorAll('img').forEach(function (img) {
-      // Стрипаем Яндекс-вьювер стили которые делают картинки на всю ширину
-      if (img.style.maxWidth === '100%') img.style.maxWidth = '';
-      if (img.style.height === 'auto') img.style.height = '';
-      // Если явного размера нет совсем (данные потеряны) — ставим разумный дефолт
-      if (!img.style.width && !img.getAttribute('width') && !img.style.maxWidth) {
-        img.style.maxWidth = '150px';
-      }
+      if (!img.style.maxWidth) img.style.maxWidth = '100%';
+      if (!img.style.height) img.style.height = 'auto';
     });
   }
 
@@ -737,11 +732,8 @@
         if (v && !el.getAttribute('src')) el.setAttribute('src', v);
         el.removeAttribute('data-cke-saved-src');
       });
-      // Яндекс-почта навязывает max-width:100%;height:auto при отображении письма —
-      // убираем эти стили, чтобы сохранились оригинальные размеры (width:140px и т.п.)
       tmp.querySelectorAll('img').forEach(function (img) {
-        if (img.style.maxWidth === '100%') img.style.maxWidth = '';
-        if (img.style.height === 'auto') img.style.height = '';
+        img.style.maxWidth = '100%'; img.style.height = 'auto';
       });
       var sel = window.getSelection();
       if (sel && sel.rangeCount > 0) {

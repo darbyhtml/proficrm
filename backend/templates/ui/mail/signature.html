@@ -186,13 +186,8 @@
         const html = htmlField.value || "";
         editor.innerHTML = html;
         editor.querySelectorAll("img").forEach((img) => {
-          // Стрипаем Яндекс-вьювер стили которые делают картинки на всю ширину
-          if (img.style.maxWidth === "100%") img.style.maxWidth = "";
-          if (img.style.height === "auto") img.style.height = "";
-          // Если явного размера нет совсем (данные потеряны) — ставим разумный дефолт
-          if (!img.style.width && !img.getAttribute("width") && !img.style.maxWidth) {
-            img.style.maxWidth = "150px";
-          }
+          if (!img.style.maxWidth) img.style.maxWidth = "100%";
+          if (!img.style.height) img.style.height = "auto";
         });
       }
       loadSignature();
@@ -373,30 +368,17 @@
           if (hasYandexWebattach && window.uiToast) {
             window.uiToast('В подпись вставлены картинки из Яндекс.Почты по защищённым ссылкам — у получателей они могут не отображаться.', 'error');
           }
-          // Убираем inline max-width:100%;height:auto которые Яндекс-почта навязывает
-          // картинкам при отображении письма (перекрывают оригинальные размеры).
           images.forEach((img) => {
-            if (img.style.maxWidth === "100%") img.style.maxWidth = "";
-            if (img.style.height === "auto") img.style.height = "";
-          });
-          // Масштабируем ячейки таблицы пропорционально до 400px.
-          tempDiv.querySelectorAll("table").forEach((table) => {
-            const MAX_W = 400;
-            const cells = Array.from(table.querySelectorAll("tr:first-child > td, tr:first-child > th"));
-            let totalW = 0;
-            cells.forEach(c => { totalW += parseInt(c.style.width || c.getAttribute("width") || "0", 10); });
-            if (totalW > MAX_W) {
-              const scale = MAX_W / totalW;
-              cells.forEach(c => {
-                const w = parseInt(c.style.width || c.getAttribute("width") || "0", 10);
-                if (w > 0) { c.style.width = Math.round(w * scale) + "px"; c.removeAttribute("width"); }
-              });
+            const src = img.getAttribute("src");
+            if (src) {
+              if (src.startsWith("data:image/")) {
+                if (!img.style.maxWidth) img.style.maxWidth = "100%";
+                if (!img.style.height) img.style.height = "auto";
+              } else if (src.startsWith("http://") || src.startsWith("https://")) {
+                img.style.maxWidth = "100%";
+                img.style.height = "auto";
+              }
             }
-          });
-          // Картинки вне таблицы — ограничиваем 350px.
-          images.forEach((img) => {
-            if (!img.closest("table")) img.style.maxWidth = "350px";
-            img.style.height = "auto";
           });
 
           // Сохраняем все стили и атрибуты элементов
@@ -537,8 +519,9 @@
     }
     /* В редакторе подписи не растягиваем картинки */
     #sigEditor img{
-      max-width: min(100%, 400px) !important;
+      max-width: 100% !important;
       height: auto;
+      width: auto;
       object-fit: contain;
       display: inline-block;
       vertical-align: middle;
