@@ -478,6 +478,12 @@ SMTP_BZ_UNSUB_SYNC_SECONDS = float(os.getenv("SMTP_BZ_UNSUB_SYNC_SECONDS", "600"
 SMTP_BZ_DELIVERY_SYNC_SECONDS = float(os.getenv("SMTP_BZ_DELIVERY_SYNC_SECONDS", "600") or "600")
 # Частота reconcile очереди рассылок (сек). По умолчанию раз в 5 минут.
 MAILER_QUEUE_RECONCILE_SECONDS = float(os.getenv("MAILER_QUEUE_RECONCILE_SECONDS", "300") or "300")
+
+# Retention policy: срок хранения записей в журналах (дни)
+ACTIVITY_EVENT_RETENTION_DAYS = int(os.getenv("ACTIVITY_EVENT_RETENTION_DAYS", "180") or "180")
+ERRORLOG_RETENTION_DAYS = int(os.getenv("ERRORLOG_RETENTION_DAYS", "90") or "90")
+NOTIFICATION_RETENTION_DAYS = int(os.getenv("NOTIFICATION_RETENTION_DAYS", "90") or "90")
+
 CELERY_BEAT_SCHEDULE = {
     "send-pending-emails": {
         "task": "mailer.tasks.send_pending_emails",
@@ -510,6 +516,19 @@ CELERY_BEAT_SCHEDULE = {
     "generate-recurring-tasks": {
         "task": "tasksapp.tasks.generate_recurring_tasks",
         "schedule": crontab(hour=6, minute=0),  # Ежедневно 06:00 по Moscow
+    },
+    # Retention: еженедельно в воскресенье 03:00 MSK
+    "purge-old-activity-events": {
+        "task": "audit.tasks.purge_old_activity_events",
+        "schedule": crontab(hour=3, minute=0, day_of_week=0),
+    },
+    "purge-old-error-logs": {
+        "task": "audit.tasks.purge_old_error_logs",
+        "schedule": crontab(hour=3, minute=15, day_of_week=0),
+    },
+    "purge-old-notifications": {
+        "task": "notifications.tasks.purge_old_notifications",
+        "schedule": crontab(hour=3, minute=30, day_of_week=0),
     },
 }
 
