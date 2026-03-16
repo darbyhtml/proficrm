@@ -1988,8 +1988,6 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
     if not can_view and company_responsible_id == user.id:
         can_view = True
 
-    # Диагностика: что именно посчитали (оставим как info, чтобы быстро понять причину 403)
-    logger = logging.getLogger(__name__)
     logger.info(
         "Task view access check: user_id=%s role=%s task_id=%s created_by_id=%s assigned_to_id=%s company_id=%s company_responsible_id=%s can_view=%s",
         user.id,
@@ -2001,7 +1999,11 @@ def task_view(request: HttpRequest, task_id) -> HttpResponse:
         company_responsible_id,
         can_view,
     )
-    
+
+    if not can_view:
+        from django.core.exceptions import PermissionDenied
+        raise PermissionDenied()
+
     # Вычисляем просрочку в днях (только если известны дедлайн и время завершения)
     view_task_overdue_days = None
     if task.due_at and task.completed_at and task.completed_at > task.due_at:

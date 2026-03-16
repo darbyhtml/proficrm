@@ -2226,6 +2226,8 @@ def company_note_add(request: HttpRequest, company_id) -> HttpResponse:
     if request.method != "POST":
         return redirect("company_detail", company_id=company_id)
 
+    from companies.services import CompanyService
+
     user: User = request.user
     company = get_object_or_404(Company.objects.select_related("responsible", "branch"), id=company_id)
 
@@ -2233,84 +2235,22 @@ def company_note_add(request: HttpRequest, company_id) -> HttpResponse:
     form = CompanyNoteForm(request.POST, request.FILES)
     extra_files = request.FILES.getlist("attachments") or []
     if form.is_valid():
-        note: CompanyNote = form.save(commit=False)
-        note.company = company
-        note.author = user
-        if note.attachment:
-            try:
-                note.attachment_name = (getattr(note.attachment, "name", "") or "").split("/")[-1].split("\\")[-1]
-                note.attachment_ext = (note.attachment_name.rsplit(".", 1)[-1].lower() if "." in note.attachment_name else "")[:16]
-                note.attachment_size = int(getattr(note.attachment, "size", 0) or 0)
-                note.attachment_content_type = (getattr(note.attachment, "content_type", "") or "").strip()[:120]
-            except Exception as e:
-                logger.warning(
-                    f"Ошибка при извлечении метаданных вложения заметки: {e}",
-                    exc_info=True,
-                    extra={"company_id": str(company.id), "note_id": note.id if hasattr(note, "id") else None},
-                )
-        note.save()
-        # Дополнительные вложения (несколько файлов)
-        for order, f in enumerate(extra_files, start=0):
-            try:
-                att = CompanyNoteAttachment(
-                    note=note,
-                    file=f,
-                    order=order,
-                )
-                att.save()
-            except Exception as e:
-                logger.warning(
-                    f"Ошибка при сохранении доп. вложения заметки: {e}",
-                    exc_info=True,
-                    extra={"company_id": str(company.id), "note_id": note.id},
-                )
-        log_event(
-            actor=user,
-            verb=ActivityEvent.Verb.COMMENT,
-            entity_type="note",
-            entity_id=note.id,
-            company_id=company.id,
-            message="Добавлена заметка",
+        note_data: CompanyNote = form.save(commit=False)
+        CompanyService.add_note(
+            company=company,
+            user=user,
+            text=note_data.text or "",
+            attachment=note_data.attachment or None,
+            extra_files=extra_files or None,
         )
-        # уведомление ответственному (если это не он)
-        if company.responsible_id and company.responsible_id != user.id:
-            notify(
-                user=company.responsible,
-                kind=Notification.Kind.COMPANY,
-                title="Новая заметка по компании",
-                body=f"{company.name}: {(note.text or '').strip()[:180] or 'Вложение'}",
-                url=f"/companies/{company.id}/",
-            )
     elif extra_files and not (request.POST.get("text") or "").strip() and not request.FILES.get("attachment"):
         # Только несколько файлов без текста и без одного attachment — создаём заметку вручную
-        note = CompanyNote(company=company, author=user, text="")
-        note.save()
-        for order, f in enumerate(extra_files, start=0):
-            try:
-                att = CompanyNoteAttachment(note=note, file=f, order=order)
-                att.save()
-            except Exception as e:
-                logger.warning(
-                    f"Ошибка при сохранении доп. вложения заметки: {e}",
-                    exc_info=True,
-                    extra={"company_id": str(company.id), "note_id": note.id},
-                )
-        log_event(
-            actor=user,
-            verb=ActivityEvent.Verb.COMMENT,
-            entity_type="note",
-            entity_id=note.id,
-            company_id=company.id,
-            message="Добавлена заметка",
+        CompanyService.add_note(
+            company=company,
+            user=user,
+            text="",
+            extra_files=extra_files,
         )
-        if company.responsible_id and company.responsible_id != user.id:
-            notify(
-                user=company.responsible,
-                kind=Notification.Kind.COMPANY,
-                title="Новая заметка по компании",
-                body=f"{company.name}: Вложение",
-                url=f"/companies/{company.id}/",
-            )
 
     return redirect("company_detail", company_id=company_id)
 

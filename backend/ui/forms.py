@@ -772,10 +772,11 @@ class TaskEditForm(forms.ModelForm):
 class BranchForm(forms.ModelForm):
     class Meta:
         model = Branch
-        fields = ["code", "name"]
+        fields = ["code", "name", "is_active"]
         widgets = {
             "code": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+            "is_active": forms.CheckboxInput(attrs={"class": "rounded border-gray-300"}),
         }
 
 

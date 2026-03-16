@@ -112,12 +112,8 @@ class AmoApiConfig(models.Model):
     # ------------------------------------------------------------------
 
     def _encrypt(self, value: str) -> str:
-        try:
-            from mailer.crypto import encrypt_str
-            return encrypt_str(value or "")
-        except (RuntimeError, Exception):
-            # Fernet key not set (e.g. dev/test env) — store plaintext as fallback
-            return value or ""
+        from mailer.crypto import encrypt_str
+        return encrypt_str(value or "")
 
     def _decrypt(self, value: str) -> str:
         if not value:

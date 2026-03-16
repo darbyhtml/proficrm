@@ -195,8 +195,22 @@ class CampaignRecipient(models.Model):
     campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name="recipients", verbose_name="Кампания")
 
     email = models.EmailField("Email")
-    contact_id = models.UUIDField("ID контакта", null=True, blank=True)
-    company_id = models.UUIDField("ID компании", null=True, blank=True)
+    contact = models.ForeignKey(
+        "companies.Contact",
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        verbose_name="Контакт",
+        db_index=True,
+    )
+    company = models.ForeignKey(
+        "companies.Company",
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        verbose_name="Компания",
+        db_index=True,
+    )
 
     status = models.CharField("Статус", max_length=16, choices=Status.choices, default=Status.PENDING)
     last_error = models.CharField("Ошибка", max_length=2000, blank=True, default="")

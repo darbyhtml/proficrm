@@ -17,7 +17,7 @@ from django.utils import timezone
 from accounts.models import User
 from audit.service import log_event
 from audit.models import ActivityEvent
-from companies.models import Company, CompanyPhone, CompanyEmail, CompanyNote, CompanyHistoryEvent
+from companies.models import Company, CompanyPhone, CompanyEmail, CompanyNote, CompanyNoteAttachment, CompanyHistoryEvent
 from companies.permissions import can_edit_company, can_transfer_company
 from crm.request_id_middleware import get_request_id
 
@@ -394,33 +394,29 @@ class CompanyService:
         user: User,
         text: str,
         attachment: Any | None = None,
+        extra_files: list | None = None,
     ) -> CompanyNote:
         """
         Добавить заметку к компании.
-        
+
         Args:
             company: Компания
             user: Автор заметки
             text: Текст заметки
-            attachment: Вложение (опционально)
-        
+            attachment: Основное вложение (опционально)
+            extra_files: Дополнительные файлы → CompanyNoteAttachment (опционально)
+
         Returns:
             Созданная заметка
-        
-        Raises:
-            PermissionDenied: если нет прав на просмотр компании
         """
-        # Проверка прав на просмотр (заметки может добавлять любой, кто видит компанию)
-        # В реальности это проверяется через policy_required на уровне view
-        
         note = CompanyNote.objects.create(
             company=company,
             author=user,
             text=text,
             attachment=attachment,
         )
-        
-        # Обработка метаданных вложения
+
+        # Метаданные основного вложения
         if attachment:
             try:
                 note.attachment_name = (getattr(attachment, "name", "") or "").split("/")[-1].split("\\")[-1]
@@ -430,11 +426,24 @@ class CompanyService:
                 note.save(update_fields=["attachment_name", "attachment_ext", "attachment_size", "attachment_content_type"])
             except Exception as e:
                 logger.warning(
-                    f"Ошибка при извлечении метаданных вложения заметки: {e}",
+                    "Ошибка при извлечении метаданных вложения заметки: %s",
+                    e,
                     exc_info=True,
                     extra={"company_id": str(company.id), "note_id": note.id, "request_id": get_request_id()},
                 )
-        
+
+        # Дополнительные вложения
+        for order, f in enumerate(extra_files or []):
+            try:
+                CompanyNoteAttachment.objects.create(note=note, file=f, order=order)
+            except Exception as e:
+                logger.warning(
+                    "Ошибка при сохранении доп. вложения заметки: %s",
+                    e,
+                    exc_info=True,
+                    extra={"company_id": str(company.id), "note_id": note.id},
+                )
+
         # Логирование
         log_event(
             actor=user,
@@ -445,5 +454,20 @@ class CompanyService:
             message="Добавлена заметка",
             meta={"request_id": get_request_id()},
         )
-        
+
+        # Уведомление ответственному (если это не он сам)
+        if company.responsible_id and company.responsible_id != user.id:
+            try:
+                from notifications.models import Notification
+                from notifications.service import notify
+                notify(
+                    user=company.responsible,
+                    kind=Notification.Kind.COMPANY,
+                    title="Новая заметка по компании",
+                    body=f"{company.name}: {(text or '').strip()[:180] or 'Вложение'}",
+                    url=f"/companies/{company.id}/",
+                )
+            except Exception as e:
+                logger.warning("Ошибка при отправке уведомления о заметке: %s", e, exc_info=True)
+
         return note

@@ -16,6 +16,9 @@ from ui.models import AmoApiConfig
 
 User = get_user_model()
 
+# Тестовый Fernet-ключ (не используется в prod)
+_TEST_FERNET_KEY = "85--b5Z37dcxRDvHf_xmpOis4j_NGXACmrek0BtzyZo="
+
 
 def _get_csrf(client):
     r = client.get("/settings/amocrm/migrate/")
@@ -45,7 +48,7 @@ def _make_result(companies_matched=5, companies_next_offset=5, companies_has_mor
     return r
 
 
-@override_settings(SECURE_SSL_REDIRECT=False)
+@override_settings(SECURE_SSL_REDIRECT=False, MAILER_FERNET_KEY=_TEST_FERNET_KEY)
 class AmocrmMigrateViewTestCase(TestCase):
     def setUp(self):
         cache.clear()
