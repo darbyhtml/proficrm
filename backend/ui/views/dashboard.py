@@ -345,7 +345,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         "overdue": overdue_list,
         "tasks_week": tasks_week_list,
         "contracts_soon": contracts_soon,
-        "can_view_cold_call_reports": _can_view_cold_call_reports(user),
+        "can_view_cold_call_reports": _can_view_cold_call_reports(request.user),
         # Общие количества для кнопок "Посмотреть все"
         "tasks_new_count": tasks_new_count,
         "tasks_today_count": tasks_today_count,
