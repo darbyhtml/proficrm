@@ -323,7 +323,7 @@ def dashboard_poll(request: HttpRequest) -> JsonResponse:
     
     if since:
         try:
-            since_dt = datetime.fromtimestamp(int(since) / 1000, tz=timezone.utc)
+            since_dt = datetime.fromtimestamp(int(since) / 1000, tz=timezone.UTC)
             # Проверяем, были ли изменения после since_dt
             has_changes = (
                 Task.objects.filter(
