@@ -796,63 +796,85 @@
   (function () {
     var selImg = null, dragState = null;
 
-    var rHandle = document.createElement('span');
-    rHandle.setAttribute('aria-hidden', 'true');
-    rHandle.style.cssText = 'position:fixed;width:12px;height:12px;background:#01948E;border:2px solid #fff;border-radius:3px;cursor:se-resize;z-index:9998;display:none;box-shadow:0 1px 4px rgba(0,0,0,.3);';
-    document.body.appendChild(rHandle);
+    // Три ручки: правый край (ширина), нижний край (высота), угол (оба)
+    function makeHandle(cursor) {
+      var h = document.createElement('span');
+      h.setAttribute('aria-hidden', 'true');
+      h.style.cssText = 'position:fixed;width:10px;height:10px;background:#01948E;border:2px solid #fff;border-radius:2px;z-index:9998;display:none;box-shadow:0 1px 4px rgba(0,0,0,.3);cursor:' + cursor + ';';
+      document.body.appendChild(h);
+      return h;
+    }
+    var hRight  = makeHandle('e-resize');
+    var hBottom = makeHandle('s-resize');
+    var hCorner = makeHandle('se-resize');
 
-    function placeHandle() {
-      if (!selImg) { rHandle.style.display = 'none'; return; }
+    function placeHandles() {
+      if (!selImg) {
+        hRight.style.display = hBottom.style.display = hCorner.style.display = 'none';
+        return;
+      }
       var r = selImg.getBoundingClientRect();
-      rHandle.style.left = (r.right - 6) + 'px';
-      rHandle.style.top  = (r.bottom - 6) + 'px';
-      rHandle.style.display = 'block';
+      hRight.style.left  = (r.right  - 5) + 'px';
+      hRight.style.top   = (r.top + r.height / 2 - 5) + 'px';
+      hRight.style.display = 'block';
+      hBottom.style.left = (r.left + r.width / 2 - 5) + 'px';
+      hBottom.style.top  = (r.bottom - 5) + 'px';
+      hBottom.style.display = 'block';
+      hCorner.style.left = (r.right  - 5) + 'px';
+      hCorner.style.top  = (r.bottom - 5) + 'px';
+      hCorner.style.display = 'block';
     }
 
     function pickImg(img) {
       if (selImg) selImg.removeAttribute('data-resize-sel');
       selImg = img;
       selImg.setAttribute('data-resize-sel', '1');
-      placeHandle();
+      placeHandles();
     }
 
     function dropImg() {
       if (selImg) selImg.removeAttribute('data-resize-sel');
       selImg = null;
-      rHandle.style.display = 'none';
+      hRight.style.display = hBottom.style.display = hCorner.style.display = 'none';
     }
 
     editor.addEventListener('click', function (e) {
       if (e.target.tagName === 'IMG') { e.preventDefault(); pickImg(e.target); }
-      else if (!rHandle.contains(e.target)) { dropImg(); }
+      else if (e.target !== hRight && e.target !== hBottom && e.target !== hCorner) { dropImg(); }
     });
 
-    rHandle.addEventListener('mousedown', function (e) {
+    function startDrag(e, type) {
       e.preventDefault();
       if (!selImg) return;
       var r = selImg.getBoundingClientRect();
-      dragState = { startX: e.clientX, w: Math.round(r.width), aspect: r.width / Math.max(1, r.height) };
-    });
+      dragState = { type: type, startX: e.clientX, startY: e.clientY, w: Math.round(r.width), h: Math.round(r.height) };
+    }
+    hRight.addEventListener('mousedown',  function (e) { startDrag(e, 'w'); });
+    hBottom.addEventListener('mousedown', function (e) { startDrag(e, 'h'); });
+    hCorner.addEventListener('mousedown', function (e) { startDrag(e, 'wh'); });
 
     document.addEventListener('mousemove', function (e) {
       if (!dragState || !selImg) return;
-      var newW = Math.max(20, Math.round(dragState.w + (e.clientX - dragState.startX)));
-      var newH = Math.max(1, Math.round(newW / dragState.aspect));
-      selImg.style.width  = newW + 'px';
-      selImg.style.height = newH + 'px';
+      var dx = e.clientX - dragState.startX;
+      var dy = e.clientY - dragState.startY;
+      var newW = dragState.w, newH = dragState.h;
+      if (dragState.type === 'w'  || dragState.type === 'wh') newW = Math.max(20, Math.round(dragState.w + dx));
+      if (dragState.type === 'h'  || dragState.type === 'wh') newH = Math.max(10, Math.round(dragState.h + dy));
+      selImg.style.width   = newW + 'px';
+      selImg.style.height  = newH + 'px';
       selImg.style.maxWidth = '';
-      selImg.setAttribute('width', newW);
+      selImg.setAttribute('width',  newW);
       selImg.setAttribute('height', newH);
-      placeHandle();
+      placeHandles();
     });
 
     document.addEventListener('mouseup', function () {
       if (dragState) { dragState = null; syncToHidden(); }
     });
 
-    window.addEventListener('scroll', placeHandle, { passive: true });
-    window.addEventListener('resize', placeHandle, { passive: true });
-    editor.addEventListener('scroll', placeHandle, { passive: true });
+    window.addEventListener('scroll', placeHandles, { passive: true });
+    window.addEventListener('resize', placeHandles, { passive: true });
+    editor.addEventListener('scroll', placeHandles, { passive: true });
     editor.addEventListener('blur', function () { setTimeout(dropImg, 200); });
   })();
 
