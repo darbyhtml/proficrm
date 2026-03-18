@@ -1856,7 +1856,13 @@ def company_edit(request: HttpRequest, company_id) -> HttpResponse:
     return render(
         request,
         "ui/company_edit.html",
-        {"company": company, "form": form, "company_emails": company_emails, "company_phones": company_phones},
+        {
+            "company": company,
+            "form": form,
+            "company_emails": company_emails,
+            "company_phones": company_phones,
+            "contract_types": ContractType.objects.order_by("order", "name"),
+        },
     )
 
 

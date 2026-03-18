@@ -217,7 +217,7 @@ class CompanyCreateForm(forms.ModelForm):
             "activity_kind": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2", "placeholder": "Напр.: строительство, услуги, производство… (можно с новой строки)"}),
             "employees_count": forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "min": "0", "placeholder": "Напр.: 120"}),
             "work_timezone": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "work_schedule": forms.Textarea(attrs={"rows": 6, "class": "w-full rounded-lg border px-3 py-2 font-mono text-sm", "placeholder": "Например:\nПн-Пт: 09:00-18:00\nСб: 10:00-16:00\nВс: выходной\n\nИли скопируйте режим работы с сайта компании. Время автоматически форматируется в формат HH:MM."}),
+            "work_schedule": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2 font-mono text-sm", "placeholder": "Пн–Пт: 09:00–18:00\nСб: 10:00–16:00\nВс: выходной"}),
             "contract_type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "contract_until": forms.DateInput(attrs={"type": "date", "class": "w-full rounded-lg border px-3 py-2"}),
             "head_company": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
@@ -352,6 +352,7 @@ class CompanyEditForm(forms.ModelForm):
             "activity_kind",
             "employees_count",
             "work_timezone",
+            "region",
             "work_schedule",
             "contract_type",
             "contract_until",
@@ -368,8 +369,8 @@ class CompanyEditForm(forms.ModelForm):
             "legal_name": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "inn": forms.Textarea(
                 attrs={
-                    "rows": 2,
-                    "class": "w-full rounded-lg border px-3 py-2 font-mono",
+                    "rows": 1,
+                    "class": "w-full rounded-lg border px-3 py-2 font-mono h-[42px]",
                     "placeholder": "Можно несколько ИНН: через /, запятую, пробел или с новой строки",
                 }
             ),
@@ -379,7 +380,8 @@ class CompanyEditForm(forms.ModelForm):
             "activity_kind": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2", "placeholder": "Напр.: строительство, услуги, производство… (можно с новой строки)"}),
             "employees_count": forms.NumberInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "min": "0", "placeholder": "Напр.: 120"}),
             "work_timezone": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-            "work_schedule": forms.Textarea(attrs={"rows": 6, "class": "w-full rounded-lg border px-3 py-2 font-mono text-sm", "placeholder": "Например:\nПн-Пт: 09:00-18:00\nСб: 10:00-16:00\nВс: выходной\n\nИли скопируйте режим работы с сайта компании. Время автоматически форматируется в формат HH:MM."}),
+            "region": forms.Select(attrs={"class": "select w-full"}),
+            "work_schedule": forms.Textarea(attrs={"rows": 3, "class": "w-full rounded-lg border px-3 py-2 font-mono text-sm", "placeholder": "Пн–Пт: 09:00–18:00\nСб: 10:00–16:00\nВс: выходной"}),
             "contract_type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
             "contract_until": forms.DateInput(attrs={"type": "date", "class": "w-full rounded-lg border px-3 py-2"}),
             "head_company": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),

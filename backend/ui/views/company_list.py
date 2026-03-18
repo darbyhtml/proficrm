@@ -1247,7 +1247,28 @@ def company_create(request: HttpRequest) -> HttpResponse:
     else:
         form = CompanyCreateForm(user=user)
 
-    return render(request, "ui/company_create.html", {"form": form, "company_emails": [], "company_phones": []})
+    # При POST с ошибкой — восстанавливаем доп. поля из POST, чтобы не терять данные
+    if request.method == "POST":
+        _restore_emails = [
+            CompanyEmail(value=(v or "").strip())
+            for k, v in request.POST.items()
+            if k.startswith("company_emails_") and (v or "").strip()
+        ]
+        _restore_phones = [
+            CompanyPhone(value=(v or "").strip())
+            for k, v in request.POST.items()
+            if k.startswith("company_phones_") and (v or "").strip()
+        ]
+    else:
+        _restore_emails = []
+        _restore_phones = []
+
+    return render(request, "ui/company_create.html", {
+        "form": form,
+        "company_emails": _restore_emails,
+        "company_phones": _restore_phones,
+        "contract_types": ContractType.objects.order_by("order", "name"),
+    })
 
 
 @login_required
