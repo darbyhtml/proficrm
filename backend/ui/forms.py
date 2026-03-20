@@ -1189,7 +1189,7 @@ ContactEmailFormSet = inlineformset_factory(
     formset=_BaseEmailFormSet,
     widgets={
         "type": forms.Select(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
-        "value": forms.EmailInput(attrs={"class": "w-full rounded-lg border px-3 py-2"}),
+        "value": forms.TextInput(attrs={"class": "w-full rounded-lg border px-3 py-2", "inputmode": "email", "autocomplete": "email"}),
     },
 )
 
