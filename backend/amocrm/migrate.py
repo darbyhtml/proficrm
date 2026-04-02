@@ -4590,6 +4590,8 @@ def migrate_filtered(
                         created_label = ""
 
                     prefix = "Импорт из amo"
+                    import_note_type = "note"  # default
+                    import_meta = {}
                     # amomail_message — история почты из amoCRM
                     if note_type.lower().startswith("amomail"):
                         incoming = bool(params.get("income")) if isinstance(params, dict) else False
@@ -4624,11 +4626,24 @@ def migrate_filtered(
                         author = None
                         text = "\n".join(lines) if lines else "Письмо (amoMail)"
                         prefix = "Импорт из amo"
+                        import_note_type = "email_in" if incoming else "email_out"
+                        import_meta = {
+                            "subject": subj,
+                            "from": frm_s,
+                            "to": to_s,
+                            "body": summ,
+                            "attachments": int(attach_cnt) if attach_cnt not in (None, "", 0, "0") else 0,
+                            "direction": "in" if incoming else "out",
+                        }
                     elif note_type.lower() in ("call_out", "call_in", "call"):
                         # звонки — тоже форматируем, иначе будет JSON-каша
                         text = _format_call_note(note_type, params)
                         author = None
                         prefix = "Импорт из amo"
+                        if note_type.lower() == "call_in":
+                            import_note_type = "call_in"
+                        else:
+                            import_note_type = "call_out"
                     notes_processed += 1
                     meta_bits = []
                     if author_amo_name:
@@ -4671,6 +4686,12 @@ def migrate_filtered(
                         if should_rewrite:
                             existing_note.text = text_full[:8000]
                             upd = True
+                        if existing_note.note_type != import_note_type:
+                            existing_note.note_type = import_note_type
+                            upd = True
+                        if import_meta and existing_note.meta != import_meta:
+                            existing_note.meta = import_meta
+                            upd = True
                         if existing_note.author_id == actor.id and (author is None or author.id != actor.id):
                             existing_note.author = author  # может быть None
                             upd = True
@@ -4698,6 +4719,8 @@ def migrate_filtered(
                             company=company,
                             author=author,  # НЕ actor, чтобы не выглядело "как будто вы писали"
                             text=text_full[:8000],
+                            note_type=import_note_type,
+                            meta=import_meta,
                             external_source="amo_api",
                             external_uid=str(nid) if nid else "",
                         )

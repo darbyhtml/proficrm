@@ -149,14 +149,14 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     is_admin = require_admin(user)
     is_group_manager = user.role == User.Role.GROUP_MANAGER
     pinned_note = (
-        CompanyNote.objects.filter(company=company, is_pinned=True)
+        CompanyNote.objects.filter(company=company, is_pinned=True, note_type=CompanyNote.NoteType.NOTE)
         .select_related("author", "pinned_by")
         .prefetch_related("note_attachments")
         .order_by("-pinned_at", "-created_at")
         .first()
     )
     notes = (
-        CompanyNote.objects.filter(company=company)
+        CompanyNote.objects.filter(company=company, note_type=CompanyNote.NoteType.NOTE)
         .select_related("author", "pinned_by")
         .prefetch_related("note_attachments")
         .order_by("-is_pinned", "-pinned_at", "-created_at")[:60]
@@ -202,6 +202,26 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
     history_events = list(
         company.history_events.select_related("actor", "from_user", "to_user").order_by("occurred_at")[:50]
     )
+
+    # Таймлайн: звонки + письма + передвижения — единая хронологическая лента
+    timeline_notes = list(
+        CompanyNote.objects.filter(company=company)
+        .exclude(note_type=CompanyNote.NoteType.NOTE)
+        .select_related("author")
+        .order_by("-created_at")[:100]
+    )
+    timeline_events = list(
+        company.history_events.select_related("actor", "from_user", "to_user")
+        .order_by("-occurred_at")[:100]
+    )
+    # Объединяем в один список кортежей (datetime, type_tag, object)
+    timeline_items = sorted(
+        [{"date": n.created_at, "kind": "note", "obj": n} for n in timeline_notes]
+        + [{"date": e.occurred_at, "kind": "event", "obj": e} for e in timeline_events],
+        key=lambda x: x["date"],
+        reverse=True,
+    )[:100]
+
     quick_form = CompanyQuickEditForm(instance=company)
     contract_form = CompanyContractForm(instance=company)
 
@@ -294,6 +314,7 @@ def company_detail(request: HttpRequest, company_id) -> HttpResponse:
             "statuses": CompanyStatus.objects.order_by("name"),  # Для быстрого изменения статуса в Modern
             "contacts_rest": list(contacts)[5:],  # Контакты с 6-го для кнопки «Показать всех» в Modern
             "history_events": history_events,  # История передвижений карточки
+            "timeline_items": timeline_items,  # Единая лента: звонки + письма + передвижения
         },
     )
 

@@ -277,9 +277,19 @@ class Company(models.Model):
 
 
 class CompanyNote(models.Model):
+
+    class NoteType(models.TextChoices):
+        NOTE = "note", "Заметка"
+        EMAIL_IN = "email_in", "Входящее письмо"
+        EMAIL_OUT = "email_out", "Исходящее письмо"
+        CALL_IN = "call_in", "Входящий звонок"
+        CALL_OUT = "call_out", "Исходящий звонок"
+
     company = models.ForeignKey(Company, verbose_name="Компания", on_delete=models.CASCADE, related_name="notes")
     author = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="Автор", null=True, on_delete=models.SET_NULL, related_name="company_notes")
     text = models.TextField("Текст")
+    note_type = models.CharField("Тип записи", max_length=16, choices=NoteType.choices, default=NoteType.NOTE, db_index=True)
+    meta = models.JSONField("Метаданные", blank=True, default=dict)
     attachment = models.FileField("Файл (вложение)", upload_to="company_notes/%Y/%m/%d/", null=True, blank=True)
     attachment_name = models.CharField("Имя файла", max_length=255, blank=True, default="")
     attachment_ext = models.CharField("Расширение", max_length=16, blank=True, default="", db_index=True)
