@@ -4644,6 +4644,23 @@ def migrate_filtered(
                             import_note_type = "call_in"
                         else:
                             import_note_type = "call_out"
+                    elif note_type.lower() == "sms":
+                        # SMS из amoCRM
+                        sms_text = str(params.get("text") or "").strip() if isinstance(params, dict) else ""
+                        sms_phone = str(params.get("phone") or "").strip() if isinstance(params, dict) else ""
+                        lines = ["SMS"]
+                        if sms_phone:
+                            lines.append("Номер: " + sms_phone)
+                        if sms_text:
+                            lines.append(sms_text)
+                        text = "\n".join(lines) if lines else "SMS"
+                        author = None
+                        prefix = "Импорт из amo"
+                        import_note_type = "sms"
+                        import_meta = {
+                            "phone": sms_phone,
+                            "text": sms_text,
+                        }
                     notes_processed += 1
                     meta_bits = []
                     if author_amo_name:

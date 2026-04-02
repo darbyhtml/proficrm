@@ -284,6 +284,7 @@ class CompanyNote(models.Model):
         EMAIL_OUT = "email_out", "Исходящее письмо"
         CALL_IN = "call_in", "Входящий звонок"
         CALL_OUT = "call_out", "Исходящий звонок"
+        SMS = "sms", "SMS"
 
     company = models.ForeignKey(Company, verbose_name="Компания", on_delete=models.CASCADE, related_name="notes")
     author = models.ForeignKey(settings.AUTH_USER_MODEL, verbose_name="Автор", null=True, on_delete=models.SET_NULL, related_name="company_notes")
