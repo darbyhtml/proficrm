@@ -209,7 +209,7 @@ def settings_amocrm(request: HttpRequest) -> HttpResponse:
                     "client_id",
                     "client_secret",
                     "redirect_uri",
-                    "long_lived_token",
+                    "long_lived_token_enc",
                     "region_custom_field_id",
                     "updated_at",
                 ]
@@ -337,7 +337,7 @@ def settings_amocrm_disconnect(request: HttpRequest) -> HttpResponse:
     cfg.long_lived_token = ""
     cfg.expires_at = None
     cfg.last_error = ""
-    cfg.save(update_fields=["access_token", "refresh_token", "long_lived_token", "expires_at", "last_error", "updated_at"])
+    cfg.save(update_fields=["access_token_enc", "refresh_token_enc", "long_lived_token_enc", "expires_at", "last_error", "updated_at"])
     messages.success(request, "amoCRM отключен (токены удалены).")
     return redirect("settings_amocrm")
 

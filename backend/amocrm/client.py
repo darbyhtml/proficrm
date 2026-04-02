@@ -96,7 +96,7 @@ class AmoClient:
         if expires_in:
             self.cfg.expires_at = timezone.now() + timezone.timedelta(seconds=expires_in)
         self.cfg.last_error = ""
-        self.cfg.save(update_fields=["access_token", "refresh_token", "token_type", "expires_at", "last_error", "updated_at"])
+        self.cfg.save(update_fields=["access_token_enc", "refresh_token_enc", "token_type", "expires_at", "last_error", "updated_at"])
 
     def ensure_token(self) -> None:
         if self.cfg.long_lived_token:
@@ -150,7 +150,7 @@ class AmoClient:
         expires_in = int(data.get("expires_in") or 0)
         self.cfg.expires_at = timezone.now() + timezone.timedelta(seconds=expires_in) if expires_in else None
         self.cfg.last_error = ""
-        self.cfg.save(update_fields=["access_token", "refresh_token", "token_type", "expires_at", "last_error", "updated_at"])
+        self.cfg.save(update_fields=["access_token_enc", "refresh_token_enc", "token_type", "expires_at", "last_error", "updated_at"])
         logger.info("OAuth token exchange successful")
 
     def _request(self, method: str, url: str, *, params: dict[str, Any] | None = None, json_body: Any | None = None, auth: bool = True) -> AmoResponse:
